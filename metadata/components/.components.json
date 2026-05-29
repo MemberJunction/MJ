@@ -1,6 +1,25 @@
 [
   {
     "fields": {
+      "Name": "InteractiveApplicationForm",
+      "Namespace": "Admin/Applications",
+      "Title": "Interactive Application Form",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/interactive-application-form.spec.json"
+    },
+    "primaryKey": {
+      "ID": "A0D8DC78-9E2D-4866-91F4-7B474B2E7A9F"
+    },
+    "sync": {
+      "lastModified": "2026-05-25T22:36:32.357Z",
+      "checksum": "44c74e0ac16b70b008fdeadd706b1545a0c40cf9cd8195d50ff8fa70f13aae87"
+    }
+  },
+  {
+    "fields": {
       "Name": "EntityBrowser",
       "Namespace": "Admin/Entities",
       "Title": "Entity Browser",
@@ -14,8 +33,8 @@
       "ID": "77571F8B-A4A2-4CD3-AC23-A59D6E989F5D"
     },
     "sync": {
-      "lastModified": "2026-02-13T22:59:28.598Z",
-      "checksum": "12f8c543bebe8d21cf453bfea71e2522661ea6aac267cef4f618d50849e2573d"
+      "lastModified": "2026-05-07T05:19:50.387Z",
+      "checksum": "9b63a74cf792a0f482b9d041c198a44f3841ec6921c1462601dc7c68e2aeda26"
     }
   },
   {
@@ -90,8 +109,8 @@
       "ID": "E7A334EA-53FD-40E4-A255-1DDA891D86B7"
     },
     "sync": {
-      "lastModified": "2026-02-13T22:59:28.713Z",
-      "checksum": "d7f1a1a6e8ecb23f2c2b655dba5434d9ebd37d0928c82930cbefa9e69d07f8c6"
+      "lastModified": "2026-05-07T05:19:50.413Z",
+      "checksum": "2630b6a40f8e93292d6c52bff6a60198e9c5ec31103aa45aa823c32cfaa2f087"
     }
   },
   {
@@ -1610,8 +1629,8 @@
       "ID": "913FC220-BE2B-4EE6-AFF5-8DD9B4C6C7E4"
     },
     "sync": {
-      "lastModified": "2026-02-13T22:59:29.601Z",
-      "checksum": "484c28b2cec3f1ad7ab9574aae44bbf731d56532983d1132bfcaeb0899d1fe16"
+      "lastModified": "2026-05-07T03:12:52.293Z",
+      "checksum": "b3dfe4e249e4745b98ec346831315465d835e79e8cedb3061a276e68ea043c77"
     }
   },
   {
@@ -2142,8 +2161,8 @@
       "ID": "2AD46B3C-D0B2-49A7-9F0B-8DCE68A0C118"
     },
     "sync": {
-      "lastModified": "2026-04-27T18:51:34.595Z",
-      "checksum": "3a0b8b66e2e91d5a6c154a05e5180a63d1ecd30a1241580973670b131d3be01e"
+      "lastModified": "2026-05-16T18:58:09.295Z",
+      "checksum": "ef6d726a19c6be4562844b5610b781aed9f7bb2bd25bf259b175e39e97967063"
     }
   }
 ]

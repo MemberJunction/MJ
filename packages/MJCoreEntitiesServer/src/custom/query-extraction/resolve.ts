@@ -5,7 +5,8 @@
  * Every function is stateless: context is passed in as parameters rather than via `this`.
  */
 
-import { EntityInfo, IMetadataProvider, QueryDependencyInfo, QueryFieldInfo, QueryInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, QueryEngine } from "@memberjunction/core-entities";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
@@ -24,7 +25,7 @@ import type {
 // ═══════════════════════════════════════════════════
 
 /**
- * Resolves all {{query:"..."}} composition references in SQL to their QueryInfo targets.
+ * Resolves all {{query:"..."}} composition references in SQL to their MJQueryEntityExtended targets.
  *
  * This is the single entry point for composition resolution. Both dependency syncing
  * and passthrough parameter extraction consume the results.
@@ -35,7 +36,7 @@ import type {
 export function ResolveCompositionReferences(
     sql: string,
     queryName: string,
-    allQueries: QueryInfo[]
+    allQueries: MJQueryEntityExtended[]
 ): ResolvedCompositionReference[] {
     const compositionEngine = new QueryCompositionEngine();
     if (!compositionEngine.HasCompositionTokens(sql)) return [];
@@ -86,8 +87,8 @@ export function ResolveCompositionReferences(
 export function ResolveQueryByNameAndCategory(
     queryName: string,
     categorySegments: string[],
-    allQueries: QueryInfo[]
-): QueryInfo | undefined {
+    allQueries: MJQueryEntityExtended[]
+): MJQueryEntityExtended | undefined {
     const queryNameLower = queryName.toLowerCase();
 
     if (categorySegments.length > 0) {
@@ -186,7 +187,7 @@ export function BuildPassthroughParams(
             if (seenParamNames.has(nameLower)) continue;
             seenParamNames.add(nameLower);
 
-            const depParam = ref.depQuery.Parameters.find(
+            const depParam = ref.depQuery.QueryParameters.find(
                 p => p.Name.toLowerCase() === mapping.depParamName.toLowerCase()
             );
 
@@ -250,6 +251,51 @@ export function MapQueryParamTypeToParserType(
 // ═══════════════════════════════════════════════════
 
 /**
+ * Builds ExtractedField[] deterministically from the parsed SELECT columns.
+ *
+ * This is the PRIMARY deterministic field extraction path, handling explicit
+ * column lists like `SELECT col1, col2 AS Alias, COUNT(*) AS Total`.
+ * For each parsed column, it creates an ExtractedField with:
+ *   - name: the output name (alias if present, otherwise source column)
+ *   - isComputed: true for expression columns (aggregates, calculations)
+ *   - sourceFieldName: the original column name (before AS alias)
+ *
+ * Returns null only if selectColumns is empty (e.g., a stored procedure call
+ * or non-SELECT statement).
+ */
+export function BuildFieldsFromSelectColumns(
+    selectColumns: SQLSelectColumn[]
+): ExtractedField[] | null {
+    if (selectColumns.length === 0) return null;
+
+    // Skip if ALL columns are wildcards — BuildFieldsForSelectStar handles that
+    if (selectColumns.every(col => col.SourceColumn === '*')) return null;
+
+    return selectColumns
+        .filter(col => col.SourceColumn !== '*')
+        .map(col => buildFieldFromSelectColumn(col));
+}
+
+/**
+ * Converts a single parsed SELECT column into an ExtractedField.
+ */
+function buildFieldFromSelectColumn(col: SQLSelectColumn): ExtractedField {
+    return {
+        name: col.OutputName,
+        description: col.IsExpression
+            ? `Computed column: ${col.SourceColumn}`
+            : col.OutputName !== col.SourceColumn
+                ? `${col.SourceColumn} (aliased as ${col.OutputName})`
+                : col.OutputName,
+        type: 'string', // default; enrichment stages refine this from entity/composition metadata
+        optional: false,
+        sourceFieldName: col.IsExpression ? null : col.SourceColumn,
+        isComputed: col.IsExpression,
+        isSummary: false,
+    };
+}
+
+/**
  * Detects SELECT * and builds the complete field list deterministically
  * from entity metadata and/or composition ref fields.
  * Returns null if the SQL doesn't use SELECT * or if entities can't be resolved.
@@ -307,12 +353,12 @@ function expandFieldsFromCompositionRefs(
     const compositionRefs = SQLParser.ExtractCompositionRefs(sql);
 
     for (const ref of compositionRefs) {
-        const referencedQuery = md.Queries.find(q =>
+        const referencedQuery = QueryEngine.Instance.Queries.find(q =>
             q.Name.toLowerCase() === ref.queryName.toLowerCase()
         );
 
-        if (referencedQuery && referencedQuery.Fields.length > 0) {
-            for (const qField of referencedQuery.Fields) {
+        if (referencedQuery && referencedQuery.QueryFields.length > 0) {
+            for (const qField of referencedQuery.QueryFields) {
                 if (!expandedFields.some(f => f.name === qField.Name)) {
                     expandedFields.push(buildFieldFromQueryField(qField, md));
                 }
@@ -344,7 +390,7 @@ function buildFieldFromEntityField(
  * Builds an ExtractedField from a dependency query's field definition.
  */
 function buildFieldFromQueryField(
-    qField: QueryFieldInfo,
+    qField: MJQueryFieldEntity,
     md: IMetadataProvider
 ): ExtractedField {
     const sourceEntityName = qField.SourceEntityID
@@ -367,7 +413,7 @@ function buildFieldFromQueryField(
  * Enriches extracted fields with deterministic SQL types from composed query field metadata.
  *
  * For queries that reference other queries via {{query:"..."}}, resolves field types
- * by matching field names against the dependency query's QueryFieldInfo.
+ * by matching field names against the dependency query's MJQueryFieldEntity.
  *
  * Uses the pre-parsed selectColumns for deterministic SELECT clause resolution,
  * which handles direct columns and AS aliases via AST parsing.
@@ -527,8 +573,8 @@ export function DetectDependencyCycles(
     queryID: string,
     queryName: string,
     proposedDeps: Array<{ dependsOnQueryID: string }>,
-    allDependencies: QueryDependencyInfo[],
-    allQueries: QueryInfo[]
+    allDependencies: MJQueryDependencyEntity[],
+    allQueries: MJQueryEntityExtended[]
 ): string | null {
     for (const dep of proposedDeps) {
         const result = checkCycleFromDep(
@@ -555,8 +601,8 @@ function checkCycleFromDep(
     sourceName: string,
     path: string[],
     visited: Set<string>,
-    allDependencies: QueryDependencyInfo[],
-    allQueries: QueryInfo[]
+    allDependencies: MJQueryDependencyEntity[],
+    allQueries: MJQueryEntityExtended[]
 ): string | null {
     if (UUIDsEqual(currentID, sourceID)) {
         return [...path, sourceName].join(' \u2192 ');
@@ -590,7 +636,7 @@ function checkCycleFromDep(
 // ═══════════════════════════════════════════════════
 
 /**
- * Resolves a field's output name to a QueryFieldInfo by using the parsed SELECT columns.
+ * Resolves a field's output name to a MJQueryFieldEntity by using the parsed SELECT columns.
  *
  * Uses the SQLParser-extracted SELECT column map to find the source column and table qualifier,
  * then matches against the composition ref's dependency query fields.
@@ -603,14 +649,14 @@ function resolveFieldFromSelectColumns(
     fieldName: string,
     selectColumnMap: Map<string, SQLSelectColumn>,
     aliasToRef: Map<string, ResolvedCompositionReference>
-): QueryFieldInfo | undefined {
+): MJQueryFieldEntity | undefined {
     const selectCol = selectColumnMap.get(fieldName.toLowerCase());
     if (!selectCol || selectCol.IsExpression) return undefined;
 
     if (selectCol.TableQualifier) {
         const ref = aliasToRef.get(selectCol.TableQualifier.toLowerCase());
         if (ref) {
-            const match = ref.depQuery.Fields.find(
+            const match = ref.depQuery.QueryFields.find(
                 f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
             );
             if (match) return match;
@@ -619,7 +665,7 @@ function resolveFieldFromSelectColumns(
 
     // No table qualifier — try all composition refs
     for (const ref of Array.from(aliasToRef.values())) {
-        const match = ref.depQuery.Fields.find(
+        const match = ref.depQuery.QueryFields.find(
             f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
         );
         if (match) return match;
@@ -629,16 +675,16 @@ function resolveFieldFromSelectColumns(
 }
 
 /**
- * Builds a flat field name -> QueryFieldInfo lookup across all dependency queries.
+ * Builds a flat field name -> MJQueryFieldEntity lookup across all dependency queries.
  * If the same field name exists in multiple dependencies, the first match wins.
  */
 function buildDependencyFieldLookup(
     resolvedRefs: ResolvedCompositionReference[]
-): Map<string, QueryFieldInfo> {
-    const lookup = new Map<string, QueryFieldInfo>();
+): Map<string, MJQueryFieldEntity> {
+    const lookup = new Map<string, MJQueryFieldEntity>();
 
     for (const ref of resolvedRefs) {
-        for (const field of ref.depQuery.Fields) {
+        for (const field of ref.depQuery.QueryFields) {
             const nameLower = field.Name.toLowerCase();
             if (!lookup.has(nameLower)) {
                 lookup.set(nameLower, field);
@@ -650,11 +696,11 @@ function buildDependencyFieldLookup(
 }
 
 /**
- * Applies matched QueryFieldInfo metadata onto an ExtractedField.
+ * Applies matched MJQueryFieldEntity metadata onto an ExtractedField.
  */
 function applyQueryFieldMetadata(
     field: ExtractedField,
-    matchedField: QueryFieldInfo,
+    matchedField: MJQueryFieldEntity,
     md: IMetadataProvider
 ): ExtractedField {
     return {
@@ -789,10 +835,10 @@ function expandWildcardFromSource(
         return expandFromEntityInfo(sourceEntityInfo, field.optional);
     }
 
-    const composedQuery = md.Queries.find(q =>
+    const composedQuery = QueryEngine.Instance.Queries.find(q =>
         q.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
     );
-    if (composedQuery && composedQuery.Fields.length > 0) {
+    if (composedQuery && composedQuery.QueryFields.length > 0) {
         return expandFromComposedQuery(composedQuery, field.optional, md);
     }
 
@@ -822,11 +868,11 @@ function expandFromEntityInfo(
  * Expands all fields from a composed query into ExtractedField entries.
  */
 function expandFromComposedQuery(
-    query: QueryInfo,
+    query: MJQueryEntityExtended,
     optional: boolean,
     md: IMetadataProvider
 ): ExtractedField[] {
-    return query.Fields.map(qField => ({
+    return query.QueryFields.map(qField => ({
         name: qField.Name,
         description: qField.Description || `${qField.Name} from query "${query.Name}"`,
         type: TypeScriptTypeFromSQLType(qField.SQLBaseType).toLowerCase() as ExtractedField['type'],

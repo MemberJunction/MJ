@@ -5,7 +5,6 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
@@ -32,40 +31,6 @@ export type SPType = typeof SPType[keyof typeof SPType];
  * databases. The base class implements support for SQL Server. In future versions of MJ, we will break out an abstract base class that has the skeleton of the logic and then the SQL Server version will be a sub-class
  * of that abstract base class and other databases will be sub-classes of the abstract base class as well.
  */
-/**
- * Creates the appropriate CodeGen database provider based on the configured database type.
- * Falls back to SQLServerCodeGenProvider for backward compatibility.
- * 
- * @param dbType The database platform type from configuration
- * @returns A CodeGenDatabaseProvider instance for the specified platform
- */
-function createCodeGenProvider(dbType: string): CodeGenDatabaseProvider {
-    switch (dbType) {
-        case 'postgresql':
-            // Dynamic import is avoided - the PostgreSQL provider should be
-            // registered via MJGlobal ClassFactory for proper decoupling.
-            // For now, attempt to resolve from ClassFactory.
-            try {
-                const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-                    CodeGenDatabaseProvider,
-                    'PostgreSQLCodeGenProvider'
-                );
-                if (pgProvider) {
-                    return pgProvider;
-                }
-            } catch {
-                // Fall through to error
-            }
-            throw new Error(
-                'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-                'is installed and its CodeGen provider is registered before running CodeGen.'
-            );
-        case 'mssql':
-        default:
-            return new SQLServerCodeGenProvider();
-    }
-}
-
 export class SQLCodeGenBase {
     protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
     public get SQLUtilityObject(): SQLUtilityBase {
@@ -73,11 +38,20 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * The database-specific code generation provider. Defaults to SQL Server.
-     * Override this property or set it before calling generation methods to use
-     * a different database platform (e.g., PostgreSQL).
+     * The database-specific code generation provider, resolved from
+     * `MJGlobal.ClassFactory` against the configured `dbPlatform`. Each provider
+     * (`SQLServerCodeGenProvider`, `PostgreSQLCodeGenProvider`, …) registers
+     * itself with `@RegisterClass(CodeGenDatabaseProvider, '<platform>')` —
+     * the canonical {@link DatabasePlatform} value as its key — so this
+     * single line picks up the right one without dialect-specific branching.
+     * Subclasses can override via `@RegisterClass(... priority)` to plug in
+     * customized codegen behavior, same hook every other MJ class uses.
      */
-    protected _dbProvider: CodeGenDatabaseProvider = createCodeGenProvider(configInfo.dbType);
+    protected _dbProvider: CodeGenDatabaseProvider =
+        MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+            CodeGenDatabaseProvider,
+            configInfo.dbPlatform,
+        )!;
     public get DBProvider(): CodeGenDatabaseProvider {
         return this._dbProvider;
     }
@@ -203,6 +177,44 @@ export class SQLCodeGenBase {
             // strictly more useful than nothing.
             let entityGenSuccess = true;
 
+            // Build a UNION will-regenerate set across every batch we're about
+            // to launch (main + cascade-regen + excluded-perms). The PG view
+            // fallback's restoreDependents path uses this to skip restoring
+            // captured dependents that codegen will recreate later in the run.
+            // Without the union, batch 1's fallback only sees batch 1's
+            // entities — so a dependent like vwAIAgentRuns (which lives in
+            // batch 2 cascade-regen) is "missing from willRegenerate", the
+            // fallback tries to restore its stale captured definition, and
+            // that definition references views (vwTestRuns, vwRecordChanges)
+            // that no longer exist post-CASCADE → restore-view fails.
+            // Empty BaseView fields are filtered so virtual/no-view entities
+            // don't add `__mj.` (a malformed key) to the set.
+            const allBatchEntities: EntityInfo[] = [
+                ...entitiesWithoutCascadeRegeneration,
+                ...entitiesForCascadeRegeneration,
+                ...excludedEntities,
+            ];
+            const globalWillRegenerate = new Set(
+                allBatchEntities
+                    .filter(e => !!e.BaseView)
+                    .map(e => `${e.SchemaName}.${e.BaseView}`)
+            );
+
+            // PostgreSQL must serialize per-entity processing. Each PG entity's
+            // phased execution (view → CRUD → permissions) issues
+            // CREATE OR REPLACE VIEW with a 42P16 fallback that does
+            // capture/DROP CASCADE/CREATE/restore via pg_depend. Running this
+            // in parallel against entities with cross-references (e.g.
+            // vwAIModels ←→ vwAIModelVendors, view + dependent function) hits
+            // catalog-level deadlocks ("ERROR: deadlock detected") and the
+            // deadlock victim's transaction rolls back leaving its dependents
+            // dropped but never recreated — net effect: 11+ views silently
+            // missing after one codegen run, then the next run crashes during
+            // AI Engine init because vwAIModels is gone. SQL Server doesn't
+            // hit this because its execution path is bulk-monolithic, not
+            // phased per-entity.
+            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : 5;
+
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
                 pool,
@@ -213,8 +225,9 @@ export class SQLCodeGenBase {
                 // other dialects defer to the bulk step 2(e) below.
                 skipExecution: perEntitySkipExecution,
                 writeFiles: true,
-                batchSize: 5,
-                enableSQLLoggingForNewOrModifiedEntities: true
+                batchSize: perEntityBatchSize,
+                enableSQLLoggingForNewOrModifiedEntities: true,
+                willRegenerate: globalWillRegenerate
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
                 logError('Main entity SQL generation batch had failures — continuing with cascade-regen and excluded-perms batches; validator will report any missing routines.');
@@ -232,7 +245,8 @@ export class SQLCodeGenBase {
                     skipExecution: perEntitySkipExecution,
                     writeFiles: true,
                     batchSize: 1, // Process sequentially to maintain dependency order
-                    enableSQLLoggingForNewOrModifiedEntities: true
+                    enableSQLLoggingForNewOrModifiedEntities: true,
+                    willRegenerate: globalWillRegenerate
                 });
                 if (!cascadeGenResult.Success) {
                     logError('Cascade-regen batch had failures — continuing; validator will report any missing routines.');
@@ -249,9 +263,10 @@ export class SQLCodeGenBase {
                 directory,
                 onlyPermissions: true,
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
-                batchSize: 5,
+                batchSize: perEntityBatchSize,
                 writeFiles: true,
-                enableSQLLoggingForNewOrModifiedEntities: false /*don't log this stuff, it is just permissions for excluded entities*/
+                enableSQLLoggingForNewOrModifiedEntities: false, /*don't log this stuff, it is just permissions for excluded entities*/
+                willRegenerate: globalWillRegenerate
             });
             if (!genResult2.Success) {
                 logError('Excluded-entities permissions batch had failures — continuing; validator will report any missing routines.');
@@ -502,10 +517,17 @@ export class SQLCodeGenBase {
                             const fileBuffer = fs.readFileSync(fullPath);
                             const fileContents = fileBuffer.toString();
                             try {
-                                await pool.query(fileContents);                            
+                                await pool.query(fileContents);
                             }
-                            catch (e: any) {
-                                logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${e}`);
+                            catch (sqlError) {
+                                // Don't shadow the outer `e` (EntityInfo) — the inner `catch (e)`
+                                // would otherwise rebind `e` to the SQL error, making
+                                // `e.Name` resolve to the error's `.Name` (undefined for pg
+                                // errors) instead of the entity's name. That's why downstream
+                                // logs read `for entity undefined` and were impossible to
+                                // pin to a specific entity.
+                                const errorMessage = sqlError instanceof Error ? sqlError.message : String(sqlError);
+                                logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${errorMessage}`);
                                 innerSuccess = false;
                             }
                         }
@@ -542,14 +564,17 @@ export class SQLCodeGenBase {
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
     public async generateAndExecuteEntitySQLToSeparateFiles(options: {
-        pool: CodeGenConnection, 
-        entities: EntityInfo[], 
-        directory: string, 
-        onlyPermissions: boolean, 
-        writeFiles: boolean, 
-        skipExecution: boolean, 
-        batchSize?: number, 
-        enableSQLLoggingForNewOrModifiedEntities?: boolean
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+        directory: string,
+        onlyPermissions: boolean,
+        writeFiles: boolean,
+        skipExecution: boolean,
+        batchSize?: number,
+        enableSQLLoggingForNewOrModifiedEntities?: boolean,
+        /** Optional UNION of will-regenerate keys across ALL batches in the same
+         *  codegen run. When provided, takes precedence over the per-batch set. */
+        willRegenerate?: Set<string>
     }): Promise<{Success: boolean, Files: string[]}> {
         if (!options.batchSize)
             options.batchSize = 5; // default to 5 if not specified
@@ -559,11 +584,13 @@ export class SQLCodeGenBase {
             const failedEntities: EntityInfo[] = [];
             const totalEntities = options.entities.length;
 
-            // Build the will-regenerate set once per batch. A dialect phased
-            // executor (e.g. PG) uses this to skip restoring dependents that
-            // are about to be rebuilt with new definitions — avoids stale
-            // captured definitions conflicting with newly-regenerated targets.
-            const willRegenerate = new Set(
+            // Prefer the caller-supplied union (across all batches in this run)
+            // when available; fall back to a per-batch set for callers that
+            // don't pass one. The per-batch set is too narrow when an earlier
+            // batch's CASCADE drops a view owned by a later batch — the
+            // captured-dependent-restore fails because it doesn't know that
+            // dependent will be re-emitted in a subsequent batch.
+            const willRegenerate = options.willRegenerate ?? new Set(
                 options.entities.map(e => `${e.SchemaName}.${e.BaseView}`)
             );
 
@@ -725,7 +752,7 @@ export class SQLCodeGenBase {
      * here because it needs access to the internal generators; the provider
      * doesn't own context building for the view.
      */
-    private async executeEntityInPhases(
+    public async executeEntityInPhases(
         pool: CodeGenConnection,
         entity: EntityInfo,
         willRegenerate: Set<string> | undefined
@@ -1615,7 +1642,13 @@ export class SQLCodeGenBase {
                 sOutput += sOutput == '' ? '' : '\n';
                 const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
                 const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
-                const relatedTable = ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable;
+                // Computed/generated columns are physically present in the base table, so we
+                // can join directly to the base table even when IsVirtual=1. Only route
+                // through the view for genuinely view-only columns (IsVirtual=1, IsComputed=0).
+                // Joining to the base table avoids unnecessary view materialization and
+                // sidesteps the self-reference problem when the FK is a self-FK.
+                const useView = ef._RelatedEntityNameFieldIsVirtual && !ef._RelatedEntityNameFieldIsComputed;
+                const relatedTable = useView ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable;
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${qs(ef.RelatedEntitySchemaName, relatedTable)} AS ${ef._RelatedEntityTableAlias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(ef.Name)} = ${ef._RelatedEntityTableAlias}.${qi(ef.RelatedEntityFieldName)}`;
             }
         }
@@ -1738,12 +1771,31 @@ export class SQLCodeGenBase {
 
             ef._RelatedEntityJoinFieldMappings = [];
             let anyFieldIsVirtual = false;
+            let anyFieldIsComputed = false;
 
             // 1. Handle NameField (if not overridden)
             // In 'extend' mode: include the NameField (backward compatible with IncludeRelatedEntityNameFieldInBaseView)
             // In 'override' mode: skip the NameField, only use explicitly configured fields
             if (config.mode !== 'override' && ef.IncludeRelatedEntityNameFieldInBaseView) {
-                const { nameField, nameFieldIsVirtual } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+                const { nameField, nameFieldIsVirtual, nameFieldIsComputed } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+
+                // Self-FK + view-only NameField + dialect that can't handle self-join → skip.
+                // A view-only column (IsVirtual=1, IsComputed=0) can only be read from the
+                // view, so the join must target the view; but PG's strict `CREATE OR REPLACE
+                // VIEW` parser raises 42P01 on a body that LEFT-JOINs the view-being-created
+                // to itself, and SQL Server's parse-time name resolution fails the same way
+                // post-DROP. Skipping drops the virtual lookup column from the view.
+                //
+                // For computed/generated columns (IsVirtual=1, IsComputed=1), the column is
+                // physically in the base table — the join target is the base table (not the
+                // view) — so the self-reference issue doesn't apply and we DON'T skip.
+                const isSelfFK = ef.RelatedEntityID && ef.EntityID && ef.RelatedEntityID.toLowerCase() === ef.EntityID.toLowerCase();
+                if (nameField !== '' && nameFieldIsVirtual && !nameFieldIsComputed && isSelfFK && !this._dbProvider.canSelfJoinViewForVirtualNameField()) {
+                    const owningEntity = md.Entities.find(e => UUIDsEqual(e.ID, ef.EntityID));
+                    logStatus(`  Skipping self-referential view-only NameField join for ${owningEntity?.Name ?? ef.EntityID}.${ef.Name} (dialect: ${this._dbProvider.PlatformKey})`);
+                    continue;
+                }
+
                 if (nameField !== '') {
                     // only add to the output, if we found a name field for the related entity.
                     ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
@@ -1768,10 +1820,12 @@ export class SQLCodeGenBase {
                         ef._RelatedEntityJoinFieldMappings.push({
                             sourceField: nameField,
                             alias: safeAlias,
-                            isVirtual: nameFieldIsVirtual
+                            isVirtual: nameFieldIsVirtual,
+                            isComputed: nameFieldIsComputed
                         });
                         allGeneratedAliases.push(safeAlias);
                         if (nameFieldIsVirtual) anyFieldIsVirtual = true;
+                        if (nameFieldIsComputed) anyFieldIsComputed = true;
 
                         // check to see if the database already knows about the RelatedEntityNameFieldMap or not
                         if (ef.RelatedEntityNameFieldMap === null ||
@@ -1807,18 +1861,21 @@ export class SQLCodeGenBase {
                         continue;
                     }
 
-                    // Get field metadata from related entity to check if virtual
+                    // Get field metadata from related entity to check if virtual / computed
                     const relatedEntity = md.EntityByName(ef.RelatedEntity);
                     const relatedField = relatedEntity?.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
                     const isVirtual = relatedField?.IsVirtual || false;
+                    const isComputed = relatedField?.IsComputed || false;
 
                     ef._RelatedEntityJoinFieldMappings.push({
                         sourceField: fieldName,
                         alias: alias,
-                        isVirtual: isVirtual
+                        isVirtual: isVirtual,
+                        isComputed: isComputed
                     });
                     allGeneratedAliases.push(alias);
                     if (isVirtual) anyFieldIsVirtual = true;
+                    if (isComputed) anyFieldIsComputed = true;
                 }
             }
 
@@ -1826,6 +1883,7 @@ export class SQLCodeGenBase {
             if (ef._RelatedEntityJoinFieldMappings.length > 0) {
                 ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
                 ef._RelatedEntityNameFieldIsVirtual = anyFieldIsVirtual;
+                ef._RelatedEntityNameFieldIsComputed = anyFieldIsComputed;
 
                 for (const mapping of ef._RelatedEntityJoinFieldMappings) {
                     const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
@@ -1837,18 +1895,18 @@ export class SQLCodeGenBase {
         return sOutput;
     }
 
-    protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean} {
+    protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean, nameFieldIsComputed: boolean} {
         const md: Metadata = new Metadata(); // use the full metadata entity list, not the filtered version that we receive // global-provider-ok: codegen runs offline against a single provider
         const e: EntityInfo = md.EntityByName(entityName)!;
         if (e) {
             const ef: EntityFieldInfo = e.NameField!;
             if (e.NameField)
-                return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual};
+                return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual, nameFieldIsComputed: ef.IsComputed === true};
         }
         else
             logStatus(`ERROR: Could not find entity with name ${entityName}`);
 
-        return {nameField: '', nameFieldIsVirtual: false}
+        return {nameField: '', nameFieldIsVirtual: false, nameFieldIsComputed: false}
     }
 
     protected stripID(name: string): string {

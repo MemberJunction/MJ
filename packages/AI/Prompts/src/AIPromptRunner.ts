@@ -20,10 +20,21 @@ import {
     AIPromptParams
 } from '@memberjunction/ai-core-plus';
 import * as JSON5 from 'json5';
- 
 
-
-
+/**
+ * Best-guess MIME family for a ChatMessage content block type when the block
+ * doesn't carry its own mimeType. Used by stripUnsupportedMediaBlocks to
+ * compare against the driver's GetFileCapabilities() list.
+ */
+function mimeFromBlockType(type: string): string {
+    switch (type) {
+        case 'image_url': return 'image/*';
+        case 'audio_url': return 'audio/*';
+        case 'video_url': return 'video/*';
+        case 'file_url': return 'application/octet-stream';
+        default: return 'application/octet-stream';
+    }
+}
 
 
 
@@ -758,6 +769,7 @@ export class AIPromptRunner {
       if (promptRun) {
         promptRun.CompletedAt = endTime;
         promptRun.ExecutionTimeMS = executionTimeMS;
+        promptRun.Success = false;
         promptRun.Result = `ERROR: ${error.message}`;
         
         // Set Status and Cancelled based on error type
@@ -1247,8 +1259,37 @@ export class AIPromptRunner {
 
 
   /**
+   * If a nunjucks render error message contains `[Line N, Column M]`,
+   * return that line of the template source (1-based) with a caret pointer
+   * for the column. Returns null when we can't parse the location, the
+   * template text is missing, or the line is out of range. Surfaces the
+   * actual offending source in child-template failure messages so the
+   * server log + prompt run + agent step record point at the exact spot
+   * instead of just "render failed".
+   */
+  private extractTemplateSourceExcerpt(
+    templateText: string | null | undefined,
+    nunjucksError: string | null | undefined,
+  ): string | null {
+    if (!templateText || !nunjucksError) return null;
+    const match = /\[Line (\d+),\s*Column (\d+)\]/.exec(nunjucksError);
+    if (!match) return null;
+    const lineNum = parseInt(match[1], 10);
+    const colNum = parseInt(match[2], 10);
+    if (!Number.isFinite(lineNum) || !Number.isFinite(colNum)) return null;
+    const lines = templateText.split('\n');
+    if (lineNum < 1 || lineNum > lines.length) return null;
+    const line = lines[lineNum - 1];
+    // Trim very long lines to keep log noise reasonable.
+    const trimmed = line.length > 240 ? line.slice(0, 240) + '…' : line;
+    const caret = ' '.repeat(Math.max(0, colNum - 1)) + '^';
+    return `L${lineNum}:${colNum} ${trimmed}\n        ${caret}`;
+  }
+
+
+  /**
    * Renders child prompt templates in a depth-first manner, composing them into a final template.
-   * 
+   *
    * @param childPrompts - Array of child prompts to render templates for
    * @param params - Original execution parameters for context
    * @param cancellationToken - Cancellation token for aborting rendering
@@ -1327,11 +1368,34 @@ export class AIPromptRunner {
           });
           
           if (!childRenderResult.Success) {
-            console.error(`[ChildTemplateRender] FAILED for "${childPrompt.Name}": ${childRenderResult.Message}`);
-            console.error(`[ChildTemplateRender] Data keys: ${Object.keys(mergedChildData).join(', ')}`);
-            throw new Error(`Failed to render child template for prompt ${childPrompt.Name}: ${childRenderResult.Message}`);
+            // Surface as much diagnostic detail as we have. The nunjucks
+            // error string usually carries `[Line X, Column Y]` already;
+            // we add the template name, content ID, and the surrounding
+            // line of template source so the server log doubles as a
+            // "what line in which template" pointer instead of just
+            // "render failed".
+            const tplContent = template.GetHighestPriorityContent();
+            const sourceExcerpt = this.extractTemplateSourceExcerpt(
+                tplContent?.TemplateText,
+                childRenderResult.Message,
+            );
+            const dataKeys = Object.keys(mergedChildData).join(', ');
+            const detail =
+                `child="${childPrompt.Name}" ` +
+                `placeholder="${childParam.parentPlaceholder}" ` +
+                `templateId=${childPrompt.TemplateID} ` +
+                `contentId=${tplContent?.ID ?? 'n/a'} ` +
+                `dataKeys=[${dataKeys}]` +
+                (sourceExcerpt ? `\n  near: ${sourceExcerpt}` : '');
+            console.error(`[ChildTemplateRender] FAILED — ${childRenderResult.Message}`);
+            console.error(`[ChildTemplateRender] Context: ${detail}`);
+            throw new Error(
+                `Failed to render child template for prompt "${childPrompt.Name}" ` +
+                `(placeholder="${childParam.parentPlaceholder}"): ${childRenderResult.Message}` +
+                (sourceExcerpt ? `\n  near: ${sourceExcerpt}` : ''),
+            );
           }
-          
+
           renderedChildTemplate = childRenderResult.Output;
         } else {
           // If no template, use empty string (child might be using conversation messages)
@@ -1342,23 +1406,31 @@ export class AIPromptRunner {
         return {
           placeholder: childParam.parentPlaceholder,
           renderedTemplate: renderedChildTemplate,
-          success: true
+          success: true,
+          errorMessage: undefined as string | undefined,
         };
 
       } catch (error) {
         this.logError(error, {
           category: 'ChildTemplateRendering',
           metadata: {
-            placeholder: childParam.parentPlaceholder
+            placeholder: childParam.parentPlaceholder,
+            childPromptName: childParam.childPrompt.prompt.Name,
+            childPromptId: childParam.childPrompt.prompt.ID,
           },
           maxErrorLength: params.maxErrorLength
         });
-        
-        // Return error result but allow other children to continue
+
+        // Return error result but allow other children to continue. The
+        // underlying error message is preserved on `errorMessage` so the
+        // aggregator below can throw a *useful* error instead of just a
+        // placeholder-name list.
+        const errMsg = error instanceof Error ? error.message : String(error);
         return {
           placeholder: childParam.parentPlaceholder,
-          renderedTemplate: `ERROR: ${error.message}`,
-          success: false
+          renderedTemplate: `ERROR: ${errMsg}`,
+          success: false,
+          errorMessage: errMsg,
         };
       }
     });
@@ -1369,19 +1441,34 @@ export class AIPromptRunner {
     // Check if any critical errors occurred
     const failedChildren = childResults.filter(r => !r.success);
     if (failedChildren.length > 0) {
+      // Compose a single error message that includes the underlying
+      // error from each failed child. Previously this threw just a list
+      // of placeholder names ("agentSpecificPrompt") — opaque. Now the
+      // thrown error carries the nunjucks message (with [Line X, Column Y])
+      // and prompt names, so it propagates into `promptRun.Result` /
+      // `promptRun.ErrorDetails` and the agent step's error surface.
+      const childErrorDetails = failedChildren
+        .map(fc => `  - ${fc.placeholder}: ${fc.errorMessage ?? 'unknown error'}`)
+        .join('\n');
+
       this.logError(`${failedChildren.length} out of ${childResults.length} child prompt templates failed to render`, {
         category: 'ChildTemplateFailures',
         severity: 'critical',
         metadata: {
           failedCount: failedChildren.length,
           totalCount: childResults.length,
-          failedPlaceholders: failedChildren.map(fc => fc.placeholder)
+          failedPlaceholders: failedChildren.map(fc => fc.placeholder),
+          failures: failedChildren.map(fc => ({
+            placeholder: fc.placeholder,
+            error: fc.errorMessage,
+          })),
         },
         maxErrorLength: params.maxErrorLength
       });
 
-      // any child render failure means we must throw an error
-      throw new Error(`Failed to render ${failedChildren.length} child prompt templates: ${failedChildren.map(fc => fc.placeholder).join(', ')}`);
+      throw new Error(
+        `Failed to render ${failedChildren.length} child prompt template(s):\n${childErrorDetails}`,
+      );
     }
 
     // Build rendered templates map
@@ -2831,8 +2918,23 @@ export class AIPromptRunner {
 
       //LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
 
-      // Render the template
-      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData);
+      // Render the template with validation **downgraded to warnings**.
+      // The previous default (SkipValidation=false) hard-failed on any
+      // declared-required template param that wasn't supplied — including
+      // the surprising case where a system placeholder like `_OUTPUT_EXAMPLE`
+      // resolves to `''` for prompts that don't define an OutputExample
+      // (ValidateTemplateInput treats trim-empty strings as "not provided").
+      // That made "render failure" the dominant failure mode for any prompt
+      // that referenced a system placeholder it didn't populate, which is
+      // an authoring trap rather than a real correctness issue.
+      //
+      // With SkipValidation=true + SuppressWarnings=false, missing required
+      // params produce a server-side warning log but rendering proceeds —
+      // nunjucks itself substitutes empty for undefined data, which is
+      // almost always what the author meant. If real param validation is
+      // needed (e.g., catching typos at template-author time), it should
+      // live in the authoring tools, not in the runtime render path.
+      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false);
     } catch (error) {
       this.logError(error, {
         category: 'TemplateRendering',
@@ -3351,6 +3453,14 @@ export class AIPromptRunner {
       // and inject qualifying files as content blocks in the last user message.
       this.injectNativeFileInputs(params, llm, chatParams, verbose);
 
+      // Strip media content blocks (image_url / audio_url / video_url / file_url)
+      // that the selected driver doesn't support — the conversation builder
+      // doesn't know which model the prompt will pick, so unsupported blocks
+      // are turned into visible text markers so the agent knows the file is
+      // attached but can't process it with the current model. See
+      // plans/artifact-attachment-unification.md §4 (modality enforcement).
+      this.stripUnsupportedMediaBlocks(llm, chatParams, model, verbose, params);
+
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
 
@@ -3389,8 +3499,142 @@ export class AIPromptRunner {
   }
 
   /**
-   * Builds the message array combining rendered prompt with conversation messages
+   * Walks every message in chatParams and rewrites media content blocks
+   * (image_url / audio_url / video_url / file_url) into visible text markers
+   * when the selected driver doesn't support that MIME modality. Keeps text
+   * blocks intact. The replacement message tells the agent the file exists
+   * and the model can't view it — much better UX than silent failure (model
+   * receives image_url, ignores it, and the agent asks the user to "upload
+   * the image" the user already uploaded).
+   *
+   * No-op when the driver's GetFileCapabilities() returns non-null AND the
+   * block's MIME matches the supported list. The driver baseclass returns
+   * null by default; only providers that declare vision/file support override
+   * it (currently: OpenAI). For everyone else, every media block falls back
+   * to text — exactly what you want when running a text-only model.
    */
+  private stripUnsupportedMediaBlocks(
+    llm: BaseLLM,
+    chatParams: ChatParams,
+    model: { Name?: string } | null | undefined,
+    verbose: boolean,
+    params: AIPromptParams,
+  ): void {
+    const caps = llm.GetFileCapabilities();
+    const modelName = model?.Name ?? '<unknown model>';
+    let stripped = 0;
+
+    for (const msg of chatParams.messages) {
+      // Path 1: replace unsupported media content BLOCKS in array-content messages.
+      if (Array.isArray(msg.content)) {
+        msg.content = msg.content.map((block) => {
+          const blockType = (block as { type?: string }).type;
+          if (blockType !== 'image_url' && blockType !== 'audio_url' && blockType !== 'video_url' && blockType !== 'file_url') {
+            return block;
+          }
+          const blockMime = (block as { mimeType?: string }).mimeType ?? mimeFromBlockType(blockType);
+          if (this.driverSupportsModality(caps, blockMime)) {
+            return block;
+          }
+          const fileName = (block as { fileName?: string }).fileName ?? '(unnamed file)';
+          stripped++;
+          return {
+            type: 'text' as const,
+            content:
+              `[Attachment "${fileName}" (${blockMime}) was provided, but the active model "${modelName}" does not support this modality. ` +
+              `Tell the user the active model cannot process ${blockMime.split('/')[0]} content rather than guessing what the file contains.]`,
+          };
+        });
+        continue;
+      }
+
+      // Path 2: artifacts that went through the tool-dispatch path appear in
+      // the artifact manifest section of the rendered system prompt. The model
+      // gets the manifest as text and decides whether to call get_full — and
+      // for a non-vision model receiving an image manifest entry, get_full
+      // returns base64 it can't interpret, so it pattern-matches few-shot
+      // examples and pretends. Annotate the manifest inline so the model
+      // knows it can't actually view the artifact.
+      if (typeof msg.content === 'string' && msg.role === ChatMessageRole.system) {
+        const before = msg.content;
+        msg.content = this.annotateManifestForUnsupportedMedia(before, caps, modelName);
+        if (msg.content !== before) stripped++;
+      }
+    }
+
+    if (stripped > 0) {
+      this.logStatus(
+        `[ModalityCheck] Annotated ${stripped} unsupported media artifact reference(s) for model "${modelName}". Driver capabilities: ${caps ? caps.SupportedMimeTypes.join(', ') : 'none (driver declares no file support)'}.`,
+        verbose,
+        params,
+      );
+    }
+  }
+
+  /**
+   * Walks the rendered system-prompt text for the `## Available Artifacts`
+   * section emitted by ArtifactToolManager.ToManifestString(). For each
+   * artifact entry whose MIME hint indicates a media type the driver cannot
+   * process, appends a one-line warning so the model doesn't pretend to view
+   * an artifact it can only see as base64.
+   */
+  private annotateManifestForUnsupportedMedia(
+    systemText: string,
+    caps: import('@memberjunction/ai').FileCapabilities | null,
+    modelName: string,
+  ): string {
+    if (!systemText.includes('## Available Artifacts')) return systemText;
+
+    const lines = systemText.split('\n');
+    const result: string[] = [];
+    let inManifest = false;
+    let mutated = false;
+    const entryRegex = /^\*\*[A-Z]+\*\* — .+? \[(?<mime>[^\]]+)\]/;
+
+    for (const line of lines) {
+      if (line.startsWith('## Available Artifacts')) {
+        inManifest = true;
+        result.push(line);
+        continue;
+      }
+      if (inManifest && /^## /.test(line)) {
+        inManifest = false;
+      }
+      result.push(line);
+
+      if (!inManifest) continue;
+      const match = entryRegex.exec(line);
+      if (!match) continue;
+      const mime = (match.groups?.mime ?? '').toLowerCase();
+      const modality = mime.split('/')[0];
+      if (modality !== 'image' && modality !== 'audio' && modality !== 'video') continue;
+      if (this.driverSupportsModality(caps, mime)) continue;
+
+      result.push(
+        `    > ⚠ The active model "${modelName}" cannot process ${modality} content (${mime}). ` +
+          `Calling get_full returns base64 you cannot interpret visually — tell the user the model does not support ${modality} input rather than guessing what this file contains.`,
+      );
+      mutated = true;
+    }
+
+    return mutated ? result.join('\n') : systemText;
+  }
+
+  /**
+   * Returns true when the driver explicitly declares support for this MIME
+   * (exact or subtype-wildcard match). Returns false when capabilities are
+   * null (driver supports no files) or the MIME isn't on the supported list.
+   */
+  private driverSupportsModality(caps: import('@memberjunction/ai').FileCapabilities | null, mimeType: string): boolean {
+    if (!caps) return false;
+    const lower = mimeType.toLowerCase();
+    return caps.SupportedMimeTypes.some((pattern) => {
+      const p = pattern.toLowerCase();
+      if (p.endsWith('/*')) return lower.startsWith(p.slice(0, -1));
+      return lower === p;
+    });
+  }
+
   /**
    * Checks each nativeFileInput against the resolved driver's FileCapabilities
    * and injects qualifying files as content blocks in the last user message.

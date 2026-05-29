@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { CompositeKey, LocalCacheManager, Metadata, RunView, UserInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, IMetadataProvider } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -1747,9 +1747,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
+            // Boolean literal goes through the active provider's dialect:
+            //   SQL Server emits `= 1`, PostgreSQL emits `= TRUE`.
+            // Filter stays server-side; no client-side `.filter()` post-pass.
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as DatabaseProviderBase;
             const filters: string[] = [];
-            if (activeOnly) filters.push('IsActive=1');
             if (companyID) filters.push(`CompanyID='${companyID}'`);
+            if (activeOnly) filters.push(`IsActive = ${provider.Dialect.BooleanLiteral(true)}`);
             const filter = filters.join(' AND ');
             const result = await rv.RunView<MJCompanyIntegrationEntity>({
                 EntityName: 'MJ: Company Integrations',
@@ -1765,10 +1769,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
 
+            const filteredResults = result.Results;
+
             return {
                 Success: true,
-                Message: `${result.Results.length} connections`,
-                Connections: result.Results.map(ci => ({
+                Message: `${filteredResults.length} connections`,
+                Connections: filteredResults.map(ci => ({
                     ID: ci.ID,
                     IntegrationName: ci.Integration,
                     IntegrationID: ci.IntegrationID,

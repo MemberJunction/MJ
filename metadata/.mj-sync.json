@@ -17,6 +17,7 @@
     "credential-types",
     "resource-types",
     "search-providers",
+    "search-scopes",
     "content-source-types",
     "integration-source-types",
     "ai-vendors",

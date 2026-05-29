@@ -20,7 +20,8 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -72,7 +73,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 10
           },
@@ -80,14 +81,14 @@
             "ID": "A117EB14-411D-4590-A8DC-F9AF5C82DA5D"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:55.587Z",
-            "checksum": "0c37082d81bbfc64102c4d37d41dad6c079860f1c7a8f53fea8d8d3528518875"
+            "lastModified": "2026-05-27T17:58:51.065Z",
+            "checksum": "f73dcd14aeb277725c2bf0b147d266c30a90951d1f35572303cd1cf8aba4ca73"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -95,8 +96,8 @@
             "ID": "3BA8C588-3954-4180-86C5-666D886849F7"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:55.588Z",
-            "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
+            "lastModified": "2026-05-27T17:58:51.078Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
           }
         },
         {
@@ -128,6 +129,21 @@
             "lastModified": "2026-04-11T04:10:54.823Z",
             "checksum": "49a2b5a9b8c939050b947281568da42303aa6e836bf5bb619843c881494a9a26"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9
+          },
+          "primaryKey": {
+            "ID": "6DB79169-60C8-4D14-BC56-C398B63A23FB"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T17:58:51.042Z",
+            "checksum": "1702dcefdc5af476fedab1959e4a7b8e999f71bdf19c2f51f14e2c8b165f96f2"
+          }
         }
       ]
     },
@@ -135,8 +151,8 @@
       "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:53:38.175Z",
-      "checksum": "409bb7d645105c16ab72d40435f396ee98e0d643d89179d3dab9872fa18ab7e6"
+      "lastModified": "2026-05-27T17:58:50.986Z",
+      "checksum": "083cc27cf86f3bb5d66f4ff669f30f38ccb6bffe92cecefaa70be73d6e5009de"
     }
   }
 ]

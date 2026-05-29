@@ -465,4 +465,67 @@ END`;
       expect(result).toMatch(/\n$/);
     });
   });
+
+  // ─── Fix 18 (extension): DROP-overload guard before CREATE OR REPLACE ────
+  //
+  // FunctionRule has the same Bug 1 risk as ProcedureToFunctionRule. PG
+  // dispatches functions by full signature, so adding/changing a parameter
+  // creates a duplicate overload via CREATE OR REPLACE. Fix 18 emits a
+  // DO-block dropping all overloads of the function name BEFORE the CREATE
+  // OR REPLACE in both the inline-TVF path and the scalar-function path.
+  describe('Fix 18 extension: DROP-overload guard before CREATE OR REPLACE FUNCTION', () => {
+    it('should emit a DROP-overload DO-block for inline TVF conversion', () => {
+      const input = `CREATE FUNCTION [__mj].[GetMyTVF](@CategoryID UNIQUEIDENTIFIER)
+RETURNS TABLE
+AS RETURN (
+    SELECT [Name] AS Name, [ID] AS ID FROM [__mj].[Item] WHERE [CategoryID] = @CategoryID
+)`;
+      const result = convert(input);
+      // Expect the DROP block to reference the function by name and precede the CREATE
+      expect(result).toContain(`proname = 'GetMyTVF'`);
+      expect(result).toContain(`pronamespace = '__mj'::regnamespace`);
+      expect(result).toContain(`DROP FUNCTION IF EXISTS`);
+      const dropIdx = result.indexOf('DROP FUNCTION IF EXISTS');
+      const createIdx = result.indexOf('CREATE OR REPLACE FUNCTION');
+      expect(dropIdx).toBeGreaterThan(-1);
+      expect(createIdx).toBeGreaterThan(dropIdx);
+    });
+
+    it('should emit a DROP-overload DO-block for scalar function conversion', () => {
+      // Use simple-typed params (no size suffix) so the convertScalarFunction
+      // regex matches — the regex's `[^)]*` for the param list can't span
+      // nested parens like `VARCHAR(255)`. This is a pre-existing converter
+      // limitation; the Fix 18 DROP-block path is only exercised when the
+      // primary regex matches, which requires simple-typed params.
+      const input = `CREATE FUNCTION [__mj].[GetMyScalar](@P_X INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @Result INT
+    SET @Result = @P_X * 2
+    RETURN @Result
+END`;
+      const result = convert(input);
+      expect(result).toContain(`proname = 'GetMyScalar'`);
+      expect(result).toContain(`pronamespace = '__mj'::regnamespace`);
+      expect(result).toContain(`DROP FUNCTION IF EXISTS`);
+      const dropIdx = result.indexOf('DROP FUNCTION IF EXISTS');
+      // The scalar path preserves whatever CREATE form the input used —
+      // plain `CREATE FUNCTION` or `CREATE OR REPLACE FUNCTION`. With the
+      // DROP block first, both forms are safe (DROP removes any prior
+      // overload, so plain CREATE no longer collides). Match either.
+      const createIdx = result.search(/CREATE(\s+OR\s+REPLACE)?\s+FUNCTION\s+__mj/);
+      expect(dropIdx).toBeGreaterThan(-1);
+      expect(createIdx).toBeGreaterThan(dropIdx);
+    });
+
+    it('should emit a unique DROP block per function name', () => {
+      const result1 = convert(`CREATE FUNCTION [__mj].[FuncOne](@X INT) RETURNS INT AS BEGIN RETURN @X END`);
+      const result2 = convert(`CREATE FUNCTION [__mj].[FuncTwo](@X INT) RETURNS INT AS BEGIN RETURN @X END`);
+      expect(result1).toContain(`proname = 'FuncOne'`);
+      expect(result1).not.toContain(`proname = 'FuncTwo'`);
+      expect(result2).toContain(`proname = 'FuncTwo'`);
+      expect(result2).not.toContain(`proname = 'FuncOne'`);
+    });
+  });
 });

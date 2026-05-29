@@ -1,9 +1,10 @@
 import { ApplicationInfo, DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
-import { NewUserSetup } from "../Config/config";
+import { configInfo, NewUserSetup } from "../Config/config";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
+import { GetDialect } from "@memberjunction/sql-dialect";
 
 /**
  * Base class for creating a new user in the system, you can sub-class this class to create your own user creation logic
@@ -89,9 +90,17 @@ export class CreateNewUserBase {
 
                                     //now create MJUserApplicationEntity records for each entity in the application
                                     const rv: RunView = new RunView();
+                                    // The boolean comparison goes through the active dialect:
+                                    //   - SQL Server emits `DefaultForNewUser = 1`
+                                    //   - PostgreSQL emits `DefaultForNewUser = TRUE`
+                                    // Using a hardcoded `= 1` worked on SS but failed on PG with
+                                    // `operator does not exist: boolean = integer`.
+                                    // SQLDialect.BooleanLiteral() is the single source of truth
+                                    // for boolean-literal SQL across the stack.
+                                    const dialect = GetDialect(configInfo.dbPlatform);
                                     const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
                                         EntityName: 'MJ: Application Entities',
-                                        ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
+                                        ExtraFilter: `ApplicationID = '${application.ID}' AND DefaultForNewUser = ${dialect.BooleanLiteral(true)}`,
                                     }, currentUser);
 
                                     if(!rvResult.Success){
@@ -99,9 +108,11 @@ export class CreateNewUserBase {
                                         continue;
                                     }
 
-                                    LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
+                                    const defaultForNewUserEntities = rvResult.Results;
 
-                                    for(const [index, appEntity] of rvResult.Results.entries()){
+                                    LogStatus(`Creating ${defaultForNewUserEntities.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
+
+                                    for(const [index, appEntity] of defaultForNewUserEntities.entries()){
                                         const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', currentUser);
                                         userAppEntity.NewRecord();
                                         userAppEntity.UserApplicationID = userApplication.ID;

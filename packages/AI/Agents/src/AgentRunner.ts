@@ -14,10 +14,9 @@ import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { InputArtifact } from './ArtifactToolManager';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -32,9 +31,11 @@ interface ArtifactVersionRow {
     FileID: string | null;
     Content: string | null;
     MimeType: string | null;
+    ForceToolsOnly: boolean | null;
     ArtifactName: string;
     TypeName: string;
     ToolLibraryClass: string | null;
+    DefaultDeliveryMode: 'Inline' | 'ToolsOnly' | null;
 }
 
 /**
@@ -400,8 +401,8 @@ export class AgentRunner {
                 data: {
                     ...params.data,
                     conversationId,
-                    ...(inputArtifacts.length > 0 ? { __inputArtifacts: inputArtifacts } : {}),
                 },
+                inputArtifacts: inputArtifacts.length > 0 ? inputArtifacts : undefined,
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };
@@ -493,18 +494,19 @@ export class AgentRunner {
                         agentResponseDetailId,
                         contextUser,
                         agentResult.resolvedStorageAccountId,
-                        md
+                        md,
+                        params.agent.AcceptUnregisteredFiles
                     );
                 }
             })();
 
-            // Step 7: Save media outputs to AIAgentRunMedia and create conversation attachments (async)
+            // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
             const saveMediaPromise = (async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
-                    const mediaToSave = agentResult.mediaOutputs.filter(m => m.persist !== false);
-                    LogStatus(`Processing ${mediaToSave.length} of ${agentResult.mediaOutputs.length} media outputs (filtered by persist flag)`);
+                    const mediaToSave = agentResult.mediaOutputs;
+                    LogStatus(`Processing ${mediaToSave.length} media output(s)`);
 
-                    // Save to AIAgentRunMedia for permanent storage
+                    // Save to AIAgentRunMedia for permanent audit/lineage storage
                     const ids = await this.SaveAgentRunMedia(
                         agentResult.agentRun.ID,
                         mediaToSave,
@@ -512,12 +514,17 @@ export class AgentRunner {
                         md
                     );
 
-                    // Create ConversationDetailAttachment records for UI display
-                    if (agentResponseDetailId && ids.length > 0) {
-                        await this.CreateConversationMediaAttachments(
+                    // Create Artifact + ArtifactVersion + ConversationDetailArtifact for each
+                    // media output so the chat UI renders them as artifact cards. This replaces
+                    // the old CreateConversationMediaAttachments path which wrote to the deprecated
+                    // ConversationDetailAttachment table (the server hook then auto-paired to an
+                    // artifact). Writing artifacts directly removes the deprecated-entity dependency
+                    // and the redundant dual-write. Uses the same createArtifactWithVersion helper
+                    // that ProcessFileArtifacts uses, keeping artifact creation logic in one place.
+                    if (agentResponseDetailId) {
+                        await this.CreateMediaArtifacts(
                             agentResponseDetailId,
                             mediaToSave,
-                            ids,
                             contextUser,
                             md
                         );
@@ -982,10 +989,8 @@ export class AgentRunner {
 
     /**
      * Saves media outputs to AIAgentRunMedia table for permanent storage.
-     * This creates records for each media output promoted during agent execution.
-     *
-     * Only media with `persist !== false` is saved. Media items with `persist: false`
-     * are typically intercepted binary content that was never used in the final output.
+     * Creates a record for each media output promoted during agent execution.
+     * All items in the array are saved.
      *
      * @param agentRunId - The ID of the agent run
      * @param mediaOutputs - Array of media outputs to save
@@ -1014,17 +1019,7 @@ export class AgentRunner {
             return [];
         }
 
-        // Filter to only persist media that should be saved
-        // persist=false means intercepted but unused binary content (e.g., images not used in response)
-        const mediaToSave = mediaOutputs.filter(m => m.persist !== false);
-        if (mediaToSave.length === 0) {
-            LogStatus(`All ${mediaOutputs.length} media outputs have persist=false, skipping save`);
-            return [];
-        }
-
-        if (mediaToSave.length < mediaOutputs.length) {
-            LogStatus(`Filtering: ${mediaToSave.length} of ${mediaOutputs.length} media outputs will be persisted`);
-        }
+        const mediaToSave = mediaOutputs;
 
         const savedIds: string[] = [];
         const md = provider || this._provider;
@@ -1112,121 +1107,82 @@ export class AgentRunner {
         }
     }
 
+    // ── Media artifact creation ─────────────────────────────────────────────────
+
     /**
-     * Creates ConversationDetailAttachment records for media outputs.
-     * This enables media to be displayed in the conversation UI.
+     * Creates `MJ: Artifact` + `MJ: Artifact Version` + `MJ: Conversation Detail Artifact`
+     * junction records for agent-produced media outputs (images, audio, video).
      *
-     * @param conversationDetailId - The conversation detail to attach media to
-     * @param mediaOutputs - Array of media outputs
-     * @param agentRunMediaIds - Corresponding AIAgentRunMedia IDs
-     * @param contextUser - User context for the operation
-     * @returns Array of created attachment IDs
-     * @since 3.1.0
+     * Replaces the deprecated `CreateConversationMediaAttachments` path which wrote to
+     * the `MJ: Conversation Detail Attachments` table (then auto-paired to an artifact
+     * via the server-side hook). Writing artifacts directly removes the deprecated-entity
+     * dependency and the redundant dual-write.
      *
-     * @example
-     * ```typescript
-     * const runner = new AgentRunner();
-     * const attachmentIds = await runner.CreateConversationMediaAttachments(
-     *     conversationDetailId,
-     *     mediaOutputs,
-     *     agentRunMediaIds,
-     *     currentUser
-     * );
-     * ```
+     * Reuses {@link createArtifactWithVersion} — the same helper that `ProcessFileArtifacts`
+     * uses — so artifact creation logic (MIME resolution, transaction wrapping, junction
+     * linking) lives in exactly one place.
+     *
+     * @param conversationDetailId - The conversation detail to link artifacts to
+     * @param mediaOutputs - Media outputs to persist as artifacts
+     * @param contextUser - User context for DB operations
+     * @param provider - Optional metadata provider for multi-provider support
+     *
+     * @since 5.38.0
      */
-    public async CreateConversationMediaAttachments(
+    public async CreateMediaArtifacts(
         conversationDetailId: string,
         mediaOutputs: MediaOutput[],
-        agentRunMediaIds: string[],
         contextUser: UserInfo,
         provider?: IMetadataProvider
-    ): Promise<string[]> {
+    ): Promise<void> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
-            return [];
+            return;
         }
 
-        const attachmentIds: string[] = [];
+        await ArtifactMetadataEngine.Instance.Config(false, contextUser);
         const md = provider || this._provider;
+        let successCount = 0;
 
-        try {
-            // Use AIEngine's cached modalities instead of a fresh DB call
-            const aiEngine = AIEngine.Instance;
+        for (let i = 0; i < mediaOutputs.length; i++) {
+            const media = mediaOutputs[i];
 
-            for (let i = 0; i < mediaOutputs.length; i++) {
-                const mediaOutput = mediaOutputs[i];
-                const agentRunMediaId = agentRunMediaIds[i];
+            try {
+                const extension = this.getMimeTypeExtension(media.mimeType);
+                const fileName = media.label || `${media.modality.toLowerCase()}_${i + 1}.${extension}`;
+                const estimatedSizeBytes = media.data
+                    ? Math.ceil(media.data.length * 0.75)
+                    : undefined;
 
-                if (!agentRunMediaId) {
-                    LogError(`No AIAgentRunMedia ID for media output ${i}`);
-                    continue;
-                }
-
-                try {
-                    const attachment = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
-                        'MJ: Conversation Detail Attachments',
-                        contextUser
-                    );
-
-                    attachment.ConversationDetailID = conversationDetailId;
-                    attachment.MimeType = mediaOutput.mimeType;
-                    attachment.DisplayOrder = i;
-
-                    // Get modality ID from cached engine data
-                    const modality = aiEngine.GetModalityByName(mediaOutput.modality);
-                    if (modality) {
-                        attachment.ModalityID = modality.ID;
-                    } else {
-                        LogError(`Unknown modality: ${mediaOutput.modality}`);
-                        continue;
+                await this.createArtifactWithVersion({
+                    mimeType: media.mimeType,
+                    fileName,
+                    sizeBytes: estimatedSizeBytes,
+                    conversationDetailId,
+                    contextUser,
+                    provider: md,
+                    acceptUnregisteredFiles: true,
+                    label: `media ${media.modality}`,
+                    setVersionFields: (version) => {
+                        // DecideInlineStorage applies consistent text-vs-binary storage
+                        // decisions across all artifact creation paths. For media (images,
+                        // audio, video), it wraps the base64 in a data URL; for text-y
+                        // MIMEs it decodes to UTF-8. Same helper the server hook and
+                        // ConversationAttachmentService use.
+                        if (media.data) {
+                            const stored = DecideInlineStorage(media.mimeType, media.data);
+                            version.ContentMode = stored.contentMode;
+                            version.Content = stored.content;
+                        }
                     }
+                });
 
-                    // Generate a filename if none provided
-                    const extension = this.getMimeTypeExtension(mediaOutput.mimeType);
-                    attachment.FileName = mediaOutput.label || `${mediaOutput.modality.toLowerCase()}_${i + 1}.${extension}`;
-
-                    // Store inline data for small media
-                    // In the future, consider MJStorage for large files
-                    if (mediaOutput.data) {
-                        attachment.InlineData = mediaOutput.data;
-                        // Estimate file size from base64 length (base64 is ~33% larger than binary)
-                        attachment.FileSizeBytes = Math.ceil(mediaOutput.data.length * 0.75);
-                    }
-
-                    // Set dimensions if available
-                    if (mediaOutput.width) {
-                        attachment.Width = mediaOutput.width;
-                    }
-                    if (mediaOutput.height) {
-                        attachment.Height = mediaOutput.height;
-                    }
-                    if (mediaOutput.durationSeconds) {
-                        attachment.DurationSeconds = Math.ceil(mediaOutput.durationSeconds);
-                    }
-
-                    // Set description if available
-                    if (mediaOutput.description) {
-                        attachment.Description = mediaOutput.description;
-                    }
-
-                    const saved = await attachment.Save();
-                    if (saved) {
-                        attachmentIds.push(attachment.ID);
-                        LogStatus(`Created ConversationDetailAttachment: ${attachment.ID} (${mediaOutput.modality})`);
-                    } else {
-                        LogError(`Failed to create attachment: ${attachment.LatestResult?.Message}`);
-                    }
-                } catch (attachError) {
-                    LogError(`Error creating attachment ${i}: ${(attachError as Error).message}`);
-                }
+                successCount++;
+            } catch (error) {
+                LogError(`Error creating media artifact ${i} (${media.modality}): ${(error as Error).message}`);
             }
-
-            LogStatus(`Created ${attachmentIds.length} conversation attachments for detail ${conversationDetailId}`);
-            return attachmentIds;
-
-        } catch (error) {
-            LogError(`Error in CreateConversationMediaAttachments: ${(error as Error).message}`);
-            return attachmentIds;
         }
+
+        LogStatus(`Created ${successCount} of ${mediaOutputs.length} media artifact(s) for detail ${conversationDetailId}`);
     }
 
     // ── File artifact processing ───────────────────────────────────────────────
@@ -1249,11 +1205,13 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         resolvedStorageAccountId?: string,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        acceptUnregisteredFiles?: boolean
     ): Promise<void> {
         if (fileOutputs.length === 0) return;
 
         const md = provider || this._provider;
+        const acceptUnregistered = acceptUnregisteredFiles ?? false;
 
         // Hoist engine configs before parallel processing
         await Promise.all([
@@ -1262,73 +1220,8 @@ export class AgentRunner {
         ]);
 
         await Promise.all(
-            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md))
+            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md, acceptUnregistered))
         );
-    }
-
-    /**
-     * Re-processes file artifacts from a historical agent run by querying its persisted
-     * action step OutputData. Use this to recover artifacts for runs that completed before
-     * ProcessFileArtifacts was introduced, or for debugging.
-     *
-     * @param agentRunId - The agent run whose action steps to inspect
-     * @param conversationDetailId - The conversation detail to link artifacts to
-     * @param contextUser - User context for DB operations
-     */
-    public async ReprocessRunFileArtifacts(
-        agentRunId: string,
-        conversationDetailId: string,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<void> {
-        const md = provider || this._provider;
-        const steps = await this.loadActionStepsForRun(agentRunId, contextUser, md);
-        if (steps.length === 0) return;
-
-        const fileOutputs = steps.flatMap(step => this.parseStepFileOutputs(step));
-
-        await this.ProcessFileArtifacts(fileOutputs, conversationDetailId, contextUser, undefined, md);
-    }
-
-    /** Loads all completed action steps for a given agent run (read-only, narrow fields). */
-    private async loadActionStepsForRun(agentRunId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<ActionStepSummary[]> {
-        const rv = RunView.FromMetadataProvider(provider || this._provider);
-        const result = await rv.RunView<ActionStepSummary>({
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${agentRunId}' AND StepType='Actions' AND Status='Completed'`,
-            Fields: ['ID', 'OutputData'],
-            ResultType: 'simple'
-        }, contextUser);
-        return result.Success ? (result.Results ?? []) : [];
-    }
-
-    /**
-     * Parses persisted OutputData JSON from an action step and extracts file output metadata.
-     * Detection is shape-based (looks for objects with fileName + mimeType + fileData/fileId),
-     * not name-based — works regardless of what the action named its output parameter.
-     *
-     * Used only by the historical reprocessing path — live runs use BaseAgent's detectFileOutputs.
-     */
-    private parseStepFileOutputs(step: ActionStepSummary): FileOutputRef[] {
-        if (!step.OutputData) return [];
-
-        let outputData: ActionStepOutputData;
-        try {
-            outputData = JSON.parse(step.OutputData) as ActionStepOutputData;
-        } catch {
-            return [];
-        }
-
-        const params = outputData.actionResult?.parameters;
-        if (!params) return [];
-
-        const results: FileOutputRef[] = [];
-        for (const param of params) {
-            if (param.Value == null) continue;
-            const ref = ParseFileOutputRef(param.Value);
-            if (ref) results.push(ref);
-        }
-        return results;
     }
 
     /** Uploads or resolves a single file output and creates the artifact records.
@@ -1338,12 +1231,13 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         resolvedStorageAccountId: string | undefined,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        acceptUnregisteredFiles: boolean
     ): Promise<void> {
         try {
             if (fo.fileId) {
                 // File already in storage — create file-backed artifact
-                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
                 return;
             }
 
@@ -1353,7 +1247,7 @@ export class AgentRunner {
             if (!hasStorage) {
                 // No storage configured — go straight to inline artifact
                 LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
                 return;
             }
 
@@ -1367,11 +1261,11 @@ export class AgentRunner {
                     resolvedStorageAccountId,
                     provider
                 );
-                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
             } catch (storageError) {
                 // Upload failed — fall back to inline artifact
                 LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
             }
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
@@ -1417,21 +1311,42 @@ export class AgentRunner {
             conversationDetailId: string;
             contextUser: UserInfo;
             provider: IMetadataProvider;
+            /** Whether to fall back to the Generic Binary artifact type when MIME has no exact match. */
+            acceptUnregisteredFiles: boolean;
             /** Callback to set version-specific fields (ContentMode, FileID/Content, etc.) */
             setVersionFields: (version: MJArtifactVersionEntity) => void;
             /** Label for log/error messages (e.g. 'file' or 'inline file') */
             label: string;
         }
     ): Promise<void> {
-        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, setVersionFields, label } = params;
+        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label } = params;
 
-        // Resolve the artifact type by MIME type; fall back to the built-in JSON type
-        const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
-        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType);
-        if (!artifactType) {
-            LogStatus(`ProcessFileArtifacts: no ArtifactType found for MIME ${mimeType}, using JSON fallback`);
+        // Resolve the artifact type using the wildcard-aware resolver with an
+        // extension hint for application/octet-stream uploads.
+        const fileExtension = fileName.includes('.') ? fileName.split('.').pop() : undefined;
+        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType, fileExtension);
+
+        let artifactTypeId: string;
+        if (artifactType) {
+            artifactTypeId = artifactType.ID;
+        } else if (acceptUnregisteredFiles) {
+            // Per-agent opt-in: resolve to the Generic Binary fallback.
+            const genericBinary = ArtifactMetadataEngine.Instance.ArtifactTypes.find(
+                t => t.Name === 'Generic Binary'
+            );
+            if (!genericBinary) {
+                throw new Error(
+                    `Cannot create artifact for ${label} "${fileName}": MIME type "${mimeType}" is not registered and the Generic Binary fallback type is missing from the artifact registry.`
+                );
+            }
+            LogStatus(`ProcessFileArtifacts: no exact ArtifactType for MIME "${mimeType}"; resolving to Generic Binary fallback (agent has AcceptUnregisteredFiles=true).`);
+            artifactTypeId = genericBinary.ID;
+        } else {
+            throw new Error(
+                `Cannot create artifact for ${label} "${fileName}": MIME type "${mimeType}" is not supported. ` +
+                `Register an Artifact Type for this MIME, or set AcceptUnregisteredFiles=true on this agent to use the Generic Binary fallback.`
+            );
         }
-        const artifactTypeId = artifactType?.ID ?? JSON_ARTIFACT_TYPE_ID;
 
         // Use direct provider transaction (BeginTransaction/CommitTransaction) instead of
         // TransactionGroup. This ensures saves execute immediately within the SQL transaction,
@@ -1507,10 +1422,11 @@ export class AgentRunner {
         sizeBytes: number | undefined,
         conversationDetailId: string,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        acceptUnregisteredFiles: boolean
     ): Promise<void> {
         await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider,
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
             label: 'file',
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
@@ -1527,10 +1443,11 @@ export class AgentRunner {
         sizeBytes: number | undefined,
         conversationDetailId: string,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        acceptUnregisteredFiles: boolean
     ): Promise<void> {
         await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider,
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
             label: 'inline file',
             setVersionFields: (version) => {
                 version.ContentMode = 'Text';
@@ -1646,6 +1563,17 @@ export class AgentRunner {
                             content = row.Content || '';
                         }
 
+                        // Binary artifacts stored as a base64 data URL by the
+                        // server hook (xlsx, docx, pdf, image when inline) need
+                        // to reach their tool libraries as a Buffer of the
+                        // decoded bytes — the libraries call
+                        // `Buffer.from(content, 'base64')` and that fails on
+                        // the `data:<mime>;base64,` prefix. Pure helper shared
+                        // with the server-hook unit tests.
+                        if (typeof content === 'string') {
+                            content = ExtractBase64FromDataUrl(content);
+                        }
+
                         if (typeof content === 'string' && content) {
                             content = await this.hydrateSqlBackedContent(content, contextUser);
                         }
@@ -1657,81 +1585,18 @@ export class AgentRunner {
                                 content,
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
+                                deliveryMode: row.DefaultDeliveryMode ?? 'ToolsOnly',
+                                forceToolsOnly: row.ForceToolsOnly === true,
                             });
                         }
                     }
                 }
             }
 
-            // Also gather file attachments (ConversationDetailAttachment) that are
-            // document types the agent can explore (PDF, Excel, Word, etc.).
-            // Uploaded files go through the attachment system, not the artifact system,
-            // so gatherConversationArtifacts would miss them without this.
-            const FILE_MIME_PREFIXES = [
-                'application/pdf',
-                'application/vnd.openxmlformats-officedocument', // .docx, .xlsx, .pptx
-                'application/vnd.ms-excel', // .xls
-                'application/msword', // .doc
-                'text/', // .txt, .csv, .json, .md, etc.
-                'application/json',
-            ];
-
-            const attachments = await rv.RunView<{
-                ID: string;
-                MimeType: string | null;
-                FileID: string | null;
-                FileName: string | null;
-                InlineData: string | null;
-            }>(
-                {
-                    EntityName: 'MJ: Conversation Detail Attachments',
-                    ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
-                    Fields: ['ID', 'MimeType', 'FileID', 'FileName', 'InlineData'],
-                    ResultType: 'simple',
-                },
-                contextUser,
-            );
-
-            if (attachments.Success && attachments.Results.length > 0) {
-                for (const att of attachments.Results) {
-                    const mime = att.MimeType ?? '';
-                    const isDocumentType = FILE_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
-                    if (!isDocumentType) continue;
-
-                    let content: string | Buffer = '';
-                    if (att.FileID) {
-                        const downloaded = await this.downloadArtifactFileContent(att.FileID, contextUser);
-                        if (downloaded) {
-                            content = downloaded;
-                        } else {
-                            LogError(`[AgentRunner] Failed to download attachment file "${att.FileName}" (FileID: ${att.FileID})`);
-                            continue;
-                        }
-                    } else if (att.InlineData) {
-                        // InlineData is base64-encoded — decode for binary files, keep as string for text
-                        if (mime.startsWith('text/') || mime === 'application/json') {
-                            content = Buffer.from(att.InlineData, 'base64').toString('utf-8');
-                        } else {
-                            content = Buffer.from(att.InlineData, 'base64');
-                        }
-                    } else {
-                        continue; // No content available
-                    }
-
-                    const typeName = this.inferArtifactTypeName(mime);
-                    inputArtifacts.push({
-                        name: att.FileName || 'Uploaded File',
-                        typeName,
-                        content,
-                        mimeType: mime || undefined,
-                    });
-                }
-            }
-
             if (inputArtifacts.length > 0) {
                 LogStatus(`[AgentRunner] Gathered ${inputArtifacts.length} input artifact(s) for conversation ${conversationId}: ${inputArtifacts.map(a => `${a.typeName}:"${a.name}" (${a.mimeType || 'no mime'})`).join(', ')}`);
             } else {
-                LogStatus(`[AgentRunner] No input artifacts found for conversation ${conversationId} (${junctions.Results.length} artifact junction(s), ${attachments.Success ? attachments.Results.length : 0} attachment(s) checked)`);
+                LogStatus(`[AgentRunner] No input artifacts found for conversation ${conversationId} (${junctions.Results.length} artifact junction(s) checked)`);
             }
 
             return inputArtifacts;

@@ -18,14 +18,15 @@ export class MJApplicationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'applicationConfiguration', sectionName: 'Application Configuration', isExpanded: true },
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
-            { sectionKey: 'navigationSettings', sectionName: 'Navigation Settings', isExpanded: false },
+            { sectionKey: 'navigationSettings', sectionName: 'Navigation Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Entities', isExpanded: false },
-            { sectionKey: 'mJUserApplications', sectionName: 'User Applications', isExpanded: false },
             { sectionKey: 'mJApplicationSettings', sectionName: 'Application Settings', isExpanded: false },
+            { sectionKey: 'mJUserApplications', sectionName: 'User Applications', isExpanded: false },
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJApplicationRoles', sectionName: 'Application Roles', isExpanded: false },
             { sectionKey: 'mJDashboardUserPreferences', sectionName: 'Dashboard User Preferences', isExpanded: false },
-            { sectionKey: 'mJApplicationRoles', sectionName: 'Application Roles', isExpanded: false }
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);
     }
 }

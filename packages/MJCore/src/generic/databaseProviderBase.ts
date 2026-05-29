@@ -10,6 +10,7 @@ import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunRepo
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { RunReportParams } from "./runReport";
 import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
 export { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
@@ -151,6 +152,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     override get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
     }
+
+    /**
+     * The {@link SQLDialect} instance matching this provider's `PlatformKey`.
+     *
+     * Use this whenever runtime code needs to emit dialect-specific SQL
+     * (boolean literals, identifier quoting, casts, …) — it spares callers
+     * from doing `GetDialect(provider.PlatformKey)` every time, and keeps
+     * dialect resolution in one place. Resolves lazily and is cached so
+     * repeated access is free.
+     *
+     * Example:
+     * ```typescript
+     * const lit = provider.Dialect.BooleanLiteral(true); // '1' on SS, 'TRUE' on PG
+     * ```
+     */
+    public get Dialect(): SQLDialect {
+        if (!this._dialect) {
+            this._dialect = GetDialect(this.PlatformKey);
+        }
+        return this._dialect;
+    }
+    private _dialect: SQLDialect | null = null;
 
     /**
      * Gets the MemberJunction core schema name (e.g. '__mj').
@@ -1253,7 +1276,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     f.ActiveStatusAssertions = tempStatus;
                     return ret;
                 });
-                entity.ResultHistory.push(entityResult);
+                entity.RegisterResultHistoryEntry(entityResult);
 
                 // Step 2: Validation hook
                 if (!bReplay) {
@@ -1411,7 +1434,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 FieldName: f.Name,
                 Value: f.Value,
             }));
-            entity.ResultHistory.push(entityResult);
+            entity.RegisterResultHistoryEntry(entityResult);
 
             // Generate provider-specific delete SQL
             const sqlDetails = this.GenerateDeleteSQL(entity, user);

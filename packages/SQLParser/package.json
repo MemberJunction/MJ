@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/sql-parser",
   "type": "module",
-  "version": "5.32.0",
+  "version": "5.37.0",
   "description": "MemberJunction: SQL parsing utilities — table/column extraction with AST and regex fallback",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,7 +18,7 @@
   "license": "ISC",
   "dependencies": {
     "node-sql-parser": "^5.4.0",
-    "@memberjunction/sql-dialect": "5.32.0"
+    "@memberjunction/sql-dialect": "5.37.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

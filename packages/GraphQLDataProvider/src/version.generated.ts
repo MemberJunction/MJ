@@ -4,4 +4,4 @@
 // Used by BrowserIndexedDBStorageProvider to derive the IndexedDB DB_VERSION
 // so cache schema upgrades fire automatically on minor version bumps.
 
-export const PACKAGE_VERSION = '5.32.0';
+export const PACKAGE_VERSION = '5.37.0';

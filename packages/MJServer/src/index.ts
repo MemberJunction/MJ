@@ -5,7 +5,8 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -25,7 +26,9 @@ import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
@@ -58,15 +61,19 @@ import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/se
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 /**
- * Returns the configured database platform type based on the DB_TYPE environment variable.
- * Defaults to 'sqlserver' for backward compatibility.
+ * Returns the configured database platform from the `DB_PLATFORM` environment
+ * variable, falling back to `'sqlserver'` when the env var is unset. An
+ * unrecognized non-empty value (typo, legacy alias) throws — silent fallback
+ * is the bug we don't want, because it routes the wrong provider against a
+ * real database.
+ *
+ * Implementation note: the actual env-parsing lives in
+ * `@memberjunction/global` (single source of truth across MJCLI, MJServer,
+ * CodeGenLib). This wrapper keeps the public `getDbType()` symbol that
+ * MJServer consumers (and the broader stack) already import.
  */
 export function getDbType(): DatabasePlatform {
-    const dbType = process.env.DB_TYPE?.toLowerCase();
-    if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
-        return 'postgresql';
-    }
-    return 'sqlserver';
+    return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }
 
 export { MaxLength } from 'class-validator';
@@ -96,6 +103,8 @@ export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
+export * from './resolvers/SearchKnowledgeStreamResolver.js';
+export * from './resolvers/AvailableSearchProvidersResolver.js';
 export * from './resolvers/FetchEntityVectorsResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
@@ -417,7 +426,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       url: process.env.REDIS_URL,
       keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
       enablePubSub: true,
-      enableLogging: true,
+      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
     });
     (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
     await redisProvider.StartListening();
@@ -660,27 +669,70 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const httpServer = createServer(app);
 
   const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });
-  const serverCleanup = useServer(
+
+  // Track per-connection expiry timers so we can clean them up on close
+  const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
+
+  const serverCleanup = useServer<Record<string, unknown>, { userPayload: UserPayload }>(
     {
       schema,
-      context: async ({ connectionParams }) => {
-        const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSources);
-        return { userPayload };
-      },
-      onError: (ctx, message, errors) => {
-        // Check if error is token expiration (expected behavior)
-        const isTokenExpired = errors.some(err =>
-          err.extensions?.code === 'JWT_EXPIRED' ||
-          err.message?.includes('token has expired')
-        );
+      // RAII: validate the token once at connection time and cache the result.
+      // This prevents re-validating (and re-logging) on every subscription message.
+      onConnect: async (ctx) => {
+        try {
+          const token = String(ctx.connectionParams?.Authorization);
+          const userPayload = await getUserPayload(token, undefined, dataSources);
 
-        if (isTokenExpired) {
-          // Log at warn level - this is expected from long-lived browser sessions
-          console.warn('WebSocket connection token expired - client should reconnect with refreshed token');
-        } else {
-          // Log actual errors at error level
-          console.error('WebSocket error:', errors);
+          // Store validated payload on the connection for use in context()
+          ctx.extra.userPayload = userPayload;
+
+          // Schedule proactive socket close at token expiry so the client
+          // reconnects with a fresh token instead of spamming errors.
+          const decoded = jwt.decode(token.replace('Bearer ', ''));
+          if (decoded && typeof decoded !== 'string' && decoded.exp) {
+            const msUntilExpiry = decoded.exp * 1000 - Date.now();
+            if (msUntilExpiry > 0) {
+              const timer = setTimeout(() => {
+                console.log(`WebSocket token expiring — closing connection for ${userPayload.email}`);
+                // 4403 = Forbidden — retriable in graphql-ws, signals "get a new token"
+                // (4401 is reserved as fatal/"Unauthorized" in the graphql-ws protocol)
+                try {
+                  ctx.extra.socket.close(4403, 'Token expired');
+                } catch {
+                  // Socket may already be closed; benign
+                }
+              }, msUntilExpiry);
+              // Prevent the timer from keeping the process alive during shutdown
+              timer.unref();
+              expiryTimers.set(ctx, timer);
+            }
+          }
+
+          return true;
+        } catch (error: unknown) {
+          // Return false instead of throwing — graphql-ws sends 4403 Forbidden
+          // (retriable) rather than letting the throw produce 1011 (fatal).
+          const msg = error instanceof Error ? error.message : 'Authentication failed';
+          console.warn(`WebSocket connection rejected: ${msg}`);
+          return false;
         }
+      },
+      // context() now just reads the already-validated payload — no I/O, no logging
+      context: async (ctx) => {
+        return { userPayload: ctx.extra.userPayload as UserPayload };
+      },
+      onClose: (ctx) => {
+        // Clear the expiry timer if the connection closes before the token expires
+        const timer = expiryTimers.get(ctx);
+        if (timer) {
+          clearTimeout(timer);
+          expiryTimers.delete(ctx);
+        }
+      },
+      onError: (_ctx, _message, errors) => {
+        // Token expiry errors can't happen anymore (handled in onConnect + timer),
+        // so all errors here are genuine and worth logging.
+        console.error('WebSocket error:', errors);
       },
     },
     webSocketServer
@@ -899,6 +951,19 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       } catch (error) {
         console.error('❌ Error stopping scheduled jobs service:', error);
       }
+    }
+
+    // Drain anything self-registered with ShutdownRegistry — QueueManager,
+    // future engines/services with timers/intervals/listeners. Each is
+    // responsible for being idempotent and not throwing.
+    try {
+      const count = ShutdownRegistry.Instance.Count;
+      if (count > 0) {
+        await ShutdownRegistry.Instance.ShutdownAll();
+        console.log(`✅ ShutdownRegistry drained ${count} registered service(s)`);
+      }
+    } catch (error) {
+      console.error('❌ Error draining ShutdownRegistry:', error);
     }
 
     // Close server

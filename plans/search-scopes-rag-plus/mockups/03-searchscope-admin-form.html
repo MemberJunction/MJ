@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: SearchScope Admin Form</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .form-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+        .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--mj-border-default); margin-bottom: 16px; }
+        .tab { padding: 8px 16px; font-size: 0.8125rem; color: var(--mj-text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); font-weight: 600; }
+        .tab .count { font-size: 0.6875rem; padding: 1px 6px; margin-left: 4px; border-radius: 999px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); font-weight: 600; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .field label.label { display: block; margin-bottom: 6px; }
+        .toggle-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 0.875rem; background: var(--mj-bg-surface); }
+        .code-editor {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.8125rem;
+            padding: 12px;
+            background: var(--mj-bg-surface-sunken);
+            border-radius: 6px;
+            border: 1px solid var(--mj-border-default);
+            color: var(--mj-text-primary);
+            line-height: 1.5;
+            white-space: pre;
+        }
+        .help-panel { position: sticky; top: 16px; }
+        .help-panel h4 { margin: 0 0 8px; font-size: 0.875rem; color: var(--mj-text-primary); }
+        .help-panel p { font-size: 0.8125rem; color: var(--mj-text-secondary); line-height: 1.5; margin: 0 0 12px; }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>MJ: Search Scope — "HR Policies" · Edit</h1>
+            <span class="mock-breadcrumb">AI Admin / Search Scopes / HR Policies · Mockup 3/10</span>
+        </div>
+
+        <div class="form-layout">
+            <div class="card">
+                <div class="tabs">
+                    <div class="tab active">Definition</div>
+                    <div class="tab">Providers <span class="count">3</span></div>
+                    <div class="tab">External Indexes <span class="count">1</span></div>
+                    <div class="tab">Entities <span class="count">2</span></div>
+                    <div class="tab">Storage <span class="count">0</span></div>
+                    <div class="tab">Assigned Agents <span class="count">4</span></div>
+                </div>
+
+                <div class="stack">
+                    <div class="grid-2">
+                        <div class="field">
+                            <div class="label">Name</div>
+                            <input type="text" value="HR Policies" />
+                        </div>
+                        <div class="field">
+                            <div class="label">Icon</div>
+                            <div class="row">
+                                <input type="text" value="fa-solid fa-user-tie" />
+                                <i class="fa-solid fa-user-tie" style="font-size:1.25rem;color:var(--mj-brand-primary);"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <div class="label">Description</div>
+                        <textarea rows="3">Company HR documents, PTO policy, benefits FAQ, onboarding materials. Used by the People Ops agent and manager-facing copilots.</textarea>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="field">
+                            <div class="label">Owner (personal scopes only)</div>
+                            <select><option>— None (Organization-wide) —</option></select>
+                        </div>
+                        <div class="field">
+                            <div class="label">Status</div>
+                            <select><option>Active</option><option>Inactive</option></select>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="toggle-row">
+                            <input type="checkbox" checked /> <span><strong>Is Default</strong><br/><span class="muted">Picked when users/agents don't specify a scope.</span></span>
+                        </div>
+                        <div class="toggle-row">
+                            <input type="checkbox" /> <span><strong>Is Global</strong><br/><span class="muted">Reserved for the single built-in Global scope.</span></span>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="field">
+                            <div class="label">Start At (optional)</div>
+                            <input type="text" value="2025-11-01 00:00 -0500" />
+                        </div>
+                        <div class="field">
+                            <div class="label">End At (optional)</div>
+                            <input type="text" value="2026-01-31 23:59 -0500" />
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <div class="label">Scope Config (JSON)</div>
+                        <div class="code-editor">{
+  "rrfK": 60,
+  "fusionWeights": {
+    "vector": 2.0,
+    "fulltext": 1.0,
+    "entity": 1.0
+  },
+  "reRanker": {
+    "driverClass": "CohereReRanker",
+    "inputTopN": 100,
+    "outputTopN": 20,
+    "config": { "model": "rerank-v3.5" }
+  }
+}</div>
+                    </div>
+
+                    <div class="field">
+                        <div class="label">Search Context Config (multi-tenant dimensions)</div>
+                        <div class="code-editor">{
+  "dimensions": [
+    {
+      "name": "OrganizationID",
+      "entityId": "&lt;organizations-entity-id&gt;",
+      "inheritanceMode": "strict",
+      "required": true
+    },
+    {
+      "name": "DepartmentID",
+      "entityId": "&lt;departments-entity-id&gt;",
+      "inheritanceMode": "cascading"
+    }
+  ]
+}</div>
+                    </div>
+
+                    <div class="row" style="justify-content:flex-end;">
+                        <button class="btn">Cancel</button>
+                        <button class="btn primary"><i class="fa-solid fa-save"></i> Save scope</button>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="card help-panel">
+                <h4>About Search Scopes</h4>
+                <p>A Search Scope is a named boundary that controls which providers, indexes, entities, and storage accounts participate in a search. Combined with a runtime Search Context, it enables multi-tenant, permission-aware retrieval.</p>
+                <h4>When to use each tab</h4>
+                <p><strong>Definition</strong> — core metadata, time-windowing, RRF weights, re-ranker config.</p>
+                <p><strong>Providers</strong> — which SearchProviders run inside this scope (plus optional per-provider query-rewrite templates).</p>
+                <p><strong>External Indexes</strong> — vector stores (Pinecone/Qdrant/PGVector) and 3rd-party engines (Elasticsearch/Typesense/Azure AI Search).</p>
+                <p><strong>Entities</strong> — scoped entity + FTS search, each with optional ExtraFilter and UserSearchString overrides.</p>
+                <p><strong>Storage</strong> — storage accounts and optional folder-path restrictions.</p>
+                <p><strong>Assigned Agents</strong> — agents that reference this scope via MJ: AI Agent Search Scopes rows.</p>
+            </aside>
+        </div>
+    </div>
+</body>
+</html>

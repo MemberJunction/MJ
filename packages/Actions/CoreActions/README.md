@@ -86,6 +86,14 @@ Several abstract base classes reduce duplication across related actions:
 
 The file `src/generated/action_subclasses.ts` contains actions produced by the MJ CodeGen system from natural-language `UserPrompt` descriptions stored in the database. Generated actions use a **composition pattern** -- they always extend `BaseAction` (never their parent action class) and invoke the parent action via `ActionEngineServer.Instance.RunAction()` at runtime. See the [parent README](../README.md) for details on the generated/child action architecture.
 
+### Scheduled Geocoding (`Scheduled Geocoding` action)
+
+`src/custom/geo/scheduled-geocoding.action.ts` is a safety-net maintenance action that finds records in geo-enabled entities (`Entity.SupportsGeoCoding = 1`) missing a `RecordGeoCode` row, retries failed geocoding attempts, and cleans up orphaned `RecordGeoCode` rows. **Live geocoding-on-save runs inline via `BaseEntity.OnSaveCompleted`** — this scheduled action is only needed to catch records inserted via bulk SQL imports or direct DB writes that bypass `BaseEntity.Save()`.
+
+The "find missing records" phase uses **keyset (seek) pagination** when the target entity has a single-column orderable PK (the common case for MJ entities). This keeps each page O(log N) regardless of how deep the iteration goes — important on multi-million-row entities like `Tax Returns`. Composite-PK entities fall back to `StartRow`-based OFFSET pagination automatically. See **[KEYSET_PAGINATION_GUIDE.md](../../../guides/KEYSET_PAGINATION_GUIDE.md)** for the pattern.
+
+Default cadence is **Saturday 2 AM UTC** (configured in `metadata/scheduled-jobs/.geocoding-maintenance-job.json`). Administrators can adjust the `CronExpression` per environment.
+
 ### Configuration
 
 External API keys used by certain actions (Perplexity, Google Custom Search, Gamma) are loaded from `mj.config.cjs` or environment variables via the `config.ts` module:
@@ -303,6 +311,24 @@ Orchestrate action execution with branching, iteration, parallelism, and retry l
 | Registration Name | Class | Description |
 |---|---|---|
 | `__ExecuteCode` | `ExecuteCodeAction` | Execute sandboxed code snippets |
+
+### Interactive Forms (6 actions)
+
+The lifecycle for runtime-author entity forms (form-role
+`ComponentSpec` + `EntityFormOverride`). See
+[/plans/interactive-forms/phase-2-runtime-loop.md](../../../plans/interactive-forms/phase-2-runtime-loop.md)
+for the full architecture and security model. Mutation actions enforce
+ownership checks (User → caller, Role → membership, Global → admin).
+
+| Registration Name | Class | Description |
+|---|---|---|
+| `__GetEntitySchemaForForm` | `GetEntitySchemaForFormAction` | Read-only: returns the curated form-relevant schema for an entity (FKs resolved, value lists annotated, audit fields stripped). |
+| `__GetDefaultFormScaffoldForEntity` | `GetDefaultFormScaffoldForEntityAction` | Read-only: produces a working form-role `ComponentSpec` mirroring the CodeGen Angular default layout. The agent's baseline. |
+| `__GetActiveFormForEntity` | `GetActiveFormForEntityAction` | Read-only: returns the resolved Active override + full applicable-variants list for the (entity, calling-user) pair. |
+| `__CreateInteractiveForm` | `CreateInteractiveFormAction` | Net-new only. Inserts Component v1.0.0 + Active User-scope Override. Fails `ALREADY_EXISTS` if the user already has an Active override for the entity. |
+| `__ModifyInteractiveForm` | `ModifyInteractiveFormAction` | Branches on the pointed-to Component status: Pending → modify in place; Active → new Pending Component v(N+1) + sibling Pending Override. Always User-scope-clamped. |
+| `__ActivateInteractiveFormVersion` | `ActivateInteractiveFormVersionAction` | Promotes a Pending override to Active; atomically demotes the prior sibling Active. |
+| `__RevertInteractiveForm` | `RevertInteractiveFormAction` | Re-points an Active override at an older Component row in the same Name lineage. Pure UPDATE; no new rows. |
 
 ### Demo (6 actions)
 

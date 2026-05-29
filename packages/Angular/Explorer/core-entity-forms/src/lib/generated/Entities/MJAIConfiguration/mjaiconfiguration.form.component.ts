@@ -18,11 +18,11 @@ export class MJAIConfigurationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
             { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
-            { sectionKey: 'inheritanceSettings', sectionName: 'Inheritance Settings', isExpanded: false },
+            { sectionKey: 'inheritanceSettings', sectionName: 'Inheritance Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentConfigurations', sectionName: 'AI Agent Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'AI Agent Prompts', isExpanded: false },
             { sectionKey: 'mJAIConfigurationParams', sectionName: 'AI Configuration Params', isExpanded: false },
-            { sectionKey: 'mJAIAgentConfigurations', sectionName: 'AI Agent Configurations', isExpanded: false },
             { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },

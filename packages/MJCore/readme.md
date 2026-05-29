@@ -555,6 +555,59 @@ const result = await rv.RunView<OrderEntity>({
 // Aggregate results are in result.AggregateResults[]
 ```
 
+#### Keyset (Seek) Pagination — `AfterKey`
+
+For background jobs and bulk processing that iterate through *all* records of a large entity, use `AfterKey` instead of `StartRow`. Keyset pagination stays **O(log N) per page** regardless of depth — `StartRow`/OFFSET pagination becomes progressively slower as the offset grows.
+
+```typescript
+import { CompositeKey } from '@memberjunction/core';
+
+let lastSeenKey: CompositeKey | undefined; // undefined => first page
+
+while (true) {
+    const result = await rv.RunView({
+        EntityName: 'Tax Returns',
+        ExtraFilter: 'AddressLine1 IS NOT NULL',
+        AfterKey: lastSeenKey,
+        MaxRows: 500,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break; // partial page = end of data
+
+    const last = result.Results[result.Results.length - 1];
+    lastSeenKey = CompositeKey.FromID(last.ID);
+}
+```
+
+**Constraints** (throw `AfterKeyNotSupportedError` on violation):
+- Entity must have a **single-column primary key** on a comparable type.
+- `OrderBy`, if set, must reference only the PK column (any `ASC`/`DESC` direction).
+- Cannot be combined with non-zero `StartRow`.
+
+Keyset queries automatically bypass the server cache (read + write) — each call uses a different seek key, so caching them is pure overhead.
+
+UI grid pagination (a few hundred pages of a few hundred rows) should stay on `StartRow` — keyset isn't necessary there. See **[KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)** for the full pattern, validation rules, and reference implementations.
+
+```typescript
+// Defensive: catch the framework's typed error if you want to fall back to OFFSET
+import { AfterKeyNotSupportedError } from '@memberjunction/core';
+
+try {
+    await rv.RunView({ EntityName: 'SomeEntity', AfterKey: key, MaxRows: 500 }, user);
+} catch (e) {
+    if (e instanceof AfterKeyNotSupportedError && e.Reason === 'CompositePK') {
+        // entity has composite PK — fall back to StartRow-based iteration
+    } else {
+        throw e;
+    }
+}
+```
+
+Helper: `IsKeysetPaginationOrderableType(sqlTypeName)` — returns true if a column type is acceptable as a keyset PK (essentially all standard SQL types; defensively rejects exotics like `xml`/`sql_variant`/`varbinary`).
+
 #### ResultType and Fields Optimization
 
 ```typescript
@@ -592,7 +645,8 @@ const countResult = await rv.RunView({
 | `Fields` | `string[]` | Field names to return (simple mode only) |
 | `UserSearchString` | `string` | User search term |
 | `MaxRows` | `number` | Maximum rows to return |
-| `StartRow` | `number` | Row offset for pagination |
+| `StartRow` | `number` | Row offset (OFFSET-based pagination). Use for UI grids. For deep iteration over large tables, prefer `AfterKey`. |
+| `AfterKey` | `CompositeKey` | Keyset (seek) pagination cursor — O(log N) per page regardless of depth. Requires single-column PK. Throws `AfterKeyNotSupportedError` on incompatible entities. See [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md). |
 | `ResultType` | `'simple' \| 'entity_object' \| 'count_only'` | Result format |
 | `IgnoreMaxRows` | `boolean` | Bypass entity MaxRows setting |
 | `SaveViewResults` | `boolean` | Store run results for future exclusion |
@@ -801,6 +855,48 @@ Key features:
 - Automatic refresh when entities are saved or deleted (debounced)
 - Local caching support via `CacheLocal` and `CacheLocalTTL` options
 - Supports both entity and dataset loading
+
+---
+
+### RegisterForStartup
+
+The `@RegisterForStartup` decorator registers singleton engine classes (or any class implementing `IStartupSink`) with the `StartupManager` to automatically run configuration/setup during application boot.
+
+```typescript
+import { RegisterForStartup, IStartupSink, IMetadataProvider, UserInfo } from '@memberjunction/core';
+
+@RegisterForStartup({
+    priority: 10,                 // Lower numbers run first
+    severity: 'fatal',           // 'fatal' (aborts startup), 'error', 'warn', 'silent'
+    description: 'My custom startup engine'
+})
+export class MyStartupEngine implements IStartupSink {
+    public static get Instance(): MyStartupEngine {
+        return super.getInstance<MyStartupEngine>();
+    }
+
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Run configuration and initial load
+        await this.Config(false, contextUser, provider);
+    }
+}
+```
+
+#### Deferred Startup & Delay
+For non-critical background services (like local AI model loading or vector pre-warming), you can set `deferred: true` to execute asynchronously without blocking the main application boot sequence.
+
+You can also specify `deferredDelay` (in milliseconds) to wait a set duration after synchronous boot finishes before the startup manager triggers the task, preventing resource spikes during boot:
+
+```typescript
+@RegisterForStartup({
+    deferred: true,
+    deferredDelay: 15000, // Delay background loading by 15 seconds
+    description: 'Background AI Engine pre-warming'
+})
+export class AIEngine implements IStartupSink {
+    // ...
+}
+```
 
 ---
 

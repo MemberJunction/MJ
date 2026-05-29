@@ -515,6 +515,15 @@ export interface IMetadataProvider {
 
     get DatabaseConnection(): any
 
+    /**
+     * A stable string that uniquely identifies the underlying connection this provider points to
+     * (host/port/database/endpoint — never credentials). Two providers pointing at the same
+     * connection should return the same value. Used by BaseEngine to key its per-connection engine
+     * instance cache so transient per-request providers don't pollute the cache; same-connection
+     * lookups share one cached engine.
+     */
+    get InstanceConnectionString(): string
+
     Config(configData: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean>
 
     get Entities(): EntityInfo[]
@@ -549,22 +558,23 @@ export interface IMetadataProvider {
      */
     get AuthorizationRoles(): AuthorizationRoleInfo[]
 
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
     get Queries(): QueryInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
     get QueryFields(): QueryFieldInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
     get QueryCategories(): QueryCategoryInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
     get QueryPermissions(): QueryPermissionInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities` instead. */
     get QueryEntities(): QueryEntityInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities` instead. */
     get QueryParameters(): QueryParameterInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities` instead. */
     get QueryDependencies(): QueryDependencyInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities` instead. */
     get SQLDialects(): SQLDialectInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities` instead. */
     get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
@@ -1431,14 +1441,23 @@ export class AllMetadata {
      * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
      */
     AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryCategories: QueryCategoryInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueries: QueryInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryFields: QueryFieldInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryPermissions: QueryPermissionInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryEntities: QueryEntityInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryParameters: QueryParameterInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryDependencies: QueryDependencyInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllSQLDialects: SQLDialectInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];

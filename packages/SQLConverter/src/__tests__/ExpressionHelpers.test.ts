@@ -583,6 +583,69 @@ describe('convertCastTypes', () => {
     expect(convertCastTypes('CAST(col as uniqueidentifier)'))
       .toBe('CAST(col AS UUID)');
   });
+
+  // -------------------------------------------------------------------------
+  // Quoted type tokens (post convertIdentifiers): CAST(x AS [INT]) → "INT"
+  //
+  // When upstream T-SQL has bracket-wrapped types and convertIdentifiers
+  // runs first, the type name ends up double-quoted. PG parses quoted
+  // tokens as identifiers, not types, so without normalization PG emits
+  // `type "INT" does not exist`. The pre-pass strips quotes from known
+  // T-SQL types so the existing rules apply.
+  // -------------------------------------------------------------------------
+  it('converts AS "INT" (quoted) to AS INTEGER', () => {
+    expect(convertCastTypes('CAST("col" AS "INT")'))
+      .toBe('CAST("col" AS INTEGER)');
+  });
+
+  it('converts AS "INTEGER" (quoted) to AS INTEGER (no double-quote regression)', () => {
+    expect(convertCastTypes('CAST("col" AS "INTEGER")'))
+      .toBe('CAST("col" AS INTEGER)');
+  });
+
+  it('converts AS "BIT" (quoted) to AS BOOLEAN', () => {
+    expect(convertCastTypes('CAST("col" AS "BIT")'))
+      .toBe('CAST("col" AS BOOLEAN)');
+  });
+
+  it('converts AS "NVARCHAR" (quoted) to AS TEXT', () => {
+    expect(convertCastTypes('CAST("col" AS "NVARCHAR")'))
+      .toBe('CAST("col" AS TEXT)');
+  });
+
+  it('converts AS "NVARCHAR"(100) (quoted with length) to AS VARCHAR(100)', () => {
+    expect(convertCastTypes('CAST("col" AS "NVARCHAR"(100))'))
+      .toBe('CAST("col" AS VARCHAR(100))');
+  });
+
+  it('converts AS "DATETIME" (quoted) to AS TIMESTAMPTZ', () => {
+    expect(convertCastTypes('CAST("col" AS "DATETIME")'))
+      .toBe('CAST("col" AS TIMESTAMPTZ)');
+  });
+
+  it('converts AS "UNIQUEIDENTIFIER" (quoted) to AS UUID', () => {
+    expect(convertCastTypes('CAST("col" AS "UNIQUEIDENTIFIER")'))
+      .toBe('CAST("col" AS UUID)');
+  });
+
+  it('full pipeline: convertIdentifiers + convertCastTypes on bracket-wrapped types', () => {
+    // Simulates the runtime query-extraction pipeline path that produced
+    // the original `type "INTEGER" does not exist` error.
+    const tsqlInput = 'SELECT CAST([Score] AS [INT]) AS Score FROM [Results]';
+    const afterIdentifiers = convertIdentifiers(tsqlInput);
+    const afterCastTypes = convertCastTypes(afterIdentifiers);
+    expect(afterCastTypes)
+      .toBe('SELECT CAST("Score" AS INTEGER) AS Score FROM "Results"');
+  });
+
+  it('preserves real quoted identifiers (column refs) — only types after AS are unquoted', () => {
+    // Defensive: a column literally named "INT" (weird but legal) should
+    // not be unquoted. Our regex requires the quoted token to follow
+    // `AS\s+`, so a quoted column reference like `WHERE "INT" = 1` is
+    // left alone.
+    expect(convertCastTypes('SELECT * FROM T WHERE "INT" = 1'))
+      .toBe('SELECT * FROM T WHERE "INT" = 1');
+  });
 });
 
 // ---------------------------------------------------------------------------

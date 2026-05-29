@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "Name": "Image",
+      "Description": "Image content (PNG, JPEG, GIF, WebP, etc.). Delivered inline as image_url for vision-capable models. ForceToolsOnly per-instance opts out of inline delivery — note that no tool exists today to re-feed bytes back into the model's vision pipeline, so ToolsOnly on multimodal artifacts means the LLM only sees bytes as a tool result, not as a native image.",
+      "ParentID": null,
+      "ContentType": "image/*",
+      "DriverClass": "ImageArtifactViewerPlugin",
+      "ToolLibraryClass": null,
+      "IsEnabled": true,
+      "Priority": 0,
+      "DefaultDeliveryMode": "Inline",
+      "SystemSupplied": true,
+      "Icon": "fa-solid fa-image"
+    },
+    "primaryKey": {
+      "ID": "0C39419D-DE0C-4269-8D68-37FDE9A2075E"
+    },
+    "sync": {
+      "lastModified": "2026-05-27T16:33:03.873Z",
+      "checksum": "c9df033983300d9a91f2986283fd9a3f199cec02da17629495abf503044b1fe8"
+    }
+  }
+]

@@ -1,12 +1,12 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { KeyValuePairOutputType } from './KeyInputOutputTypes.js';
+import { CompositeKeyInputType, KeyValuePairOutputType } from './KeyInputOutputTypes.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 /********************************************************************************
@@ -159,11 +159,24 @@ export class RunViewByIDInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -260,11 +273,24 @@ export class RunViewByNameInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -347,11 +373,24 @@ export class RunDynamicViewInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -463,11 +502,24 @@ export class RunViewGenericInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 //****************************************************************************
@@ -1017,6 +1069,9 @@ export class RunViewResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
+          AfterKey: item.params.AfterKey
+            ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
+            : undefined,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

@@ -974,7 +974,8 @@ SELECT
 	c.is_nullable AllowsNull,
 	IIF(COALESCE(bt.name, t.name) IN ('timestamp', 'rowversion'), 1, IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity)) AutoIncrement,
 	c.column_id,
-	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
+	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- view-only columns OR computed columns are both flagged virtual (read-only at API layer); use IsComputed below to disambiguate
+	IIF(cc.definition IS NOT NULL, 1, 0) IsComputed, -- computed columns are physically in the base table but read-only at the SQL layer; distinct from view-only virtual columns
 	basetable_columns.object_id,
 	dc.name AS DefaultConstraintName,
   dc.definition AS DefaultValue,
@@ -1217,6 +1218,7 @@ BEGIN
         DefaultValue NVARCHAR(MAX),
         AutoIncrement BIT,
         IsVirtual BIT,
+        IsComputed BIT,
         Sequence INT,
         RelatedEntityID UNIQUEIDENTIFIER,
         RelatedEntityFieldName NVARCHAR(255),
@@ -1242,6 +1244,7 @@ BEGIN
         CONVERT(nvarchar(max),fromSQL.DefaultValue),
         fromSQL.AutoIncrement,
         fromSQL.IsVirtual,
+        fromSQL.IsComputed,
         fromSQL.Sequence,
         re.ID AS RelatedEntityID,
         fk.referenced_column AS RelatedEntityFieldName,
@@ -1303,14 +1306,17 @@ BEGIN
           ISNULL(LTRIM(RTRIM(ef.DefaultValue)), '') <> ISNULL(LTRIM(RTRIM(CONVERT(NVARCHAR(MAX), fromSQL.DefaultValue))), '') OR
           ef.AutoIncrement <> fromSQL.AutoIncrement OR
           ef.IsVirtual <> fromSQL.IsVirtual OR
+          ef.IsComputed <> fromSQL.IsComputed OR
           ef.Sequence <> fromSQL.Sequence OR
           ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, ef.RelatedEntityID), '00000000-0000-0000-0000-000000000000') <> ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, re.ID), '00000000-0000-0000-0000-000000000000') OR -- Use TRY_CONVERT here
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
           ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END OR
-          ef.IsUnique <> CASE 
-              WHEN pk.ColumnName IS NOT NULL THEN 1 
+          ef.IsUnique <> CASE
+              WHEN pk.ColumnName IS NOT NULL THEN 1
               ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
-          END
+          END OR
+          -- Detect AllowUpdateAPI that needs clearing on virtual transition
+          (ef.AllowUpdateAPI = 1 AND fromSQL.IsVirtual = 1 AND ef.IsVirtual = 0)
         );
 
     -- Step 4: Perform the update using the table variable
@@ -1325,11 +1331,16 @@ BEGIN
         ef.DefaultValue = fr.DefaultValue,
         ef.AutoIncrement = fr.AutoIncrement,
         ef.IsVirtual = fr.IsVirtual,
+        ef.IsComputed = fr.IsComputed,
         ef.Sequence = fr.Sequence,
         ef.RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityID, ef.RelatedEntityID), -- if AutoUpdate is not on, respect the current value
         ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName), -- if AutoUpdate is not on, respect the current value
         ef.IsPrimaryKey = fr.IsPrimaryKey,
         ef.IsUnique = fr.IsUnique,
+        -- When a field transitions to virtual, it can no longer be written to.
+        -- IS-A parent fields are unaffected: they are created as virtual and
+        -- never go through a 0→1 transition in this SP.
+        ef.AllowUpdateAPI = IIF(fr.IsVirtual = 1 AND ef.IsVirtual = 0, 0, ef.AllowUpdateAPI),
         ef.__mj_UpdatedAt = GETUTCDATE()
     FROM
         [__mj].EntityField ef

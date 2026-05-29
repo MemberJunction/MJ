@@ -91,7 +91,8 @@ export class GeminiLLM extends BaseLLM {
      * Convert MJ effort level (1-100) to Gemini thinkingBudget (0-24576)
      *
      * Mapping strategy:
-     * - 1-33 (low): 1024-4096 tokens
+     * - 1 (minimal): 0 (disabled) on Flash; clamped to ~1024 on Pro
+     * - 2-33 (low): 1024-4096 tokens
      * - 34-66 (medium): 4097-12288 tokens
      * - 67-100 (high): 12289-24576 tokens
      * - undefined: No thinkingConfig (Gemini default ~8192)
@@ -124,16 +125,16 @@ export class GeminiLLM extends BaseLLM {
         const isFlashModel = lowerModel.includes('flash');
         const isProModel = lowerModel.includes('pro') && !isFlashModel;
 
-        // Very low effort (1-5) - try to disable thinking on Flash models
-        if (level <= 5 && isFlashModel) {
+        // Minimal effort (1) - disable thinking on Flash models
+        if (level === 1 && isFlashModel) {
             return 0; // Disable thinking (only works on Flash/Flash-Lite)
         }
 
         // For Pro models, minimum effective budget is ~1024
-        // For Flash models with effort > 5, use normal scaling
+        // For Flash models with effort >= 2, use normal scaling
         if (level <= 33) {
-            // Low: linear scale from 1024 to 4096
-            return Math.round(1024 + ((level - 1) / 32) * (4096 - 1024));
+            // Low (2-33): linear scale from 1024 to 4096
+            return Math.round(1024 + ((level - 2) / 31) * (4096 - 1024));
         } else if (level <= 66) {
             // Medium: linear scale from 4097 to 12288
             return Math.round(4097 + ((level - 34) / 32) * (12288 - 4097));
@@ -417,11 +418,11 @@ export class GeminiLLM extends BaseLLM {
                     numericLevel = 0;
                 }
 
-                if (!numericLevel || numericLevel <= 1) {
-                    geminiLevel = "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                if (numericLevel === 1) {
+                    geminiLevel = "MINIMAL" // effort 1 is the minimum valid value and maps to minimal thinking on Gemini 3+ models
                 }
-                else if(numericLevel <= 33) {
-                    geminiLevel = "LOW" 
+                else if (numericLevel >= 2 && numericLevel <= 33) {
+                    geminiLevel = "LOW"
                 }
                 else if (numericLevel <= 66) {
                     geminiLevel = "MEDIUM" 
@@ -453,7 +454,7 @@ export class GeminiLLM extends BaseLLM {
     /**
      * Reset streaming state for a new request
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,
@@ -568,29 +569,35 @@ export class GeminiLLM extends BaseLLM {
     } {
         let content = '';
         let finishReason = undefined;
-        
-        // Extract text from the chunk with the new SDK
-        if (chunk.candidates && 
-            chunk.candidates[0] && 
-            chunk.candidates[0].content && 
-            chunk.candidates[0].content[0] && 
-            chunk.candidates[0].content[0].parts) {
-            
-            // Find the text part
-            const textPart = chunk.candidates[0].content[0].parts.find((part: any) => part.text);
-            if (textPart?.text) {
-                const rawContent = textPart.text;
-                
-                // Add raw content to pending content for processing
-                this._streamingState.pendingContent += rawContent;
-                
-                // Process the pending content to extract thinking
+
+        // @google/genai shapes Candidate.content as a Content OBJECT (`{ parts: Part[] }`),
+        // not an array as the legacy @google/generative-ai SDK did. The old `content[0].parts`
+        // access always resolved to undefined on the new SDK, so the guard failed on every
+        // chunk and no text was ever appended -- that's why streaming appeared dead.
+        //
+        // A single chunk's `parts` array can also mix reasoning ({thought:true, text}) and
+        // answer ({text}) parts. Split them the same way the non-streaming path does, so
+        // the reasoning summary never leaks into the user-visible stream.
+        const parts: Array<{ text?: string; thought?: boolean }> | undefined =
+            chunk?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+            let visibleTextAdded = false;
+            for (const part of parts) {
+                if (!part?.text) continue;
+                if (part.thought) {
+                    this._streamingState.accumulatedThinking += part.text;
+                } else {
+                    this._streamingState.pendingContent += part.text;
+                    visibleTextAdded = true;
+                }
+            }
+            if (visibleTextAdded) {
                 content = this.processThinkingInStreamingContent();
             }
         }
-        
+
         // Check for finish reason if available
-        if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
+        if (chunk?.candidates?.[0]?.finishReason) {
             finishReason = chunk.candidates[0].finishReason;
         }
 

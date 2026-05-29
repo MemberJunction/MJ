@@ -84,6 +84,13 @@ export interface CachedRunViewData {
     aggregateResults?: AggregateResult[];
     /** Total row count from the database — may differ from results.length for paginated queries */
     totalRowCount?: number;
+    /**
+     * Hash of the entity's field names (in sequence order) at the time the cache entry was written.
+     * Used to detect schema changes (e.g., new columns added via migration + CodeGen) that would
+     * make the cached data structurally stale even though maxUpdatedAt and rowCount haven't changed.
+     * Backward-compatible: entries without this field are served normally (no regression).
+     */
+    schemaHash?: string;
 }
 
 /**
@@ -462,6 +469,34 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Checks whether a cached RunView entry is structurally stale due to a schema change
+     * (e.g., new columns added via migration + CodeGen). Compares the stored schema hash
+     * against the current entity field list. If they differ, the entry is invalidated.
+     * @param fingerprint - The cache fingerprint
+     * @param data - The cached data to validate
+     * @returns true if the entry is stale and should not be served
+     */
+    private isSchemaStaleCacheEntry(fingerprint: string, data: CachedRunViewData): boolean {
+        if (!data.schemaHash) return false;
+
+        const entityName = this.extractEntityFromFingerprint(fingerprint);
+        if (!entityName) return false;
+
+        const currentHash = this.ComputeSchemaHash(undefined, entityName);
+        if (!currentHash) return false;
+
+        if (currentHash !== data.schemaHash) {
+            LogStatusEx({
+                message: `[CACHE-SCHEMA-STALE] Entity "${entityName}" schema changed (cached=${data.schemaHash}, current=${currentHash})`,
+                verboseOnly: false
+            });
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Adds a fingerprint to the entity→fingerprint reverse index.
      * Called when a RunView result is cached.
      */
@@ -496,6 +531,35 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public GetFingerprintsForEntity(entityName: string): ReadonlySet<string> {
         return this._entityFingerprintIndex.get(entityName) ?? new Set();
+    }
+
+    /**
+     * Resolves cached fingerprints for an entity, checking the local in-memory
+     * index first and falling back to the shared storage provider (e.g., Redis)
+     * when the local index is empty. This handles cross-server scenarios where
+     * Server A cached RunView results and Server B saves a record — Server B's
+     * local index is empty but Redis still has the stale cached entries.
+     */
+    private async resolveFingerprintsForEntity(entityName: string): Promise<Set<string> | undefined> {
+        const local = this._entityFingerprintIndex.get(entityName);
+        if (local && local.size > 0) return local;
+
+        if (!this._storageProvider?.GetCategoryKeys) return undefined;
+
+        const allKeys = await this._storageProvider.GetCategoryKeys(CacheCategory.RunViewCache);
+        const entityPrefix = entityName + '|';
+        const remoteFingerprints = allKeys.filter(k => k.startsWith(entityPrefix));
+        if (remoteFingerprints.length > 0) {
+            LogStatusVerbose(`LocalCacheManager: found ${remoteFingerprints.length} remote cached fingerprint(s) for "${entityName}" via storage provider`);
+            const result = new Set(remoteFingerprints);
+            // Populate local index so subsequent lookups are O(1) instead of hitting Redis again
+            for (const fp of result) {
+                this.addToEntityIndex(fp);
+            }
+            return result;
+        }
+
+        return undefined;
     }
 
     // ========================================================================
@@ -551,7 +615,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
         if (!this.IsCachingEnabledForEntity(baseEntity.EntityInfo)) return;
 
-        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        const fingerprints = await this.resolveFingerprintsForEntity(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const primaryKeys = baseEntity.EntityInfo.PrimaryKeys;
@@ -602,7 +666,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityInfo = md.EntityByName(entityName);
         if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
-        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        const fingerprints = await this.resolveFingerprintsForEntity(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const action = payload?.action;
@@ -1067,6 +1131,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
+        // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
+        // sends a different AfterKey but otherwise-identical params; without this, sequential
+        // pages collide on the same fingerprint and the dedup/linger layer hands page N+1 the
+        // result of page N — freezing the cursor and looping forever. Appended only when present
+        // so non-keyset fingerprints stay byte-for-byte identical (no cache invalidation).
+        if (params.AfterKey) {
+            parts.push(`ak:${params.AfterKey.ToString()}`);
+        }
+
         // Only include connection if provided
         if (connection) {
             parts.push(connection);
@@ -1113,6 +1186,28 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Computes a hash of an entity's field names in sequence order.
+     * Used to detect schema changes (new/removed/reordered columns) that would
+     * make cached RunView data structurally stale.
+     * @param provider - The metadata provider to resolve the entity
+     * @param entityName - The entity name to compute the hash for
+     * @returns The schema hash string, or undefined if the entity can't be resolved
+     */
+    public ComputeSchemaHash(provider: IMetadataProvider | undefined, entityName: string): string | undefined {
+        try {
+            const md = provider ?? new Metadata();
+            const entity = md.EntityByName(entityName);
+            if (!entity || !entity.Fields || entity.Fields.length === 0) return undefined;
+            // Use natural sequence order (EntityInfo.Fields is sorted by Sequence).
+            // This detects field additions, removals, AND reorderings.
+            const fieldNames = entity.Fields.map(f => f.Name).join('|');
+            return this.simpleHash(fieldNames);
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
      * Stores a RunView result in the cache.
      *
      * Note: rowCount is NOT persisted - it is always derived from results.length
@@ -1139,6 +1234,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         provider?: IMetadataProvider
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
+
+        // Keyset (AfterKey) queries are inherently single-use — each call uses a different
+        // seek key, so a cached entry would never be reusable by a subsequent caller.
+        // Skip the cache write entirely to avoid polluting the cache with one-shot entries.
+        if (params.AfterKey) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for keyset (AfterKey) query on "${params.EntityName}"`, verboseOnly: true });
+            return;
+        }
 
         // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
         // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
@@ -1172,13 +1275,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
         }
 
-        // Persist results, maxUpdatedAt, aggregateResults, and totalRowCount
+        // Type guard — coerce maxUpdatedAt to ISO string if caller passed wrong type
+        if (maxUpdatedAt && typeof maxUpdatedAt !== 'string') {
+            const coerced = new Date(maxUpdatedAt as unknown as number).toISOString();
+            LogError(`SetRunViewResult: maxUpdatedAt was ${typeof maxUpdatedAt}, coerced to ISO string: ${coerced}`);
+            maxUpdatedAt = coerced;
+        }
+
+        // Persist results, maxUpdatedAt, aggregateResults, totalRowCount, and schemaHash
         const data: CachedRunViewData = { results, maxUpdatedAt };
         if (aggregateResults && aggregateResults.length > 0) {
             data.aggregateResults = aggregateResults;
         }
         if (totalRowCount !== undefined) {
             data.totalRowCount = totalRowCount;
+        }
+        // Compute and store schema hash for upgrade detection
+        if (params.EntityName) {
+            const schemaHash = this.ComputeSchemaHash(provider, params.EntityName);
+            if (schemaHash) {
+                data.schemaHash = schemaHash;
+            }
         }
         // Estimate size from a string serialization for eviction accounting only;
         // the actual stored value is the native object (no JSON.stringify on the
@@ -1297,6 +1414,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Shared helper used by both `GetRunViewResult` and `GetRunViewResults` to
      * unwrap the persisted shape into the consumer-facing `CachedRunViewResult`,
      * recording the appropriate hit/miss + access-tracking side effects.
+     *
+     * Also validates the schema hash (if present) to detect structurally stale
+     * cache entries after schema migrations. If the entity's field list changed
+     * since the entry was cached, the entry is invalidated and null is returned.
      */
     private materializeCachedRunViewResult(
         fingerprint: string,
@@ -1306,6 +1427,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this._stats.misses++;
             return null;
         }
+
+        if (this.isSchemaStaleCacheEntry(fingerprint, parsed)) {
+            this.InvalidateRunViewResult(fingerprint).catch(() => {});
+            this._stats.misses++;
+            return null;
+        }
+
         this.recordAccess(fingerprint);
         this._stats.hits++;
         const results = parsed.results || [];
@@ -1506,6 +1634,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const resultMap = new Map<string, unknown>();
                 for (const row of cached.results) {
                     const rowObj = row as Record<string, unknown>;
+                    if (pkFieldNames.some(fn => rowObj[fn] == null)) continue; // Skip rows with missing PK fields
                     const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
                     resultMap.set(rowKey.ToConcatenatedString(), row);
                 }
@@ -1553,6 +1682,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const resultMap = new Map<string, unknown>();
                 for (const row of cached.results) {
                     const rowObj = row as Record<string, unknown>;
+                    if (pkFieldNames.some(fn => rowObj[fn] == null)) continue; // Skip rows with missing PK fields
                     const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
                     resultMap.set(rowKey.ToConcatenatedString(), row);
                 }
@@ -1614,14 +1744,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     public async InvalidateEntityCaches(entityName: string): Promise<void> {
         if (!this._storageProvider) return;
 
-        const normalizedName = entityName.toLowerCase().trim();
-        const toRemove: string[] = [];
-
-        for (const [key, entry] of this._registry.entries()) {
-            if (entry.type === 'runview' && entry.name.toLowerCase().trim() === normalizedName) {
-                toRemove.push(key);
-            }
-        }
+        const resolved = await this.resolveFingerprintsForEntity(entityName);
+        const toRemove = resolved ? Array.from(resolved) : [];
 
         if (toRemove.length > 0) {
             LogStatusEx({ message: `    🗑️ [Cache INVALIDATE-ENTITY] "${entityName}" — removing ${toRemove.length} entries: ${toRemove.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
@@ -1631,6 +1755,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             try {
                 await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
+                this.removeFromEntityIndex(key);
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
             }

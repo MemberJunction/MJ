@@ -52,6 +52,23 @@ export class ConversationBridgeService {
     public DeepLinkRequest$ = new Subject<ConversationDeepLink>();
 
     /**
+     * "Expand the overlay" requests from anywhere in the app — typically
+     * a dashboard's "Refine with AI" button that wants to pop the chat
+     * after setting fresh AppContext. The mounted overlay subscribes and
+     * calls its own `Expand()` in response. Decoupled this way because the
+     * overlay component reference isn't reachable from arbitrary callers,
+     * and we don't want everyone to take a hard dep on the overlay class.
+     */
+    public ExpandOverlayRequested$ = new Subject<void>();
+
+    /**
+     * Ask the overlay to expand. Idempotent if already expanded.
+     */
+    public RequestExpandOverlay(): void {
+        this.ExpandOverlayRequested$.next();
+    }
+
+    /**
      * Set the active conversation from the overlay.
      * The workspace will pick up the change automatically.
      */

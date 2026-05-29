@@ -123,17 +123,6 @@
           </div>
         }
 
-        <!-- Suggested Responses (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && suggestedResponses.length > 0) {
-          <mj-suggested-responses
-            [suggestedResponses]="suggestedResponses"
-            [disabled]="isProcessing"
-            [isLastMessage]="isLastMessageInConversation"
-            [isConversationOwner]="isConversationOwner"
-            (responseSelected)="onSuggestedResponseSelected($event)">
-          </mj-suggested-responses>
-        }
-
         <!-- Agent Response Form (shown only for last message by owner) -->
         @if (isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form
@@ -195,7 +184,9 @@
             <mj-conversation-message-rating
               [conversationDetailId]="message.ID"
               [currentUser]="currentUser"
-              [ratingsData]="ratings">
+              [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
+              [ratingsData]="ratings"
+              [canEdit]="isConversationOwner">
             </mj-conversation-message-rating>
             <button
               class="action-bar-btn pin-btn"
@@ -285,7 +276,8 @@
                   <mj-conversation-message-rating
                     [conversationDetailId]="message.ID"
                     [currentUser]="currentUser"
-                    [ratingsData]="ratings">
+                    [ratingsData]="ratings"
+                    [canEdit]="isConversationOwner">
                   </mj-conversation-message-rating>
                   <button
                     class="action-bar-btn pin-btn"

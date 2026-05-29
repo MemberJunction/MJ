@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -70,7 +72,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -160,6 +162,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ForceToolsOnly"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -188,6 +198,8 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
     <!-- ========================================
          RELATED ENTITY PANELS
@@ -243,6 +255,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Artifact Uses Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifactUses"
+        SectionName="Artifact Uses"
+        Icon="fa fa-eye"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifactUses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactUses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactUses', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Conversation Detail Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailArtifacts"
@@ -268,29 +305,31 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Artifact Uses Section -->
+    <!-- Conversation Detail Attachments Section -->
     <mj-collapsible-panel
-        SectionKey="mJArtifactUses"
-        SectionName="Artifact Uses"
-        Icon="fa fa-eye"
+        SectionKey="mJConversationDetailAttachments"
+        SectionName="Conversation Detail Attachments"
+        Icon="fa fa-paperclip"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArtifactUses')"
+        [BadgeCount]="GetSectionRowCount('mJConversationDetailAttachments')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
-                [AllowLoad]="IsSectionExpanded('mJArtifactUses')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','ArtifactVersionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
+                [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArtifactUses', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

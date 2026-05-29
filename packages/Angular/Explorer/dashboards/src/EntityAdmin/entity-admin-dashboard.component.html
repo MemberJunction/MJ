@@ -1,43 +1,53 @@
-<div class="entity-admin-dashboard-container">
-  <div class="dashboard-header">
-    <div class="header-info">
-      <span class="visible-entities-count">{{ filteredEntities.length }} visible entities</span>
+<mj-page-layout>
+  <mj-page-header
+    Title="Entity Admin"
+    Icon="fa-solid fa-database"
+    Subtitle="Browse and configure entity definitions">
+    <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+    <div meta>
+      <mj-stat-badge
+        [Count]="filteredEntities.length"
+        [Total]="TotalEntityCount"
+        Label="entities">
+      </mj-stat-badge>
     </div>
-    <div class="header-controls">
-      <button 
-        class="control-btn" 
-        (click)="toggleFilterPanel()" 
-        [class.active]="filterPanelVisible"
+    <div actions>
+      <button
+        mjButton
+        [variant]="filterPanelVisible ? 'primary' : 'secondary'"
+        size="sm"
+        (click)="toggleFilterPanel()"
         title="Toggle Filters">
-        <span class="fa-solid fa-filter"></span>
-        Filters
+        <i class="fa-solid fa-filter"></i> Filters
       </button>
     </div>
-  </div>
-  
-  @if (isLoading) {
-    <div class="loading-container">
-      <mj-loading [text]="loadingMessage" size="large"></mj-loading>
-    </div>
-  }
-  
-  @if (error) {
-    <div class="error-container">
-      <p class="error-message">{{ error }}</p>
-    </div>
-  }
-  
-  @if (!isLoading && !error) {
-    <div class="dashboard-content">
-      <mj-erd-composite 
-        #erdComposite
-        [isRefreshingERD]="isRefreshingERD"
-        (stateChange)="onStateChange($event)"
-        (userStateChange)="onUserStateChange($event)"
-        (entityOpened)="onEntityOpened($event)"
-        (openRecord)="onOpenRecord($event)"
-        >
-      </mj-erd-composite>
-    </div>
-  }
-</div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
+    @if (isLoading) {
+      <div class="loading-container">
+        <mj-loading [text]="loadingMessage" size="large"></mj-loading>
+      </div>
+    }
+
+    @if (error) {
+      <div class="error-container">
+        <p class="error-message">{{ error }}</p>
+      </div>
+    }
+
+    @if (!isLoading && !error) {
+      <div class="dashboard-content">
+        <mj-erd-composite
+          #erdComposite
+          [isRefreshingERD]="isRefreshingERD"
+          (stateChange)="onStateChange($event)"
+          (userStateChange)="onUserStateChange($event)"
+          (entityOpened)="onEntityOpened($event)"
+          (openRecord)="onOpenRecord($event)"
+          >
+        </mj-erd-composite>
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

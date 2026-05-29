@@ -6,11 +6,13 @@
                     (click)="SetRenderMode('point')">
                 <i class="fa-solid fa-location-dot"></i> Points
             </button>
-            <button class="mj-map-mode-btn"
-                    [class.active]="RenderMode === 'boundary'"
-                    (click)="SetRenderMode('boundary')">
-                <i class="fa-solid fa-draw-polygon"></i> Boundary
-            </button>
+            @if (HasBoundaryField) {
+                <button class="mj-map-mode-btn"
+                        [class.active]="RenderMode === 'boundary'"
+                        (click)="SetRenderMode('boundary')">
+                    <i class="fa-solid fa-draw-polygon"></i> Boundary
+                </button>
+            }
             <button class="mj-map-mode-btn"
                     [class.active]="RenderMode === 'choropleth'"
                     (click)="SetRenderMode('choropleth')">

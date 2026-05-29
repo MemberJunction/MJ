@@ -1,4 +1,3 @@
-import { IMetadataProvider, LogError, UserInfo } from "@memberjunction/core";
 import type { QuerySyncContext, ExtractedField, ResolveResult } from "./types";
 import { parseQuerySQL } from "./parse";
 import {
@@ -7,12 +6,13 @@ import {
     MergePassthroughParams,
     ExtractEntityMetadataFromSQL,
     BuildFieldsForSelectStar,
+    BuildFieldsFromSelectColumns,
     EnrichFieldTypesFromCompositions,
     EnrichFieldTypesFromEntityMetadata,
-    DetectDependencyCycles,
 } from "./resolve";
 import { RunLLMEnrichment, MergeParametersWithLLM } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
+import { QueryEngine } from "@memberjunction/core-entities";
 
 /**
  * Result of running the full extraction pipeline.
@@ -75,7 +75,7 @@ export async function CleanupQueryData(ctx: QuerySyncContext): Promise<void> {
 
 function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuerySQL>): ResolveResult {
     const md = ctx.metadataProvider;
-    const allQueries = md.Queries;
+    const allQueries = QueryEngine.Instance.Queries;
 
     // Composition references
     const resolvedCompositionRefs = ResolveCompositionReferences(ctx.sql, ctx.queryName, allQueries);
@@ -87,15 +87,16 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuer
     // Entity metadata (for LLM context and entity sync)
     const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.tableRefs, md);
 
-    // Field resolution: SELECT * expansion or null
-    const selectStarFields = BuildFieldsForSelectStar(ctx.sql, parseResult.tableRefs, parseResult.selectColumns, md);
+    // Field resolution: try SELECT * expansion first (uses entity metadata), fall back to explicit SELECT columns
+    const resolvedFields = BuildFieldsForSelectStar(ctx.sql, parseResult.tableRefs, parseResult.selectColumns, md)
+        ?? BuildFieldsFromSelectColumns(parseResult.selectColumns);
 
     return {
         resolvedCompositionRefs,
         allDeterministicParams,
         passthroughContext,
         entityMetadata,
-        selectStarFields,
+        resolvedFields,
     };
 }
 
@@ -109,14 +110,19 @@ function merge(
 
     // Parameters: merge deterministic + LLM
     const finalParams = resolveResult.allDeterministicParams.length > 0
-        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext)
+        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext, ctx.parameterHints)
         : null;
 
-    // Fields: use SELECT * expansion or LLM select clause, then enrich
-    const rawFields = resolveResult.selectStarFields
-        ?? (llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0
-            ? llmResult.selectClause
-            : null);
+    // Fields priority: deterministic (SELECT * or explicit columns) → LLM selectClause
+    const resolvedFields = resolveResult.resolvedFields;
+    const llmFields = llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0
+        ? llmResult.selectClause
+        : null;
+
+    // When we have deterministic fields, supplement them with LLM descriptions
+    const rawFields = resolvedFields
+        ? supplementDeterministicWithLLM(resolvedFields, llmFields)
+        : llmFields;
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
@@ -145,12 +151,12 @@ async function sync(
         syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
-    // Fields
+    // Fields: when finalFields is null, preserve existing fields instead of deleting them.
+    // Deletion only happens when we have a positive new field list (handled inside SyncFields via diff).
     if (finalFields) {
         syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
-    } else {
-        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Fields', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
+    // When finalFields is null, we intentionally do NOT call RemoveAllRecords — existing fields are preserved.
 
     // Entities
     if (resolveResult.entityMetadata.length > 0) {
@@ -163,4 +169,39 @@ async function sync(
     syncPromises.push(SyncDependencies(ctx.queryID, resolveResult.resolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
 
     await Promise.all(syncPromises);
+}
+
+/**
+ * Supplements deterministic fields with richer descriptions from LLM output.
+ * The deterministic field list is authoritative for names; the LLM may provide
+ * better descriptions, type hints, and computation descriptions.
+ */
+function supplementDeterministicWithLLM(
+    resolvedFields: ExtractedField[],
+    llmFields: ExtractedField[] | null
+): ExtractedField[] {
+    if (!llmFields || llmFields.length === 0) return resolvedFields;
+
+    const llmByName = new Map<string, ExtractedField>();
+    for (const lf of llmFields) {
+        llmByName.set(lf.name.toLowerCase(), lf);
+    }
+
+    return resolvedFields.map(df => {
+        const llmMatch = llmByName.get(df.name.toLowerCase());
+        if (!llmMatch) return df;
+
+        return {
+            ...df,
+            // LLM provides richer descriptions than the deterministic defaults
+            description: llmMatch.description || df.description,
+            // LLM may provide a better type guess for expression columns
+            type: df.isComputed ? (llmMatch.type || df.type) : df.type,
+            // LLM may identify summary/computed nature better
+            isSummary: llmMatch.isSummary ?? df.isSummary,
+            computationDescription: llmMatch.computationDescription ?? df.computationDescription,
+            // LLM may identify source entity for columns the parser can't resolve
+            sourceEntity: df.sourceEntity ?? llmMatch.sourceEntity,
+        };
+    });
 }

@@ -150,6 +150,20 @@
             "lastModified": "2026-03-14T01:24:30.048Z",
             "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C2F2D516-D2F4-4513-B58B-14ED249955D3"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:03.955Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -296,6 +310,20 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:23.981Z",
             "checksum": "78558c71cbfb2759018a8685d77bf0601f4b14529fbec57cdf2a096e31cecf2c"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7089B4C7-9192-4DFF-82EB-4505D9242E64"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:04.019Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
         }
       ],
@@ -460,6 +488,22 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:23.994Z",
             "checksum": "fe936dc4b6cea51a3508ebb5889c66106b72b0e272783d1aa863d0e9c11b5039"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "130B65AE-DC36-4D8B-92DC-653830C0AE54"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:04.184Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
         }
       ],

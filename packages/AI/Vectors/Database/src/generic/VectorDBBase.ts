@@ -1,3 +1,4 @@
+import { UserInfo } from '@memberjunction/core';
 import { BaseRequestParams, BaseResponse, CreateIndexParams,
         EditIndexParams, IndexList, ListVectorIDsParams, ListVectorIDsResult, UpdateOptions,
         VectorRecord } from "./record";
@@ -26,7 +27,19 @@ export abstract class VectorDBBase {
     abstract CreateIndex(params: CreateIndexParams): BaseResponse | Promise<BaseResponse>;
     abstract DeleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
     abstract EditIndex(params: EditIndexParams): BaseResponse  | Promise<BaseResponse>;
-    abstract QueryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
+    /**
+     * Query an index for nearest neighbours.
+     *
+     * @param params - Query parameters (vector or record id, topK, filter, etc.)
+     * @param contextUser - Optional caller identity. Remote drivers (Pinecone,
+     *   Qdrant, pgvector) authenticate via their own credentials and ignore
+     *   this parameter. In-process drivers that need to honor server-side
+     *   row-level security (e.g. SimpleVectorDatabase, which calls RunView
+     *   to load entity vectors) require it. Pattern matches MJ's
+     *   `RunView(params, contextUser)` and `GetEntityObject(name, contextUser)`
+     *   conventions.
+     */
+    abstract QueryIndex(params: QueryOptions, contextUser?: UserInfo): BaseResponse | Promise<BaseResponse>;
 
     abstract CreateRecord(record: VectorRecord, indexName?: string): BaseResponse | Promise<BaseResponse>;
     abstract CreateRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
@@ -67,9 +80,9 @@ export abstract class VectorDBBase {
      * Only available on providers where SupportsHybridSearch is true.
      * Default implementation falls back to a standard vector QueryIndex call.
      */
-    public HybridQuery(params: HybridQueryOptions): BaseResponse | Promise<BaseResponse> {
+    public HybridQuery(params: HybridQueryOptions, contextUser?: UserInfo): BaseResponse | Promise<BaseResponse> {
         // Default: fall back to pure vector search, ignoring keyword params
-        return this.QueryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter });
+        return this.QueryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter }, contextUser);
     }
 
     /**
@@ -83,7 +96,8 @@ export abstract class VectorDBBase {
      * @returns The query response from the vector database
      */
     public MetadataFilteredQuery(
-        params: QueryOptions & { metadataFilter: SharedIndexFilterOptions }
+        params: QueryOptions & { metadataFilter: SharedIndexFilterOptions },
+        contextUser?: UserInfo,
     ): BaseResponse | Promise<BaseResponse> {
         const nativeFilter = this.BuildMetadataFilter(params.metadataFilter);
         const queryParams: QueryOptions = {
@@ -92,7 +106,7 @@ export abstract class VectorDBBase {
         };
         // Remove the metadataFilter before passing to QueryIndex
         delete (queryParams as Record<string, unknown>)['metadataFilter'];
-        return this.QueryIndex(queryParams);
+        return this.QueryIndex(queryParams, contextUser);
     }
 
     /**

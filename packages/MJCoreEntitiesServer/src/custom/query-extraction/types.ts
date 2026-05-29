@@ -1,4 +1,5 @@
-import type { IMetadataProvider, IRunViewProvider, QueryInfo, UserInfo } from "@memberjunction/core";
+import type { IMetadataProvider, IRunViewProvider, UserInfo } from "@memberjunction/core";
+import type { MJQueryEntityExtended } from "@memberjunction/core-entities";
 import type { MJParameterInfo, MJParseResult, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
 // ═══════════════════════════════════════════════════
@@ -64,7 +65,7 @@ export interface PassthroughParamContext {
  * then consumed by both dependency sync and passthrough parameter extraction.
  */
 export interface ResolvedCompositionReference {
-    depQuery: QueryInfo;
+    depQuery: MJQueryEntityExtended;
     referencePath: string;
     alias: string | null;
     parameterMapping: Record<string, string> | null;
@@ -103,8 +104,8 @@ export interface ResolveResult {
     allDeterministicParams: MJParameterInfo[];
     passthroughContext: Map<string, PassthroughParamContext>;
     entityMetadata: EntityMetadataEntry[];
-    /** Non-null if SELECT * was detected and fields were expanded deterministically */
-    selectStarFields: ExtractedField[] | null;
+    /** Fields resolved from the SQL — via SELECT * expansion against entity metadata, or parsed from explicit SELECT columns */
+    resolvedFields: ExtractedField[] | null;
 }
 
 /**
@@ -119,4 +120,7 @@ export interface QuerySyncContext {
     contextUser: UserInfo;
     metadataProvider: IMetadataProvider;
     runViewProvider: IRunViewProvider;
+    /** Caller-provided tested parameter sample values (paramName → sampleValue).
+     *  When present, these take highest priority over LLM-generated or heuristic sampleValues. */
+    parameterHints?: Map<string, string>;
 }

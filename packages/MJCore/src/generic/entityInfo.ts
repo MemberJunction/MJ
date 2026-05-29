@@ -4,6 +4,7 @@ import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
+import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
@@ -536,10 +537,32 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeInUserSearchAPI: boolean = null
     FullTextSearchEnabled: boolean = false
     UserSearchParamFormatAPI: string = null
+    /**
+     * Search predicate controlling how user-search queries match against this field
+     * in the LIKE-based search path used when the entity does not have FullTextSearchEnabled.
+     * Valid values: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact'. Default 'Contains'.
+     * Honored by GenericDatabaseProvider.createViewUserSearchSQL.
+     */
+    UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
-    IsVirtual: boolean = null 
-    IsNameField: boolean = null 
+    IsVirtual: boolean = null
+    /**
+     * When true, this field is a SQL Server computed column or PostgreSQL generated column —
+     * physically present in the base table but read-only at the SQL layer. Distinct from
+     * IsVirtual, which is also set to 1 for these fields (because they are read-only at the
+     * API layer) but is additionally set for view-only columns that don't exist in the base
+     * table at all (e.g., joined name lookups in the base view). Use the combination to
+     * disambiguate:
+     *   IsVirtual=0, IsComputed=0 → regular base-table column (writable)
+     *   IsVirtual=1, IsComputed=0 → view-only column (no physical storage)
+     *   IsVirtual=1, IsComputed=1 → computed/generated column (physical, read-only in SQL)
+     * Only relevant downstream consumer that branches on this is base-view JOIN target
+     * selection in CodeGen — when an FK's related Name Field is IsComputed=1, the join
+     * targets the related entity's base table (not its view).
+     */
+    IsComputed: boolean = null
+    IsNameField: boolean = null
     RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
@@ -794,6 +817,13 @@ export class EntityFieldInfo extends BaseInfo {
     IsFloat: boolean
     _RelatedEntityTableAlias: string
     _RelatedEntityNameFieldIsVirtual: boolean
+    /**
+     * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
+     * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
+     * prefer the related entity's base table when the Name Field is a SQL computed/
+     * generated column (physically present in the base table even though IsVirtual=1).
+     */
+    _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
     _EntityFieldValues: EntityFieldValueInfo[];
@@ -805,6 +835,7 @@ export class EntityFieldInfo extends BaseInfo {
         sourceField: string;
         alias: string;
         isVirtual: boolean;
+        isComputed: boolean;
     }>;
 
     /**
@@ -1039,7 +1070,21 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get IsUniqueIdentifier(): boolean {
         return this.Type.trim().toLowerCase() === 'uniqueidentifier';
-    }    
+    }
+
+    /**
+     * Returns true if the field's SQL type is **fixed-width / space-padded**
+     * (SQL Server `char`/`nchar`, PostgreSQL `char`/`character`/`bpchar`).
+     *
+     * Authoritative source is `@memberjunction/sql-dialect` so the list of
+     * fixed-width types stays in one place per dialect. `BaseEntity` reads
+     * this on value-set to rtrim padding the DB returned, preventing
+     * spurious dirty-flagging when application code stores the logical
+     * (un-padded) form of the value.
+     */
+    get FixedWidthColumn(): boolean {
+        return IsFixedWidthStringSQLType(this.Type);
+    }
 
     /**
      * Returns true if the field has a default value set
@@ -1073,6 +1118,65 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get NeedsClearCompanion(): boolean {
         return this.AllowsNull;
+    }
+
+    /**
+     * Returns true when this field appears as a parameter in the entity's
+     * `spCreate` (when `isUpdate=false`) or `spUpdate` (when `isUpdate=true`)
+     * stored procedure.
+     *
+     * This is the **single source of truth** for the SP parameter contract,
+     * consumed by both:
+     *
+     *   • **CodeGen**, when emitting the SP body (which `@params` to declare
+     *     and which columns to `INSERT`/`UPDATE`), and
+     *   • **Runtime data providers**, via the `RenderSaveCallBinding` hook
+     *     implemented by `SQLServerDataProvider` and `PostgreSQLDataProvider`
+     *     (orchestrated by `GenericDatabaseProvider.GenerateSaveSQL`), when
+     *     building the EXEC / parameter list passed to the SP.
+     *
+     * Keeping both sides on the same predicate guarantees the SP signature
+     * and the call-site argument list always agree. Drift between them
+     * surfaces as a SQL Server "Procedure or function ... has too many
+     * arguments specified" error at save time (or its PG equivalent).
+     *
+     * **Exclusion rules** (in order):
+     *
+     *   • `IsVirtual` — view-only / joined columns. Not present in the base
+     *     table; the SP body never references them. Also covers IS-A parent
+     *     fields on child entities — those are saved via the parent's SP,
+     *     not the child's, so they must not appear in the child's SP params.
+     *   • `IsComputed` — SQL Server computed columns and PG generated
+     *     columns. Physically present in the base table but read-only at
+     *     the SQL layer (`INSERT`/`UPDATE` cannot target them). Today
+     *     `IsComputed=1` implies `IsVirtual=1`, but checking both is
+     *     defensive against future decoupling of the flags.
+     *   • `IsSpecialDateField` — `__mj_CreatedAt`, `__mj_UpdatedAt`,
+     *     `__mj_DeletedAt`. Set inside the SP body / trigger from
+     *     `GETUTCDATE()` rather than by the caller.
+     *   • Non-PK fields without `AllowUpdateAPI` — by definition not
+     *     callable via the SP signature.
+     *
+     * **PK handling**:
+     *
+     *   • On **update**, the PK is always a parameter (required to identify
+     *     the row).
+     *   • On **create**, the PK is a parameter only when it's NOT
+     *     auto-increment — the SP body declares it with a default so the
+     *     caller can either supply a value or let the database default fire
+     *     (e.g. `NEWSEQUENTIALID()`). For auto-increment PKs, the SP
+     *     intentionally doesn't expose the PK as a parameter.
+     *
+     * @param isUpdate `true` for `spUpdate`, `false` for `spCreate`.
+     */
+    public IsSPParameter(isUpdate: boolean): boolean {
+        if (this.IsVirtual) return false;
+        if (this.IsComputed) return false;
+        if (this.IsSpecialDateField) return false;
+        if (this.IsPrimaryKey) {
+            return isUpdate || !this.AutoIncrement;
+        }
+        return this.AllowUpdateAPI;
     }
 
     /**
@@ -1779,12 +1883,29 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-      const f = this.Fields.find((f) => f.IsNameField);
-
-      if (!f)
-        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
-      else
-        return f;
+      // Multiple fields can have IsNameField=true (e.g. Entity has both `Name`
+      // and `DisplayName` marked). Without a deterministic preference, the
+      // pick depends on `this.Fields` insertion order — which differs between
+      // SQL Server (where `Name` happens to come first) and PostgreSQL (where
+      // `DisplayName` does). Codegen builds JOIN aliases off NameField, so
+      // the divergence produces views like `vwDatasetItems` that SELECT the
+      // wrong column on PG (`DisplayName AS "Entity"` instead of
+      // `Name AS "Entity"`), and downstream consumers like
+      // TemplateEngineBase.GetDatasetByName then look up `"Templates"`
+      // (the DisplayName) instead of `"MJ: Templates"` (the actual Name) and
+      // crash with `Entity Templates not found in metadata`.
+      //
+      // Resolution rule: when more than one field claims IsNameField, prefer
+      // the one literally named `Name`. Falls back to the first IsNameField
+      // match (preserves prior behavior when there's no `Name` field), then
+      // to a field named `Name` even without IsNameField set (legacy default).
+      const candidates = this.Fields.filter((f) => f.IsNameField);
+      if (candidates.length > 1) {
+        const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
+        if (literalName) return literalName;
+      }
+      if (candidates.length > 0) return candidates[0];
+      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
     }
 
     /**************************************************************************
@@ -2053,6 +2174,12 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+        // Central exemption check: if the user holds any role that grants this
+        // permission without an RLS filter, they are exempt — return no filter.
+        if (this.UserExemptFromRowLevelSecurity(user, type)) {
+            return '';
+        }
+
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
         if (userRLS && userRLS.length > 0) {
             // userRLS has all of the objects that apply to this user. The user is NOT exempt from RLS, so we need to OR together all of the RLS object filters
@@ -2174,6 +2301,12 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Builds an ExtraFilter for direct organic key matching (field-to-field comparison).
+     *
+     * Per-column normalization: each side of the comparison uses its OWN normalization
+     * function (the spoke entity's organic key carries its own expression; the hub uses
+     * the parent organic key's expression). At runtime we look up the spoke entity's
+     * matching organic key (same Name) to find its expression. Falls back to the hub's
+     * expression on both sides if the spoke doesn't carry its own.
      */
     private static BuildDirectOrganicKeyFilter(
         record: BaseEntity,
@@ -2184,6 +2317,10 @@ export class EntityInfo extends BaseInfo {
         const relatedFields = relatedEntity.RelatedEntityFieldNamesArray;
         const conditions: string[] = [];
 
+        // Resolve the spoke entity's own organic key (matching by Name) to pull its
+        // per-column normalization. Falls back to the hub's expression if not found.
+        const spokeOrganicKey = EntityInfo.ResolveSpokeOrganicKey(relatedEntity, organicKey);
+
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
             if (value == null) {
@@ -2192,12 +2329,30 @@ export class EntityInfo extends BaseInfo {
             }
             const relatedField = relatedFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapWithNormalization(
-                `[${relatedField}]`, organicKey, escapedValue
+            conditions.push(EntityInfo.WrapBothSidesWithNormalization(
+                `[${relatedField}]`, spokeOrganicKey ?? organicKey,
+                escapedValue, organicKey
             ));
         }
 
         return conditions.join(' AND ');
+    }
+
+    /**
+     * Look up the spoke entity's organic key matching the hub's by Name, so we can apply
+     * the spoke's own normalization function on the spoke side. Returns undefined if the
+     * spoke entity doesn't have a parallel organic key — caller falls back to the hub's.
+     */
+    private static ResolveSpokeOrganicKey(
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        hubOrganicKey: EntityOrganicKeyInfo
+    ): EntityOrganicKeyInfo | undefined {
+        const md = Metadata.Provider;
+        if (!md) return undefined;
+        const spokeEntity = md.EntityByName?.(relatedEntity.RelatedEntity)
+            ?? md.Entities?.find?.((e: EntityInfo) => e.Name === relatedEntity.RelatedEntity);
+        if (!spokeEntity) return undefined;
+        return spokeEntity.OrganicKeys?.find((ok) => ok.Name === hubOrganicKey.Name);
     }
 
     /**
@@ -2212,6 +2367,9 @@ export class EntityInfo extends BaseInfo {
         const transitiveMatchFields = relatedEntity.TransitiveObjectMatchFieldNamesArray;
         const conditions: string[] = [];
 
+        // Transitive bridge values are normalized using the HUB's expression on both sides —
+        // the bridge view is a synthetic projection of hub-side values, not the spoke's raw
+        // column, so the spoke's own expression doesn't apply here.
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
             if (value == null) {
@@ -2258,6 +2416,60 @@ export class EntityInfo extends BaseInfo {
             }
             default:
                 return `${fieldExpression} = '${escapedValue}'`;
+        }
+    }
+
+    /**
+     * Like WrapWithNormalization but takes a separate organic key for each side — so the
+     * spoke field uses the spoke entity's own expression while the literal value (sourced
+     * from the hub record) uses the hub's expression. Same canonical form on both sides
+     * when the expressions agree; different transforms applied independently when they
+     * don't (the per-column normalization case).
+     */
+    private static WrapBothSidesWithNormalization(
+        fieldExpression: string,
+        fieldOrganicKey: EntityOrganicKeyInfo,
+        escapedValue: string,
+        valueOrganicKey: EntityOrganicKeyInfo
+    ): string {
+        const leftSide = EntityInfo.NormalizeFieldExpression(fieldExpression, fieldOrganicKey);
+        const rightSide = EntityInfo.NormalizeLiteralExpression(escapedValue, valueOrganicKey);
+        return `${leftSide} = ${rightSide}`;
+    }
+
+    /** Apply an organic key's normalization to a SQL field expression (left side of compare). */
+    private static NormalizeFieldExpression(
+        fieldExpression: string,
+        organicKey: EntityOrganicKeyInfo
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim': return `LOWER(LTRIM(RTRIM(${fieldExpression})))`;
+            case 'Trim':          return `LTRIM(RTRIM(${fieldExpression}))`;
+            case 'ExactMatch':    return fieldExpression;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) return fieldExpression;
+                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+            }
+            default: return fieldExpression;
+        }
+    }
+
+    /** Apply an organic key's normalization to a quoted literal value (right side of compare). */
+    private static NormalizeLiteralExpression(
+        escapedValue: string,
+        organicKey: EntityOrganicKeyInfo
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim': return `LOWER(LTRIM(RTRIM('${escapedValue}')))`;
+            case 'Trim':          return `LTRIM(RTRIM('${escapedValue}'))`;
+            case 'ExactMatch':    return `'${escapedValue}'`;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) return `'${escapedValue}'`;
+                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+            }
+            default: return `'${escapedValue}'`;
         }
     }
 

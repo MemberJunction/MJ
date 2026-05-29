@@ -5,6 +5,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, MJVersionLabelEntityType, MJVersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
 import { EntityLinkClickEvent } from '@memberjunction/ng-versions';
+import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
 interface ScopeStat {
     Scope: string;
     Count: number;
@@ -79,6 +80,62 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
+
+    public readonly viewOptions: ViewToggleOption[] = [
+        { key: 'card', icon: 'fa-solid fa-grip', title: 'Card view' },
+        { key: 'list', icon: 'fa-solid fa-list', title: 'List view' }
+    ];
+
+    public get FilterFields(): FilterFieldConfig[] {
+        const scopeOptions = [
+            { text: 'All Scopes', value: '' },
+            ...this.ScopeStats.map(s => ({ text: `${s.Scope} (${s.Count})`, value: s.Scope }))
+        ];
+        const statusOptions = [
+            { text: 'All Statuses', value: '' },
+            ...this.StatusStats.map(s => ({ text: `${s.Status} (${s.Count})`, value: s.Status }))
+        ];
+        return [
+            {
+                key: 'scopeFilter',
+                type: 'dropdown',
+                label: 'Scope',
+                icon: 'fa-solid fa-layer-group',
+                placeholder: 'All Scopes',
+                options: scopeOptions
+            },
+            {
+                key: 'statusFilter',
+                type: 'dropdown',
+                label: 'Status',
+                icon: 'fa-solid fa-circle-info',
+                placeholder: 'All Statuses',
+                options: statusOptions
+            }
+        ];
+    }
+    public get FilterValues(): Record<string, unknown> {
+        return { scopeFilter: this.ScopeFilter, statusFilter: this.StatusFilter };
+    }
+    public get ActiveFilterCount(): number {
+        let n = 0;
+        if (this.ScopeFilter) n++;
+        if (this.StatusFilter) n++;
+        return n;
+    }
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+        const next = (v ?? {}) as { scopeFilter?: string; statusFilter?: string };
+        if ((next.scopeFilter ?? '') !== this.ScopeFilter) {
+            this.OnScopeFilterChange(next.scopeFilter ?? '');
+        }
+        if ((next.statusFilter ?? '') !== this.StatusFilter) {
+            this.OnStatusFilterChange(next.statusFilter ?? '');
+        }
+    }
+    public resetFilters(): void {
+        if (this.ScopeFilter) this.OnScopeFilterChange('');
+        if (this.StatusFilter) this.OnStatusFilterChange('');
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
         super();

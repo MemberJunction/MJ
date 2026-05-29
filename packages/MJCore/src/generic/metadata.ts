@@ -129,18 +129,22 @@ export class Metadata {
         return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
     public get Queries(): QueryInfo[] {
         return Metadata.Provider.Queries;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
     public get QueryFields(): QueryFieldInfo[] {
         return Metadata.Provider.QueryFields;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
     public get QueryCategories(): QueryCategoryInfo[] {
         return Metadata.Provider.QueryCategories;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return Metadata.Provider.QueryPermissions;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }

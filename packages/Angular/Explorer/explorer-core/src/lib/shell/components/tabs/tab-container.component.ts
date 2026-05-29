@@ -7,6 +7,7 @@ import {
   ElementRef,
   ApplicationRef,
   EnvironmentInjector,
+  runInInjectionContext,
   createComponent,
   ComponentRef,
   ViewEncapsulation,
@@ -30,8 +31,8 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
-import { ComponentCacheManager } from './component-cache-manager';
+import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
+import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -91,7 +92,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   useSingleResourceMode = false;
   private singleResourceComponentRef: ComponentRef<BaseResourceComponent> | null = null;
   /** Cache identity of the current single-resource component for detachment */
-  private singleResourceCacheIdentity: { driverClass: string; recordId: string; appId: string; tabId: string } | null = null;
+  private singleResourceCacheIdentity: { driverClass: string; recordId: string; appId: string; tabId: string; discriminator?: string } | null = null;
   private previousTabBarVisible: boolean | null = null;
   private currentSingleResourceSignature: string | null = null; // Track loaded content signature to avoid unnecessary reloads
   private isCreatingInitialTabs = false; // Flag to prevent syncTabsWithConfiguration during initial tab creation
@@ -311,6 +312,67 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }, 50);
   }
 
+  /**
+   * Clear cached components matching a predicate. Components that match are
+   * destroyed; others are kept. Use for tenant switching — clear org-scoped
+   * components while keeping system/global components alive.
+   *
+   * @param predicate Return true for components that should be destroyed.
+   *                  If omitted, clears ALL cached components.
+   * @returns Number of components destroyed.
+   */
+  public ClearComponentCache(predicate?: (info: CachedComponentInfo) => boolean): number {
+    if (predicate) {
+      return this.cacheManager.ClearCacheByPredicate(predicate);
+    }
+    const stats = this.cacheManager.getCacheStats();
+    this.cacheManager.clearCache();
+    return stats.total;
+  }
+
+  /**
+   * Destroy all cached components and reload open tabs.
+   *
+   * In single-resource mode: clears the signature to force a reload, then
+   * re-invokes loadSingleResourceContent().
+   *
+   * In multi-tab mode: destroys all cached components, marks all tabs as
+   * not-loaded, then reloads the currently active tab immediately. Other
+   * tabs reload lazily when the user switches to them (onTabShown fires
+   * with isFirstShow=true after MarkTabNotLoaded).
+   *
+   * Use this for tenant switching — tabs stay open but their components
+   * are recreated fresh with the new org context.
+   */
+  public async ReloadAllTabs(): Promise<void> {
+    // Destroy all cached component instances
+    this.cacheManager.clearCache();
+
+    if (this.useSingleResourceMode) {
+      // Force reload by clearing the signature check
+      this.currentSingleResourceSignature = null;
+      this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
+      await this.loadSingleResourceContent();
+    } else {
+      // Mark all tabs as not-loaded so onTabShown will trigger loadTabContent
+      const tabIds = this.layoutManager.GetAllTabIds();
+      for (const tabId of tabIds) {
+        this.layoutManager.MarkTabNotLoaded(tabId);
+      }
+
+      // Reload the currently active tab immediately
+      const activeTabId = this.workspaceManager.GetActiveTabId();
+      if (activeTabId && this.layoutManager.IsInitialized) {
+        const container = this.layoutManager.GetContainer(activeTabId);
+        if (container) {
+          await this.loadTabContent(activeTabId, container);
+          this.layoutManager.MarkTabLoaded(activeTabId);
+        }
+      }
+    }
+  }
+
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
 
@@ -368,6 +430,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           if (this.layoutInitialized) {
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
+            // Reset restoration flag too — otherwise a subsequent flip back to multi-tab
+            // mode will let the Configuration subscription take the "restoration-complete"
+            // branch and try to mutate a non-existent layout, producing
+            // "GoldenLayoutManager: Layout not initialized" on the next AddTab.
+            this.layoutRestorationComplete = false;
           }
           // Load the active tab's content directly (now container will exist)
           this.loadSingleResourceContent();
@@ -406,6 +473,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         // Reset layout initialized flag since we're switching from single-resource mode
         // The gl-container is a new DOM element (due to @if), so we need fresh initialization
         this.layoutInitialized = false;
+        // Restoration is also undone — see comment above on the single-resource branch.
+        this.layoutRestorationComplete = false;
 
         // Initialize Golden Layout - use setTimeout to allow the template to update first
         // and ensure the gl-container div exists in the DOM
@@ -461,12 +530,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     // Get driver class for component lookup
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
+    // Entity name discriminates between "new record" tabs of different entities (all
+    // have empty ResourceRecordID otherwise). For non-Records resources this is undefined.
+    const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
 
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
     const cached = this.cacheManager.getCachedComponent(
       driverClass,
       resourceData.ResourceRecordID || '',
-      activeTab.applicationId
+      activeTab.applicationId,
+      cacheDiscriminator
     );
 
     if (cached) {
@@ -480,7 +553,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         driverClass,
         resourceData.ResourceRecordID || '',
         activeTab.applicationId,
-        activeTab.id
+        activeTab.id,
+        cacheDiscriminator
       );
 
       // Reattach the cached wrapper element to single-resource container
@@ -489,11 +563,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Store reference and identity for cleanup/detachment
       this.singleResourceComponentRef = cached.componentRef;
-      this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
+      this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id, discriminator: cacheDiscriminator };
 
-      // Restore saved queryParams to the tab config so the URL reflects
-      // the component's preserved state (e.g., selected conversation, collection drill-down).
-      if (cached.savedQueryParams) {
+      // Reconcile the cached component's preserved queryParams with any INCOMING navigation
+      // intent already on the tab config (e.g. a Home pin / deep link that targeted a specific
+      // conversation via SwitchToApp before we got here).
+      //
+      // - If the tab has incoming queryParams, those are the source of truth: keep them and
+      //   sync the cache's snapshot to match. The component's reactive query-param subscription
+      //   (alive while detached) delivers them, so it switches to the requested state. Restoring
+      //   savedQueryParams here instead would clobber the navigation intent — the bug where two
+      //   conversation pins both reopened whatever chat was already cached.
+      // - Only when there's NO incoming intent (a plain tab re-focus) do we restore the
+      //   component's own preserved params so the URL reflects its retained state.
+      const incomingQP = activeTab.configuration?.['queryParams'] as Record<string, string> | undefined;
+      const hasIncomingQP = incomingQP != null && Object.keys(incomingQP).length > 0;
+      if (hasIncomingQP) {
+        cached.savedQueryParams = { ...incomingQP };
+      } else if (cached.savedQueryParams) {
         this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
           queryParams: cached.savedQueryParams
         });
@@ -518,6 +605,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     if (!resourceReg) {
       LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+      // Show the user something actionable instead of an empty pane, and unblock the
+      // shell's first-load gate so the loading overlay clears.
+      this.cleanupSingleResourceComponent();
+      this.renderMissingResourceError(container, driverClass, {
+        mode: 'single-resource',
+        appId: activeTab.applicationId,
+        tabId: activeTab.id,
+        resourceType: resourceData.ResourceType,
+        recordId: resourceData.ResourceRecordID || null,
+      });
       return;
     }
 
@@ -554,6 +651,19 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
     };
 
+    // When a record is saved, re-key the tab and cache (new-record → saved transition)
+    // and refresh the tab title to reflect the entity's current display name.
+    instance.ResourceRecordSavedEvent = (entity: BaseEntity) => {
+      this.handleResourceRecordSaved(driverClass, activeTab.applicationId, activeTab.id, instance, entity);
+    };
+
+    // Resource asked to be closed (e.g., user discarded a brand-new record — there's
+    // no actual record to view, so leaving the tab open serves no purpose and would
+    // also poison the cache for the next "Create New" click of the same entity).
+    instance.ResourceCloseRequestedEvent = () => {
+      this.handleResourceCloseRequested(activeTab.id, instance);
+    };
+
     // Get the native element and append to container
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
@@ -574,7 +684,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     // Store reference and identity for cleanup/detachment
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
-    this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
+    this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id, discriminator: cacheDiscriminator };
   }
 
   /**
@@ -625,9 +735,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
       if (this.singleResourceCacheIdentity) {
-        const { driverClass, recordId, appId } = this.singleResourceCacheIdentity;
+        const { driverClass, recordId, appId, discriminator } = this.singleResourceCacheIdentity;
         // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
-        this.cacheManager.markAsDetached(driverClass, recordId, appId);
+        this.cacheManager.markAsDetached(driverClass, recordId, appId, discriminator);
       }
       this.singleResourceComponentRef = null;
       this.singleResourceCacheIdentity = null;
@@ -640,6 +750,181 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (container) {
       while (container.firstChild) {
         container.removeChild(container.firstChild);
+      }
+    }
+  }
+
+  /**
+   * Handle a record-saved event from a hosted resource component.
+   *
+   * Does two things on every save:
+   *
+   * 1. **Re-key new-record tabs.** When a tab opened as "Create New Record" (empty
+   *    `resourceRecordId`) transitions to a saved record, we update both the workspace
+   *    tab's id and the component-cache key to the new PK. Without this, the next
+   *    `OpenNewEntityRecord(<sameEntity>)` would match this tab (both have empty
+   *    `resourceRecordId`) and focus the stale form instead of opening a fresh one.
+   *    For existing records being re-saved, this step is a no-op.
+   *
+   * 2. **Refresh the tab title.** Whether new or existing, the entity's display name
+   *    (typically its `Name` field) may have changed. We call the resource component's
+   *    `GetResourceDisplayName` and push the result to the tab — so a tab that read
+   *    "New Foo Record" before save now reads the actual entered name.
+   */
+  private handleResourceRecordSaved(
+    driverClass: string,
+    appId: string,
+    tabId: string,
+    instance: BaseResourceComponent,
+    entity: BaseEntity
+  ): void {
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab) {
+      return;
+    }
+
+    const oldRecordId = tab.resourceRecordId || '';
+    // ToURLSegment, NOT ToString — must match the format NavigationService.OpenEntityRecord
+    // uses and that EntityRecordResource.GetPrimaryKey expects via LoadFromURLSegment.
+    const newRecordId = entity?.PrimaryKey?.ToURLSegment?.() ?? '';
+    const isNewRecordTransition = oldRecordId === '' && !!newRecordId;
+    // The cache entry for an empty-recordId tab was keyed with the entity name as
+    // discriminator (to avoid new-record collisions across entities). Re-key has to
+    // pass that same old discriminator to find the entry. After save the record has
+    // a real PK, so the new key needs no discriminator.
+    const oldDiscriminator = tab.configuration?.['Entity'] as string | undefined;
+
+    if (isNewRecordTransition) {
+      // Re-key the cache entry first, so when the workspace config emission triggers
+      // signature/needsReload checks below, the cache lookup at the new id succeeds.
+      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, undefined);
+
+      // Keep the in-memory single-resource identity in sync so detach uses the correct key.
+      if (this.singleResourceCacheIdentity?.tabId === tabId) {
+        this.singleResourceCacheIdentity = {
+          ...this.singleResourceCacheIdentity,
+          recordId: newRecordId,
+          discriminator: undefined
+        };
+      }
+
+      // Pre-compute and stamp the new signature so the configuration-subscription path
+      // in single-resource mode doesn't see a "content changed" delta and trigger a
+      // needless reload cycle (which would destroy the currently attached component).
+      if (this.useSingleResourceMode && this.currentSingleResourceSignature !== null) {
+        const updatedTab: WorkspaceTab = {
+          ...tab,
+          resourceRecordId: newRecordId,
+          configuration: { ...tab.configuration, recordId: newRecordId, isNew: undefined }
+        };
+        this.currentSingleResourceSignature = this.getTabContentSignature(updatedTab);
+      }
+
+      // Propagate the new id to the workspace tab.
+      this.workspaceManager.UpdateTabResourceRecordId(tabId, newRecordId);
+    }
+
+    // Always refresh the tab title — the entity's display-name field (typically Name)
+    // may have just been set or changed. Done after the rekey so the resource component's
+    // Data.ResourceRecordID reflects the saved PK before GetResourceDisplayName reads it.
+    //
+    // ProviderBase caches GetEntityRecordName results, so a plain call here would return
+    // the pre-edit name. Pre-warm the cache with a forceRefresh so the downstream read
+    // inside GetResourceDisplayName picks up the saved name. Only meaningful for entity
+    // records with a PK; other resource types' GetResourceDisplayName doesn't hit the
+    // record-name cache and will work either way.
+    void this.refreshTabTitleAfterSave(tabId, instance, entity);
+  }
+
+  /**
+   * After a save, invalidate the entity-record-name cache for the saved record and then
+   * push the resource component's current display name into the tab title.
+   *
+   * Errors are swallowed (logged via the inner call paths) — failing to refresh a tab
+   * title should never break the save flow.
+   */
+  private async refreshTabTitleAfterSave(
+    tabId: string,
+    instance: BaseResourceComponent,
+    entity: BaseEntity
+  ): Promise<void> {
+    try {
+      const entityName = entity?.EntityInfo?.Name;
+      const pk = entity?.PrimaryKey;
+      if (entityName && pk?.HasValue) {
+        // forceRefresh: true overwrites the cached (pre-edit) name with the fresh one.
+        // GetResourceDisplayName (called next) reads the same cache and now sees fresh data.
+        const md = instance.ProviderToUse;
+        await md.GetEntityRecordName(entityName, pk, md.CurrentUser, true);
+      }
+    } catch {
+      // Cache pre-warm failures are non-fatal — the title update below will fall back
+      // to whatever the cache has and the user can still interact with the form.
+    }
+    await this.updateTabTitleFromResource(tabId, instance, instance.Data);
+  }
+
+  /**
+   * A resource component asked to be dismissed — typically the user clicked Discard
+   * on a brand-new record. Behavior depends on workspace state:
+   *
+   * - **Multi-tab mode (or > 1 tab)**: just close the tab. `WorkspaceStateManager.CloseTab`
+   *   activates the next tab, `syncTabsWithConfiguration` removes the tab from Golden
+   *   Layout, and the user lands on whatever tab was previously active.
+   *
+   * - **Last tab in the workspace**: `CloseTab` intentionally keeps the last tab around
+   *   (just unpins it) so the workspace is never empty — correct for the
+   *   user-clicked-X-button case, wrong here. We want the user OFF this discarded form.
+   *   Workaround: `CloseTab` makes the tab unpinned (= a temp tab), then we open the
+   *   app's default tab via `CreateDefaultTab()` which goes through `OpenTab` and
+   *   replaces the now-temp tab. End result: user lands on the app's home/default view.
+   */
+  private async handleResourceCloseRequested(tabId: string, _instance: BaseResourceComponent): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    const tab = config?.tabs.find(t => t.id === tabId);
+    const isLastTab = config?.tabs.length === 1 && config.tabs[0].id === tabId;
+
+    // DESTROY (not just detach) the cached component before closing. The default
+    // tab-close path detaches and keeps components alive for reuse — but the
+    // discarded form is exactly what we DON'T want to keep: it holds a stale
+    // BaseEntity in view mode. The next "Create New Record" click for the same
+    // entity would otherwise hit the cache discriminator lookup, find this stale
+    // component, and reattach it — surfacing a blank form in view mode instead
+    // of a fresh edit-mode form. Destroy here forces a cache miss on the next click.
+    if (this.singleResourceCacheIdentity?.tabId === tabId) {
+      // Single-resource mode: the component is tracked via singleResource* fields,
+      // and its cache entry is currently marked attached. Use the identity directly
+      // to destroy it (markAsDetached would clear attachedToTabId and break a
+      // subsequent destroyComponentByTabId lookup).
+      const { driverClass, recordId, appId, discriminator } = this.singleResourceCacheIdentity;
+      this.cacheManager.destroyComponent(driverClass, recordId, appId, discriminator);
+      this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
+      // Clear the host container's DOM so the user isn't briefly looking at the
+      // destroyed component's wrapper between CloseTab and the default-tab load.
+      const directContainer = this.directContentContainer?.nativeElement;
+      if (directContainer) {
+        while (directContainer.firstChild) directContainer.removeChild(directContainer.firstChild);
+      }
+    } else {
+      // Multi-tab mode: cache entry is keyed by attachedToTabId; the convenience
+      // method handles the lookup.
+      this.cacheManager.destroyComponentByTabId(tabId);
+      this.componentRefs.delete(tabId);
+    }
+
+    this.workspaceManager.CloseTab(tabId);
+
+    if (isLastTab && tab) {
+      // CloseTab kept the tab around but unpinned it. Replace it with the app's
+      // default tab so the user lands on a meaningful surface (typically the
+      // home dashboard) instead of staying on the discarded form.
+      const app = this.appManager.GetAppById(tab.applicationId);
+      if (app) {
+        const defaultTabRequest = await app.CreateDefaultTab();
+        if (defaultTabRequest) {
+          this.workspaceManager.OpenTab(defaultTabRequest, app.GetColor());
+        }
       }
     }
   }
@@ -737,12 +1022,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Get driver class for cache lookup (resolves to actual component class name)
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
+      // Discriminate distinct "new record" tabs of different entities (all have empty
+      // ResourceRecordID otherwise — would silently collide in the cache).
+      const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
 
       // Check if we have a cached component for this resource
       const cached = this.cacheManager.getCachedComponent(
         driverClass,
         resourceData.ResourceRecordID || '',
-        tab.applicationId
+        tab.applicationId,
+        cacheDiscriminator
       );
 
       if (cached) {
@@ -754,7 +1043,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           driverClass,
           resourceData.ResourceRecordID || '',
           tab.applicationId,
-          tabId
+          tabId,
+          cacheDiscriminator
         );
 
         // Keep legacy componentRefs map updated
@@ -779,6 +1069,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       if (!resourceReg) {
         LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+        // Render an in-tab error instead of leaving the pane blank. The container was
+        // already cleared above on line 754, so we just append the error UI here.
+        this.renderMissingResourceError(glContainer.element, driverClass, {
+          mode: 'multi-tab',
+          appId: tab.applicationId,
+          tabId,
+          resourceType: resourceData.ResourceType,
+          recordId: resourceData.ResourceRecordID || null,
+        });
         return;
       }
 
@@ -801,11 +1100,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.emitFirstLoadCompleteOnce();
       };
 
-      instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
-        // Update tab title if needed
-        if (entity && entity.Get && entity.Get('Name')) {
-          // TODO: Implement UpdateTabTitle in WorkspaceStateManager
-        }
+      instance.ResourceRecordSavedEvent = (entity: BaseEntity) => {
+        this.handleResourceRecordSaved(driverClass, tab.applicationId, tabId, instance, entity);
+      };
+
+      // Resource asked to be closed (e.g., user discarded a brand-new record).
+      instance.ResourceCloseRequestedEvent = () => {
+        this.handleResourceCloseRequested(tabId, instance);
       };
 
       // Wire up display name change notifications
@@ -873,8 +1174,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Create a lightweight instance just to call GetResourceDisplayName
-      const tempInstance = new resourceReg.SubClass() as BaseResourceComponent;
+      // Create a lightweight instance just to call GetResourceDisplayName.
+      // Must run inside an injection context because BaseResourceComponent
+      // uses inject() field initializers (e.g. NavigationService).
+      const tempInstance = runInInjectionContext(
+        this.environmentInjector,
+        () => new resourceReg.SubClass() as BaseResourceComponent
+      );
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
@@ -1105,6 +1411,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * Sync tabs with configuration changes
    */
   private syncTabsWithConfiguration(tabs: WorkspaceTab[]): void {
+    // Defense in depth: skip syncing if Golden Layout isn't actually live. This can
+    // happen when the visibility-mode transition has flipped `useSingleResourceMode`
+    // to false and scheduled `initializeGoldenLayout(true)` via setTimeout(0), but the
+    // Configuration subscription fires in the same tick before that init runs. The
+    // deferred init will rebuild tabs from config via forceCreateTabs anyway.
+    if (!this.layoutInitialized || !this.layoutManager.IsInitialized) {
+      return;
+    }
+
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
 
@@ -1413,5 +1728,70 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   private emitFirstLoadCompleteOnce(): void {
     this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
+  }
+
+  /**
+   * Render an inline "missing resource component" error into a host element when
+   * ClassFactory has no registration for the requested driver class. Used when a
+   * dashboard / nav item references a component class that isn't built into this
+   * Angular bundle (e.g. an app-specific dashboard defined outside the running app).
+   *
+   * Logs a structured console.error with context for developers, and ensures the
+   * shell's first-resource-load gate is satisfied so the loading overlay clears.
+   */
+  private renderMissingResourceError(host: HTMLElement, driverClass: string, context: Record<string, unknown>): void {
+    console.error(
+      `[TabContainer] No resource component registered for driver class "${driverClass}".\n` +
+        `MemberJunction's ClassFactory has no @RegisterClass(BaseResourceComponent, '${driverClass}') in this build. ` +
+        `Either the package providing this resource is not included in the running Explorer bundle, ` +
+        `the registration manifest is stale (run \`npm run mj:manifest\`), or the driver class name in metadata is wrong.\n` +
+        `Context: ${JSON.stringify(context, null, 2)}`
+    );
+
+    // Clear the host before injecting the error UI.
+    host.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tab-content-wrapper missing-resource-error';
+    wrapper.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px; box-sizing: border-box;';
+    wrapper.setAttribute('role', 'alert');
+
+    const card = document.createElement('div');
+    card.style.cssText = [
+      'max-width: 720px',
+      'width: 100%',
+      'padding: 32px',
+      'background: var(--mj-bg-surface)',
+      'border: 1px solid var(--mj-status-warning-border)',
+      'border-radius: 8px',
+      'text-align: center',
+      'color: var(--mj-text-primary)',
+      'font-family: inherit',
+    ].join(';');
+
+    const icon = document.createElement('div');
+    icon.innerHTML = '<i class="fa-solid fa-puzzle-piece"></i>';
+    icon.style.cssText = 'font-size: 32px; color: var(--mj-status-warning); margin-bottom: 12px;';
+
+    const title = document.createElement('h2');
+    title.textContent = 'This view isn’t available in the running build.';
+    title.style.cssText = 'font-size: 18px; font-weight: 600; margin: 0 0 12px 0; color: var(--mj-status-warning-text);';
+
+    const detail = document.createElement('p');
+    detail.textContent = `No component is registered for driver class "${driverClass}". The Angular package that provides this view likely isn't bundled into this Explorer build.`;
+    detail.style.cssText = 'font-size: 14px; line-height: 1.5; color: var(--mj-text-secondary); margin: 0 0 12px 0;';
+
+    const hint = document.createElement('p');
+    hint.textContent = 'See browser console for technical details (driver class, application, nav item).';
+    hint.style.cssText = 'font-size: 12px; color: var(--mj-text-muted); margin: 0; font-style: italic;';
+
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(detail);
+    card.appendChild(hint);
+    wrapper.appendChild(card);
+    host.appendChild(wrapper);
+
+    // Unblock the shell's first-load gate so the loading overlay clears.
+    this.emitFirstLoadCompleteOnce();
   }
 }

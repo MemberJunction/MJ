@@ -1,7 +1,11 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
-import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+// Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
+// under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
+// `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
+// and the SS code path silently fails.
+import './providers/sqlserver/SQLServerCodeGenProvider';
+import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
@@ -240,33 +244,39 @@ export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
    // All platform-specific SQL generation is delegated to the CodeGenDatabaseProvider.
-   // The provider is lazily initialized from the dbType() config on first access.
+   // The provider is lazily initialized from the dbPlatform() config on first access.
 
    private _dbProvider: CodeGenDatabaseProvider | null = null;
 
    /**
     * Returns the CodeGenDatabaseProvider for the current database platform.
-    * Lazily initialized from dbType() configuration.
+    * Lazily initialized from dbPlatform() configuration.
+    *
+    * Lookup goes through `MJGlobal.ClassFactory` keyed by the platform string,
+    * which matches the `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+    * decorators on the concrete providers (`'sqlserver'`, `'postgresql'`).
+    * Mismatched keys silently fall back to the abstract base class — fail loud
+    * with an explicit error so a misconfigured platform doesn't ship as a
+    * runtime breakage in dialect-specific methods.
     */
    protected get dbProvider(): CodeGenDatabaseProvider {
       if (!this._dbProvider) {
-         const platform = dbType();
-         if (platform === 'postgresql') {
-            const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-               CodeGenDatabaseProvider,
-               'PostgreSQLCodeGenProvider'
+         const platform = dbPlatform();
+         const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+            CodeGenDatabaseProvider,
+            platform
+         );
+         // CreateInstance returns the abstract base class on a missed key (it
+         // doesn't throw), so disambiguate by constructor identity: anything
+         // that's still the bare base means lookup didn't resolve to a real
+         // dialect provider for this platform.
+         if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+            throw new Error(
+               `CodeGen provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+               `provider package is installed and registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`
             );
-            if (pgProvider) {
-               this._dbProvider = pgProvider;
-            } else {
-               throw new Error(
-                  'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-                  'is installed and its CodeGen provider is registered before running CodeGen.'
-               );
-            }
-         } else {
-            this._dbProvider = new SQLServerCodeGenProvider();
          }
+         this._dbProvider = provider;
       }
       return this._dbProvider;
    }
@@ -333,6 +343,51 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Returns a sequence value safe to use for an EntityField INSERT under the given
+    * EntityID, defaulting to `candidate` when it doesn't collide. Otherwise returns
+    * `MAX(Sequence) + 1` for that entity.
+    *
+    * Why this exists: several insert paths (virtual-entity field sync, IS-A parent
+    * field sync, schema-derived field creation) compute a deterministic sequence
+    * up-front, but a partial prior run can leave rows at that exact ordinal under
+    * the target EntityID. SS hides the collision because retried runs typically
+    * succeed before failing; PG raises UQ_EntityField_EntityID_Sequence (~4 errors
+    * per advanced-generation run). The values are temporary anyway —
+    * spUpdateExistingEntityFieldsFromSchema renumbers them on the next pass.
+    */
+   protected async nextAvailableEntityFieldSequence(
+      pool: CodeGenConnection,
+      entityId: string,
+      candidate: number
+   ): Promise<number> {
+      const schema = mj_core_schema();
+      const tbl = this.qs(schema, 'EntityField');
+      const seqCol = this.qi('Sequence');
+      const entityIdCol = this.qi('EntityID');
+      const sql = `SELECT
+                      ${this.coalesce(`MAX(${seqCol})`, '0')} AS ${this.qi('MaxSeq')},
+                      ${this.coalesce(`MAX(CASE WHEN ${seqCol} = @Candidate THEN 1 ELSE 0 END)`, '0')} AS ${this.qi('Hit')}
+                   FROM ${tbl}
+                   WHERE ${entityIdCol} = @EntityID`;
+      try {
+         const result = await this.runQueryWithParams(pool, sql, {
+            EntityID: entityId,
+            Candidate: candidate,
+         });
+         const row = result.recordset?.[0];
+         if (!row) return candidate;
+         const hit = Number(row.Hit ?? 0) > 0;
+         if (!hit) return candidate;
+         const maxSeq = Number(row.MaxSeq ?? 0);
+         return maxSeq + 1;
+      } catch {
+         // If the lookup itself fails, fall back to the candidate. The downstream
+         // INSERT will surface the real error if there's a true collision.
+         return candidate;
+      }
+   }
+
+   /**
     * Wraps a SELECT query with a row limit.
     * SQL Server: SELECT TOP N ... , PostgreSQL: SELECT ... LIMIT N
     */
@@ -345,6 +400,17 @@ export class ManageMetadataBase {
       }
       // PostgreSQL: SELECT columns FROM ... LIMIT N
       return `SELECT ${selectBody} ${fromAndWhere}${orderClause} ${limit.suffix}`;
+   }
+
+   /**
+    * Returns a parenthesized subquery that resolves an entity's ID by its BaseTable + SchemaName.
+    * Used in logged SQL to keep INSERT statements portable across databases
+    * (avoids hardcoding runtime UUIDs that may differ on a fresh database).
+    */
+   protected entityIdSubquery(tableName: string, schemaName: string): string {
+      const schema = mj_core_schema();
+      return `(${this.selectTop(1, 'ID',
+         `FROM ${this.qs(schema, 'vwEntities')} WHERE BaseTable = '${tableName}' AND SchemaName = '${schemaName}'`)})`;
    }
 
    /**
@@ -752,10 +818,11 @@ export class ManageMetadataBase {
                   updatedCount++;
                   logStatus(`    > Organic key: Updated "${okConfig.Name}" on ${ownerEntityName}`);
                } else {
-                  // Insert new — generate a deterministic UUID based on entity+name for idempotency
+                  // Insert new — use entity-lookup subquery so the logged SQL is portable across databases
+                  const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
                   const insertSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKey')}
                      (EntityID, Name, ${okConfig.Description ? 'Description, ' : ''}MatchFieldNames, NormalizationStrategy, ${okConfig.CustomNormalizationExpression ? 'CustomNormalizationExpression, ' : ''}Sequence, Status)
-                     VALUES ('${ownerEntityId}', '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active')`;
+                     VALUES (${ownerSubquery}, '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active')`;
                   await this.LogSQLAndExecute(pool, insertSQL,
                      `Insert organic key "${okConfig.Name}" on ${ownerEntityName}`);
                   createdCount++;
@@ -812,11 +879,15 @@ export class ManageMetadataBase {
                      await this.LogSQLAndExecute(pool, updateRelSQL,
                         `Update organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
                   } else {
+                     // Use subqueries for FK references so the logged SQL is portable across databases
+                     const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
+                     const organicKeySubquery = `(SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = ${ownerSubquery} AND Name = '${okConfig.Name}')`;
+                     const relEntitySubquery = this.entityIdSubquery(reConfig.TableName, reConfig.SchemaName);
                      const insertRelSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')}
                         (EntityOrganicKeyID, RelatedEntityID, RelatedEntityFieldNames,
                          TransitiveObjectName, TransitiveObjectMatchFieldNames, TransitiveObjectOutputFieldName, RelatedEntityJoinFieldName,
                          DisplayName, DisplayLocation, Sequence)
-                        VALUES ('${organicKeyId}', '${relEntityId}',
+                        VALUES (${organicKeySubquery}, ${relEntitySubquery},
                          ${relFieldNames ? `'${relFieldNames}'` : 'NULL'},
                          ${transitiveObject ? `'${transitiveObject}'` : 'NULL'},
                          ${transitiveMatchFields ? `'${transitiveMatchFields}'` : 'NULL'},
@@ -1355,6 +1426,11 @@ export class ManageMetadataBase {
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
             newEntityFieldUUID = this.createNewUUID();
+            // Compute a non-colliding sequence by querying MAX(Sequence) for this entity. The
+            // ordinal `fieldSequence` (column index in the view) is correct for stable ordering
+            // when nothing exists yet, but a partial prior run could have left rows at the same
+            // ordinal under this EntityID — UQ_EntityField_EntityID_Sequence then fires on PG.
+            const safeSequence = await this.nextAvailableEntityFieldSequence(pool, entity.ID, fieldSequence);
             const q = (n: string) => this.qi(n);
             const sqlAdd = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
                                       ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
@@ -1363,7 +1439,7 @@ export class ManageMetadataBase {
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
                             VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${fieldSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
+                                       ${safeSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
@@ -1680,7 +1756,7 @@ export class ManageMetadataBase {
          logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
       }
 
-      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
       return true;
    }
 
@@ -1739,7 +1815,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified FKs for ${entity.Name}`);
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified FKs for ${entity.Name}`);
       return true;
    }
 
@@ -1790,7 +1866,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
       return true;
    }
 
@@ -1954,8 +2030,12 @@ export class ManageMetadataBase {
          } else {
             // Create new virtual field record for this parent field
             const newFieldID = this.createNewUUID();
-            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema
-            const sequence = 100000 + parentFields.indexOf(parentField);
+            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema.
+            // Query MAX(Sequence) at insert time so we never collide with an existing row
+            // (e.g. partial prior run left a record at the candidate ordinal under this
+            // EntityID — UQ_EntityField_EntityID_Sequence then fires on PG).
+            const candidate = 100000 + parentFields.indexOf(parentField);
+            const sequence = await this.nextAvailableEntityFieldSequence(pool, childEntity.ID, candidate);
 
             const q = (n: string) => this.qi(n);
             const sqlInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
@@ -2142,13 +2222,23 @@ export class ManageMetadataBase {
          logError(`      > buildInsertRelationshipSQL: parent entity not found in metadata — RelatedEntityID=${f.RelatedEntityID}, child entity=${e.Name}, field=${f.Name}. Skipping relationship creation.`);
          return '';
       }
-      const relCount = relationshipCountMap.get(f.EntityID as number) || 0;
+      // Sequence numbers siblings under the SAME parent — the new EntityRelationship row's
+      // EntityID is f.RelatedEntityID (the parent / "one" side of the FK). Earlier code keyed
+      // the count map on f.EntityID (the child / FK-owning side), which made every newly
+      // created sibling collide on Sequence=1. That, combined with the old timestamp-based
+      // sort tiebreaker in sortRelatedEntities, was the root cause of the cross-environment
+      // "flip-flop" in generated.ts. Key on the parent so Sequence is unique per parent and
+      // carries real ordering meaning. The seed counts in relationshipCountMap (built at
+      // line ~2129) are already grouped by EntityRelationship.EntityID (parent), so this
+      // aligns the read/write side with the seed side.
+      const parentEntityID = f.RelatedEntityID as number;
+      const relCount = relationshipCountMap.get(parentEntityID) || 0;
       const sequence = relCount + 1;
       const newEntityRelationshipUUID = this.createNewUUID();
       const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
       const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
                     VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
-      relationshipCountMap.set(f.EntityID as number, sequence);
+      relationshipCountMap.set(parentEntityID, sequence);
       return `
 /* Create Entity Relationship: ${parentEntity.Name} -> ${e.Name} (One To Many via ${f.Name}) */
    ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
@@ -3203,6 +3293,7 @@ export class ManageMetadataBase {
             ${this.qi('AutoIncrement')},
             ${this.qi('AllowUpdateAPI')},
             ${this.qi('IsVirtual')},
+            ${this.qi('IsComputed')},
             ${this.qi('RelatedEntityID')},
             ${this.qi('RelatedEntityFieldName')},
             ${this.qi('IsNameField')},
@@ -3232,6 +3323,7 @@ export class ManageMetadataBase {
             ${this.boolLit(n.AutoIncrement)},
             ${this.boolLit(n.AllowUpdateAPI)},
             ${this.boolLit(n.IsVirtual)},
+            ${this.boolLit(n.IsComputed)},
             ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
             ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
             ${this.boolLit(n.IsNameField !== null ? n.IsNameField : false)},
@@ -4772,6 +4864,8 @@ export class ManageMetadataBase {
             if (fieldAnalysis) {
                await this.applySmartFieldIdentification(pool, {
                   ID: entity.ID,
+                  Name: entity.Name,
+                  SchemaName: entityRecord.SchemaName as string | undefined,
                   AllowUserSearchAPI: entityRecord.AllowUserSearchAPI as boolean | undefined,
                   AutoUpdateAllowUserSearchAPI: entityRecord.AutoUpdateAllowUserSearchAPI as boolean | undefined,
                   FullTextSearchEnabled: entityRecord.FullTextSearchEnabled as boolean | undefined,
@@ -4887,7 +4981,7 @@ export class ManageMetadataBase {
     */
    protected async applySmartFieldIdentification(
       pool: CodeGenConnection,
-      entity: { ID: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
+      entity: { ID: string; Name?: string; SchemaName?: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): Promise<void> {
@@ -4895,7 +4989,7 @@ export class ManageMetadataBase {
 
       this.applyNameFieldUpdates(sqlStatements, fields, result);
       this.applyDefaultInViewUpdates(sqlStatements, fields, result);
-      this.applySearchableFieldUpdates(sqlStatements, fields, result);
+      this.applySearchableFieldUpdates(sqlStatements, fields, result, entity);
       this.applySearchPredicateUpdates(sqlStatements, fields, result);
       this.applyEntitySearchConfig(sqlStatements, entity, result);
       if (configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate) {
@@ -4904,9 +4998,8 @@ export class ManageMetadataBase {
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
-         const combinedSQL = sqlStatements.join('\n');
          try {
-            await this.LogSQLAndExecute(pool, combinedSQL, `Set field properties for entity`, false);
+            await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set field properties for entity`, false);
          }
          catch (ex) {
             logError('Error executing combined smart field SQL: ', ex)
@@ -4971,12 +5064,21 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Generate SQL UPDATEs for IncludeInUserSearchAPI on the identified searchable fields
+    * Generate SQL UPDATEs for IncludeInUserSearchAPI on the identified searchable fields.
+    *
+    * Guardrails: even if the SmartFieldIdentificationResult flags a field as searchable,
+    * we refuse to enable IncludeInUserSearchAPI when the field is a primary key, a
+    * non-text type (LIKE forces an implicit per-row CONVERT and never seeks an index),
+    * or an unbounded text type whose parent entity is not FTX-enabled (the LIKE path
+    * cannot seek MAX/ntext/text columns; FTX is the right tool there). These are
+    * always-wrong cases — they cause the data provider to emit unindexed scans on
+    * every search.
     */
    protected applySearchableFieldUpdates(
       sqlStatements: string[],
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      entity?: { FullTextSearchEnabled?: boolean }
    ): void {
       if (!result.searchableFields || result.searchableFields.length === 0) {
          return;
@@ -4993,7 +5095,13 @@ export class ManageMetadataBase {
          logError(`Smart field identification returned invalid searchableFields: ${missingSearchableFields.join(', ')} not found in entity`);
       }
 
+      const ftxEnabled = !!entity?.FullTextSearchEnabled;
       for (const field of searchableFields) {
+         if (!this.isFieldEligibleForUserSearch(field, ftxEnabled)) {
+            // Silently skip — the LLM proposed a field we cannot honor without
+            // creating an unindexed scan. This is a guardrail, not a bug.
+            continue;
+         }
          if (!field.IncludeInUserSearchAPI) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
@@ -5003,6 +5111,26 @@ export class ManageMetadataBase {
             `);
          }
       }
+   }
+
+   /**
+    * Returns true if the field is a sensible target for LIKE-based user search.
+    * Mirrors the runtime guard in GenericDatabaseProvider.isTextSearchableType /
+    * the Phase 1 hygiene migration so CodeGen stops re-introducing invalid flags.
+    */
+   protected isFieldEligibleForUserSearch(
+      field: Record<string, unknown>,
+      ftxEnabled: boolean
+   ): boolean {
+      if (field.IsPrimaryKey === true) return false;
+      const type = (field.Type as string | undefined ?? '').toLowerCase();
+      // Non-text types are never appropriate for substring search.
+      const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
+      if (!textTypes.has(type)) return false;
+      // Unbounded text on a non-FTX entity cannot be index-seeked.
+      const length = field.Length as number | undefined;
+      if (length === -1 && !ftxEnabled) return false;
+      return true;
    }
 
    /**
@@ -5039,11 +5167,18 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Generate SQL UPDATEs for entity-level AllowUserSearchAPI
+    * Generate SQL UPDATEs for entity-level AllowUserSearchAPI.
+    *
+    * Guardrail: even if the LLM proposes enabling AllowUserSearchAPI on an entity
+    * that looks like an audit/log/run-history table by name, refuse — those tables
+    * grow unboundedly, the LIKE fan-out across them dominates global-search latency,
+    * and they're virtually never the right target for a user-facing search box.
+    * The team can still enable search on such an entity by setting
+    * AutoUpdateAllowUserSearchAPI=0 and flipping the flag manually.
     */
    protected applyEntitySearchConfig(
       sqlStatements: string[],
-      entity: { ID: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean },
+      entity: { ID: string; Name?: string; SchemaName?: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean },
       result: SmartFieldIdentificationResult
    ): void {
       if (result.allowUserSearch == null || !entity.AutoUpdateAllowUserSearchAPI) {
@@ -5051,6 +5186,11 @@ export class ManageMetadataBase {
       }
       const newValue = result.allowUserSearch;
       const currentValue = !!entity.AllowUserSearchAPI;
+      // If the LLM is proposing to ENABLE search on a log/audit/run-history-style
+      // entity, drop the proposal. We never block a proposal to DISABLE search.
+      if (newValue && !currentValue && this.isLikelyLogOrAuditEntity(entity.Name, entity.SchemaName)) {
+         return;
+      }
       if (newValue !== currentValue) {
          sqlStatements.push(`
             UPDATE ${this.qs(mj_core_schema(), 'Entity')}
@@ -5059,6 +5199,25 @@ export class ManageMetadataBase {
             AND AutoUpdateAllowUserSearchAPI = ${this.boolLit(true)}
          `);
       }
+   }
+
+   /**
+    * Heuristic: does the entity name match the shape of an audit / log /
+    * run-history / change-tracking table? These are the entities that drive
+    * the most LIKE-scan time and almost never belong in global search.
+    */
+   protected isLikelyLogOrAuditEntity(name: string | undefined, _schemaName: string | undefined): boolean {
+      if (!name) return false;
+      const n = name.trim();
+      // Common patterns: ends in "Logs"/"Log", ends in "Runs"/"Run History",
+      // contains "Audit", or matches MJ's "Record Changes" naming.
+      if (/\bLogs?$/i.test(n)) return true;
+      if (/\bAudit\b/i.test(n)) return true;
+      if (/\bRecord Changes?$/i.test(n)) return true;
+      if (/\bRuns?$/i.test(n) && !/Test Runs?$/i.test(n)) return true;
+      if (/\bRun (History|Steps|Messages)$/i.test(n)) return true;
+      if (/\bExecution Logs?$/i.test(n)) return true;
+      return false;
    }
 
    /**
@@ -5334,7 +5493,7 @@ WHERE
 
       if (sqlStatements.length > 0) {
          try {
-            await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
+            await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set categories for ${sqlStatements.length} fields`, false);
          }
          catch (ex) {
             logError('Error Applying Field Categories', ex)
@@ -5361,8 +5520,8 @@ WHERE
             const escapedIcon = entityIcon.replace(/'/g, "''");
             const updateSQL = `
                UPDATE ${this.qs(mj_core_schema(), 'Entity')}
-               SET Icon = '${escapedIcon}', __mj_UpdatedAt = ${this.utcNow()}
-               WHERE ID = '${entityId}'
+               SET ${this.qi('Icon')} = '${escapedIcon}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+               WHERE ${this.qi('ID')} = '${entityId}'
             `;
             try {
                await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
@@ -5388,15 +5547,15 @@ WHERE
       const infoJSON = JSON.stringify(categoryInfo).replace(/'/g, "''");
 
       // Upsert FieldCategoryInfo (new format)
-      const checkNewSQL = `SELECT ID FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
+      const checkNewSQL = `SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
       const existingNew = await this.runQuery(pool, checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
          try {
             await this.LogSQLAndExecute(pool, `
                UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
-               SET Value = '${infoJSON}', __mj_UpdatedAt = ${this.utcNow()}
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
+               SET ${this.qi('Value')} = '${infoJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+               WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'
             `, `Update FieldCategoryInfo setting for entity`, false);
          }
          catch (ex) {
@@ -5406,7 +5565,7 @@ WHERE
          const newId = uuidv4();
          try {
             await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
                VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})
             `, `Insert FieldCategoryInfo setting for entity`, false);
          }
@@ -5424,15 +5583,15 @@ WHERE
       }
       const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
 
-      const checkLegacySQL = `SELECT ID FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
+      const checkLegacySQL = `SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'`;
       const existingLegacy = await this.runQuery(pool, checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
          try {
             await this.LogSQLAndExecute(pool, `
                UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
-               SET Value = '${iconsJSON}', __mj_UpdatedAt = ${this.utcNow()}
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+               SET ${this.qi('Value')} = '${iconsJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+               WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'
             `, `Update FieldCategoryIcons setting (legacy)`, false);
          }
          catch (ex) {
@@ -5442,7 +5601,7 @@ WHERE
          const newId = uuidv4();
          try {
             await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
                VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})
             `, `Insert FieldCategoryIcons setting (legacy)`, false);
          }
@@ -5463,8 +5622,8 @@ WHERE
    ): Promise<void> {
       const updateSQL = `
          UPDATE ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-         SET DefaultForNewUser = ${this.boolLit(importance.defaultForNewUser)}, __mj_UpdatedAt = ${this.utcNow()}
-         WHERE EntityID = '${entityId}'
+         SET ${this.qi('DefaultForNewUser')} = ${this.boolLit(importance.defaultForNewUser)}, ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+         WHERE ${this.qi('EntityID')} = '${entityId}'
       `;
 
       try {
@@ -5491,5 +5650,39 @@ WHERE
     */
    private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
       return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   }
+
+   /**
+    * Logs and executes a sequence of SQL statements as a single batch.
+    *
+    * Each statement is dialect-quoted (via `qsql`), has its trailing
+    * whitespace/`;` trimmed, then gets a single `;` re-appended. Statements
+    * are joined with `\n` and sent through `LogSQLAndExecute` so PG's strict
+    * parser sees properly-terminated boundaries between statements.
+    *
+    * Use this instead of `statements.join('\n')` followed by
+    * `LogSQLAndExecute(...)`. SQL Server tolerated the unterminated form;
+    * PG does not. SS still accepts the explicitly-terminated batch, so
+    * this is a no-cost upgrade for both dialects.
+    *
+    * Empty / whitespace-only statements are filtered out. Returns
+    * `undefined` (no execution) when nothing remains.
+    */
+   private async LogSQLBatchAndExecute(
+      pool: CodeGenConnection,
+      statements: string[],
+      description?: string,
+      isRecurringScript: boolean = false,
+      includeBatchSeparator: boolean = false,
+      batchSeparator: string = 'GO'
+   ): Promise<any> {
+      const terminated: string[] = [];
+      for (const s of statements) {
+         const trimmed = (s ?? '').replace(/[\s;]+$/g, '');
+         if (trimmed.length === 0) continue;
+         terminated.push(`${trimmed};`);
+      }
+      if (terminated.length === 0) return undefined;
+      return await this.LogSQLAndExecute(pool, terminated.join('\n'), description, isRecurringScript, includeBatchSeparator, batchSeparator);
    }
 }

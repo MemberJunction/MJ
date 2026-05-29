@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityFieldInfo, Metadata, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
-import { ValidationErrorInfo } from '@memberjunction/global';
+import { BaseEntity, EntityFieldInfo, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
+import { ValidationErrorInfo, HighlightSearchMatches } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 
@@ -147,14 +147,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return this.FieldInfo?.DisplayNameOrName ?? this.FieldName;
   }
 
-  /** Display name with search highlighting applied */
+  /** Display name with search highlighting applied. Output is bound to `[innerHTML]`. */
   get HighlightedDisplayName(): string {
-    const filter = this.FormContext?.sectionFilter?.trim();
-    if (!filter) return this.DisplayName;
-
-    const escaped = filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escaped, 'gi');
-    return this.DisplayName.replace(regex, '<mark class="mj-forms-search-highlight">$&</mark>');
+    return HighlightSearchMatches(this.DisplayName, this.FormContext?.sectionFilter ?? '', 'mj-forms-search-highlight');
   }
 
   /** Current field value */

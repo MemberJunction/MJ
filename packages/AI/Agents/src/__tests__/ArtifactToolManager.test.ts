@@ -4,6 +4,13 @@ import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } f
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
+// Side-effect imports — force the @RegisterClass decorators on the production
+// libraries to run so the P2B.8 parent-chain tests can resolve them via ClassFactory
+// the way the runtime does.
+import '../artifact-tools/JSONToolLibrary';
+import '../artifact-tools/DataSnapshotToolLibrary';
+import '../artifact-tools/SearchResultSetToolLibrary';
+
 function makeArtifact(name: string, typeName: string, content: string): InputArtifact {
     return { name, typeName, content };
 }
@@ -121,39 +128,59 @@ describe('ArtifactToolManager', () => {
         });
     });
 
-    describe('ExecuteToolCalls', () => {
-        it('executes a tool call and stores results', async () => {
+    describe('ExecuteSingleToolCall', () => {
+        it('returns the stored result for a successful call', async () => {
             manager.Initialize([
                 makeArtifact('My Text', 'Text', 'line one\nline two\nline three'),
             ]);
 
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'get_lines', input: { start: 0, count: 2 } },
-            ]);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_lines',
+                input: { start: 0, count: 2 },
+            });
 
-            const results = manager.GetPendingResults();
-            expect(results).toContain('get_lines');
-            expect(results).toContain('line one');
+            expect(stored.artifactId).toBe('A');
+            expect(stored.tool).toBe('get_lines');
+            expect(stored.result.success).toBe(true);
+            // The agent runtime persists this full result into Tool step
+            // OutputData; the raw data payload must survive.
+            expect(stored.result.data).toBeDefined();
+            expect(typeof stored.durationMs).toBe('number');
+            expect(stored.timestamp).toBeInstanceOf(Date);
         });
 
-        it('returns error for unknown artifact ID', async () => {
+        it('returns a structured error for an unknown artifact ID', async () => {
             manager.Initialize([
                 makeArtifact('X', 'JSON', '{}'),
                 makeArtifact('Y', 'JSON', '{}'),
             ]);
 
-            await manager.ExecuteToolCalls([
-                { artifactId: 'Z', tool: 'json_keys', input: {} },
-            ]);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'Z',
+                tool: 'json_keys',
+                input: {},
+            });
 
-            const results = manager.GetPendingResults();
-            expect(results).toContain('Unknown artifact ID');
+            expect(stored.result.success).toBe(false);
+            expect(stored.result.errorMessage).toContain('Unknown artifact ID');
+            expect(stored.result.data).toBeNull();
         });
     });
 
-    describe('GetPendingResults', () => {
-        it('returns empty string when no results', () => {
-            expect(manager.GetPendingResults()).toBe('');
+    describe('ExecuteToolCalls', () => {
+        it('dispatches every call and each returned result is observable via the snapshot resultCount', async () => {
+            manager.Initialize([
+                makeArtifact('First', 'JSON', '{"a":1}'),
+                makeArtifact('Second', 'JSON', '{"b":2}'),
+            ]);
+
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'json_keys', input: {} },
+                { artifactId: 'B', tool: 'json_keys', input: {} },
+            ]);
+
+            expect(manager.ToJSON().resultCount).toBe(2);
         });
     });
 
@@ -219,57 +246,119 @@ describe('ArtifactToolManager', () => {
 
         it('dispatches overridden tool to child library', async () => {
             manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'shared_tool', input: {} },
-            ]);
-            expect(manager.GetAccessLog()[0].success).toBe(true);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'shared_tool', input: {},
+            });
+            expect(stored.result.success).toBe(true);
             // Child library tags results with 'child'
-            const resultText = manager.GetPendingResults();
-            expect(resultText).toContain('"handledBy": "child"');
+            expect((stored.result.data as { handledBy?: string }).handledBy).toBe('child');
         });
 
         it('dispatches inherited tool to parent library', async () => {
             manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'parent_only_tool', input: {} },
-            ]);
-            const resultText = manager.GetPendingResults();
-            expect(resultText).toContain('"handledBy": "parent"');
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'parent_only_tool', input: {},
+            });
+            expect((stored.result.data as { handledBy?: string }).handledBy).toBe('parent');
         });
     });
 
-    describe('GetAccessLog', () => {
-        it('returns empty array when no tool calls have been made', () => {
-            manager.Initialize([makeArtifact('X', 'JSON', '{}')]);
-            expect(manager.GetAccessLog()).toEqual([]);
+    describe('Search Result Set parent-chain (P2B.8)', () => {
+        // Real Search Result Set → Data Snapshot → Data chain that ships in production
+        // metadata. Asserts ArtifactToolManager merges SearchResultSetToolLibrary's 5
+        // search-specific tools with DataSnapshotToolLibrary's 6 tabular tools when an
+        // agent loads a Search Result Set artifact.
+        const dataTypeId = '11111111-aaaa-1111-aaaa-111111111111';
+        const dataSnapshotTypeId = '22222222-aaaa-2222-aaaa-222222222222';
+        const searchResultSetTypeId = '33333333-aaaa-3333-aaaa-333333333333';
+
+        // Use the canonical Data-Snapshot-shaped artifact content that
+        // AgentPreExecutionRAG.BuildArtifactPayload actually produces in
+        // production. Both DataSnapshot's inherited tabular tools (get_tables,
+        // get_rows, etc.) AND SearchResultSetToolLibrary's search-specific tools
+        // (filterByScore, etc.) operate on this same content via parseSpec's
+        // tables[]→Results adapter.
+        const minimalSearchResultSetContent = JSON.stringify({
+            title: 'Pre-execution RAG (1 scope(s))',
+            tables: [
+                {
+                    name: 'results',
+                    columns: [
+                        { field: 'id' }, { field: 'recordID' }, { field: 'entity' },
+                        { field: 'title' }, { field: 'snippet' }, { field: 'score' },
+                        { field: 'source' },
+                    ],
+                    rows: [
+                        { id: 'row-1', recordID: 'rec-1', entity: 'Document', title: 'Doc One', snippet: 'lorem', score: 0.91, source: 'vector' },
+                        { id: 'row-2', recordID: 'rec-2', entity: 'Document', title: 'Doc Two', snippet: 'ipsum', score: 0.62, source: 'vector' },
+                    ],
+                },
+            ],
+            queries: [{ scopeID: 'scope-1', scopeName: 'Knowledge', query: 'how do I file expenses?' }],
+            scopeIDs: ['scope-1'],
         });
 
-        it('records one entry per tool call with timestamp and duration', async () => {
-            manager.Initialize([makeArtifact('Doc', 'JSON', '{"a":1,"b":2}')]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'json_keys', input: {} },
-            ]);
-            const log = manager.GetAccessLog();
-            expect(log).toHaveLength(1);
-            expect(log[0].artifactId).toBe('A');
-            expect(log[0].tool).toBe('json_keys');
-            expect(log[0].timestamp).toBeInstanceOf(Date);
-            expect(log[0].durationMs).toBeGreaterThanOrEqual(0);
+        beforeEach(() => {
+            const engineAny = ArtifactMetadataEngine.Instance as unknown as {
+                _artifactTypes: Array<Record<string, unknown>>;
+            };
+            engineAny._artifactTypes = [
+                { ID: dataTypeId, Name: 'Data', ParentID: null, ToolLibraryClass: 'JSONToolLibrary' },
+                { ID: dataSnapshotTypeId, Name: 'Data Snapshot', ParentID: dataTypeId, ToolLibraryClass: 'DataSnapshotToolLibrary' },
+                { ID: searchResultSetTypeId, Name: 'Search Result Set', ParentID: dataSnapshotTypeId, ToolLibraryClass: 'SearchResultSetToolLibrary' },
+            ];
         });
 
-        it('records failures with errorMessage', async () => {
-            // Two artifacts so the single-artifact fallback doesn't resolve an unknown ID
+        afterEach(() => {
+            const engineAny = ArtifactMetadataEngine.Instance as unknown as {
+                _artifactTypes: Array<Record<string, unknown>>;
+            };
+            engineAny._artifactTypes = [];
+        });
+
+        it('exposes the 5 SearchResultSet-specific tools when a Search Result Set artifact is loaded', () => {
             manager.Initialize([
-                makeArtifact('First', 'JSON', '{}'),
-                makeArtifact('Second', 'JSON', '{}'),
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
             ]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'ZZZ', tool: 'json_keys', input: {} },
+            const docs = manager.GetToolDocumentation();
+            // The 5 spec-mandated tools from SearchResultSetToolLibrary
+            for (const t of ['filterByScore', 'groupBySourceProvider', 'getMatchingChunks', 'followSourceLink', 'rerankInline']) {
+                expect(docs).toContain(t);
+            }
+        });
+
+        it('inherits DataSnapshot tabular tools through the parent chain', () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
             ]);
-            const log = manager.GetAccessLog();
-            expect(log).toHaveLength(1);
-            expect(log[0].success).toBe(false);
-            expect(log[0].errorMessage).toContain('Unknown artifact ID');
+            const docs = manager.GetToolDocumentation();
+            // The 6 tabular tools DataSnapshotToolLibrary contributes
+            for (const t of ['get_tables', 'get_schema', 'get_rows', 'search_rows', 'aggregate', 'get_full']) {
+                expect(docs).toContain(t);
+            }
+        });
+
+        it('dispatches a SearchResultSet-specific tool (filterByScore) to its own library, not Data Snapshot', async () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
+            ]);
+            // Should succeed (the search-specific tool is the leaf in the chain)
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'filterByScore', input: { minScore: 0.7 },
+            });
+            expect(stored.tool).toBe('filterByScore');
+            expect(stored.result.success).toBe(true);
+        });
+
+        it('dispatches an inherited DataSnapshot tool (get_tables) to DataSnapshotToolLibrary through the parent chain', async () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
+            ]);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'get_tables', input: {},
+            });
+            expect(stored.tool).toBe('get_tables');
+            expect(stored.result.success).toBe(true);
         });
     });
 });

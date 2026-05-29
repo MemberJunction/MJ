@@ -1,4 +1,18 @@
 export { GenericDatabaseProvider, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export type {
+    SaveCoercedValue,
+    SaveCallBinding,
+    SaveSQLFragment,
+    RecordChangePayload,
+} from './saveTypes.js';
+export {
+    CRUDSprocType,
+    shouldIncludeFieldInParams,
+    needsClearCompanionBroadRule,
+    projectedParamCount,
+    useJsonArgShape,
+} from './crudSprocFieldRules.js';
+export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';

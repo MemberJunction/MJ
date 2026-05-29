@@ -9,6 +9,22 @@ See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy develop
 
 # MemberJunction Development Guide
 
+## 🗺️ Nested CLAUDE.md Index
+
+Sub-directory CLAUDE.md files extend this root guide with topic-specific rules. **Read the relevant one when working in its tree** — they contain conventions that won't appear here.
+
+| Path | Scope |
+|------|-------|
+| [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Database migration authoring rules — naming, hardcoded UUIDs, system columns, CodeGen handoff |
+| [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata file authoring — `@lookup` / `@file` / `@parent` refs, sync push, JSON-type interfaces |
+| [`packages/Actions/CLAUDE.md`](packages/Actions/CLAUDE.md) | Action authoring patterns, parameter validation, error handling |
+| [`packages/Angular/CLAUDE.md`](packages/Angular/CLAUDE.md) | Angular conventions — change detection, naming, custom forms, BaseFormPanel slot system |
+| [`packages/Angular/Generic/CLAUDE.md`](packages/Angular/Generic/CLAUDE.md) | Generic-Angular package rules — no Router imports, reusability constraints |
+| [`packages/Angular/Explorer/CLAUDE.md`](packages/Angular/Explorer/CLAUDE.md) | Explorer-specific patterns — `NavigationService`, `BaseResourceComponent`, deep links |
+| [`packages/Angular/Explorer/dashboards/CLAUDE.md`](packages/Angular/Explorer/dashboards/CLAUDE.md) | Dashboard page chrome (`<mj-page-layout>` + header/body trio), `NotifyLoadComplete`, agent context wiring |
+| [`packages/DBAutoDoc/CLAUDE.md`](packages/DBAutoDoc/CLAUDE.md) | DB auto-doc package conventions |
+
 ## 📜 Project-Wide Standards
 
 - **[Publish-Then-No-Breaking-Changes Policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** — within a published OpenApp major version, only additive schema changes are allowed. No dropping tables or columns, no narrowing types, no renaming, no adding required parameters. Breaking changes force a major version bump. Consult this before authoring any migration that modifies an existing schema. (Adopted 2026-04-29; applies prospectively from each app's next published version going forward.)
@@ -183,6 +199,62 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 - **Still declare the package in `dependencies`** (or `optionalDependencies` / `peerDependencies`). Dynamic import does not exempt you from the dep graph.
 - Prefer a single top-of-module dynamic load behind a memoized promise over repeated `await import()` inside every method.
 
+### 9. PERSIST USER PREFERENCES VIA `UserInfoEngine` — NEVER `localStorage`
+
+**Never use `window.localStorage` (or `sessionStorage`) to persist user preferences.** All per-user preferences MUST go through `UserInfoEngine.Instance` in `@memberjunction/core-entities`, which writes to the `MJ: User Settings` table.
+
+#### Why this matters
+- `localStorage` is **per-browser, per-origin** — your preference dies if the user switches browsers, clears site data, signs in from a different machine, or uses incognito. That's a broken cross-device UX.
+- `MJ: User Settings` is **per-user, server-side, replicated**. The same person sees the same preferences on every device they sign in from.
+- `UserInfoEngine` already has an **in-memory cache** populated at user bootstrap, so `GetSetting()` is a synchronous cache hit — no extra latency vs. localStorage on the read path.
+- `SetSettingDebounced()` handles UI write storms (resize, drag, rapid clicks) without hammering the DB.
+
+#### The API
+```typescript
+import { UserInfoEngine } from '@memberjunction/core-entities';
+
+// Read — synchronous, returns string | undefined
+const raw = UserInfoEngine.Instance.GetSetting('mj.myFeature.somePref');
+const pref = raw ? JSON.parse(raw) : null;
+
+// Write — debounced, fire-and-forget. Preferred for UI handlers.
+UserInfoEngine.Instance.SetSettingDebounced('mj.myFeature.somePref', JSON.stringify(value));
+
+// Write — explicit await, returns boolean. Use when you need confirmation.
+const saved = await UserInfoEngine.Instance.SetSetting('mj.myFeature.somePref', JSON.stringify(value));
+
+// Delete — async, returns boolean. Fire-and-forget is fine for cleanup paths.
+void UserInfoEngine.Instance.DeleteSetting('mj.myFeature.somePref');
+```
+
+#### Key naming convention
+- Prefix with the dashboard/feature root, dot-separated: `mj.<feature>.<prefName>`. Examples already in the codebase:
+  - `mj.formBuilder.cockpitPrefs.v1` — Form Builder cockpit pane sizes
+  - `mj.formVariant.<entityname>` — per-entity form-variant choice
+  - `search.showFilterPanel`, `HomeApp.HidePinEmptyState` — dashboard-scoped flags
+- Use **lowercased** entity names / IDs in keys when scoping to a record. This avoids case-variant duplicates in the settings table.
+- For non-trivial shapes, serialize as JSON. Include a `v1`/`v2` suffix in the key when the shape may evolve so future code can read the old shape and migrate.
+
+#### When `localStorage` IS acceptable
+- **Auth/MSAL tokens**: the auth providers manage these themselves; don't second-guess them.
+- **Truly ephemeral, throwaway state** that has no value across sessions and you don't want hitting the DB. Rare — most "transient" state is more sticky than you think.
+- **Test fixtures**: the Playwright workflow uses `.playwright-cli/profile` to persist auth across runs. That's tooling, not application UX.
+
+#### Anti-patterns to avoid
+
+```typescript
+// ❌ WRONG — preference dies on browser switch / cache clear
+window.localStorage.setItem('mj.somePref', JSON.stringify(value));
+
+// ❌ WRONG — same problem, different syntax
+sessionStorage.setItem('mj.somePref', value);
+
+// ✅ CORRECT — server-persisted, cross-device
+UserInfoEngine.Instance.SetSettingDebounced('mj.somePref', JSON.stringify(value));
+```
+
+If you're tempted to use `localStorage` because "it's just a little thing" — that's exactly the kind of preference users notice when it disappears on the next laptop. Default to `UserInfoEngine`. Only deviate with a documented reason.
+
 ---
 
 ## 📚 Development Guides
@@ -200,7 +272,10 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - State management with getter/setters
   - Engine class patterns (no Angular services for data)
   - User preferences and local caching
+  - **Page Chrome** — the shared `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` trio that every Explorer dashboard uses, with slot rules (`[meta]`/`[actions]`/`[toolbar]`) and documented exceptions
   - Layout patterns, permission checking, and more
+
+- **[Explorer Chrome Conventions](plans/explorer-chrome-conventions.md)**: The full rulebook for MJ Explorer's shared chrome — slot rules (`[meta]` is state, `[actions]` is verbs, `[toolbar]` is secondary controls), filter UI decision tree, and the canonical exception list. Sub-pages of left-nav shells use `<mj-page-header-interior>` (Section 10) — a two-row card with `[Title]` + `[Subtitle]` inputs and the same slot conventions as `<mj-page-header>` — NOT their own `<mj-page-header>` (which would produce a doubled-header). Read before doing chrome work or deciding to deviate.
 
 - **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
   - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)
@@ -805,6 +880,23 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 
 MemberJunction's multi-tier caching system is a cornerstone of server performance. **Always consult [guides/CACHING_AND_PUBSUB_GUIDE.md](guides/CACHING_AND_PUBSUB_GUIDE.md)** when working on caching, RunView optimization, or data loading patterns.
 
+### Reactive UIs over entity caches — use `BaseEngine` + `ObserveProperty`
+
+**Before you build a new "reload after mutation" loop in Angular, check whether a `BaseEngine` subclass already caches the entity.** If one does, subscribe to its observable instead of polling/reloading. If one doesn't and the entity-set is small enough to cache (a few dozen rows, not 100MB+), **build a new engine** — it's the canonical MJ pattern and gives you reactivity for free.
+
+The key APIs (see [packages/MJCore/src/generic/baseEngine.ts](packages/MJCore/src/generic/baseEngine.ts)):
+
+- **`ObserveProperty<E>(propertyName): Observable<E[]>`** — lazy-created BehaviorSubject for any engine array property. Subscribers receive the current array on subscribe, then auto-receive it again on save / delete / remote-invalidate. Zero cost if no one observes.
+- **`DataChange$: Observable<EngineDataChangeEvent>`** — engine-wide observable for any refresh.
+- **`Configs` entries auto-subscribe to BaseEntity events** for the configured `EntityName`. Save / delete / remote-invalidate on a matching row triggers an in-place array mutation (or full refresh when filters/orderby prevent in-place updates) and emits to all `ObserveProperty` subscribers. **You don't write invalidation code yourself.**
+- **Lazy-load pattern**: every caller does `await MyEngine.Instance.Config(false, user, provider)` at entry — no-op when already loaded; never penalizes users who don't touch the feature.
+
+**Reference implementations**: `ConversationEngine`, `InteractiveFormsEngine`, `ComponentMetadataEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`. Copy the shape — `Config()` declares `BaseEnginePropertyConfig[]`; engine exposes `get Forms` (sync array) and `get Forms$` (RxJS observable). Angular components use `async` pipe on the observable.
+
+**Caching boundary**: If the entity has a huge column (e.g., `Specification` text) AND many rows, don't bulk-load — punt to `RunView` with targeted filters (see `ComponentMetadataEngine`'s comment about why `MJ: Components` isn't fully cached there). If the entity is small or you can narrow with `Filter`, do cache it.
+
+See [guides/CACHING_AND_PUBSUB_GUIDE.md § BaseEngine Integration](guides/CACHING_AND_PUBSUB_GUIDE.md#baseengine-integration) for the full pattern + the cross-server invalidation flow.
+
 Key principles:
 - **Server trusts its cache completely** (`TrustLocalCacheCompletely = true`) — BaseEntity event-driven invalidation guarantees freshness
 - **All RunView/RunViews calls check the server cache first** — even without explicit `CacheLocal`, if data is in cache it's returned with zero DB queries
@@ -817,6 +909,36 @@ Key principles:
 - Use `RunViews` (plural) instead of multiple `RunView` calls
 - Group related queries together in a single batch operation
 - Example: Load all dashboard data in 2-3 calls instead of 30+
+
+### Deep Pagination — Use Keyset (`AfterKey`), not `StartRow`
+
+For background jobs, scheduled actions, or bulk processing that iterates through *all* records of a large entity, use **`RunViewParams.AfterKey`** (keyset / seek pagination) instead of `StartRow`. Keyset stays O(log N) per page regardless of depth — `StartRow` becomes progressively expensive as the offset grows (each page must enumerate and discard the skipped rows).
+
+```typescript
+import { CompositeKey } from '@memberjunction/core';
+
+let lastSeenKey: CompositeKey | undefined;
+while (true) {
+    const result = await rv.RunView({
+        EntityName: 'Tax Returns',
+        ExtraFilter: 'AddressLine1 IS NOT NULL',
+        AfterKey: lastSeenKey,
+        MaxRows: 500,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break;
+
+    const last = result.Results[result.Results.length - 1];
+    lastSeenKey = CompositeKey.FromID(last.ID);
+}
+```
+
+**Constraints**: single-column PK only; throws `AfterKeyNotSupportedError` for composite-PK entities (fall back to `StartRow`). UI grid pagination (a few hundred pages of a few hundred rows) should stay on `StartRow` — keyset isn't necessary there.
+
+See **[guides/KEYSET_PAGINATION_GUIDE.md](guides/KEYSET_PAGINATION_GUIDE.md)** for full details, examples, and the reference implementations (`ScheduledGeocodingAction`, `VectorBase`, `EntityVectorSyncer`).
 
 ### Client-Side Data Aggregation
 - Load raw data once, aggregate in memory

@@ -13,6 +13,7 @@ export * from './lib/resource-wrappers/view-resource.component'
 export * from './lib/resource-wrappers/list-detail-resource.component'
 export * from './lib/resource-wrappers/chat-conversations-resource.component'
 export * from './lib/resource-wrappers/artifact-resource.component'
+export * from './lib/conversation-feedback'
 
 // Command Palette (only component and service, no module)
 export * from './lib/command-palette/command-palette.component';

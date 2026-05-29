@@ -1,0 +1,89 @@
+<div class="scope-selector" [class.disabled]="Disabled">
+    <button
+        type="button"
+        class="scope-trigger"
+        [attr.aria-expanded]="IsOpen"
+        [attr.aria-disabled]="Disabled"
+        (click)="TogglePanel()">
+        <i [class]="SelectionIcon" aria-hidden="true"></i>
+        <span class="scope-label">{{ SelectionLabel }}</span>
+        <i class="fa-solid fa-chevron-down scope-chevron" aria-hidden="true"></i>
+    </button>
+
+    @if (IsOpen) {
+        <div class="scope-panel" role="dialog" aria-label="Search scopes">
+            @if (IsLoading) {
+                <div class="scope-loading">Loading scopes&hellip;</div>
+            } @else {
+                @if (GlobalScope) {
+                    <div class="scope-section">
+                        <div class="scope-section-header">Default</div>
+                        <label class="scope-option" (click)="ToggleScope(GlobalScope)">
+                            <input
+                                type="checkbox"
+                                [checked]="IsSelected(GlobalScope.ID) || SelectedScopeIDs.length === 0"
+                                (click)="$event.stopPropagation()"
+                                (change)="ToggleScope(GlobalScope)"
+                                [disabled]="Disabled">
+                            <i [class]="GlobalScope.Icon || 'fa-solid fa-globe'" aria-hidden="true"></i>
+                            <span class="scope-option-name">{{ GlobalScope.Name }}</span>
+                            @if (GlobalScope.Description) {
+                                <span class="scope-option-desc">{{ GlobalScope.Description }}</span>
+                            }
+                        </label>
+                    </div>
+                }
+
+                @if (OrgScopes.length > 0) {
+                    <div class="scope-section">
+                        <div class="scope-section-header">Organization</div>
+                        @for (s of OrgScopes; track s.ID) {
+                            <label class="scope-option" (click)="ToggleScope(s)">
+                                <input
+                                    type="checkbox"
+                                    [checked]="IsSelected(s.ID)"
+                                    (click)="$event.stopPropagation()"
+                                    (change)="ToggleScope(s)"
+                                    [disabled]="Disabled">
+                                <i [class]="s.Icon || 'fa-solid fa-filter'" aria-hidden="true"></i>
+                                <span class="scope-option-name">{{ s.Name }}</span>
+                                @if (s.IsDefault) {
+                                    <span class="scope-option-badge">Default</span>
+                                }
+                                @if (s.Description) {
+                                    <span class="scope-option-desc">{{ s.Description }}</span>
+                                }
+                            </label>
+                        }
+                    </div>
+                }
+
+                @if (PersonalScopes.length > 0) {
+                    <div class="scope-section">
+                        <div class="scope-section-header">Personal</div>
+                        @for (s of PersonalScopes; track s.ID) {
+                            <label class="scope-option" (click)="ToggleScope(s)">
+                                <input
+                                    type="checkbox"
+                                    [checked]="IsSelected(s.ID)"
+                                    (click)="$event.stopPropagation()"
+                                    (change)="ToggleScope(s)"
+                                    [disabled]="Disabled">
+                                <i [class]="s.Icon || 'fa-solid fa-user'" aria-hidden="true"></i>
+                                <span class="scope-option-name">{{ s.Name }}</span>
+                                @if (s.Description) {
+                                    <span class="scope-option-desc">{{ s.Description }}</span>
+                                }
+                            </label>
+                        }
+                    </div>
+                }
+
+                <div class="scope-panel-footer">
+                    <button type="button" class="scope-link" (click)="ClearSelection()" [disabled]="SelectedScopeIDs.length === 0">Reset to Global</button>
+                    <button type="button" class="scope-link primary" (click)="ClosePanel()">Done</button>
+                </div>
+            }
+        </div>
+    }
+</div>

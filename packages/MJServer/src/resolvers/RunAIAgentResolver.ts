@@ -1,7 +1,8 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -13,6 +14,15 @@ import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
+
+/**
+ * Absolute server-side cap for inline content blocks emitted to the LLM, in
+ * bytes. Defense in depth: even if an Artifact Type is configured for Inline
+ * delivery, anything past this size falls back to the tool dispatch path with
+ * a visible annotation on the manifest. Single source of truth — replaces the
+ * pre-existing per-call MAX_INLINE_ARTIFACT_CHARS / maxInlineChars constants.
+ */
+const INLINE_SIZE_CAP = 100 * 1024;
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -1288,13 +1298,13 @@ export class RunAIAgentResolver extends ResolverBase {
         // Reverse to get chronological order (oldest first)
         const details = detailsResult.Results.reverse();
 
-        // Get all message IDs for batch loading attachments
+        // Get all message IDs for batch loading artifacts
         const messageIds = details.map(d => d.ID);
 
-        // Batch load all attachments for these messages
-        const attachmentsByDetailId = await attachmentService.GetAttachmentsBatch(messageIds, contextUser, provider);
-
-        // Batch load input artifacts for these messages
+        // Batch load input artifacts for these messages. Since the backfill migration
+        // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
+        // ConversationDetailAttachment rows to artifact pairs, the artifact junction
+        // is the single source of truth — no separate attachment query needed.
         const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
 
         // Build ChatMessage array with attachments and input artifacts
@@ -1302,92 +1312,80 @@ export class RunAIAgentResolver extends ResolverBase {
 
         for (const detail of details) {
             const role = this.mapDetailRoleToMessageRole(detail.Role);
-            const attachments = attachmentsByDetailId.get(detail.ID) || [];
-
-            // Get attachment data with content URLs (handles both inline and FileID storage)
-            const attachmentDataPromises = attachments.map(att =>
-                attachmentService.GetAttachmentData(att, contextUser, provider)
-            );
-            const attachmentDataResults = await Promise.all(attachmentDataPromises);
-
-            // Filter out nulls and convert to AttachmentData format.
-            // IMPORTANT: Skip large document attachments that are handled by artifact tools.
-            // These file types (PDF, Excel, Word) are accessible via ArtifactToolManager
-            // and embedding their multi-MB base64 content in the conversation causes
-            // context overflow on follow-up messages when conversation history is replayed.
-            // Images are kept inline since LLMs handle them natively via multimodal.
-            const ARTIFACT_TOOL_MIME_PREFIXES = [
-                'application/pdf',
-                'application/vnd.openxmlformats-officedocument', // .docx, .xlsx, .pptx
-                'application/vnd.ms-excel', // .xls
-                'application/msword', // .doc
-            ];
-
             const validAttachments: AttachmentData[] = [];
 
-            for (const result of attachmentDataResults) {
-                if (!result) continue;
-                const mime = result.attachment.MimeType || '';
-                const isArtifactToolType = ARTIFACT_TOOL_MIME_PREFIXES.some(prefix => mime.startsWith(prefix));
-                if (isArtifactToolType) {
-                    // Skip raw file embedding — the agent accesses the file via
-                    // artifact tools (manifest injected into prompt) and/or native
-                    // file input (resolved per-driver in AIPromptRunner).
-                    // Do NOT add a placeholder attachment: 'Document' maps to 'file_url'
-                    // content blocks, and drivers attempt base64 decoding of the text,
-                    // causing API errors.
-                } else {
-                    validAttachments.push({
-                        type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
-                        mimeType: result.attachment.MimeType,
-                        fileName: result.attachment.FileName ?? undefined,
-                        sizeBytes: result.attachment.FileSizeBytes ?? undefined,
-                        width: result.attachment.Width ?? undefined,
-                        height: result.attachment.Height ?? undefined,
-                        durationSeconds: result.attachment.DurationSeconds ?? undefined,
-                        content: result.contentUrl
-                    });
-                }
-            }
-
-            // Get input artifacts for this message and convert to AttachmentData.
-            // Like regular attachments above, skip file-backed artifacts whose MIME
-            // types are handled by ArtifactToolManager — embedding their multi-MB
-            // base64 content in every conversation replay causes context overflow.
+            // Get input artifacts for this message — routing via RouteArtifact.
             const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
             for (const artifactVersion of inputArtifacts) {
                 const artifactMime = artifactVersion.MimeType || '';
-                const isArtifactToolHandled = ARTIFACT_TOOL_MIME_PREFIXES.some(
-                    prefix => artifactMime.startsWith(prefix)
-                );
+                const fileName = artifactVersion.FileName ?? '';
+                const ext = fileName.includes('.') ? fileName.split('.').pop() : undefined;
+                const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(artifactMime, ext);
+
+                const decision = RouteArtifact({
+                    typeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
+                    forceToolsOnly: artifactVersion.ForceToolsOnly,
+                    mimeType: artifactMime,
+                    sizeBytes: artifactVersion.ContentSizeBytes ?? 0,
+                    inlineSizeCap: INLINE_SIZE_CAP,
+                    modelSupportsModality: () => true,
+                    modelName: '<resolver>',
+                    artifactTypeName: artifactType?.Name ?? artifactMime,
+                });
 
                 if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
-                    if (isArtifactToolHandled) {
-                        // Skip raw file embedding — the agent accesses the file via
-                        // artifact tools (manifest injected into prompt) and/or native
-                        // file input (resolved per-driver in AIPromptRunner).
-                        // Do NOT add a placeholder attachment here: 'Document' maps to
-                        // 'file_url' content blocks, and drivers attempt base64 decoding
-                        // of the placeholder text, causing API errors.
-                    } else {
-                        // Non-artifact-tool file types: embed normally
-                        const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
-                        if (fileContent) {
-                            validAttachments.push({
-                                type: ConversationUtility.GetAttachmentTypeFromMime(artifactMime),
-                                mimeType: artifactMime || 'application/octet-stream',
-                                fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
-                                sizeBytes: artifactVersion.ContentSizeBytes || undefined,
-                                content: fileContent
-                            });
+                    if (decision.delivery !== 'inline') {
+                        if (decision.delivery === 'tools' && decision.annotation) {
+                            LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
                         }
+                        continue;
+                    }
+                    const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
+                    if (fileContent) {
+                        validAttachments.push({
+                            type: ConversationUtility.GetAttachmentTypeFromMime(artifactMime),
+                            mimeType: artifactMime || 'application/octet-stream',
+                            fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
+                            sizeBytes: artifactVersion.ContentSizeBytes || undefined,
+                            content: fileContent
+                        });
                     }
                 } else if (artifactVersion.Content) {
-                    // Text artifact — use BuildInlinePreview for large DataSnapshots
-                    // to preserve table structure instead of raw substring truncation.
-                    const textContent = artifactVersion.Content;
-                    const MAX_INLINE_ARTIFACT_CHARS = 10_000;
+                    // Text-mode artifact (ContentMode = 'Text'). Honor the
+                    // routing decision the same way as for file-mode.
+                    if (decision.delivery !== 'inline') {
+                        if (decision.delivery === 'tools' && decision.annotation) {
+                            LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
+                        }
+                        continue;
+                    }
 
+                    const textContent = artifactVersion.Content;
+
+                    // Media artifacts (image / audio / video) stored inline by
+                    // the server hook arrive here as `Text` mode with a base64
+                    // data URL in Content. We must route them as their native
+                    // modality, not as text — otherwise the LLM sees the raw
+                    // base64 as text content, can't process it, and either
+                    // hallucinates or admits confusion. Use the artifact's
+                    // declared MIME (not the wrapper string) so
+                    // ConversationUtility builds the right content block type.
+                    const mediaModality = artifactMime.startsWith('image/')
+                        || artifactMime.startsWith('audio/')
+                        || artifactMime.startsWith('video/');
+
+                    if (mediaModality && textContent.startsWith('data:')) {
+                        validAttachments.push({
+                            type: ConversationUtility.GetAttachmentTypeFromMime(artifactMime),
+                            mimeType: artifactMime,
+                            fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
+                            sizeBytes: artifactVersion.ContentSizeBytes || undefined,
+                            content: textContent,
+                        });
+                        continue;
+                    }
+
+                    const MAX_INLINE_ARTIFACT_CHARS = 10_000;
                     if (textContent.length > MAX_INLINE_ARTIFACT_CHARS) {
                         const preview = ArtifactToolManager.BuildInlinePreview(textContent, 5);
                         validAttachments.push({

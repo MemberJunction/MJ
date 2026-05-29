@@ -124,7 +124,8 @@
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"
-                (tabsChanged)="onTabsChanged()">
+                (tabsChanged)="onTabsChanged()"
+                (applyFormRequested)="applyFormRequested.emit($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }

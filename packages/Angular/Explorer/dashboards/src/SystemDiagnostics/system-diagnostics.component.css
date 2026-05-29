@@ -1,102 +1,37 @@
-.system-diagnostics {
-    padding: 0;
-    background: var(--mj-bg-surface-sunken);
-    height: 100%;
+/*
+  SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell.
+  Host is a flex column so <mj-page-header-interior> sits pinned at the top
+  and .scrollable-content fills the rest. See plans/explorer-chrome-conventions.md Section 10.
+*/
+:host {
     display: flex;
     flex-direction: column;
+    height: 100%;
     overflow: hidden;
-}
-
-/* Header */
-.diagnostics-header {
     background: var(--mj-bg-page);
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.system-diagnostics {
+    background: var(--mj-bg-surface-sunken);
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+}
+
+/* Inline auto-refresh toggle in the [actions] slot. */
+.auto-refresh-toggle {
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-    flex-shrink: 0;
-}
-
-.header-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.header-title i {
-    font-size: 24px;
-    color: var(--mj-status-success);
-}
-
-.header-title h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.header-controls {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.auto-refresh-control {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    gap: 6px;
+    cursor: pointer;
     font-size: 13px;
     color: var(--mj-text-secondary);
+    white-space: nowrap;
 }
 
-.auto-refresh-control label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.auto-refresh-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
     cursor: pointer;
-}
-
-.auto-refresh-control input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-}
-
-.refresh-indicator {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--mj-status-success);
-    font-size: 12px;
-}
-
-.refresh-btn {
-    background: var(--mj-status-success);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-}
-
-.refresh-btn:hover:not(:disabled) {
-    background: var(--mj-color-success-800);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
-}
-
-.refresh-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
 }
 
 .spinning {
@@ -108,263 +43,19 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Overview Cards Container (Collapsible) */
-.overview-cards-container {
-    position: relative;
-    background: var(--mj-bg-page);
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-    transition: all 0.3s ease;
-}
-
-.overview-cards-container.collapsed {
-    padding: 0;
-}
-
-.kpi-toggle-btn {
-    position: absolute;
-    right: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 28px;
-    border-radius: var(--mj-radius-full);
-    border: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-page);
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    transition: all 0.2s ease;
-    z-index: 10;
-}
-
-.kpi-toggle-btn:hover {
-    background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-}
-
-.overview-cards-container.collapsed .kpi-toggle-btn {
-    top: 50%;
-}
-
-/* Overview Cards */
-.overview-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    padding: 20px 24px;
-    padding-right: 60px;
-    background: var(--mj-bg-page);
-    flex-shrink: 0;
-}
-
-/* Mini KPI Bar (Collapsed State) */
-.overview-cards-mini {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    padding: 10px 60px 10px 24px;
-    background: var(--mj-bg-page);
-}
-
-.mini-kpi {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--mj-text-secondary);
-}
-
-.mini-kpi i {
-    font-size: 14px;
-    color: var(--mj-color-indigo-500);
-}
-
-.mini-kpi.warning i {
-    color: var(--mj-color-warning-500);
-}
-
-.mini-value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.mini-label {
-    font-size: 12px;
-    color: var(--mj-text-muted);
-}
-
-.mini-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--mj-border-default);
-}
-
-.overview-card {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--mj-bg-surface-card);
-    border-radius: var(--mj-radius-lg);
-    border: 1px solid var(--mj-border-default);
-    box-shadow: var(--mj-shadow-md);
-}
-
-.card-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--mj-radius-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-}
-
-.card-icon--engines {
-    background: var(--mj-color-accent-300);
-    color: var(--mj-brand-primary);
-}
-
-.card-icon--memory {
-    background: var(--mj-color-warning-50);
-    color: var(--mj-color-warning-700);
-}
-
-.card-icon--warning {
-    background: var(--mj-color-error-100);
-    color: var(--mj-status-error);
-}
-
-.card-icon--success {
-    background: var(--mj-color-success-100);
-    color: var(--mj-status-success);
-}
-
-.card-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.card-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    line-height: 1;
-    letter-spacing: -0.02em;
-}
-
-.card-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    margin-top: 0.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.card-subtitle {
-    font-size: 0.6875rem;
-    color: var(--mj-text-muted);
-    margin-top: 0.125rem;
-}
+/*
+  Overview KPIs (engines / memory / redundant) now live as <mj-stat-badge>
+  instances in the chrome's [meta] slot — see the header-interior block above.
+  The legacy .overview-cards-container / .overview-card / .kpi-toggle-btn /
+  .mini-kpi rules were retired with that migration.
+*/
 
 /* Main Content */
-.main-content {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-}
-
-/* Left Navigation */
-.left-nav {
-    width: 240px;
-    background: var(--mj-bg-page);
-    border-right: 1px solid var(--mj-border-default);
-    padding: 16px 0;
-    flex-shrink: 0;
-}
-
-.nav-section {
-    padding: 0 12px;
-}
-
-.nav-section-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 8px 12px;
-    margin-bottom: 4px;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: var(--mj-radius-md);
-    cursor: pointer;
-    color: var(--mj-text-secondary);
-    font-size: 14px;
-    transition: all 0.2s ease;
-    margin-bottom: 4px;
-}
-
-.nav-item:hover {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-}
-
-.nav-item.active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 500;
-}
-
-.nav-item i {
-    width: 18px;
-    text-align: center;
-    font-size: 15px;
-}
-
-.nav-item span:first-of-type {
-    flex: 1;
-}
-
-.nav-badge {
-    background: var(--mj-border-default);
-    color: var(--mj-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: var(--mj-radius-lg);
-    min-width: 24px;
-    text-align: center;
-}
-
-.nav-item.active .nav-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    color: var(--mj-brand-primary);
-}
-
-.nav-badge--warning {
-    background: var(--mj-color-warning-500) !important;
-    color: white !important;
-}
-
-.nav-badge--success {
-    background: var(--mj-status-success) !important;
-    color: white !important;
-}
-
-/* Content Area */
+/*
+  Content Area — L2 nav was previously a bespoke left rail (.left-nav). It now
+  lives in the interior chrome above as <mj-tab-nav>. Section panels render
+  directly inside .content-area, which fills the remaining body width.
+*/
 .content-area {
     flex: 1;
     padding: 24px;
@@ -1922,26 +1613,43 @@
     font-weight: 500;
 }
 
-/* PerfMon Chart Styles */
+/* PerfMon Chart Styles
+ * ====================
+ * Chrome (background, borders, text, controls) is mapped to MJ semantic tokens
+ * so the panel adapts to the active theme and is white-labelable. Series colors
+ * (cyan / magenta / neon-green / orange) are categorical chart data — they must
+ * stay distinct across themes and are exempt by the same rule that exempts
+ * other chart-data palettes.
+ *
+ * The accent (--perfmon-accent) is intentionally kept as the same neon green as
+ * the engine series so the "live signal" indicators (header icon, footer count,
+ * chart strokes) read as part of the chart palette rather than the app's brand.
+ *
+ * Overlays are derived via color-mix() from --mj-text-primary so they invert
+ * automatically: dark tints over light surfaces in light mode, light tints over
+ * dark surfaces in dark mode.
+ */
 .perfmon-section {
-    /* Scoped terminal theme variables */
-    --perfmon-bg: #1a1a2e;
-    --perfmon-bg-deep: #0d0d1a;
+    /* Chrome — adapts to theme */
+    --perfmon-bg: var(--mj-bg-surface-card);
+    --perfmon-bg-deep: var(--mj-bg-surface-sunken);
+    --perfmon-border: var(--mj-border-default);
+    --perfmon-border-medium: var(--mj-border-strong);
+    --perfmon-border-light: var(--mj-border-strong);
+    --perfmon-text-faint: var(--mj-text-disabled);
+    --perfmon-text-muted: var(--mj-text-muted);
+    --perfmon-text-secondary: var(--mj-text-secondary);
+    --perfmon-control-bg: var(--mj-bg-surface-sunken);
+    --perfmon-control-bg-hover: var(--mj-bg-surface-hover);
+    --perfmon-mode-bg: var(--mj-bg-surface-sunken);
+    --perfmon-overlay-light: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
+    --perfmon-overlay-medium: color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
+    --perfmon-overlay-strong: color-mix(in srgb, var(--mj-text-primary) 25%, transparent);
+    --perfmon-tooltip-bg: var(--mj-bg-overlay);
+
+    /* Categorical series colors and live-signal accent — exempt */
     --perfmon-accent: #00ff88;
     --perfmon-accent-dim: #00cc6a;
-    --perfmon-border: #333;
-    --perfmon-border-medium: #444;
-    --perfmon-border-light: #555;
-    --perfmon-text-faint: #666;
-    --perfmon-text-muted: #888;
-    --perfmon-text-secondary: #aaa;
-    --perfmon-control-bg: #2a2a2a;
-    --perfmon-control-bg-hover: #333;
-    --perfmon-mode-bg: #1a1a1a;
-    --perfmon-overlay-light: rgba(255, 255, 255, 0.05);
-    --perfmon-overlay-medium: rgba(255, 255, 255, 0.15);
-    --perfmon-overlay-strong: rgba(255, 255, 255, 0.25);
-    --perfmon-tooltip-bg: rgba(0, 0, 0, 0.9);
     --perfmon-series-runview: #00bcd4;
     --perfmon-series-runquery: #e040fb;
     --perfmon-series-engine: #00ff88;
@@ -2322,20 +2030,6 @@
 }
 
 @media (max-width: 768px) {
-    .diagnostics-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .header-controls {
-        width: 100%;
-        flex-wrap: wrap;
-    }
-
-    .overview-cards {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .engine-grid {
         grid-template-columns: 1fr;
     }
@@ -2972,6 +2666,29 @@
     padding: 2px 6px;
     border-radius: 4px;
     word-break: break-all;
+}
+
+/* Health status indicators for config items */
+.config-health-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.config-health-icon.health-success {
+    color: var(--mj-status-success);
+}
+.config-health-icon.health-failure {
+    color: var(--mj-status-error);
+}
+.config-detail-row--error {
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+.detail-value--error {
+    color: var(--mj-status-error-text) !important;
+    background: none !important;
+    font-family: inherit !important;
+    word-break: break-word;
 }
 
 /* Sample Data Section */

@@ -1,0 +1,100 @@
+<div class="canvas-root" (click)="OnCanvasBackgroundClick()">
+
+  @if (!Canvas) {
+    <div class="canvas-empty">
+      <i class="fa-solid fa-table-list"></i>
+      <h3>No form loaded</h3>
+      <p>Pick an entity from the toolbar to start a new form, or select one from the left panel.</p>
+    </div>
+  } @else {
+    <div class="canvas-title-row" (click)="$event.stopPropagation()">
+      <input class="canvas-title" type="text"
+             placeholder="Untitled form"
+             [value]="Canvas.title ?? ''" (input)="OnTitleInput($event)" />
+      <span class="canvas-entity-badge">
+        <i class="fa-solid fa-table"></i> {{ Canvas.entityName }}
+      </span>
+    </div>
+
+    <div cdkDropList
+         cdkDropListOrientation="vertical"
+         (cdkDropListDropped)="OnDropSection($event)"
+         class="canvas-sections-host">
+
+      @for (section of Canvas.sections; track section.id) {
+        <div class="canvas-section"
+             cdkDrag
+             [class.selected]="SelectedSectionId === section.id"
+             (click)="$event.stopPropagation()">
+
+          <header class="section-header" (click)="OnSectionHeaderClick(section.id, $event)">
+            <span class="section-drag-handle" cdkDragHandle title="Drag to reorder">
+              <i class="fa-solid fa-grip-vertical"></i>
+            </span>
+            <h3 class="section-title">{{ section.title || 'Untitled Section' }}</h3>
+            <div class="section-actions">
+              <button class="mini-btn" title="Add static text"
+                      (click)="OnAddStaticElement(section.id, 'static-text'); $event.stopPropagation()">
+                <i class="fa-solid fa-font"></i>
+              </button>
+              <button class="mini-btn" title="Add computed field"
+                      (click)="OnAddStaticElement(section.id, 'computed'); $event.stopPropagation()">
+                <i class="fa-solid fa-calculator"></i>
+              </button>
+              <button class="mini-btn" title="Add spacer"
+                      (click)="OnAddStaticElement(section.id, 'spacer'); $event.stopPropagation()">
+                <i class="fa-solid fa-arrows-up-down"></i>
+              </button>
+            </div>
+          </header>
+
+          <div class="section-grid"
+               [class.cols-2]="section.columns === 2"
+               cdkDropList
+               [id]="'section-' + section.id"
+               [cdkDropListConnectedTo]="sectionListIds"
+               [cdkDropListData]="section.elements"
+               (cdkDropListDropped)="OnDropElement($event, section.id)"
+               (dragover)="OnNativeDragOver($event)"
+               (drop)="OnNativeDrop($event, section.id)">
+
+            @for (element of section.elements; track element.id) {
+              <div class="canvas-element"
+                   cdkDrag
+                   [class.span-2]="element.span === 2 && section.columns === 2"
+                   [class.selected]="SelectedElementId === element.id"
+                   [class.unknown-field]="isFieldUnknown(element)"
+                   (click)="OnElementClick(section.id, element.id, $event)">
+                <span class="element-drag-handle" cdkDragHandle title="Drag to move">
+                  <i class="fa-solid fa-grip-vertical"></i>
+                </span>
+                <div class="element-body">
+                  <div class="element-label">{{ getLabelForElement(element) }}</div>
+                  <div class="element-meta">
+                    @if (getFieldTypeBadge(element); as badge) {
+                      <span class="element-type-badge">{{ badge }}</span>
+                    }
+                    @if (isFieldUnknown(element)) {
+                      <span class="element-warn"
+                            title="Field not in current schema — will be skipped at code generation">
+                        <i class="fa-solid fa-triangle-exclamation"></i> not in schema
+                      </span>
+                    }
+                  </div>
+                </div>
+              </div>
+            } @empty {
+              <div class="section-drop-empty">
+                Drag a field here, or use the buttons above to add static elements.
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <button class="add-section-btn" (click)="OnAddSection(); $event.stopPropagation()">
+      <i class="fa-solid fa-plus"></i> Add Section
+    </button>
+  }
+</div>

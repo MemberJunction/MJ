@@ -50,6 +50,34 @@ import { FormStateService } from './form-state.service';
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
+
+  /**
+   * Variants applicable to the current (entity, user) tuple, supplied by the
+   * Explorer-level form resolver. When more than one entry is present, the
+   * record-form-container shows a picker that lets the user switch between
+   * variants. Empty / single-entry arrays hide the picker.
+   *
+   * The container reads this via its `EffectiveVariants` accessor — generated
+   * form templates do NOT need to bind it explicitly.
+   */
+  public Variants: { ID: string; Label: string; Scope: 'User' | 'Role' | 'Global'; Status: 'Active' | 'Pending' | 'Inactive' }[] = [];
+
+  /**
+   * ID of the currently-rendered variant (null when no override is active and
+   * the form is the CodeGen / @RegisterClass default).
+   */
+  public CurrentVariantID: string | null = null;
+
+  /**
+   * Hook called when the user picks a different variant from the picker.
+   * Default is a no-op; the Explorer-level single-record component replaces
+   * this on the form instance to wire `FormResolverService.SetSelectedVariant`
+   * and reload the record. Kept as a method (not an EventEmitter) so the host
+   * doesn't need to subscribe — assignment is enough.
+   */
+  public OnVariantChanged: (variantID: string | null) => void = (_id) => {
+    // host installs the real handler post-construction
+  };
   public isHistoryDialogOpen: boolean = false;
   public IsTagsPanelOpen: boolean = false;
   public TagCount: number = 0;
@@ -346,6 +374,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CancelEdit() {
     if (this.record) {
       const r = <BaseEntity>this.record;
+      // Capture BEFORE any mutation — Revert() can clear the "new" flag on some
+      // entities. We need to know whether this record was ever persisted so we
+      // can tell the host to dismiss the form (there's nothing to view).
+      const wasNeverSaved = !r.IsSaved;
+
       if (r.Dirty || this.PendingRecordsDirty()) {
         // Revert is safe here — the toolbar's discard dialog already confirmed with the user
         r.Revert();
@@ -360,6 +393,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.RaiseEvent(BaseFormComponentEventCodes.REVERT_PENDING_CHANGES);
       }
       this.EndEditMode();
+
+      // For never-saved records, ask the host to dismiss the form — leaving it
+      // in view mode shows an empty record (there IS no record) and any
+      // subsequent "Create New" click for the same entity would silently
+      // reuse this abandoned form. Hosts that don't have a meaningful close
+      // semantic can ignore this event.
+      if (wasNeverSaved) {
+        this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
+      }
     }
   }
 
@@ -705,11 +747,24 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
+    const section = this.sectionMap.get(sectionKey);
+    // When the caller doesn't pass an explicit default, fall back to the value seeded by
+    // initSections() — related-entity and System Metadata panels are seeded collapsed there.
+    // Without this, FormStateService falls back to its global DEFAULT_SECTION_STATE (isExpanded=true),
+    // which reports a never-before-visited related-entity panel as expanded and causes its data grid
+    // (bound [AllowLoad]="IsSectionExpanded(key)") to fetch on form open even while the panel is collapsed.
+    // When the caller passes no explicit default, fall back to the value seeded by initSections().
+    // If the section isn't in sectionMap yet — which happens during the window before the form's
+    // async ngOnInit calls initSections(), e.g. when a record is opened already-loaded via an
+    // in-app double-click so the grids render in the first change-detection pass — coalesce to
+    // FALSE rather than letting FormStateService fall through to its global expanded default. A
+    // missing section must NOT report as expanded, or its data grid (bound [AllowLoad]="IsSectionExpanded(key)")
+    // fires a RunView on open before the seeded collapsed default is applied.
+    const resolvedDefault = defaultExpanded !== undefined ? defaultExpanded : (section?.isExpanded ?? false);
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.isSectionExpanded(entityName, sectionKey, defaultExpanded);
+      return this.formStateService.isSectionExpanded(entityName, sectionKey, resolvedDefault);
     }
-    const section = this.sectionMap.get(sectionKey);
     return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
   }
 

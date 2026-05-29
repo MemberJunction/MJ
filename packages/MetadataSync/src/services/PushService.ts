@@ -2,7 +2,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
+import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -119,11 +122,17 @@ export class PushService {
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
+  private syncMetadataEngine: SyncMetadataEngine;
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
     this.stateManager = stateManager;
+    
+    // Initialize SyncMetadataEngine
+    this.syncMetadataEngine = new SyncMetadataEngine();
+    this.syncMetadataEngine.initializeEngine(this.syncEngine);
+    this.syncEngine.setMetadataEngine(this.syncMetadataEngine);
   }
 
   /** Set or replace the state manager after construction. */
@@ -144,6 +153,22 @@ export class PushService {
     }
     // Fall back to root config, default to false
     return this.syncConfig?.emitSyncNotes ?? false;
+  }
+
+  /**
+   * Whether a SQL column type is string-shaped (text/varchar/nvarchar/char/etc).
+   * Used to decide if an `@file:` resolved JSON object should be JSON.stringify'd
+   * before going to entity.Set — naked objects on string columns become
+   * `[object Object]` via toString().
+   *
+   * Delegates to `@memberjunction/sql-dialect`'s `IsStringSQLType` so the list
+   * of string-shaped type names is single-sourced. Also accepts the synthetic
+   * value `'string'` because EntityField.Type can carry the TS-side type label
+   * for virtual fields rather than a real SQL type.
+   */
+  private isTextLikeColumn(sqlType: string): boolean {
+    const t = (sqlType ?? '').trim().toLowerCase();
+    return t === 'string' || IsStringSQLType(t);
   }
 
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
@@ -254,6 +279,19 @@ export class PushService {
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
       }
+
+      // Preload entities and cache files.
+      // We pass the SyncEngine's provider explicitly rather than reaching for
+      // Metadata.Provider — `mj sync` is single-process so they resolve to the
+      // same instance today, but routing through SyncEngine keeps the wiring
+      // self-consistent and makes future provider plumbing trivial.
+      callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
+      this.syncMetadataEngine.setEntityDirs(entityDirs);
+      await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
+      for (const warning of this.syncMetadataEngine.drainWarnings()) {
+        callbacks?.onWarn?.(`   ⚠️  ${warning}`);
+      }
+      callbacks?.onLog?.('✓ Preload completed successfully\n');
       
       if (options.verbose) {
         callbacks?.onLog?.(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
@@ -531,23 +569,31 @@ export class PushService {
           await fileBackupManager.backupFile(filePath);
         }
         
-        // Read the raw file data first
-        const rawFileData = await fs.readJson(filePath);
+        // Check if file is already cached to avoid double I/O
+        let rawFileData: any;
+        let fileData: any;
+        const cachedFile = this.syncMetadataEngine.getCachedFile(filePath);
+        
+        if (cachedFile) {
+          rawFileData = cachedFile.rawData;
+          fileData = cachedFile.fileData;
+        } else {
+          // Fallback (e.g. if not preloaded)
+          rawFileData = await fs.readJson(filePath);
+          fileData = rawFileData;
+          
+          const jsonString = JSON.stringify(rawFileData);
+          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+          if (hasIncludes) {
+            const jsonPreprocessor = new JsonPreprocessor();
+            fileData = await jsonPreprocessor.processFile(filePath);
+          }
+          this.syncMetadataEngine.cacheFile(filePath, rawFileData, fileData);
+        }
 
         // Keep unprocessed data to write back (preserves @file: references)
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
-
-        // Preprocess @include directives before checksumming, so changes to
-        // included files are detected by the incremental skip check.
-        let fileData = rawFileData;
-        const jsonString = JSON.stringify(rawFileData);
-        const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
-        if (hasIncludes) {
-          const jsonPreprocessor = new JsonPreprocessor();
-          fileData = await jsonPreprocessor.processFile(filePath);
-        }
 
         // Compute checksum on the RESOLVED content (after @include preprocessing)
         // so that changes to included files are properly detected.
@@ -745,6 +791,9 @@ export class PushService {
             } else {
               await JsonWriteHelper.writeOrderedRecordData(filePath, unprocessedRecords[0]);
             }
+            // Drop the cached snapshot — file on disk no longer matches it,
+            // and any later reader within this push must see fresh contents.
+            this.syncMetadataEngine.invalidateCachedFile(filePath);
           }
         }
 
@@ -969,7 +1018,52 @@ export class PushService {
           resolutionCollector,
           fieldName
         );
-        entity.Set(fieldName, processedValue);
+        const fieldInfo = entity.GetFieldByName(fieldName);
+        const fieldType = (fieldInfo?.EntityFieldInfo?.Type || '').trim().toLowerCase();
+        const isUuidField = fieldType === 'uniqueidentifier' || fieldType === 'uuid';
+        const currentValue = fieldInfo ? entity.Get(fieldName) : undefined;
+
+        // `@file:` references that point at a `.json` file return the parsed
+        // object (sync-engine.ts:304 — "Let BaseEntity handle serialization").
+        // BaseEntity does NOT auto-stringify: passing a plain object straight
+        // through to a text/varchar column lands in PG (and SQL Server's pg
+        // driver wraps `obj.toString()` → the literal string
+        // `[object Object]`. This poisoned 89 AI-prompt OutputExample +
+        // ComponentLibrary LintRules rows on every "idempotent" push because
+        // the metadata file held real JSON but the DB held the toString
+        // garbage, so the diff was perpetual. Stringify here for any non-PK
+        // field whose target type is a string-shaped column.
+        let valueToSet: unknown = processedValue;
+        if (
+          processedValue !== null
+          && typeof processedValue === 'object'
+          && !Array.isArray(processedValue)
+          && fieldInfo
+          && this.isTextLikeColumn(fieldType)
+        ) {
+          valueToSet = JSON.stringify(processedValue);
+        }
+
+        // Skip the Set when an existing record's UUID-typed field already
+        // equals the new value modulo case. PG returns UUIDs lowercase by
+        // default; metadata files authored against SQL Server use uppercase.
+        // A naive Set() trips BaseEntity dirty tracking via string equality
+        // and re-issues spUpdate every push — turning every "idempotent"
+        // sync run into hundreds of no-op updates that immediately drift
+        // back. UUIDsEqual handles the canonical-equality semantics that
+        // CLAUDE.md mandates for any UUID comparison.
+        if (
+          !isNew
+          && isUuidField
+          && typeof valueToSet === 'string'
+          && typeof currentValue === 'string'
+          && UUIDsEqual(currentValue, valueToSet)
+        ) {
+          // Same UUID, different case — leave the field alone so Dirty
+          // stays false and this record stays in the Unchanged bucket.
+        } else {
+          entity.Set(fieldName, valueToSet);
+        }
       } catch (fieldError: unknown) {
         // Check if this is a deferrable lookup error first
         if (fieldError instanceof DeferrableLookupError) {
@@ -1462,6 +1556,9 @@ export class PushService {
         
         throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
       }
+
+      // Remove from metadata cache
+      this.syncMetadataEngine.removeEntityFromCache(entityName, record.primaryKey);
       
       // Set deletedAt timestamp after successful deletion (only for metadata records)
       if (!isDbOnly) {
@@ -1958,6 +2055,8 @@ export class PushService {
         } else {
           await JsonWriteHelper.writeOrderedRecordData(deferredWrite.filePath, deferredWrite.records[0]);
         }
+        // File contents just changed on disk — drop the stale cache entry.
+        this.syncMetadataEngine.invalidateCachedFile(deferredWrite.filePath);
       } catch (error) {
         callbacks?.onWarn?.(`   ⚠️  Failed to write ${deferredWrite.filePath}: ${error}`);
       }

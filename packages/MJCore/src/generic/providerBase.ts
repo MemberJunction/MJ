@@ -125,6 +125,40 @@ export const AllMetadataArrays = [
 
 
 /**
+ * Raw entity-metadata row shapes flowing into `PostProcessEntityMetadata` from the
+ * dataset loader. These rows are untyped JSON off the wire; we capture only the
+ * properties this code path actually reads or writes, with an `unknown` index
+ * signature for the rest — matching the `Record<string, unknown> & {…}` pattern
+ * already used by `EntityInfo`'s constructor.
+ */
+type BaseMetadataRow = Record<string, unknown>;
+export type EntityMetadataRow = BaseMetadataRow & {
+    ID: string;
+    Name: string;
+    SchemaName?: string;
+    EntityFields?: unknown[];
+    EntityPermissions?: unknown[];
+    EntityRelationships?: unknown[];
+    EntitySettings?: unknown[];
+    EntityOrganicKeys?: unknown[];
+};
+export type EntityFieldMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Sequence: number;
+    EntityFieldValues?: unknown[];
+};
+export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
+export type EntityChildMetadataRow = BaseMetadataRow & { EntityID: string };
+export type OrganicKeyMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Status: string;
+    EntityOrganicKeyRelatedEntities?: unknown[];
+};
+export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
+
+/**
  * Base class for all metadata providers in MemberJunction.
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
@@ -484,7 +518,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        if (this.TrustLocalCacheCompletely && !params.BypassCache) {
+        // Keyset (AfterKey) queries always bypass the server cache: each call uses a
+        // different seek key, so a cached entry would never be reusable. Treat them like
+        // explicit BypassCache=true requests.
+        if (this.TrustLocalCacheCompletely && !params.BypassCache && !params.AfterKey) {
             // Server-side: use direct Pre → Internal → Post pipeline.
             // Cache is kept in sync via BaseEntity events + Redis pub/sub,
             // so PreRunView cache hits are returned immediately with no DB round-trip.
@@ -974,7 +1011,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * and must not be deduplicated.
      */
     private ShouldBypassDedup(params: RunViewParams[]): boolean {
-        return params.some(p => p.SaveViewResults === true);
+        // BypassCache:true MUST bypass the dedup-linger cache as well —
+        // otherwise the "skip the cache to see DB truth" contract leaks: a
+        // recent identical RunView (within DedupLingerMs) would return its
+        // cached result even when the caller explicitly asked for a fresh
+        // read. Permission resolvers and other security-critical paths rely
+        // on BypassCache being a hard cache bypass; without this, freshly
+        // revoked grants stay visible through the linger window.
+        // SaveViewResults bypasses for the original reason: it creates DB
+        // records and must not be deduplicated.
+        return params.some(p => p.SaveViewResults === true || p.BypassCache === true);
     }
 
     /**
@@ -1250,8 +1296,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // end-to-end — there's no cache-coherence concern to preserve.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
         const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        // Keyset (AfterKey) queries are inherently single-use, so we never read from or
+        // write to the cache for them. See RunViewParams.AfterKey JSDoc for rationale.
         const willCache =
             !params.BypassCache &&
+            !params.AfterKey &&
             (params.CacheLocal || this.TrustLocalCacheCompletely) &&
             entityCacheAllowed;
         if (entity && willCache) {
@@ -1391,8 +1440,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // end-to-end — there's no cache-coherence concern to preserve.
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
             const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(param);
+            // Keyset (AfterKey) queries are inherently single-use; never use the cache for them.
             const batchWillCache =
                 !param.BypassCache &&
+                !param.AfterKey &&
                 (param.CacheLocal || this.TrustLocalCacheCompletely) &&
                 batchEntityCacheAllowed;
             if (batchEntity && batchWillCache) {
@@ -1592,10 +1643,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
             : new Map<string, CachedRunViewResult | null>();
 
+        // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
+        const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();
+        if (response.results) {
+            for (const r of response.results) {
+                serverResultsByViewIndex.set(r.viewIndex, r);
+            }
+        }
+
         // Process all results in parallel — 'current' entries now read from the
         // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, response.results, preResolvedCache, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -1632,12 +1691,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
-        serverResults: RunViewWithCacheCheckResult<T>[],
+        checkResult: RunViewWithCacheCheckResult<T> | undefined,
         preResolvedCache: Map<string, CachedRunViewResult | null>,
         contextUser?: UserInfo
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
-        const checkResult = serverResults.find(r => r.viewIndex === index);
-
         if (!checkResult) {
             return {
                 result: {
@@ -2197,7 +2254,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        return maxDate ? maxDate.toISOString() : new Date().toISOString();
+        // Return empty string for empty/timestamp-less results instead of current server time.
+        // Using current time would make empty result sets perpetually "stale" — each smart-cache-check
+        // would see a different timestamp and force an unnecessary DB refresh.
+        return maxDate ? maxDate.toISOString() : '';
     }
 
     /**
@@ -2710,38 +2770,76 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param settings - Array of entity settings metadata
      * @returns Processed array of EntityInfo instances with all relationships established
      */
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[], organicKeys?: any[], organicKeyRelatedEntities?: any[]): any[] {
-        const result: any[] = [];
+    /**
+     * Groups items into a Map keyed by a NormalizeUUID-transformed value.
+     * Single-pass O(N) helper used to build pre-indexed lookup maps for
+     * metadata post-processing, replacing repeated O(N*M) filter scans.
+     */
+    private groupByNormalizedUUID<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+        const map = new Map<string, T[]>();
+        for (const item of items) {
+            const key = NormalizeUUID(keyFn(item));
+            let list = map.get(key);
+            if (!list) {
+                list = [];
+                map.set(key, list);
+            }
+            list.push(item);
+        }
+        return map;
+    }
+
+    protected PostProcessEntityMetadata(
+        entities: EntityMetadataRow[],
+        fields: EntityFieldMetadataRow[],
+        fieldValues: EntityFieldValueMetadataRow[],
+        permissions: EntityChildMetadataRow[],
+        relationships: EntityChildMetadataRow[],
+        settings: EntityChildMetadataRow[],
+        organicKeys?: OrganicKeyMetadataRow[],
+        organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[]
+    ): EntityInfo[] {
+        const result: EntityInfo[] = [];
 
         // Sort entities alphabetically by name to ensure deterministic ordering
         // This prevents non-deterministic output in CodeGen and other metadata consumers
         const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
-        if (fieldValues && fieldValues.length > 0)
-            for (let f of fields) {
-                // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
-            }
-
-        // Link organic key related entities to their parent organic keys
-        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
-            for (const ok of organicKeys) {
-                ok.EntityOrganicKeyRelatedEntities = organicKeyRelatedEntities.filter(
-                    okre => UUIDsEqual(okre.EntityOrganicKeyID, ok.ID)
-                );
+        if (fieldValues && fieldValues.length > 0) {
+            const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
+            for (const f of fields) {
+                f.EntityFieldValues = fieldValuesByFieldId.get(NormalizeUUID(f.ID)) || [];
             }
         }
 
-        for (let e of sortedEntities) {
-            e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
-            e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
-            e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
+        // Link organic key related entities to their parent organic keys
+        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
+            const okreByOrganicKeyId = this.groupByNormalizedUUID(organicKeyRelatedEntities, okre => okre.EntityOrganicKeyID);
+            for (const ok of organicKeys) {
+                ok.EntityOrganicKeyRelatedEntities = okreByOrganicKeyId.get(NormalizeUUID(ok.ID)) || [];
+            }
+        }
+
+        const fieldsByEntityId = this.groupByNormalizedUUID(fields, f => f.EntityID);
+        const permissionsByEntityId = this.groupByNormalizedUUID(permissions, p => p.EntityID);
+        const relationshipsByEntityId = this.groupByNormalizedUUID(relationships, r => r.EntityID);
+        const settingsByEntityId = this.groupByNormalizedUUID(settings, s => s.EntityID);
+        const activeOrganicKeysByEntityId = organicKeys
+            ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
+            : new Map<string, OrganicKeyMetadataRow[]>();
+
+        for (const e of sortedEntities) {
+            const entityIdKey = NormalizeUUID(e.ID);
+
+            const entityFields = fieldsByEntityId.get(entityIdKey) || [];
+            e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
+            e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
+            e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];
+
             // Link active organic keys to the entity
             if (organicKeys) {
-                e.EntityOrganicKeys = organicKeys.filter(
-                    ok => UUIDsEqual(ok.EntityID, e.ID) && ok.Status === 'Active'
-                );
+                e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e));
         }
@@ -2849,66 +2947,39 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public get AuthorizationRoles(): AuthorizationRoleInfo[] {
         return this._localMetadata.AllAuthorizationRoles;
     }
-    /**
-     * Gets all saved queries in the system.
-     * @returns Array of QueryInfo objects representing stored queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get Queries(): QueryInfo[] {
         return this._localMetadata.AllQueries;
     }
-    /**
-     * Gets all query category definitions.
-     * @returns Array of QueryCategoryInfo objects for query organization
-     */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryCategories(): QueryCategoryInfo[] {
         return this._localMetadata.AllQueryCategories;
     }
-    /**
-     * Gets all query field definitions.
-     * @returns Array of QueryFieldInfo objects defining query result columns
-     */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryFields(): QueryFieldInfo[] {
         return this._localMetadata.AllQueryFields;
     }
-    /**
-     * Gets all query permission assignments.
-     * @returns Array of QueryPermissionInfo objects defining query access
-     */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
     }
-    /**
-     * Gets all query entity associations.
-     * @returns Array of QueryEntityInfo objects linking queries to entities
-     */
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryEntities(): QueryEntityInfo[] {
         return this._localMetadata.AllQueryEntities;
     }
-    /**
-     * Gets all query parameter definitions.
-     * @returns Array of QueryParameterInfo objects for parameterized queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
     }
-    /**
-     * Gets all query dependency records tracking composition references between queries.
-     * @returns Array of QueryDependencyInfo objects representing query-to-query dependencies
-     */
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryDependencies(): QueryDependencyInfo[] {
         return this._localMetadata.AllQueryDependencies;
     }
-    /**
-     * Gets all SQL dialect definitions.
-     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
-     */
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get SQLDialects(): SQLDialectInfo[] {
         return this._localMetadata.AllSQLDialects;
     }
-    /**
-     * Gets all query SQL dialect variants.
-     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QuerySQLs(): QuerySQLInfo[] {
         return this._localMetadata.AllQuerySQLs;
     }

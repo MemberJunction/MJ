@@ -477,7 +477,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
@@ -494,7 +494,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
      * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
      */
-    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number, startRow?: number): Promise<RunQueryResult> {
         const query = gql`
             query ExecuteAdhocQuery($input: AdhocQueryInput!) {
                 ExecuteAdhocQuery(input: $input) {
@@ -503,9 +503,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         `;
 
-        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        const input: { SQL: string; TimeoutSeconds?: number; MaxRows?: number; StartRow?: number } = { SQL: sql };
         if (timeoutSeconds !== undefined) {
             input.TimeoutSeconds = timeoutSeconds;
+        }
+        if (maxRows !== undefined) {
+            input.MaxRows = maxRows;
+        }
+        if (startRow !== undefined) {
+            input.StartRow = startRow;
         }
 
         const result = await this.ExecuteGQL(query, { input });
@@ -836,6 +842,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;
+                // BypassCache instructs the server to skip its RunView cache layer for this
+                // query — used for cross-entity subqueries the cache invalidator can't follow
+                // (e.g. WHERE … IN (SELECT … FROM vwListDetails …)) or for maintenance reads
+                // that need true DB state. Only forward when explicitly set so default behavior
+                // (server caching enabled) is unchanged.
+                if (params.BypassCache !== undefined)
+                    innerParams.BypassCache = params.BypassCache;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -995,10 +1008,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.MaxRows = param.MaxRows;
                     if (param.StartRow !== undefined)
                         innerParam.StartRow = param.StartRow; // Add StartRow parameter
+                    if (param.AfterKey) {
+                        // Keyset (seek) pagination cursor. Server validates and throws
+                        // AfterKeyNotSupportedError on composite-PK / unsupported types.
+                        innerParam.AfterKey = { KeyValuePairs: param.AfterKey.KeyValuePairs };
+                    }
                     innerParam.ForceAuditLog = param.ForceAuditLog || false;
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
                         innerParam.AuditLogDescription = param.AuditLogDescription;
+                    }
+                    if (param.BypassCache !== undefined) {
+                        innerParam.BypassCache = param.BypassCache;
                     }
 
                     if (!dynamicView) {
@@ -1112,6 +1133,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     IgnoreMaxRows: item.params.IgnoreMaxRows || false,
                     MaxRows: item.params.MaxRows,
                     StartRow: item.params.StartRow,
+                    AfterKey: item.params.AfterKey ? { KeyValuePairs: item.params.AfterKey.KeyValuePairs } : null,
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',
@@ -1525,7 +1547,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.Success = true;
             result.NewValues = entity.GetAll();
-            entity.ResultHistory.push(result);
+            entity.RegisterResultHistoryEntry(result);
             return result.NewValues;
         }
 
@@ -1539,7 +1561,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             // Create the query for the mutation first, we will provide the specific
             // input values later in the loop below. Here we are just setting up the mutation
@@ -1811,7 +1833,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = 'delete';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             const vars = {};
             const mutationInputTypes = [];
@@ -2652,9 +2674,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._isDisposingSocketIntentionally = false;
             this._wsClient = createClient({
                 url: this.ConfigData.WSURL,
-                connectionParams: {
+                // Function form: re-evaluated on every connection attempt (including
+                // retries after 4403 "Token expired"). This lets the client pick up a
+                // freshly-refreshed token instead of reusing the stale one.
+                connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
+                }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,
                 shouldRetry: () => true,
@@ -2665,7 +2690,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._wsClient.on('connected', () => {
                 this._socketStateSubject.next('connected');
             });
-            this._wsClient.on('closed', () => {
+            this._wsClient.on('closed', (event: unknown) => {
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -2673,6 +2698,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return;
                 }
                 this._socketStateSubject.next('disconnected');
+
+                // If the server closed with 4403 "Token expired", eagerly refresh
+                // the token so that graphql-ws retries use a fresh one. Without this,
+                // all retry attempts would reuse the stale token and fail.
+                const closeCode = (event as { code?: number })?.code;
+                if (closeCode === 4403 && this._configData.Data.RefreshTokenFunction) {
+                    this.RefreshToken().catch(() => {
+                        // RefreshToken failure is handled via notifyAuthenticationError
+                    });
+                }
             });
 
             // Start cleanup timer if not already running

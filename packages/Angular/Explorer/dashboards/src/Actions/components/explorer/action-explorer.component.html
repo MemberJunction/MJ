@@ -1,3 +1,120 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Action Explorer"
+    Icon="fa-solid fa-folder-tree"
+    Subtitle="Browse, organize, and run all configured actions">
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredActions.length"
+        [Total]="Actions.length"
+        Label="actions">
+      </mj-stat-badge>
+    </div>
+    <div actions>
+      <!-- Filters popover (shared trigger + popover chrome; multi-select checkbox content stays bespoke) -->
+      <mj-filter-popover
+        [ActiveCount]="StatusTypeFilterCount"
+        [ShowClearAll]="StatusTypeFilterCount > 0"
+        (ClearAllRequested)="clearFilters()">
+        <div class="dropdown-section">
+          <div class="section-header">
+            <span>Status</span>
+            @if (Filters.statuses.length > 0) {
+              <button mjButton variant="flat" size="sm" (click)="StateService.setStatusFilter([])">Clear</button>
+            }
+          </div>
+          <div class="filter-options">
+            @for (status of StatusOptions; track status.value) {
+              <label class="filter-option" [class.selected]="isStatusSelected(status.value)">
+                <input type="checkbox"
+                  [checked]="isStatusSelected(status.value)"
+                  (change)="toggleStatus(status.value)">
+                <span class="status-dot" [attr.data-status]="status.value"></span>
+                {{ status.label }}
+              </label>
+            }
+          </div>
+        </div>
+        <div class="dropdown-section">
+          <div class="section-header">
+            <span>Type</span>
+            @if (Filters.types.length > 0) {
+              <button mjButton variant="flat" size="sm" (click)="StateService.setTypeFilter([])">Clear</button>
+            }
+          </div>
+          <div class="filter-options">
+            @for (type of TypeOptions; track type.value) {
+              <label class="filter-option" [class.selected]="isTypeSelected(type.value)">
+                <input type="checkbox"
+                  [checked]="isTypeSelected(type.value)"
+                  (change)="toggleType(type.value)">
+                <i [class]="type.icon"></i>
+                {{ type.label }}
+              </label>
+            }
+          </div>
+        </div>
+      </mj-filter-popover>
+
+      <!-- Sort Dropdown (bespoke — no shared sort component yet) -->
+      <div class="dropdown-container" (clickOutside)="ShowSortDropdown = false">
+        <button mjButton variant="secondary" size="sm" (click)="toggleSortDropdown()">
+          <i [class]="getSortIcon()"></i> {{ getSortLabel() }}
+          <i [class]="ShowSortDropdown ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+        </button>
+        @if (ShowSortDropdown) {
+          <div class="dropdown-menu sort-menu">
+            @for (option of SortOptions; track option.field) {
+              <button class="sort-option"
+                [class.selected]="SortField === option.field"
+                (click)="setSortField(option.field)">
+                <i [class]="option.icon"></i>
+                {{ option.label }}
+                @if (SortField === option.field) {
+                  <i [class]="SortDirection === 'asc' ? 'fa-solid fa-arrow-up' : 'fa-solid fa-arrow-down'" class="direction-icon"></i>
+                }
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <mj-view-toggle
+        [Options]="ViewToggleOptions"
+        [ActiveKey]="ViewMode"
+        (KeyChange)="setViewMode($any($event))">
+      </mj-view-toggle>
+
+      <mj-refresh-button (Clicked)="onRefresh()"></mj-refresh-button>
+
+      <button mjButton variant="primary" size="sm" (click)="onNewAction()">
+        <i class="fa-solid fa-plus"></i> New Action
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search actions..."
+        [Value]="Filters.searchTerm"
+        (ValueChange)="onSearchInput($event)">
+      </mj-page-search>
+      @if (hasActiveFilters()) {
+        <div class="active-filters">
+          @for (status of Filters.statuses; track status) {
+            <span class="status-chip removable" (click)="toggleStatus(status)">
+              Status: {{ status }} <i class="fa-solid fa-times"></i>
+            </span>
+          }
+          @for (type of Filters.types; track type) {
+            <span class="status-chip removable" (click)="toggleType(type)">
+              Type: {{ type === 'Generated' ? 'AI Generated' : type }} <i class="fa-solid fa-times"></i>
+            </span>
+          }
+        </div>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 <div class="action-explorer">
   <!-- Full-page Loading Overlay -->
   @if (IsLoading) {
@@ -17,14 +134,6 @@
 
   <!-- Main Content Area -->
   <div class="explorer-main">
-    <!-- Toolbar -->
-    <mj-action-toolbar
-      [TotalCount]="Actions.length"
-      [FilteredCount]="FilteredActions.length"
-      (NewActionClick)="onNewAction()"
-      (RefreshClick)="onRefresh()">
-    </mj-action-toolbar>
-
     <!-- Breadcrumb -->
     <mj-action-breadcrumb
       [SelectedCategoryId]="SelectedCategoryId"
@@ -145,3 +254,5 @@
     </mj-action-test-harness-dialog>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

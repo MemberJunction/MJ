@@ -19,7 +19,6 @@ import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand,
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
-import { SuggestedResponse } from '../../models/conversation-state.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
@@ -712,8 +711,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // No agent run — fall back to message entity timestamps
-    return this.formattedGenerationTime;
+    // No agent run — fall back to message entity timestamps.
+    const fromMessage = this.formattedGenerationTime;
+    if (fromMessage) {
+      return fromMessage;
+    }
+
+    // Last resort: the live elapsed-time string is frozen at the value it had
+    // when status flipped to Complete (the interval is cleared in ngDoCheck). If
+    // the same component instance handled the in-progress phase, this is the
+    // accurate duration the user just watched tick. If the message arrived already
+    // complete (no in-progress phase observed), `_elapsedTimeFormatted` is still
+    // its initial '0:00' — return null in that case so the time pill doesn't render
+    // a misleading zero.
+    return this._elapsedTimeFormatted !== '0:00' ? this._elapsedTimeFormatted : null;
   }
 
   public get formattedGenerationTime(): string | null {
@@ -1120,25 +1131,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Parse and return suggested responses from message data
-   * Uses strongly-typed SuggestedResponses property from MJConversationDetailEntity
-   */
-  public get suggestedResponses(): SuggestedResponse[] {
-    try {
-      const rawData = this.message.SuggestedResponses;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of SuggestedResponse objects
-      const responses = JSON.parse(rawData);
-
-      return Array.isArray(responses) ? responses : [];
-    } catch (error) {
-      console.error('Failed to parse suggested responses:', error);
-      return [];
-    }
-  }
-
-  /**
    * Check if current user is the conversation owner
    */
   public get isConversationOwner(): boolean {
@@ -1146,49 +1138,57 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Handle suggested response selection
-   */
-  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
-    this.suggestedResponseSelected.emit(event);
-  }
-
-  /**
    * Get agent response form from message
    * Uses ResponseForm property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string so the getter returns a stable object reference
+   * for the same input. Without caching, `JSON.parse` produces a new object every call,
+   * which makes Angular's `@if (responseForm)` template index churn between CD passes —
+   * the classic NG0100 "ExpressionChangedAfterItHasBeenCheckedError" we used to hit here.
    */
+  private _responseFormRaw: string | null | undefined = undefined;
+  private _responseFormCache: AgentResponseForm | null = null;
   public get responseForm(): AgentResponseForm | null {
-    try {
-      const rawData = this.message.ResponseForm;
-      if (!rawData) {
-        return null;
-      }
-
-      // Parse JSON string to AgentResponseForm object
-      const form = JSON.parse(rawData);
-
-      return form || null;
-    } catch (error) {
-      console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
+    const rawData = this.message.ResponseForm ?? null;
+    if (rawData === this._responseFormRaw) return this._responseFormCache;
+    this._responseFormRaw = rawData;
+    if (!rawData) {
+      this._responseFormCache = null;
       return null;
     }
+    try {
+      this._responseFormCache = (JSON.parse(rawData) as AgentResponseForm) || null;
+    } catch (error) {
+      console.error('Failed to parse response form:', error, 'Raw data:', rawData);
+      this._responseFormCache = null;
+    }
+    return this._responseFormCache;
   }
 
   /**
    * Get actionable commands from message
    * Uses ActionableCommands property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
+  private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsCache: ActionableCommand[] = [];
   public get actionableCommands(): ActionableCommand[] {
+    const rawData = this.message.ActionableCommands ?? null;
+    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    this._actionableCommandsRaw = rawData;
+    if (!rawData) {
+      this._actionableCommandsCache = [];
+      return this._actionableCommandsCache;
+    }
     try {
-      const rawData = this.message.ActionableCommands;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of ActionableCommand objects
       const commands = JSON.parse(rawData);
-      return Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
-      return [];
+      this._actionableCommandsCache = [];
     }
+    return this._actionableCommandsCache;
   }
 
   /**

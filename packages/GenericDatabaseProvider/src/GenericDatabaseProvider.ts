@@ -40,7 +40,6 @@ import {
     RunQueryWithCacheCheckParams,
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
-    QueryInfo,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -57,12 +56,13 @@ import {
     LogStatus,
     LogStatusEx,
     StripStopWords,
-    QueryCacheManager,
     DatabasePlatform,
     QueryExecutionSpec,
     SaveContext,
     SaveContextField,
     SaveSQLResult,
+    AfterKeyNotSupportedError,
+    IsKeysetPaginationOrderableType,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -74,10 +74,14 @@ import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect } from '@memberjunction/sql-dialect';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline } from './renderPipeline.js';
+import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
     MJEntityAIActionEntity,
-    MJQueryEntity,
+    MJQueryEntityExtended,
+    MJQueryParameterEntity,
     MJUserViewEntityExtended,
     QueryEngine,
     ViewInfo,
@@ -227,6 +231,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
         const sessionId = uuidv4();
         const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+        const dialect = this.getDialect();
         const session = new SqlLoggingSessionImpl(sessionId, filePath,
             {
                 defaultSchemaName: mjCoreSchema,
@@ -234,7 +239,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // hardcode 'GO'. Callers can still override by passing batchSeparator explicitly.
                 batchSeparator: this.PlatformBatchSeparator || undefined,
                 ...options
-            });
+            },
+            // Pass the platform dialect through so SQL emission (Flyway placeholder escaping etc.)
+            // uses the right form for SQL Server vs. PostgreSQL. Falls back to the constructor's
+            // default (SQLServerDialect) when a subclass hasn't overridden getDialect().
+            dialect ?? undefined);
 
         // Initialize the session (create file, write header)
         await session.initialize();
@@ -900,6 +909,219 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Maximum number of parameters a CRUD stored procedure (`spCreate*`/`spUpdate*`/`spDelete*`)
+     * may declare on this database platform before CodeGen must emit a JSON-arg shape instead.
+     *
+     * - SQL Server: `Infinity` — SS supports up to 2,100 parameters per procedure, far beyond
+     *   any realistic CRUD sproc.
+     * - PostgreSQL: `90` — PG's hard `FUNC_MAX_ARGS` ceiling is 100 (compiled into the server,
+     *   not configurable on managed services like RDS/Aurora). 90 leaves headroom for column
+     *   adds without flipping sproc shape unexpectedly.
+     *
+     * Used by the shared `useJsonArgShape` predicate (CodeGen + provider call-site) to decide
+     * whether a given sproc should emit as typed-args + `_Clear` companions (today's shape) or
+     * as a single-JSONB-arg sproc with key-presence tri-state semantics. See
+     * [plans/json-arg-crud-sprocs.md](../../../plans/json-arg-crud-sprocs.md) and GitHub
+     * issue #2552.
+     */
+    public get ProcedureParamLimit(): number {
+        return Infinity;
+    }
+
+    /**
+     * Returns true when CRUD sproc generation and call-construction for the
+     * given entity + sproc verb should use a single JSON-arg shape (instead of
+     * typed args + `_Clear` companions).
+     *
+     * Convenience wrapper around the pure `useJsonArgShape` helper, applying
+     * this provider's `ProcedureParamLimit`. CodeGen and runtime call-sites
+     * can invoke this via the provider instance to keep sproc emit and sproc
+     * invocation in lockstep.
+     */
+    public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
+        return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
+    }
+
+    /**************************************************************************/
+    // GenerateSaveSQL — Concrete Dialect-Driven Save Builder
+    /**************************************************************************/
+
+    /**
+     * Per-field value transform applied before encryption + rendering. Each
+     * provider owns its type-coercion rules:
+     *
+     * - SQL Server: `datetimeoffset → ISO string`; non-PK `uniqueidentifier`
+     *   with `()` function-literal → `skip` (let DB default fire).
+     * - PostgreSQL: `gen_random_uuid()`/`uuid_generate_v4()` → fresh UUID;
+     *   `NOW()`/`CURRENT_TIMESTAMP` → `null` (let DB default fire); bool /
+     *   binary / Date pass-throughs handled here.
+     *
+     * Returns `{ kind: 'use', value }` to bind the (possibly transformed)
+     * value, or `{ kind: 'skip' }` to omit the field entirely.
+     *
+     * Runs in `GenerateSaveSQL` *before* `EncryptFieldValuesForSave` and
+     * *before* `RenderSaveCallBinding`.
+     */
+    protected abstract CoerceSaveFieldValue(
+        field: EntityFieldInfo,
+        value: unknown,
+        isUpdate: boolean,
+    ): SaveCoercedValue;
+
+    /**
+     * Renders the dialect-specific parameter binding for a save call.
+     * Returns a discriminated `SaveCallBinding` the orchestrator treats as
+     * opaque — the same provider's `WrapSaveCallForResult` /
+     * `WrapSaveCallWithRecordChange` pattern-match the variant.
+     *
+     * `fieldValues` is the post-coercion, post-encryption map from
+     * `GenerateSaveSQL`. Iteration order matters for PostgreSQL positional
+     * binding — Map iteration follows insertion order, which the
+     * orchestrator preserves.
+     */
+    protected abstract RenderSaveCallBinding(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        isUpdate: boolean,
+        spName: string,
+    ): SaveCallBinding;
+
+    /**
+     * Wraps the bare SP-call binding with the dialect's result-capture
+     * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
+     * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
+     */
+    protected abstract WrapSaveCallForResult(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+    ): SaveSQLFragment;
+
+    /**
+     * Wraps an already-result-captured save SQL with the dialect's
+     * record-change emission. SQL Server inlines `EXEC spCreateRecordChange_Internal`
+     * after the result table; PostgreSQL emits a CTE chain with
+     * `INSERT INTO "RecordChange" ... RETURNING`.
+     *
+     * Orchestrator only calls this when `ShouldTrackRecordChanges` is true
+     * and `BuildRecordChangePayload` returned a non-null payload.
+     */
+    protected abstract WrapSaveCallWithRecordChange(
+        saveSQL: SaveSQLFragment,
+        binding: SaveCallBinding,
+        payload: RecordChangePayload,
+        entity: BaseEntity,
+    ): SaveSQLFragment;
+
+    /**
+     * Concrete implementation of the abstract save-SQL builder defined on
+     * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
+     * predicate, applies provider-specific value coercion, encrypts, then
+     * delegates parameter binding, result-capture wrapping, and record-change
+     * wrapping to abstract hooks the provider subclass implements.
+     *
+     * See `plans/sp-save-builder-generic-layer-refactor.md` (rev 4) for
+     * the design and the rev-3 lesson that motivated this shape.
+     */
+    protected override async GenerateSaveSQL(
+        entity: BaseEntity,
+        isNew: boolean,
+        user: UserInfo,
+    ): Promise<SaveSQLResult> {
+        const isUpdate = !isNew;
+        const spName = this.GetCreateUpdateSPName(entity, isNew);
+
+        // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
+        const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        for (const f of entity.EntityInfo.Fields) {
+            if (!f.IsSPParameter(isUpdate)) continue;
+
+            // PK-on-UPDATE: SP signature includes the PK, but the provider's
+            // binding renderer tail-appends it from `entity.PrimaryKey.KeyValuePairs`
+            // to avoid duplicate DECLARE/SET. Skip here.
+            if (isUpdate && f.IsPrimaryKey) continue;
+
+            // PK-on-CREATE with no explicit value: omit so the SP default fires.
+            const isPKOnCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
+            if (isPKOnCreate) {
+                const v = entity.Get(f.Name);
+                if (v === null || v === undefined) continue;
+            }
+
+            // Read with ActiveStatusAssertions temporarily disabled — matches
+            // the prior SS path which silenced warnings for this lookup.
+            const theField = entity.Fields.find(
+                (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
+            );
+            const tempStatus = theField?.ActiveStatusAssertions;
+            if (theField) theField.ActiveStatusAssertions = false;
+            const rawValue = theField?.Value;
+            if (theField && tempStatus !== undefined) theField.ActiveStatusAssertions = tempStatus;
+
+            const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
+            if (coerced.kind === 'skip') continue;
+            fieldValueMap.set(f, coerced.value);
+        }
+
+        // 2. Encrypt — between coercion and rendering, mutates the map in place.
+        await this.EncryptFieldValuesForSave(entity, fieldValueMap, user);
+
+        // 3. Render the provider-specific binding.
+        const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
+
+        // 4. Wrap with result capture. This is the "no-record-change" save
+        //    shape; we also keep it as simpleSQL so consumers (e.g.
+        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
+        //    record-change-free form to fall back to.
+        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
+        let saveSQL = baseSaveSQL;
+        const simpleSQL = baseSaveSQL.sql;
+
+        // 5. Optionally wrap with record-change emission.
+        let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
+        if (this.ShouldTrackRecordChanges(entity.EntityInfo)) {
+            const newData = entity.GetAll(false);
+            const oldData = isUpdate ? entity.GetAll(true) : null;
+
+            // ISA propagation hook: capture the diff for SS subtype propagation.
+            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
+            if (isUpdate && oldData) {
+                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+                if (diffChanges && Object.keys(diffChanges).length > 0) {
+                    overlappingChangeData = {
+                        changesJSON: JSON.stringify(diffChanges),
+                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
+                    };
+                }
+            }
+
+            const payload = this.BuildRecordChangePayload(
+                newData,
+                oldData,
+                '',
+                entity.EntityInfo,
+                isNew ? 'Create' : 'Update',
+                user,
+                entity.RestoreContext,
+                "'",
+            );
+            if (payload) {
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
+            }
+        }
+
+        const result: SaveSQLResult = {
+            fullSQL: saveSQL.sql,
+            simpleSQL,
+            parameters: saveSQL.parameters ?? null,
+        };
+        if (overlappingChangeData) {
+            (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
+        }
+        return result;
+    }
+
+    /**
      * Builds a platform-specific pagination clause.
      * SQL Server: `OFFSET X ROWS FETCH NEXT Y ROWS ONLY`
      * PostgreSQL: `LIMIT Y OFFSET X`
@@ -956,6 +1178,193 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
         return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+    }
+
+    /**
+     * Validates that the entity and RunViewParams are compatible with keyset (AfterKey) pagination,
+     * then returns the SQL predicate (`<pk> > 'value'` or `<pk> < 'value'`) and the resolved
+     * order-by direction.
+     *
+     * See {@link AfterKeyNotSupportedError} for the validation rules and {@link RunViewParams.AfterKey}
+     * for the API contract.
+     *
+     * @throws AfterKeyNotSupportedError on validation failure
+     */
+    protected BuildKeysetSeekClause(
+        entityInfo: EntityInfo,
+        params: RunViewParams
+    ): { seekPredicate: string; direction: 'ASC' | 'DESC'; pkColumnName: string } {
+        const afterKey = params.AfterKey!;
+
+        // 1. Single-column PK requirement
+        const pkFields = entityInfo.PrimaryKeys;
+        if (!pkFields || pkFields.length === 0) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'CompositePK',
+                `AfterKey requires a primary key on entity "${entityInfo.Name}", but none is defined.`
+            );
+        }
+        if (pkFields.length > 1) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'CompositePK',
+                `AfterKey requires a single-column primary key. Entity "${entityInfo.Name}" has a composite PK (${pkFields.length} columns: ${pkFields.map(f => f.Name).join(', ')}). Use StartRow-based pagination for composite-PK entities, or restructure the workload.`
+            );
+        }
+        const pkField = pkFields[0];
+
+        // 2. Orderable PK type
+        if (!IsKeysetPaginationOrderableType(pkField.Type)) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'UnsupportedPKType',
+                `AfterKey is not supported for entity "${entityInfo.Name}" because its PK column "${pkField.Name}" has type "${pkField.Type}", which is not in the keyset-orderable allowlist.`
+            );
+        }
+
+        // 3. StartRow conflict
+        if (params.StartRow !== undefined && params.StartRow > 0) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'StartRowConflict',
+                `AfterKey cannot be combined with StartRow > 0. Use one or the other.`
+            );
+        }
+
+        // 4. AfterKey shape — must contain exactly one key matching the PK column
+        const pairs = afterKey.KeyValuePairs ?? [];
+        if (pairs.length !== 1) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'AfterKeyShape',
+                `AfterKey must contain exactly one key/value pair matching the entity's PK column "${pkField.Name}". Got ${pairs.length} pairs.`
+            );
+        }
+        const pair = pairs[0];
+        if (pair.FieldName?.toLowerCase().trim() !== pkField.Name.toLowerCase().trim()) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'AfterKeyShape',
+                `AfterKey key name "${pair.FieldName}" does not match the entity's PK column "${pkField.Name}".`
+            );
+        }
+        if (pair.Value === null || pair.Value === undefined || pair.Value === '') {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'AfterKeyShape',
+                `AfterKey value for "${pkField.Name}" is null/empty. To request the first page, omit AfterKey entirely.`
+            );
+        }
+
+        // 5. OrderBy compatibility — must be empty, or reference only the PK column
+        let direction: 'ASC' | 'DESC' = 'ASC';
+        const rawOrderBy = (params.OrderBy as string | undefined)?.trim() ?? '';
+        if (rawOrderBy.length > 0) {
+            // Accept: "ID", "ID ASC", "ID DESC", "[ID]", "[ID] DESC", '"ID"', etc.
+            // Strip quoting characters and split on whitespace.
+            const stripped = rawOrderBy.replace(/[\[\]"`]/g, '').trim();
+            const tokens = stripped.split(/\s+/);
+            const colName = tokens[0]?.trim();
+            const dirToken = tokens[1]?.toUpperCase().trim();
+            if (!colName || colName.toLowerCase() !== pkField.Name.toLowerCase()) {
+                throw new AfterKeyNotSupportedError(
+                    entityInfo.Name, 'IncompatibleOrderBy',
+                    `When AfterKey is set, OrderBy must reference only the PK column "${pkField.Name}". Got "${rawOrderBy}".`
+                );
+            }
+            if (tokens.length > 2 || (dirToken && dirToken !== 'ASC' && dirToken !== 'DESC')) {
+                throw new AfterKeyNotSupportedError(
+                    entityInfo.Name, 'IncompatibleOrderBy',
+                    `When AfterKey is set, OrderBy may only specify a direction (ASC/DESC). Got "${rawOrderBy}".`
+                );
+            }
+            if (dirToken === 'DESC') direction = 'DESC';
+        }
+
+        // 6. Build the seek predicate. Comparison operator depends on direction.
+        const op = direction === 'ASC' ? '>' : '<';
+        const pkColumnName = this.QuoteIdentifier(pkField.Name);
+        const literalValue = this.formatKeysetSeekValue(pair.Value, pkField.Type);
+        const seekPredicate = `${pkColumnName} ${op} ${literalValue}`;
+
+        return { seekPredicate, direction, pkColumnName };
+    }
+
+    /**
+     * Formats a CompositeKey value as a SQL literal for use in a keyset seek predicate.
+     *
+     * This bypasses parameter binding because the entire WHERE clause is built as a string
+     * elsewhere in this provider (consistent with ExtraFilter / OrderBy handling). The seek
+     * value comes from server-side application code, not raw user input — but we still type-
+     * check and escape to defend against any caller passing a tainted value.
+     *
+     * Strategy:
+     * - UUID types: validate strict UUID format, wrap in single quotes
+     * - Numeric types: validate finite number, output bare
+     * - Boolean: output 0/1 (SQL Server) or TRUE/FALSE (caller can override if needed)
+     * - Date/time types: validate ISO-ish string, wrap in single quotes
+     * - String types: escape single quotes by doubling, wrap in single quotes
+     *
+     * @throws AfterKeyNotSupportedError if the value fails type-specific validation
+     */
+    protected formatKeysetSeekValue(value: unknown, sqlType: string): string {
+        const t = (sqlType || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        const asStr = String(value);
+
+        // UUIDs — validate format strictly
+        if (t === 'uniqueidentifier' || t === 'uuid') {
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidPattern.test(asStr)) {
+                throw new AfterKeyNotSupportedError(
+                    '', 'AfterKeyShape',
+                    `AfterKey value "${asStr}" is not a valid UUID for ${sqlType} primary key.`
+                );
+            }
+            return `'${asStr}'`;
+        }
+
+        // Numeric types
+        const numericTypes = new Set([
+            'int', 'bigint', 'smallint', 'tinyint', 'integer', 'bigserial', 'serial',
+            'decimal', 'numeric', 'money', 'smallmoney', 'float', 'real', 'double precision'
+        ]);
+        if (numericTypes.has(t)) {
+            const n = typeof value === 'number' ? value : Number(asStr);
+            if (!Number.isFinite(n)) {
+                throw new AfterKeyNotSupportedError(
+                    '', 'AfterKeyShape',
+                    `AfterKey value "${asStr}" is not a valid numeric value for ${sqlType} primary key.`
+                );
+            }
+            return String(n);
+        }
+
+        // Boolean / bit
+        if (t === 'bit' || t === 'boolean') {
+            const v = value === true || asStr === 'true' || asStr === '1';
+            return v ? '1' : '0';
+        }
+
+        // Date / time — accept anything ISO-ish; quote and escape single quotes
+        const dateTypes = new Set([
+            'date', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime', 'time',
+            'timestamp', 'timestamp with time zone', 'timestamp without time zone'
+        ]);
+        if (dateTypes.has(t)) {
+            const escaped = asStr.replace(/'/g, "''");
+            // Reject anything containing semicolons or comment markers as a defense-in-depth check
+            if (/;|--|\/\*|\*\//.test(escaped)) {
+                throw new AfterKeyNotSupportedError(
+                    '', 'AfterKeyShape',
+                    `AfterKey value for ${sqlType} primary key contains disallowed characters.`
+                );
+            }
+            return `'${escaped}'`;
+        }
+
+        // String types (default)
+        const escaped = asStr.replace(/'/g, "''");
+        if (/;|--|\/\*|\*\//.test(escaped)) {
+            throw new AfterKeyNotSupportedError(
+                '', 'AfterKeyShape',
+                `AfterKey value contains disallowed characters.`
+            );
+        }
+        return `'${escaped}'`;
     }
 
     /**
@@ -1027,7 +1436,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const saveViewResults: boolean = params.SaveViewResults ?? false;
 
             // ── TOP / pagination mode ──
-            const usingPagination = !!(params.MaxRows && params.MaxRows > 0 && params.StartRow !== undefined && params.StartRow >= 0);
+            // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
+            // and never silently degrade to OFFSET. Throws AfterKeyNotSupportedError if invalid.
+            const usingKeyset = !!params.AfterKey;
+            let keysetSeekPredicate = '';
+            let keysetDirection: 'ASC' | 'DESC' = 'ASC';
+            let keysetPkColumnName = '';
+            if (usingKeyset) {
+                const seek = this.BuildKeysetSeekClause(entityInfo, params);
+                keysetSeekPredicate = seek.seekPredicate;
+                keysetDirection = seek.direction;
+                keysetPkColumnName = seek.pkColumnName;
+            }
+
+            // usingPagination is the OFFSET-based path; keyset uses TOP/LIMIT semantics like a
+            // non-paginated query, so we never set usingPagination=true when AfterKey is present.
+            const usingPagination = !usingKeyset && !!(params.MaxRows && params.MaxRows > 0 && params.StartRow !== undefined && params.StartRow >= 0);
             let topSQL = '';
             let maxRowsForQuery = 0;
             if (params.IgnoreMaxRows === true) {
@@ -1035,6 +1459,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             } else if (usingPagination) {
                 // pagination — no TOP, will add OFFSET/FETCH or LIMIT/OFFSET later
                 maxRowsForQuery = params.MaxRows!;
+            } else if (usingKeyset) {
+                // Keyset uses TOP/LIMIT like a non-paginated query — bounded by MaxRows.
+                // MaxRows is required for keyset to make sense (otherwise return whole table).
+                const keysetMaxRows = params.MaxRows && params.MaxRows > 0 ? params.MaxRows : (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0 ? entityInfo.UserViewMaxRows : 1000);
+                topSQL = this.BuildTopClause(keysetMaxRows);
+                maxRowsForQuery = keysetMaxRows;
             } else if (params.MaxRows && params.MaxRows > 0) {
                 topSQL = this.BuildTopClause(params.MaxRows);
                 maxRowsForQuery = params.MaxRows;
@@ -1098,23 +1528,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 bHasWhere = true;
             }
 
-            // 5. Row-Level Security
-            if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-                const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-                if (rlsWhereClause && rlsWhereClause.length > 0) {
-                    whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-                    bHasWhere = true;
-                }
+            // 5. Row-Level Security (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
+                bHasWhere = true;
             }
+
+            // 6. Keyset (AfterKey) seek predicate — only on the data query, NOT the count query.
+            //    The count is the total matching the user-visible filters; the seek predicate is
+            //    a pagination cursor, conceptually distinct from "how many records match overall".
+            const seekPredicateForData = usingKeyset ? keysetSeekPredicate : '';
 
             if (bHasWhere) {
                 viewSQL += ` WHERE ${whereSQL}`;
                 if (countSQL) countSQL += ` WHERE ${whereSQL}`;
             }
+            if (seekPredicateForData) {
+                viewSQL += bHasWhere ? ` AND (${seekPredicateForData})` : ` WHERE (${seekPredicateForData})`;
+            }
 
             // ── ORDER BY (transform user-provided clause for platform compatibility) ──
-            const rawOrderBy: string = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
-            const orderBy: string = rawOrderBy.length > 0 ? this.TransformExternalSQLClause(rawOrderBy, entityInfo) : '';
+            // For keyset (AfterKey) mode, we force ORDER BY <pk> <direction> regardless of the
+            // caller's OrderBy — BuildKeysetSeekClause already validated that any caller-provided
+            // OrderBy referenced the PK and we use the resolved direction.
+            let rawOrderBy: string;
+            if (usingKeyset) {
+                rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
+            } else {
+                rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
+            }
+            const orderBy: string = rawOrderBy.length > 0
+                ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
+                : '';
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -1126,11 +1572,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     viewSQL = logResult.executeViewSQL;
                     userViewRunID = logResult.runID;
                 } else if (orderBy.length > 0) {
-                    if (!this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                    if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
             } else if (orderBy.length > 0) {
-                if (!this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                 viewSQL += ` ORDER BY ${orderBy}`;
             }
 
@@ -1141,7 +1587,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
                 viewSQL += ' ' + this.BuildPaginationSQL(params.MaxRows!, params.StartRow!);
             } else if (!topSQL && maxRowsForQuery > 0) {
-                // Platform doesn't use TOP (e.g., PG uses LIMIT at end of query)
+                // Platform doesn't use TOP (e.g., PG uses LIMIT at end of query).
+                // This also covers the usingKeyset case on PG: topSQL is set to empty by PG's
+                // BuildTopClause, so we fall here and emit LIMIT N at the end.
                 const limitSQL = this.BuildNonPaginatedLimitSQL(maxRowsForQuery);
                 if (limitSQL) viewSQL += ' ' + limitSQL;
             }
@@ -1334,7 +1782,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Builds user search SQL for the given entity and search string.
+     *
      * Supports full-text search (if enabled) and field-by-field LIKE searching.
+     * For the LIKE path:
+     *   - honors EntityField.UserSearchPredicateAPI (Exact / BeginsWith / EndsWith / Contains)
+     *     so index-seekable predicates can be expressed,
+     *   - escapes LIKE metacharacters (%, _, [, ]) in user input with ESCAPE '\\',
+     *   - skips fields that are not sensible text-search targets (non-text types,
+     *     unbounded text columns when FTX is off).
      */
     protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
         let sUserSearchSQL = '';
@@ -1355,20 +1810,77 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const pkName = this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID');
             sUserSearchSQL = `${pkName} IN (SELECT ${pkName} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.FullTextSearchFunction ?? '')}('${u}'))`;
         } else {
+            const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
             for (const field of entityInfo.Fields) {
-                if (field.IncludeInUserSearchAPI) {
-                    let sParam = '';
-                    if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
-                    if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0)
-                        sParam = field.UserSearchParamFormatAPI.replace('{0}', safeUserSearchString);
-                    else
-                        sParam = ` LIKE '%${safeUserSearchString}%'`;
-                    sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
-                }
+                if (!field.IncludeInUserSearchAPI) continue;
+                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
+                if (!sParam) continue;
+                if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
+                sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
             }
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
         }
         return sUserSearchSQL;
+    }
+
+    /**
+     * Build the SQL fragment that compares one EntityField against a user search term.
+     *
+     * Resolution order:
+     *   1. UserSearchParamFormatAPI (custom override) wins if set, with `{0}` replaced
+     *      by the single-quote-escaped raw term. Caller is responsible for escaping
+     *      LIKE metacharacters in their format string if needed.
+     *   2. Otherwise, the field must be a text-searchable type. Non-text and unbounded-
+     *      text fields return '' (caller skips them).
+     *   3. Otherwise, the predicate is chosen from UserSearchPredicateAPI:
+     *        Exact      -> = N'term'                     (index-seekable)
+     *        BeginsWith -> LIKE N'term%' ESCAPE '\\'     (index-seekable)
+     *        EndsWith   -> LIKE N'%term' ESCAPE '\\'
+     *        Contains   -> LIKE N'%term%' ESCAPE '\\'   (default, non-seekable)
+     */
+    protected buildPerFieldSearchPredicate(
+        field: EntityFieldInfo,
+        escapedTerm: string,
+        rawSafeTerm: string,
+    ): string {
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
+            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+        }
+        if (!this.isTextSearchableType(field)) return '';
+        const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
+        switch (pred) {
+            case 'Exact':
+                return ` = N'${rawSafeTerm}'`;
+            case 'BeginsWith':
+                return ` LIKE N'${escapedTerm}%' ESCAPE '\\'`;
+            case 'EndsWith':
+                return ` LIKE N'%${escapedTerm}' ESCAPE '\\'`;
+            case 'Contains':
+            default:
+                return ` LIKE N'%${escapedTerm}%' ESCAPE '\\'`;
+        }
+    }
+
+    /**
+     * Escape characters that have special meaning in SQL Server LIKE patterns.
+     * The backslash itself must be escaped first so its replacement isn't reprocessed.
+     * Pair with `ESCAPE '\\'` on the LIKE clause.
+     */
+    protected escapeLikeTerm(safeTerm: string): string {
+        return safeTerm.replace(/[\\%_\[\]]/g, m => '\\' + m);
+    }
+
+    /**
+     * True if the field's column type is appropriate for text-pattern search.
+     * Non-text types are rejected because LIKE forces an implicit per-row CONVERT
+     * to nvarchar. Unbounded (MAX/ntext/text) columns are rejected because the
+     * LIKE path cannot seek them; FTX is the right tool for those.
+     */
+    protected isTextSearchableType(field: EntityFieldInfo): boolean {
+        const t = (field.Type ?? '').toLowerCase();
+        if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
+        if (field.Length === -1) return false;
+        return true;
     }
 
     /**************************************************************************/
@@ -1429,6 +1941,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Parses a timestamp string sent by the client.
+     *
+     * Accepts both ISO 8601 strings (the canonical form) and all-digit strings
+     * representing milliseconds since epoch. The numeric form has been observed
+     * in the wild from clients whose cache layer round-tripped a Date through a
+     * lossy serializer — `new Date('1778004618383')` returns `Invalid Date`,
+     * but `new Date(Number('1778004618383'))` is a valid timestamp. Returning
+     * `null` on unparseable input lets callers degrade to a stale-cache fallback
+     * instead of throwing `RangeError: Invalid time value` on a downstream
+     * `.toISOString()`.
+     */
+    protected parseClientTimestamp(raw: string | null | undefined): Date | null {
+        if (!raw) return null;
+        const d = /^\d+$/.test(raw) ? new Date(Number(raw)) : new Date(raw);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    /**
      * Compares client cache status with server status to determine if cache is current.
      * Checks both row count and maxUpdatedAt timestamp.
      */
@@ -1437,10 +1967,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         serverStatus: { maxUpdatedAt?: string; rowCount?: number },
     ): boolean {
         if (clientStatus.rowCount !== serverStatus.rowCount) return false;
-        const clientDate = new Date(clientStatus.maxUpdatedAt);
+
+        // Handle empty result sets: if both sides report no timestamp, matching row count is sufficient
+        const clientEmpty = !clientStatus.maxUpdatedAt || clientStatus.maxUpdatedAt === '';
+        const serverEmpty = !serverStatus.maxUpdatedAt || serverStatus.maxUpdatedAt === '';
+        if (clientEmpty && serverEmpty) return true;
+
+        const clientDate = this.parseClientTimestamp(clientStatus.maxUpdatedAt);
+        if (!clientDate) return false;
         const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
+        // Server has no timestamp (e.g., empty table) — current if row counts match (already checked above)
         if (!serverDate) return clientStatus.rowCount === 0;
-        return clientDate.toISOString() === serverDate.toISOString();
+        if (isNaN(serverDate.getTime())) return false;
+
+        // Compare as epoch milliseconds with 1-second tolerance to handle timestamp
+        // precision differences between SQL Server and JavaScript Date.toISOString()
+        return Math.abs(clientDate.getTime() - serverDate.getTime()) < 1000;
     }
 
     /**************************************************************************/
@@ -1471,7 +2013,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
-                if (!item.cacheStatus) {
+                // Keyset queries bypass the cache entirely (per the AfterKey API contract):
+                // each call uses a different seek key, so cached entries would never be
+                // reusable. Route directly to standard execution path.
+                if (!item.cacheStatus || item.params.AfterKey) {
                     itemsWithoutCacheCheck.push({ index: i, item });
                     continue;
                 }
@@ -1649,11 +2194,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-            if (rlsWhereClause && rlsWhereClause.length > 0) {
-                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-            }
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
 
         return whereSQL;
@@ -1792,11 +2335,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
 
             // Validation: detect hidden deletes not tracked in RecordChanges
-            const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
+            const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
+            if (!clientMaxUpdatedDate) {
+                // Unparseable client timestamp — can't trust the differential math; fall back.
+                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+            }
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
                 if (!createdAt) return false;
-                return new Date(String(createdAt)) > clientMaxUpdatedDate;
+                const created = new Date(String(createdAt));
+                return !isNaN(created.getTime()) && created > clientMaxUpdatedDate;
             }).length;
 
             const serverRowCount = serverStatus.rowCount ?? 0;
@@ -1906,21 +2454,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
-            const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+            const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
-            const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+            const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
-                const queryInfo = this.resolveQueryInfo(item.params);
-                if (!queryInfo) {
+                const query = this.resolveQuery(item.params);
+                if (!query) {
                     errorResults.push({ queryIndex: i, queryId: item.params.QueryID || '', status: 'error', errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}` });
                     continue;
                 }
 
-                if (!queryInfo.UserCanRun(user)) {
-                    errorResults.push({ queryIndex: i, queryId: queryInfo.ID, status: 'error', errorMessage: `User does not have permission to run query: ${queryInfo.Name}` });
+                if (!query.UserCanRun(user)) {
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}` });
                     continue;
                 }
 
@@ -1929,30 +2477,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                if (!queryInfo.CacheValidationSQL) {
-                    itemsWithoutValidationSQL.push({ index: i, item, queryInfo });
+                if (!query.CacheValidationSQL) {
+                    itemsWithoutValidationSQL.push({ index: i, item, query });
                     continue;
                 }
 
-                itemsNeedingCacheCheck.push({ index: i, item, queryInfo });
+                itemsNeedingCacheCheck.push({ index: i, item, query });
             }
 
             const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
 
-            const staleItems: Array<{ index: number; params: RunQueryParams; queryInfo: QueryInfo }> = [];
+            const staleItems: Array<{ index: number; params: RunQueryParams; query: MJQueryEntityExtended }> = [];
             const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
 
-            for (const { index, item, queryInfo } of itemsNeedingCacheCheck) {
+            for (const { index, item, query } of itemsNeedingCacheCheck) {
                 const serverStatus = cacheStatusResults.get(index);
                 if (!serverStatus || !serverStatus.success) {
-                    errorResults.push({ queryIndex: index, queryId: queryInfo.ID, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                    errorResults.push({ queryIndex: index, queryId: query.ID, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
                     continue;
                 }
 
                 if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                    currentResults.push({ queryIndex: index, queryId: queryInfo.ID, status: 'current' });
+                    currentResults.push({ queryIndex: index, queryId: query.ID, status: 'current' });
                 } else {
-                    staleItems.push({ index, params: item.params, queryInfo });
+                    staleItems.push({ index, params: item.params, query });
                 }
             }
 
@@ -1960,11 +2508,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ...itemsWithoutCacheCheck.map(({ index, item }) =>
                     this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser),
                 ),
-                ...itemsWithoutValidationSQL.map(({ index, item, queryInfo }) =>
-                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, queryInfo.ID),
+                ...itemsWithoutValidationSQL.map(({ index, item, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, query.ID),
                 ),
-                ...staleItems.map(({ index, params: queryParams, queryInfo }) =>
-                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, queryInfo.ID),
+                ...staleItems.map(({ index, params: queryParams, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, query.ID),
                 ),
             ];
 
@@ -1980,75 +2528,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
-     * Tries QueryEngine first for fresh data, falls back to ProviderBase cache.
+     * Resolves a query from RunQueryParams (by ID or Name+CategoryPath).
+     * Uses QueryEngine as the single source of truth for query metadata.
      */
-    protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
-        const freshEntity = this.findQueryInEngine(
-            params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath,
-        );
-        if (freshEntity) return this.refreshQueryInfoFromEntity(freshEntity);
+    protected resolveQuery(params: RunQueryParams): MJQueryEntityExtended | undefined {
+        const engineQueries = QueryEngine.Instance?.Queries;
+        if (!engineQueries || engineQueries.length === 0) return undefined;
 
-        if (params.QueryID) return this.Queries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        if (params.QueryID) {
+            return engineQueries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        }
 
         if (params.QueryName) {
-            const matchingQueries = this.Queries.filter(
-                q => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase(),
-            );
-            if (matchingQueries.length === 0) return undefined;
-            if (matchingQueries.length === 1) return matchingQueries[0];
+            const lowerName = params.QueryName.trim().toLowerCase();
+            const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
+            if (matches.length === 0) return undefined;
+            if (matches.length === 1) return matches[0];
 
             if (params.CategoryPath) {
-                const byPath = matchingQueries.find(
+                const byPath = matches.find(
                     q => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase(),
                 );
                 if (byPath) return byPath;
             }
 
             if (params.CategoryID) {
-                const byId = matchingQueries.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
+                const byId = matches.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
                 if (byId) return byId;
-            }
 
-            return matchingQueries[0];
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Searches QueryEngine for a fresh query entity.
-     */
-    protected findQueryInEngine(QueryID: string | undefined, QueryName: string | undefined, CategoryID: string | undefined, CategoryPath: string | undefined): MJQueryEntity | null {
-        const engineQueries = QueryEngine.Instance?.Queries;
-        if (!engineQueries || engineQueries.length === 0) return null;
-
-        if (QueryID) {
-            const lower = QueryID.trim().toLowerCase();
-            return engineQueries.find(q => q.ID.trim().toLowerCase() === lower) ?? null;
-        }
-
-        if (QueryName) {
-            const lowerName = QueryName.trim().toLowerCase();
-            const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
-            if (matches.length === 0) return null;
-            if (matches.length === 1) return matches[0];
-
-            if (CategoryID) {
-                const byId = matches.find(q => q.CategoryID?.trim().toLowerCase() === CategoryID.trim().toLowerCase());
-                if (byId) return byId;
-            }
-            if (CategoryPath) {
-                const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
+                const resolvedCategoryId = this.resolveCategoryPath(params.CategoryPath ?? '');
                 if (resolvedCategoryId) {
-                    const byPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
-                    if (byPath) return byPath;
+                    const byResolvedPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
+                    if (byResolvedPath) return byResolvedPath;
                 }
             }
+
             return matches[0];
         }
 
-        return null;
+        return undefined;
     }
 
     /**
@@ -2057,11 +2575,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * emits a console warning but allows execution to proceed, enabling query testing
      * before formal approval.
      *
-     * @param query - The resolved QueryInfo to validate
+     * @param query - The resolved MJQueryEntityExtended to validate
      * @param contextUser - The user attempting to execute the query
      * @throws Error if the user does not have permission to run the query
      */
-    protected ValidateQueryForExecution(query: QueryInfo, contextUser?: UserInfo): void {
+    protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
         const user = contextUser || this.CurrentUser;
         if (user && !query.UserHasRunPermissions(user)) {
             throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
@@ -2070,20 +2588,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
         }
-    }
-
-    /**
-     * Creates a fresh QueryInfo from a MJQueryEntity and patches the ProviderBase cache.
-     */
-    protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
-        const freshInfo = new QueryInfo(entity.GetAll());
-        const existingIndex = this.Queries.findIndex(q => UUIDsEqual(q.ID, freshInfo.ID));
-        if (existingIndex >= 0) {
-            this.Queries[existingIndex] = freshInfo;
-        } else {
-            this.Queries.push(freshInfo);
-        }
-        return freshInfo;
     }
 
     /**
@@ -2110,15 +2614,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Default: parallel individual queries. SQL Server overrides for batch execution.
      */
     protected async getBatchedQueryCacheStatus(
-        items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+        items: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }>,
         contextUser?: UserInfo,
     ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
         const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
         if (items.length === 0) return results;
 
-        const promises = items.map(async ({ index, queryInfo }) => {
+        const promises = items.map(async ({ index, query }) => {
             try {
-                const rows = await this.ExecuteSQL<Record<string, unknown>>(queryInfo.CacheValidationSQL!, undefined, undefined, contextUser);
+                const rows = await this.ExecuteSQL<Record<string, unknown>>(query.CacheValidationSQL!, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
                     results.set(index, {
@@ -2172,16 +2676,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
 
-    private _queryCacheInitialized: boolean = false;
-
-    private get QueryCacheMgr(): QueryCacheManager {
-        if (!this._queryCacheInitialized) {
-            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
-            this._queryCacheInitialized = true;
-        }
-        return QueryCacheManager.Instance;
-    }
-
     /**
      * Full query execution pipeline: resolve → validate → compose → template → cache check →
      * execute → paginate → audit → cache store. Platform providers inherit this; only
@@ -2202,7 +2696,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
-            const cacheConfig = query.CacheConfig;
             let paginatedResult: Record<string, unknown>[];
             let totalRowCount: number;
             let executionTime: number;
@@ -2222,44 +2715,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     this.PlatformKey as DatabasePlatform,
                 );
 
-                // Check count cache — skip COUNT SQL if we have a cached total
-                const cachedCount = cacheConfig?.enabled
-                    ? await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {})
-                    : null;
-
+                // Execute data + count queries in parallel
                 const start = Date.now();
-                if (cachedCount != null) {
-                    // Only execute data query — count is cached
-                    const dataResult = await this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser);
-                    executionTime = Date.now() - start;
-                    if (!dataResult) throw new Error('Error executing paged query SQL');
-                    paginatedResult = dataResult;
-                    totalRowCount = cachedCount;
-                } else {
-                    // Execute data + count queries in parallel
-                    const [dataResult, countResult] = await Promise.all([
-                        this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
-                        this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
-                    ]);
-                    executionTime = Date.now() - start;
-                    if (!dataResult) throw new Error('Error executing paged query SQL');
+                const [dataResult, countResult] = await Promise.all([
+                    this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
+                    this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
+                ]);
+                executionTime = Date.now() - start;
+                if (!dataResult) throw new Error('Error executing paged query SQL');
 
-                    paginatedResult = dataResult;
-                    totalRowCount = countResult?.[0]?.TotalRowCount != null
-                        ? Number(countResult[0].TotalRowCount)
-                        : paginatedResult.length;
-
-                    // Cache the count for subsequent page requests (fire-and-forget)
-                    if (cacheConfig?.enabled) {
-                        void this.QueryCacheMgr.SetTotalRowCount(query, params.Parameters || {}, totalRowCount);
-                    }
-                }
-
-                // Cache the paged results (fire-and-forget)
-                if (cacheConfig?.enabled) {
-                    void this.QueryCacheMgr.SetPaged(query, params.Parameters || {}, params.StartRow!, params.MaxRows!, paginatedResult);
-                    void this.QueryCacheMgr.InvalidateWithDependents(query);
-                }
+                paginatedResult = dataResult;
+                totalRowCount = countResult?.[0]?.TotalRowCount != null
+                    ? Number(countResult[0].TotalRowCount)
+                    : paginatedResult.length;
             } else {
                 // Check full-result cache before executing
                 const cachedResult = await this.checkQueryCache(query, params, appliedParameters);
@@ -2341,34 +2809,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
-            // Check ad-hoc cache if opt-in TTL is provided
-            const adhocTTL = params.AdhocCacheTTLMinutes;
-            if (adhocTTL != null && adhocTTL > 0) {
-                const cached = await this.QueryCacheMgr.GetAdhoc(params.SQL!, adhocTTL);
-                if (cached) {
-                    const { paginatedResult, totalRowCount } = this.applyQueryPagination(
-                        cached.results as Record<string, unknown>[], params,
-                    );
-                    return {
-                        Success: true,
-                        QueryID: '',
-                        QueryName: 'Ad-Hoc Query',
-                        Results: paginatedResult,
-                        RowCount: paginatedResult.length,
-                        TotalRowCount: totalRowCount,
-                        ExecutionTime: 0,
-                        ErrorMessage: '',
-                        CacheHit: true,
-                    };
-                }
-            }
-
             const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
-
-            // Store in ad-hoc cache if opt-in (fire-and-forget)
-            if (adhocTTL != null && adhocTTL > 0) {
-                void this.QueryCacheMgr.SetAdhoc(params.SQL!, adhocTTL, result);
-            }
 
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
@@ -2400,10 +2841,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Finds a query from RunQueryParams and validates user permissions.
-     * Uses `resolveQueryInfo()` for lookup and `ValidateQueryForExecution()` for permissions.
+     * Uses `resolveQuery()` for lookup and `ValidateQueryForExecution()` for permissions.
      */
-    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): QueryInfo {
-        const query = this.resolveQueryInfo(params);
+    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
+        const query = this.resolveQuery(params);
         if (!query) {
             let errorDetails = 'Query not found';
             if (params.QueryName) {
@@ -2431,7 +2872,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * pipeline. Paging is handled separately by the caller (InternalRunQuery).
      */
     protected processQueryParameters(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
@@ -2441,8 +2882,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: parameters,
-                UsesTemplate: query.UsesTemplate,
-                QueryInfo: query,
+                UsesTemplate: query.UsesTemplate ?? false,
+                QueryInfo: {
+                    SQL: query.SQL ?? '',
+                    UsesTemplate: query.UsesTemplate ?? false,
+                    Parameters: query.QueryParameters,
+                },
             }
         );
 
@@ -2512,13 +2957,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        // QueryExecutionSpec.ParameterDefinitions is QueryParameterInfo[] (MJCore),
+        // while RenderContext expects MJQueryParameterEntity[] (core-entities).
+        // Both share the structural shape the processor needs (Name, DataType, IsRequired).
+        const paramDefs = spec.ParameterDefinitions as MJQueryParameterEntity[] | undefined;
         const result = RenderPipeline.Run(
             spec.SQL,
             {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: spec.Parameters,
-                ParameterDefinitions: spec.ParameterDefinitions,
+                ParameterDefinitions: paramDefs,
                 UsesTemplate: spec.UsesTemplate,
                 Dependencies: spec.Dependencies,
                 OriginalSQL: spec.SQL,
@@ -2537,81 +2986,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Checks the query cache for existing results and returns them if valid.
+     * Currently always returns null (query caching is not active).
      */
     protected async checkQueryCache(
-        query: QueryInfo,
-        params: RunQueryParams,
-        appliedParameters: Record<string, string>,
+        _query: MJQueryEntityExtended,
+        _params: RunQueryParams,
+        _appliedParameters: Record<string, string>,
     ): Promise<RunQueryResult | null> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) {
-            return null;
-        }
-
-        const cached = await this.QueryCacheMgr.Get(query, params.Parameters || {});
-        if (!cached) {
-            return null;
-        }
-
-        LogStatus(`Cache hit for query ${query.Name} (${query.ID})`);
-
-        const { paginatedResult, totalRowCount } = this.applyQueryPagination(
-            cached.results as Record<string, unknown>[], params,
-        );
-
-        return {
-            Success: true,
-            QueryID: query.ID,
-            QueryName: query.Name,
-            Results: paginatedResult,
-            RowCount: paginatedResult.length,
-            TotalRowCount: totalRowCount,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            AppliedParameters: appliedParameters,
-            CacheHit: true,
-            CacheTTLRemaining: cached.ttlRemainingMs,
-        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+        return null;
     }
 
     /**
      * Checks the paged cache for a specific page of query results.
      * Returns a full RunQueryResult on hit, null on miss.
+     * Currently always returns null (query caching is not active).
      */
     protected async checkPagedQueryCache(
-        query: QueryInfo,
-        params: RunQueryParams,
-        appliedParameters: Record<string, string>,
+        _query: MJQueryEntityExtended,
+        _params: RunQueryParams,
+        _appliedParameters: Record<string, string>,
     ): Promise<RunQueryResult | null> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) return null;
-
-        const cached = await this.QueryCacheMgr.GetPaged(
-            query, params.Parameters || {}, params.StartRow!, params.MaxRows!,
-        );
-        if (!cached) return null;
-
-        // Also try to get the cached count
-        const cachedCount = await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {});
-        const totalRowCount = cachedCount ?? cached.results.length;
-
-        LogStatus(`Paged cache hit for query ${query.Name} (${query.ID}) page ${params.StartRow}+${params.MaxRows}`);
-
-        return {
-            Success: true,
-            QueryID: query.ID,
-            QueryName: query.Name,
-            Results: cached.results as Record<string, unknown>[],
-            RowCount: cached.results.length,
-            TotalRowCount: totalRowCount,
-            PageNumber: Math.floor(params.StartRow! / params.MaxRows!) + 1,
-            PageSize: params.MaxRows!,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            AppliedParameters: appliedParameters,
-            CacheHit: true,
-            CacheTTLRemaining: cached.ttlRemainingMs,
-        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+        return null;
     }
 
     /**
@@ -2658,7 +3053,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Only logs if the query has `AuditQueryRuns` enabled or `ForceAuditLog` is set.
      */
     protected auditQueryExecution(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         params: RunQueryParams,
         finalSQL: string,
         rowCount: number,
@@ -2700,17 +3095,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Caches query results if caching is enabled for the query.
-     * Caches the full result set (before pagination).
+     * Currently a no-op (query caching is not active).
      */
-    protected async cacheQueryResults(query: QueryInfo, parameters: Record<string, string>, results: Record<string, unknown>[]): Promise<void> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) {
-            return;
-        }
-
-        await this.QueryCacheMgr.Set(query, parameters, results);
-        await this.QueryCacheMgr.InvalidateWithDependents(query);
-        LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
+    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[]): Promise<void> {
+        // No-op: query caching has been removed
     }
 
     /**************************************************************************/
@@ -2737,9 +3125,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
         }).join(' AND ');
 
-        // Append Read RLS filter if user is not exempt
+        // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
         let fullWhere = where;
-        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+        if (user) {
             const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
@@ -2809,10 +3197,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -2838,10 +3222,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;

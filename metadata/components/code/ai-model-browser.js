@@ -342,7 +342,8 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden'
+        minWidth: 0,
+        minHeight: 0
       }}>
         {/* Header */}
         <div style={{
@@ -450,7 +451,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
         <div style={{
           flex: 1,
           display: 'flex',
-          overflow: 'hidden'
+          minHeight: 0
         }}>
           {/* Model List */}
           <div style={{
