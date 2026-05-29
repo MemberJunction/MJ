@@ -12,7 +12,7 @@ import { BuildFieldsFromSelectColumns } from '../custom/query-extraction/resolve
 import type { ExtractedField } from '../custom/query-extraction/types';
 
 const tsqlDialect = new SQLServerDialect();
-const extractSelectColumns = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractSelectColumns();
+const extractSelectColumns = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractSelectColumns(sql, dialect);
 
 // ═══════════════════════════════════════════════════
 // BuildFieldsFromSelectColumns — deterministic extraction

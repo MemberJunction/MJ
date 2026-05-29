@@ -821,7 +821,7 @@ export class SQLParser {
                 const ast = parser.astify(cleanSQL, { database: parserDialect });
                 const statements = Array.isArray(ast) ? ast : [ast];
                 for (const stmt of statements) {
-                    SQLParser.walkAST(stmt as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
+                    SQLParser.walkASTForExtraction(stmt as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
                 }
             } catch { /* columns will be empty */ }
         }
@@ -848,11 +848,17 @@ export class SQLParser {
 
     /**
      * Extract all table/view references from this instance's SQL.
-     * Handles Nunjucks templates via placeholder substitution before AST parsing.
+     * Convenience delegate to the static overload.
      */
     ExtractTableRefs(): SQLTableReference[] {
-        const sql = this._sql;
-        const dialect = this._dialect;
+        return SQLParser.ExtractTableRefs(this._sql, this._dialect);
+    }
+
+    /**
+     * Extract all table/view references from SQL.
+     * Handles Nunjucks templates via placeholder substitution before AST parsing.
+     */
+    static ExtractTableRefs(sql: string, dialect: SQLParserDialect): SQLTableReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
@@ -865,11 +871,17 @@ export class SQLParser {
 
     /**
      * Extract all column references from this instance's SQL.
-     * Handles Nunjucks templates via placeholder substitution before AST parsing.
+     * Convenience delegate to the static overload.
      */
     ExtractColumnRefs(): SQLColumnReference[] {
-        const sql = this._sql;
-        const dialect = this._dialect;
+        return SQLParser.ExtractColumnRefs(this._sql, this._dialect);
+    }
+
+    /**
+     * Extract all column references from SQL.
+     * Handles Nunjucks templates via placeholder substitution before AST parsing.
+     */
+    static ExtractColumnRefs(sql: string, dialect: SQLParserDialect): SQLColumnReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
@@ -882,7 +894,7 @@ export class SQLParser {
             const ast = parser.astify(cleanSQL, { database: parserDialect });
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
-                SQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
+                SQLParser.walkASTForExtraction(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
             }
             return SQLParser.buildColumnRefs(columnRefs);
         } catch {
@@ -893,6 +905,14 @@ export class SQLParser {
     // ─── SELECT Column Extraction ─────────────────────────
 
     /**
+     * Extract SELECT clause columns from this instance's SQL.
+     * Convenience delegate to the static overload.
+     */
+    ExtractSelectColumns(): SQLSelectColumn[] {
+        return SQLParser.ExtractSelectColumns(this._sql, this._dialect);
+    }
+
+    /**
      * Extracts the SELECT clause columns with their output names, source columns, and table qualifiers.
      *
      * Handles:
@@ -901,9 +921,7 @@ export class SQLParser {
      *   - Expressions: `COUNT(*)` → { OutputName: "COUNT(*)", SourceColumn: "COUNT(*)", IsExpression: true }
      *   - MJ template tokens are replaced with placeholders before AST parsing.
      */
-    ExtractSelectColumns(): SQLSelectColumn[] {
-        const sql = this._sql;
-        const dialect = this._dialect;
+    static ExtractSelectColumns(sql: string, dialect: SQLParserDialect): SQLSelectColumn[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
@@ -1005,6 +1023,14 @@ export class SQLParser {
     // ─── CTE Extraction ────────────────────────────────
 
     /**
+     * Extract CTE definitions from this instance's SQL.
+     * Convenience delegate to the static overload.
+     */
+    ExtractCTEs(): SQLCTEExtraction | null {
+        return SQLParser.ExtractCTEs(this._sql, this._dialect);
+    }
+
+    /**
      * Extract CTE definitions from SQL starting with a WITH clause.
      *
      * Given: `WITH A AS (SELECT 1), B AS (SELECT 2) SELECT A.x, B.y FROM A, B`
@@ -1013,9 +1039,7 @@ export class SQLParser {
      * Uses AST parsing first (produces bracket-quoted identifiers for SQL Server),
      * falls back to paren-depth scanning if AST fails (e.g., Nunjucks-templated SQL).
      */
-    ExtractCTEs(): SQLCTEExtraction | null {
-        const sql = this._sql;
-        const dialect = this._dialect;
+    static ExtractCTEs(sql: string, dialect: SQLParserDialect): SQLCTEExtraction | null {
         // Strip leading whitespace + SQL comments (/* */ and --) so that
         // queries with a descriptive header block are recognized as CTEs.
         // The AST parser handles comments natively, but when it fails
@@ -1868,6 +1892,8 @@ export class SQLParser {
      *
      * Returns the rewritten SQL plus a forward map (original interior → alias).
      */
+    private static readonly BRACKET_ALIAS_PREFIX = '_mjid_';
+
     private static aliasBracketIdentifiers(
         sql: string,
         dialect: SQLParserDialect,
@@ -1911,7 +1937,7 @@ export class SQLParser {
                 }
                 if (interior.length > 0 && /[^A-Za-z0-9_]/.test(interior)) {
                     let alias = forward.get(interior);
-                    if (!alias) { alias = `_mjid_${seq++}`; forward.set(interior, alias); }
+                    if (!alias) { alias = `${SQLParser.BRACKET_ALIAS_PREFIX}${seq++}`; forward.set(interior, alias); }
                     // Emit a BARE identifier — node-sql-parser rejects bracket-quoted
                     // CTE names entirely, so the alias must be unbracketed. sqlify
                     // re-quotes it ([_mjid_0]); restoreAliases handles every form.
@@ -1931,7 +1957,7 @@ export class SQLParser {
      * Reverses bracket-identifier aliasing on a sqlify result. node-sql-parser
      * may emit the alias bare, bracketed, or backticked; all three forms are
      * restored to the original bracketed identifier. Aliases are unique
-     * `_mjid_<seq>` tokens, so replacement is unambiguous.
+     * `BRACKET_ALIAS_PREFIX<seq>` tokens, so replacement is unambiguous.
      */
     private static restoreAliases(sql: string, aliasMap: Map<string, string>): string {
         let out = sql;
@@ -2044,7 +2070,7 @@ export class SQLParser {
 
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
-                SQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
+                SQLParser.walkASTForExtraction(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
             }
 
             return SQLParser.deduplicateTables(tableAliasMap);
@@ -2209,7 +2235,7 @@ export class SQLParser {
     // Private: AST Walking (table/column extraction)
     // ═══════════════════════════════════════════════════
 
-    private static walkAST(
+    private static walkASTForExtraction(
         node: Record<string, unknown>,
         tableAliasMap: Map<string, { schemaName: string; tableName: string }>,
         columnRefs: Set<string>
@@ -2223,7 +2249,7 @@ export class SQLParser {
                 if (cteRecord.stmt) {
                     const stmtRecord = cteRecord.stmt as Record<string, unknown>;
                     const cteAst = (stmtRecord.ast || stmtRecord) as Record<string, unknown>;
-                    SQLParser.walkAST(cteAst, tableAliasMap, columnRefs);
+                    SQLParser.walkASTForExtraction(cteAst, tableAliasMap, columnRefs);
                 }
             }
         }
@@ -2268,7 +2294,7 @@ export class SQLParser {
         }
 
         if (node._next) {
-            SQLParser.walkAST(node._next as Record<string, unknown>, tableAliasMap, columnRefs);
+            SQLParser.walkASTForExtraction(node._next as Record<string, unknown>, tableAliasMap, columnRefs);
         }
     }
 
@@ -2290,7 +2316,7 @@ export class SQLParser {
         if (fromItem.expr) {
             const exprRecord = fromItem.expr as Record<string, unknown>;
             const subqueryAst = (exprRecord.ast || exprRecord) as Record<string, unknown>;
-            SQLParser.walkAST(subqueryAst, tableAliasMap, columnRefs);
+            SQLParser.walkASTForExtraction(subqueryAst, tableAliasMap, columnRefs);
         }
 
         if (fromItem.on) {
@@ -2322,7 +2348,7 @@ export class SQLParser {
         }
 
         if (expr.ast && tableAliasMap) {
-            SQLParser.walkAST(expr.ast as Record<string, unknown>, tableAliasMap, columnRefs);
+            SQLParser.walkASTForExtraction(expr.ast as Record<string, unknown>, tableAliasMap, columnRefs);
         }
 
         if (expr.left) SQLParser.walkExpression(expr.left as Record<string, unknown>, columnRefs, tableAliasMap);

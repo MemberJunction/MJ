@@ -11,8 +11,8 @@ import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parse
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 
 const tsqlDialect = new SQLServerDialect();
-const extractSelectColumns = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractSelectColumns();
-const extractTableRefs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractTableRefs();
+const extractSelectColumns = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractSelectColumns(sql, dialect);
+const extractTableRefs = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractTableRefs(sql, dialect);
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser

@@ -503,7 +503,7 @@ ORDER BY e.StartDate DESC`;
 // ExtractSelectColumns, RenameTemplateVariable, SubstituteTemplateVariable
 // ═══════════════════════════════════════════════════
 
-const extractSelectColumns = (sql: string) => new SQLParser(sql, tsqlDialect).ExtractSelectColumns();
+const extractSelectColumns = (sql: string) => SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 const renameTemplateVariable = SQLParser.RenameTemplateVariable.bind(SQLParser);
 const substituteTemplateVariable = SQLParser.SubstituteTemplateVariable.bind(SQLParser);
 

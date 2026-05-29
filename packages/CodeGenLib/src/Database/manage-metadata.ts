@@ -1,4 +1,4 @@
-import { SQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
+import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
 // Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
 // under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
@@ -1609,7 +1609,7 @@ export class ManageMetadataBase {
          IsForeignKey: boolean;
       }>;
    }> {
-      const tableRefs = new SQLParser(viewDefinition, new SQLServerDialect()).ExtractTableRefs();
+      const tableRefs = SQLParser.ExtractTableRefs(viewDefinition, this.dialect);
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const sourceEntities: Array<{
          Name: string;

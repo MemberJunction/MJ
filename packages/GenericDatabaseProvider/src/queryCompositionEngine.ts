@@ -828,7 +828,7 @@ export class QueryCompositionEngine {
      * @param dialect SQL dialect for AST parsing
      */
     private hoistInnerCTEs(sql: string, dialect: SQLDialect): { innerCTEDefinitions: string[]; mainSelect: string } {
-        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
 
         if (!extraction) {
             // Should not happen since caller already verified WITH prefix,

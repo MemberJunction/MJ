@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 
-const extractTableRefs = (sql: string) => new SQLParser(sql, new SQLServerDialect()).ExtractTableRefs();
+const extractTableRefs = (sql: string) => SQLParser.ExtractTableRefs(sql, new SQLServerDialect());
 
 // ═══════════════════════════════════════════════════
 // View definition patterns from real MJ databases

@@ -113,7 +113,7 @@ export class QueryPagingEngine {
         }
 
         // unparseable — try the CTE-fallback path first.
-        const isCTE = new SQLParser(cleanedSQL, dialect).ExtractCTEs() !== null;
+        const isCTE = SQLParser.ExtractCTEs(cleanedSQL, dialect) !== null;
         if (isCTE) {
             try {
                 return QueryPagingEngine.buildDataSQL(cleanedSQL, 0, cap, dialect);
@@ -239,7 +239,7 @@ export class QueryPagingEngine {
      * Does not affect TOP in subqueries or CTEs.
      */
     private static stripTopFromMainSelect(sql: string, dialect: SQLDialect): string {
-        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
 
         if (extraction) {
             const { sql: cleanMain, topRemoved } = QueryPagingEngine.stripTopClause(extraction.MainStatement);
@@ -271,7 +271,7 @@ export class QueryPagingEngine {
     private static buildCountSQL(sql: string, dialect: SQLDialect): string {
         const countCTEName = dialect.QuoteIdentifier('__count');
 
-        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
         const mainStatement = extraction ? extraction.MainStatement : sql;
         const cteDefs = extraction
             ? extraction.CTEDefinitions.map(def => QueryPagingEngine.quoteCteName(def, dialect))

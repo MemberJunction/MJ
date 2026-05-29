@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '../sql-parser.js';
-import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
+import { SQLServerDialect, PostgreSQLDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 
 const tsqlDialect = new SQLServerDialect();
 const pgDialect = new PostgreSQLDialect();
 
-// Thin instance-API shims — SQLParser's extraction methods are now instance
-// methods (`new SQLParser(sql, dialect).ExtractX()`). These wrappers keep the
-// test bodies unchanged.
-const extractTableRefs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractTableRefs();
-const extractColumnRefs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractColumnRefs();
-const extractCTEs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractCTEs();
+// Shorthand helpers — delegate to static methods with a default dialect.
+// These avoid repeating `tsqlDialect` in every call while keeping test
+// bodies free of unnecessary instance construction.
+const extractTableRefs = (sql: string, dialect: SQLParserDialect = tsqlDialect) => SQLParser.ExtractTableRefs(sql, dialect);
+const extractColumnRefs = (sql: string, dialect: SQLParserDialect = tsqlDialect) => SQLParser.ExtractColumnRefs(sql, dialect);
+const extractCTEs = (sql: string, dialect: SQLParserDialect = tsqlDialect) => SQLParser.ExtractCTEs(sql, dialect);
 
 describe('SQLParser', () => {
     // ================================================================
@@ -319,7 +319,7 @@ GROUP BY YEAR(e.StartDate)`;
     describe('Sqlify', () => {
         it('should reconstruct plain SQL through AST', () => {
             const result = SQLParser.Astify('SELECT Name FROM Users WHERE Active = 1', tsqlDialect);
-            const sql = SQLParser.Sqlify(result, tsqlDialect);
+            const sql = SQLParser.Sqlify(result);
             expect(sql.toLowerCase()).toContain('select');
             expect(sql.toLowerCase()).toContain('from');
         });
@@ -327,7 +327,7 @@ GROUP BY YEAR(e.StartDate)`;
         it('should reconstruct MJ SQL from tokens (verbatim)', () => {
             const original = "SELECT Name FROM Users WHERE Region = {{ Region | sqlString }}";
             const result = SQLParser.Astify(original, tsqlDialect);
-            expect(SQLParser.Sqlify(result, tsqlDialect)).toBe(original);
+            expect(SQLParser.Sqlify(result)).toBe(original);
         });
     });
 

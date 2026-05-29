@@ -535,7 +535,7 @@ export function ExtractEntityMetadataFromSQL(
     const results: EntityMetadataEntry[] = [];
 
     try {
-        const columnRefs = new SQLParser(sql, new SQLServerDialect()).ExtractColumnRefs();
+        const columnRefs = SQLParser.ExtractColumnRefs(sql, new SQLServerDialect());
 
         for (const tableRef of tableRefs) {
             const matchingEntity = findEntityByTableRef(md, tableRef);
