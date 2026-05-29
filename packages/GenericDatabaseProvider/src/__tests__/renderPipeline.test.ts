@@ -231,6 +231,9 @@ describe('MaxRows row cap — AST injection', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT * FROM Members', { Platform: 'sqlserver', MaxRows: 10 });
         expect(result.FinalSQL).toMatch(/SELECT\s+TOP\s+10\b/i);
+        // Pin the AST-inject path specifically — not the outer-wrap or OFFSET/FETCH fallback.
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 
     it('injects LIMIT on a plain SELECT (PostgreSQL)', () => {
@@ -238,6 +241,17 @@ describe('MaxRows row cap — AST injection', () => {
         const result = RenderPipeline.Run('SELECT * FROM t', { Platform: 'postgresql', MaxRows: 10 });
         expect(result.FinalSQL).toMatch(/\bLIMIT\s+10\b/i);
         expect(result.FinalSQL).not.toMatch(/\bTOP\b/i);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+    });
+
+    it('caps a SELECT containing a window function via AST TOP injection', () => {
+        stubMetadata();
+        const sql = 'SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]';
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/SELECT\s+TOP\s+10\b/i);
+        expect(result.FinalSQL).toMatch(/ROW_NUMBER\(\)\s+OVER/i);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 
     it('caps the outermost SELECT of a CTE on SQL Server', () => {
@@ -520,23 +534,27 @@ describe('MaxRows row cap — incompatible shapes left alone', () => {
         expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
-    it('preserves OPTION (RECOMPILE) and never wraps it in a derived table', () => {
+    it('caps a SELECT with a trailing OPTION (RECOMPILE) via AST TOP injection', () => {
+        // The constructor's OPTION-splitting preprocessing makes this shape
+        // parseable, so the cap is enforced precisely (TOP 10) and the OPTION
+        // hint is re-appended — NOT left uncapped (the pre-preprocessing
+        // behavior) and NOT wrapped in a derived table.
         stubMetadata();
         const sql = `SELECT ID FROM Users OPTION (RECOMPILE)`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
         expect(result.FinalSQL).toMatch(/OPTION\s*\(\s*RECOMPILE\s*\)/i);
         expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 
-    it('does not append FETCH NEXT after OPTION (RECOMPILE)', () => {
+    it('does not fall back to OFFSET/FETCH for an OPTION (RECOMPILE) query', () => {
         stubMetadata();
         const sql = `SELECT ID FROM Users OPTION (RECOMPILE)`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        const optionPos = result.FinalSQL.search(/OPTION\s*\(\s*RECOMPILE\s*\)/i);
-        const fetchPos = result.FinalSQL.search(/FETCH\s+NEXT/i);
-        if (optionPos >= 0 && fetchPos >= 0) {
-            expect(fetchPos).toBeLessThan(optionPos);
-        }
+        // AST inject is used, so there is no synthesized OFFSET/FETCH at all.
+        expect(result.FinalSQL.search(/FETCH\s+NEXT/i)).toBe(-1);
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
     it('returns empty SQL unchanged (no synthesized clauses)', () => {
@@ -630,14 +648,19 @@ describe('MaxRows row cap — hard cap guarantee', () => {
         expect(result.FinalSQL).toMatch(/_mj_capped/);
     });
 
-    it('caps a CTE with bracket-quoted names via OFFSET/FETCH', () => {
+    it('caps a CTE with bracket-quoted names via AST TOP injection', () => {
         stubMetadata();
         const sql = `WITH [Active People] AS (SELECT ID FROM Users WHERE Status='A') SELECT * FROM [Active People]`;
         const result = RenderPipeline.Run(sql, {
             Platform: 'sqlserver',
             MaxRows: 100,
         });
-        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY/i);
+        // Bracket-identifier preprocessing makes the bracket-quoted CTE name
+        // parseable, so the cap is applied precisely (TOP 100) instead of the
+        // OFFSET/FETCH fallback; the original [Active People] name is restored.
+        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
+        expect(result.FinalSQL).toContain('[Active People]');
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
     it('caps a SELECT with CROSS APPLY via outer wrap', () => {
@@ -694,11 +717,18 @@ ORDER BY ap.[ActivePeopleCount] DESC`;
         expect(result.FinalSQL).toMatch(/WITH\s+\[ActivePeople\]\s+AS/i);
     });
 
-    it('leaves a CTE with a hyphenated bracket name unchanged (parser cannot represent it)', () => {
+    it('caps a CTE with a hyphenated bracket name via AST TOP injection', () => {
+        // Bracket-identifier preprocessing aliases the hyphenated name so it
+        // parses, applies the cap precisely (TOP 10), and restores [my-cte] on
+        // ToSQL — the cap is now enforced (it previously fell to a fallback).
         stubMetadata();
         const sql = `WITH [my-cte] AS (SELECT 1 AS a) SELECT * FROM [my-cte]`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
         expect(result.FinalSQL).toContain('[my-cte]');
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 });
 
@@ -751,6 +781,113 @@ describe('MaxRows row cap — numeric sanitation', () => {
         const result = RenderPipeline.Run('SELECT * FROM t', { Platform: 'sqlserver', MaxRows: Number.MAX_SAFE_INTEGER });
         expect(result.FinalSQL).not.toMatch(/e\+/i);
         expect(result.FinalSQL).toMatch(/\bTOP\s+\d+\b/);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Safety guard — mutation rejection
+// ════════════════════════════════════════════════════════════════════
+
+describe('safety guard — write-statement rejection', () => {
+    // ── Single write statements (DML) ─────────────────────────────────
+    it('throws when the rendered query is a DELETE', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('DELETE FROM Users WHERE ID = 1', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    it('throws when the rendered query is an UPDATE', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('UPDATE Users SET Active = 1', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    it('throws when the rendered query is an INSERT', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("INSERT INTO Users (Name) VALUES ('x')", { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    // ── Single DDL (StatementKind 'other' — missed by the old mutation-only guard) ──
+    it('throws when the rendered query is a DROP (DDL)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('DROP TABLE Users', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    // ── Stacked-statement injection (second layer) ────────────────────
+    it('throws on a stacked SELECT; DELETE injection', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT 1 AS x; DELETE FROM Users', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    it('throws on a stacked SELECT; DROP injection', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE Users', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    it('throws on a stacked injection on PostgreSQL', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE users', { Platform: 'postgresql' }))
+            .toThrow(/write statement/i);
+    });
+
+    // ── Stacked payloads that DON'T parse (the AST write check can't see them) ──
+    it('throws on a stacked SELECT; EXEC xp_cmdshell payload (unparseable)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("SELECT 1 AS x; EXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    it('throws on a stacked SELECT; WAITFOR DELAY time-based payload (unparseable)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("SELECT 1 AS x; WAITFOR DELAY '00:00:05'", { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    it('throws on a stacked statement separated only by a comment', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("SELECT 1 AS x; -- c\nEXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    it('rejects an otherwise-benign SET NOCOUNT ON; SELECT — a rendered query must be a single statement', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SET NOCOUNT ON; SELECT * FROM Users', { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    // ── Legitimate single reads must still pass ───────────────────────
+    it('allows a normal SELECT through', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT * FROM Users', { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/SELECT/i);
+    });
+
+    it('does not false-positive on the REPLACE() string function', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run("SELECT REPLACE(Name, 'a', 'b') AS N FROM Users", { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/REPLACE/i);
+    });
+
+    it('allows a parenthesized SELECT', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('(SELECT * FROM Users)', { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/SELECT/i);
+    });
+
+    it('allows a single SELECT with a trailing semicolon', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT * FROM Users;', { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/SELECT/i);
+    });
+
+    it('does not flag a semicolon inside a string literal', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run("SELECT 'a; b' AS s FROM Users", { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toContain("'a; b'");
     });
 });
 
@@ -1247,6 +1384,45 @@ function assertCapEnforcedOrSafelyUntouched(originalSQL: string, finalSQL: strin
     );
 }
 
+/**
+ * The pipeline path WrapWithMaxRows takes for a shape:
+ *   'ast'         — precise inline TOP/LIMIT injection (no derived-table wrapper, no OFFSET/FETCH)
+ *   'wrap'        — outer 'SELECT TOP N * FROM (...) AS _mj_capped'
+ *   'fetch'       — CTE/OFFSET-FETCH fallback ('FETCH NEXT N ROWS ONLY')
+ *   'passthrough' — returned unchanged / empty (mutation, SELECT INTO, FOR JSON/XML, comment-only, …)
+ */
+type ExpectedPath = 'ast' | 'wrap' | 'fetch' | 'passthrough';
+
+/**
+ * Stronger than the safety invariant: asserts the cap was applied via the
+ * EXPECTED path. This catches a silent regression where an inject-eligible
+ * shape drops to the outer-wrap or OFFSET/FETCH fallback — still "capped", so
+ * assertCapEnforcedOrSafelyUntouched alone would not notice.
+ */
+function assertPathTaken(originalSQL: string, finalSQL: string, cap: number, path: ExpectedPath): void {
+    assertCapEnforcedOrSafelyUntouched(originalSQL, finalSQL, cap); // universal safety net still holds
+    const hasWrap = /_mj_capped/.test(finalSQL);
+    const hasFetch = /FETCH\s+NEXT\s+\d+\s+ROWS\s+ONLY/i.test(finalSQL);
+    switch (path) {
+        case 'ast':
+            expect(hasWrap).toBe(false);
+            expect(hasFetch).toBe(false);
+            expect(hasSyntacticCap(finalSQL, cap)).toBe(true);
+            break;
+        case 'wrap':
+            expect(hasWrap).toBe(true);
+            break;
+        case 'fetch':
+            expect(hasFetch).toBe(true);
+            break;
+        case 'passthrough':
+            expect(hasWrap).toBe(false);
+            expect(hasFetch).toBe(false);
+            expect(hasSyntacticCap(finalSQL, cap)).toBe(false);
+            break;
+    }
+}
+
 describe('bulletproof — realistic Skip / Query Builder shapes (SQL Server)', () => {
 
     it('Skip-style multi-CTE with bracket-quoted names and JOINs', () => {
@@ -1268,7 +1444,13 @@ LEFT JOIN [Recent Donors] rd ON rd.[MemberID] = am.[MemberID]
 ORDER BY rd.[TotalDonated] DESC`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: CAP });
         assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, CAP);
-        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY/i);
+        // Bracket-identifier preprocessing now lets the bracket-quoted CTE names
+        // parse, so the cap is applied via precise AST TOP injection (not the
+        // OFFSET/FETCH fallback). The original bracket names are restored.
+        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
+        expect(result.FinalSQL).toContain('[Active Members]');
+        expect(result.FinalSQL).toContain('[Recent Donors]');
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
     it('top-N-per-group with ROW_NUMBER OVER PARTITION BY', () => {
@@ -1644,88 +1826,88 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
     // A handful of Skip-flavored query shapes. The invariant is universal:
     // every output must either be capped or be a leave-alone shape. If any
     // future code change loosens the cap, one of these will fail.
-    const corpus: { name: string; sql: string }[] = [
-        { name: 'simple SELECT *', sql: `SELECT * FROM [dbo].[vwMembers]` },
-        { name: 'SELECT with WHERE', sql: `SELECT [ID] FROM [dbo].[vwMembers] WHERE [Status]='Active'` },
-        { name: 'JOIN no cap', sql: `SELECT m.[ID], c.[Name] FROM [Members] m INNER JOIN [Chapters] c ON m.[ChapterID]=c.[ID]` },
-        { name: 'GROUP BY', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY [ChapterID]` },
-        { name: 'CTE plain', sql: `WITH a AS (SELECT [ID] FROM [Members]) SELECT * FROM a` },
-        { name: 'CTE bracket-named', sql: `WITH [hi] AS (SELECT 1 AS x) SELECT * FROM [hi]` },
-        { name: 'CTE with hyphens in name', sql: `WITH [my-cte] AS (SELECT 1 AS x) SELECT * FROM [my-cte]` },
-        { name: 'multi CTE', sql: `WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT a.x, b.y FROM a, b` },
-        { name: 'window function', sql: `SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]` },
-        { name: 'UNION ALL', sql: `SELECT [ID] FROM [A] UNION ALL SELECT [ID] FROM [B]` },
-        { name: 'UNION (deduped)', sql: `SELECT [ID] FROM [A] UNION SELECT [ID] FROM [B]` },
-        { name: 'INTERSECT', sql: `SELECT [ID] FROM [A] INTERSECT SELECT [ID] FROM [B]` },
-        { name: 'EXCEPT', sql: `SELECT [ID] FROM [A] EXCEPT SELECT [ID] FROM [B]` },
-        { name: 'TOP 5', sql: `SELECT TOP 5 * FROM [Members]` },
-        { name: 'TOP huge', sql: `SELECT TOP 999999 * FROM [Members]` },
-        { name: 'TOP (N)', sql: `SELECT TOP (1000000) * FROM [Members]` },
-        { name: 'TOP PERCENT', sql: `SELECT TOP 25 PERCENT * FROM [Members]` },
-        { name: 'TOP WITH TIES', sql: `SELECT TOP 10 WITH TIES * FROM [Members] ORDER BY [ID]` },
-        { name: 'TOP (@n) param', sql: `SELECT TOP (@n) * FROM [Members]` },
-        { name: 'DISTINCT', sql: `SELECT DISTINCT [Country] FROM [Members]` },
-        { name: 'DISTINCT TOP N', sql: `SELECT DISTINCT TOP 1000 [Country] FROM [Members]` },
-        { name: 'subquery in FROM', sql: `SELECT s.* FROM (SELECT [ID] FROM [Members]) s` },
-        { name: 'EXISTS subquery', sql: `SELECT [ID] FROM [A] WHERE EXISTS (SELECT 1 FROM [B] WHERE [B].x=[A].x)` },
-        { name: 'NOT IN subquery', sql: `SELECT [ID] FROM [A] WHERE [ID] NOT IN (SELECT [ID] FROM [B])` },
-        { name: 'CASE expression', sql: `SELECT CASE WHEN [X]>1 THEN 'a' ELSE 'b' END FROM [Members]` },
-        { name: 'VALUES table', sql: `SELECT * FROM (VALUES (1),(2),(3)) AS t(x)` },
-        { name: 'three-part name', sql: `SELECT * FROM [DB1].[dbo].[Members]` },
-        { name: 'with parens', sql: `(SELECT * FROM [Members])` },
-        { name: 'comment-only', sql: `/* nothing */` },
-        { name: 'whitespace-only', sql: `   ` },
-        { name: 'just semicolon', sql: `;` },
-        { name: 'CROSS APPLY', sql: `SELECT m.[ID], j.[Name] FROM [Members] m CROSS APPLY OPENJSON(m.[Meta]) WITH ([Name] NVARCHAR(100)) j` },
-        { name: 'JSON_VALUE', sql: `SELECT JSON_VALUE([Meta],'$.x') FROM [Members]` },
-        { name: 'CTE + GROUP BY + JOIN', sql: `WITH d AS (SELECT [MID], SUM([Amt]) AS T FROM [Don] GROUP BY [MID]) SELECT m.[ID], d.T FROM [Members] m LEFT JOIN d ON d.[MID]=m.[ID]` },
-        { name: 'FOR JSON AUTO', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
-        { name: 'FOR XML AUTO', sql: `SELECT [ID] FROM [Members] FOR XML AUTO` },
-        { name: 'OPTION RECOMPILE', sql: `SELECT [ID] FROM [Members] OPTION (RECOMPILE)` },
-        { name: 'SELECT INTO temp', sql: `SELECT * INTO #t FROM [Members]` },
-        { name: 'self-join', sql: `SELECT a.[ID] FROM [Members] a JOIN [Members] b ON a.[ReferredBy]=b.[ID]` },
-        { name: 'GROUP BY ROLLUP', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY ROLLUP([ChapterID])` },
-        { name: 'string with FOR JSON', sql: `SELECT [Name] FROM [Members] WHERE [Note]='FOR JSON inside string'` },
-        { name: 'bracket id named [TOP]', sql: `SELECT [TOP] FROM [Members]` },
-        { name: 'bracket id named [FOR JSON]', sql: `SELECT [FOR JSON] FROM [Members]` },
-        { name: 'comment-hidden TOP', sql: `SELECT /* TOP 999999 */ [ID] FROM [Members]` },
-        { name: 'CRLF line breaks', sql: `SELECT\r\n*\r\nFROM\r\n[Members]` },
-        { name: 'mixed case keywords', sql: `seLect * fRom [Members]` },
-        { name: 'trailing semicolons', sql: `SELECT * FROM [Members];;;` },
+    const corpus: { name: string; sql: string; path: ExpectedPath }[] = [
+        { name: 'simple SELECT *', path: 'ast', sql: `SELECT * FROM [dbo].[vwMembers]` },
+        { name: 'SELECT with WHERE', path: 'ast', sql: `SELECT [ID] FROM [dbo].[vwMembers] WHERE [Status]='Active'` },
+        { name: 'JOIN no cap', path: 'ast', sql: `SELECT m.[ID], c.[Name] FROM [Members] m INNER JOIN [Chapters] c ON m.[ChapterID]=c.[ID]` },
+        { name: 'GROUP BY', path: 'ast', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY [ChapterID]` },
+        { name: 'CTE plain', path: 'ast', sql: `WITH a AS (SELECT [ID] FROM [Members]) SELECT * FROM a` },
+        { name: 'CTE bracket-named', path: 'fetch', sql: `WITH [hi] AS (SELECT 1 AS x) SELECT * FROM [hi]` },
+        { name: 'CTE with hyphens in name', path: 'ast', sql: `WITH [my-cte] AS (SELECT 1 AS x) SELECT * FROM [my-cte]` },
+        { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT a.x, b.y FROM a, b` },
+        { name: 'window function', path: 'ast', sql: `SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]` },
+        { name: 'UNION ALL', path: 'wrap', sql: `SELECT [ID] FROM [A] UNION ALL SELECT [ID] FROM [B]` },
+        { name: 'UNION (deduped)', path: 'wrap', sql: `SELECT [ID] FROM [A] UNION SELECT [ID] FROM [B]` },
+        { name: 'INTERSECT', path: 'wrap', sql: `SELECT [ID] FROM [A] INTERSECT SELECT [ID] FROM [B]` },
+        { name: 'EXCEPT', path: 'wrap', sql: `SELECT [ID] FROM [A] EXCEPT SELECT [ID] FROM [B]` },
+        { name: 'TOP 5', path: 'ast', sql: `SELECT TOP 5 * FROM [Members]` },
+        { name: 'TOP huge', path: 'ast', sql: `SELECT TOP 999999 * FROM [Members]` },
+        { name: 'TOP (N)', path: 'ast', sql: `SELECT TOP (1000000) * FROM [Members]` },
+        { name: 'TOP PERCENT', path: 'wrap', sql: `SELECT TOP 25 PERCENT * FROM [Members]` },
+        { name: 'TOP WITH TIES', path: 'wrap', sql: `SELECT TOP 10 WITH TIES * FROM [Members] ORDER BY [ID]` },
+        { name: 'TOP (@n) param', path: 'wrap', sql: `SELECT TOP (@n) * FROM [Members]` },
+        { name: 'DISTINCT', path: 'ast', sql: `SELECT DISTINCT [Country] FROM [Members]` },
+        { name: 'DISTINCT TOP N', path: 'ast', sql: `SELECT DISTINCT TOP 1000 [Country] FROM [Members]` },
+        { name: 'subquery in FROM', path: 'ast', sql: `SELECT s.* FROM (SELECT [ID] FROM [Members]) s` },
+        { name: 'EXISTS subquery', path: 'ast', sql: `SELECT [ID] FROM [A] WHERE EXISTS (SELECT 1 FROM [B] WHERE [B].x=[A].x)` },
+        { name: 'NOT IN subquery', path: 'ast', sql: `SELECT [ID] FROM [A] WHERE [ID] NOT IN (SELECT [ID] FROM [B])` },
+        { name: 'CASE expression', path: 'ast', sql: `SELECT CASE WHEN [X]>1 THEN 'a' ELSE 'b' END FROM [Members]` },
+        { name: 'VALUES table', path: 'ast', sql: `SELECT * FROM (VALUES (1),(2),(3)) AS t(x)` },
+        { name: 'three-part name', path: 'ast', sql: `SELECT * FROM [DB1].[dbo].[Members]` },
+        { name: 'with parens', path: 'ast', sql: `(SELECT * FROM [Members])` },
+        { name: 'comment-only', path: 'passthrough', sql: `/* nothing */` },
+        { name: 'whitespace-only', path: 'passthrough', sql: `   ` },
+        { name: 'just semicolon', path: 'passthrough', sql: `;` },
+        { name: 'CROSS APPLY', path: 'wrap', sql: `SELECT m.[ID], j.[Name] FROM [Members] m CROSS APPLY OPENJSON(m.[Meta]) WITH ([Name] NVARCHAR(100)) j` },
+        { name: 'JSON_VALUE', path: 'ast', sql: `SELECT JSON_VALUE([Meta],'$.x') FROM [Members]` },
+        { name: 'CTE + GROUP BY + JOIN', path: 'ast', sql: `WITH d AS (SELECT [MID], SUM([Amt]) AS T FROM [Don] GROUP BY [MID]) SELECT m.[ID], d.T FROM [Members] m LEFT JOIN d ON d.[MID]=m.[ID]` },
+        { name: 'FOR JSON AUTO', path: 'passthrough', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
+        { name: 'FOR XML AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR XML AUTO` },
+        { name: 'OPTION RECOMPILE', path: 'ast', sql: `SELECT [ID] FROM [Members] OPTION (RECOMPILE)` },
+        { name: 'SELECT INTO temp', path: 'passthrough', sql: `SELECT * INTO #t FROM [Members]` },
+        { name: 'self-join', path: 'ast', sql: `SELECT a.[ID] FROM [Members] a JOIN [Members] b ON a.[ReferredBy]=b.[ID]` },
+        { name: 'GROUP BY ROLLUP', path: 'ast', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY ROLLUP([ChapterID])` },
+        { name: 'string with FOR JSON', path: 'ast', sql: `SELECT [Name] FROM [Members] WHERE [Note]='FOR JSON inside string'` },
+        { name: 'bracket id named [TOP]', path: 'ast', sql: `SELECT [TOP] FROM [Members]` },
+        { name: 'bracket id named [FOR JSON]', path: 'ast', sql: `SELECT [FOR JSON] FROM [Members]` },
+        { name: 'comment-hidden TOP', path: 'ast', sql: `SELECT /* TOP 999999 */ [ID] FROM [Members]` },
+        { name: 'CRLF line breaks', path: 'ast', sql: `SELECT\r\n*\r\nFROM\r\n[Members]` },
+        { name: 'mixed case keywords', path: 'ast', sql: `seLect * fRom [Members]` },
+        { name: 'trailing semicolons', path: 'wrap', sql: `SELECT * FROM [Members];;;` },
     ];
 
-    for (const { name, sql } of corpus) {
+    for (const { name, sql, path } of corpus) {
         it(`invariant holds for: ${name}`, () => {
             stubMetadata();
             const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: CAP });
-            assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, CAP);
+            assertPathTaken(sql, result.FinalSQL, CAP, path);
         });
     }
 
     // The same shapes on PostgreSQL where applicable (no [brackets], no TOP).
-    const pgCorpus: { name: string; sql: string }[] = [
-        { name: 'plain SELECT', sql: `SELECT * FROM members` },
-        { name: 'JOIN', sql: `SELECT m.id, c.name FROM members m JOIN chapters c ON m.cid=c.id` },
-        { name: 'GROUP BY', sql: `SELECT chapter_id, COUNT(*) FROM members GROUP BY chapter_id` },
-        { name: 'CTE', sql: `WITH a AS (SELECT id FROM members) SELECT * FROM a` },
-        { name: 'multi CTE', sql: `WITH a AS (SELECT 1 x), b AS (SELECT 2 y) SELECT * FROM a, b` },
-        { name: 'window', sql: `SELECT id, ROW_NUMBER() OVER (ORDER BY joined) AS rn FROM members` },
-        { name: 'UNION ALL', sql: `SELECT id FROM a UNION ALL SELECT id FROM b` },
-        { name: 'LIMIT 5', sql: `SELECT * FROM members LIMIT 5` },
-        { name: 'LIMIT huge', sql: `SELECT * FROM members LIMIT 999999` },
-        { name: 'LIMIT N OFFSET M', sql: `SELECT * FROM members LIMIT 999999 OFFSET 10` },
-        { name: 'DISTINCT', sql: `SELECT DISTINCT country FROM members` },
-        { name: 'EXISTS', sql: `SELECT id FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.x=a.x)` },
-        { name: 'NOT IN', sql: `SELECT id FROM a WHERE id NOT IN (SELECT id FROM b)` },
-        { name: 'CASE', sql: `SELECT CASE WHEN x>1 THEN 'a' ELSE 'b' END FROM members` },
-        { name: 'subquery in FROM', sql: `SELECT s.* FROM (SELECT id FROM members) s` },
+    const pgCorpus: { name: string; sql: string; path: ExpectedPath }[] = [
+        { name: 'plain SELECT', path: 'ast', sql: `SELECT * FROM members` },
+        { name: 'JOIN', path: 'ast', sql: `SELECT m.id, c.name FROM members m JOIN chapters c ON m.cid=c.id` },
+        { name: 'GROUP BY', path: 'ast', sql: `SELECT chapter_id, COUNT(*) FROM members GROUP BY chapter_id` },
+        { name: 'CTE', path: 'ast', sql: `WITH a AS (SELECT id FROM members) SELECT * FROM a` },
+        { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 x), b AS (SELECT 2 y) SELECT * FROM a, b` },
+        { name: 'window', path: 'ast', sql: `SELECT id, ROW_NUMBER() OVER (ORDER BY joined) AS rn FROM members` },
+        { name: 'UNION ALL', path: 'wrap', sql: `SELECT id FROM a UNION ALL SELECT id FROM b` },
+        { name: 'LIMIT 5', path: 'ast', sql: `SELECT * FROM members LIMIT 5` },
+        { name: 'LIMIT huge', path: 'ast', sql: `SELECT * FROM members LIMIT 999999` },
+        { name: 'LIMIT N OFFSET M', path: 'ast', sql: `SELECT * FROM members LIMIT 999999 OFFSET 10` },
+        { name: 'DISTINCT', path: 'ast', sql: `SELECT DISTINCT country FROM members` },
+        { name: 'EXISTS', path: 'ast', sql: `SELECT id FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.x=a.x)` },
+        { name: 'NOT IN', path: 'ast', sql: `SELECT id FROM a WHERE id NOT IN (SELECT id FROM b)` },
+        { name: 'CASE', path: 'ast', sql: `SELECT CASE WHEN x>1 THEN 'a' ELSE 'b' END FROM members` },
+        { name: 'subquery in FROM', path: 'ast', sql: `SELECT s.* FROM (SELECT id FROM members) s` },
     ];
 
-    for (const { name, sql } of pgCorpus) {
+    for (const { name, sql, path } of pgCorpus) {
         it(`PG invariant holds for: ${name}`, () => {
             stubMetadata();
             const result = RenderPipeline.Run(sql, { Platform: 'postgresql', MaxRows: CAP });
-            assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, CAP);
+            assertPathTaken(sql, result.FinalSQL, CAP, path);
         });
     }
 });

@@ -1609,7 +1609,7 @@ export class ManageMetadataBase {
          IsForeignKey: boolean;
       }>;
    }> {
-      const tableRefs = SQLParser.ExtractTableRefs(viewDefinition);
+      const tableRefs = SQLParser.ExtractTableRefs(viewDefinition, this.dialect);
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const sourceEntities: Array<{
          Name: string;
