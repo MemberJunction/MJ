@@ -5,37 +5,44 @@ import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect
 const tsqlDialect = new SQLServerDialect();
 const pgDialect = new PostgreSQLDialect();
 
+// Thin instance-API shims — SQLParser's extraction methods are now instance
+// methods (`new SQLParser(sql, dialect).ExtractX()`). These wrappers keep the
+// test bodies unchanged.
+const extractTableRefs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractTableRefs();
+const extractColumnRefs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractColumnRefs();
+const extractCTEs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractCTEs();
+
 describe('SQLParser', () => {
     // ================================================================
     // ExtractTableRefs
     // ================================================================
     describe('ExtractTableRefs', () => {
         it('should extract table references from a simple SELECT', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT ID, Name FROM Users WHERE Active = 1');
+            const tables = extractTableRefs('SELECT ID, Name FROM Users WHERE Active = 1');
             expect(tables.length).toBeGreaterThanOrEqual(1);
             expect(tables[0].TableName).toBe('Users');
         });
 
         it('should extract table references from a JOIN query', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT u.ID, r.Name FROM Users u INNER JOIN Roles r ON u.RoleID = r.ID');
+            const tables = extractTableRefs('SELECT u.ID, r.Name FROM Users u INNER JOIN Roles r ON u.RoleID = r.ID');
             expect(tables.length).toBe(2);
             const tableNames = tables.map(t => t.TableName).sort();
             expect(tableNames).toEqual(['Roles', 'Users']);
         });
 
         it('should extract schema-qualified table references', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT ID FROM __mj.AIAgentRun');
+            const tables = extractTableRefs('SELECT ID FROM __mj.AIAgentRun');
             expect(tables.length).toBe(1);
             expect(tables[0].TableName).toBe('AIAgentRun');
             expect(tables[0].SchemaName).toBe('__mj');
         });
 
         it('should return empty for empty SQL', () => {
-            expect(SQLParser.ExtractTableRefs('')).toEqual([]);
+            expect(extractTableRefs('')).toEqual([]);
         });
 
         it('should extract tables from SQL with Nunjucks templates', () => {
-            const tables = SQLParser.ExtractTableRefs(
+            const tables = extractTableRefs(
                 "SELECT ID FROM Users WHERE Region = {{ Region | sqlString }}"
             );
             expect(tables.length).toBe(1);
@@ -48,17 +55,17 @@ describe('SQLParser', () => {
 WHERE Active = 1
 {% endif %}
 ORDER BY Name`;
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
         });
 
         it('should accept PostgreSQL dialect', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT id FROM users', pgDialect);
+            const tables = extractTableRefs('SELECT id FROM users', pgDialect);
             expect(tables.length).toBe(1);
         });
 
         it('should handle SQL Server TOP clause', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT TOP 10 ID FROM Users');
+            const tables = extractTableRefs('SELECT TOP 10 ID FROM Users');
             expect(tables.length).toBe(1);
         });
     });
@@ -68,7 +75,7 @@ ORDER BY Name`;
     // ================================================================
     describe('ExtractColumnRefs', () => {
         it('should extract column references from simple SQL', () => {
-            const columns = SQLParser.ExtractColumnRefs('SELECT ID, Name FROM Users WHERE Active = 1');
+            const columns = extractColumnRefs('SELECT ID, Name FROM Users WHERE Active = 1');
             expect(columns.length).toBeGreaterThanOrEqual(2);
             const colNames = columns.map(c => c.ColumnName);
             expect(colNames).toContain('ID');
@@ -76,13 +83,13 @@ ORDER BY Name`;
         });
 
         it('should extract qualified column references', () => {
-            const columns = SQLParser.ExtractColumnRefs('SELECT u.Name, r.Title FROM Users u JOIN Roles r ON u.RoleID = r.ID');
+            const columns = extractColumnRefs('SELECT u.Name, r.Title FROM Users u JOIN Roles r ON u.RoleID = r.ID');
             const qualified = columns.filter(c => c.TableQualifier !== null);
             expect(qualified.length).toBeGreaterThan(0);
         });
 
         it('should return empty for empty SQL', () => {
-            expect(SQLParser.ExtractColumnRefs('')).toEqual([]);
+            expect(extractColumnRefs('')).toEqual([]);
         });
     });
 
@@ -91,12 +98,12 @@ ORDER BY Name`;
     // ================================================================
     describe('ExtractCTEs', () => {
         it('should return null for SQL without a WITH clause', () => {
-            expect(SQLParser.ExtractCTEs('SELECT * FROM Users', tsqlDialect)).toBeNull();
+            expect(extractCTEs('SELECT * FROM Users', tsqlDialect)).toBeNull();
         });
 
         it('should extract a single CTE', () => {
             const sql = 'WITH Active AS (SELECT ID FROM Users WHERE Active = 1) SELECT * FROM Active';
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -106,7 +113,7 @@ ORDER BY Name`;
 
         it('should extract multiple CTEs', () => {
             const sql = 'WITH A AS (SELECT 1 AS x), B AS (SELECT 2 AS y) SELECT A.x, B.y FROM A, B';
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(2);
@@ -116,7 +123,7 @@ ORDER BY Name`;
 
         it('should handle CTEs with nested parentheses', () => {
             const sql = "WITH Agg AS (SELECT MemberID, COUNT(DISTINCT ChapterID) AS Total FROM (SELECT * FROM Memberships WHERE Status = 'Active') sub GROUP BY MemberID) SELECT * FROM Agg";
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -125,7 +132,7 @@ ORDER BY Name`;
 
         it('should handle CTEs with string literals containing parentheses', () => {
             const sql = "WITH Filtered AS (SELECT * FROM T WHERE Name = 'Test (Dept)') SELECT * FROM Filtered";
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -134,7 +141,7 @@ ORDER BY Name`;
 
         it('should handle SQL with Nunjucks templates (regex fallback)', () => {
             const sql = "WITH Filtered AS (SELECT * FROM T WHERE x = {{ someParam }}) SELECT * FROM Filtered";
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.UsedASTParsing).toBe(false);
@@ -144,7 +151,7 @@ ORDER BY Name`;
 
         it('should accept a dialect parameter', () => {
             const sql = 'WITH A AS (SELECT 1) SELECT * FROM A';
-            const result = SQLParser.ExtractCTEs(sql, pgDialect);
+            const result = extractCTEs(sql, pgDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -182,7 +189,7 @@ WHERE TotalActivityCount >= {{ MinActivityCount | sqlNumber }}
 {% endif %}
 ORDER BY TotalActivityCount DESC`;
 
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -216,7 +223,7 @@ FROM ChapterMembers chmem
 LEFT JOIN ChapterEventActivity chev ON chmem.ChapterID = chev.ChapterID
 LEFT JOIN ChapterCourseActivity chcr ON chmem.ChapterID = chcr.ChapterID`;
 
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(3);
@@ -242,7 +249,7 @@ FROM current_members m
 INNER JOIN nams.vwAccounts a ON a.Id = m.NU__Account__c
 ORDER BY a.LastName, a.FirstName`;
 
-            const result = SQLParser.ExtractCTEs(sql, tsqlDialect);
+            const result = extractCTEs(sql, tsqlDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(2);
@@ -264,7 +271,7 @@ INNER JOIN [AssociationDemo].[vwMembers] m ON ms.MemberID = m.ID
 WHERE ms.Status = 'Active'
 GROUP BY mt.Name`;
 
-            expect(SQLParser.ExtractCTEs(sql, tsqlDialect)).toBeNull();
+            expect(extractCTEs(sql, tsqlDialect)).toBeNull();
         });
 
         it('should return null for query with subquery in JOIN (no CTE)', () => {
@@ -276,7 +283,7 @@ LEFT JOIN (
     GROUP BY li.RelatedEntityID
 ) rev ON e.ID = rev.EventID`;
 
-            expect(SQLParser.ExtractCTEs(sql, tsqlDialect)).toBeNull();
+            expect(extractCTEs(sql, tsqlDialect)).toBeNull();
         });
 
         it('should return null for Nunjucks query without CTE', () => {
@@ -287,7 +294,7 @@ FROM [AssociationDemo].[vwEvents] e
 {% endif %}
 GROUP BY YEAR(e.StartDate)`;
 
-            expect(SQLParser.ExtractCTEs(sql, tsqlDialect)).toBeNull();
+            expect(extractCTEs(sql, tsqlDialect)).toBeNull();
         });
     });
 
@@ -413,7 +420,7 @@ GROUP BY YEAR(e.StartDate)`;
         });
 
         it('should extract tables from SQL with FOR XML PATH + ROOT', () => {
-            const tables = SQLParser.ExtractTableRefs(
+            const tables = extractTableRefs(
                 "SELECT m.Name, m.Email FROM [__mj].[Members] m ORDER BY m.Name FOR XML PATH('Member'), ROOT('Members')"
             );
             expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -479,7 +486,7 @@ GROUP BY YEAR(e.StartDate)`;
     describe('PostgreSQL Dialect', () => {
         it('ExtractCTEs with double-quoted CTE names', () => {
             const sql = 'WITH "MyCTE" AS (SELECT 1 AS val) SELECT * FROM "MyCTE"';
-            const result = SQLParser.ExtractCTEs(sql, pgDialect);
+            const result = extractCTEs(sql, pgDialect);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);

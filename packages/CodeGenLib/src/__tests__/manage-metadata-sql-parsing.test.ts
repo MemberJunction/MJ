@@ -1,13 +1,16 @@
 /**
  * Regression tests for SQL parsing in manage-metadata.ts.
  *
- * The buildSourceEntityContext method uses SQLParser.ExtractTableRefs()
+ * The buildSourceEntityContext method uses extractTableRefs()
  * to parse SQL Server view definitions and resolve table references to MJ entities.
  * These tests verify that the parser correctly handles the full range of view
  * definition patterns that CodeGen encounters in the wild.
  */
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+
+const extractTableRefs = (sql: string) => new SQLParser(sql, new SQLServerDialect()).ExtractTableRefs();
 
 // ═══════════════════════════════════════════════════
 // View definition patterns from real MJ databases
@@ -28,7 +31,7 @@ SELECT
 FROM
     [__mj].[User] u`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
             const userTable = tables.find(t => t.TableName === 'User');
             expect(userTable).toBeDefined();
@@ -39,7 +42,7 @@ FROM
             const sql = `CREATE VIEW [dbo].[vwCustomers] AS
 SELECT * FROM [dbo].[Customer]`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
             expect(tables.find(t => t.TableName === 'Customer')).toBeDefined();
         });
@@ -65,7 +68,7 @@ INNER JOIN
 INNER JOIN
     [__mj].[Role] r ON ep.RoleID = r.ID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('EntityPermission');
@@ -90,7 +93,7 @@ INNER JOIN
 LEFT JOIN
     [__mj].[Entity] re ON ef.RelatedEntityID = re.ID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             // Entity appears twice (different aliases) — deduplicated by schema.table
             const entityRefs = tables.filter(t => t.TableName === 'Entity');
@@ -112,7 +115,7 @@ SELECT
 FROM
     [__mj].[Entity] e`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('Entity');
@@ -138,7 +141,7 @@ INNER JOIN (
     GROUP BY ModelID
 ) latest ON mc.ModelID = latest.ModelID AND mc.EffectiveDate = latest.MaxDate`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('AIModelCost');
@@ -165,7 +168,7 @@ INNER JOIN
 INNER JOIN
     [AssociationDemo].[Member] m ON cm.MemberID = m.ID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
             expect(tables.every(t => t.SchemaName === 'AssociationDemo')).toBe(true);
         });
@@ -181,7 +184,7 @@ FROM
 INNER JOIN
     [SchemaB].[TableTwo] b ON a.ID = b.RefID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBe(2);
             expect(tables.find(t => t.SchemaName === 'SchemaA' && t.TableName === 'TableOne')).toBeDefined();
             expect(tables.find(t => t.SchemaName === 'SchemaB' && t.TableName === 'TableTwo')).toBeDefined();
@@ -214,7 +217,7 @@ INNER JOIN
 WHERE
     lc.rn = 1`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('RecordChange');
@@ -245,7 +248,7 @@ LEFT JOIN
 GROUP BY
     m.ID, m.FirstName, m.LastName`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('Member');
@@ -269,7 +272,7 @@ WHERE
         WHERE ep.EntityID = e.ID AND ep.CanRead = 1
     )`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('Entity');
@@ -282,7 +285,7 @@ SELECT ID, EntityName, Action, 'RecordChange' AS Source FROM [__mj].[RecordChang
 UNION ALL
 SELECT ID, EntityName, Action, 'AuditLog' AS Source FROM [__mj].[AuditLog]`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('RecordChange');
@@ -304,7 +307,7 @@ FROM
 INNER JOIN
     [__mj].[vwUsers] u ON n.UserID = u.ID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('Notification');
@@ -319,21 +322,21 @@ INNER JOIN
 FROM [__mj].[User] u
 WHERE u.IsActive = 1`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBe(1);
             expect(tables[0].TableName).toBe('User');
         });
 
         it('should handle empty or null SQL gracefully', () => {
-            expect(SQLParser.ExtractTableRefs('')).toEqual([]);
-            expect(SQLParser.ExtractTableRefs('   ')).toEqual([]);
+            expect(extractTableRefs('')).toEqual([]);
+            expect(extractTableRefs('   ')).toEqual([]);
         });
 
         it('should handle view with no FROM clause', () => {
             const sql = `CREATE VIEW [dbo].[vwConstants] AS
 SELECT 1 AS One, 'Hello' AS Greeting, GETDATE() AS Now`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables).toHaveLength(0);
         });
 
@@ -352,7 +355,7 @@ CROSS APPLY (
     ORDER BY ef.__mj_UpdatedAt DESC
 ) lf`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(2);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('Entity');
@@ -367,7 +370,7 @@ CROSS APPLY (
 FROM [__mj].[Entity] p
 INNER JOIN [__mj].[Entity] c ON p.ID = c.ParentID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             // Entity appears twice but should be deduplicated
             const entityRefs = tables.filter(t => t.TableName === 'Entity');
             expect(entityRefs).toHaveLength(1);

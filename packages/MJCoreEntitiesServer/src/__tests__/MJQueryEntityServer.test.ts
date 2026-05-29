@@ -11,6 +11,8 @@ import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parse
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 
 const tsqlDialect = new SQLServerDialect();
+const extractSelectColumns = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractSelectColumns();
+const extractTableRefs = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractTableRefs();
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -195,7 +197,7 @@ AND YEAR(s.[Date]) >= {{ StartYear | sqlNumber }}`;
 )
 SELECT * FROM ChapterMembers`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('vwChapters');
@@ -207,12 +209,12 @@ FROM [AssociationDemo].[vwMembers] m
 LEFT JOIN [AssociationDemo].[vwMemberships] ms ON ms.MemberID = m.ID
 INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
         });
 
         it('should extract schema names correctly', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT * FROM nams.vwAccounts a');
+            const tables = extractTableRefs('SELECT * FROM nams.vwAccounts a');
             expect(tables.length).toBe(1);
             expect(tables[0].SchemaName).toBe('nams');
             expect(tables[0].TableName).toBe('vwAccounts');
@@ -1428,7 +1430,7 @@ describe('Field Type Enrichment from Composition References', () => {
 describe('Field Type Enrichment from Entity Metadata', () => {
     it('should resolve direct column from entity metadata via SQLParser', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1451,7 +1453,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should resolve AS alias to source column from entity metadata', () => {
         const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
@@ -1474,7 +1476,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should disambiguate multiple tables by alias', () => {
         const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [
             { name: 'Name', description: 'User name', type: 'string', optional: false },
@@ -1507,7 +1509,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should skip fields that already have sqlBaseType and sqlFullType', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Already resolved', type: 'string', optional: false,
@@ -1528,7 +1530,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should fall back to flat lookup when no SELECT column matches', () => {
         // Field "Email" is not in the SELECT clause but exists in the entity
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Email', description: 'User email', type: 'string', optional: false,
@@ -1549,7 +1551,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should not overwrite existing sourceEntity on the field', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,

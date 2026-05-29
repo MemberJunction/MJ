@@ -12,6 +12,7 @@ import { BuildFieldsFromSelectColumns } from '../custom/query-extraction/resolve
 import type { ExtractedField } from '../custom/query-extraction/types';
 
 const tsqlDialect = new SQLServerDialect();
+const extractSelectColumns = (sql: string, dialect = tsqlDialect) => new SQLParser(sql, dialect).ExtractSelectColumns();
 
 // ═══════════════════════════════════════════════════
 // BuildFieldsFromSelectColumns — deterministic extraction
@@ -21,7 +22,7 @@ describe('BuildFieldsFromSelectColumns', () => {
     describe('Simple column lists', () => {
         it('should extract fields from SELECT col1, col2 FROM table', () => {
             const sql = 'SELECT col1, col2 FROM MyTable';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -34,7 +35,7 @@ describe('BuildFieldsFromSelectColumns', () => {
 
         it('should extract fields with table qualifiers', () => {
             const sql = 'SELECT t.ID, t.Name, t.Email FROM __mj.vwUsers t';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -49,7 +50,7 @@ describe('BuildFieldsFromSelectColumns', () => {
     describe('Aliased columns', () => {
         it('should extract fields from SELECT col1 AS Alias1, col2 AS Alias2', () => {
             const sql = 'SELECT col1 AS Alias1, col2 AS Alias2 FROM MyTable';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -63,7 +64,7 @@ describe('BuildFieldsFromSelectColumns', () => {
 
         it('should handle mixed aliased and non-aliased columns', () => {
             const sql = 'SELECT t.ID, t.FirstName AS Name, t.Email FROM __mj.vwUsers t';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -79,7 +80,7 @@ describe('BuildFieldsFromSelectColumns', () => {
     describe('Aggregate functions and expressions', () => {
         it('should extract fields from aggregate functions', () => {
             const sql = 'SELECT COUNT(*) AS Total, SUM(Amount) AS Revenue FROM Orders';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -97,7 +98,7 @@ describe('BuildFieldsFromSelectColumns', () => {
 
         it('should handle MAX, MIN, AVG aggregates', () => {
             const sql = 'SELECT MAX(Score) AS HighScore, MIN(Score) AS LowScore, AVG(Score) AS AvgScore FROM Results';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -109,7 +110,7 @@ describe('BuildFieldsFromSelectColumns', () => {
     describe('SELECT * handling', () => {
         it('should return null for SELECT * (defers to BuildFieldsForSelectStar)', () => {
             const sql = 'SELECT * FROM Users';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).toBeNull();
@@ -117,7 +118,7 @@ describe('BuildFieldsFromSelectColumns', () => {
 
         it('should return null for SELECT t.* FROM table t', () => {
             const sql = 'SELECT t.* FROM Users t';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).toBeNull();
@@ -133,7 +134,7 @@ WHERE sess.Year = {{ Year | sqlNumber }}
 {% if MinRating %}AND s.Rating >= {{ MinRating | sqlNumber }}{% endif %}
 GROUP BY s.Name, s.Rating`;
 
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -163,7 +164,7 @@ LEFT JOIN [AssociationDemo].[vwMemberships] ms ON ms.MemberID = m.ID
 INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
 LEFT JOIN [AssociationDemo].[vwChapters] c ON m.ChapterID = c.ID`;
 
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -180,7 +181,7 @@ LEFT JOIN [AssociationDemo].[vwChapters] c ON m.ChapterID = c.ID`;
     describe('TOP N and DISTINCT', () => {
         it('should extract fields from queries with TOP N', () => {
             const sql = 'SELECT TOP 10 ID, Name, Score FROM Students ORDER BY Score DESC';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -192,7 +193,7 @@ LEFT JOIN [AssociationDemo].[vwChapters] c ON m.ChapterID = c.ID`;
 
         it('should extract fields from queries with DISTINCT', () => {
             const sql = 'SELECT DISTINCT Region, City FROM Locations';
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -223,7 +224,7 @@ LEFT JOIN [CASE].[vwRatings] r ON sess.ID = r.SessionID
 GROUP BY s.Name, s.Title
 ORDER BY AvgRating DESC`;
 
-            const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+            const selectColumns = extractSelectColumns(sql, tsqlDialect);
             const fields = BuildFieldsFromSelectColumns(selectColumns);
 
             expect(fields).not.toBeNull();
@@ -386,7 +387,7 @@ describe('Non-destructive field handling when extraction fails', () => {
         const sql = `SELECT s.Name AS SpeakerName, COUNT(*) AS Total
 FROM Speakers s GROUP BY s.Name`;
 
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
         const fields = BuildFieldsFromSelectColumns(selectColumns);
 
         // With the fix, deterministic extraction produces fields even without LLM
@@ -412,7 +413,7 @@ WHERE sess.Year >= {{ StartYear | sqlNumber }}
 GROUP BY s.Name, s.Title
 ORDER BY AvgRating DESC`;
 
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
         const fields = BuildFieldsFromSelectColumns(selectColumns);
 
         expect(fields).not.toBeNull();
@@ -440,7 +441,7 @@ describe('Complex SQL patterns', () => {
 )
 SELECT Name, SessionCount FROM TopSpeakers WHERE SessionCount > 5`;
 
-        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
         const fields = BuildFieldsFromSelectColumns(selectColumns);
 
         // Should extract from the outermost SELECT

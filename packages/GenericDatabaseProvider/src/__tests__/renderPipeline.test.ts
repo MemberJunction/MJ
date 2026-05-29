@@ -231,6 +231,9 @@ describe('MaxRows row cap — AST injection', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT * FROM Members', { Platform: 'sqlserver', MaxRows: 10 });
         expect(result.FinalSQL).toMatch(/SELECT\s+TOP\s+10\b/i);
+        // Pin the AST-inject path specifically — not the outer-wrap or OFFSET/FETCH fallback.
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 
     it('injects LIMIT on a plain SELECT (PostgreSQL)', () => {
@@ -238,6 +241,17 @@ describe('MaxRows row cap — AST injection', () => {
         const result = RenderPipeline.Run('SELECT * FROM t', { Platform: 'postgresql', MaxRows: 10 });
         expect(result.FinalSQL).toMatch(/\bLIMIT\s+10\b/i);
         expect(result.FinalSQL).not.toMatch(/\bTOP\b/i);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+    });
+
+    it('caps a SELECT containing a window function via AST TOP injection', () => {
+        stubMetadata();
+        const sql = 'SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]';
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/SELECT\s+TOP\s+10\b/i);
+        expect(result.FinalSQL).toMatch(/ROW_NUMBER\(\)\s+OVER/i);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 
     it('caps the outermost SELECT of a CTE on SQL Server', () => {
@@ -520,23 +534,27 @@ describe('MaxRows row cap — incompatible shapes left alone', () => {
         expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
-    it('preserves OPTION (RECOMPILE) and never wraps it in a derived table', () => {
+    it('caps a SELECT with a trailing OPTION (RECOMPILE) via AST TOP injection', () => {
+        // The constructor's OPTION-splitting preprocessing makes this shape
+        // parseable, so the cap is enforced precisely (TOP 10) and the OPTION
+        // hint is re-appended — NOT left uncapped (the pre-preprocessing
+        // behavior) and NOT wrapped in a derived table.
         stubMetadata();
         const sql = `SELECT ID FROM Users OPTION (RECOMPILE)`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
         expect(result.FinalSQL).toMatch(/OPTION\s*\(\s*RECOMPILE\s*\)/i);
         expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 
-    it('does not append FETCH NEXT after OPTION (RECOMPILE)', () => {
+    it('does not fall back to OFFSET/FETCH for an OPTION (RECOMPILE) query', () => {
         stubMetadata();
         const sql = `SELECT ID FROM Users OPTION (RECOMPILE)`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        const optionPos = result.FinalSQL.search(/OPTION\s*\(\s*RECOMPILE\s*\)/i);
-        const fetchPos = result.FinalSQL.search(/FETCH\s+NEXT/i);
-        if (optionPos >= 0 && fetchPos >= 0) {
-            expect(fetchPos).toBeLessThan(optionPos);
-        }
+        // AST inject is used, so there is no synthesized OFFSET/FETCH at all.
+        expect(result.FinalSQL.search(/FETCH\s+NEXT/i)).toBe(-1);
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
     it('returns empty SQL unchanged (no synthesized clauses)', () => {
@@ -630,14 +648,19 @@ describe('MaxRows row cap — hard cap guarantee', () => {
         expect(result.FinalSQL).toMatch(/_mj_capped/);
     });
 
-    it('caps a CTE with bracket-quoted names via OFFSET/FETCH', () => {
+    it('caps a CTE with bracket-quoted names via AST TOP injection', () => {
         stubMetadata();
         const sql = `WITH [Active People] AS (SELECT ID FROM Users WHERE Status='A') SELECT * FROM [Active People]`;
         const result = RenderPipeline.Run(sql, {
             Platform: 'sqlserver',
             MaxRows: 100,
         });
-        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY/i);
+        // Bracket-identifier preprocessing makes the bracket-quoted CTE name
+        // parseable, so the cap is applied precisely (TOP 100) instead of the
+        // OFFSET/FETCH fallback; the original [Active People] name is restored.
+        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
+        expect(result.FinalSQL).toContain('[Active People]');
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
     it('caps a SELECT with CROSS APPLY via outer wrap', () => {
@@ -694,11 +717,18 @@ ORDER BY ap.[ActivePeopleCount] DESC`;
         expect(result.FinalSQL).toMatch(/WITH\s+\[ActivePeople\]\s+AS/i);
     });
 
-    it('leaves a CTE with a hyphenated bracket name unchanged (parser cannot represent it)', () => {
+    it('caps a CTE with a hyphenated bracket name via AST TOP injection', () => {
+        // Bracket-identifier preprocessing aliases the hyphenated name so it
+        // parses, applies the cap precisely (TOP 10), and restores [my-cte] on
+        // ToSQL — the cap is now enforced (it previously fell to a fallback).
         stubMetadata();
         const sql = `WITH [my-cte] AS (SELECT 1 AS a) SELECT * FROM [my-cte]`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
         expect(result.FinalSQL).toContain('[my-cte]');
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
     });
 });
 
@@ -751,6 +781,42 @@ describe('MaxRows row cap — numeric sanitation', () => {
         const result = RenderPipeline.Run('SELECT * FROM t', { Platform: 'sqlserver', MaxRows: Number.MAX_SAFE_INTEGER });
         expect(result.FinalSQL).not.toMatch(/e\+/i);
         expect(result.FinalSQL).toMatch(/\bTOP\s+\d+\b/);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Safety guard — mutation rejection
+// ════════════════════════════════════════════════════════════════════
+
+describe('safety guard — mutation rejection', () => {
+    it('throws when the rendered query is a DELETE', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('DELETE FROM Users WHERE ID = 1', { Platform: 'sqlserver' }))
+            .toThrow(/data mutation/i);
+    });
+
+    it('throws when the rendered query is an UPDATE', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('UPDATE Users SET Active = 1', { Platform: 'sqlserver' }))
+            .toThrow(/data mutation/i);
+    });
+
+    it('throws when the rendered query is an INSERT', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("INSERT INTO Users (Name) VALUES ('x')", { Platform: 'sqlserver' }))
+            .toThrow(/data mutation/i);
+    });
+
+    it('allows a normal SELECT through', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT * FROM Users', { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/SELECT/i);
+    });
+
+    it('does not false-positive on the REPLACE() string function', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run("SELECT REPLACE(Name, 'a', 'b') AS N FROM Users", { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/REPLACE/i);
     });
 });
 
@@ -1268,7 +1334,13 @@ LEFT JOIN [Recent Donors] rd ON rd.[MemberID] = am.[MemberID]
 ORDER BY rd.[TotalDonated] DESC`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: CAP });
         assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, CAP);
-        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY/i);
+        // Bracket-identifier preprocessing now lets the bracket-quoted CTE names
+        // parse, so the cap is applied via precise AST TOP injection (not the
+        // OFFSET/FETCH fallback). The original bracket names are restored.
+        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
+        expect(result.FinalSQL).toContain('[Active Members]');
+        expect(result.FinalSQL).toContain('[Recent Donors]');
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
     it('top-N-per-group with ROW_NUMBER OVER PARTITION BY', () => {

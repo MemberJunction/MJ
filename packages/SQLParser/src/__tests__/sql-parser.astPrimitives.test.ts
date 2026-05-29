@@ -6,146 +6,174 @@ const tsql = new SQLServerDialect();
 const pg = new PostgreSQLDialect();
 
 // ════════════════════════════════════════════════════════════════════
-// GetStatementKind
+// Construction / IsValid
 // ════════════════════════════════════════════════════════════════════
 
-describe('SQLParser.GetStatementKind', () => {
+describe('SQLParser construction', () => {
+
+    it('IsValid is true for a parseable SELECT', () => {
+        expect(new SQLParser('SELECT * FROM Users', tsql).IsValid).toBe(true);
+    });
+
+    it('IsValid is false for unparseable SQL', () => {
+        expect(new SQLParser('SELECT FROM WHERE (((', tsql).IsValid).toBe(false);
+    });
+
+    it('IsValid is false for an empty string', () => {
+        expect(new SQLParser('', tsql).IsValid).toBe(false);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// StatementKind
+// ════════════════════════════════════════════════════════════════════
+
+describe('SQLParser.StatementKind', () => {
 
     it('returns "select" for a plain SELECT', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM Users', tsql);
-        expect(SQLParser.GetStatementKind(ast)).toBe('select');
+        expect(new SQLParser('SELECT * FROM Users', tsql).StatementKind).toBe('select');
     });
 
     it('returns "select" for a CTE-headed SELECT', () => {
-        const ast = SQLParser.ParseSQL('WITH x AS (SELECT 1 AS a) SELECT * FROM x', tsql);
-        expect(SQLParser.GetStatementKind(ast)).toBe('select');
+        expect(new SQLParser('WITH x AS (SELECT 1 AS a) SELECT * FROM x', tsql).StatementKind).toBe('select');
     });
 
     it('returns "set-op" for a UNION', () => {
-        const ast = SQLParser.ParseSQL('SELECT 1 UNION SELECT 2', tsql);
-        expect(SQLParser.GetStatementKind(ast)).toBe('set-op');
+        expect(new SQLParser('SELECT 1 UNION SELECT 2', tsql).StatementKind).toBe('set-op');
     });
 
     it('returns "select-into" for SELECT … INTO #temp', () => {
-        const ast = SQLParser.ParseSQL('SELECT * INTO #temp FROM Users', tsql);
-        expect(SQLParser.GetStatementKind(ast)).toBe('select-into');
+        expect(new SQLParser('SELECT * INTO #temp FROM Users', tsql).StatementKind).toBe('select-into');
     });
 
     it('returns "mutation" for UPDATE', () => {
-        const ast = SQLParser.ParseSQL('UPDATE Users SET Active = 1', tsql);
-        expect(SQLParser.GetStatementKind(ast)).toBe('mutation');
+        expect(new SQLParser('UPDATE Users SET Active = 1', tsql).StatementKind).toBe('mutation');
     });
 
     it('returns "mutation" for DELETE', () => {
-        const ast = SQLParser.ParseSQL('DELETE FROM Users WHERE ID = 1', tsql);
-        expect(SQLParser.GetStatementKind(ast)).toBe('mutation');
+        expect(new SQLParser('DELETE FROM Users WHERE ID = 1', tsql).StatementKind).toBe('mutation');
     });
 
     it('returns "mutation" for INSERT', () => {
-        const ast = SQLParser.ParseSQL('INSERT INTO Users (Name) VALUES ($1)', pg);
-        expect(SQLParser.GetStatementKind(ast)).toBe('mutation');
+        expect(new SQLParser('INSERT INTO Users (Name) VALUES ($1)', pg).StatementKind).toBe('mutation');
     });
 
-    it('returns "other" for a null AST', () => {
-        expect(SQLParser.GetStatementKind(null)).toBe('other');
-    });
-
-    it('returns "other" for an empty AST array', () => {
-        expect(SQLParser.GetStatementKind([])).toBe('other');
+    it('returns "other" for unparseable SQL', () => {
+        expect(new SQLParser('not valid sql (((', tsql).StatementKind).toBe('other');
     });
 });
 
 // ════════════════════════════════════════════════════════════════════
-// GetOuterCap
+// OuterCap (dialect-neutral RowCapInfo)
 // ════════════════════════════════════════════════════════════════════
 
-describe('SQLParser.GetOuterCap', () => {
+describe('SQLParser.OuterCap', () => {
 
     it('returns null when no cap is present', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM Users', tsql);
-        expect(SQLParser.GetOuterCap(ast)).toBeNull();
+        expect(new SQLParser('SELECT * FROM Users', tsql).OuterCap).toBeNull();
     });
 
     it('extracts a numeric SQL Server TOP', () => {
-        const ast = SQLParser.ParseSQL('SELECT TOP 5 * FROM Users', tsql);
-        expect(SQLParser.GetOuterCap(ast)).toEqual({ kind: 'top', value: 5 });
+        expect(new SQLParser('SELECT TOP 5 * FROM Users', tsql).OuterCap)
+            .toEqual({ form: 'numeric', value: 5, offset: null });
     });
 
-    it('flags TOP PERCENT as non-reducible', () => {
-        const ast = SQLParser.ParseSQL('SELECT TOP 25 PERCENT * FROM Users', tsql);
-        const cap = SQLParser.GetOuterCap(ast);
-        expect(cap).toMatchObject({ kind: 'top', isPercent: true });
+    it('flags TOP PERCENT as a percent cap', () => {
+        expect(new SQLParser('SELECT TOP 25 PERCENT * FROM Users', tsql).OuterCap)
+            .toEqual({ form: 'percent' });
     });
+    // Note: node-sql-parser's transactsql grammar only accepts a numeric `TOP N`
+    // (TOP (@var), TOP (1+1), TOP (SELECT 1) all fail to parse), so the opaque
+    // TOP branch is unreachable via parsing — it is covered directly in
+    // ASTDialectAdapter.test.ts against a synthetic AST root.
 
     it('extracts a numeric PostgreSQL LIMIT', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM users LIMIT 5', pg);
-        expect(SQLParser.GetOuterCap(ast)).toEqual({ kind: 'limit', value: 5, offset: null });
+        expect(new SQLParser('SELECT * FROM users LIMIT 5', pg).OuterCap)
+            .toEqual({ form: 'numeric', value: 5, offset: null });
     });
 
     it('extracts LIMIT N OFFSET M and preserves the offset', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM users LIMIT 5 OFFSET 10', pg);
-        expect(SQLParser.GetOuterCap(ast)).toEqual({ kind: 'limit', value: 5, offset: 10 });
+        expect(new SQLParser('SELECT * FROM users LIMIT 5 OFFSET 10', pg).OuterCap)
+            .toEqual({ form: 'numeric', value: 5, offset: 10 });
     });
 
-    it('returns null for an empty AST', () => {
-        expect(SQLParser.GetOuterCap(null)).toBeNull();
+    it('flags a non-numeric LIMIT $1 as opaque', () => {
+        const parser = new SQLParser('SELECT * FROM users LIMIT $1', pg);
+        expect(parser.IsValid).toBe(true);
+        expect(parser.OuterCap).toEqual({ form: 'opaque' });
+    });
+
+    it('returns null for unparseable SQL', () => {
+        expect(new SQLParser('not valid sql (((', tsql).OuterCap).toBeNull();
     });
 
     it('returns null for a non-SELECT statement', () => {
-        const ast = SQLParser.ParseSQL('UPDATE Users SET Active = 1', tsql);
-        expect(SQLParser.GetOuterCap(ast)).toBeNull();
+        expect(new SQLParser('UPDATE Users SET Active = 1', tsql).OuterCap).toBeNull();
     });
 });
 
 // ════════════════════════════════════════════════════════════════════
-// SetOuterCap
+// SetOuterCap + ToSQL
 // ════════════════════════════════════════════════════════════════════
 
-describe('SQLParser.SetOuterCap', () => {
+describe('SQLParser.SetOuterCap + ToSQL', () => {
 
     it('injects TOP N on SQL Server', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM Users', tsql);
-        SQLParser.SetOuterCap(ast, 50, tsql);
-        const out = SQLParser.SqlifyAST(ast!, tsql);
-        expect(out).toMatch(/\bTOP\s+50\b/i);
+        const parser = new SQLParser('SELECT * FROM Users', tsql);
+        parser.SetOuterCap(50);
+        expect(parser.ToSQL()).toMatch(/\bTOP\s+50\b/i);
     });
 
     it('replaces an existing TOP value on SQL Server', () => {
-        const ast = SQLParser.ParseSQL('SELECT TOP 500 * FROM Users', tsql);
-        SQLParser.SetOuterCap(ast, 100, tsql);
-        const out = SQLParser.SqlifyAST(ast!, tsql);
+        const parser = new SQLParser('SELECT TOP 500 * FROM Users', tsql);
+        parser.SetOuterCap(100);
+        const out = parser.ToSQL();
         expect(out).toMatch(/\bTOP\s+100\b/i);
         expect(out).not.toMatch(/\bTOP\s+500\b/i);
     });
 
     it('injects LIMIT N on PostgreSQL', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM users', pg);
-        SQLParser.SetOuterCap(ast, 50, pg);
-        const out = SQLParser.SqlifyAST(ast!, pg);
-        expect(out).toMatch(/LIMIT\s+50/i);
+        const parser = new SQLParser('SELECT * FROM users', pg);
+        parser.SetOuterCap(50);
+        expect(parser.ToSQL()).toMatch(/LIMIT\s+50/i);
     });
 
     it('replaces an existing LIMIT value on PostgreSQL', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM users LIMIT 500', pg);
-        SQLParser.SetOuterCap(ast, 100, pg);
-        const out = SQLParser.SqlifyAST(ast!, pg);
+        const parser = new SQLParser('SELECT * FROM users LIMIT 500', pg);
+        parser.SetOuterCap(100);
+        const out = parser.ToSQL();
         expect(out).toMatch(/LIMIT\s+100/i);
         expect(out).not.toMatch(/LIMIT\s+500/i);
     });
 
     it('preserves OFFSET when replacing a LIMIT', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM users LIMIT 500 OFFSET 25', pg);
-        SQLParser.SetOuterCap(ast, 100, pg);
-        const out = SQLParser.SqlifyAST(ast!, pg);
+        const parser = new SQLParser('SELECT * FROM users LIMIT 500 OFFSET 25', pg);
+        parser.SetOuterCap(100);
+        const out = parser.ToSQL();
         expect(out).toMatch(/LIMIT\s+100/i);
         expect(out).toMatch(/OFFSET\s+25/i);
     });
 
     it('is a no-op for a non-SELECT statement', () => {
-        const ast = SQLParser.ParseSQL('UPDATE Users SET Active = 1', tsql);
-        SQLParser.SetOuterCap(ast, 100, tsql);
-        const out = SQLParser.SqlifyAST(ast!, tsql);
-        expect(out).not.toMatch(/\bTOP\b/i);
+        const parser = new SQLParser('UPDATE Users SET Active = 1', tsql);
+        parser.SetOuterCap(100);
+        expect(parser.ToSQL()).not.toMatch(/\bTOP\b/i);
+    });
+
+    it('produces re-parseable SQL with the applied cap (SQL Server)', () => {
+        const parser = new SQLParser('SELECT TOP 500 * FROM Users WHERE Active = 1', tsql);
+        parser.SetOuterCap(100);
+        const reparsed = new SQLParser(parser.ToSQL(), tsql);
+        expect(reparsed.IsValid).toBe(true);
+        expect(reparsed.OuterCap).toEqual({ form: 'numeric', value: 100, offset: null });
+    });
+
+    it('produces re-parseable SQL with the applied cap (PostgreSQL, OFFSET kept)', () => {
+        const parser = new SQLParser('SELECT * FROM users LIMIT 500 OFFSET 25', pg);
+        parser.SetOuterCap(100);
+        const reparsed = new SQLParser(parser.ToSQL(), pg);
+        expect(reparsed.IsValid).toBe(true);
+        expect(reparsed.OuterCap).toEqual({ form: 'numeric', value: 100, offset: 25 });
     });
 });
 
@@ -156,24 +184,60 @@ describe('SQLParser.SetOuterCap', () => {
 describe('SQLParser.ClearOuterCap', () => {
 
     it('removes an existing TOP', () => {
-        const ast = SQLParser.ParseSQL('SELECT TOP 100 * FROM Users', tsql);
-        SQLParser.ClearOuterCap(ast);
-        const out = SQLParser.SqlifyAST(ast!, tsql);
-        expect(out).not.toMatch(/\bTOP\b/i);
+        const parser = new SQLParser('SELECT TOP 100 * FROM Users', tsql);
+        parser.ClearOuterCap();
+        expect(parser.ToSQL()).not.toMatch(/\bTOP\b/i);
     });
 
     it('removes an existing LIMIT', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM users LIMIT 100', pg);
-        SQLParser.ClearOuterCap(ast);
-        const out = SQLParser.SqlifyAST(ast!, pg);
-        expect(out).not.toMatch(/LIMIT\b/i);
+        const parser = new SQLParser('SELECT * FROM users LIMIT 100', pg);
+        parser.ClearOuterCap();
+        expect(parser.ToSQL()).not.toMatch(/LIMIT\b/i);
     });
 
     it('is a no-op when no cap is present', () => {
-        const ast = SQLParser.ParseSQL('SELECT * FROM Users', tsql);
-        SQLParser.ClearOuterCap(ast);
-        const out = SQLParser.SqlifyAST(ast!, tsql);
-        expect(out).toMatch(/SELECT.*FROM/i);
+        const parser = new SQLParser('SELECT * FROM Users', tsql);
+        parser.ClearOuterCap();
+        expect(parser.ToSQL()).toMatch(/SELECT.*FROM/i);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Preprocessing fallback (bracket-identifier aliasing + trailing OPTION)
+// ════════════════════════════════════════════════════════════════════
+
+describe('SQLParser preprocessing fallback', () => {
+
+    it('parses a CTE whose name has a space, restoring it on ToSQL', () => {
+        const sql = 'WITH [Active People] AS (SELECT 1 AS a) SELECT * FROM [Active People]';
+        const parser = new SQLParser(sql, tsql);
+        expect(parser.IsValid).toBe(true);
+        parser.SetOuterCap(100);
+        const out = parser.ToSQL();
+        expect(out).toContain('[Active People]');
+        expect(out).not.toMatch(/_mjid_/);
+        expect(out).toMatch(/\bTOP\s+100\b/i);
+    });
+
+    it('parses a hyphenated bracket identifier and restores it', () => {
+        const parser = new SQLParser('WITH [my-cte] AS (SELECT 1 AS a) SELECT * FROM [my-cte]', tsql);
+        expect(parser.IsValid).toBe(true);
+        expect(parser.ToSQL()).toContain('[my-cte]');
+    });
+
+    it('caps a query with a trailing OPTION clause and preserves the hint', () => {
+        const parser = new SQLParser('SELECT * FROM Users OPTION (RECOMPILE)', tsql);
+        expect(parser.IsValid).toBe(true);
+        parser.SetOuterCap(50);
+        const out = parser.ToSQL();
+        expect(out).toMatch(/\bTOP\s+50\b/i);
+        expect(out).toMatch(/OPTION\s*\(RECOMPILE\)/i);
+    });
+
+    it('does not alias a bracket identifier with no special characters (fast path)', () => {
+        const parser = new SQLParser('SELECT [Active] FROM Users', tsql);
+        expect(parser.IsValid).toBe(true);
+        expect(parser.ToSQL()).not.toMatch(/_mjid_/);
     });
 });
 
