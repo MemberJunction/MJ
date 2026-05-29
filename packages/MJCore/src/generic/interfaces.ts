@@ -926,33 +926,74 @@ export interface IRunViewProvider {
     FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult>
 
     /**
-     * Search a single entity's records using lexical, semantic, or hybrid (weighted-RRF) ranking.
+     * Ranked search over **one** entity's records, blending lexical name/text-field
+     * matching with semantic embedding cosine. Results are post-filtered by the
+     * caller's row-level read permissions on that entity.
      *
-     * Backed by an `EntityDocument` of type 'Search' configured for the target entity.
-     * Semantic results come from the in-memory `SimpleVectorServiceProvider` rehydrated
-     * from `MJ: Entity Record Documents.VectorJSON` (or any configured `VectorDatabase`
-     * provider). Lexical results come from name-field substring/prefix matching.
+     * ## How this differs from the other lookups on `IMetadataProvider`
      *
-     * Results are post-filtered by the contextUser's read permissions on the target
-     * entity. Callers requesting a `topK` of N typically receive ≤ N results after
-     * filtering — the implementation over-fetches to compensate.
+     * | Method | Purpose |
+     * |---|---|
+     * | {@link EntityByName} / {@link EntityByID} | Look up an entity **definition** by name or ID. Deterministic, not ranked, returns `EntityInfo`. |
+     * | {@link FullTextSearch} | Server-side text search across one or many entities using each entity's `UserSearchString` rule (DB-level LIKE / FTS). Returns flat per-entity result groups, no semantic ranking. |
+     * | **`SearchEntity`** (this) | Hybrid lexical-plus-semantic ranking of records **inside one entity**, backed by an `EntityDocument`-driven vector index. Use when you need "the N most relevant records of this entity for the user's free-text request". |
+     * | {@link SearchEntities} | Batch form — runs `SearchEntity` over many entities in one round-trip. |
      *
-     * @param entityName Name of the target entity (e.g. 'MJ: Entities', 'Accounts').
-     * @param searchText Free-text query.
-     * @param options Mode, weights, topK, and other knobs.
-     * @returns Ranked array of {@link EntitySearchResult}, descending by score.
+     * Semantic ranking requires an Active `EntityDocument` of type `Search`
+     * registered for the target entity (see `/metadata/entity-documents/` for
+     * the seeded one against `MJ: Entities`); without it, `mode: 'semantic'`
+     * returns no rows and `mode: 'hybrid'` degrades to lexical-only.
+     *
+     * @param params Target entity name, search text, and optional ranking knobs.
+     * @returns Ranked `EntitySearchResult[]` — descending by score, sliced to `topK`.
      */
-    SearchEntities(entityName: string, searchText: string, options?: SearchEntitiesOptions): Promise<EntitySearchResult[]>
+    SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]>
+
+    /**
+     * Batch form of {@link SearchEntity}. Runs the per-entity ranking against
+     * **many** entities in one call. Transports as a single JSON payload in both
+     * directions over GraphQL when invoked through `GraphQLDataProvider`, so
+     * N entity searches cost one round-trip instead of N.
+     *
+     * Server-side providers fan the call out via `Promise.all` to independent
+     * `SearchEntity` invocations — each entity's lexical pass, semantic pass,
+     * blending, and permission filter run independently, and the per-entity
+     * result arrays come back aligned by input order.
+     *
+     * Use this whenever an agent or workflow needs ranked results from more
+     * than one entity for the same user request (e.g., "find anything
+     * relevant to 'overdue payments'" across Invoices, Customers, and Notes).
+     *
+     * @param params One `SearchEntityParams` per target entity.
+     * @returns Array of result arrays, aligned by input order — `result[i]`
+     *          holds the ranked matches for `params[i]`.
+     */
+    SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]>
 }
 
 /**
- * Options for {@link IMetadataProvider.SearchEntities}.
+ * Per-entity input for {@link IMetadataProvider.SearchEntity} and
+ * {@link IMetadataProvider.SearchEntities}. Bundles the entity name, the
+ * search text, and the ranking options into a single transport-friendly
+ * shape so batched calls fit one GraphQL payload.
+ */
+export type SearchEntityParams = {
+    /** Name of the entity to search (e.g., `'MJ: Entities'`, `'Accounts'`). */
+    entityName: string;
+    /** Free-text query. Empty/whitespace returns an empty result. */
+    searchText: string;
+    /** Ranking mode + knobs. See {@link SearchEntitiesOptions}. */
+    options?: SearchEntitiesOptions;
+};
+
+/**
+ * Options for {@link IMetadataProvider.SearchEntity} / {@link IMetadataProvider.SearchEntities}.
  */
 export type SearchEntitiesOptions = {
     /**
      * Ranking strategy:
-     * - `'lexical'`: name-field substring/prefix matching only.
-     * - `'semantic'`: vector cosine only.
+     * - `'lexical'`: name-field substring / prefix matching only.
+     * - `'semantic'`: vector cosine against the EntityDocument-backed index.
      * - `'hybrid'`: weighted RRF blend of the two. **Default.**
      */
     mode?: 'lexical' | 'semantic' | 'hybrid';
@@ -980,7 +1021,7 @@ export type SearchEntitiesOptions = {
 };
 
 /**
- * One ranked result from {@link IMetadataProvider.SearchEntities}.
+ * One ranked result from {@link IMetadataProvider.SearchEntity}.
  */
 export type EntitySearchResult = {
     /** Pointer to the matching `EntityRecordDocument` row. Null when result came purely from the lexical pass. */

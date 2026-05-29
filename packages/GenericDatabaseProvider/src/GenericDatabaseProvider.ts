@@ -3778,14 +3778,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Server-side semantic ranking for {@link ProviderBase.SearchEntities}. Embeds the query
-     * text via `AIEngine.EmbedTextLocal` (using the configured local embedding model) and runs
-     * a vector cosine query against the in-process `SimpleVectorServiceProvider`, which
-     * rehydrates the vector pool for `entityDocumentId` from
-     * `MJ: Entity Record Documents.VectorJSON` rows.
+     * Server-side semantic ranking pass for {@link ProviderBase.SearchEntity}
+     * (and, by extension, the batched {@link ProviderBase.SearchEntities}).
      *
-     * Failures (no embedding model available, vector index miss) degrade to an empty result
-     * set so hybrid mode can still surface lexical matches.
+     * Embeds the query text via `AIEngine.EmbedTextLocal` (using the configured
+     * local embedding model) and runs a vector cosine query against the in-process
+     * `SimpleVectorServiceProvider`, which rehydrates the vector pool for
+     * `entityDocumentId` from `MJ: Entity Record Documents.VectorJSON` rows.
+     *
+     * Failures (no embedding model available, vector index miss) degrade to an
+     * empty result set so hybrid mode can still surface lexical matches.
      */
     protected override async searchEntitiesSemanticPass(
         entityDocumentId: string,

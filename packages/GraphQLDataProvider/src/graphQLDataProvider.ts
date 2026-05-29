@@ -16,7 +16,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
-         SearchEntitiesOptions, EntitySearchResult, ScoredCandidate } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -1479,67 +1479,78 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
-     * Search a single entity's records via the server's `SearchEntities` resolver.
-     * The full ranking (lexical + semantic + RRF blend) runs server-side against the
-     * backing database provider; the client receives the already-ranked, already
-     * permission-filtered result list.
+     * Ranked search over many entities in one GraphQL round-trip.
      *
-     * Overrides the abstract template-method orchestration on `ProviderBase` because
-     * the client has no embedder, no vector pool, and no business doing the work
-     * locally — one round-trip to the server returns the final ranked list.
+     * Both the singular {@link SearchEntity} and the batched `SearchEntities`
+     * forms on the client route through the same plural GQL endpoint — one
+     * request, one response, regardless of how many entities are in `params`.
+     * The full ranking (lexical + semantic + RRF blend + permission filter)
+     * runs server-side against the backing database provider; the client just
+     * unpacks the already-ranked, permission-filtered result groups and
+     * returns them aligned by input order.
+     *
+     * Overrides the inherited `Promise.all`-based fan-out on `ProviderBase`
+     * because the client has no embedder, no vector pool, and no business
+     * doing the work locally — N round-trips to N entities would be silly when
+     * one batched payload returns the same answer.
      */
-    public async SearchEntities(
-        entityName: string,
-        searchText: string,
-        options?: SearchEntitiesOptions
-    ): Promise<EntitySearchResult[]> {
-        if (!entityName || !searchText || !searchText.trim()) {
-            return [];
-        }
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        if (!params || params.length === 0) return [];
+        const valid = params.filter(p => p?.entityName && p?.searchText && p.searchText.trim());
+        if (valid.length === 0) return params.map(() => []);
 
-        const query = gql`query SearchEntitiesQuery($params: SearchEntitiesInput!) {
+        const query = gql`query SearchEntitiesQuery($params: [SearchEntityInput!]!) {
             SearchEntities(params: $params) {
                 Success
                 ErrorMessage
-                Results {
-                    EntityRecordDocumentID
-                    RecordID
-                    Score
-                    MatchType
-                    LexicalScore
-                    SemanticScore
+                Groups {
+                    EntityName
+                    Results {
+                        EntityRecordDocumentID
+                        RecordID
+                        Score
+                        MatchType
+                        LexicalScore
+                        SemanticScore
+                    }
                 }
             }
         }`;
 
-        const params = {
-            EntityName: entityName,
-            SearchText: searchText,
-            Mode: options?.mode ?? 'hybrid',
-            RrfK: options?.rrfK,
-            LexicalWeight: options?.weights?.lexical,
-            SemanticWeight: options?.weights?.semantic,
-            TopK: options?.topK,
-            MinScore: options?.minScore,
-            EntityDocumentID: options?.entityDocumentId,
-        };
+        const gqlParams = params.map(p => ({
+            EntityName: p.entityName,
+            SearchText: p.searchText,
+            Mode: p.options?.mode ?? 'hybrid',
+            RrfK: p.options?.rrfK,
+            LexicalWeight: p.options?.weights?.lexical,
+            SemanticWeight: p.options?.weights?.semantic,
+            TopK: p.options?.topK,
+            MinScore: p.options?.minScore,
+            EntityDocumentID: p.options?.entityDocumentId,
+        }));
 
-        const data = await this.ExecuteGQL(query, { params });
+        const data = await this.ExecuteGQL(query, { params: gqlParams });
         if (!data?.SearchEntities?.Success) {
             if (data?.SearchEntities?.ErrorMessage) {
                 LogError(`SearchEntities GraphQL error: ${data.SearchEntities.ErrorMessage}`);
             }
-            return [];
+            return params.map(() => []);
         }
 
-        return (data.SearchEntities.Results as Array<{
-            EntityRecordDocumentID: string | null;
-            RecordID: string;
-            Score: number;
-            MatchType: EntitySearchResult['matchType'];
-            LexicalScore: number | null;
-            SemanticScore: number | null;
-        }>).map(r => ({
+        // Groups arrive aligned by input order; we trust the server to preserve that.
+        const groups = data.SearchEntities.Groups as Array<{
+            EntityName: string;
+            Results: Array<{
+                EntityRecordDocumentID: string | null;
+                RecordID: string;
+                Score: number;
+                MatchType: EntitySearchResult['matchType'];
+                LexicalScore: number | null;
+                SemanticScore: number | null;
+            }>;
+        }>;
+
+        return groups.map(group => group.Results.map(r => ({
             entityRecordDocumentId: r.EntityRecordDocumentID,
             recordId: r.RecordID,
             score: r.Score,
@@ -1548,14 +1559,26 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 lexical: r.LexicalScore ?? undefined,
                 semantic: r.SemanticScore ?? undefined,
             },
-        }));
+        })));
     }
 
     /**
-     * Unreachable on the client — `SearchEntities` is overridden above to proxy the
-     * entire operation via GraphQL, so the inherited template-method orchestration
-     * never invokes this. Implementing the abstract method as a no-op is purely a
-     * type-system requirement.
+     * Singular form — convenience wrapper that calls the batched
+     * {@link SearchEntities} with a single-element params list. Same one
+     * GraphQL round-trip; same server-side ranking. Returning `results[0]`
+     * is safe even for invalid inputs because `SearchEntities` returns an
+     * empty array per slot in that case.
+     */
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const groups = await this.SearchEntities([params]);
+        return groups[0] ?? [];
+    }
+
+    /**
+     * Unreachable on the client — `SearchEntity` and `SearchEntities` are both
+     * overridden above to proxy through one batched GraphQL round-trip, so the
+     * inherited template-method orchestration never invokes this. Implementing
+     * the abstract method as a no-op is purely a type-system requirement.
      */
     protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
         return [];

@@ -2,27 +2,35 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError } from "@memberjunction/core";
-import type { SearchEntitiesOptions, EntitySearchResult } from "@memberjunction/core";
+import type { SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "@memberjunction/core";
 
 /**
- * Action that runs a ranked search across one entity's records using lexical,
- * semantic, or hybrid (weighted-RRF) ranking. Backed by `EntityDocument`-style
- * semantic search where configured, with permission filtering applied.
+ * Action wrapper around {@link Metadata.Provider.SearchEntity}: ranked hybrid
+ * (lexical + semantic) search over one entity's records, with permission
+ * filtering. The classic agent prompt-seeding case — swap a 1500-row entity
+ * dump for "here are 10 likely candidates" — is just
+ * `SearchEntity({ entityName: 'MJ: Entities', searchText: userText, options: { topK: 10 } })`.
  *
- * **Use this action when** an AI agent or workflow needs to find "the most
- * relevant records in entity X for the user's request" without paginating
- * through the full table. The classic agent prompt-seeding case — swap a
- * 1500-row entity dump for "here are 10 likely candidates" — is just
- * `SearchEntities('MJ: Entities', userText, { topK: 10 })`.
+ * ## When to use this Action vs. the others MJ already exposes
  *
- * Returns a JSON payload of `{ count, results: EntitySearchResult[] }` in
- * the action `Message`, where each result includes the recordId, score,
- * matchType, and per-list component scores.
+ * - **Search Entity** (this action): "Find me the N most relevant *records* of
+ *   one entity for this free-text request." Hybrid lexical + semantic ranking,
+ *   backed by an `EntityDocument` of type `Search`. Use for agent prompt
+ *   seeding, in-app "find a customer/invoice/document" UX.
+ * - **Get Entity Details / Get Entity List**: deterministic metadata or row
+ *   reads, no ranking. Use when you already know which entity / which records.
+ * - **Search Query Catalog** / unified `Search` actions (`@memberjunction/ai-search`):
+ *   cross-source search across vectors, full-text, entities, storage — broader
+ *   in scope, slower, requires SearchScope configuration. Use when the agent
+ *   doesn't know which entity to look in.
+ *
+ * Returns a JSON payload of `{ count, results: EntitySearchResult[] }` in the
+ * action `Message`, plus `Count` and `Results` output params.
  *
  * @example
  * ```typescript
  * await runAction({
- *   ActionName: 'Search Entities',
+ *   ActionName: 'Search Entity',
  *   Params: [
  *     { Name: 'EntityName', Value: 'MJ: Entities' },
  *     { Name: 'SearchText', Value: 'invoices' },
@@ -32,8 +40,8 @@ import type { SearchEntitiesOptions, EntitySearchResult } from "@memberjunction/
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Search Entities")
-export class SearchEntitiesAction extends BaseAction {
+@RegisterClass(BaseAction, "Search Entity")
+export class SearchEntityAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -70,7 +78,8 @@ export class SearchEntitiesAction extends BaseAction {
             };
 
             const md = params.Provider ?? new Metadata();
-            const results: EntitySearchResult[] = await md.SearchEntities(entityName, searchText, options);
+            const searchParams: SearchEntityParams = { entityName, searchText, options };
+            const results: EntitySearchResult[] = await md.SearchEntity(searchParams);
 
             this.addOutputParam(params, "Count", results.length);
             this.addOutputParam(params, "Results", results);
@@ -81,7 +90,7 @@ export class SearchEntitiesAction extends BaseAction {
                 Message: JSON.stringify({ count: results.length, results }),
             };
         } catch (error) {
-            LogError(`SearchEntitiesAction failed: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`SearchEntityAction failed: ${error instanceof Error ? error.message : String(error)}`);
             return {
                 Success: false,
                 ResultCode: "UNEXPECTED_ERROR",
@@ -111,6 +120,6 @@ export class SearchEntitiesAction extends BaseAction {
 
 /** Tree-shaking prevention export — called from the package's barrel to keep
  *  the class registration alive under aggressive bundlers. */
-export function LoadSearchEntitiesAction(): void {
+export function LoadSearchEntityAction(): void {
     // intentionally empty
 }

@@ -1,16 +1,16 @@
 /**
- * Tests for SearchEntitiesAction — the metadata-driven wrapper around
- * IMetadataProvider.SearchEntities(). The action is intentionally thin
+ * Tests for SearchEntityAction — the metadata-driven wrapper around
+ * IMetadataProvider.SearchEntity(). The action is intentionally thin
  * (extract params, delegate, return) so tests focus on validation,
  * param shaping, and pass-through behavior.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const searchEntitiesMock = vi.fn();
+const searchEntityMock = vi.fn();
 
 vi.mock('@memberjunction/core', () => ({
-    Metadata: vi.fn().mockImplementation(() => ({ SearchEntities: searchEntitiesMock })),
+    Metadata: vi.fn().mockImplementation(() => ({ SearchEntity: searchEntityMock })),
     LogError: vi.fn(),
 }));
 
@@ -29,7 +29,7 @@ vi.mock('@memberjunction/actions', () => ({
     },
 }));
 
-import { SearchEntitiesAction } from '../custom/data/search-entities.action';
+import { SearchEntityAction } from '../custom/data/search-entity.action';
 
 const makeParams = (overrides: Array<{ Name: string; Value: unknown }>): {
     Params: Array<{ Name: string; Type: string; Value: unknown }>;
@@ -39,13 +39,13 @@ const makeParams = (overrides: Array<{ Name: string; Value: unknown }>): {
     Params: overrides.map(p => ({ Name: p.Name, Type: 'Input', Value: p.Value })),
 });
 
-describe('SearchEntitiesAction', () => {
-    let action: SearchEntitiesAction;
+describe('SearchEntityAction', () => {
+    let action: SearchEntityAction;
 
     beforeEach(() => {
-        action = new SearchEntitiesAction();
-        searchEntitiesMock.mockReset();
-        searchEntitiesMock.mockResolvedValue([]);
+        action = new SearchEntityAction();
+        searchEntityMock.mockReset();
+        searchEntityMock.mockResolvedValue([]);
     });
 
     describe('parameter validation', () => {
@@ -80,8 +80,8 @@ describe('SearchEntitiesAction', () => {
         });
     });
 
-    describe('pass-through to SearchEntities', () => {
-        it('defaults to hybrid mode with topK=10, weights 1.0', async () => {
+    describe('pass-through to SearchEntity', () => {
+        it('packages params into a single SearchEntityParams object with hybrid defaults', async () => {
             const params = makeParams([
                 { Name: 'EntityName', Value: 'MJ: Entities' },
                 { Name: 'SearchText', Value: 'invoices' },
@@ -89,13 +89,13 @@ describe('SearchEntitiesAction', () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (action as any).InternalRunAction(params);
 
-            expect(searchEntitiesMock).toHaveBeenCalledOnce();
-            const [entityName, text, opts] = searchEntitiesMock.mock.calls[0];
-            expect(entityName).toBe('MJ: Entities');
-            expect(text).toBe('invoices');
-            expect(opts.mode).toBe('hybrid');
-            expect(opts.topK).toBe(10);
-            expect(opts.weights).toEqual({ lexical: 1.0, semantic: 1.0 });
+            expect(searchEntityMock).toHaveBeenCalledOnce();
+            const [searchParams] = searchEntityMock.mock.calls[0];
+            expect(searchParams.entityName).toBe('MJ: Entities');
+            expect(searchParams.searchText).toBe('invoices');
+            expect(searchParams.options.mode).toBe('hybrid');
+            expect(searchParams.options.topK).toBe(10);
+            expect(searchParams.options.weights).toEqual({ lexical: 1.0, semantic: 1.0 });
         });
 
         it('passes through topK, mode, weights, RRFK, EntityDocumentID', async () => {
@@ -112,18 +112,18 @@ describe('SearchEntitiesAction', () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (action as any).InternalRunAction(params);
 
-            const [, , opts] = searchEntitiesMock.mock.calls[0];
-            expect(opts.mode).toBe('semantic');
-            expect(opts.topK).toBe(5);
-            expect(opts.weights).toEqual({ lexical: 2.5, semantic: 0.5 });
-            expect(opts.rrfK).toBe(30);
-            expect(opts.entityDocumentId).toBe('doc-abc');
+            const [searchParams] = searchEntityMock.mock.calls[0];
+            expect(searchParams.options.mode).toBe('semantic');
+            expect(searchParams.options.topK).toBe(5);
+            expect(searchParams.options.weights).toEqual({ lexical: 2.5, semantic: 0.5 });
+            expect(searchParams.options.rrfK).toBe(30);
+            expect(searchParams.options.entityDocumentId).toBe('doc-abc');
         });
     });
 
     describe('result shaping', () => {
         it('packages results into SUCCESS message and output params', async () => {
-            searchEntitiesMock.mockResolvedValue([
+            searchEntityMock.mockResolvedValue([
                 { recordId: 'a', score: 0.9, matchType: 'hybrid', components: {}, entityRecordDocumentId: 'erd-1' },
                 { recordId: 'b', score: 0.8, matchType: 'lexical', components: {}, entityRecordDocumentId: null },
             ]);
@@ -141,7 +141,6 @@ describe('SearchEntitiesAction', () => {
             expect(payload.count).toBe(2);
             expect(payload.results).toHaveLength(2);
 
-            // Output params added
             const countParam = params.Params.find(p => p.Name === 'Count');
             const resultsParam = params.Params.find(p => p.Name === 'Results');
             expect(countParam?.Value).toBe(2);
@@ -151,7 +150,7 @@ describe('SearchEntitiesAction', () => {
 
     describe('error handling', () => {
         it('returns UNEXPECTED_ERROR when the provider throws', async () => {
-            searchEntitiesMock.mockRejectedValueOnce(new Error('boom'));
+            searchEntityMock.mockRejectedValueOnce(new Error('boom'));
             const params = makeParams([
                 { Name: 'EntityName', Value: 'Foo' },
                 { Name: 'SearchText', Value: 'bar' },

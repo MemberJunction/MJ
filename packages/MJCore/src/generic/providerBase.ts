@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
@@ -1007,34 +1007,31 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Search a single entity's records using lexical, semantic, or hybrid
-     * (weighted-RRF) ranking. See {@link IMetadataProvider.SearchEntities}.
+     * Ranked search over **one** entity's records. See {@link IMetadataProvider.SearchEntity}
+     * for the contract and how this differs from {@link EntityByName} /
+     * {@link FullTextSearch}.
      *
-     * Implementation overview:
-     *   1. Resolve the EntityDocument (by `entityDocumentId` override or by
-     *      looking up the active Search-category doc for the entity).
-     *   2. In parallel: run the lexical pass (RunView with LIKE filters on
-     *      name + user-search fields) and the semantic pass (embed query →
-     *      QueryIndex against the configured VectorDatabase).
+     * Implementation overview (concrete on `ProviderBase`, used as-is by every
+     * server-side provider; `GraphQLDataProvider` overrides to proxy via GQL):
+     *   1. Resolve the EntityDocument (by `params.options.entityDocumentId`
+     *      override or by looking up the active Search-category doc for the entity).
+     *   2. In parallel: run the lexical pass (RunView with LIKE filters on the
+     *      name field + any `IncludeInUserSearchAPI` fields) and the semantic
+     *      pass (`searchEntitiesSemanticPass`, the protected template method
+     *      each concrete server provider implements).
      *   3. Fuse via canonical `ComputeRRF()` with optional per-list weights.
      *   4. Permission-filter via a second RunView constrained to the matched
      *      record IDs — that pipeline already enforces row-level read perms
      *      on this entity, so any rows the user can't read drop out.
      *   5. Slice to topK, apply minScore cutoff, return.
-     *
-     * Embedding the query text uses the configured embedding model from the
-     * EntityDocument's `AIModelID`; this implementation delegates to the
-     * `AIEngineBase`-style helper resolved lazily via the global class
-     * factory to avoid a hard dependency on `@memberjunction/ai-engine`.
      */
-    public async SearchEntities(
-        entityName: string,
-        searchText: string,
-        options: SearchEntitiesOptions = {}
-    ): Promise<EntitySearchResult[]> {
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const { entityName, searchText } = params;
+        const options: SearchEntitiesOptions = params.options ?? {};
+
         const entity = this.EntityByName(entityName);
         if (!entity) {
-            LogError(`SearchEntities: unknown entity "${entityName}"`);
+            LogError(`SearchEntity: unknown entity "${entityName}"`);
             return [];
         }
         if (!searchText || !searchText.trim()) {
@@ -1063,7 +1060,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 embeddingModelAPIName = resolved.apiName;
             }
             if (!entityDocumentId && mode === 'semantic') {
-                LogError(`SearchEntities: no active 'Search' EntityDocument for entity "${entityName}"; cannot run semantic-only mode`);
+                LogError(`SearchEntity: no active 'Search' EntityDocument for entity "${entityName}"; cannot run semantic-only mode`);
                 return [];
             }
         }
@@ -1129,6 +1126,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         return results;
+    }
+
+    /**
+     * Batch form of {@link SearchEntity}. Fans the input list out to N
+     * independent `SearchEntity` calls via `Promise.all`; result arrays come
+     * back aligned by input order (`result[i]` holds the matches for `params[i]`).
+     *
+     * On the server side, the per-entity passes are independent — running them
+     * concurrently is a real wall-clock win when the caller wants results from
+     * multiple entities. On the client side, `GraphQLDataProvider` overrides
+     * this method to pack the whole batch into a single GraphQL round-trip
+     * instead of issuing N parallel HTTP requests.
+     *
+     * See {@link IMetadataProvider.SearchEntities} for the contract.
+     */
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        if (!params || params.length === 0) return [];
+        return Promise.all(params.map(p => this.SearchEntity(p)));
     }
 
     /**
@@ -1220,12 +1235,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Run the semantic ranking pass for {@link SearchEntities}. Each concrete
+     * Run the semantic ranking pass for {@link SearchEntity}. Each concrete
      * `ProviderBase` subclass supplies its own implementation: server-side
      * providers (`GenericDatabaseProvider`) embed the query text and query
      * an in-process vector pool directly; client-side providers
-     * (`GraphQLDataProvider`) override `SearchEntities` outright to proxy
-     * via GraphQL and never reach this method.
+     * (`GraphQLDataProvider`) override `SearchEntity` / `SearchEntities`
+     * outright to proxy via GraphQL and never reach this method.
      *
      * @returns Ranked array of `ScoredCandidate` whose `ID` is the parent
      *          entity's record ID and `Metadata.entityRecordDocumentId`

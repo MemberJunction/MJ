@@ -1,18 +1,25 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
-import { EntitySearchResult, Metadata, SearchEntitiesOptions } from '@memberjunction/core';
+import { EntitySearchResult, SearchEntityParams } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
 
 /**
- * GraphQL surface for {@link Metadata.Provider.SearchEntities}. The client
- * (`GraphQLDataProvider.SearchEntities`) proxies one round-trip through this
- * resolver; the actual ranking (lexical + semantic + RRF blend + permission
- * filter) runs server-side via `GenericDatabaseProvider`.
+ * GraphQL surface for {@link Metadata.Provider.SearchEntity} / `SearchEntities`.
+ *
+ * Both client forms ({@link GraphQLDataProvider.SearchEntity} and `SearchEntities`)
+ * proxy through this single batched resolver — one HTTP round-trip carries N
+ * per-entity searches in both directions. The actual ranking (lexical +
+ * semantic + RRF blend + permission filter) runs server-side via
+ * `GenericDatabaseProvider.SearchEntity`, fanned out concurrently across
+ * the input list.
+ *
+ * Result groups are aligned by input order so the client can map them back
+ * to the original `params[i]` slot without needing the entity name.
  */
 
 @InputType()
-export class SearchEntitiesInput {
+export class SearchEntityInput {
     @Field(() => String)
     declare EntityName: string;
 
@@ -63,6 +70,15 @@ export class EntitySearchResultType {
 }
 
 @ObjectType()
+export class EntitySearchResultGroupType {
+    @Field(() => String)
+    declare EntityName: string;
+
+    @Field(() => [EntitySearchResultType])
+    declare Results: EntitySearchResultType[];
+}
+
+@ObjectType()
 export class SearchEntitiesResponseType {
     @Field(() => Boolean)
     declare Success: boolean;
@@ -70,8 +86,8 @@ export class SearchEntitiesResponseType {
     @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 
-    @Field(() => [EntitySearchResultType])
-    declare Results: EntitySearchResultType[];
+    @Field(() => [EntitySearchResultGroupType])
+    declare Groups: EntitySearchResultGroupType[];
 }
 
 @Resolver(SearchEntitiesResponseType)
@@ -79,53 +95,62 @@ export class SearchEntitiesResolver {
     @Query(() => SearchEntitiesResponseType)
     async SearchEntities(
         @Ctx() { providers, userPayload }: AppContext,
-        @Arg('params') params: SearchEntitiesInput
+        @Arg('params', () => [SearchEntityInput]) params: SearchEntityInput[]
     ): Promise<SearchEntitiesResponseType> {
         try {
             const md = GetReadOnlyProvider(providers);
-
             const user = UserCache.Instance.Users.find(
                 (u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase()
             );
             if (!user) {
-                return { Success: false, ErrorMessage: `User ${userPayload.email} not found`, Results: [] };
+                return {
+                    Success: false,
+                    ErrorMessage: `User ${userPayload.email} not found`,
+                    Groups: params.map(p => ({ EntityName: p.EntityName, Results: [] })),
+                };
             }
 
-            const options: SearchEntitiesOptions = {
-                mode: params.Mode ?? 'hybrid',
-                rrfK: params.RrfK ?? undefined,
-                weights: {
-                    lexical: params.LexicalWeight ?? undefined,
-                    semantic: params.SemanticWeight ?? undefined,
+            const callParams: SearchEntityParams[] = params.map(p => ({
+                entityName: p.EntityName,
+                searchText: p.SearchText,
+                options: {
+                    mode: p.Mode ?? 'hybrid',
+                    rrfK: p.RrfK ?? undefined,
+                    weights: {
+                        lexical: p.LexicalWeight ?? undefined,
+                        semantic: p.SemanticWeight ?? undefined,
+                    },
+                    topK: p.TopK ?? undefined,
+                    minScore: p.MinScore ?? undefined,
+                    entityDocumentId: p.EntityDocumentID ?? undefined,
+                    contextUser: user,
                 },
-                topK: params.TopK ?? undefined,
-                minScore: params.MinScore ?? undefined,
-                entityDocumentId: params.EntityDocumentID ?? undefined,
-                contextUser: user,
-            };
+            }));
 
-            const results: EntitySearchResult[] = await md.SearchEntities(
-                params.EntityName,
-                params.SearchText,
-                options
-            );
+            // Server-side provider fans the batch out via Promise.all under the
+            // hood — see ProviderBase.SearchEntities. Results arrive aligned by
+            // input order; we just map each group's records to the GraphQL shape.
+            const groupedResults: EntitySearchResult[][] = await md.SearchEntities(callParams);
 
             return {
                 Success: true,
-                Results: results.map(r => ({
-                    EntityRecordDocumentID: r.entityRecordDocumentId,
-                    RecordID: r.recordId,
-                    Score: r.score,
-                    MatchType: r.matchType,
-                    LexicalScore: r.components.lexical ?? null,
-                    SemanticScore: r.components.semantic ?? null,
+                Groups: groupedResults.map((results, i) => ({
+                    EntityName: params[i].EntityName,
+                    Results: results.map(r => ({
+                        EntityRecordDocumentID: r.entityRecordDocumentId,
+                        RecordID: r.recordId,
+                        Score: r.score,
+                        MatchType: r.matchType,
+                        LexicalScore: r.components.lexical ?? null,
+                        SemanticScore: r.components.semantic ?? null,
+                    })),
                 })),
             };
         } catch (e) {
             return {
                 Success: false,
                 ErrorMessage: e instanceof Error ? e.message : String(e),
-                Results: [],
+                Groups: params.map(p => ({ EntityName: p.EntityName, Results: [] })),
             };
         }
     }
