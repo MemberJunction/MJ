@@ -1,5 +1,6 @@
 import { BaseInfo } from "./baseInfo"
 import { Metadata } from "./metadata"
+import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
@@ -2345,9 +2346,10 @@ export class EntityInfo extends BaseInfo {
      */
     private static ResolveSpokeOrganicKey(
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
-        hubOrganicKey: EntityOrganicKeyInfo
+        hubOrganicKey: EntityOrganicKeyInfo,
+        provider?: IMetadataProvider
     ): EntityOrganicKeyInfo | undefined {
-        const md = Metadata.Provider;
+        const md = provider ?? Metadata.Provider;
         if (!md) return undefined;
         const spokeEntity = md.EntityByName?.(relatedEntity.RelatedEntity)
             ?? md.Entities?.find?.((e: EntityInfo) => e.Name === relatedEntity.RelatedEntity);

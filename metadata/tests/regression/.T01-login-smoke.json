@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T01 - Login Smoke",
+    "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test — if login fails, nothing else can run.",
+    "InputDefinition": {
+      "goal": "Verify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200(?!/login|/callback)",
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "User is logged in and past the Auth0 login screen",
+        "MJ Explorer application is visible with navigation elements",
+        "No error messages or blank screens"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200(?!/login|/callback)"
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.2,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "url-match": 0.3,
+        "step-count": 0.2
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression,smoke"
+  },
+  "primaryKey": {
+    "ID": "2F4CAED9-0916-433E-8A63-70C4B71B337B"
+  },
+  "sync": {
+    "lastModified": "2026-05-28T03:08:25.414Z",
+    "checksum": "c231e749ffbffb0fa452c8f428572084cd184cc5abd0d427aa61eee2fef2f59f"
+  }
+}

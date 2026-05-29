@@ -204,7 +204,7 @@ export class FormResolverService {
         // all three; pickActive() filters to Active separately). Replaces
         // a per-LoadForm RunView with an in-memory predicate — sub-ms.
         const applicable = InteractiveFormsEngine.Instance.Overrides.filter(o => {
-            if (!o.EntityID || o.EntityID.toLowerCase() !== entity.ID.toLowerCase()) return false;
+            if (!o.EntityID || !UUIDsEqual(o.EntityID, entity.ID)) return false;
             if (o.Scope === 'User')   return !!o.UserID && o.UserID.toLowerCase() === user.ID.toLowerCase();
             if (o.Scope === 'Role')   return !!o.RoleID && userRoleIds.has(o.RoleID);
             if (o.Scope === 'Global') return true;
