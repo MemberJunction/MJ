@@ -6,7 +6,7 @@ import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 // See: https://nodejs.org/api/module.html#modulecreaterequirefilename
 const _require = createRequire(import.meta.url);
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
-import { ComponentLinter, Violation } from './component-linter';
+import { ComponentLinter, Violation, type LinterOptions } from '@memberjunction/react-linter';
 import {
   ComponentSpec,
   ComponentUtilities,
@@ -52,7 +52,15 @@ async function preResolveComponentSpec(
   return spec;
 }
 
-export interface ComponentExecutionOptions {
+/**
+ * Browser-execution options for {@link ComponentRunner}. Extends {@link LinterOptions}
+ * (which carries `componentSpec`, `contextUser`, `entityMetadata`, `utilities` —
+ * the fields the static linter reads) with Playwright-specific runtime fields
+ * (timeouts, page-ready hooks, screenshot mode). The browser harness happens
+ * to run the linter as a prelude, so accepting a superset keeps the call sites
+ * tidy without leaking browser concerns into the linter package.
+ */
+export interface ComponentExecutionOptions extends LinterOptions {
   componentSpec: ComponentSpec;
   props?: Record<string, any>;
   setupCode?: string;
@@ -64,26 +72,6 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   isRootComponent?: boolean;
   debug?: boolean;
-  utilities?: ComponentUtilities;
-
-  /**
-   * Optional array of entity metadata providing complete field lists per entity.
-   * Used by the linter to validate field usage with two-tier severity:
-   * - Medium: Field exists in entity but not declared in dataRequirements
-   * - Critical: Field does not exist in entity at all
-   *
-   * If not provided, linter only checks against dataRequirements.fieldMetadata
-   * which may cause false-positive critical errors for valid but undeclared fields.
-   *
-   * @example
-   * // Caller provides metadata for entities used in component
-   * const md = new Metadata();
-   * const entityNames = spec.dataRequirements.entities.map(e => e.name);
-   * const entityMetadata = md.Entities
-   *   .filter(e => entityNames.includes(e.Name))
-   *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
-   */
-  entityMetadata?: SimpleEntityInfo[];
 
   /**
    * Optional callback invoked with the live Playwright page after the component

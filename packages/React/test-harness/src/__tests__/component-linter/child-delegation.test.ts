@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ComponentLinter } from '../../lib/component-linter';
+import { ComponentLinter } from '@memberjunction/react-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 // Root component code: orchestrator that renders children, no RunQuery calls

@@ -64,9 +64,7 @@ DatabaseProviderBase (@memberjunction/core — no heavy deps, abstract)
 | `runDifferentialQueryAndReturn()` | Returns only changed rows since client's cached state, with hidden-delete detection |
 | `getDeletedRecordIDsSince()` | Virtual: queries RecordChange table for deletions since a timestamp |
 | `getUpdatedRowsSince()` | Virtual: queries entity view for rows updated since a timestamp |
-| `resolveQueryInfo()` | Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath) |
-| `findQueryInEngine()` | Searches QueryEngine for a fresh query entity |
-| `refreshQueryInfoFromEntity()` | Creates fresh QueryInfo from entity and patches ProviderBase cache |
+| `resolveQuery()` | Resolves query from RunQueryParams (by ID or Name+CategoryPath) via QueryEngine |
 | `resolveCategoryPath()` | Resolves hierarchical category path to CategoryID |
 | `BuildParameterPlaceholder()` | Virtual: PG-style $1/$2 by default; SQL Server overrides to @p0/@p1 |
 | `getColumnsForDatasetItem()` | Validates and quotes column names for dataset item queries |

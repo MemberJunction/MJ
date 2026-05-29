@@ -165,18 +165,27 @@ export class LoopAgentType extends BaseAgentType {
             }
             switch (response.nextStep.type) {
                 case 'Sub-Agent':
-                    if (!response.nextStep.subAgent) {
+                    if (!response.nextStep.subAgent && (!response.nextStep.subAgents || response.nextStep.subAgents.length === 0)) {
                         retVal.step = 'Retry';
-                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent details must be specified';
+                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent or subAgents details must be specified';
                         retVal.errorMessage = 'Sub-agent details not specified';
                     }
                     else {
                         retVal.step = 'Sub-Agent';
-                        retVal.subAgent = {
-                            name: response.nextStep.subAgent.name,
-                            message: response.nextStep.subAgent.message,
-                            terminateAfter: response.nextStep.subAgent.terminateAfter,
-                            templateParameters: response.nextStep.subAgent.templateParameters || {}
+                        if (response.nextStep.subAgents && response.nextStep.subAgents.length > 0) {
+                            retVal.subAgents = response.nextStep.subAgents.map(sa => ({
+                                name: sa.name,
+                                message: sa.message,
+                                terminateAfter: sa.terminateAfter,
+                                templateParameters: sa.templateParameters || {}
+                            }));
+                        } else if (response.nextStep.subAgent) {
+                            retVal.subAgent = {
+                                name: response.nextStep.subAgent.name,
+                                message: response.nextStep.subAgent.message,
+                                terminateAfter: response.nextStep.subAgent.terminateAfter,
+                                templateParameters: response.nextStep.subAgent.templateParameters || {}
+                            };
                         }
                     }
                     break;
@@ -328,8 +337,8 @@ export class LoopAgentType extends BaseAgentType {
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
-            // be smart/lenient about missing types. if type is missing but we have a nextStep.subAgent, default to sub-agent and if type is missing and we have nextStep.actions, default to actions
-            if (!lcaseType && response.nextStep.subAgent) {
+            // be smart/lenient about missing types. if type is missing but we have a nextStep.subAgent/subAgents, default to sub-agent and if type is missing and we have nextStep.actions, default to actions
+            if (!lcaseType && (response.nextStep.subAgent || (response.nextStep.subAgents && response.nextStep.subAgents.length > 0))) {
                 response.nextStep.type = 'Sub-Agent'; // update the data structure to have the correct type
                 lcaseType = 'sub-agent';
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
@@ -359,8 +368,8 @@ export class LoopAgentType extends BaseAgentType {
                 return {success: false, message};
             }
 
-            if (lcaseType === 'sub-agent' && !response.nextStep.subAgent) {
-                const message = 'LoopAgentResponse requires subAgent object for sub-agent type';
+            if (lcaseType === 'sub-agent' && !response.nextStep.subAgent && (!response.nextStep.subAgents || response.nextStep.subAgents.length === 0)) {
+                const message = 'LoopAgentResponse requires subAgent or subAgents for sub-agent type';
                 LogError(message);
                 return {success: false, message};
             }

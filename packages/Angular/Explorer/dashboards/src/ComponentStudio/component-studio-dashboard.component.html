@@ -192,15 +192,30 @@
       }
     </div>
 
-    <!-- Resize Handle: Center <-> Right -->
-    @if (!state.IsAIPanelCollapsed) {
+    <!-- Right panel — only renders when the user has actively selected a
+         component (form palette OR AI assistant). Showing an empty chat
+         against no component is more noise than help, so we collapse the
+         whole pane in that case. The collapse-button state is still
+         honored: user can also explicitly hide. -->
+    @if (!state.IsAIPanelCollapsed && state.SelectedComponent) {
+      <!-- Resize Handle: Center <-> Right -->
       <div class="resize-handle" (mousedown)="OnRightResizeStart($event)"></div>
-    }
-
-    <!-- Right Panel: AI Assistant -->
-    @if (!state.IsAIPanelCollapsed) {
       <div class="panel panel-right" [style.width.px]="rightPanelWidth">
-        <mj-ai-assistant-panel></mj-ai-assistant-panel>
+        @if (IsFormRoleComponent) {
+          <mj-form-builder-right-panel
+              [Schema]="state.FormSchema"
+              [Canvas]="state.FormCanvas"
+              [SelectedElementId]="state.FormSelectedElementId"
+              [SelectedSectionId]="state.FormSelectedSectionId"
+              (ElementChanged)="OnFormBuilderElementChanged($event)"
+              (SectionChanged)="OnFormBuilderSectionChanged($event)"
+              (ElementDeleted)="OnFormBuilderElementDeleted($event)"
+              (SectionDeleted)="OnFormBuilderSectionDeleted($event)"
+              (FieldAdded)="OnFormBuilderFieldAdded($event)">
+          </mj-form-builder-right-panel>
+        } @else {
+          <mj-ai-assistant-panel></mj-ai-assistant-panel>
+        }
       </div>
     }
   </div>
@@ -283,6 +298,17 @@
       (Cancel)="ShowSaveVersionDialog = false">
     </mj-save-version-dialog>
   }
+
+  <!-- Post-save Override dialog for form-role Components. Fires after a
+       successful version save when the spec declares componentRole='form'
+       and the user has picked a target entity in the Field Binding inspector. -->
+  <mj-form-override-dialog
+    [Visible]="ShowFormOverrideDialog"
+    [ComponentName]="PendingOverrideComponentName"
+    [EntityName]="PendingOverrideEntityName"
+    (confirmed)="OnFormOverrideDialogConfirm($event)"
+    (dismissed)="OnFormOverrideDialogDismiss()">
+  </mj-form-override-dialog>
 
   <!-- Text Import Dialog -->
   @if (ShowTextImportDialog) {
