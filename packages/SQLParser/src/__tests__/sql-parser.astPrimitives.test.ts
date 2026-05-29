@@ -203,6 +203,38 @@ describe('SQLParser.ClearOuterCap', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// ClearOrderBy
+// ════════════════════════════════════════════════════════════════════
+
+describe('SQLParser.ClearOrderBy', () => {
+
+    it('removes a top-level ORDER BY (SQL Server)', () => {
+        const parser = new SQLParser('SELECT * FROM Users ORDER BY Name', tsql);
+        parser.ClearOrderBy();
+        expect(parser.ToSQL()).not.toMatch(/ORDER\s+BY/i);
+    });
+
+    it('removes a top-level ORDER BY (PostgreSQL)', () => {
+        // The exact shape AnalyzeTopLevelOrderBy fails to strip; ClearOrderBy must.
+        const parser = new SQLParser('SELECT id FROM users ORDER BY id', pg);
+        parser.ClearOrderBy();
+        expect(parser.ToSQL()).not.toMatch(/ORDER\s+BY/i);
+    });
+
+    it('clears ORDER BY on a set-op branch (UNION)', () => {
+        const parser = new SQLParser('SELECT 1 AS a UNION SELECT 2 AS a ORDER BY a', tsql);
+        parser.ClearOrderBy();
+        expect(parser.ToSQL()).not.toMatch(/ORDER\s+BY/i);
+    });
+
+    it('is a no-op when there is no ORDER BY', () => {
+        const parser = new SQLParser('SELECT * FROM Users', tsql);
+        parser.ClearOrderBy();
+        expect(parser.ToSQL()).toMatch(/SELECT/i);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Preprocessing fallback (bracket-identifier aliasing + trailing OPTION)
 // ════════════════════════════════════════════════════════════════════
 

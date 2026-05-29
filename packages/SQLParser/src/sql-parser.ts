@@ -397,6 +397,23 @@ export class SQLParser {
     }
 
     /**
+     * Removes the top-level ORDER BY from the parsed statement, following the
+     * set-op (`UNION` / `INTERSECT` / `EXCEPT`) chain so an ORDER BY on any
+     * branch is cleared. No-op when there is none. Dialect-universal — the
+     * `orderby` field has the same shape across dialects.
+     *
+     * Used by the count-SQL builder: ORDER BY is irrelevant for a COUNT and is
+     * illegal inside a SQL Server CTE without TOP.
+     */
+    ClearOrderBy(): void {
+        let node = SQLParser.unwrapRoot(this._ast);
+        while (node) {
+            if (node.orderby) node.orderby = null;
+            node = (node._next as Record<string, unknown> | null) ?? null;
+        }
+    }
+
+    /**
      * Serialize the (possibly mutated) AST back to SQL, restoring any
      * preprocessing transforms applied at construction (bracket-identifier
      * aliases, then the trailing `OPTION (...)` clause).

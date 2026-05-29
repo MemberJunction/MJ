@@ -1,5 +1,5 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { SQLParser, AnalyzeTopLevelOrderBy, findOrderByStatement as sharedFindOrderByStatement } from '@memberjunction/sql-parser';
+import { SQLParser, AnalyzeTopLevelOrderBy } from '@memberjunction/sql-parser';
 import { GetDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -258,80 +258,51 @@ export class QueryPagingEngine {
     // Count SQL — wrap in CTE, strip ORDER BY, SELECT COUNT(*)
     // ════════════════════════════════════════════════════════════════════
 
+    /**
+     * Builds count SQL that wraps the (cap-free, ORDER-BY-free) query in a
+     * `[__count]` CTE and selects `COUNT(*)`. A single instance-API path:
+     *   1. `ExtractCTEs` hoists any user CTEs as siblings (a CTE body can't
+     *      contain its own WITH) — AST parse first, paren-depth regex fallback.
+     *   2. `stripCountBody` removes the top-level ORDER BY (irrelevant for a
+     *      count, and illegal in a SQL Server CTE without TOP) and any outer
+     *      TOP / LIMIT (so the count reflects the full set, consistent with the
+     *      paged data query).
+     */
     private static buildCountSQL(sql: string, dialect: SQLDialect): string {
-        const astResult = QueryPagingEngine.buildCountSQLViaAST(sql, dialect);
-        if (astResult) return astResult;
-
-        return QueryPagingEngine.buildCountSQLViaRegex(sql, dialect);
-    }
-
-    private static buildCountSQLViaAST(sql: string, dialect: SQLDialect): string | null {
-        try {
-            const ast = SQLParser.ParseSQL(sql, dialect);
-            if (!ast) return null;
-
-            const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
-            if (!stmt) return null;
-
-            const existingCTEDefs = QueryPagingEngine.extractCTEsFromAST(stmt, dialect);
-
-            const orderByStmt = QueryPagingEngine.findOrderByStatement(stmt);
-            if (orderByStmt?.orderby) {
-                orderByStmt.orderby = null;
-            }
-
-            if (stmt.top) stmt.top = null;
-
-            stmt.with = null;
-            const mainSelectSQL = SQLParser.SqlifyAST(
-                stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], dialect
-            );
-
-            const countCTEName = dialect.QuoteIdentifier('__count');
-            const allCTEs = [...existingCTEDefs, `${countCTEName} AS (\n${mainSelectSQL}\n)`];
-            return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
-        } catch {
-            return null;
-        }
-    }
-
-    private static extractCTEsFromAST(
-        stmt: Record<string, unknown>,
-        dialect: SQLDialect
-    ): string[] {
-        const ctes = (stmt.with as unknown[] | null) || [];
-        return ctes.map(cte => {
-            const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
-            const quotedName = dialect.QuoteIdentifier(cteRecord.name.value);
-            const bodySQL = SQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof SQLParser.SqlifyAST>[0], dialect);
-            return `${quotedName} AS (\n${bodySQL}\n)`;
-        });
-    }
-
-    private static buildCountSQLViaRegex(sql: string, dialect: SQLDialect): string {
-        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
-
-        if (extraction) {
-            const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement, dialect);
-            const quotedCTEDefs = extraction.CTEDefinitions.map(def =>
-                QueryPagingEngine.quoteCteName(def, dialect)
-            );
-            const countCTEName = dialect.QuoteIdentifier('__count');
-            const allCTEs = [...quotedCTEDefs, `${countCTEName} AS (\n${sqlWithoutOrder}\n)`];
-            return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
-        }
-
-        const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(sql, dialect);
         const countCTEName = dialect.QuoteIdentifier('__count');
-        return `WITH ${countCTEName} AS (\n${sqlWithoutOrder}\n)\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
+
+        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
+        const mainStatement = extraction ? extraction.MainStatement : sql;
+        const cteDefs = extraction
+            ? extraction.CTEDefinitions.map(def => QueryPagingEngine.quoteCteName(def, dialect))
+            : [];
+
+        const countBody = QueryPagingEngine.stripCountBody(mainStatement, dialect);
+
+        const allCTEs = [...cteDefs, `${countCTEName} AS (\n${countBody}\n)`];
+        return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // AST helpers — delegate to shared orderByAnalyzer
-    // ════════════════════════════════════════════════════════════════════
-
-    private static findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
-        return sharedFindOrderByStatement(stmt);
+    /**
+     * Strips the ORDER BY and any outer row cap (TOP on SQL Server, LIMIT on
+     * PostgreSQL) from the statement being counted, via a single parser
+     * round-trip — so the count reflects the full set rather than the capped
+     * subset. Falls back to a string-based ORDER BY strip when the statement
+     * can't be parsed (e.g. TRY_CAST, unresolved templates); the cap can't be
+     * reliably removed without a parse, matching the prior regex behavior.
+     */
+    private static stripCountBody(sql: string, dialect: SQLDialect): string {
+        const parser = new SQLParser(sql, dialect);
+        if (parser.IsValid) {
+            parser.ClearOuterCap();
+            parser.ClearOrderBy();
+            try {
+                return parser.ToSQL();
+            } catch {
+                // fall through to the string-based fallback
+            }
+        }
+        return QueryPagingEngine.extractOrderBy(sql, dialect).sqlWithoutOrder;
     }
 
     // ════════════════════════════════════════════════════════════════════
