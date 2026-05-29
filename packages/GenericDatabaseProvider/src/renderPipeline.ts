@@ -196,24 +196,30 @@ export class RenderPipeline {
 
     /**
      * Defense-in-depth guard on the fully-resolved query: throws when the
-     * rendered SQL resolves to a top-level data mutation (INSERT / UPDATE /
-     * DELETE / MERGE) — never a valid query result, and the case
-     * parameter-substitution injection would most likely produce.
+     * rendered SQL contains a write statement anywhere — a DML mutation
+     * (INSERT / UPDATE / DELETE / MERGE / REPLACE), DDL (DROP / CREATE / ALTER /
+     * TRUNCATE / RENAME), or EXEC / CALL / GRANT / REVOKE / USE.
      *
-     * This is AST-precise (the `mutation` StatementKind), so it cannot
-     * false-positive on legitimate read queries. The broader dangerous-keyword
-     * / injection scan ({@link SQLExpressionValidator.validateFullQuery})
-     * deliberately stays on the ad-hoc execution path (untrusted free-text
-     * input); it is unsuitable as a blanket gate here because it rejects
-     * legitimate saved-query constructs — the `REPLACE()` string function,
-     * parenthesized SELECTs, trailing semicolons, etc.
+     * {@link SQLParser.HasWriteStatement} inspects EVERY top-level statement, so
+     * it catches both a single rendered mutation and a stacked-statement
+     * injection payload (e.g. `SELECT 1; DROP TABLE x`) that the first-statement
+     * `StatementKind` alone would miss. It is AST-precise: matching is on the
+     * statement type, so it cannot false-positive on legitimate read queries —
+     * the `REPLACE()` string function, parenthesized SELECTs, trailing
+     * semicolons, or benign `SET` / `DECLARE` prefixes all pass.
+     *
+     * The broader dangerous-keyword scan
+     * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
+     * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
+     * a blanket gate here because it rejects those same legitimate constructs.
      */
     private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
-        const kind = new SQLParser(sql, GetDialect(platform)).StatementKind;
-        if (kind === 'mutation') {
+        const parsed = new SQLParser(sql, GetDialect(platform));
+        if (parsed.HasWriteStatement) {
             throw new Error(
-                'RenderPipeline: rendered SQL resolves to a data mutation ' +
-                '(INSERT/UPDATE/DELETE/MERGE), which is not executable as a query.',
+                'RenderPipeline: rendered SQL contains a write statement ' +
+                '(mutation / DDL) or a stacked-statement injection payload — ' +
+                'only a read query may be rendered for execution.',
             );
         }
     }

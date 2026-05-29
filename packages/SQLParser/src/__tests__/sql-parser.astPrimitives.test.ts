@@ -64,6 +64,58 @@ describe('SQLParser.StatementKind', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// HasWriteStatement (write/stacked-injection detection)
+// ════════════════════════════════════════════════════════════════════
+
+describe('SQLParser.HasWriteStatement', () => {
+
+    it('is false for a plain SELECT', () => {
+        expect(new SQLParser('SELECT * FROM Users', tsql).HasWriteStatement).toBe(false);
+    });
+
+    it('is false for a CTE-headed SELECT', () => {
+        expect(new SQLParser('WITH c AS (SELECT 1 AS a) SELECT * FROM c', tsql).HasWriteStatement).toBe(false);
+    });
+
+    it('is false for a SELECT using the REPLACE() string function', () => {
+        // statement type is 'select' — the function name must not be mistaken for a REPLACE statement
+        expect(new SQLParser("SELECT REPLACE(Name, 'a', 'b') AS N FROM Users", tsql).HasWriteStatement).toBe(false);
+    });
+
+    it('is true for a single DELETE / UPDATE / INSERT', () => {
+        expect(new SQLParser('DELETE FROM Users WHERE ID = 1', tsql).HasWriteStatement).toBe(true);
+        expect(new SQLParser('UPDATE Users SET Active = 1', tsql).HasWriteStatement).toBe(true);
+        expect(new SQLParser("INSERT INTO Users (Name) VALUES ('x')", tsql).HasWriteStatement).toBe(true);
+    });
+
+    it('is true for a single DDL statement (DROP) — StatementKind is only "other"', () => {
+        const parser = new SQLParser('DROP TABLE Users', tsql);
+        expect(parser.StatementKind).toBe('other');
+        expect(parser.HasWriteStatement).toBe(true);
+    });
+
+    it('is true for a stacked SELECT; DROP injection', () => {
+        expect(new SQLParser('SELECT 1 AS x; DROP TABLE Users', tsql).HasWriteStatement).toBe(true);
+    });
+
+    it('is true for a stacked SELECT; DELETE injection', () => {
+        expect(new SQLParser('SELECT 1 AS x; DELETE FROM Users', tsql).HasWriteStatement).toBe(true);
+    });
+
+    it('is false for a benign SET NOCOUNT ON prefix before a SELECT', () => {
+        expect(new SQLParser('SET NOCOUNT ON; SELECT * FROM Users', tsql).HasWriteStatement).toBe(false);
+    });
+
+    it('is false for a benign DECLARE prefix before a SELECT', () => {
+        expect(new SQLParser('DECLARE @x INT = 5; SELECT @x AS v', tsql).HasWriteStatement).toBe(false);
+    });
+
+    it('is false for unparseable SQL', () => {
+        expect(new SQLParser('not valid sql (((', tsql).HasWriteStatement).toBe(false);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // OuterCap (dialect-neutral RowCapInfo)
 // ════════════════════════════════════════════════════════════════════
 

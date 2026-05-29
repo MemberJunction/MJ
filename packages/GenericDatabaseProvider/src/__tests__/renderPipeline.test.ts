@@ -788,25 +788,53 @@ describe('MaxRows row cap — numeric sanitation', () => {
 // Safety guard — mutation rejection
 // ════════════════════════════════════════════════════════════════════
 
-describe('safety guard — mutation rejection', () => {
+describe('safety guard — write-statement rejection', () => {
+    // ── Single write statements (DML) ─────────────────────────────────
     it('throws when the rendered query is a DELETE', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('DELETE FROM Users WHERE ID = 1', { Platform: 'sqlserver' }))
-            .toThrow(/data mutation/i);
+            .toThrow(/write statement/i);
     });
 
     it('throws when the rendered query is an UPDATE', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('UPDATE Users SET Active = 1', { Platform: 'sqlserver' }))
-            .toThrow(/data mutation/i);
+            .toThrow(/write statement/i);
     });
 
     it('throws when the rendered query is an INSERT', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("INSERT INTO Users (Name) VALUES ('x')", { Platform: 'sqlserver' }))
-            .toThrow(/data mutation/i);
+            .toThrow(/write statement/i);
     });
 
+    // ── Single DDL (StatementKind 'other' — missed by the old mutation-only guard) ──
+    it('throws when the rendered query is a DROP (DDL)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('DROP TABLE Users', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    // ── Stacked-statement injection (second layer) ────────────────────
+    it('throws on a stacked SELECT; DELETE injection', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT 1 AS x; DELETE FROM Users', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    it('throws on a stacked SELECT; DROP injection', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE Users', { Platform: 'sqlserver' }))
+            .toThrow(/write statement/i);
+    });
+
+    it('throws on a stacked injection on PostgreSQL', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE users', { Platform: 'postgresql' }))
+            .toThrow(/write statement/i);
+    });
+
+    // ── Legitimate reads must still pass ──────────────────────────────
     it('allows a normal SELECT through', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT * FROM Users', { Platform: 'sqlserver' });
@@ -817,6 +845,18 @@ describe('safety guard — mutation rejection', () => {
         stubMetadata();
         const result = RenderPipeline.Run("SELECT REPLACE(Name, 'a', 'b') AS N FROM Users", { Platform: 'sqlserver' });
         expect(result.FinalSQL).toMatch(/REPLACE/i);
+    });
+
+    it('allows a parenthesized SELECT', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('(SELECT * FROM Users)', { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/SELECT/i);
+    });
+
+    it('allows a benign SET NOCOUNT ON prefix before a SELECT', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SET NOCOUNT ON; SELECT * FROM Users', { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toMatch(/SELECT/i);
     });
 });
 

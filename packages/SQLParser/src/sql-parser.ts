@@ -359,6 +359,41 @@ export class SQLParser {
     }
 
     /**
+     * node-sql-parser statement `type` values that write/modify rather than read.
+     * Used by {@link HasWriteStatement} to reject such statements anywhere in a
+     * rendered read query (including a stacked injection payload).
+     */
+    private static readonly WRITE_STATEMENT_TYPES = new Set<string>([
+        'insert', 'update', 'delete', 'merge', 'replace',        // DML
+        'drop', 'create', 'alter', 'truncate', 'rename',         // DDL
+        'call', 'exec', 'execute', 'grant', 'revoke', 'use',     // exec / DCL / context
+    ]);
+
+    /**
+     * Whether ANY top-level statement is a write — a DML mutation
+     * (INSERT/UPDATE/DELETE/MERGE/REPLACE), DDL (DROP/CREATE/ALTER/TRUNCATE/
+     * RENAME), or EXEC/CALL/GRANT/REVOKE/USE.
+     *
+     * Unlike {@link StatementKind} (which classifies only the first statement),
+     * this inspects EVERY top-level statement, so a stacked payload such as
+     * `SELECT 1; DROP TABLE x` is detected. Benign session prefixes (`SET`,
+     * `DECLARE`) and SELECTs are not writes. Matching is on the AST statement
+     * type, so the `REPLACE()` string function inside a SELECT is never
+     * mistaken for a `REPLACE` statement.
+     */
+    get HasWriteStatement(): boolean {
+        if (!this._ast) return false;
+        const statements = Array.isArray(this._ast) ? this._ast : [this._ast];
+        for (const stmt of statements) {
+            const type = (stmt as unknown as Record<string, unknown>).type;
+            if (typeof type === 'string' && SQLParser.WRITE_STATEMENT_TYPES.has(type.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * The outermost row cap on the parsed SELECT, dialect-neutral, or `null`
      * when none is present. Backed by the dialect's ASTDialectAdapter, so the
      * caller never needs to know whether the cap was a `TOP` or `LIMIT`.
@@ -381,14 +416,13 @@ export class SQLParser {
     }
 
     /**
-     * Removes the outermost row cap from the parsed SELECT. No-op when the
-     * root isn't a SELECT.
+     * Removes the outermost row cap (TOP on SQL Server, LIMIT on PostgreSQL)
+     * from the parsed SELECT. No-op when the root isn't a SELECT.
      *
-     * SEEDED: retained for the count-SQL path migration (`buildCountSQLViaAST`)
-     * tracked in plans/sql-parser-pipeline-implementation-plan.md. Has no
-     * production caller yet by design — wiring it into the count path is a
-     * deliberate, separately-tested behavior change (it would also strip
-     * `LIMIT` on PostgreSQL count queries).
+     * Used by the count-SQL builder (`queryPagingEngine.stripCountBody`) so a
+     * paged query's count reflects the full set rather than the capped subset.
+     * It clears both forms, so a PostgreSQL count drops an explicit `LIMIT` —
+     * consistent with how SQL Server's `TOP` is dropped.
      */
     ClearOuterCap(): void {
         const root = SQLParser.unwrapRoot(this._ast);
