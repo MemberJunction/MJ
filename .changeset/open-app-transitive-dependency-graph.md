@@ -1,5 +1,5 @@
 ---
-"@memberjunction/open-app-engine": minor
+"@memberjunction/open-app-engine": patch
 ---
 
 feat(open-app): resolve the full transitive dependency graph up front, with real cross-repo cycle detection; forward `AllowDoubleUnderscoreSchema` / `Verbose` to dependency installs
