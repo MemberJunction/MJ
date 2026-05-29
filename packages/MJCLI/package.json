@@ -24,10 +24,11 @@
   "files": [
     "/bin",
     "/dist",
-    "/oclif.manifest.json"
+    "/oclif.manifest.json",
+    "/regression-compose"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f && oclif manifest",
+    "build": "tsc && tsc-alias -f && oclif manifest && node scripts/copy-regression-assets.mjs",
     "prepack": "npm run build && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md",
@@ -86,7 +87,7 @@
     "mssql": "^11.0.1",
     "ora-classic": "^5.4.2",
     "pg": "^8.13.1",
-    "pg-query-stream": "^4.7.1",
+    "pg-query-stream": "~4.8.0",
     "recast": "^0.23.11",
     "simple-git": "^3.30.0",
     "zod": "~3.24.4"

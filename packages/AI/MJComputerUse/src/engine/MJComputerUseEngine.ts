@@ -170,6 +170,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 maxSteps: request.MaxSteps,
                 formLoginCredentials: request.FormLoginCredentials,
                 previousStepSummary: request.PreviousStepSummary,
+                applicationContext: request.ApplicationContext,
             });
 
             if (!result.success) {
@@ -187,6 +188,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
 
             const rawText = result.rawResult ?? '';
             this.log(`AIPromptRunner response: ${rawText.length} chars`);
+            this.log(`AIPromptRunner raw response (first 1000 chars): ${rawText.substring(0, 1000)}`);
             return ResponseParser.ParseControllerResponse(rawText);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

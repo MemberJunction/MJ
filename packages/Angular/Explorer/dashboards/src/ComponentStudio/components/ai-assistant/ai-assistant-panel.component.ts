@@ -6,8 +6,9 @@ import {
     OnInit,
     inject,
 } from '@angular/core';
-import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LogError } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject, Subscription, takeUntil } from 'rxjs';
@@ -156,7 +157,7 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
                 LogError(`AIAssistantPanel: '${AIAssistantPanelComponent.CODESMITH_AGENT_NAME}' not found in AIEngineBase cache`);
             }
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const app = md.Applications?.find(
                 a => a.Name?.trim().toLowerCase() === AIAssistantPanelComponent.COCKPIT_APP_NAME.toLowerCase()
             );
@@ -279,7 +280,7 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
     }
 
     public OnConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
-        if (this.ChatConversation && this.ChatConversation.ID === event.conversationId) {
+        if (this.ChatConversation && UUIDsEqual(this.ChatConversation.ID, event.conversationId)) {
             this.ChatConversation.Name = event.name;
             if (event.description !== undefined) {
                 this.ChatConversation.Description = event.description;

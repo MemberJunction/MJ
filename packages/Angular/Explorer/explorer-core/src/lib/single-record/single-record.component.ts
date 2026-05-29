@@ -17,12 +17,53 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 })
 export class SingleRecordComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(Container, {static: true}) formContainer!: Container;
-  @Input() public PrimaryKey: CompositeKey = new CompositeKey();
-  @Input() public entityName: string | null = '';
+
+  private _primaryKey: CompositeKey = new CompositeKey();
+  @Input()
+  public set PrimaryKey(value: CompositeKey) {
+    const changed = !this.compositeKeysEqual(this._primaryKey, value);
+    this._primaryKey = value ?? new CompositeKey();
+    if (!changed || !this._viewInitialized) {
+      return;
+    }
+    // Skip reload when the incoming key just reflects the current record's now-saved PK.
+    // After a new-record save, BaseResourceComponent updates parent.Data.ResourceRecordID,
+    // the parent's PrimaryKey getter then returns a fresh CK with the saved ID, and Angular
+    // pushes it down to us. The form already represents that record in-place — destroying
+    // and rebuilding it here would lose edit state, refetch from DB, and spawn a redundant
+    // GetRecordFavoriteStatus call. Genuine external swaps (parent rebinds to a different
+    // record) still trigger the reload because `value` won't match `_currentRecord.PrimaryKey`.
+    if (this._currentRecord && this.compositeKeysEqual(value, this._currentRecord.PrimaryKey)) {
+      return;
+    }
+    this.reloadCurrentForm();
+  }
+  public get PrimaryKey(): CompositeKey {
+    return this._primaryKey;
+  }
+
+  private _entityName: string | null = '';
+  @Input()
+  public set entityName(value: string | null) {
+    const changed = this._entityName !== value;
+    this._entityName = value;
+    if (changed && this._viewInitialized) {
+      this.reloadCurrentForm();
+    }
+  }
+  public get entityName(): string | null {
+    return this._entityName;
+  }
+
   @Input() public newRecordValues: string | Record<string, unknown> | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
+  /**
+   * Emitted when the hosted form asks to be dismissed (e.g., user clicked Discard on
+   * a brand-new record). Parent components should close the tab / route the user back.
+   */
+  @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
 
   private recentAccessService: RecentAccessService;
   private navigationService = inject(NavigationService);
@@ -46,12 +87,80 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
   private _currentRecord: BaseEntity | null = null;
   private _eventHandlerSubscription: Subscription | null = null;
   private _formEventSubscriptions: Subscription[] = [];
+  private _viewInitialized = false;
 
   ngOnInit(): void {
   }
 
   ngAfterViewInit() {
-    this.LoadForm(this.PrimaryKey, <string>this.entityName)
+    this._viewInitialized = true;
+    this.LoadForm(this._primaryKey, <string>this._entityName)
+  }
+
+  /**
+   * Re-run LoadForm when an @Input changes after initial view init.
+   *
+   * Defense-in-depth: the tab/cache rekey on save (in TabContainerComponent) is the
+   * primary fix that prevents stale-form bugs after creating a new record. This setter
+   * path ensures we self-heal if a host ever swaps the bound inputs without recreating
+   * the component — without it, LoadForm only ever runs once per component instance.
+   *
+   * Tears down the previous form (component, record, event handlers) before loading the
+   * new one so we don't leak references or stack multiple forms in the container.
+   */
+  private reloadCurrentForm(): void {
+    this.teardownActiveForm();
+    if (!this._entityName) {
+      return;
+    }
+    this.loading = true;
+    this.LoadForm(this._primaryKey, this._entityName);
+  }
+
+  /**
+   * Compare two CompositeKey instances by their key/value contents.
+   * Two different instances representing the same key should NOT count as a change.
+   *
+   * Filters out KVPs with empty Values before comparing. Different callers represent
+   * "no key" differently — some use an empty KeyValuePairs list, others use a single
+   * KVP with an empty Value (e.g. `LoadFromURLSegment(entity, '')`). Both mean the
+   * same thing semantically and must not trigger a change.
+   */
+  private compositeKeysEqual(a: CompositeKey | null | undefined, b: CompositeKey | null | undefined): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const aKvps = (a.KeyValuePairs || []).filter(kvp => String(kvp.Value ?? '').length > 0);
+    const bKvps = (b.KeyValuePairs || []).filter(kvp => String(kvp.Value ?? '').length > 0);
+    if (aKvps.length !== bKvps.length) return false;
+    for (let i = 0; i < aKvps.length; i++) {
+      if (aKvps[i].FieldName !== bKvps[i].FieldName) return false;
+      if (String(aKvps[i].Value ?? '') !== String(bKvps[i].Value ?? '')) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Tear down the currently rendered form so a new one can be loaded in its place.
+   * Mirrors the cleanup done in ngOnDestroy, minus the final state reset.
+   */
+  private teardownActiveForm(): void {
+    this.cleanupFormSubscriptions();
+
+    if (this._eventHandlerSubscription) {
+      this._eventHandlerSubscription.unsubscribe();
+      this._eventHandlerSubscription = null;
+    }
+
+    if (this._formComponentRef) {
+      try { this._formComponentRef.destroy(); } catch { /* noop */ }
+      this._formComponentRef = null;
+    }
+
+    this._currentRecord = null;
+
+    if (this.formContainer?.viewContainerRef) {
+      this.formContainer.viewContainerRef.clear();
+    }
   }
 
   public async LoadForm(primaryKey: CompositeKey, entityName: string) {
@@ -63,15 +172,18 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       return;
     }
 
-    this.entityName = entityName;
-    if (primaryKey.HasValue) {
-      // we have an existing record to load up
-      this.PrimaryKey = primaryKey;
-    }
-    else {
-      // new record, no existing primary key
-      this.PrimaryKey = new CompositeKey();
-    }
+    // Write through to backing fields directly. Going through the setters here would
+    // re-trigger reloadCurrentForm() and recurse — we're already inside LoadForm.
+    //
+    // Use the parameter as-is rather than substituting `new CompositeKey()` for the
+    // !HasValue branch. The parent's getter (e.g. EntityRecordResource.GetPrimaryKey)
+    // builds its CK via `LoadFromURLSegment(entity, '')`, which yields `[{FieldName: 'ID',
+    // Value: ''}]` for a new record — a single KVP with an empty value, NOT an empty
+    // KVP list. Substituting an empty CK here creates a structural mismatch that makes
+    // the setter's compositeKeysEqual see a phantom change on the very next CD cycle,
+    // which triggers reload → LoadForm → CD → setter → reload (infinite loop).
+    this._entityName = entityName;
+    this._primaryKey = primaryKey ?? new CompositeKey();
 
     const md = this.ProviderToUse;
     const entity = md.EntityByName(entityName);
@@ -362,6 +474,11 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
         break;
       case 'email':
         window.open(`mailto:${event.EmailAddress}`, '_self');
+        break;
+      case 'dismiss':
+        // Form asked to be dismissed (typically Discard on a new record).
+        // Re-emit so the parent (EntityRecordResource) can close the tab.
+        this.recordDismissed.emit();
         break;
     }
   }

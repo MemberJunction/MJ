@@ -459,10 +459,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 await this.LoadConfigs(configs, contextUser, forceRefresh);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
-                this._loaded = true;
 
-                // Notify registry that engine is loaded
-                BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                // Only mark as loaded if all configs loaded successfully.
+                // If any config failed (e.g. network error during MJAPI restart),
+                // leaving _loaded=false allows EnsureLoaded()/Config() to retry on next attempt.
+                const hasFailures = Array.from(this._dataMap.values()).some(entry => !entry.loadedSuccessfully);
+                if (hasFailures) {
+                    const failedNames = Array.from(this._dataMap.entries())
+                        .filter(([, entry]) => !entry.loadedSuccessfully)
+                        .map(([key, entry]) => entry.entityName || entry.datasetName || key);
+                    LogError(`${this.constructor.name}: Not marking as loaded — ${failedNames.length} config(s) failed to load: ${failedNames.join(', ')}. Will retry on next Config()/EnsureLoaded() call.`);
+                } else {
+                    this._loaded = true;
+                    // Notify registry that engine is loaded
+                    BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                }
             } catch (e) {
                 LogError(e);
             } finally {
@@ -1434,7 +1445,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
         }
         if (!result) {
-            LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
+            const errorMsg = `GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`;
+            LogError(`LoadSingleDatasetConfig: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
+            return;
+        }
+        if (!result.Success) {
+            const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
+            LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
             return;
         }
         if (result.Success) {

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T08 - Navigation and Tab Management",
+    "Description": "Opens multiple entity records in separate tabs, switches between tabs, and closes a tab without losing the others. Validates the core tab management workflow.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer. Open at least two different entity records so they appear in separate tabs in the tab bar. Switch between the tabs to verify each shows its own content. Then close one of the tabs and verify that the remaining tab(s) are still open and functional with their correct content displayed. Use Shift+Click on the tab to open the page as a tab.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Multiple tabs are visible in the tab bar",
+        "Content changed when switching tabs",
+        "After closing a tab, at least one other tab remained open"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "8F37873C-FD30-4C2C-A875-716DCE7C9E77"
+  },
+  "sync": {
+    "lastModified": "2026-05-28T03:08:25.604Z",
+    "checksum": "0b74f880942853697af3ce8ea9af0d1974813030c084a3a2db7958b1484aeeb5"
+  }
+}

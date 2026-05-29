@@ -1,0 +1,57 @@
+{
+  "entity": "MJ: Test Suite Runs",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "lookupFields": {
+      "SuiteID": {
+        "entity": "MJ: Test Suites",
+        "field": "Name"
+      }
+    },
+    "excludeFields": [
+      "Suite",
+      "RunByUser",
+      "ProviderTransaction",
+      "SkipEmbeddings"
+    ],
+    "relatedEntities": {
+      "MJ: Test Runs": {
+        "entity": "MJ: Test Runs",
+        "foreignKey": "TestSuiteRunID",
+        "excludeFields": [
+          "Test",
+          "TestSuiteRun",
+          "RunByUser",
+          "TargetLogEntity",
+          "TargetLog",
+          "ProviderTransaction",
+          "SkipEmbeddings"
+        ],
+        "lookupFields": {
+          "TestID": {
+            "entity": "MJ: Tests",
+            "field": "Name"
+          }
+        },
+        "relatedEntities": {
+          "MJ: Test Run Outputs": {
+            "entity": "MJ: Test Run Outputs",
+            "foreignKey": "TestRunID",
+            "excludeFields": [
+              "TestRun",
+              "OutputType",
+              "ProviderTransaction",
+              "SkipEmbeddings"
+            ],
+            "externalizeFields": [
+              {
+                "field": "InlineData",
+                "pattern": "@file:screenshots/{TestRunID}/{ID}.png"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

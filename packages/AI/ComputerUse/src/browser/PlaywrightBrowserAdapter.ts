@@ -58,6 +58,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         this.browser = await chromium.launch({
             headless: config.Headless,
             slowMo: config.SlowMo,
+            args: config.Args,
         });
 
         // Build storageState if InitialLocalStorage is configured.
@@ -196,12 +197,61 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 await page.reload({ waitUntil: 'load' });
                 break;
 
+            case 'Drag':
+                await this.executeDrag(page, action);
+                break;
+
             default: {
                 // Exhaustive check — TypeScript will error if a case is missing
                 const _exhaustive: never = action;
                 throw new Error(`Unknown browser action type: ${JSON.stringify(_exhaustive)}`);
             }
         }
+    }
+
+    /**
+     * Execute a drag action. Uses bounding box centroids when provided,
+     * otherwise uses raw start/end X/Y coordinates.
+     *
+     * Implementation: mouseDown at start → multiple intermediate mouseMove
+     * steps → mouseUp at end. The intermediate steps matter because HTML5
+     * drag-and-drop handlers (e.g., AG Grid column reorder) only fire
+     * `dragover` once they observe sustained mouse motion.
+     */
+    private async executeDrag(
+        page: Page,
+        action: {
+            StartX: number;
+            StartY: number;
+            EndX: number;
+            EndY: number;
+            StartBoundingBox?: { XMin: number; YMin: number; XMax: number; YMax: number };
+            EndBoundingBox?: { XMin: number; YMin: number; XMax: number; YMax: number };
+            Steps: number;
+        }
+    ): Promise<void> {
+        let startX = action.StartX;
+        let startY = action.StartY;
+        let endX = action.EndX;
+        let endY = action.EndY;
+
+        if (action.StartBoundingBox) {
+            startX = (action.StartBoundingBox.XMin + action.StartBoundingBox.XMax) / 2;
+            startY = (action.StartBoundingBox.YMin + action.StartBoundingBox.YMax) / 2;
+        }
+        if (action.EndBoundingBox) {
+            endX = (action.EndBoundingBox.XMin + action.EndBoundingBox.XMax) / 2;
+            endY = (action.EndBoundingBox.YMin + action.EndBoundingBox.YMax) / 2;
+        }
+
+        const steps = Math.max(1, Math.floor(action.Steps || 10));
+
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        // Playwright's `steps` option walks the mouse via N intermediate
+        // moves, which is what HTML5 dnd needs to register the drag.
+        await page.mouse.move(endX, endY, { steps });
+        await page.mouse.up();
     }
 
     /**
