@@ -552,6 +552,62 @@ export class SQLParser {
     }
 
     /**
+     * Token-aware detection of stacked statements: a statement-separating
+     * semicolon that has real content after it (outside string literals,
+     * quoted identifiers, and comments). A single trailing semicolon — or a run
+     * of them followed only by whitespace/comments — is allowed.
+     *
+     * Unlike an AST check, this fires even when the trailing payload makes the
+     * SQL unparseable (`SELECT 1; EXEC xp_cmdshell '…'`, `SELECT 1; WAITFOR
+     * DELAY '…'`), which is exactly the stacked-injection class an AST scan
+     * misses (the whole string fails to parse, so the AST is null). A rendered
+     * read query must be a single statement, so any internal `;` is rejected.
+     */
+    static HasStackedStatements(sql: string, dialect: SQLParserDialect): boolean {
+        const quoteSample = dialect.QuoteIdentifier('x');
+        const recognizeBrackets = quoteSample.startsWith('[');
+        const recognizeBackticks = quoteSample.startsWith('`');
+        const n = sql.length;
+        let i = 0;
+        let sawSemicolon = false;
+
+        while (i < n) {
+            const c = sql[i];
+
+            // line / block comments
+            if (c === '-' && i + 1 < n && sql[i + 1] === '-') {
+                while (i < n && sql[i] !== '\n') i++;
+                continue;
+            }
+            if (c === '/' && i + 1 < n && sql[i + 1] === '*') {
+                i += 2;
+                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) i++;
+                if (i < n) i += 2;
+                continue;
+            }
+
+            // string literals + quoted identifiers (skip wholesale)
+            if (c === "'" || c === '"' ||
+                (recognizeBrackets && c === '[') ||
+                (recognizeBackticks && c === '`')) {
+                const close = c === '[' ? ']' : c;
+                i = SQLParser.skipQuotedFrom(sql, i, close);
+                continue;
+            }
+
+            if (c === ';') { sawSemicolon = true; i++; continue; }
+            if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
+
+            // any other character is real statement content; if a top-level
+            // semicolon already appeared, this content is a second statement
+            if (sawSemicolon) return true;
+            i++;
+        }
+
+        return false;
+    }
+
+    /**
      * Strip line and block comments from SQL, preserving content inside
      * string literals and quoted identifiers. Block comments support nesting.
      *

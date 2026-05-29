@@ -329,6 +329,56 @@ describe('SQLParser preprocessing fallback', () => {
 // HasUnwrappableTrailingClause
 // ════════════════════════════════════════════════════════════════════
 
+describe('SQLParser.HasStackedStatements', () => {
+
+    it('is false for a single statement', () => {
+        expect(SQLParser.HasStackedStatements('SELECT * FROM Users', tsql)).toBe(false);
+    });
+
+    it('is false for a single statement with a trailing semicolon', () => {
+        expect(SQLParser.HasStackedStatements('SELECT * FROM Users;', tsql)).toBe(false);
+    });
+
+    it('is false for multiple trailing semicolons / whitespace / trailing comment', () => {
+        expect(SQLParser.HasStackedStatements('SELECT * FROM Users;;;  ', tsql)).toBe(false);
+        expect(SQLParser.HasStackedStatements('SELECT * FROM Users; -- done', tsql)).toBe(false);
+    });
+
+    it('is true for a stacked write that parses (SELECT; DELETE)', () => {
+        expect(SQLParser.HasStackedStatements('SELECT 1 AS x; DELETE FROM Users', tsql)).toBe(true);
+    });
+
+    it('is true for a stacked UNPARSEABLE payload (SELECT; EXEC xp_cmdshell)', () => {
+        expect(SQLParser.HasStackedStatements("SELECT 1 AS x; EXEC xp_cmdshell 'dir'", tsql)).toBe(true);
+    });
+
+    it('is true for a stacked time-based payload (SELECT; WAITFOR DELAY)', () => {
+        expect(SQLParser.HasStackedStatements("SELECT 1 AS x; WAITFOR DELAY '00:00:05'", tsql)).toBe(true);
+    });
+
+    it('is true when statements are separated only by a comment', () => {
+        expect(SQLParser.HasStackedStatements("SELECT 1; -- c\nSELECT 2", tsql)).toBe(true);
+    });
+
+    it('is true for a benign SET/DECLARE prefix (single-statement rule)', () => {
+        expect(SQLParser.HasStackedStatements('SET NOCOUNT ON; SELECT * FROM Users', tsql)).toBe(true);
+        expect(SQLParser.HasStackedStatements('DECLARE @x INT = 5; SELECT @x AS v', tsql)).toBe(true);
+    });
+
+    it('does not flag a semicolon inside a string literal', () => {
+        expect(SQLParser.HasStackedStatements("SELECT 'a; b' AS s FROM Users", tsql)).toBe(false);
+    });
+
+    it('does not flag a semicolon inside a bracket identifier or comment', () => {
+        expect(SQLParser.HasStackedStatements('SELECT [a;b] FROM Users', tsql)).toBe(false);
+        expect(SQLParser.HasStackedStatements('SELECT /* a; b */ 1 AS x', tsql)).toBe(false);
+    });
+
+    it('does not flag a semicolon inside a double-quoted identifier (PostgreSQL)', () => {
+        expect(SQLParser.HasStackedStatements('SELECT "a; b" FROM users', pg)).toBe(false);
+    });
+});
+
 describe('SQLParser.HasUnwrappableTrailingClause', () => {
 
     it('detects FOR JSON AUTO', () => {

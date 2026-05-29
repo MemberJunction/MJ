@@ -208,18 +208,33 @@ export class RenderPipeline {
      * the `REPLACE()` string function, parenthesized SELECTs, trailing
      * semicolons, or benign `SET` / `DECLARE` prefixes all pass.
      *
+     * A second, token-based check rejects stacked statements (an internal
+     * statement-separating `;`). Unlike the AST check it fires even when the
+     * trailing payload makes the SQL unparseable — e.g. `SELECT 1; EXEC
+     * xp_cmdshell '…'` or `SELECT 1; WAITFOR DELAY '…'` — which is the
+     * stacked-injection class the AST scan misses (the whole string fails to
+     * parse, so there is no AST to classify). A rendered read query must be a
+     * single statement.
+     *
      * The broader dangerous-keyword scan
      * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
      * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
-     * a blanket gate here because it rejects those same legitimate constructs.
+     * a blanket gate here because it rejects legitimate read constructs (the
+     * `REPLACE()` string function, parenthesized SELECTs, etc.).
      */
     private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
-        const parsed = new SQLParser(sql, GetDialect(platform));
+        const dialect = GetDialect(platform);
+        const parsed = new SQLParser(sql, dialect);
         if (parsed.HasWriteStatement) {
             throw new Error(
                 'RenderPipeline: rendered SQL contains a write statement ' +
-                '(mutation / DDL) or a stacked-statement injection payload — ' +
-                'only a read query may be rendered for execution.',
+                '(mutation / DDL) — only a read query may be rendered for execution.',
+            );
+        }
+        if (SQLParser.HasStackedStatements(sql, dialect)) {
+            throw new Error(
+                'RenderPipeline: rendered SQL contains multiple statements ' +
+                '(a stacked-statement injection) — only a single read query may be rendered.',
             );
         }
     }

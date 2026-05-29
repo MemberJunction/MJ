@@ -834,7 +834,32 @@ describe('safety guard — write-statement rejection', () => {
             .toThrow(/write statement/i);
     });
 
-    // ── Legitimate reads must still pass ──────────────────────────────
+    // ── Stacked payloads that DON'T parse (the AST write check can't see them) ──
+    it('throws on a stacked SELECT; EXEC xp_cmdshell payload (unparseable)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("SELECT 1 AS x; EXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    it('throws on a stacked SELECT; WAITFOR DELAY time-based payload (unparseable)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("SELECT 1 AS x; WAITFOR DELAY '00:00:05'", { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    it('throws on a stacked statement separated only by a comment', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run("SELECT 1 AS x; -- c\nEXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    it('rejects an otherwise-benign SET NOCOUNT ON; SELECT — a rendered query must be a single statement', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SET NOCOUNT ON; SELECT * FROM Users', { Platform: 'sqlserver' }))
+            .toThrow(/multiple statements/i);
+    });
+
+    // ── Legitimate single reads must still pass ───────────────────────
     it('allows a normal SELECT through', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT * FROM Users', { Platform: 'sqlserver' });
@@ -853,10 +878,16 @@ describe('safety guard — write-statement rejection', () => {
         expect(result.FinalSQL).toMatch(/SELECT/i);
     });
 
-    it('allows a benign SET NOCOUNT ON prefix before a SELECT', () => {
+    it('allows a single SELECT with a trailing semicolon', () => {
         stubMetadata();
-        const result = RenderPipeline.Run('SET NOCOUNT ON; SELECT * FROM Users', { Platform: 'sqlserver' });
+        const result = RenderPipeline.Run('SELECT * FROM Users;', { Platform: 'sqlserver' });
         expect(result.FinalSQL).toMatch(/SELECT/i);
+    });
+
+    it('does not flag a semicolon inside a string literal', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run("SELECT 'a; b' AS s FROM Users", { Platform: 'sqlserver' });
+        expect(result.FinalSQL).toContain("'a; b'");
     });
 });
 
