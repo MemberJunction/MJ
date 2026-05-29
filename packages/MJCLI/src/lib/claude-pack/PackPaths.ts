@@ -7,7 +7,7 @@
  * @see plans/claude-install-pack.md §3.2 (target layout), §6.4 (paths per rule)
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -114,29 +114,97 @@ export function parseSemverMajor(version: string): string | null {
 }
 
 /**
- * Detect the MJ major version installed in the user's project. Reads
- * `<dir>/package.json` and looks at any `@memberjunction/*` entry in
- * `dependencies` or `devDependencies`.
- *
- * Returns `null` if no MJ dependency is declared (e.g., a fresh `mj install`
- * that hasn't run `npm install` yet, or a non-MJ project).
+ * Workspace subdirectories that distribution-style `mj install` outputs
+ * place @memberjunction/* deps under (e.g. `apps/MJAPI`, `apps/MJExplorer`,
+ * and any custom `packages/*` packages). When the root `package.json` is
+ * a workspace shell with no direct @mj deps, we walk one level into each
+ * of these subdirs to find them.
  */
-export function detectMJMajor(targetDir: string): string | null {
-  const pkgPath = path.join(targetDir, 'package.json');
-  if (!existsSync(pkgPath)) return null;
+const WORKSPACE_SUBDIRS = ['apps', 'packages'] as const;
 
-  let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
-  try {
-    pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  } catch {
-    return null;
+/**
+ * Collect every `@memberjunction/*` dep entry visible to a target install dir.
+ *
+ * Looks at:
+ *   1. `<dir>/package.json`
+ *   2. `<dir>/apps/*\/package.json`
+ *   3. `<dir>/packages/*\/package.json`
+ *
+ * The walk-the-workspaces fallback is needed for distribution-style installs
+ * (the output of `mj install`), where the root `package.json` is a workspace
+ * shell — `@memberjunction/*` deps live in `apps/MJAPI/package.json`,
+ * `apps/MJExplorer/package.json`, etc. Source-style monorepo checkouts and
+ * simple consumer projects all keep deps at the root, where step 1 finds them.
+ *
+ * Returned in iteration order (root first, then alphabetical subdir order)
+ * so the FIRST entry found drives single-answer functions like
+ * {@link detectMJMajor}. Returns an empty array when no MJ deps are visible
+ * anywhere reachable.
+ */
+function collectMJDeps(targetDir: string): Array<{ name: string; version: string }> {
+  const candidates = [path.join(targetDir, 'package.json')];
+
+  for (const subdir of WORKSPACE_SUBDIRS) {
+    const dir = path.join(targetDir, subdir);
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    entries.sort();
+    for (const entry of entries) {
+      candidates.push(path.join(dir, entry, 'package.json'));
+    }
   }
 
-  const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
-  for (const [name, version] of Object.entries(allDeps)) {
-    if (!name.startsWith('@memberjunction/')) continue;
+  const collected: Array<{ name: string; version: string }> = [];
+  for (const pkgPath of candidates) {
+    if (!existsSync(pkgPath)) continue;
+    let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    try {
+      pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    } catch {
+      continue;
+    }
+    const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    for (const [name, version] of Object.entries(deps)) {
+      if (name.startsWith('@memberjunction/')) {
+        collected.push({ name, version });
+      }
+    }
+  }
+  return collected;
+}
+
+/**
+ * Detect the MJ major version installed in the user's project. Reads
+ * `<dir>/package.json` and looks at any `@memberjunction/*` entry in
+ * `dependencies` or `devDependencies`. Falls back to scanning
+ * `<dir>/apps/*\/package.json` and `<dir>/packages/*\/package.json` for
+ * distribution-style workspace installs whose root has no direct @mj deps.
+ *
+ * Returns `null` if no MJ dependency is declared anywhere reachable (e.g.,
+ * a fresh `mj install` that hasn't run `npm install` yet, or a non-MJ project).
+ */
+export function detectMJMajor(targetDir: string): string | null {
+  for (const { version } of collectMJDeps(targetDir)) {
     const major = parseSemverMajor(version);
     if (major) return major;
+  }
+  return null;
+}
+
+/**
+ * Detect the full MJ semver string (e.g. `5.33.0`) installed in the user's
+ * project. Same scan order as {@link detectMJMajor} — root, then workspace
+ * subdirs. Returns the bare semver with any `^`/`~`/`>=` prefix stripped,
+ * or `null` if nothing is reachable.
+ */
+export function detectMJVersionString(targetDir: string): string | null {
+  for (const { version } of collectMJDeps(targetDir)) {
+    const stripped = version.replace(/^(\^|~|>=|<=|>|<|=|v)+/, '');
+    if (/^\d+\./.test(stripped)) return stripped;
   }
   return null;
 }

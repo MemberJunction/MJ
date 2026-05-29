@@ -206,7 +206,7 @@ describe('installPack — --check fast path', () => {
         rmSync(packDir, { recursive: true, force: true });
     });
 
-    it('reports up-to-date when local version matches', async () => {
+    it('reports up-to-date as a note (not a warning) when local version matches', async () => {
         writeFixturePackToDir(packDir, makeManifest('5.1.0'));
         // Plant a local VERSION matching the pack
         mkdirSync(path.join(target, '.claude/mj'), { recursive: true });
@@ -218,12 +218,14 @@ describe('installPack — --check fast path', () => {
             CheckOnly: true,
         });
         expect(result.ok).toBe(true);
-        expect(result.warnings.some((w) => w.includes('up to date'))).toBe(true);
+        // "Up to date" is the success case — should land in notes, not warnings.
+        expect(result.notes.some((n) => n.includes('up to date'))).toBe(true);
+        expect(result.warnings.some((w) => w.includes('up to date'))).toBe(false);
         // --check doesn't write anything
         expect(existsSync(path.join(target, 'CLAUDE.md'))).toBe(false);
     });
 
-    it('reports update available when versions differ', async () => {
+    it('reports update available as a note (not a warning) when versions differ', async () => {
         writeFixturePackToDir(packDir, makeManifest('5.2.0'));
         mkdirSync(path.join(target, '.claude/mj'), { recursive: true });
         writeFileSync(path.join(target, '.claude/mj/VERSION'), '5.1.0\n');
@@ -233,11 +235,13 @@ describe('installPack — --check fast path', () => {
             FromPath: packDir,
             CheckOnly: true,
         });
-        expect(result.warnings.some((w) => w.includes('Update available'))).toBe(true);
-        expect(result.warnings.some((w) => w.includes('5.2.0'))).toBe(true);
+        // "Update available" is informational, not a warning state.
+        expect(result.notes.some((n) => n.includes('Update available'))).toBe(true);
+        expect(result.notes.some((n) => n.includes('5.2.0'))).toBe(true);
+        expect(result.warnings.some((w) => w.includes('Update available'))).toBe(false);
     });
 
-    it('reports no local pack found when VERSION missing', async () => {
+    it('reports no local pack found as a warning (not a note) when VERSION missing', async () => {
         writeFixturePackToDir(packDir, makeManifest('5.1.0'));
         // No local .claude/mj/VERSION
         const result = await installPack({
@@ -245,7 +249,9 @@ describe('installPack — --check fast path', () => {
             FromPath: packDir,
             CheckOnly: true,
         });
+        // "No local pack" IS a warning state — caller may want to act.
         expect(result.warnings.some((w) => w.includes('No local pack'))).toBe(true);
+        expect(result.notes.some((n) => n.includes('No local pack'))).toBe(false);
     });
 });
 
@@ -340,6 +346,11 @@ describe('installPack — output shape', () => {
         expect(result.actions).toHaveProperty('skipped');
         expect(result.actions).toHaveProperty('errors');
         expect(result).toHaveProperty('warnings');
+        // notes was added in the same PR as the "up to date" reclassification —
+        // §7.5 schema guarantees it's always present, even as `[]`, so downstream
+        // consumers can iterate without optional chaining.
+        expect(result).toHaveProperty('notes');
+        expect(Array.isArray(result.notes)).toBe(true);
     });
 
     it('writes the manifest into the user .claude/mj/ directory', async () => {

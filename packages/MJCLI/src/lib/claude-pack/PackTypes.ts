@@ -76,6 +76,14 @@ export interface ActionLog {
 /**
  * Full result object — the shape returned to callers and serialized for
  * `--json`. Matches the schema in §7.5 of the plan.
+ *
+ * **`warnings` vs `notes`**: a `warning` flags a state the caller may want to
+ * act on (no local pack, customized file would be overwritten, etc.); a
+ * `note` is purely informational status (`Pack is up to date`,
+ * `Update available: v5.1 → v5.2`). Older versions of this type collapsed
+ * both into `warnings`, which made successful `--check` runs look like
+ * something was wrong. `notes` is always present (empty array if none),
+ * keeping `--json` consumers happy.
  */
 export interface InstallResult {
   ok: boolean;
@@ -84,6 +92,7 @@ export interface InstallResult {
   installedMJVersion: string | null;
   actions: ActionLog;
   warnings: string[];
+  notes: string[];
 }
 
 /** Empty action log helper — exported to avoid `{} as ActionLog` casts. */

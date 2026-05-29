@@ -61,6 +61,13 @@ export function formatPretty(result: InstallResult): string {
     appendBucket(lines, 'updated', result.actions.updated, chalk.cyan);
     appendBucket(lines, 'skipped', result.actions.skipped, chalk.dim, 5);
 
+    if (result.notes.length > 0) {
+        lines.push(chalk.cyan(`notes (${result.notes.length}):`));
+        for (const n of result.notes) {
+            lines.push(chalk.cyan(`  - ${n}`));
+        }
+    }
+
     if (result.warnings.length > 0) {
         lines.push(chalk.yellow(`warnings (${result.warnings.length}):`));
         for (const w of result.warnings) {

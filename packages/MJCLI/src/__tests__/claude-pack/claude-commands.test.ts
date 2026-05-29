@@ -316,9 +316,10 @@ describe('update:claude --check (via Command.run)', () => {
         const parsed = JSON.parse(logOutput.join('\n'));
         expect(parsed.ok).toBe(true);
         expect(parsed.packVersion).toBe('5.2.0');
-        const warningText = (parsed.warnings as string[]).join(' ');
-        expect(warningText).toContain('Update available');
-        expect(warningText).toContain('5.2.0');
+        // "Update available" is informational — lands in notes, not warnings.
+        const noteText = (parsed.notes as string[]).join(' ');
+        expect(noteText).toContain('Update available');
+        expect(noteText).toContain('5.2.0');
     });
 });
 

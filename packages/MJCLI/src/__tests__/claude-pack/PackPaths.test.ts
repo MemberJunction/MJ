@@ -6,6 +6,7 @@ import {
     targetPathsFor,
     parseSemverMajor,
     detectMJMajor,
+    detectMJVersionString,
     resolveLocalPackRoot,
     buildRemoteUrlPrefix,
 } from '../../lib/claude-pack/PackPaths.js';
@@ -118,6 +119,229 @@ describe('PackPaths', () => {
                 })
             );
             expect(detectMJMajor(tmp)).toBe(null);
+        });
+
+        // Distribution-style `mj install` produces a workspace layout where
+        // @memberjunction/* deps live in apps/MJAPI and apps/MJExplorer, not
+        // the root. Detection has to walk in one level or it returns null on
+        // exactly the install dirs the pack is *designed* for.
+        it('walks into apps/* when root package.json has no @memberjunction/* deps', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'memberjunction-distribution',
+                    workspaces: ['apps/*', 'packages/*'],
+                    // No @memberjunction/* at root — workspace shell only
+                    dependencies: { turbo: '^2.0.0' },
+                })
+            );
+            const appDir = path.join(tmp, 'apps', 'MJAPI');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(
+                path.join(appDir, 'package.json'),
+                JSON.stringify({
+                    name: 'mj_api',
+                    dependencies: { '@memberjunction/server': '^5.37.0' },
+                })
+            );
+            expect(detectMJMajor(tmp)).toBe('5');
+        });
+
+        it('walks into packages/* when root package.json has no @memberjunction/* deps', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'memberjunction-distribution',
+                    workspaces: ['packages/*'],
+                })
+            );
+            const pkgDir = path.join(tmp, 'packages', 'mj_generatedentities');
+            mkdirSync(pkgDir, { recursive: true });
+            writeFileSync(
+                path.join(pkgDir, 'package.json'),
+                JSON.stringify({
+                    name: 'mj_generatedentities',
+                    dependencies: { '@memberjunction/core-entities': '^6.0.0' },
+                })
+            );
+            expect(detectMJMajor(tmp)).toBe('6');
+        });
+
+        it('prefers root package.json deps when both root and apps/* have @mj deps', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'user-project',
+                    dependencies: { '@memberjunction/cli': '^5.33.0' },
+                })
+            );
+            const appDir = path.join(tmp, 'apps', 'MJAPI');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(
+                path.join(appDir, 'package.json'),
+                JSON.stringify({
+                    name: 'mj_api',
+                    dependencies: { '@memberjunction/server': '^99.0.0' },
+                })
+            );
+            // Root wins — the workspace walk is a *fallback*, not an override.
+            expect(detectMJMajor(tmp)).toBe('5');
+        });
+
+        it('returns null when neither root nor workspace subdirs declare an @mj dep', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'user-project',
+                    workspaces: ['apps/*'],
+                })
+            );
+            const appDir = path.join(tmp, 'apps', 'frontend');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(
+                path.join(appDir, 'package.json'),
+                JSON.stringify({ name: 'frontend', dependencies: { react: '^18.0.0' } })
+            );
+            expect(detectMJMajor(tmp)).toBe(null);
+        });
+
+        // The next few cases are defensive — making sure the workspace walk
+        // doesn't crash on weird-but-real filesystem states.
+
+        it('returns null when an @mj dep at a workspace subdir uses workspace:* (non-semver)', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({ name: 'workspace-root', workspaces: ['apps/*'] })
+            );
+            const appDir = path.join(tmp, 'apps', 'MJAPI');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(
+                path.join(appDir, 'package.json'),
+                JSON.stringify({
+                    name: 'mj_api',
+                    dependencies: { '@memberjunction/server': 'workspace:*' },
+                })
+            );
+            // workspace:* isn't a real version — rejected, no fallback elsewhere.
+            expect(detectMJMajor(tmp)).toBe(null);
+        });
+
+        it('tolerates a malformed package.json in one workspace dir (continues to next)', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({ name: 'workspace-root', workspaces: ['apps/*'] })
+            );
+            // Use names where the BROKEN one sorts BEFORE the good one so the
+            // walk hits the failure first and we genuinely exercise the
+            // try/catch-then-continue path. ASCII sort: '0' < 'A'-'Z' < 'a'-'z',
+            // so '0-broken' sorts before 'mj-api'.
+            const badApp = path.join(tmp, 'apps', '0-broken');
+            mkdirSync(badApp, { recursive: true });
+            writeFileSync(path.join(badApp, 'package.json'), 'not json {');
+
+            const goodApp = path.join(tmp, 'apps', 'mj-api');
+            mkdirSync(goodApp, { recursive: true });
+            writeFileSync(
+                path.join(goodApp, 'package.json'),
+                JSON.stringify({
+                    name: 'mj_api',
+                    dependencies: { '@memberjunction/server': '^5.37.0' },
+                })
+            );
+            // Walk hits 0-broken/package.json first (JSON.parse throws → catch
+            // → continue), then mj-api/package.json (good → returns '5').
+            expect(detectMJMajor(tmp)).toBe('5');
+        });
+
+        it('tolerates `apps` being a file rather than a directory', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({ name: 'user', workspaces: ['apps/*'] })
+            );
+            // Simulate: someone shipped an `apps` text file by accident
+            writeFileSync(path.join(tmp, 'apps'), 'this is a file, not a dir');
+            // The walk should silently skip, returning null.
+            expect(detectMJMajor(tmp)).toBe(null);
+        });
+
+        it('tolerates a workspace subdir without any package.json', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({ name: 'user', workspaces: ['apps/*'] })
+            );
+            const emptyApp = path.join(tmp, 'apps', 'empty');
+            mkdirSync(emptyApp, { recursive: true });
+            // No package.json in apps/empty/ — should silently skip, not crash.
+            expect(detectMJMajor(tmp)).toBe(null);
+        });
+
+        // Regression guard: non-workspace consumer projects (the ORIGINAL happy
+        // path before fix #1) must keep working identically. This test echoes
+        // the very first assertion in the file but lives down here to make the
+        // "didn't break the simple case" intent explicit.
+        it('still works for non-workspace consumer projects (regression guard for fix #1)', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'simple-consumer',
+                    // No `workspaces` field at all — typical consumer
+                    dependencies: {
+                        '@memberjunction/core-entities': '^5.20.0',
+                        react: '^18.0.0',
+                    },
+                })
+            );
+            // No apps/ or packages/ subdirs at all.
+            expect(detectMJMajor(tmp)).toBe('5');
+        });
+    });
+
+    describe('detectMJVersionString', () => {
+        let tmp: string;
+        beforeEach(() => {
+            tmp = mkdtempSync(path.join(tmpdir(), 'mjcli-pack-ver-'));
+        });
+        afterEach(() => {
+            rmSync(tmp, { recursive: true, force: true });
+        });
+
+        it('returns the full semver from root deps', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'user-project',
+                    dependencies: { '@memberjunction/cli': '^5.33.0' },
+                })
+            );
+            expect(detectMJVersionString(tmp)).toBe('5.33.0');
+        });
+
+        it('walks into apps/* for workspace-style installs (same fallback as detectMJMajor)', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({
+                    name: 'memberjunction-distribution',
+                    workspaces: ['apps/*'],
+                })
+            );
+            const appDir = path.join(tmp, 'apps', 'MJAPI');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(
+                path.join(appDir, 'package.json'),
+                JSON.stringify({
+                    name: 'mj_api',
+                    dependencies: { '@memberjunction/server': '^5.37.0' },
+                })
+            );
+            expect(detectMJVersionString(tmp)).toBe('5.37.0');
+        });
+
+        it('returns null when no MJ dep is reachable', () => {
+            writeFileSync(
+                path.join(tmp, 'package.json'),
+                JSON.stringify({ name: 'user-project', dependencies: {} })
+            );
+            expect(detectMJVersionString(tmp)).toBe(null);
         });
     });
 

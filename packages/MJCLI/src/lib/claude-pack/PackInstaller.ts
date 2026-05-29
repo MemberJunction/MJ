@@ -20,6 +20,7 @@ import { mergePack } from './PackMerger.js';
 import {
     buildRemoteUrlPrefix,
     detectMJMajor,
+    detectMJVersionString,
     resolveLocalPackRoot,
 } from './PackPaths.js';
 import {
@@ -153,6 +154,7 @@ export async function installPack(opts: InstallPackOptions): Promise<InstallResu
         installedMJVersion,
         actions: Actions,
         warnings: Warnings,
+        notes: [],
     };
 }
 
@@ -247,13 +249,19 @@ function buildCheckResult(
 
     const actions: ActionLog = emptyActionLog();
     const warnings: string[] = [];
+    const notes: string[] = [];
 
     if (!localVersion) {
+        // "No local pack" is a state worth flagging — the user ran --check
+        // expecting an installed pack and there isn't one.
         warnings.push('No local pack found (.claude/mj/VERSION missing).');
     } else if (localVersion === manifest.packVersion) {
-        warnings.push(`Pack is up to date (v${localVersion}).`);
+        // "Up to date" is the success case for --check, not a warning.
+        notes.push(`Pack is up to date (v${localVersion}).`);
     } else {
-        warnings.push(
+        // "Update available" is informational — there's an action the user
+        // *can* take, but nothing is wrong.
+        notes.push(
             `Update available: v${localVersion} → v${manifest.packVersion}. Run \`mj update:claude\` to apply.`
         );
     }
@@ -264,6 +272,7 @@ function buildCheckResult(
         installedMJVersion,
         actions,
         warnings,
+        notes,
     };
 }
 
@@ -278,31 +287,16 @@ function errorResult(installedMJVersion: string | null, message: string): Instal
         installedMJVersion,
         actions: { ...emptyActionLog(), errors: [message] },
         warnings: [],
+        notes: [],
     };
 }
 
 /**
- * Detect the full MJ semver in the target dir's package.json (e.g. `5.33.0`).
- * Falls back to `null` if no MJ dep is declared.
+ * Detect the full MJ semver in the target dir (e.g. `5.33.0`). Delegates
+ * to {@link detectMJVersionString} in PackPaths so the workspace-walk
+ * behavior stays in sync with {@link detectMJMajor}.
  */
-function detectMJVersion(targetDir: string): string | null {
-    const pkgPath = path.join(targetDir, 'package.json');
-    if (!existsSync(pkgPath)) return null;
-    let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
-    try {
-        pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    } catch {
-        return null;
-    }
-    const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
-    for (const [name, version] of Object.entries(deps)) {
-        if (!name.startsWith('@memberjunction/')) continue;
-        // Strip range prefix; return the bare semver.
-        const stripped = version.replace(/^(\^|~|>=|<=|>|<|=|v)+/, '');
-        if (/^\d+\./.test(stripped)) return stripped;
-    }
-    return null;
-}
+const detectMJVersion = detectMJVersionString;
 
 /** Re-export the default raw URL prefix for tests / verbose logging. */
 export { buildRemoteUrlPrefix };
