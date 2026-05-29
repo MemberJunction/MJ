@@ -212,7 +212,7 @@ function extractCTEStructure(
     }
 
     // Use SQLParser.ExtractCTEs for the actual splitting
-    const extraction = SQLParser.ExtractCTEs(sql, dialect);
+    const extraction = new SQLParser(sql, dialect).ExtractCTEs();
     if (!extraction) {
         return { ctes: [], body: fragments, hasUserCTEs: false };
     }

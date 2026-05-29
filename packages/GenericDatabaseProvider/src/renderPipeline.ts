@@ -154,6 +154,14 @@ export class RenderPipeline {
         appliedParameters = templateResult.appliedParameters;
         const afterTemplates = currentSQL;
 
+        // ── Step 2.5: Safety validation (mutation + injection guard) ──
+        // The fully-resolved query is the point where composition and parameter
+        // substitution — the only injection vectors — are complete, and where
+        // StatementKind reflects the user's actual statement (paging wrapping
+        // below always produces a SELECT). Saved queries otherwise skip the
+        // dangerous-keyword validation that ad-hoc queries get at execution.
+        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform);
+
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
         if (hasMaxRows) {
             currentSQL = QueryPagingEngine.WrapWithMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
@@ -184,6 +192,30 @@ export class RenderPipeline {
             },
             PagingResult: pagingResult,
         };
+    }
+
+    /**
+     * Defense-in-depth guard on the fully-resolved query: throws when the
+     * rendered SQL resolves to a top-level data mutation (INSERT / UPDATE /
+     * DELETE / MERGE) — never a valid query result, and the case
+     * parameter-substitution injection would most likely produce.
+     *
+     * This is AST-precise (the `mutation` StatementKind), so it cannot
+     * false-positive on legitimate read queries. The broader dangerous-keyword
+     * / injection scan ({@link SQLExpressionValidator.validateFullQuery})
+     * deliberately stays on the ad-hoc execution path (untrusted free-text
+     * input); it is unsuitable as a blanket gate here because it rejects
+     * legitimate saved-query constructs — the `REPLACE()` string function,
+     * parenthesized SELECTs, trailing semicolons, etc.
+     */
+    private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
+        const kind = new SQLParser(sql, GetDialect(platform)).StatementKind;
+        if (kind === 'mutation') {
+            throw new Error(
+                'RenderPipeline: rendered SQL resolves to a data mutation ' +
+                '(INSERT/UPDATE/DELETE/MERGE), which is not executable as a query.',
+            );
+        }
     }
 
     /**

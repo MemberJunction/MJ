@@ -18,6 +18,7 @@ const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { getASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
 import {
     MJToken,
     MJTemplateExpr,
@@ -149,23 +150,12 @@ export type SQLStatementKind =
     | 'other';
 
 /**
- * Describes the outermost row cap on a parsed SELECT.
- *
- * Distinguishes between values that can be reasoned about as a row count
- * (numeric) and values that cannot (PERCENT, non-numeric expressions like
- * `TOP (@n)`). Returned by {@link SQLParser.GetOuterCap}.
+ * Dialect-neutral description of the outermost row cap on a parsed SELECT.
+ * Defined in {@link ./ASTDialectAdapter}; re-exported here so consumers can
+ * import it from `@memberjunction/sql-parser` without referencing the adapter.
+ * Returned by {@link SQLParser.OuterCap}.
  */
-export type SQLOuterCap =
-    /** Numeric SQL Server `TOP N` */
-    | { kind: 'top'; value: number }
-    /** `TOP N PERCENT` — semantically a fraction of rows, not a row count */
-    | { kind: 'top'; isPercent: true }
-    /** `TOP (@var)` / `TOP (subquery)` — value not statically known */
-    | { kind: 'top'; isNonNumeric: true }
-    /** Numeric `LIMIT N` (with optional `OFFSET M`) */
-    | { kind: 'limit'; value: number; offset: number | null }
-    /** `LIMIT $1` etc. — value not statically known */
-    | { kind: 'limit'; isNonNumeric: true };
+export type { RowCapInfo } from './ASTDialectAdapter.js';
 
 // ═══════════════════════════════════════════════════
 // SQLParser class
@@ -178,9 +168,75 @@ export type SQLOuterCap =
  * Nunjucks block tags (`{% if %}...{% endif %}`), composition tokens
  * (`{{query:"Path/Name(params)"}}`), and template comments (`{# ... #}`).
  *
- * All methods are static — no instance state is needed.
+ * Two-tier API:
+ *   - **Instance** (`new SQLParser(sql, dialect)`) — parses once (with a
+ *     preprocessing fallback) and exposes typed, dialect-neutral AST
+ *     inspection/mutation (`StatementKind`, `OuterCap`, `SetOuterCap`,
+ *     `ToSQL`) plus extraction helpers (`ExtractCTEs`, `ExtractTableRefs`,
+ *     `ExtractColumnRefs`, `ExtractSelectColumns`).
+ *   - **Static utilities** — pure string/token operations that need no parsed
+ *     state (`StripComments`, `Tokenize`, `Analyze`, `ParseSQL`, `SqlifyAST`,
+ *     `HasUnwrappableTrailingClause`, the MJ-template helpers, etc.).
  */
 export class SQLParser {
+    // ─── Instance state ────────────────────────────────
+    private readonly _sql: string;
+    private readonly _dialect: SQLParserDialect;
+    private readonly _adapter: ASTDialectAdapter;
+    private readonly _ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null;
+    /** alias → original bracketed identifier; set when bracket preprocessing was applied */
+    private readonly _aliasMap: Map<string, string> | null;
+    /** trailing `OPTION (...)` clause split off during preprocessing; re-appended on ToSQL */
+    private readonly _trailingOption: string | null;
+
+    /**
+     * Parse SQL into an instance exposing dialect-neutral AST inspection,
+     * mutation, and extraction.
+     *
+     * On a direct-parse failure, applies preprocessing fallbacks — splitting a
+     * trailing `OPTION (...)` clause and aliasing bracket-quoted identifiers
+     * whose interior contains parser-defeating characters (`[Active People]`,
+     * `[my-cte]`) — so a wider class of SQL becomes AST-addressable. {@link ToSQL}
+     * transparently restores both transforms.
+     *
+     * Never throws on unparseable SQL — check {@link IsValid}.
+     */
+    constructor(sql: string, dialect: SQLParserDialect) {
+        this._sql = sql;
+        this._dialect = dialect;
+        this._adapter = getASTDialectAdapter(dialect);
+
+        // Fast path: direct parse (matches the old static ParseSQL contract).
+        const direct = SQLParser.parseSQL(sql, dialect.ParserDialect);
+        if (direct) {
+            this._ast = direct;
+            this._aliasMap = null;
+            this._trailingOption = null;
+            return;
+        }
+
+        // Fallback: preprocess (OPTION split, then bracket aliasing) and retry.
+        const pre = SQLParser.preprocessForParse(sql, dialect);
+        this._ast = pre.ast;
+        this._aliasMap = pre.aliasMap;
+        this._trailingOption = pre.trailingOption;
+    }
+
+    /** Whether the SQL parsed into an AST (directly or via preprocessing). */
+    get IsValid(): boolean {
+        return this._ast !== null;
+    }
+
+    /** The raw AST. Prefer the typed accessors; this is an escape hatch. */
+    get AST(): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
+        return this._ast;
+    }
+
+    /** The dialect supplied at construction. */
+    get Dialect(): SQLParserDialect {
+        return this._dialect;
+    }
+
     /**
      * Fixes a known node-sql-parser bug where CAST(x AS NVARCHAR(MAX)) is
      * serialized as CAST(x AS NVARCHARmax). Applies to NVARCHAR, VARCHAR,
@@ -272,19 +328,22 @@ export class SQLParser {
         return SQLParser.fixMaxTypeSerialization(sql);
     }
 
-    // ─── AST shape primitives ──────────────────────────
+    // ─── AST primitives (instance) ──────────────────────
     //
-    // These methods hide node-sql-parser's AST shape behind typed accessors.
-    // Callers should prefer them over direct AST poking — the shape of `top`,
-    // `limit`, `into`, `set_op`, etc. is parser-version-specific, and these
-    // primitives are the only place that needs to track those details.
+    // These operate on the instance's parsed AST and hide node-sql-parser's
+    // shape behind typed, dialect-neutral accessors. The shape of `top`,
+    // `limit`, `into`, `set_op`, etc. is confined to this region and to
+    // ASTDialectAdapter — the only places that track those details.
+    //
+    // All inspect the FIRST statement only (matching SqlifyAST, which
+    // serializes only the first); MJ query SQL is single-statement.
 
     /**
-     * Returns the high-level classification of the statement at the AST root.
-     * Returns `'other'` for an empty / null / malformed AST.
+     * High-level classification of the parsed statement:
+     * `'select'` | `'select-into'` | `'set-op'` | `'mutation'` | `'other'`.
      */
-    static GetStatementKind(ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null): SQLStatementKind {
-        const root = SQLParser.unwrapRoot(ast);
+    get StatementKind(): SQLStatementKind {
+        const root = SQLParser.unwrapRoot(this._ast);
         if (!root) return 'other';
         const type = root.type;
         if (type !== 'select') {
@@ -300,97 +359,56 @@ export class SQLParser {
     }
 
     /**
-     * Returns the outermost row cap on a SELECT (TOP on SQL Server, LIMIT on
-     * PostgreSQL / MySQL), or `null` when none is present.
-     *
-     * Distinguishes between numeric values (reducible) and PERCENT /
-     * non-numeric values (callers must either preserve them or strip them
-     * before applying a new cap).
+     * The outermost row cap on the parsed SELECT, dialect-neutral, or `null`
+     * when none is present. Backed by the dialect's ASTDialectAdapter, so the
+     * caller never needs to know whether the cap was a `TOP` or `LIMIT`.
      */
-    static GetOuterCap(ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null): SQLOuterCap | null {
-        const root = SQLParser.unwrapRoot(ast);
+    get OuterCap(): RowCapInfo | null {
+        const root = SQLParser.unwrapRoot(this._ast);
         if (!root || root.type !== 'select') return null;
-
-        const top = root.top as { value?: unknown; percent?: unknown } | null | undefined;
-        if (top != null) {
-            if (top.percent) return { kind: 'top', isPercent: true };
-            const v = typeof top.value === 'number' ? top.value : Number(top.value);
-            if (!Number.isFinite(v)) return { kind: 'top', isNonNumeric: true };
-            return { kind: 'top', value: v };
-        }
-
-        const limit = root.limit as { value?: { value: unknown }[]; seperator?: string } | null | undefined;
-        if (limit != null && Array.isArray(limit.value) && limit.value.length > 0) {
-            // node-sql-parser shape for SQL Server / PostgreSQL:
-            //   LIMIT N          → value=[{value:N}]            (seperator='')
-            //   LIMIT N OFFSET M → value=[{value:N}, {value:M}] (seperator='offset')
-            // The LIMIT value is always at index 0 in these dialects.
-            const limitNode = limit.value[0];
-            const v = typeof limitNode.value === 'number' ? limitNode.value : Number(limitNode.value);
-            if (!Number.isFinite(v)) return { kind: 'limit', isNonNumeric: true };
-            let offset: number | null = null;
-            if (limit.value.length > 1) {
-                const offsetNode = limit.value[1];
-                const o = typeof offsetNode.value === 'number' ? offsetNode.value : Number(offsetNode.value);
-                offset = Number.isFinite(o) ? o : null;
-            }
-            return { kind: 'limit', value: v, offset };
-        }
-
-        return null;
+        return this._adapter.ReadRowCap(root);
     }
 
     /**
-     * Sets the outermost row cap. The form (TOP vs LIMIT) is dialect-driven:
-     * SQL Server emits `TOP N`, every other dialect emits `LIMIT N`. Any
-     * existing OFFSET is preserved on LIMIT-style dialects.
+     * Sets the outermost row cap. The adapter writes the dialect's form
+     * (`TOP N` on SQL Server, `LIMIT N` elsewhere), preserving any existing
+     * OFFSET. No-op when the root isn't a SELECT.
+     */
+    SetOuterCap(cap: number): void {
+        const root = SQLParser.unwrapRoot(this._ast);
+        if (!root || root.type !== 'select') return;
+        this._adapter.WriteRowCap(root, cap);
+    }
+
+    /**
+     * Removes the outermost row cap from the parsed SELECT. No-op when the
+     * root isn't a SELECT.
      *
-     * If the AST root isn't a SELECT this is a no-op.
+     * SEEDED: retained for the count-SQL path migration (`buildCountSQLViaAST`)
+     * tracked in plans/sql-parser-pipeline-implementation-plan.md. Has no
+     * production caller yet by design — wiring it into the count path is a
+     * deliberate, separately-tested behavior change (it would also strip
+     * `LIMIT` on PostgreSQL count queries).
      */
-    static SetOuterCap(
-        ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null,
-        cap: number,
-        dialect: SQLParserDialect,
-    ): void {
-        const root = SQLParser.unwrapRoot(ast);
+    ClearOuterCap(): void {
+        const root = SQLParser.unwrapRoot(this._ast);
         if (!root || root.type !== 'select') return;
-        if (SQLParser.isSQLServerDialect(dialect)) {
-            root.top = { value: cap, percent: null } as unknown as never;
-        } else {
-            const existing = root.limit as { value?: { value: unknown }[]; seperator?: string } | null | undefined;
-            const offsetNode = existing?.value && existing.value.length > 1 ? existing.value[1] : null;
-            if (offsetNode) {
-                root.limit = {
-                    seperator: 'offset',
-                    value: [{ type: 'number', value: cap }, offsetNode],
-                } as unknown as never;
-            } else {
-                root.limit = {
-                    seperator: '',
-                    value: [{ type: 'number', value: cap }],
-                } as unknown as never;
-            }
-        }
+        this._adapter.ClearRowCap(root);
     }
 
     /**
-     * Detects whether the dialect emits SQL Server-style `TOP` rather than
-     * the generic `LIMIT` row cap. Uses the same identifier-quoting probe
-     * that {@link StripComments} uses for bracket detection.
+     * Serialize the (possibly mutated) AST back to SQL, restoring any
+     * preprocessing transforms applied at construction (bracket-identifier
+     * aliases, then the trailing `OPTION (...)` clause).
+     *
+     * Throws if the SQL was not parseable (check {@link IsValid} first).
      */
-    private static isSQLServerDialect(dialect: SQLParserDialect): boolean {
-        return dialect.QuoteIdentifier('x').startsWith('[');
-    }
-
-    /**
-     * Removes the outermost row cap from a SELECT (both `TOP` and `LIMIT`
-     * forms). Idempotent — calling on an AST with no cap is a no-op.
-     */
-    static ClearOuterCap(ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null): void {
-        const root = SQLParser.unwrapRoot(ast);
-        if (!root || root.type !== 'select') return;
-        root.top = null as unknown as never;
-        root.limit = null as unknown as never;
+    ToSQL(): string {
+        if (!this._ast) throw new Error('SQLParser.ToSQL: SQL was not parseable');
+        let sql = SQLParser.SqlifyAST(this._ast, this._dialect);
+        if (this._aliasMap) sql = SQLParser.restoreAliases(sql, this._aliasMap);
+        if (this._trailingOption) sql = `${sql} ${this._trailingOption}`;
+        return sql;
     }
 
     /**
@@ -722,10 +740,12 @@ export class SQLParser {
     // ─── Table & Column Extraction ─────────────────────
 
     /**
-     * Extract all table/view references from SQL.
+     * Extract all table/view references from this instance's SQL.
      * Handles Nunjucks templates via placeholder substitution before AST parsing.
      */
-    static ExtractTableRefs(sql: string, dialect?: SQLParserDialect): SQLTableReference[] {
+    ExtractTableRefs(): SQLTableReference[] {
+        const sql = this._sql;
+        const dialect = this._dialect;
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
@@ -737,10 +757,12 @@ export class SQLParser {
     }
 
     /**
-     * Extract all column references from SQL.
+     * Extract all column references from this instance's SQL.
      * Handles Nunjucks templates via placeholder substitution before AST parsing.
      */
-    static ExtractColumnRefs(sql: string, dialect?: SQLParserDialect): SQLColumnReference[] {
+    ExtractColumnRefs(): SQLColumnReference[] {
+        const sql = this._sql;
+        const dialect = this._dialect;
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
@@ -772,7 +794,9 @@ export class SQLParser {
      *   - Expressions: `COUNT(*)` → { OutputName: "COUNT(*)", SourceColumn: "COUNT(*)", IsExpression: true }
      *   - MJ template tokens are replaced with placeholders before AST parsing.
      */
-    static ExtractSelectColumns(sql: string, dialect: SQLParserDialect): SQLSelectColumn[] {
+    ExtractSelectColumns(): SQLSelectColumn[] {
+        const sql = this._sql;
+        const dialect = this._dialect;
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
@@ -882,7 +906,9 @@ export class SQLParser {
      * Uses AST parsing first (produces bracket-quoted identifiers for SQL Server),
      * falls back to paren-depth scanning if AST fails (e.g., Nunjucks-templated SQL).
      */
-    static ExtractCTEs(sql: string, dialect: SQLParserDialect): SQLCTEExtraction | null {
+    ExtractCTEs(): SQLCTEExtraction | null {
+        const sql = this._sql;
+        const dialect = this._dialect;
         // Strip leading whitespace + SQL comments (/* */ and --) so that
         // queries with a descriptive header block are recognized as CTEs.
         // The AST parser handles comments natively, but when it fails
@@ -1606,6 +1632,226 @@ export class SQLParser {
             }
             return null;
         }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Private: Parse Preprocessing (fallback + restoration)
+    // ═══════════════════════════════════════════════════
+
+    /**
+     * Last-resort parse used when a direct parse fails. Rewrites SQL into a
+     * form node-sql-parser accepts:
+     *   1. Split a trailing `OPTION (...)` query hint (SQL Server).
+     *   2. Alias bracket-quoted identifiers whose interior contains
+     *      parser-defeating characters (`[Active People]`, `[my-cte]`).
+     *
+     * Returns the AST plus the data needed to restore the original SQL on
+     * {@link ToSQL}. `ast` is `null` when even the rewritten SQL is unparseable
+     * (or when no transform applied — nothing new to try).
+     */
+    private static preprocessForParse(
+        sql: string,
+        dialect: SQLParserDialect,
+    ): {
+        ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null;
+        aliasMap: Map<string, string> | null;
+        trailingOption: string | null;
+    } {
+        const noResult = { ast: null, aliasMap: null, trailingOption: null };
+        let work = sql;
+
+        // 1. Trailing OPTION (...) — always at the outermost level.
+        const optionSplit = SQLParser.splitTrailingOption(work, dialect);
+        const trailingOption = optionSplit ? optionSplit.optionClause : null;
+        if (optionSplit) work = optionSplit.sqlWithoutOption;
+
+        // 2. Bracket-identifier aliasing (SQL Server bracket quoting only).
+        const aliased = SQLParser.aliasBracketIdentifiers(work, dialect);
+        if (aliased.forward.size > 0) work = aliased.rewritten;
+        const aliasMap = aliased.forward.size > 0
+            ? new Map<string, string>(
+                Array.from(aliased.forward, ([interior, alias]) => [alias, `[${interior}]`]),
+              )
+            : null;
+
+        // No transform applied → re-parsing the same SQL would just fail again.
+        if (work === sql) return noResult;
+
+        const ast = SQLParser.parseSQL(work, dialect.ParserDialect);
+        if (!ast) return noResult;
+        return { ast, aliasMap, trailingOption };
+    }
+
+    /**
+     * Token-aware scan for a trailing `OPTION (...)` query hint at the
+     * outermost level (outside string literals, quoted identifiers, and
+     * comments). Returns the SQL without the clause plus the clause text, or
+     * `null` when there is no trailing OPTION.
+     */
+    private static splitTrailingOption(
+        sql: string,
+        dialect: SQLParserDialect,
+    ): { sqlWithoutOption: string; optionClause: string } | null {
+        const quoteSample = dialect.QuoteIdentifier('x');
+        const recognizeBrackets = quoteSample.startsWith('[');
+        const recognizeBackticks = quoteSample.startsWith('`');
+        const n = sql.length;
+        const isWordChar = (ch: string): boolean =>
+            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+            (ch >= '0' && ch <= '9') || ch === '_';
+
+        let i = 0;
+        let optionStart = -1;
+        while (i < n) {
+            const ch = sql[i];
+            if (ch === "'") { i = SQLParser.skipQuotedFrom(sql, i, "'"); continue; }
+            if (ch === '"') { i = SQLParser.skipQuotedFrom(sql, i, '"'); continue; }
+            if (recognizeBrackets && ch === '[') { i = SQLParser.skipQuotedFrom(sql, i, ']'); continue; }
+            if (recognizeBackticks && ch === '`') { i = SQLParser.skipQuotedFrom(sql, i, '`'); continue; }
+            if (ch === '-' && i + 1 < n && sql[i + 1] === '-') { while (i < n && sql[i] !== '\n') i++; continue; }
+            if (ch === '/' && i + 1 < n && sql[i + 1] === '*') {
+                i += 2;
+                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) i++;
+                if (i < n) i += 2;
+                continue;
+            }
+
+            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
+            if (!prevIsWord && i + 6 <= n && sql.substring(i, i + 6).toUpperCase() === 'OPTION' &&
+                (i + 6 === n || !isWordChar(sql[i + 6]))) {
+                let j = i + 6;
+                while (j < n && /\s/.test(sql[j])) j++;
+                if (j < n && sql[j] === '(') {
+                    optionStart = i; // remember the last top-level OPTION (
+                    i = j;
+                    continue;
+                }
+            }
+            i++;
+        }
+
+        if (optionStart === -1) return null;
+
+        // Match the balanced paren group following OPTION.
+        let k = optionStart + 6;
+        while (k < n && /\s/.test(sql[k])) k++;
+        let depth = 0;
+        for (; k < n; k++) {
+            const ch = sql[k];
+            if (ch === "'") { k = SQLParser.skipQuotedFrom(sql, k, "'") - 1; continue; }
+            if (ch === '(') depth++;
+            else if (ch === ')') { depth--; if (depth === 0) { k++; break; } }
+        }
+        if (depth !== 0) return null; // unbalanced — leave alone
+
+        const rest = sql.substring(k).trim();
+        if (rest !== '' && rest !== ';') return null; // not a trailing OPTION
+
+        return {
+            sqlWithoutOption: sql.substring(0, optionStart).trimEnd(),
+            optionClause: sql.substring(optionStart, k).trim(),
+        };
+    }
+
+    /**
+     * Token-aware scan that aliases bracket-quoted identifiers whose interior
+     * contains characters node-sql-parser can't handle (`[Active People]`,
+     * `[my-cte]`, `[dbo.table]`). Aliases are stable, collision-safe tokens
+     * (`_mjid_<seq>`). Applies only to bracket-quoting dialects (SQL Server).
+     *
+     * Returns the rewritten SQL plus a forward map (original interior → alias).
+     */
+    private static aliasBracketIdentifiers(
+        sql: string,
+        dialect: SQLParserDialect,
+    ): { rewritten: string; forward: Map<string, string> } {
+        const forward = new Map<string, string>();
+        if (!dialect.QuoteIdentifier('x').startsWith('[')) return { rewritten: sql, forward };
+
+        const n = sql.length;
+        let out = '';
+        let i = 0;
+        let seq = 0;
+        while (i < n) {
+            const ch = sql[i];
+            if (ch === '-' && i + 1 < n && sql[i + 1] === '-') {
+                while (i < n && sql[i] !== '\n') { out += sql[i]; i++; }
+                continue;
+            }
+            if (ch === '/' && i + 1 < n && sql[i + 1] === '*') {
+                out += '/*'; i += 2;
+                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) { out += sql[i]; i++; }
+                if (i < n) { out += '*/'; i += 2; }
+                continue;
+            }
+            if (ch === "'" || ch === '"' || ch === '`') {
+                const close = ch;
+                const end = SQLParser.skipQuotedFrom(sql, i, close);
+                out += sql.substring(i, end);
+                i = end;
+                continue;
+            }
+            if (ch === '[') {
+                // Read the interior, honoring the ]] escape for a literal ].
+                let j = i + 1;
+                let interior = '';
+                while (j < n) {
+                    if (sql[j] === ']') {
+                        if (j + 1 < n && sql[j + 1] === ']') { interior += ']'; j += 2; continue; }
+                        j++; break;
+                    }
+                    interior += sql[j]; j++;
+                }
+                if (interior.length > 0 && /[^A-Za-z0-9_]/.test(interior)) {
+                    let alias = forward.get(interior);
+                    if (!alias) { alias = `_mjid_${seq++}`; forward.set(interior, alias); }
+                    // Emit a BARE identifier — node-sql-parser rejects bracket-quoted
+                    // CTE names entirely, so the alias must be unbracketed. sqlify
+                    // re-quotes it ([_mjid_0]); restoreAliases handles every form.
+                    out += alias;
+                } else {
+                    out += sql.substring(i, j); // leave non-problematic identifiers untouched
+                }
+                i = j;
+                continue;
+            }
+            out += ch; i++;
+        }
+        return { rewritten: out, forward };
+    }
+
+    /**
+     * Reverses bracket-identifier aliasing on a sqlify result. node-sql-parser
+     * may emit the alias bare, bracketed, or backticked; all three forms are
+     * restored to the original bracketed identifier. Aliases are unique
+     * `_mjid_<seq>` tokens, so replacement is unambiguous.
+     */
+    private static restoreAliases(sql: string, aliasMap: Map<string, string>): string {
+        let out = sql;
+        for (const [alias, originalBracketed] of aliasMap) {
+            out = out.split(`[${alias}]`).join(originalBracketed);
+            out = out.split('`' + alias + '`').join(originalBracketed);
+            out = out.replace(new RegExp(`\\b${alias}\\b`, 'g'), originalBracketed);
+        }
+        return out;
+    }
+
+    /**
+     * Advances past a quoted span starting at `start` (whose opening char is
+     * `sql[start]`), honoring the doubled-delimiter escape (`''`, `]]`, `""`,
+     * `` `` ``). Returns the index just past the closing delimiter.
+     */
+    private static skipQuotedFrom(sql: string, start: number, close: string): number {
+        const n = sql.length;
+        let i = start + 1;
+        while (i < n) {
+            if (sql[i] === close) {
+                if (i + 1 < n && sql[i + 1] === close) { i += 2; continue; }
+                return i + 1;
+            }
+            i++;
+        }
+        return n;
     }
 
     /**

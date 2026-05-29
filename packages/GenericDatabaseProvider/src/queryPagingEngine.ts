@@ -113,7 +113,7 @@ export class QueryPagingEngine {
         }
 
         // unparseable — try the CTE-fallback path first.
-        const isCTE = SQLParser.ExtractCTEs(cleanedSQL, dialect) !== null;
+        const isCTE = new SQLParser(cleanedSQL, dialect).ExtractCTEs() !== null;
         if (isCTE) {
             try {
                 return QueryPagingEngine.buildDataSQL(cleanedSQL, 0, cap, dialect);
@@ -134,10 +134,12 @@ export class QueryPagingEngine {
      * to be wrap-safe (no FOR JSON/FOR XML/OPTION at top level).
      */
     private static outerWrap(sql: string, cap: number, dialect: SQLDialect): string {
-        if (dialect.PlatformKey === 'sqlserver') {
-            return `SELECT TOP ${cap} * FROM (\n${sql}\n) AS _mj_capped`;
-        }
-        return `SELECT * FROM (\n${sql}\n) AS _mj_capped LIMIT ${cap}`;
+        // Route the cap form through the dialect's LimitClause so there is a
+        // single source of truth for "TOP vs LIMIT" — no PlatformKey probe here.
+        const lc = dialect.LimitClause(cap);
+        const prefix = lc.prefix ? `${lc.prefix} ` : '';   // 'TOP N ' (SQL Server) or ''
+        const suffix = lc.suffix ? ` ${lc.suffix}` : '';   // ' LIMIT N' (PostgreSQL) or ''
+        return `SELECT ${prefix}* FROM (\n${sql}\n) AS _mj_capped${suffix}`;
     }
 
     /**
@@ -165,37 +167,31 @@ export class QueryPagingEngine {
         | { outcome: 'pass-through' }
         | { outcome: 'unparseable' }
     {
-        const ast = SQLParser.ParseSQL(sql, dialect);
-        if (!ast) return { outcome: 'unparseable' };
+        // The instance parser applies preprocessing fallbacks on a direct-parse
+        // failure (bracket-identifier aliasing for Skip-style CTE names, trailing
+        // OPTION splitting); ToSQL restores them. This widens the set of shapes
+        // that reach the precise AST-inject path instead of the outer-wrap path.
+        const parsed = new SQLParser(sql, dialect);
+        if (!parsed.IsValid) return { outcome: 'unparseable' };
 
-        const kind = SQLParser.GetStatementKind(ast);
+        const kind = parsed.StatementKind;
         if (kind === 'mutation' || kind === 'select-into') return { outcome: 'pass-through' };
         if (kind === 'set-op') return { outcome: 'unparseable' };
         if (kind !== 'select') return { outcome: 'pass-through' };
 
-        const existing = SQLParser.GetOuterCap(ast);
+        const existing = parsed.OuterCap;
 
-        // PERCENT and non-numeric caps can't be reasoned about as row counts;
-        // let the caller outer-wrap them.
-        if (existing && ('isPercent' in existing || 'isNonNumeric' in existing)) {
-            return { outcome: 'wrap' };
-        }
+        // PERCENT and non-numeric (opaque) caps can't be reasoned about as row
+        // counts; let the caller outer-wrap them.
+        if (existing && existing.form !== 'numeric') return { outcome: 'wrap' };
 
         // Existing numeric cap — only modify when the requested cap is tighter.
-        if (existing) {
-            if (existing.value <= cap) return { outcome: 'capped', sql };
-            SQLParser.SetOuterCap(ast, cap, dialect);
-            try {
-                return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
-            } catch {
-                return { outcome: 'unparseable' };
-            }
-        }
+        if (existing && existing.value <= cap) return { outcome: 'capped', sql };
 
-        // No existing cap — inject one.
-        SQLParser.SetOuterCap(ast, cap, dialect);
+        // No cap (or a looser one) — inject/replace.
+        parsed.SetOuterCap(cap);
         try {
-            return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
+            return { outcome: 'capped', sql: parsed.ToSQL() };
         } catch {
             return { outcome: 'unparseable' };
         }
@@ -243,7 +239,7 @@ export class QueryPagingEngine {
      * Does not affect TOP in subqueries or CTEs.
      */
     private static stripTopFromMainSelect(sql: string, dialect: SQLDialect): string {
-        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
 
         if (extraction) {
             const { sql: cleanMain, topRemoved } = QueryPagingEngine.stripTopClause(extraction.MainStatement);
@@ -313,7 +309,7 @@ export class QueryPagingEngine {
     }
 
     private static buildCountSQLViaRegex(sql: string, dialect: SQLDialect): string {
-        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+        const extraction = new SQLParser(sql, dialect).ExtractCTEs();
 
         if (extraction) {
             const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement, dialect);

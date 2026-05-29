@@ -18,7 +18,7 @@ export type {
     SQLParseResult,
     SQLParseOptions,
     SQLStatementKind,
-    SQLOuterCap,
+    RowCapInfo,
 } from './sql-parser.js';
 
 // Re-export node-sql-parser's AST type so consumers don't need a direct dependency
