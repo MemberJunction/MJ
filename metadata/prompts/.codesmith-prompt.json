@@ -6,14 +6,15 @@
     "ResponseFormat": "JSON",
     "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
     "Status": "Active",
-    "Description": "Main prompt for the Codesmith Agent. Expert code generator that creates, tests, and refines JavaScript for data analysis and transformations."
+    "Description": "Main prompt for the Codesmith Agent. Expert code generator that creates, tests, and refines JavaScript for data analysis and transformations.",
+    "EffortLevel": 1
   },
   "relatedEntities": {
     "MJ: AI Prompt Models": [
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
           "Priority": 6
         },
@@ -21,14 +22,14 @@
           "ID": "3B961499-D248-4BC2-83DD-46FFFFEA72CD"
         },
         "sync": {
-          "lastModified": "2026-04-24T00:50:24.642Z",
-          "checksum": "6cc52c3d83ec3f1a91b7679fe32dca36c145f0b5cc64eb590417991f0b3a7911"
+          "lastModified": "2026-05-27T17:58:51.555Z",
+          "checksum": "074cd1cfb475111ead34041b0a0ba019f94cb86ab6012aa29084309d9c390654"
         }
       },
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
           "Priority": 5
         },
@@ -36,8 +37,8 @@
           "ID": "C820B858-C2B7-49AE-8958-35A390B9C40A"
         },
         "sync": {
-          "lastModified": "2026-04-24T00:50:24.662Z",
-          "checksum": "ef4ac5c92dbc4dece3ca9a2f2128b600c3207c30077052deeaacf34afcaa6dce"
+          "lastModified": "2026-05-27T17:58:51.569Z",
+          "checksum": "45a8e3d452751c032d7ad175b7b8a3fc32d0e866c84144253ae298eb6e54d441"
         }
       },
       {
@@ -58,7 +59,7 @@
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
           "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
           "Priority": 2
         },
@@ -66,8 +67,8 @@
           "ID": "97E7D784-B50D-4D3D-BF25-4374964E84B2"
         },
         "sync": {
-          "lastModified": "2026-02-13T20:48:56.234Z",
-          "checksum": "b33d8ad0139e5d79757bea1f8161e50630120103ffb0ecfa7c02fa037ae2f216"
+          "lastModified": "2026-05-27T17:58:51.581Z",
+          "checksum": "af233dc9683c21f81a871f5779ce925a7faef4e7c8b02f377e47f6d89d0cb595"
         }
       },
       {
@@ -106,7 +107,7 @@
     "ID": "A948FDCD-CB38-49EA-8480-6CC8AAFC0BE8"
   },
   "sync": {
-    "lastModified": "2026-02-13T20:48:56.124Z",
-    "checksum": "97522beeb585c02418b575e3f422e885f044ed3729cc02a739965f04a3c1f357"
+    "lastModified": "2026-05-27T17:58:51.501Z",
+    "checksum": "07e175c85e498aef1cf63dd4695dae543a322a46f81c01cd12557c963be98810"
   }
 }

@@ -14,11 +14,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ----- Module mocks -------------------------------------------------------
 
-vi.mock('@angular/core', () => ({
-    Component: () => (target: Function) => target,
-    ChangeDetectorRef: class { markForCheck() {} detectChanges() {} },
-    inject: () => ({ markForCheck: vi.fn() }),
-}));
+class StubReactBridgeService {
+    async getReactContext(): Promise<unknown> {
+        return {};
+    }
+}
+
+vi.mock(import('@angular/core'), async (importOriginal) => {
+    const actual = await importOriginal();
+    const fakeChangeDetector = { markForCheck: vi.fn(), detectChanges: vi.fn() };
+    const fakeReactBridge = new StubReactBridgeService();
+    return {
+        ...actual,
+        Component: () => (target: Function) => target,
+        ChangeDetectorRef: class { markForCheck() {} detectChanges() {} } as unknown as typeof actual.ChangeDetectorRef,
+        inject: ((token: unknown) => {
+            const name = (token as { name?: string } | null)?.name ?? '';
+            if (name.includes('ReactBridge')) return fakeReactBridge;
+            return fakeChangeDetector;
+        }) as unknown as typeof actual.inject,
+    };
+});
 
 // Stub BaseFormComponent: just enough surface for the wrapper to extend.
 // Provides the abstract `record` slot, edit-mode toggles, and permission getters
@@ -39,19 +55,23 @@ class StubBaseFormComponent {
 
 vi.mock('../base-form-component', () => ({ BaseFormComponent: StubBaseFormComponent }));
 
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    RunView: class {
-        static FromMetadataProvider() {
-            return { RunView: async () => ({ Success: true, Results: [] }) };
-        }
-    },
-    CompositeKey: class {
-        public KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
-        public HasValue = false;
-    },
-    BaseEntity: class {},
-}));
+vi.mock(import('@memberjunction/core'), async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+        RunView: class {
+            static FromMetadataProvider() {
+                return { RunView: async () => ({ Success: true, Results: [] }) };
+            }
+        } as unknown as typeof actual.RunView,
+        CompositeKey: class {
+            public KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
+            public HasValue = false;
+        } as unknown as typeof actual.CompositeKey,
+        BaseEntity: class {} as unknown as typeof actual.BaseEntity,
+    };
+});
 
 vi.mock('@memberjunction/interactive-component-types', () => ({
     SimpleEntityFieldInfo: class {
@@ -72,7 +92,10 @@ vi.mock('@memberjunction/interactive-component-types/forms', () => ({
     },
 }));
 
-vi.mock('@memberjunction/ng-react', () => ({}));
+vi.mock('@memberjunction/ng-react', () => ({
+    ReactBridgeService: StubReactBridgeService,
+    MJReactComponent: class {},
+}));
 
 // ----- Test helpers -------------------------------------------------------
 

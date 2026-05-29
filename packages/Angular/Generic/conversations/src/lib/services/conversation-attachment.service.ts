@@ -59,36 +59,11 @@ export class ConversationAttachmentService {
       const rv = RunView.FromMetadataProvider(this.Provider);
       const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
-        EntityName: 'MJ: Conversation Detail Attachments',
-        ExtraFilter: `ConversationDetailID IN (${idList})`,
-        OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
-        ResultType: 'entity_object'
-      }, contextUser);
-
-      if (attachmentResult.Success && attachmentResult.Results) {
-        for (const attachment of attachmentResult.Results) {
-          // Storage-unified attachments (post-v5.35) link to an ArtifactVersion
-          // via ArtifactVersionID. The matching junction is loaded below and
-          // rendered as the artifact card (carries the resolved type name and
-          // tool affordances). Skip the attachment row here to avoid showing
-          // two cards for the same upload — one labeled by its raw MIME, the
-          // other by its artifact type. Legacy attachments (NULL FK) keep the
-          // older single-card path.
-          if (attachment.ArtifactVersionID) continue;
-
-          const detailId = attachment.ConversationDetailID;
-
-          if (!result.has(detailId)) {
-            result.set(detailId, []);
-          }
-
-          const messageAttachment = this.convertToMessageAttachment(attachment);
-          result.get(detailId)!.push(messageAttachment);
-        }
-      }
-
-      // Also load input artifacts (ConversationDetailArtifact with Direction='Input')
+      // Load input artifacts (ConversationDetailArtifact with Direction='Input').
+      // Since the backfill migration (V202605271400__Backfill_Attachment_Artifacts)
+      // converted all legacy ConversationDetailAttachment rows to artifact pairs,
+      // the artifact junction is the single source of truth — no separate attachment
+      // query needed.
       const artifactLinksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
         EntityName: 'MJ: Conversation Detail Artifacts',
         ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
