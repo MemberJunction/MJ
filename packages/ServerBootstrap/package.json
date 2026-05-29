@@ -74,6 +74,7 @@
     "@memberjunction/ai-vectors-pgvector": "5.37.0",
     "@memberjunction/ai-vectors-pinecone": "5.37.0",
     "@memberjunction/ai-vectors-qdrant": "5.37.0",
+    "@memberjunction/ai-vectors-sqlserver": "5.37.0",
     "@memberjunction/ai-vertex": "5.37.0",
     "@memberjunction/ai-xai": "5.37.0",
     "@memberjunction/ai-zhipu": "5.37.0",
