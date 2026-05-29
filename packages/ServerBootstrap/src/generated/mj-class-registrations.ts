@@ -519,7 +519,7 @@ import {
     MJEntityActionEntityExtended,
 } from '@memberjunction/actions-base';
 
-// @memberjunction/ai-core-plus (7 classes)
+// @memberjunction/ai-core-plus (8 classes)
 import {
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
@@ -528,6 +528,7 @@ import {
     MJAIPromptCategoryEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
+    MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
 // @memberjunction/ai-engine-base (4 classes)
@@ -733,7 +734,7 @@ import {
     YouTubeUploadVideoAction,
 } from '@memberjunction/actions-bizapps-social';
 
-// @memberjunction/core-entities-server (18 classes)
+// @memberjunction/core-entities-server (19 classes)
 import {
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -746,6 +747,7 @@ import {
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityDocumentEntityServer,
     MJQueryEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -1530,6 +1532,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptCategoryEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
+    MJEntityDocumentEntityExtended,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
     PerMillionTokensPriceUnitType,
@@ -1684,6 +1687,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityDocumentEntityServer,
     MJQueryEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -1955,7 +1959,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 814;
+export const CLASS_REGISTRATIONS_COUNT = 816;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
