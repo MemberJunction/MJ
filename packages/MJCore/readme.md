@@ -1216,6 +1216,53 @@ Features:
 
 ---
 
+## Entity Search (`SearchEntities`)
+
+`IMetadataProvider.SearchEntities()` is a cross-mode ranked search over a single entity's records, backed by an `EntityDocument` of type `Search`. Supports lexical-only, semantic-only, and hybrid (weighted-RRF) modes; results are post-filtered by the context user's read permissions on the target entity.
+
+```typescript
+import { Metadata, EntitySearchResult } from '@memberjunction/core';
+
+const md = new Metadata();
+const results: EntitySearchResult[] = await md.SearchEntities(
+    'MJ: Entities',
+    userRequestText,
+    { mode: 'hybrid', topK: 10, weights: { lexical: 1.0, semantic: 1.5 }, contextUser }
+);
+
+// Each result is { recordId, score, matchType, components, entityRecordDocumentId }
+for (const r of results) {
+    console.log(`${r.recordId}: ${r.score.toFixed(4)} (${r.matchType})`);
+}
+```
+
+**Modes:**
+- `lexical` — substring/prefix matching on the entity's name field and any `IncludeInUserSearchAPI` fields.
+- `semantic` — vector cosine against precomputed embeddings in `MJ: Entity Record Documents.VectorJSON`.
+- `hybrid` (default) — weighted RRF blend of the two, controlled by `options.weights` and `options.rrfK`.
+
+**Configuration:** semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds one for `MJ: Entities` so the entity catalog is searchable out of the box; users enable it for other entities via metadata (see `/metadata/entity-documents/`).
+
+---
+
+## Weighted Reciprocal Rank Fusion (`ComputeRRF`)
+
+`ComputeRRF` is the canonical RRF implementation used wherever MJ blends ranked result lists (`SearchEntities` hybrid mode, `SearchEngine` cross-scope fusion, dupe detection). It accepts an optional per-list `weights` array:
+
+```typescript
+import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
+
+const fused = ComputeRRF(
+    [lexicalResults, semanticResults],
+    /* k */ 60,
+    /* weights */ [1.0, 1.5]   // semantic contributes 1.5× per rank position
+);
+```
+
+Formula: `FusedScore(d) = Σ_i w_i / (k + rank_i(d))`. Omitting `weights` is equivalent to all-ones — canonical unweighted RRF.
+
+---
+
 ## Utility Functions
 
 ```typescript

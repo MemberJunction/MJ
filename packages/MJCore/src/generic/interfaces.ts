@@ -924,7 +924,79 @@ export interface IRunViewProvider {
      * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
      */
     FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult>
+
+    /**
+     * Search a single entity's records using lexical, semantic, or hybrid (weighted-RRF) ranking.
+     *
+     * Backed by an `EntityDocument` of type 'Search' configured for the target entity.
+     * Semantic results come from the in-memory `SimpleVectorServiceProvider` rehydrated
+     * from `MJ: Entity Record Documents.VectorJSON` (or any configured `VectorDatabase`
+     * provider). Lexical results come from name-field substring/prefix matching.
+     *
+     * Results are post-filtered by the contextUser's read permissions on the target
+     * entity. Callers requesting a `topK` of N typically receive ≤ N results after
+     * filtering — the implementation over-fetches to compensate.
+     *
+     * @param entityName Name of the target entity (e.g. 'MJ: Entities', 'Accounts').
+     * @param searchText Free-text query.
+     * @param options Mode, weights, topK, and other knobs.
+     * @returns Ranked array of {@link EntitySearchResult}, descending by score.
+     */
+    SearchEntities(entityName: string, searchText: string, options?: SearchEntitiesOptions): Promise<EntitySearchResult[]>
 }
+
+/**
+ * Options for {@link IMetadataProvider.SearchEntities}.
+ */
+export type SearchEntitiesOptions = {
+    /**
+     * Ranking strategy:
+     * - `'lexical'`: name-field substring/prefix matching only.
+     * - `'semantic'`: vector cosine only.
+     * - `'hybrid'`: weighted RRF blend of the two. **Default.**
+     */
+    mode?: 'lexical' | 'semantic' | 'hybrid';
+
+    /** RRF smoothing constant. Default: 60 (paper standard). */
+    rrfK?: number;
+
+    /** Per-list weights for hybrid mode. Default: `{ lexical: 1.0, semantic: 1.0 }`. */
+    weights?: { lexical?: number; semantic?: number };
+
+    /** Maximum results to return after filtering. Default: 10. */
+    topK?: number;
+
+    /** Drop results below this final blended score. Default: 0. */
+    minScore?: number;
+
+    /**
+     * Override which EntityDocument to use. Defaults to the active Search-category
+     * EntityDocument registered for the entity.
+     */
+    entityDocumentId?: string;
+
+    /** Context user for permission filtering and embedding-model lookup. */
+    contextUser?: UserInfo;
+};
+
+/**
+ * One ranked result from {@link IMetadataProvider.SearchEntities}.
+ */
+export type EntitySearchResult = {
+    /** Pointer to the matching `EntityRecordDocument` row. Null when result came purely from the lexical pass. */
+    entityRecordDocumentId: string | null;
+    /** Record ID within the target entity (suitable for `Load()` on the entity object). */
+    recordId: string;
+    /** Final blended/single-mode score. */
+    score: number;
+    /** Which signal(s) contributed. */
+    matchType: 'lexical' | 'semantic' | 'hybrid';
+    /** Raw per-list scores, for callers that want to audit or re-rank. */
+    components: {
+        lexical?: number;
+        semantic?: number;
+    };
+};
 
 // ============================================================================
 // FULL-TEXT SEARCH TYPES

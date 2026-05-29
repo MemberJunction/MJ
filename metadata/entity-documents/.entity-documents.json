@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Entities Search",
+      "EntityID": "@lookup:Entities.Name=MJ: Entities",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "Template": "@file:templates/mj-entities-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    }
+  }
+]

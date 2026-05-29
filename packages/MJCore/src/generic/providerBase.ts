@@ -1,6 +1,7 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
+import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -163,7 +164,49 @@ export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrgan
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
+/**
+ * Pluggable hooks SearchEntities calls to embed the query text and dispatch the
+ * vector search against a configured EntityDocument index. Host packages
+ * (`@memberjunction/ai-engine`, `@memberjunction/ai-vectors-memory`) register
+ * implementations via {@link ProviderBase.RegisterSearchEntitiesHooks}. When
+ * not registered, semantic mode degrades to empty results.
+ */
+export interface SearchEntitiesHooks {
+    /** Embed the query text. Return null if no embedding model is available. */
+    embedText(text: string, contextUser?: UserInfo): Promise<number[] | null>;
+
+    /**
+     * Run a topK vector query against the cached index for `entityDocumentId`.
+     * The returned `metadata.RecordID` MUST be the parent entity's record ID;
+     * `id` is the EntityRecordDocument PK.
+     */
+    queryVectorIndex(
+        entityDocumentId: string,
+        queryVector: number[],
+        topK: number,
+        contextUser?: UserInfo
+    ): Promise<Array<{ id: string; score: number; metadata?: Record<string, unknown> }>>;
+}
+
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider {
+    /**
+     * Hooks for semantic search wiring. Registered by host packages (the AI
+     * engine + the vector memory provider) so MJCore avoids hard build-time
+     * dependencies. See {@link SearchEntitiesHooks}.
+     */
+    protected static _searchEntitiesHooks: SearchEntitiesHooks | undefined;
+
+    /**
+     * Register implementations of the SearchEntities hooks. Typically called once
+     * at server startup from `@memberjunction/ai-vectors-memory`'s host-bootstrap
+     * code (or any equivalent wiring) — never required for SearchEntities to
+     * exist on the API surface; only required for `mode: 'semantic' | 'hybrid'`
+     * to return results.
+     */
+    public static RegisterSearchEntitiesHooks(hooks: SearchEntitiesHooks): void {
+        ProviderBase._searchEntitiesHooks = hooks;
+    }
+
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -1003,6 +1046,316 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return `${base}|${extras}`;
         });
         return parts.join('||');
+    }
+
+    /**
+     * Search a single entity's records using lexical, semantic, or hybrid
+     * (weighted-RRF) ranking. See {@link IMetadataProvider.SearchEntities}.
+     *
+     * Implementation overview:
+     *   1. Resolve the EntityDocument (by `entityDocumentId` override or by
+     *      looking up the active Search-category doc for the entity).
+     *   2. In parallel: run the lexical pass (RunView with LIKE filters on
+     *      name + user-search fields) and the semantic pass (embed query →
+     *      QueryIndex against the configured VectorDatabase).
+     *   3. Fuse via canonical `ComputeRRF()` with optional per-list weights.
+     *   4. Permission-filter via a second RunView constrained to the matched
+     *      record IDs — that pipeline already enforces row-level read perms
+     *      on this entity, so any rows the user can't read drop out.
+     *   5. Slice to topK, apply minScore cutoff, return.
+     *
+     * Embedding the query text uses the configured embedding model from the
+     * EntityDocument's `AIModelID`; this implementation delegates to the
+     * `AIEngineBase`-style helper resolved lazily via the global class
+     * factory to avoid a hard dependency on `@memberjunction/ai-engine`.
+     */
+    public async SearchEntities(
+        entityName: string,
+        searchText: string,
+        options: SearchEntitiesOptions = {}
+    ): Promise<EntitySearchResult[]> {
+        const entity = this.EntityByName(entityName);
+        if (!entity) {
+            LogError(`SearchEntities: unknown entity "${entityName}"`);
+            return [];
+        }
+        if (!searchText || !searchText.trim()) {
+            return [];
+        }
+
+        const mode = options.mode ?? 'hybrid';
+        const topK = options.topK ?? 10;
+        const minScore = options.minScore ?? 0;
+        const overFetch = topK * 2;
+        const contextUser = options.contextUser;
+
+        // Resolve EntityDocument when semantic ranking is in play
+        let entityDocumentId: string | null = null;
+        let embeddingModelDriverClass: string | null = null;
+        let embeddingModelAPIName: string | null = null;
+        if (mode === 'semantic' || mode === 'hybrid') {
+            const resolved = await this.resolveSearchEntityDocument(
+                entity.ID,
+                options.entityDocumentId,
+                contextUser
+            );
+            if (resolved) {
+                entityDocumentId = resolved.id;
+                embeddingModelDriverClass = resolved.driverClass;
+                embeddingModelAPIName = resolved.apiName;
+            }
+            if (!entityDocumentId && mode === 'semantic') {
+                LogError(`SearchEntities: no active 'Search' EntityDocument for entity "${entityName}"; cannot run semantic-only mode`);
+                return [];
+            }
+        }
+
+        // Dispatch lexical and semantic in parallel. Wrapping the lexical pass
+        // in Promise.resolve adds no real cost today and keeps the shape ready
+        // if the lexical implementation ever goes async (FTS, external index).
+        const [lexicalRanked, semanticRanked] = await Promise.all([
+            mode === 'semantic'
+                ? Promise.resolve<ScoredCandidate[]>([])
+                : this.searchEntitiesLexicalPass(entity, searchText, overFetch, contextUser),
+            mode === 'lexical' || !entityDocumentId
+                ? Promise.resolve<ScoredCandidate[]>([])
+                : this.searchEntitiesSemanticPass(
+                    entityDocumentId,
+                    searchText,
+                    overFetch,
+                    embeddingModelDriverClass,
+                    embeddingModelAPIName,
+                    contextUser
+                ),
+        ]);
+
+        // Blend
+        const blended = this.searchEntitiesBlend(mode, lexicalRanked, semanticRanked, options);
+
+        // Build component-score lookup for the result-shape step
+        const lexicalScoreById = new Map<string, number>();
+        for (const c of lexicalRanked) lexicalScoreById.set(c.ID, c.Score);
+        const semanticScoreById = new Map<string, number>();
+        const semanticDocByRecord = new Map<string, string>();
+        for (const c of semanticRanked) {
+            semanticScoreById.set(c.ID, c.Score);
+            const erdId = (c.Metadata?.['entityRecordDocumentId'] as string | undefined);
+            if (erdId) semanticDocByRecord.set(c.ID, erdId);
+        }
+
+        // Permission-filter post hoc via RunView constrained to the matched
+        // record IDs — the existing pipeline already enforces row-level read
+        // permissions on this entity, so unauthorized rows simply drop out.
+        const ids = blended.map(c => c.ID);
+        const allowedIds = ids.length > 0
+            ? await this.searchEntitiesFilterByPermission(entity, ids, contextUser)
+            : new Set<string>();
+
+        const results: EntitySearchResult[] = [];
+        for (const cand of blended) {
+            if (!allowedIds.has(cand.ID)) continue;
+            if (cand.Score < minScore) continue;
+            const lex = lexicalScoreById.get(cand.ID);
+            const sem = semanticScoreById.get(cand.ID);
+            const matchType: EntitySearchResult['matchType'] = (lex != null && sem != null)
+                ? 'hybrid'
+                : (lex != null ? 'lexical' : 'semantic');
+            results.push({
+                entityRecordDocumentId: semanticDocByRecord.get(cand.ID) ?? null,
+                recordId: cand.ID,
+                score: cand.Score,
+                matchType,
+                components: { lexical: lex, semantic: sem },
+            });
+            if (results.length >= topK) break;
+        }
+
+        return results;
+    }
+
+    /**
+     * Look up the EntityDocument that backs entity search for `entityID`.
+     * Caller supplies an explicit ID override; otherwise we filter for an
+     * Active EntityDocument joined to the 'Search' type via the denormalized
+     * `Type` column on `vwEntityDocuments` (avoids a SQL subquery and keeps
+     * this metadata-layer code provider-agnostic).
+     */
+    private async resolveSearchEntityDocument(
+        entityID: string,
+        explicitId: string | undefined,
+        contextUser: UserInfo | undefined
+    ): Promise<{ id: string; driverClass: string | null; apiName: string | null } | null> {
+        const filter = explicitId
+            ? `ID='${explicitId.replace(/'/g, "''")}'`
+            : `EntityID='${entityID.replace(/'/g, "''")}' AND Status='Active' AND Type='Search'`;
+        const r = await this.RunView<{
+            ID: string;
+            AIModelID: string | null;
+            AIModel: string | null;
+            AIDriverClass: string | null;
+            AIAPIName: string | null;
+        }>({
+            EntityName: 'MJ: Entity Documents',
+            ExtraFilter: filter,
+            ResultType: 'simple',
+            MaxRows: 1,
+        }, contextUser);
+
+        if (!r.Success || (r.Results?.length ?? 0) === 0) return null;
+        const row = r.Results![0];
+        return {
+            id: row.ID,
+            driverClass: row.AIDriverClass ?? null,
+            apiName: row.AIAPIName ?? null,
+        };
+    }
+
+    /**
+     * Substring/prefix LIKE search against the entity's name field and any
+     * fields flagged `IncludeInUserSearchAPI`. Returns lexical scores in [0,1]
+     * blended by best match per row.
+     */
+    private async searchEntitiesLexicalPass(
+        entity: EntityInfo,
+        searchText: string,
+        overFetch: number,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        const trimmed = searchText.trim();
+        if (!trimmed) return [];
+
+        const sanitized = trimmed.replace(/'/g, "''");
+        const searchableFieldNames = entity.Fields
+            .filter(f => f.IncludeInUserSearchAPI || f.IsNameField)
+            .map(f => f.Name);
+        if (searchableFieldNames.length === 0) return [];
+
+        const likeClauses = searchableFieldNames.map(n => `${n} LIKE '%${sanitized}%'`).join(' OR ');
+
+        const r = await this.RunView<Record<string, unknown>>({
+            EntityName: entity.Name,
+            ExtraFilter: likeClauses,
+            ResultType: 'simple',
+            MaxRows: overFetch,
+        }, contextUser);
+
+        if (!r.Success) return [];
+
+        const lower = trimmed.toLowerCase();
+        const nameField = entity.NameField?.Name ?? entity.Fields.find(f => f.IsNameField)?.Name ?? null;
+        const out: ScoredCandidate[] = [];
+        for (const row of (r.Results ?? [])) {
+            const id = String(row['ID'] ?? '');
+            if (!id) continue;
+            const nameVal = nameField ? String(row[nameField] ?? '').toLowerCase() : '';
+            let score = 0.5; // any match (in some searchable field)
+            if (nameVal) {
+                if (nameVal === lower) score = 1.0;
+                else if (nameVal.startsWith(lower)) score = 0.85;
+                else if (nameVal.includes(lower)) score = 0.7;
+            }
+            out.push({ ID: id, Score: score });
+        }
+        // ComputeRRF reads order, not magnitude — sort by score so rank 1 = best lexical match
+        out.sort((a, b) => b.Score - a.Score);
+        return out;
+    }
+
+    /**
+     * Embed the query text using the configured embedding model and dispatch
+     * a QueryIndex against the SimpleVectorServiceProvider (or any VectorDB
+     * provider registered against the EntityDocument's VectorDatabase).
+     *
+     * Returns ScoredCandidate[] whose `ID` is the parent record's RecordID
+     * and `Metadata.entityRecordDocumentId` carries the EntityRecordDocument PK.
+     *
+     * Both the embedding helper and the vector provider are resolved through
+     * `ProviderBase.RegisterSearchEntitiesHooks()` (called by host packages —
+     * see `@memberjunction/ai-engine` and `@memberjunction/ai-vectors-memory`),
+     * which keeps MJCore free of build-time dependencies on the AI/vector
+     * packages while still letting SearchEntities work at runtime.
+     */
+    private async searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        _embeddingDriverClass: string | null,
+        _embeddingApiName: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        const hooks = ProviderBase._searchEntitiesHooks;
+        if (!hooks?.embedText || !hooks?.queryVectorIndex) {
+            LogStatus('SearchEntities: semantic hooks not registered; semantic pass returns empty. Call ProviderBase.RegisterSearchEntitiesHooks() from your AI/vector wiring.');
+            return [];
+        }
+
+        let queryVector: number[] | null = null;
+        try {
+            queryVector = await hooks.embedText(searchText, contextUser);
+        } catch (e) {
+            LogError(`SearchEntities: embedText hook threw: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+        if (!queryVector) return [];
+
+        let matches: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> = [];
+        try {
+            matches = await hooks.queryVectorIndex(entityDocumentId, queryVector, overFetch, contextUser);
+        } catch (e) {
+            LogError(`SearchEntities: queryVectorIndex hook threw: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+
+        const out: ScoredCandidate[] = [];
+        for (const m of matches) {
+            const recordId = String(m.metadata?.['RecordID'] ?? '');
+            if (!recordId) continue;
+            out.push({
+                ID: recordId,
+                Score: m.score,
+                Metadata: { entityRecordDocumentId: m.id },
+            });
+        }
+        return out;
+    }
+
+    /** Blend lexical + semantic via canonical weighted ComputeRRF. */
+    private searchEntitiesBlend(
+        mode: NonNullable<SearchEntitiesOptions['mode']>,
+        lexicalRanked: ScoredCandidate[],
+        semanticRanked: ScoredCandidate[],
+        options: SearchEntitiesOptions
+    ): ScoredCandidate[] {
+        if (mode === 'lexical') return lexicalRanked;
+        if (mode === 'semantic') return semanticRanked;
+        const weights = [
+            options.weights?.lexical ?? 1.0,
+            options.weights?.semantic ?? 1.0,
+        ];
+        return ComputeRRF([lexicalRanked, semanticRanked], options.rrfK ?? 60, weights);
+    }
+
+    /**
+     * Run a permission-aware RunView restricted to the matched IDs. Whatever
+     * comes back is what the user is allowed to see. Used as a post-filter
+     * over the fused result set.
+     */
+    private async searchEntitiesFilterByPermission(
+        entity: EntityInfo,
+        ids: string[],
+        contextUser: UserInfo | undefined
+    ): Promise<Set<string>> {
+        if (ids.length === 0) return new Set();
+        const escaped = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+        const r = await this.RunView<{ ID: string }>({
+            EntityName: entity.Name,
+            ExtraFilter: `ID IN (${escaped})`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: ids.length,
+        }, contextUser);
+        if (!r.Success) return new Set();
+        return new Set((r.Results ?? []).map(row => row.ID));
     }
 
     /**

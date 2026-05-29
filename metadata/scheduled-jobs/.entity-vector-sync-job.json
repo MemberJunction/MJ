@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Entity Vector Sync - Daily",
+      "Description": "Daily vector-sync run for all Active Search-type Entity Documents (e.g. MJ Entities Search). Embeds new/changed records via the EntityDocument's configured embedding model and writes the vectors back to MJ: Entity Record Documents.VectorJSON. RunImmediatelyIfNeverRun=true so a fresh install runs the sync on first poll instead of waiting up to 24h.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=EntityVectorSyncJobDriver",
+      "CronExpression": "0 0 4 * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "RunImmediatelyIfNeverRun": true,
+      "Configuration": {
+        "EntityDocumentType": "Search"
+      }
+    }
+  }
+]

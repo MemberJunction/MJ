@@ -89,6 +89,10 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
     public Configuration = '';
     public NotifyOnSuccess = false;
     public NotifyOnFailure = true;
+    /** When true AND the job has never run, the scheduler queues it for immediate
+     *  execution on the next poll instead of waiting for the next cron tick.
+     *  Useful for newly-seeded jobs that should not wait up to a full cron interval. */
+    public RunImmediatelyIfNeverRun = false;
 
     // Stats (edit mode)
     public TotalRuns = 0;
@@ -223,6 +227,7 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
         this.Configuration = this.DefaultConfiguration ?? '';
         this.NotifyOnSuccess = false;
         this.NotifyOnFailure = true;
+        this.RunImmediatelyIfNeverRun = false;
         this.TotalRuns = 0;
         this.SuccessRuns = 0;
         this.FailedRuns = 0;
@@ -240,6 +245,9 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
         this.Configuration = job.Configuration ?? '';
         this.NotifyOnSuccess = job.Get('NotifyOnSuccess') as boolean ?? false;
         this.NotifyOnFailure = job.Get('NotifyOnFailure') as boolean ?? true;
+        // Strongly-typed property — added by CodeGen after the v5.38.x migration runs.
+        // Will compile-error until then; user is doing the migration + CodeGen pass before merging.
+        this.RunImmediatelyIfNeverRun = job.RunImmediatelyIfNeverRun ?? false;
     }
 
     private applyFormToEntity(job: MJScheduledJobEntity): void {
@@ -253,6 +261,8 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
         job.Configuration = this.Configuration;
         job.Set('NotifyOnSuccess', this.NotifyOnSuccess);
         job.Set('NotifyOnFailure', this.NotifyOnFailure);
+        // Strongly-typed property — added by CodeGen after the v5.38.x migration runs.
+        job.RunImmediatelyIfNeverRun = this.RunImmediatelyIfNeverRun;
     }
 
     private async getOrCreateEntity(): Promise<MJScheduledJobEntity> {
