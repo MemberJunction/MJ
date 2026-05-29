@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
     addOutput, checkOverrideOwnership, failure, getNumberParam, getStringParam, loadComponent, loadOverride, mapToComponentStatus,
 } from "./_shared";
@@ -107,7 +107,7 @@ export class RevertInteractiveFormAction extends BaseAction {
             if (!target) {
                 return failure("COMPONENT_NOT_FOUND", "Could not resolve target Component.");
             }
-            if (target.ID === currentComponent.ID) {
+            if (UUIDsEqual(target.ID, currentComponent.ID)) {
                 addOutput(params, "OverrideID", override.ID);
                 addOutput(params, "ComponentID", target.ID);
                 addOutput(params, "PreviousComponentID", null);
