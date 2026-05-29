@@ -220,6 +220,14 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
      */
     constructor(apiKey?: string) { super(apiKey && apiKey.trim().length > 0 ? apiKey : 'in-memory-no-auth'); }
 
+    /** SVS reads vectors out of `MJ: Entity Record Documents.VectorJSON`; it
+     *  intentionally does not implement `CreateRecord(s)`. Flagging this lets
+     *  ingestion pipelines short-circuit the upsert call instead of logging
+     *  spurious "unsupported" errors per batch. */
+    public override get IsReadOnly(): boolean {
+        return true;
+    }
+
     /**
      * Drop a cached index. The BaseEntity event subscription handles this
      * automatically for `Save()` / `Delete()` paths; call this manually only
