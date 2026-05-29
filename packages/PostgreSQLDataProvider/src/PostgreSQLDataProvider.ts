@@ -23,6 +23,7 @@ import {
 
 
 import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import type { ColocatedDialect, IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -59,7 +60,7 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Boolean columns use true/false instead of 1/0
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
-export class PostgreSQLDataProvider extends GenericDatabaseProvider {
+export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
     private _connectionManager: PGConnectionManager = new PGConnectionManager();
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
@@ -330,6 +331,32 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
             LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
         }
+    }
+
+    // ─── Colocated vector host (IColocatedVectorHost) ────────────────
+    // Lets a colocated vector provider (e.g. PgVectorColocated) store and query vectors
+    // in THIS database, reusing this connection — and, when a transaction is open, the
+    // same transaction — instead of opening a separate pool to a remote vector store.
+
+    public get ColocatedDialect(): ColocatedDialect {
+        return 'PostgreSQL';
+    }
+
+    public get ColocatedSchema(): string {
+        return this._schemaName;
+    }
+
+    /**
+     * Execute a parameterized statement for a colocated vector provider against this
+     * connection. Uses the active transaction client when one is open (so vector writes
+     * commit/rollback with the entity write), otherwise the shared pool. Placeholders use
+     * PG's native `$1..$n`. Deliberately bypasses {@link ExecuteSQL}'s PascalCase
+     * auto-quoting — the vector provider emits its own correctly-quoted SQL.
+     */
+    public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+        const source = this._transaction ?? this._connectionManager.Pool;
+        const result = await source.query(sql, params ? [...params] : undefined);
+        return result.rows as T[];
     }
 
     // ─── Transaction Management ──────────────────────────────────────
