@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import { createMockFileSystem, createMockGitHubProvider } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleVersionInfo } from './mocks/fixtures.js';
@@ -271,6 +272,120 @@ describe('ScaffoldPhase', () => {
         expect((err as InstallerError).Code).toBe('EXTRACT_FAILED');
         expect((err as InstallerError).message).toContain('Corrupt ZIP');
       }
+    });
+  });
+
+  // ─── install.config.json preservation across ExtractZip ─────────────
+  //
+  // The bootstrap ZIP ships a stub `install.config.json` (legacy camelCase
+  // shape, empty values) intended as a fill-in template. If the user already
+  // populated their own `install.config.json` in the target dir before
+  // running `mj install` (or before re-running with `--no-resume`), the
+  // unconditional ExtractZip would clobber their customized file. The
+  // scaffold phase backs up the file before extraction and restores it
+  // afterwards so user edits survive.
+
+  describe('install.config.json preservation', () => {
+    // Use path.join so the test passes on Windows (which uses backslashes)
+    // as well as POSIX. ScaffoldPhase calls path.join under the hood.
+    const USER_CONFIG_PATH = path.join('/test/install', 'install.config.json');
+
+    // Clear mock call history so cumulative calls from prior tests in this
+    // file don't leak into our assertions. (We still want the default mock
+    // return values set in the outer beforeEach, so use mockClear() — not
+    // mockReset() — to preserve the implementations.)
+    beforeEach(() => {
+      mockFs.FileExists.mockClear();
+      mockFs.ReadText.mockClear();
+      mockFs.WriteText.mockClear();
+      mockFs.ExtractZip.mockClear();
+    });
+    const USER_CONFIG_CONTENT = JSON.stringify(
+      {
+        DatabaseHost: 'localhost',
+        DatabaseName: 'UserCustomized',
+        AuthProviderValues: { CLIENT_ID: 'user-supplied-id' },
+      },
+      null,
+      2,
+    );
+
+    it('should preserve an existing install.config.json across ExtractZip', async () => {
+      // Simulate: user already has install.config.json in the target dir
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        p === USER_CONFIG_PATH,
+      );
+      mockFs.ReadText.mockImplementation(async (p: string) =>
+        p === USER_CONFIG_PATH ? USER_CONFIG_CONTENT : '',
+      );
+
+      const ctx = makeContext({ Tag: 'v5.2.0' });
+      await phase.Run(ctx);
+
+      // Read happens before extract; write happens after extract
+      expect(mockFs.ReadText).toHaveBeenCalledWith(USER_CONFIG_PATH);
+      expect(mockFs.ExtractZip).toHaveBeenCalled();
+      expect(mockFs.WriteText).toHaveBeenCalledWith(
+        USER_CONFIG_PATH,
+        USER_CONFIG_CONTENT,
+      );
+
+      // Order check: ReadText (backup) → ExtractZip → WriteText (restore)
+      const readOrder = mockFs.ReadText.mock.invocationCallOrder[0];
+      const extractOrder = mockFs.ExtractZip.mock.invocationCallOrder[0];
+      const writeOrder = mockFs.WriteText.mock.invocationCallOrder.find(
+        (_, i) => mockFs.WriteText.mock.calls[i][0] === USER_CONFIG_PATH,
+      );
+      expect(readOrder).toBeLessThan(extractOrder);
+      expect(extractOrder).toBeLessThan(writeOrder as number);
+    });
+
+    it('should not write any install.config.json when none existed before extract', async () => {
+      // Simulate: no user config in the target dir
+      mockFs.FileExists.mockResolvedValue(false);
+
+      const ctx = makeContext({ Tag: 'v5.2.0' });
+      await phase.Run(ctx);
+
+      // FileExists was probed, no ReadText for the config, no restoration WriteText
+      expect(mockFs.FileExists).toHaveBeenCalledWith(USER_CONFIG_PATH);
+      const configReads = mockFs.ReadText.mock.calls.filter(
+        ([p]: [string]) => p === USER_CONFIG_PATH,
+      );
+      const configWrites = mockFs.WriteText.mock.calls.filter(
+        ([p]: [string]) => p === USER_CONFIG_PATH,
+      );
+      expect(configReads).toHaveLength(0);
+      expect(configWrites).toHaveLength(0);
+    });
+
+    it('should emit a step:progress message when restoring a preserved config', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        p === USER_CONFIG_PATH,
+      );
+      mockFs.ReadText.mockResolvedValue(USER_CONFIG_CONTENT);
+
+      // Build the context inline so we can capture the emitSpy and inspect
+      // emitted events. (`makeContext` only exposes the emitter, not the spy.)
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx: ScaffoldContext = {
+        Tag: 'v5.2.0',
+        Dir: '/test/install',
+        Yes: true,
+        Emitter: emitter,
+      };
+      await phase.Run(ctx);
+
+      const progressEvents = emittedEvents(emitSpy, 'step:progress') as Array<{
+        Phase: string;
+        Message: string;
+      }>;
+      const preserveMsg = progressEvents.find(
+        (e) =>
+          e.Phase === 'scaffold' &&
+          e.Message?.includes('Preserved existing install.config.json'),
+      );
+      expect(preserveMsg).toBeDefined();
     });
   });
 
