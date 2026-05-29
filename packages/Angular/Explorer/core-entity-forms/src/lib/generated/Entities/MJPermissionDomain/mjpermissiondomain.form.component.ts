@@ -17,7 +17,7 @@ export class MJPermissionDomainFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'domainConfiguration', sectionName: 'Domain Configuration', isExpanded: true },
             { sectionKey: 'providerImplementation', sectionName: 'Provider Implementation', isExpanded: true },
-            { sectionKey: 'providerCapabilities', sectionName: 'Provider Capabilities', isExpanded: true },
+            { sectionKey: 'providerCapabilities', sectionName: 'Provider Capabilities', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

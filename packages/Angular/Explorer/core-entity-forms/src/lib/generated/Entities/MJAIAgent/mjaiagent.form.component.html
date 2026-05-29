@@ -1298,5 +1298,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- AI Agent Channel Configs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentChannelConfigs"
+        SectionName="AI Agent Channel Configs"
+        Icon="fa fa-network-wired"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentChannelConfigs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Channel Configs','AIAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Channel Configs')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentChannelConfigs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentChannelConfigs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

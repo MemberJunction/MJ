@@ -17,8 +17,8 @@ export class MJAIResultCacheFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'promptConfiguration', sectionName: 'Prompt Configuration', isExpanded: true },
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
-            { sectionKey: 'resultInformation', sectionName: 'Result Information', isExpanded: true },
-            { sectionKey: 'stakeholderLinks', sectionName: 'Stakeholder Links', isExpanded: true },
+            { sectionKey: 'resultInformation', sectionName: 'Result Information', isExpanded: false },
+            { sectionKey: 'stakeholderLinks', sectionName: 'Stakeholder Links', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

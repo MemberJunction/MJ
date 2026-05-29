@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "AIAgentID": "@lookup:MJ: AI Agents.Name=Sage",
+      "AIAgentChannelID": "@lookup:MJ: AI Agent Channels.Name=voice-cascaded",
+      "Sequence": 1,
+      "Status": "Active",
+      "LatencyBudgetMs": 900,
+      "ConfigJSON": {
+        "Kind": "voice-cascaded",
+        "STT": {
+          "AIModelID": "@lookup:MJ: AI Models.Name=Deepgram Nova-3 (Streaming STT)",
+          "LanguageCode": "en-US",
+          "Partials": true
+        },
+        "TTS": {
+          "AIModelID": "@lookup:MJ: AI Models.Name=ElevenLabs Flash v2.5 (Streaming TTS)",
+          "FirstChunkBudgetMs": 150
+        },
+        "VAD": {
+          "DriverClass": "EnergyVAD",
+          "Sensitivity": 0.5
+        },
+        "TurnDetector": {
+          "DriverClass": "SilenceTurnDetector"
+        },
+        "LatencyBudgetMs": 900,
+        "BargeIn": true,
+        "FillerPolicy": {
+          "ThresholdMs": 10000,
+          "Phrases": [
+            "one moment",
+            "let me look that up",
+            "checking now"
+          ]
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "F07F9FB4-81B4-44CB-8BF3-89404D3CC1F8"
+    },
+    "sync": {
+      "lastModified": "2026-05-23T19:00:34.486Z",
+      "checksum": "9295ff1b2cad96d2d7f4a6c7ba2809637cda08e48467e266e7440bd3dccefe11"
+    }
+  }
+]

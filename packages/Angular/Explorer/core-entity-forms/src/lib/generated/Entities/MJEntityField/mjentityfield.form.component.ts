@@ -18,10 +18,10 @@ export class MJEntityFieldFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identificationKeys', sectionName: 'Identification & Keys', isExpanded: true },
             { sectionKey: 'userInterfaceDisplaySettings', sectionName: 'User Interface & Display Settings', isExpanded: true },
-            { sectionKey: 'dataConstraintsValidation', sectionName: 'Data Constraints & Validation', isExpanded: true },
-            { sectionKey: 'relationshipsLinking', sectionName: 'Relationships & Linking', isExpanded: true },
+            { sectionKey: 'dataConstraintsValidation', sectionName: 'Data Constraints & Validation', isExpanded: false },
+            { sectionKey: 'relationshipsLinking', sectionName: 'Relationships & Linking', isExpanded: false },
             { sectionKey: 'systemAuditMetadata', sectionName: 'System & Audit Metadata', isExpanded: false },
-            { sectionKey: 'securityEncryption', sectionName: 'Security & Encryption', isExpanded: true },
+            { sectionKey: 'securityEncryption', sectionName: 'Security & Encryption', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityFieldValues', sectionName: 'Entity Field Values', isExpanded: false }
         ]);

@@ -18,8 +18,8 @@ export class MJConversationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'conversationCore', sectionName: 'Conversation Core', isExpanded: true },
             { sectionKey: 'participantsReferences', sectionName: 'Participants & References', isExpanded: true },
-            { sectionKey: 'contextualScope', sectionName: 'Contextual Scope', isExpanded: true },
-            { sectionKey: 'testRunDetails', sectionName: 'Test Run Details', isExpanded: true },
+            { sectionKey: 'contextualScope', sectionName: 'Contextual Scope', isExpanded: false },
+            { sectionKey: 'testRunDetails', sectionName: 'Test Run Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },

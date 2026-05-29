@@ -18,7 +18,7 @@ export class MJUserViewCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'organizationalHierarchy', sectionName: 'Organizational Hierarchy', isExpanded: true },
-            { sectionKey: 'linkedEntities', sectionName: 'Linked Entities', isExpanded: true },
+            { sectionKey: 'linkedEntities', sectionName: 'Linked Entities', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJUserViewCategories', sectionName: 'User View Categories', isExpanded: false },
             { sectionKey: 'mJUserViews', sectionName: 'User Views', isExpanded: false }

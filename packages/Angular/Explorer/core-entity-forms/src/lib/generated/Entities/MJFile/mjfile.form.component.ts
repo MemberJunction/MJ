@@ -18,7 +18,7 @@ export class MJFileFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'fileBasics', sectionName: 'File Basics', isExpanded: true },
             { sectionKey: 'classificationStatus', sectionName: 'Classification & Status', isExpanded: true },
-            { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: true },
+            { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJFileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false },
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },

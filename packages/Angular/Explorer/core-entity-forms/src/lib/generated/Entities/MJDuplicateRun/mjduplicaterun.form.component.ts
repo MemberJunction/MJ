@@ -18,7 +18,7 @@ export class MJDuplicateRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runOverview', sectionName: 'Run Overview', isExpanded: true },
             { sectionKey: 'approvalInformation', sectionName: 'Approval Information', isExpanded: true },
-            { sectionKey: 'processingStatus', sectionName: 'Processing Status', isExpanded: true },
+            { sectionKey: 'processingStatus', sectionName: 'Processing Status', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDuplicateRunDetails', sectionName: 'Duplicate Run Details', isExpanded: false }
         ]);

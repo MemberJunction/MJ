@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/ai-deepgram",
+  "type": "module",
+  "version": "5.36.0",
+  "description": "MemberJunction Wrapper for Deepgram Speech-to-Text (Streaming Nova-3)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "clean": "rimraf dist",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "rimraf": "^5.0.5",
+    "tsc-alias": "^1.8.10",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "5.36.0",
+    "@memberjunction/global": "5.36.0",
+    "ws": "^8.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

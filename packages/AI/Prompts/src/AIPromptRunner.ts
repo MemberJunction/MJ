@@ -3373,6 +3373,49 @@ export class AIPromptRunner {
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
 
+      // Wire token-level streaming when the caller has provided an `onStreaming`
+      // callback on AIPromptParams. BaseLLM.ChatCompletion() dispatches to its
+      // streaming branch only when `streaming === true`, `streamingCallbacks`
+      // is set, AND the provider has `SupportsStreaming === true` — providers
+      // that don't support streaming silently fall back to the non-streaming
+      // path, which is the correct behavior. See chat.types.ts:108 for the
+      // StreamingChatCallbacks contract and baseLLM.ts:241-291 for the dispatch
+      // logic.
+      //
+      // The user-supplied `onStreaming` callback is wrapped in try/catch on
+      // every invocation — a buggy user callback must never tear down the
+      // streaming pipeline mid-completion.
+      if (params.onStreaming) {
+        chatParams.streaming = true;
+        const userOnStreaming = params.onStreaming;
+        chatParams.streamingCallbacks = {
+          OnContent: (chunk: string, isComplete: boolean) => {
+            try {
+              userOnStreaming({ content: chunk, isComplete });
+            } catch (cbErr) {
+              this.logError(cbErr instanceof Error ? cbErr : String(cbErr), { category: 'StreamingCallback', model });
+            }
+          },
+          OnComplete: (_result: ChatResult) => {
+            // No-op: the final ChatResult is returned by ChatCompletion() and
+            // flows through the normal post-processing path. The streaming
+            // callback contract is concerned with deltas, not the final value.
+          },
+          OnError: (err: unknown) => {
+            // Best-effort: surface the error to the user callback as a final
+            // "isComplete" delta so a consumer that's bridging into a queue
+            // can close it. We log here regardless.
+            const errArg = err instanceof Error ? err : String(err);
+            this.logError(errArg, { category: 'StreamingError', model });
+            try {
+              userOnStreaming({ content: '', isComplete: true });
+            } catch (cbErr) {
+              this.logError(cbErr instanceof Error ? cbErr : String(cbErr), { category: 'StreamingCallback', model });
+            }
+          },
+        };
+      }
+
       // Execute the model with cancellation support
       if (cancellationToken) {
         // If cancellation token is provided, wrap the execution to handle cancellation

@@ -18,7 +18,7 @@ export class MJCredentialFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'classification', sectionName: 'Classification', isExpanded: true },
             { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
-            { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: true },
+            { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOAuthTokens', sectionName: 'O Auth Tokens', isExpanded: false },
             { sectionKey: 'mJSearchProviders', sectionName: 'Search Providers', isExpanded: false },

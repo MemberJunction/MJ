@@ -18,10 +18,10 @@ export class MJTestSuiteRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runIdentification', sectionName: 'Run Identification', isExpanded: true },
             { sectionKey: 'executionTimelineStatus', sectionName: 'Execution Timeline & Status', isExpanded: true },
-            { sectionKey: 'testMetrics', sectionName: 'Test Metrics', isExpanded: true },
-            { sectionKey: 'technicalOutput', sectionName: 'Technical Output', isExpanded: true },
-            { sectionKey: 'executionHost', sectionName: 'Execution Host', isExpanded: true },
-            { sectionKey: 'userDetails', sectionName: 'User Details', isExpanded: true },
+            { sectionKey: 'testMetrics', sectionName: 'Test Metrics', isExpanded: false },
+            { sectionKey: 'technicalOutput', sectionName: 'Technical Output', isExpanded: false },
+            { sectionKey: 'executionHost', sectionName: 'Execution Host', isExpanded: false },
+            { sectionKey: 'userDetails', sectionName: 'User Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false }
         ]);

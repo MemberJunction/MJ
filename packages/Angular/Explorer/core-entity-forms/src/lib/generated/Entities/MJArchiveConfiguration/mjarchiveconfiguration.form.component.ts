@@ -18,7 +18,7 @@ export class MJArchiveConfigurationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'storageConfiguration', sectionName: 'Storage Configuration', isExpanded: true },
-            { sectionKey: 'archiveSettings', sectionName: 'Archive Settings', isExpanded: true },
+            { sectionKey: 'archiveSettings', sectionName: 'Archive Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArchiveConfigurationEntities', sectionName: 'Archive Configuration Entities', isExpanded: false },
             { sectionKey: 'mJArchiveRuns', sectionName: 'Archive Runs', isExpanded: false }

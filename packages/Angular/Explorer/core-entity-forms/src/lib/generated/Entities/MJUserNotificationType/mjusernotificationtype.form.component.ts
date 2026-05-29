@@ -18,7 +18,7 @@ export class MJUserNotificationTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'notificationDetails', sectionName: 'Notification Details', isExpanded: true },
             { sectionKey: 'deliveryDefaults', sectionName: 'Delivery Defaults', isExpanded: true },
-            { sectionKey: 'templateSettings', sectionName: 'Template Settings', isExpanded: true },
+            { sectionKey: 'templateSettings', sectionName: 'Template Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJUserNotifications', sectionName: 'User Notifications', isExpanded: false },
             { sectionKey: 'mJUserNotificationPreferences', sectionName: 'User Notification Preferences', isExpanded: false }

@@ -60,6 +60,8 @@ import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collection
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
+import { VoiceDemoResource } from './lib/resource-wrappers/voice-demo-resource.component';
+import { VoiceWidgetComponent } from '@memberjunction/ng-voice-widget';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
@@ -89,6 +91,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ChatTasksResource,
     ArtifactResource,
     NotificationsResource,
+    VoiceDemoResource,
     DashboardPreferencesDialogComponent,
   ],
   imports: [
@@ -128,7 +131,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJDialogActionsComponent,
     MJDropdownComponent,
     MJWindowComponent,
-    MJWindowTitlebarComponent
+    MJWindowTitlebarComponent,
+    VoiceWidgetComponent
   ],
   exports: [
     ResourceContainerComponent,

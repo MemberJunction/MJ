@@ -18,7 +18,7 @@ export class MJRecommendationRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runIdentification', sectionName: 'Run Identification', isExpanded: true },
             { sectionKey: 'runScheduleStatus', sectionName: 'Run Schedule & Status', isExpanded: true },
-            { sectionKey: 'runDescription', sectionName: 'Run Description', isExpanded: true },
+            { sectionKey: 'runDescription', sectionName: 'Run Description', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJRecommendations', sectionName: 'Recommendations', isExpanded: false }
         ]);

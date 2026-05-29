@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (347 classes)
+// @memberjunction/core-entities (350 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -29,6 +29,8 @@ import {
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentChannelConfigEntity,
+    MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
@@ -76,6 +78,7 @@ import {
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
+    MJAIVoiceProfileEntity,
     MJAPIApplicationEntity,
     MJAPIApplicationScopeEntity,
     MJAPIKeyApplicationEntity,
@@ -596,6 +599,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentChannelConfigEntity,
+    MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
@@ -643,6 +648,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
+    MJAIVoiceProfileEntity,
     MJAPIApplicationEntity,
     MJAPIApplicationScopeEntity,
     MJAPIKeyApplicationEntity,
@@ -1097,7 +1103,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 507;
+export const CLASS_REGISTRATIONS_COUNT = 510;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

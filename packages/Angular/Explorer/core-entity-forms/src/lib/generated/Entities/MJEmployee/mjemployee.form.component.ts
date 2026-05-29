@@ -18,7 +18,7 @@ export class MJEmployeeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
             { sectionKey: 'personalContact', sectionName: 'Personal & Contact', isExpanded: true },
-            { sectionKey: 'employmentDetails', sectionName: 'Employment Details', isExpanded: true },
+            { sectionKey: 'employmentDetails', sectionName: 'Employment Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEmployeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },
             { sectionKey: 'mJEmployeeRoles', sectionName: 'Employee Roles', isExpanded: false },

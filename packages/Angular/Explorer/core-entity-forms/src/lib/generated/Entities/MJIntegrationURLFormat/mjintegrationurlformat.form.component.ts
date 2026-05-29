@@ -17,7 +17,7 @@ export class MJIntegrationURLFormatFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'integrationMetadata', sectionName: 'Integration Metadata', isExpanded: false },
             { sectionKey: 'uRLTemplateConfiguration', sectionName: 'URL Template Configuration', isExpanded: true },
-            { sectionKey: 'auditNotes', sectionName: 'Audit & Notes', isExpanded: true },
+            { sectionKey: 'auditNotes', sectionName: 'Audit & Notes', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

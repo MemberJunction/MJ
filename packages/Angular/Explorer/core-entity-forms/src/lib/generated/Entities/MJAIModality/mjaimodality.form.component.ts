@@ -25,7 +25,8 @@ export class MJAIModalityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
             { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
-            { sectionKey: 'mJAIModelTypesDefaultOutputModalityID', sectionName: 'AI Model Types', isExpanded: false }
+            { sectionKey: 'mJAIModelTypesDefaultOutputModalityID', sectionName: 'AI Model Types', isExpanded: false },
+            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false }
         ]);
     }
 }

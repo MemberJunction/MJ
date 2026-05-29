@@ -17,7 +17,7 @@ export class MJArchiveRunDetailFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'archiveContext', sectionName: 'Archive Context', isExpanded: true },
             { sectionKey: 'processingResults', sectionName: 'Processing Results', isExpanded: true },
-            { sectionKey: 'timelineAndVersioning', sectionName: 'Timeline and Versioning', isExpanded: true },
+            { sectionKey: 'timelineAndVersioning', sectionName: 'Timeline and Versioning', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -18,7 +18,7 @@ export class MJDashboardFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'dashboardIdentityDescription', sectionName: 'Dashboard Identity & Description', isExpanded: true },
             { sectionKey: 'accessScopeSettings', sectionName: 'Access & Scope Settings', isExpanded: true },
-            { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: true },
+            { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDashboardCategoryLinks', sectionName: 'Dashboard Category Links', isExpanded: false },
             { sectionKey: 'mJDashboardUserStates', sectionName: 'Dashboard User States', isExpanded: false },

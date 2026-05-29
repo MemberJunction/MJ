@@ -18,8 +18,8 @@ export class MJFileStorageProviderFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'providerIdentification', sectionName: 'Provider Identification', isExpanded: true },
             { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
-            { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: true },
-            { sectionKey: 'authenticationAccess', sectionName: 'Authentication & Access', isExpanded: true },
+            { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: false },
+            { sectionKey: 'authenticationAccess', sectionName: 'Authentication & Access', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJFiles', sectionName: 'Files', isExpanded: false },
             { sectionKey: 'mJFileStorageAccounts', sectionName: 'File Storage Accounts', isExpanded: false },

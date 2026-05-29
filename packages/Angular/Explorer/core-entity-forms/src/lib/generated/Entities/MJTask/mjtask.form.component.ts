@@ -18,7 +18,7 @@ export class MJTaskFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'relationshipsOwnership', sectionName: 'Relationships & Ownership', isExpanded: true },
             { sectionKey: 'taskDetails', sectionName: 'Task Details', isExpanded: true },
-            { sectionKey: 'timelineMilestones', sectionName: 'Timeline & Milestones', isExpanded: true },
+            { sectionKey: 'timelineMilestones', sectionName: 'Timeline & Milestones', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTaskDependenciesTaskID', sectionName: 'Task Dependencies (Task ID)', isExpanded: false },
             { sectionKey: 'mJTaskDependenciesDependsOnTaskID', sectionName: 'Task Dependencies (Depends On Task ID)', isExpanded: false },

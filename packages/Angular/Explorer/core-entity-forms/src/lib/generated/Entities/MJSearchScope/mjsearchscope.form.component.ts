@@ -18,9 +18,9 @@ export class MJSearchScopeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'scopeBehavior', sectionName: 'Scope Behavior', isExpanded: true },
-            { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: true },
-            { sectionKey: 'lifecycleAndAvailability', sectionName: 'Lifecycle and Availability', isExpanded: true },
-            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
+            { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: false },
+            { sectionKey: 'lifecycleAndAvailability', sectionName: 'Lifecycle and Availability', isExpanded: false },
+            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSearchScopeEntities', sectionName: 'Search Scope Entities', isExpanded: false },
             { sectionKey: 'mJSearchScopeExternalIndexes', sectionName: 'Search Scope External Indexes', isExpanded: false },

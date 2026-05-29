@@ -17,7 +17,7 @@ export class MJDataContextItemFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'itemIdentification', sectionName: 'Item Identification', isExpanded: true },
             { sectionKey: 'sourceDefinition', sectionName: 'Source Definition', isExpanded: true },
-            { sectionKey: 'cachedSnapshot', sectionName: 'Cached Snapshot', isExpanded: true },
+            { sectionKey: 'cachedSnapshot', sectionName: 'Cached Snapshot', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

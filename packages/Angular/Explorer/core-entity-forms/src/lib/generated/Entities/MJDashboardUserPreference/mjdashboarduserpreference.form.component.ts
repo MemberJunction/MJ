@@ -17,7 +17,7 @@ export class MJDashboardUserPreferenceFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identificationOwnership', sectionName: 'Identification & Ownership', isExpanded: true },
             { sectionKey: 'dashboardAssignment', sectionName: 'Dashboard Assignment', isExpanded: true },
-            { sectionKey: 'scopeSettings', sectionName: 'Scope Settings', isExpanded: true },
+            { sectionKey: 'scopeSettings', sectionName: 'Scope Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

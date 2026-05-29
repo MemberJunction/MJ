@@ -17,7 +17,7 @@ export class MJEntityRelationshipFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'relationshipCore', sectionName: 'Relationship Core', isExpanded: true },
             { sectionKey: 'aPIQuerySettings', sectionName: 'API & Query Settings', isExpanded: true },
-            { sectionKey: 'displayConfiguration', sectionName: 'Display Configuration', isExpanded: true },
+            { sectionKey: 'displayConfiguration', sectionName: 'Display Configuration', isExpanded: false },
             { sectionKey: 'technicalMetadata', sectionName: 'Technical Metadata', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

@@ -18,7 +18,7 @@ export class MJContentItemFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'sourceInformation', sectionName: 'Source Information', isExpanded: true },
             { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: true },
-            { sectionKey: 'aIVectorization', sectionName: 'AI & Vectorization', isExpanded: true },
+            { sectionKey: 'aIVectorization', sectionName: 'AI & Vectorization', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
             { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },

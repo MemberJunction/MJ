@@ -17,8 +17,8 @@ export class MJAIAgentActionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'mappingRelationships', sectionName: 'Mapping & Relationships', isExpanded: true },
             { sectionKey: 'auditStatus', sectionName: 'Audit & Status', isExpanded: true },
-            { sectionKey: 'executionConstraints', sectionName: 'Execution Constraints', isExpanded: true },
-            { sectionKey: 'resultCompaction', sectionName: 'Result Compaction', isExpanded: true },
+            { sectionKey: 'executionConstraints', sectionName: 'Execution Constraints', isExpanded: false },
+            { sectionKey: 'resultCompaction', sectionName: 'Result Compaction', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

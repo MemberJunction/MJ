@@ -17,7 +17,7 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { sep } from 'node:path';
+import { sep, dirname, join } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -106,6 +106,7 @@ export * from './resolvers/AvailableSearchProvidersResolver.js';
 export * from './resolvers/FetchEntityVectorsResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
+export * from './resolvers/ChannelSessionResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
 export * from './resolvers/TaskResolver.js';
@@ -728,6 +729,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   app.get('/healthcheck', cors<cors.CorsRequest>(), (_req, res) => {
     res.status(200).json({ status: 'ok' });
   });
+
+  // Static-file serving for ./public — used by the voice demo page and any
+  // other developer-facing static assets. Registered before auth middleware
+  // so the demo HTML loads without a token; the page itself authenticates
+  // its GraphQL calls. Source path resolves regardless of dist/ layout.
+  const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+  app.use(express.static(publicDir));
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {

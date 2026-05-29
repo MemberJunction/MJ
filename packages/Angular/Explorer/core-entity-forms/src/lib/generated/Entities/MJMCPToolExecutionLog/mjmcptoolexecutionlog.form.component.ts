@@ -17,8 +17,8 @@ export class MJMCPToolExecutionLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'connectionContext', sectionName: 'Connection Context', isExpanded: true },
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
-            { sectionKey: 'userContext', sectionName: 'User Context', isExpanded: true },
-            { sectionKey: 'payloadErrors', sectionName: 'Payload & Errors', isExpanded: true },
+            { sectionKey: 'userContext', sectionName: 'User Context', isExpanded: false },
+            { sectionKey: 'payloadErrors', sectionName: 'Payload & Errors', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

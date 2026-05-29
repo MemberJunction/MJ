@@ -18,9 +18,9 @@ export class MJMCPServerFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'serverIdentificationDetails', sectionName: 'Server Identification & Details', isExpanded: true },
             { sectionKey: 'connectionSettings', sectionName: 'Connection Settings', isExpanded: true },
-            { sectionKey: 'authenticationCredentials', sectionName: 'Authentication & Credentials', isExpanded: true },
-            { sectionKey: 'performanceLimits', sectionName: 'Performance & Limits', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'authenticationCredentials', sectionName: 'Authentication & Credentials', isExpanded: false },
+            { sectionKey: 'performanceLimits', sectionName: 'Performance & Limits', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOAuthClientRegistrations', sectionName: 'O Auth Client Registrations', isExpanded: false },
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },

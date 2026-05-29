@@ -18,7 +18,7 @@ export class MJCompanyIntegrationEntityMapFormComponent extends BaseFormComponen
         this.initSections([
             { sectionKey: 'objectMapping', sectionName: 'Object Mapping', isExpanded: true },
             { sectionKey: 'syncControl', sectionName: 'Sync Control', isExpanded: true },
-            { sectionKey: 'engineConfiguration', sectionName: 'Engine Configuration', isExpanded: true },
+            { sectionKey: 'engineConfiguration', sectionName: 'Engine Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false }

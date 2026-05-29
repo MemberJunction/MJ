@@ -17,7 +17,7 @@ export class MJQueueTaskFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'taskIdentityQueue', sectionName: 'Task Identity & Queue', isExpanded: true },
             { sectionKey: 'executionStatusTimeline', sectionName: 'Execution Status & Timeline', isExpanded: true },
-            { sectionKey: 'payloadOutcome', sectionName: 'Payload & Outcome', isExpanded: true },
+            { sectionKey: 'payloadOutcome', sectionName: 'Payload & Outcome', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -17,7 +17,7 @@ export class MJSearchScopeTestQueryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: true },
             { sectionKey: 'queryDefinition', sectionName: 'Query Definition', isExpanded: true },
-            { sectionKey: 'validationCriteria', sectionName: 'Validation Criteria', isExpanded: true },
+            { sectionKey: 'validationCriteria', sectionName: 'Validation Criteria', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

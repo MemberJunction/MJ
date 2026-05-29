@@ -17,8 +17,8 @@ export class MJTagSuggestionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'suggestionDetails', sectionName: 'Suggestion Details', isExpanded: true },
             { sectionKey: 'matchingAnalysis', sectionName: 'Matching Analysis', isExpanded: true },
-            { sectionKey: 'sourceContext', sectionName: 'Source Context', isExpanded: true },
-            { sectionKey: 'reviewWorkflow', sectionName: 'Review Workflow', isExpanded: true },
+            { sectionKey: 'sourceContext', sectionName: 'Source Context', isExpanded: false },
+            { sectionKey: 'reviewWorkflow', sectionName: 'Review Workflow', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

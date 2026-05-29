@@ -1,0 +1,216 @@
+<div class="voice-widget" [attr.data-status]="Status">
+    <!--
+        Header — agent identity + status indicator + start/stop control.
+        Compact (50px tall) so the transcript dominates the surface.
+    -->
+    <header class="voice-widget__header">
+        <div class="voice-widget__identity">
+            <div class="voice-widget__avatar voice-widget__avatar--agent">
+                <i class="fa-solid fa-microphone-lines"></i>
+            </div>
+            <div class="voice-widget__identity-text">
+                <div class="voice-widget__identity-name">Voice Channel</div>
+                <div class="voice-widget__identity-status">
+                    <span class="voice-widget__status-dot" [attr.data-status]="Status" aria-hidden="true"></span>
+                    <span>{{ StatusLabel }}</span>
+                    @if (AgentSpeaking) {
+                        <span class="voice-widget__speaking-indicator" title="Agent is speaking">
+                            <i class="fa-solid fa-volume-high"></i>
+                            <span>speaking</span>
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!--
+            Header action: just a subtle "End session" icon when active.
+            The session auto-starts on first Send / mic click so the user
+            never has to click "Start" — typing or talking IS the start.
+        -->
+        <div class="voice-widget__header-actions">
+            @if (Status === 'active' || Status === 'connecting') {
+                <button
+                    type="button"
+                    class="voice-widget__icon-btn voice-widget__icon-btn--danger"
+                    (click)="End()"
+                    aria-label="End session"
+                    title="End session"
+                >
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+        </div>
+    </header>
+
+    <!--
+        Transcript — chat-bubble layout with avatars. User and agent rows have
+        asymmetric border radii (matching the conversations module's
+        message-item.component.css patterns). Empty state shows a friendly
+        hint when no messages exist yet.
+    -->
+    <section #transcriptEl class="voice-widget__transcript" aria-live="polite">
+        @if (Transcript.length === 0) {
+            <div class="voice-widget__empty">
+                <div class="voice-widget__empty-icon">
+                    <i class="fa-solid fa-comment-dots"></i>
+                </div>
+                <p class="voice-widget__empty-title">Say hi</p>
+                <p class="voice-widget__empty-subtitle">
+                    Type below or tap the mic. The agent will reply by voice.
+                </p>
+            </div>
+        }
+        @for (entry of Transcript; track TrackByIndex($index)) {
+            <div class="voice-widget__msg" [attr.data-role]="entry.Role">
+                <div class="voice-widget__avatar"
+                     [class.voice-widget__avatar--user]="entry.Role === 'user'"
+                     [class.voice-widget__avatar--agent]="entry.Role === 'agent'"
+                     [class.voice-widget__avatar--system]="entry.Role === 'system'">
+                    @switch (entry.Role) {
+                        @case ('user') { <i class="fa-solid fa-user"></i> }
+                        @case ('agent') { <i class="fa-solid fa-robot"></i> }
+                        @default { <i class="fa-solid fa-triangle-exclamation"></i> }
+                    }
+                </div>
+                <div class="voice-widget__msg-content">
+                    <div class="voice-widget__msg-meta">
+                        <span class="voice-widget__msg-sender">
+                            @switch (entry.Role) {
+                                @case ('user') { You }
+                                @case ('agent') { Agent }
+                                @default { System }
+                            }
+                        </span>
+                        <span class="voice-widget__msg-time">{{ entry.Timestamp | date:'HH:mm:ss' }}</span>
+                    </div>
+                    <div class="voice-widget__msg-bubble">{{ entry.Text }}</div>
+                </div>
+            </div>
+        }
+        @if (IsAgentThinking) {
+            <div class="voice-widget__msg voice-widget__msg--thinking" data-role="agent">
+                <div class="voice-widget__avatar voice-widget__avatar--agent">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="voice-widget__msg-content">
+                    <div class="voice-widget__msg-bubble voice-widget__msg-bubble--thinking">
+                        <span class="voice-widget__typing-dot"></span>
+                        <span class="voice-widget__typing-dot"></span>
+                        <span class="voice-widget__typing-dot"></span>
+                    </div>
+                </div>
+            </div>
+        }
+        @if (InterimTranscript) {
+            <div class="voice-widget__msg voice-widget__msg--interim" data-role="user">
+                <div class="voice-widget__avatar voice-widget__avatar--user">
+                    <i class="fa-solid fa-microphone"></i>
+                </div>
+                <div class="voice-widget__msg-content">
+                    <div class="voice-widget__msg-bubble voice-widget__msg-bubble--interim">
+                        {{ InterimTranscript }}
+                    </div>
+                </div>
+            </div>
+        }
+    </section>
+
+    <!--
+        Actionable commands — chips below the transcript. Mirrors the
+        conversations module's mj-actionable-commands styling: sunken
+        background, brand-color left border, "Actions:" label.
+    -->
+    @if (ActionableCommands.length > 0) {
+        <div class="voice-widget__chips-row" aria-label="Suggested actions">
+            <div class="voice-widget__chips-label">Actions</div>
+            <div class="voice-widget__chips">
+                @for (cmd of ActionableCommands; track $index) {
+                    <button mjButton
+                            variant="secondary"
+                            size="sm"
+                            class="voice-widget__chip"
+                            (click)="OnActionableCommandClick(cmd)"
+                            [attr.title]="cmd['description'] || cmd['Description'] || ''">
+                        @if (cmd['icon']) {
+                            <i class="fa {{ cmd['icon'] }}"></i>
+                        } @else {
+                            <i class="fa-solid fa-bolt"></i>
+                        }
+                        <span>{{ cmd['label'] || cmd['Label'] || cmd['name'] || cmd['Name'] || 'Action' }}</span>
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Inline error banner — soft warning style, not modal-blocking. -->
+    @if (LastError && Status === 'error') {
+        <div class="voice-widget__banner voice-widget__banner--error" role="alert">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>{{ LastError }}</span>
+        </div>
+    }
+
+    <!--
+        Mic-support banner only appears when the user has clicked the mic.
+        Pre-emptively warning everyone is noise; the textarea is the
+        primary input and works everywhere. `MicError` covers the
+        post-click case.
+    -->
+
+    @if (MicError) {
+        <div class="voice-widget__banner voice-widget__banner--warning" role="alert">
+            <i class="fa-solid fa-microphone-slash"></i>
+            <span>Microphone error: {{ MicError }}</span>
+        </div>
+    }
+
+    <!--
+        Composer — input box with mic + send buttons inset. Pattern lifted
+        from packages/Angular/Generic/conversations/.../message-input-box:
+        focus-within glow, send button absolutely positioned bottom-right,
+        mic button just to the left of send.
+    -->
+    <footer class="voice-widget__composer">
+        <div class="voice-widget__composer-box" [class.voice-widget__composer-box--disabled]="Status === 'connecting'">
+            <textarea
+                class="voice-widget__composer-input"
+                rows="1"
+                placeholder="Type a message or use the microphone…"
+                [(ngModel)]="CurrentInput"
+                (keydown)="OnInputKeydown($event)"
+                (input)="OnInputAutoResize($event)"
+                [disabled]="Status === 'connecting'"
+                aria-label="Message to agent"
+            ></textarea>
+            <div class="voice-widget__composer-actions">
+                <button
+                    type="button"
+                    class="voice-widget__composer-btn"
+                    [class.voice-widget__composer-btn--mic-on]="IsMicEnabled"
+                    (click)="ToggleMic()"
+                    [disabled]="!MicSupported || Status === 'connecting'"
+                    [attr.aria-label]="IsMicEnabled ? 'Stop microphone' : 'Start microphone'"
+                    [attr.title]="!MicSupported ? 'Microphone not supported' : (IsMicEnabled ? 'Stop microphone' : 'Start microphone')"
+                >
+                    @if (IsMicEnabled) {
+                        <i class="fa-solid fa-microphone voice-widget__pulse"></i>
+                    } @else {
+                        <i class="fa-solid fa-microphone"></i>
+                    }
+                </button>
+                <button
+                    type="button"
+                    class="voice-widget__composer-btn voice-widget__composer-btn--send"
+                    (click)="Send()"
+                    [disabled]="!CurrentInput.trim() || Status === 'connecting'"
+                    aria-label="Send message"
+                    title="Send (Enter)"
+                >
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </footer>
+</div>

@@ -17,7 +17,7 @@ export class MJRecordLinkFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'linkCore', sectionName: 'Link Core', isExpanded: true },
             { sectionKey: 'recordReferences', sectionName: 'Record References', isExpanded: true },
-            { sectionKey: 'linkDetails', sectionName: 'Link Details', isExpanded: true },
+            { sectionKey: 'linkDetails', sectionName: 'Link Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

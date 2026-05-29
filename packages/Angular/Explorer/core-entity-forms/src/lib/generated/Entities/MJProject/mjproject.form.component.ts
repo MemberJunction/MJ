@@ -18,7 +18,7 @@ export class MJProjectFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'systemStatus', sectionName: 'System & Status', isExpanded: true },
             { sectionKey: 'projectHierarchy', sectionName: 'Project Hierarchy', isExpanded: true },
-            { sectionKey: 'projectOverview', sectionName: 'Project Overview', isExpanded: true },
+            { sectionKey: 'projectOverview', sectionName: 'Project Overview', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },

@@ -1934,6 +1934,69 @@
   },
   {
     "fields": {
+      "Name": "ElevenLabs Flash v2.5 (Streaming TTS)",
+      "Description": "ElevenLabs Flash v2.5 — ultra-low-latency streaming TTS, ~75 ms first audio chunk. Optimized for real-time conversational voice via the WebSocket stream-input API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "PowerRank": 10,
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "ElevenLabsAudioGenerator",
+            "APIName": "eleven_flash_v2_5",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0C1A95DD-0DC8-4323-B860-75D5271A3FE0"
+          },
+          "sync": {
+            "lastModified": "2026-05-22T22:48:05.423Z",
+            "checksum": "5096137609130ab19c8c3fd96914e90f4841b3ae40a47534c5fd004be5414bed"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "64047AE0-A817-4670-B05C-34E34DCF80C6"
+          },
+          "sync": {
+            "lastModified": "2026-05-22T22:48:05.436Z",
+            "checksum": "d295f2f6a95ced6db835bb640b3a66c982815f8cb2cdafcbd6bece2e6bb0e4f6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4883F664-D241-4673-8A8F-6C11867A5528"
+    },
+    "sync": {
+      "lastModified": "2026-05-22T22:48:01.978Z",
+      "checksum": "6fbda13b029caf072b07fe08f6cd805af10ccee47bdc2c3378abe52479fe8f8d"
+    }
+  },
+  {
+    "fields": {
       "Name": "HeyGen",
       "Description": "HeyGen Video Generation",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
@@ -14894,6 +14957,69 @@
     "sync": {
       "lastModified": "2026-05-21T22:25:01.106Z",
       "checksum": "16c1cba3c18c4071c423cabf91d6b3c44fd977852bcbe4d1be37f280d8eb6fea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Deepgram Nova-3 (Streaming STT)",
+      "Description": "Deepgram Nova-3 — low-latency streaming speech-to-text. Supports interim/partial and final results over WebSocket. Used by the cascaded voice channel.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=STT",
+      "PowerRank": 5,
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Deepgram",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "DeepgramAudioGenerator",
+            "APIName": "nova-3",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "327ED5D1-57BE-4EA9-8F87-29EB5206B4C2"
+          },
+          "sync": {
+            "lastModified": "2026-05-22T22:48:12.414Z",
+            "checksum": "d3f59c83613347384f631feb909ed0dd292718aff5c656d92112eacf862b8b84"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Deepgram",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "79358E65-D8EE-4771-BDDC-06DAD3A1AF1A"
+          },
+          "sync": {
+            "lastModified": "2026-05-22T22:48:12.430Z",
+            "checksum": "3ea0b6ae27af2dd59b09ff034db7a4bbe4a8a32c27f0498c39de31c1cd1406ef"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C9716A0E-7D06-4AE4-9D4A-B9AAC1AF3A64"
+    },
+    "sync": {
+      "lastModified": "2026-05-22T22:48:04.151Z",
+      "checksum": "a5f597142961fc6d73d833edf8a2626444d1252a83b7cc44f5e4d8a285b2be93"
     }
   }
 ]

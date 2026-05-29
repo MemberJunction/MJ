@@ -18,7 +18,7 @@ export class MJWorkspaceFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'workspaceIdentification', sectionName: 'Workspace Identification', isExpanded: true },
             { sectionKey: 'workspaceDetails', sectionName: 'Workspace Details', isExpanded: true },
-            { sectionKey: 'administrativeInfo', sectionName: 'Administrative Info', isExpanded: true },
+            { sectionKey: 'administrativeInfo', sectionName: 'Administrative Info', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJWorkspaceItems', sectionName: 'Workspace Items', isExpanded: false }
         ]);

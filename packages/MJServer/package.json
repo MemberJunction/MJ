@@ -36,6 +36,7 @@
     "@memberjunction/actions-bizapps-lms": "5.36.0",
     "@memberjunction/actions-bizapps-social": "5.36.0",
     "@memberjunction/ai": "5.36.0",
+    "@memberjunction/ai-agent-channel-runtime": "5.36.0",
     "@memberjunction/ai-agent-manager": "5.36.0",
     "@memberjunction/ai-agent-manager-actions": "5.36.0",
     "@memberjunction/ai-agents": "5.36.0",

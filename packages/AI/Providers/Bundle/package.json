@@ -25,6 +25,7 @@
     "@memberjunction/ai-blackforestlabs": "5.36.0",
     "@memberjunction/ai-cerebras": "5.36.0",
     "@memberjunction/ai-cohere": "5.36.0",
+    "@memberjunction/ai-deepgram": "5.36.0",
     "@memberjunction/ai-elevenlabs": "5.36.0",
     "@memberjunction/ai-fireworks": "5.36.0",
     "@memberjunction/ai-gemini": "5.36.0",

@@ -17,7 +17,7 @@ export class MJSearchScopeProviderFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'providerAssociation', sectionName: 'Provider Association', isExpanded: true },
             { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
-            { sectionKey: 'queryTransformation', sectionName: 'Query Transformation', isExpanded: true },
+            { sectionKey: 'queryTransformation', sectionName: 'Query Transformation', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -18,7 +18,7 @@ export class MJCompanyIntegrationRunDetailFormComponent extends BaseFormComponen
         this.initSections([
             { sectionKey: 'identifiersReferences', sectionName: 'Identifiers & References', isExpanded: true },
             { sectionKey: 'operationExecution', sectionName: 'Operation Execution', isExpanded: true },
-            { sectionKey: 'runAudit', sectionName: 'Run Audit', isExpanded: true },
+            { sectionKey: 'runAudit', sectionName: 'Run Audit', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJErrorLogs', sectionName: 'Error Logs', isExpanded: false }
         ]);

@@ -18,9 +18,9 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'promptDefinitionMetadata', sectionName: 'Prompt Definition & Metadata', isExpanded: false },
             { sectionKey: 'modelSelectionExecutionSettings', sectionName: 'Model Selection & Execution Settings', isExpanded: true },
-            { sectionKey: 'outputValidation', sectionName: 'Output & Validation', isExpanded: true },
-            { sectionKey: 'retryFailoverPolicies', sectionName: 'Retry & Failover Policies', isExpanded: true },
-            { sectionKey: 'cachingPerformance', sectionName: 'Caching & Performance', isExpanded: true },
+            { sectionKey: 'outputValidation', sectionName: 'Output & Validation', isExpanded: false },
+            { sectionKey: 'retryFailoverPolicies', sectionName: 'Retry & Failover Policies', isExpanded: false },
+            { sectionKey: 'cachingPerformance', sectionName: 'Caching & Performance', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AI Agent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MJ Voice Demo — Sage (text-in / voice-out)</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #3b82f6; --accent-hover: #2563eb; --danger: #ef4444;
+    --ok: #22c55e; --warn: #f59e0b; --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; width: 100%; max-width: 640px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { margin: 0; font-size: 20px; }
+  .sub { color: var(--muted); margin: 0; font-size: 13px; }
+  .status-pill { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 999px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.active { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.connecting { background: var(--warn); animation: pulse 1s infinite; }
+  .dot.error { background: var(--danger); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  input, button {
+    padding: 10px 12px; border-radius: 6px; font: inherit;
+    background: #0f172a; color: var(--text); border: 1px solid var(--border);
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; }
+  button { font-weight: 600; cursor: pointer; transition: background 0.15s; border: none; }
+  .btn-send { background: var(--accent); color: white; min-width: 100px; }
+  .btn-send:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-end { background: var(--danger); color: white; padding: 6px 12px; font-size: 13px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .transcript {
+    min-height: 240px; max-height: 380px; overflow-y: auto;
+    background: #0f172a; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .msg { padding: 8px 10px; border-radius: 6px; font-size: 14px; line-height: 1.4; max-width: 85%; }
+  .msg.user { background: var(--accent); color: white; align-self: flex-end; }
+  .msg.agent { background: #334155; align-self: flex-start; }
+  .msg.system { background: transparent; color: var(--muted); font-style: italic; font-size: 12px; align-self: center; }
+  footer { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+  code { font-family: ui-monospace, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <header>
+    <div>
+      <h1>Sage Voice Demo</h1>
+      <p class="sub">Type to Sage, hear Sage speak. Needs only an ElevenLabs API key.</p>
+    </div>
+    <div class="status-pill"><div id="dot" class="dot"></div><span id="statusText">Idle</span></div>
+  </header>
+
+  <div class="field">
+    <label for="apiUrl">MJAPI GraphQL URL</label>
+    <input id="apiUrl" type="text" value="http://localhost:4001/" />
+  </div>
+  <div class="field">
+    <label for="apiKey">MJ API Key (x-mj-api-key) or Bearer token</label>
+    <input id="apiKey" type="password" placeholder="MJ_SYSTEM_API_KEY or eyJ…" />
+  </div>
+
+  <div id="transcript" class="transcript"></div>
+
+  <div class="row">
+    <input id="textInput" type="text" placeholder="Type a message and press Enter…" disabled />
+    <button id="btnSend" class="btn-send" disabled>Send</button>
+    <button id="btnEnd" class="btn-end" disabled>End</button>
+  </div>
+
+  <footer>
+    <span>Session: <code id="sessionDisplay">—</code></span>
+    <span>Audio chunks: <code id="chunkCount">0</code></span>
+  </footer>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/graphql-ws/+esm';
+
+  // Sage agent ID — for production this should come from a query param or selector.
+  const SAGE_AGENT_ID = '3AB78346-897F-4238-AA6A-F10A131CC691';
+  const CHANNEL_NAME = 'voice-cascaded';
+
+  const el = (id) => document.getElementById(id);
+  const apiUrlInput = el('apiUrl');
+  const apiKeyInput = el('apiKey');
+  const textInput = el('textInput');
+  const btnSend = el('btnSend');
+  const btnEnd = el('btnEnd');
+  const dot = el('dot');
+  const statusText = el('statusText');
+  const transcript = el('transcript');
+  const sessionDisplay = el('sessionDisplay');
+  const chunkCount = el('chunkCount');
+
+  // Token via ?token=... query arg for convenience.
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('token')) apiKeyInput.value = params.get('token');
+
+  /** @type {{ sessionId: string | null, wsClient: any, unsubscribe: (() => void) | null, chunks: number, audioCtx: AudioContext | null, nextStartTime: number }} */
+  const state = { sessionId: null, wsClient: null, unsubscribe: null, chunks: 0, audioCtx: null, nextStartTime: 0 };
+
+  function setStatus(kind, text) {
+    dot.className = 'dot ' + kind;
+    statusText.textContent = text;
+  }
+
+  function addMessage(kind, text) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + kind;
+    div.textContent = text;
+    transcript.appendChild(div);
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  function authHeaderValue() {
+    const key = apiKeyInput.value.trim();
+    if (!key) throw new Error('API key / bearer token is required.');
+    return key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : { 'x-mj-api-key': key };
+  }
+
+  async function gql(query, variables) {
+    const headers = { 'Content-Type': 'application/json', ...authHeaderValue() };
+    const res = await fetch(apiUrlInput.value.trim(), {
+      method: 'POST', headers, body: JSON.stringify({ query, variables }),
+    });
+    const json = await res.json();
+    if (json.errors) throw new Error(json.errors.map((e) => e.message).join('; '));
+    return json.data;
+  }
+
+  function playPCMFrame(base64, sampleRateHz, channelCount) {
+    if (!state.audioCtx) return;
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+    const totalFloat = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) totalFloat[i] = int16[i] / 32768;
+    const framesPerChannel = totalFloat.length / channelCount;
+    const audioBuffer = state.audioCtx.createBuffer(channelCount, framesPerChannel, sampleRateHz);
+    if (channelCount === 1) {
+      audioBuffer.copyToChannel(totalFloat, 0);
+    } else {
+      for (let ch = 0; ch < channelCount; ch++) {
+        const channelData = new Float32Array(framesPerChannel);
+        for (let i = 0; i < framesPerChannel; i++) channelData[i] = totalFloat[i * channelCount + ch];
+        audioBuffer.copyToChannel(channelData, ch);
+      }
+    }
+    const source = state.audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(state.audioCtx.destination);
+    const startAt = Math.max(state.audioCtx.currentTime, state.nextStartTime);
+    source.start(startAt);
+    state.nextStartTime = startAt + audioBuffer.duration;
+  }
+
+  function deriveWsUrl(httpUrl) {
+    const u = new URL(httpUrl);
+    u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+    return u.toString();
+  }
+
+  async function ensureAudioCtx() {
+    if (!state.audioCtx) state.audioCtx = new AudioContext();
+    if (state.audioCtx.state === 'suspended') await state.audioCtx.resume();
+  }
+
+  async function startSession() {
+    setStatus('connecting', 'Starting…');
+    // 1. Create AudioContext under a user gesture (the Send-click).
+    await ensureAudioCtx();
+
+    // 2. StartChannelSession — omit RoomName → TextInputAudioOutputTransport.
+    const data = await gql(`
+      mutation StartChannelSession($input: StartChannelSessionInput!) {
+        StartChannelSession(input: $input) { SessionID ChannelName }
+      }`, { input: { AgentID: SAGE_AGENT_ID, ChannelName: CHANNEL_NAME } });
+    state.sessionId = data.StartChannelSession.SessionID;
+    sessionDisplay.textContent = state.sessionId.slice(0, 8) + '…';
+
+    // 3. Open the audio-out subscription.
+    state.wsClient = createClient({
+      url: deriveWsUrl(apiUrlInput.value.trim()),
+      connectionParams: authHeaderValue(),
+    });
+    state.unsubscribe = state.wsClient.subscribe(
+      {
+        query: `subscription Audio($sid: String!) {
+          ChannelAudioOut(SessionID: $sid) { DataBase64 SampleRateHz ChannelCount MediaType }
+        }`,
+        variables: { sid: state.sessionId },
+      },
+      {
+        next: (event) => {
+          const f = event?.data?.ChannelAudioOut;
+          if (!f) return;
+          state.chunks += 1;
+          chunkCount.textContent = String(state.chunks);
+          playPCMFrame(f.DataBase64, f.SampleRateHz, f.ChannelCount);
+        },
+        error: (err) => {
+          console.error('Subscription error:', err);
+          setStatus('error', 'Stream error: ' + (err?.message ?? String(err)));
+        },
+        complete: () => { /* Stream finished naturally; no action needed. */ },
+      }
+    );
+
+    setStatus('active', 'Active');
+    btnEnd.disabled = false;
+  }
+
+  async function sendText() {
+    const text = textInput.value.trim();
+    if (!text) return;
+    btnSend.disabled = true;
+
+    try {
+      if (!state.sessionId) await startSession();
+      addMessage('user', text);
+      textInput.value = '';
+
+      const data = await gql(`
+        mutation SubmitChannelTextTurn($input: SubmitChannelTextTurnInput!) {
+          SubmitChannelTextTurn(input: $input) { OK ErrorMessage }
+        }`, { input: { SessionID: state.sessionId, Text: text } });
+
+      if (!data.SubmitChannelTextTurn.OK) {
+        addMessage('system', 'Server: ' + (data.SubmitChannelTextTurn.ErrorMessage ?? 'submit failed'));
+        setStatus('error', 'Submit failed');
+      }
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      addMessage('system', 'Error: ' + msg);
+      setStatus('error', msg);
+    } finally {
+      btnSend.disabled = false;
+      textInput.focus();
+    }
+  }
+
+  async function endSession() {
+    btnEnd.disabled = true;
+    setStatus('connecting', 'Ending…');
+    try {
+      if (state.unsubscribe) { state.unsubscribe(); state.unsubscribe = null; }
+      if (state.wsClient) { await state.wsClient.dispose(); state.wsClient = null; }
+      if (state.sessionId) {
+        await gql(`
+          mutation EndChannelSession($input: EndChannelSessionInput!) {
+            EndChannelSession(input: $input) { OK }
+          }`, { input: { SessionID: state.sessionId, Reason: 'user-disconnect' } });
+      }
+    } catch (err) {
+      console.error('End error:', err);
+    } finally {
+      state.sessionId = null;
+      state.chunks = 0;
+      state.nextStartTime = 0;
+      sessionDisplay.textContent = '—';
+      chunkCount.textContent = '0';
+      setStatus('', 'Idle');
+      addMessage('system', 'Session ended.');
+    }
+  }
+
+  function onAuthReady() {
+    if (apiKeyInput.value.trim()) {
+      textInput.disabled = false;
+      btnSend.disabled = false;
+    }
+  }
+  apiKeyInput.addEventListener('input', onAuthReady);
+  onAuthReady();
+
+  btnSend.addEventListener('click', sendText);
+  btnEnd.addEventListener('click', endSession);
+  textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+  });
+  window.addEventListener('beforeunload', () => {
+    if (state.sessionId) {
+      const body = JSON.stringify({
+        query: `mutation E($input: EndChannelSessionInput!) { EndChannelSession(input: $input) { OK } }`,
+        variables: { input: { SessionID: state.sessionId, Reason: 'user-disconnect' } },
+      });
+      navigator.sendBeacon?.(apiUrlInput.value.trim(), new Blob([body], { type: 'application/json' }));
+    }
+  });
+</script>
+</body>
+</html>

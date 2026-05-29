@@ -18,8 +18,8 @@ export class MJArtifactVersionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'versionIdentity', sectionName: 'Version Identity', isExpanded: true },
             { sectionKey: 'contentMetadata', sectionName: 'Content & Metadata', isExpanded: false },
-            { sectionKey: 'ownershipAttribution', sectionName: 'Ownership & Attribution', isExpanded: true },
-            { sectionKey: 'fileStorage', sectionName: 'File Storage', isExpanded: true },
+            { sectionKey: 'ownershipAttribution', sectionName: 'Ownership & Attribution', isExpanded: false },
+            { sectionKey: 'fileStorage', sectionName: 'File Storage', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArtifactVersionAttributes', sectionName: 'Artifact Version Attributes', isExpanded: false },
             { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },

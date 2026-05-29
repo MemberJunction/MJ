@@ -18,7 +18,7 @@ export class MJListCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'categoryHierarchy', sectionName: 'Category Hierarchy', isExpanded: true },
-            { sectionKey: 'ownershipAudit', sectionName: 'Ownership & Audit', isExpanded: true },
+            { sectionKey: 'ownershipAudit', sectionName: 'Ownership & Audit', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJListCategories', sectionName: 'List Categories', isExpanded: false },
             { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false }

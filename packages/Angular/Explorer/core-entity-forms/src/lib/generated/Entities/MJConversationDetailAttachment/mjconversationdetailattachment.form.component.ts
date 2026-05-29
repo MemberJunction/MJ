@@ -17,7 +17,7 @@ export class MJConversationDetailAttachmentFormComponent extends BaseFormCompone
         this.initSections([
             { sectionKey: 'attachmentMetadata', sectionName: 'Attachment Metadata', isExpanded: false },
             { sectionKey: 'mediaProperties', sectionName: 'Media Properties', isExpanded: true },
-            { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: true },
+            { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

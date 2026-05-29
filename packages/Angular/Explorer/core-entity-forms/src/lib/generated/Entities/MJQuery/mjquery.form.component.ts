@@ -18,8 +18,8 @@ export class MJQueryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'queryDefinition', sectionName: 'Query Definition', isExpanded: true },
             { sectionKey: 'performanceQuality', sectionName: 'Performance & Quality', isExpanded: true },
-            { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: true },
-            { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: true },
+            { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: false },
+            { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },

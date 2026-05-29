@@ -17,7 +17,7 @@ export class MJPublicLinkFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'resourceReference', sectionName: 'Resource Reference', isExpanded: true },
             { sectionKey: 'linkCore', sectionName: 'Link Core', isExpanded: true },
-            { sectionKey: 'accessControls', sectionName: 'Access Controls', isExpanded: true },
+            { sectionKey: 'accessControls', sectionName: 'Access Controls', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

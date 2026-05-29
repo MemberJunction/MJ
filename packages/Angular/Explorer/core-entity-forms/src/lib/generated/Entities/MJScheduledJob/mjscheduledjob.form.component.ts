@@ -18,9 +18,9 @@ export class MJScheduledJobFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'jobDetails', sectionName: 'Job Details', isExpanded: true },
             { sectionKey: 'scheduleTiming', sectionName: 'Schedule & Timing', isExpanded: true },
-            { sectionKey: 'executionMetrics', sectionName: 'Execution Metrics', isExpanded: true },
-            { sectionKey: 'notificationSettings', sectionName: 'Notification Settings', isExpanded: true },
-            { sectionKey: 'distributedLocking', sectionName: 'Distributed Locking', isExpanded: true },
+            { sectionKey: 'executionMetrics', sectionName: 'Execution Metrics', isExpanded: false },
+            { sectionKey: 'notificationSettings', sectionName: 'Notification Settings', isExpanded: false },
+            { sectionKey: 'distributedLocking', sectionName: 'Distributed Locking', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJScheduledJobRuns', sectionName: 'Scheduled Job Runs', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false }

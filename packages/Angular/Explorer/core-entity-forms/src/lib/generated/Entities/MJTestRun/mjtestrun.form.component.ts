@@ -18,8 +18,8 @@ export class MJTestRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'testTargetInfo', sectionName: 'Test & Target Info', isExpanded: true },
             { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false },
-            { sectionKey: 'inputExpectedOutput', sectionName: 'Input & Expected Output', isExpanded: true },
-            { sectionKey: 'resultAnalysis', sectionName: 'Result Analysis', isExpanded: true },
+            { sectionKey: 'inputExpectedOutput', sectionName: 'Input & Expected Output', isExpanded: false },
+            { sectionKey: 'resultAnalysis', sectionName: 'Result Analysis', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRunOutputs', sectionName: 'Test Run Outputs', isExpanded: false },
             { sectionKey: 'mJTestRunFeedbacks', sectionName: 'Test Run Feedbacks', isExpanded: false },

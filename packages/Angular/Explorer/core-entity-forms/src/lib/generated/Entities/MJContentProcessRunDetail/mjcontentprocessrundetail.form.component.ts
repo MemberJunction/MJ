@@ -18,7 +18,7 @@ export class MJContentProcessRunDetailFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runContext', sectionName: 'Run Context', isExpanded: true },
             { sectionKey: 'processingMetrics', sectionName: 'Processing Metrics', isExpanded: true },
-            { sectionKey: 'usageAndTimeline', sectionName: 'Usage and Timeline', isExpanded: true },
+            { sectionKey: 'usageAndTimeline', sectionName: 'Usage and Timeline', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentProcessRunPromptRuns', sectionName: 'Content Process Run Prompt Runs', isExpanded: false }
         ]);

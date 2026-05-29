@@ -18,8 +18,8 @@ export class MJArchiveRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'executionContext', sectionName: 'Execution Context', isExpanded: true },
             { sectionKey: 'runStatusAndTiming', sectionName: 'Run Status and Timing', isExpanded: true },
-            { sectionKey: 'archiveStatistics', sectionName: 'Archive Statistics', isExpanded: true },
-            { sectionKey: 'errorDiagnostics', sectionName: 'Error Diagnostics', isExpanded: true },
+            { sectionKey: 'archiveStatistics', sectionName: 'Archive Statistics', isExpanded: false },
+            { sectionKey: 'errorDiagnostics', sectionName: 'Error Diagnostics', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArchiveRunDetails', sectionName: 'Archive Run Details', isExpanded: false }
         ]);

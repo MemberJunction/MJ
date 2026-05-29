@@ -18,7 +18,7 @@ export class MJEntityDocumentFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'documentDetails', sectionName: 'Document Details', isExpanded: true },
             { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
-            { sectionKey: 'matchingConfiguration', sectionName: 'Matching Configuration', isExpanded: true },
+            { sectionKey: 'matchingConfiguration', sectionName: 'Matching Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityDocumentRuns', sectionName: 'Entity Document Runs', isExpanded: false },
             { sectionKey: 'mJEntityDocumentSettings', sectionName: 'Entity Document Settings', isExpanded: false },

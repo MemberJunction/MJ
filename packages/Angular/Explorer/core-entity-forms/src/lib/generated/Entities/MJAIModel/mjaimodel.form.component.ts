@@ -18,7 +18,7 @@ export class MJAIModelFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'modelOverview', sectionName: 'Model Overview', isExpanded: true },
             { sectionKey: 'performanceMetrics', sectionName: 'Performance Metrics', isExpanded: true },
-            { sectionKey: 'technicalSpecifications', sectionName: 'Technical Specifications', isExpanded: true },
+            { sectionKey: 'technicalSpecifications', sectionName: 'Technical Specifications', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIActions', sectionName: 'AI Actions', isExpanded: false },
             { sectionKey: 'mJAIModelActions', sectionName: 'AI Model Actions', isExpanded: false },

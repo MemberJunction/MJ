@@ -18,7 +18,7 @@ export class MJMCPServerConnectionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'connectionSettings', sectionName: 'Connection Settings', isExpanded: true },
             { sectionKey: 'automationControls', sectionName: 'Automation Controls', isExpanded: true },
-            { sectionKey: 'loggingDiagnostics', sectionName: 'Logging & Diagnostics', isExpanded: true },
+            { sectionKey: 'loggingDiagnostics', sectionName: 'Logging & Diagnostics', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MCP Server Connection Tools', isExpanded: false },
             { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MCP Tool Execution Logs', isExpanded: false },

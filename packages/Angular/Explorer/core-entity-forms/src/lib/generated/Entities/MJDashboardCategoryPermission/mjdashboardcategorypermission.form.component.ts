@@ -17,7 +17,7 @@ export class MJDashboardCategoryPermissionFormComponent extends BaseFormComponen
         this.initSections([
             { sectionKey: 'categoryIdentification', sectionName: 'Category Identification', isExpanded: true },
             { sectionKey: 'userAccess', sectionName: 'User Access', isExpanded: true },
-            { sectionKey: 'permissionSettings', sectionName: 'Permission Settings', isExpanded: true },
+            { sectionKey: 'permissionSettings', sectionName: 'Permission Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -17,7 +17,7 @@ export class MJUserRecordLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'technicalDetails', sectionName: 'Technical Details', isExpanded: true },
             { sectionKey: 'interactionSummary', sectionName: 'Interaction Summary', isExpanded: true },
-            { sectionKey: 'userProfile', sectionName: 'User Profile', isExpanded: true },
+            { sectionKey: 'userProfile', sectionName: 'User Profile', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

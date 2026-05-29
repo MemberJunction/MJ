@@ -18,7 +18,7 @@ export class MJComponentLibraryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'libraryIdentification', sectionName: 'Library Identification', isExpanded: true },
             { sectionKey: 'distributionAssets', sectionName: 'Distribution & Assets', isExpanded: true },
-            { sectionKey: 'governanceDependencies', sectionName: 'Governance & Dependencies', isExpanded: true },
+            { sectionKey: 'governanceDependencies', sectionName: 'Governance & Dependencies', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJComponentLibraryLinks', sectionName: 'Component Library Links', isExpanded: false }
         ]);

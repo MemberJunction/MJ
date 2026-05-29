@@ -19,7 +19,7 @@ export class MJCommunicationProviderFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'providerDetails', sectionName: 'Provider Details', isExpanded: true },
             { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
-            { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: true },
+            { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false }

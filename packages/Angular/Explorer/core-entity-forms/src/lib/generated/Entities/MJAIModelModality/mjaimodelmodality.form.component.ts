@@ -17,7 +17,7 @@ export class MJAIModelModalityFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'modelModalityLink', sectionName: 'Model & Modality Link', isExpanded: true },
             { sectionKey: 'capabilitySettings', sectionName: 'Capability Settings', isExpanded: true },
-            { sectionKey: 'technicalConstraints', sectionName: 'Technical Constraints', isExpanded: true },
+            { sectionKey: 'technicalConstraints', sectionName: 'Technical Constraints', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
