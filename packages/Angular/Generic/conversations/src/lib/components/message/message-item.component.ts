@@ -711,8 +711,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // No agent run — fall back to message entity timestamps
-    return this.formattedGenerationTime;
+    // No agent run — fall back to message entity timestamps.
+    const fromMessage = this.formattedGenerationTime;
+    if (fromMessage) {
+      return fromMessage;
+    }
+
+    // Last resort: the live elapsed-time string is frozen at the value it had
+    // when status flipped to Complete (the interval is cleared in ngDoCheck). If
+    // the same component instance handled the in-progress phase, this is the
+    // accurate duration the user just watched tick. If the message arrived already
+    // complete (no in-progress phase observed), `_elapsedTimeFormatted` is still
+    // its initial '0:00' — return null in that case so the time pill doesn't render
+    // a misleading zero.
+    return this._elapsedTimeFormatted !== '0:00' ? this._elapsedTimeFormatted : null;
   }
 
   public get formattedGenerationTime(): string | null {
