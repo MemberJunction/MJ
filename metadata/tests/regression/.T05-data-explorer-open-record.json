@@ -1,0 +1,89 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T05 - Data Explorer Open Entity Record",
+    "Description": "From the Members entity grid in Data Explorer, opens a specific member record to view its detail form with fields like Name, Email, and Organization.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the Members entity to see the records grid. Then click on a specific member record to open its Full Record using the `Open Full Record` button. Verify that the detail form displays with populated fields such as Name, Email, Organization, or Membership Type.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Member detail form is displayed with populated fields",
+        "Fields like Name, Email, or Organization are visible and have values"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.3,
+          "config": {
+            "maxSteps": 35
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.2,
+          "config": {
+            "pattern": "localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "step-count": 0.3,
+        "url-match": 0.2
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "2BB830E5-AAB2-4537-BC35-366E5F7D9D31"
+  },
+  "sync": {
+    "lastModified": "2026-05-28T03:08:25.499Z",
+    "checksum": "994c7926387fc075deff6313e9dcef8af56d84e20e6850d5761162998da3edb6"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T03 - Application Switcher",
+    "Description": "Uses the application switcher to navigate from Home to Data Explorer, then to AI application, then back to Home. Validates that all three applications load correctly.",
+    "InputDefinition": {
+      "goal": "Use the application switcher (the dropdown or sidebar that lists available applications) to navigate between applications. First, switch from the Home application to Data Explorer and confirm it loads. Then switch to the AI application and confirm it loads. Finally, switch back to the Home application. Verify each application displays its own content when active.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Data Explorer content was visible at some point",
+        "AI application content was visible at some point",
+        "Returned to Home application"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "010D3E19-FFE9-4D91-A68B-5300F0CABE92"
+  },
+  "sync": {
+    "lastModified": "2026-05-28T03:08:25.458Z",
+    "checksum": "46ffa439a5963f7551b2a53c42cd7242d058fed8520b5d7ab85761ce66d657ca"
+  }
+}

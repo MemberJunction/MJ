@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T09 - Entity Form Create New Record",
+    "Description": "Navigates to the Members entity, creates a new member record by filling in required fields, then saves it. Validates the CRUD create workflow.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the Members entity. Click the 'New' or 'Add' button to create a new record. Fill in the Name field with 'Regression Test Member', Email with 'regression-test@test.com', and any other required fields. Save the record. Verify that a save confirmation appears or the record shows up in the grid.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "New record form was opened",
+        "Fields were populated with test data",
+        "Save operation completed (success indicator or record in list)"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.5,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "step-count": 0.5
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression"
+  },
+  "primaryKey": {
+    "ID": "5F97BC52-9D41-4152-B8DA-1E3A6C07E66E"
+  },
+  "sync": {
+    "lastModified": "2026-05-28T03:08:25.623Z",
+    "checksum": "a01dc6df38ef4b1e3c54143a9adc0a8e1f35b39189ef702ec2f1d7dbe6277f57"
+  }
+}

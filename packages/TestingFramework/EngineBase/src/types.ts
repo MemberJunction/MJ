@@ -121,6 +121,14 @@ export interface TestRunOptions {
    * run > suite > test > type
    */
   variables?: TestRunVariables;
+
+  /**
+   * Override the test's RepeatCount field at runtime.
+   * Useful for flaky-test detection: forces every test in the run to execute
+   * N times so the suite runner can compute score variance.
+   * If undefined, the test's own RepeatCount is used.
+   */
+  repeatCountOverride?: number;
 }
 
 /**
@@ -164,6 +172,13 @@ export interface SuiteRunOptions extends TestRunOptions {
    * Tests with sequence numbers greater than this value will be skipped.
    */
   sequenceEnd?: number;
+
+  /**
+   * Delay in milliseconds between test executions.
+   * Useful for avoiding rate limits (e.g., Auth0 brute-force protection)
+   * when tests perform repeated logins from the same IP.
+   */
+  delayBetweenTests?: number;
 }
 
 /**
