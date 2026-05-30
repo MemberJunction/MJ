@@ -10,3 +10,7 @@
 **Vulnerability:** XSS vulnerability through unsafe regex string replacement bound to innerHTML.
 **Learning:** Applying string replacement (like wrapping a search term with a `<mark>` tag) directly on text that is then bound to Angular's `[innerHTML]` exposes the application to XSS. Escaping the string *before* replacement breaks the entity codes when the regex attempts a match and wraps part of the entity.
 **Prevention:** Always escape text segments *individually* after the string match and before concatenating the highlighted parts together. Use the centralized `HighlightSearchMatches` function from `@memberjunction/global` instead of rolling custom highlight functions.
+## 2024-05-30 - XSS in Component innerHTML Generation
+**Vulnerability:** XSS vulnerability through direct assignment of unescaped variables into HTMLElement.innerHTML.
+**Learning:** Constructing complex HTML templates using template literals and assigning them to `element.innerHTML` in Angular components bypasses Angular's built-in DomSanitizer, making the application vulnerable to XSS if dynamic values (like entity names, panel titles, icon classes) contain malicious code.
+**Prevention:** Always use `EscapeHTML` (from `@memberjunction/global`) to sanitize dynamic values when manually constructing HTML strings to be assigned to `innerHTML`.
