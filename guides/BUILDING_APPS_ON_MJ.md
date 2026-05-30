@@ -331,22 +331,20 @@ This section makes [the headline idea](#the-one-idea-that-matters-most-one-langu
 **Server-side** (a resolver, action, or job — note `contextUser` for multi-user isolation):
 
 ```typescript
-const md = new Metadata();
 const rv = new RunView();
 const result = await rv.RunView<InvoiceEntity>(
   { EntityName: 'Invoices', ExtraFilter: `Status='Open'`, ResultType: 'entity_object' },
-  contextUser   // server passes the request's user
+  contextUser   // server passes the request's user; loaded entities carry it
 );
 for (const inv of result.Results) {
   inv.Status = 'Overdue';
-  await inv.Save(null, contextUser);
+  await inv.Save();   // uses the entity's established user context
 }
 ```
 
 **Client-side** (an Angular component — same classes, same calls, no DTOs, no fetch):
 
 ```typescript
-const md = new Metadata();
 const rv = new RunView();
 const result = await rv.RunView<InvoiceEntity>(
   { EntityName: 'Invoices', ExtraFilter: `Status='Open'`, ResultType: 'entity_object' }
