@@ -138,7 +138,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 
 | Package | npm | Standalone | Description |
 |---------|-----|:----------:|-------------|
-| [Core](./Core/README.md) | `@memberjunction/ai` | Yes | Base classes (`BaseLLM`, `BaseEmbeddings`, `BaseImageGenerator`, `BaseAudio`, `BaseVideo`, `BaseReranker`), type definitions, error analysis, API key management |
+| [Core](./Core/readme.md) | `@memberjunction/ai` | Yes | Base classes (`BaseLLM`, `BaseEmbeddings`, `BaseImageGenerator`, `BaseAudio`, `BaseVideo`, `BaseReranker`), type definitions, error analysis, API key management |
 | [CorePlus](./CorePlus/README.md) | `@memberjunction/ai-core-plus` | | Extended AI types that reference MJ entity concepts; shared by server and client |
 | [BaseAIEngine](./BaseAIEngine/README.md) | `@memberjunction/ai-engine-base` | Yes | Base engine class with extended types and data caching |
 | [Reranker](./Reranker/README.md) | `@memberjunction/ai-reranker` | | AI reranker service with LLM-based two-stage retrieval |
@@ -303,7 +303,7 @@ export class MyCustomLLM extends BaseLLM {
 }
 ```
 
-If your provider uses an OpenAI-compatible API, extend `OpenAILLM` instead and override the base URL. See the [Groq](./Providers/Groq/README.md) or [xAI](./Providers/xAI/README.md) providers for examples.
+If your provider uses an OpenAI-compatible API, extend `OpenAILLM` instead and override the base URL. See the [Groq](./Providers/Groq/readme.md) or [xAI](./Providers/xAI/README.md) providers for examples.
 
 ---
 
@@ -343,7 +343,7 @@ Error types include rate limiting, authentication failures, context length excee
 
 ## Further Reading
 
-- **[Core Package README](./Core/README.md)** -- Full API reference for base classes, types, and utilities
+- **[Core Package README](./Core/readme.md)** -- Full API reference for base classes, types, and utilities
 - **[Providers README](./Providers/README.md)** -- Complete provider listing with categories
 - **[Prompts Package](./Prompts/README.md)** -- Hierarchical prompt template system
 - **[Agents Package](./Agents/README.md)** -- Agent framework and sub-agent delegation
