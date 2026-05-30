@@ -19,6 +19,9 @@ import type {
  * from external records to MJ entity fields.
  */
 export class FieldMappingEngine {
+    /** Cache for compiled custom JS functions to avoid parsing/compiling them inside mapping loops */
+    private readonly customFunctionCache = new Map<string, Function>();
+
     /**
      * Applies field mappings to a batch of external records, producing mapped records
      * ready for match resolution and persistence.
@@ -295,8 +298,12 @@ export class FieldMappingEngine {
         config: CustomConfig
     ): unknown {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-implied-eval
-            const fn = new Function('value', 'fields', `return (${config.Expression});`);
+            let fn = this.customFunctionCache.get(config.Expression);
+            if (!fn) {
+                // eslint-disable-next-line @typescript-eslint/no-implied-eval
+                fn = new Function('value', 'fields', `return (${config.Expression});`);
+                this.customFunctionCache.set(config.Expression, fn);
+            }
             return fn(value, allFields) as unknown;
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
