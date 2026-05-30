@@ -272,12 +272,18 @@ Two more freedoms worth knowing:
 - **UUID primary keys by default, but no fixed key shape.** MJ defaults to `UNIQUEIDENTIFIER` / UUID PKs, yet — because it reads keys from your schema rather than mandating them — supports **any primary-/foreign-key style, including composite and natural keys**. (MJ normalizes UUID casing differences between SQL Server and PostgreSQL for you.)
 - **Bring existing data as-is.** Point CodeGen at existing tables and MJ registers them as entities — migrations are how you *evolve* the schema over time, not a precondition for building.
 
+#### Modeling beyond plain tables: type inheritance & organic (soft) keys
+
+Two metadata features matter especially when you're **ingesting data from third-party systems** and want to layer metadata-driven and AI intelligence on top of it:
+
+- **IS-A type inheritance (table-per-type).** A child entity can *be a* parent entity — it shares the parent's primary key and inherits all of the parent's fields (the generated view JOINs them in), while its own table holds only its unique columns. This models real hierarchies cleanly — e.g. a *Webinar* IS-A *Meeting* IS-A *Product* — and the inheritance is orchestrated in `BaseEntity` with no hand-written subclass code. It lets ingested or domain data be specialized without duplicating shared structure. See [IS-A Relationships](../packages/MJCore/docs/isa-relationships.md).
+- **Organic keys (natural / "soft" keys).** Relationships based on **shared business data** — email address, domain, tax ID, phone — rather than enforced foreign keys. This is the key to working with **third-party data**: records ingested from Mailchimp, QuickBooks, HubSpot, Salesforce, and the like arrive with their own IDs and *no* cross-system FKs, but they do share business values. Organic keys formalize that matching (with normalization, compound keys, and transitive joins through bridge views) so MJ can surface "related records" across integration boundaries — a contact's campaigns, invoices, and tickets matched by email. Because the matches are **first-class metadata**, the platform — and your **AI agents and RAG** — can reason over these cross-system relationships, use them for retrieval and enrichment, and even surface likely duplicates. See [Organic Keys](../packages/MJCore/docs/organic-keys.md).
+
 #### Reference material
 
 - **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations: naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
 - **[Skyway](https://github.com/MemberJunction/skyway)** — The open-source, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
-- **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Working with natural/composite keys, not just surrogate IDs.
-- **[ISA Relationships](../packages/MJCore/docs/isa-relationships.md)** — Modeling inheritance/subtyping across entities.
+- **[IS-A Relationships](../packages/MJCore/docs/isa-relationships.md)** & **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Type inheritance and natural/soft-key matching (see above).
 - **[Virtual Entities](../packages/MJCore/docs/virtual-entities.md)** — Surface a view or external source as a first-class entity without a physical table.
 - **[Soft Deletes Guide](SOFT_DELETES_GUIDE.md)** — Opt into `DeleteType='Soft'` and get filtered views + soft-delete stored procedures managed for you.
 - **[Full-Text Search Guide](../packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** — Native SQL full-text search wired into entities.
