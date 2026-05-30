@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -9570,6 +9570,9 @@ if this limit is exceeded.`})
     @Field(() => [MJAction_])
     MJActions_CreatedByAgentIDArray: MJAction_[]; // Link to MJActions
     
+    @Field(() => [MJConversation_])
+    MJConversations_DefaultAgentIDArray: MJConversation_[]; // Link to MJConversations
+    
 }
 
 //****************************************************************************
@@ -10292,6 +10295,16 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActions')} WHERE ${provider.QuoteIdentifier('CreatedByAgentID')}='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async MJConversations_DefaultAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('DefaultAgentID')}='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -19982,6 +19995,9 @@ export class MJApplication_ {
     @Field(() => [MJDashboardUserPreference_])
     MJDashboardUserPreferences_ApplicationIDArray: MJDashboardUserPreference_[]; // Link to MJDashboardUserPreferences
     
+    @Field(() => [MJConversation_])
+    MJConversations_ApplicationIDArray: MJConversation_[]; // Link to MJConversations
+    
 }
 
 //****************************************************************************
@@ -20226,6 +20242,16 @@ export class MJApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDashboardUserPreferences')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async MJConversations_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -21885,8 +21911,9 @@ export class MJArtifactUse_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
     @Field() 
     @MaxLength(100)
@@ -22066,8 +22093,9 @@ export class MJArtifactVersionAttribute_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -23716,8 +23744,9 @@ export class MJCollectionArtifact_ {
     @MaxLength(255)
     Collection: string;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -28638,6 +28667,9 @@ export class MJComponent_ {
     @Field(() => [MJComponentDependency_])
     MJComponentDependencies_DependencyComponentIDArray: MJComponentDependency_[]; // Link to MJComponentDependencies
     
+    @Field(() => [MJEntityFormOverride_])
+    MJEntityFormOverrides_ComponentIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
 }
 
 //****************************************************************************
@@ -28908,6 +28940,16 @@ export class MJComponentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwComponentDependencies')} WHERE ${provider.QuoteIdentifier('DependencyComponentID')}='${mjcomponent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Dependencies', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Component Dependencies', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityFormOverride_])
+    async MJEntityFormOverrides_ComponentIDArray(@Root() mjcomponent_: MJComponent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('ComponentID')}='${mjcomponent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -32687,8 +32729,9 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     ConversationDetail: string;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -32827,7 +32870,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.` })
+@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
@@ -32898,8 +32941,9 @@ export class MJConversationDetailAttachment_ {
     @MaxLength(500)
     File?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    ArtifactVersion?: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -33813,11 +33857,11 @@ export class MJConversation_ {
     @Field(() => Boolean, {description: `Indicates if this conversation has been archived and should not appear in active lists.`}) 
     IsArchived: boolean;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`}) 
     @MaxLength(36)
     LinkedEntityID?: string;
         
-    @Field({nullable: true, description: `ID of a related record this conversation is about (support ticket, order, etc.).`}) 
+    @Field({nullable: true, description: `The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`}) 
     @MaxLength(500)
     LinkedRecordID?: string;
         
@@ -33850,6 +33894,21 @@ export class MJConversation_ {
     @MaxLength(36)
     TestRunID?: string;
         
+    @Field({description: `Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`}) 
+    @MaxLength(20)
+    ApplicationScope: string;
+        
+    @Field({nullable: true, description: `Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`}) 
+    @MaxLength(36)
+    ApplicationID?: string;
+        
+    @Field({nullable: true, description: `Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`}) 
+    @MaxLength(36)
+    DefaultAgentID?: string;
+        
+    @Field({nullable: true, description: `Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`}) 
+    AdditionalData?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -33873,6 +33932,14 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     TestRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Application?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    DefaultAgent?: string;
         
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
@@ -33944,6 +34011,18 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     TestRunID: string | null;
 
+    @Field({ nullable: true })
+    ApplicationScope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
+
+    @Field({ nullable: true })
+    DefaultAgentID: string | null;
+
+    @Field({ nullable: true })
+    AdditionalData: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -33998,6 +34077,18 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    ApplicationScope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultAgentID?: string | null;
+
+    @Field({ nullable: true })
+    AdditionalData?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40426,6 +40517,9 @@ export class MJEntity_ {
     @Field(() => [MJTestRun_])
     MJTestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJTestRuns
     
+    @Field(() => [MJEntityFormOverride_])
+    MJEntityFormOverrides_EntityIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
 }
 
 //****************************************************************************
@@ -41470,6 +41564,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTestRuns')} WHERE ${provider.QuoteIdentifier('TargetLogEntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Test Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Test Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityFormOverride_])
+    async MJEntityFormOverrides_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -44759,6 +44863,250 @@ export class MJEntityFieldResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Entity Fields', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Entity Form Overrides
+//****************************************************************************
+@ObjectType({ description: `Points an Entity at a Component to serve as its form at runtime. Scoped to User > Role > Global with priority-based resolution. When present and Active, takes precedence over the entity\'s @RegisterClass-registered or CodeGen-generated Angular form.` })
+export class MJEntityFormOverride_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to Entity — which entity this override is for.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `Foreign key to Component — the component that renders the form. Must declare componentRole='form' and implement the FormHostProps contract.`}) 
+    @MaxLength(36)
+    ComponentID: string;
+        
+    @Field({description: `Human-readable label for this override (e.g., "CSR Customer Form", "Compact Mobile Variant").`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional longer description of what this override is for and when it applies.`}) 
+    Description?: string;
+        
+    @Field({description: `Resolution tier: User (requires UserID), Role (requires RoleID), or Global. The resolver evaluates in that order — a User row beats a Role row beats a Global row.`}) 
+    @MaxLength(20)
+    Scope: string;
+        
+    @Field({nullable: true, description: `Required when Scope='User'. The single user this override applies to.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: `Required when Scope='Role'. The role whose members see this override.`}) 
+    @MaxLength(36)
+    RoleID?: string;
+        
+    @Field(() => Int, {description: `Higher value wins within a scope tier. Ties broken by __mj_CreatedAt DESC. No IsDefault — Priority is the only mechanism.`}) 
+    Priority: number;
+        
+    @Field({description: `Active = eligible for resolution. Inactive = ignored. Pending = AI-authored, awaiting human activation (resolver treats as Inactive).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Optional free-form commentary about this override — e.g. who authored it, why it exists, what should change before it goes Global, links to related discussions. Does not affect resolution.`}) 
+    Notes?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field() 
+    @MaxLength(500)
+    Component: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Role?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Entity Form Overrides
+//****************************************************************************
+@InputType()
+export class CreateMJEntityFormOverrideInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    RoleID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Entity Form Overrides
+//****************************************************************************
+@InputType()
+export class UpdateMJEntityFormOverrideInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    RoleID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Entity Form Overrides
+//****************************************************************************
+@ObjectType()
+export class RunMJEntityFormOverrideViewResult {
+    @Field(() => [MJEntityFormOverride_])
+    Results: MJEntityFormOverride_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJEntityFormOverride_)
+export class MJEntityFormOverrideResolver extends ResolverBase {
+    @Query(() => RunMJEntityFormOverrideViewResult)
+    async RunMJEntityFormOverrideViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEntityFormOverrideViewResult)
+    async RunMJEntityFormOverrideViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEntityFormOverrideViewResult)
+    async RunMJEntityFormOverrideDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Entity Form Overrides';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJEntityFormOverride_, { nullable: true })
+    async MJEntityFormOverride(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJEntityFormOverride_ | null> {
+        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJEntityFormOverride_)
+    async CreateMJEntityFormOverride(
+        @Arg('input', () => CreateMJEntityFormOverrideInput) input: CreateMJEntityFormOverrideInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Entity Form Overrides', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJEntityFormOverride_)
+    async UpdateMJEntityFormOverride(
+        @Arg('input', () => UpdateMJEntityFormOverrideInput) input: UpdateMJEntityFormOverrideInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Entity Form Overrides', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJEntityFormOverride_)
+    async DeleteMJEntityFormOverride(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Entity Form Overrides', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -63767,6 +64115,9 @@ export class MJRole_ {
     @Field(() => [MJSearchScopePermission_])
     MJSearchScopePermissions_RoleIDArray: MJSearchScopePermission_[]; // Link to MJSearchScopePermissions
     
+    @Field(() => [MJEntityFormOverride_])
+    MJEntityFormOverrides_RoleIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
 }
 
 //****************************************************************************
@@ -63995,6 +64346,16 @@ export class MJRoleResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopePermissions')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityFormOverride_])
+    async MJEntityFormOverrides_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -77655,6 +78016,9 @@ export class MJUser_ {
     @Field(() => [MJList_])
     MJLists_LastRefreshedByUserIDArray: MJList_[]; // Link to MJLists
     
+    @Field(() => [MJEntityFormOverride_])
+    MJEntityFormOverrides_UserIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
 }
 
 //****************************************************************************
@@ -78797,6 +79161,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('LastRefreshedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityFormOverride_])
+    async MJEntityFormOverrides_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

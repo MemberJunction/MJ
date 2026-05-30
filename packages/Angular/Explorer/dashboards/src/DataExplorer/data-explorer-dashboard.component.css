@@ -96,7 +96,7 @@
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: relative;
-  z-index: 1100; /* Above Leaflet map containers (z-index ~400-1000) so dropdowns render on top */
+  z-index: 2; /* Above sibling .content-body so header dropdowns render on top of grid/map content */
 }
 
 .header-left {

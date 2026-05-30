@@ -49,6 +49,18 @@ vi.mock('@memberjunction/ai', () => {
     };
 });
 
+const { mockRegistrations, mockStartupManagerInstance } = vi.hoisted(() => {
+    const registrations: any[] = [];
+    return {
+        mockRegistrations: registrations,
+        mockStartupManagerInstance: {
+            Register: (reg: any) => registrations.push(reg),
+            GetRegistrations: () => registrations,
+            Reset: () => { registrations.length = 0; }
+        }
+    };
+});
+
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class BaseEntity {
         Get(field: string) { return ''; }
@@ -66,34 +78,77 @@ vi.mock('@memberjunction/core', () => ({
     },
     BaseEnginePropertyConfig: class BaseEnginePropertyConfig {},
     RunView: class RunView {},
-    RegisterForStartup: () => (target: unknown) => target,
+    RegisterForStartup: (constructorOrOptions: any) => {
+        if (typeof constructorOrOptions === 'function') {
+            mockStartupManagerInstance.Register({
+                constructor: constructorOrOptions,
+                options: {}
+            });
+            return constructorOrOptions;
+        }
+        const options = constructorOrOptions || {};
+        return function(constructor: any) {
+            mockStartupManagerInstance.Register({
+                constructor,
+                options
+            });
+            return constructor;
+        };
+    },
     IStartupSink: class IStartupSink {},
+    StartupManager: {
+        Instance: mockStartupManagerInstance
+    }
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    BaseSingleton: class BaseSingleton<T> {
-        protected static getInstance<T>(): T {
-            return new (this as unknown as new () => T)();
+vi.mock('@memberjunction/global', () => {
+    // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
+    // but the mock above replaces the entire module export, so we re-implement just
+    // the surface AIEngine uses.
+    class TestLruCache<K, V> {
+        private map = new Map<K, V>();
+        constructor(_opts?: { maxSize?: number }) {}
+        public Get(k: K): V | undefined {
+            const v = this.map.get(k);
+            if (v === undefined) return undefined;
+            // Refresh recency to mimic real LRU behavior
+            this.map.delete(k);
+            this.map.set(k, v);
+            return v;
         }
-    },
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: vi.fn().mockReturnValue({
-                    ChatCompletion: vi.fn(),
-                    ChatCompletions: vi.fn(),
-                    EmbedText: vi.fn(),
-                }),
+        public Set(k: K, v: V): void { this.map.set(k, v); }
+        public Has(k: K): boolean { return this.map.has(k); }
+        public Delete(k: K): boolean { return this.map.delete(k); }
+        public Clear(): void { this.map.clear(); }
+        public get Size(): number { return this.map.size; }
+    }
+
+    return {
+        BaseSingleton: class BaseSingleton<T> {
+            protected static getInstance<T>(): T {
+                return new (this as unknown as new () => T)();
             }
-        }
-    },
-    RegisterClass: () => (target: unknown) => target,
-    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined): boolean => {
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-        return a.trim().toUpperCase() === b.trim().toUpperCase();
-    },
-}));
+        },
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: vi.fn().mockReturnValue({
+                        ChatCompletion: vi.fn(),
+                        ChatCompletions: vi.fn(),
+                        EmbedText: vi.fn(),
+                    }),
+                }
+            }
+        },
+        MJLruCache: TestLruCache,
+        RegisterClass: () => (target: unknown) => target,
+        UUIDsEqual: (a: string | null | undefined, b: string | null | undefined): boolean => {
+            if (a == null && b == null) return true;
+            if (a == null || b == null) return false;
+            return a.trim().toUpperCase() === b.trim().toUpperCase();
+        },
+    };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai-core-plus', () => ({
@@ -239,6 +294,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ---------------------------------------------------------------------------
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
+import { MJGlobal } from '@memberjunction/global';
 import type { NoteEmbeddingMetadata } from '../types/NoteMatchResult';
 import type { ExampleEmbeddingMetadata } from '../types/ExampleMatchResult';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -1041,6 +1097,138 @@ describe('AIEngine', () => {
 
         it('should have correct LocalEmbeddingModelVendorName', () => {
             expect(engine.LocalEmbeddingModelVendorName).toBe('LocalEmbeddings');
+        });
+    });
+
+    describe('Embedding Cache', () => {
+        let mockEmbeddingInstance: any;
+
+        beforeEach(() => {
+            mockEmbeddingInstance = {
+                EmbedText: vi.fn().mockResolvedValue({
+                    success: true,
+                    vector: [0.1, 0.2, 0.3]
+                })
+            };
+            const CreateInstanceMock = (MJGlobal.Instance.ClassFactory.CreateInstance as any);
+            CreateInstanceMock.mockReturnValue(mockEmbeddingInstance);
+            engine.ClearEmbeddingCache();
+        });
+
+        it('should cache embedding results and return cached value on subsequent calls', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            const res1 = await engine.EmbedText(model, 'hello');
+            const res2 = await engine.EmbedText(model, 'hello');
+
+            expect(res1).toEqual(res2);
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+        });
+
+        it('should bypass cache when bypassCache is set to true', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            await engine.EmbedText(model, 'hello');
+            await engine.EmbedText(model, 'hello', undefined, { bypassCache: true });
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not cache results when noCache is set to true', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            await engine.EmbedText(model, 'hello', undefined, { noCache: true });
+            await engine.EmbedText(model, 'hello');
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('should clear cache when ClearEmbeddingCache is called', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+
+            await engine.EmbedText(model, 'hello');
+            engine.ClearEmbeddingCache();
+            await engine.EmbedText(model, 'hello');
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('should return null without invoking the provider for empty/whitespace text', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+
+            const r1 = await engine.EmbedText(model, '');
+            const r2 = await engine.EmbedText(model, '   \n\t  ');
+
+            expect(r1).toBeNull();
+            expect(r2).toBeNull();
+            expect(mockEmbeddingInstance.EmbedText).not.toHaveBeenCalled();
+        });
+
+        it('should deduplicate concurrent calls for the same (model, text) pair', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+
+            // Make the provider's promise resolve only when we tell it to
+            let resolveProvider: (v: any) => void;
+            mockEmbeddingInstance.EmbedText.mockReturnValueOnce(
+                new Promise(resolve => { resolveProvider = resolve; })
+            );
+
+            const p1 = engine.EmbedText(model, 'concurrent-text');
+            const p2 = engine.EmbedText(model, 'concurrent-text');
+            const p3 = engine.EmbedText(model, 'concurrent-text');
+
+            // Provider should have been called exactly once even though three
+            // callers raced for the same key.
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+
+            resolveProvider!({ success: true, vector: [0.5, 0.6] });
+
+            const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+            expect(r1).toEqual(r2);
+            expect(r2).toEqual(r3);
+        });
+
+        it('should evict failed embedding results from the cache so subsequent calls retry', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+
+            // First call: provider returns an empty vector (treated as failure)
+            mockEmbeddingInstance.EmbedText.mockResolvedValueOnce({ success: false, vector: [] });
+            const r1 = await engine.EmbedText(model, 'failtext');
+            expect(r1).toEqual({ success: false, vector: [] });
+
+            // Second call: provider returns a valid result; cache should not have
+            // trapped the failure
+            mockEmbeddingInstance.EmbedText.mockResolvedValueOnce({ success: true, vector: [0.9, 0.1] });
+            const r2 = await engine.EmbedText(model, 'failtext');
+            expect(r2).toEqual({ success: true, vector: [0.9, 0.1] });
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('should produce identical cache keys regardless of text length (hashed key)', async () => {
+            // Sanity check: a very long text reuses the cached result on the second call,
+            // proving the key fingerprint is stable.
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            const longText = 'x'.repeat(50_000);
+
+            await engine.EmbedText(model, longText);
+            await engine.EmbedText(model, longText);
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    // ======================================================================
+    // Startup Registration & delayed startup
+    // ======================================================================
+    describe('Startup Registration', () => {
+        it('should be registered with StartupManager as a deferred engine with a 15s delay', () => {
+            const registrations = mockStartupManagerInstance.GetRegistrations();
+            const aiEngineReg = registrations.find((r: any) => r.constructor.name === 'AIEngine');
+            
+            expect(aiEngineReg).toBeDefined();
+            expect(aiEngineReg.options.deferred).toBe(true);
+            expect(aiEngineReg.options.deferredDelay).toBe(15000);
+            expect(aiEngineReg.options.description).toContain('Server-side AI Engine and Embeddings Pre-Warming');
         });
     });
 });

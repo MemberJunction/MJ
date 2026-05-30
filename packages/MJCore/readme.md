@@ -858,6 +858,48 @@ Key features:
 
 ---
 
+### RegisterForStartup
+
+The `@RegisterForStartup` decorator registers singleton engine classes (or any class implementing `IStartupSink`) with the `StartupManager` to automatically run configuration/setup during application boot.
+
+```typescript
+import { RegisterForStartup, IStartupSink, IMetadataProvider, UserInfo } from '@memberjunction/core';
+
+@RegisterForStartup({
+    priority: 10,                 // Lower numbers run first
+    severity: 'fatal',           // 'fatal' (aborts startup), 'error', 'warn', 'silent'
+    description: 'My custom startup engine'
+})
+export class MyStartupEngine implements IStartupSink {
+    public static get Instance(): MyStartupEngine {
+        return super.getInstance<MyStartupEngine>();
+    }
+
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Run configuration and initial load
+        await this.Config(false, contextUser, provider);
+    }
+}
+```
+
+#### Deferred Startup & Delay
+For non-critical background services (like local AI model loading or vector pre-warming), you can set `deferred: true` to execute asynchronously without blocking the main application boot sequence.
+
+You can also specify `deferredDelay` (in milliseconds) to wait a set duration after synchronous boot finishes before the startup manager triggers the task, preventing resource spikes during boot:
+
+```typescript
+@RegisterForStartup({
+    deferred: true,
+    deferredDelay: 15000, // Delay background loading by 15 seconds
+    description: 'Background AI Engine pre-warming'
+})
+export class AIEngine implements IStartupSink {
+    // ...
+}
+```
+
+---
+
 ### LocalCacheManager
 
 The `LocalCacheManager` provides intelligent client-side caching for RunView and RunQuery results with TTL, LRU eviction, and differential updates.
@@ -1002,7 +1044,7 @@ This is intentional: it sidesteps the "did this PR change cache format?" review 
 
 For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
-> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ---
 
@@ -1273,20 +1315,20 @@ if (!saved) {
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/core-entities](../MJCoreEntities/README.md) | Extended entity classes for MemberJunction system entities |
+| [@memberjunction/core-entities](../MJCoreEntities/readme.md) | Extended entity classes for MemberJunction system entities |
 
 ### UI Frameworks
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ng-shared](../Angular/Shared/README.md) | Angular-specific components and services |
-| [@memberjunction/ng-explorer-core](../Angular/Explorer/core/README.md) | Core Angular explorer components |
+| [@memberjunction/ng-shared](../Angular/Generic/shared/README.md) | Angular-specific components and services |
+| [@memberjunction/ng-explorer-core](../Angular/Explorer/explorer-core/README.md) | Core Angular explorer components |
 
 ### AI Integration
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ai](../AI/Core/README.md) | AI framework core abstractions |
+| [@memberjunction/ai](../AI/Core/readme.md) | AI framework core abstractions |
 | [@memberjunction/aiengine](../AI/Engine/README.md) | AI orchestration engine |
 
 ### Communication

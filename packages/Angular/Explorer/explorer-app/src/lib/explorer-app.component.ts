@@ -369,6 +369,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
       }
     };
+    // Publish to any embedded chat-area subscribers (Form Builder
+    // cockpit, future domain dashboards). The floating overlay sees
+    // the change directly via its [AppContext] template binding; this
+    // observable channel is for chats mounted outside the overlay.
+    this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
     this.cdr.detectChanges();
 
     // Keep the bridge in sync with workspace visibility.
@@ -398,6 +403,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         ...this.AppContextSnapshot,
         AdditionalContext: update.AgentContext,
       };
+      // Republish so any embedded chat-area subscribers (Form Builder
+      // cockpit, future dashboards with their own AI pane) pick up the
+      // new dashboard slice — the floating overlay sees it via the
+      // [AppContext] template binding regardless.
+      this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
       this.cdr.detectChanges();
     }
 

@@ -1,5 +1,5 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { SQLParser, AnalyzeTopLevelOrderBy, findOrderByStatement as sharedFindOrderByStatement } from '@memberjunction/sql-parser';
+import { SQLParser, AnalyzeTopLevelOrderBy } from '@memberjunction/sql-parser';
 import { GetDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -105,7 +105,7 @@ export class QueryPagingEngine {
         // Both `wrap` and `unparseable` outcomes may try the outer-wrap path.
         // First, check for clauses that cannot legally appear inside a derived
         // table — wrapping such queries would produce invalid SQL.
-        const unwrappable = QueryPagingEngine.containsUnwrappableClause(cleanedSQL);
+        const unwrappable = SQLParser.HasUnwrappableTrailingClause(cleanedSQL, dialect);
 
         if (astResult.outcome === 'wrap') {
             if (unwrappable) return cleanedSQL;
@@ -134,79 +134,12 @@ export class QueryPagingEngine {
      * to be wrap-safe (no FOR JSON/FOR XML/OPTION at top level).
      */
     private static outerWrap(sql: string, cap: number, dialect: SQLDialect): string {
-        if (dialect.PlatformKey === 'sqlserver') {
-            return `SELECT TOP ${cap} * FROM (\n${sql}\n) AS _mj_capped`;
-        }
-        return `SELECT * FROM (\n${sql}\n) AS _mj_capped LIMIT ${cap}`;
-    }
-
-    /**
-     * Token-aware scan for clauses that cannot legally appear inside a
-     * derived table — wrapping such a query would produce invalid SQL.
-     *
-     * Detects (case-insensitive, outside string literals and quoted
-     * identifiers):
-     *   - `FOR JSON …`
-     *   - `FOR XML …`
-     *   - `OPTION (…)`
-     *
-     * `SELECT INTO` and mutations are handled separately via the AST
-     * (`applyMaxRowsViaAST` returns `pass-through` for those).
-     */
-    private static containsUnwrappableClause(sql: string): boolean {
-        const len = sql.length;
-        let i = 0;
-
-        const isWordChar = (ch: string): boolean =>
-            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') || ch === '_';
-
-        const isWS = (ch: string): boolean =>
-            ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
-
-        const matchWord = (start: number, word: string): boolean => {
-            if (start + word.length > len) return false;
-            if (sql.substring(start, start + word.length).toUpperCase() !== word) return false;
-            const after = start + word.length;
-            return after === len || !isWordChar(sql[after]);
-        };
-
-        while (i < len) {
-            const c = sql[i];
-
-            // Skip string literals and quoted identifiers (single quote,
-            // bracket, double quote — all support doubled-delimiter escapes).
-            if (c === "'" || c === '[' || c === '"') {
-                const close = c === '[' ? ']' : c;
-                i++;
-                while (i < len) {
-                    if (sql[i] === close) {
-                        if (sql[i + 1] === close) { i += 2; continue; }
-                        i++; break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-
-            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
-            if (!prevIsWord) {
-                if (matchWord(i, 'FOR')) {
-                    let j = i + 3;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (matchWord(j, 'JSON') || matchWord(j, 'XML')) return true;
-                }
-                if (matchWord(i, 'OPTION')) {
-                    let j = i + 6;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (j < len && sql[j] === '(') return true;
-                }
-            }
-
-            i++;
-        }
-
-        return false;
+        // Route the cap form through the dialect's LimitClause so there is a
+        // single source of truth for "TOP vs LIMIT" — no PlatformKey probe here.
+        const lc = dialect.LimitClause(cap);
+        const prefix = lc.prefix ? `${lc.prefix} ` : '';   // 'TOP N ' (SQL Server) or ''
+        const suffix = lc.suffix ? ` ${lc.suffix}` : '';   // ' LIMIT N' (PostgreSQL) or ''
+        return `SELECT ${prefix}* FROM (\n${sql}\n) AS _mj_capped${suffix}`;
     }
 
     /**
@@ -220,6 +153,9 @@ export class QueryPagingEngine {
      *                    the query (SELECT INTO, mutation).
      *   `unparseable`  — parser could not handle the input; caller may
      *                    attempt a CTE-fallback or outer wrap.
+     *
+     * All AST shape inspection is delegated to {@link SQLParser} primitives —
+     * this method contains no `node-sql-parser` field knowledge.
      */
     private static applyMaxRowsViaAST(
         sql: string,
@@ -231,72 +167,31 @@ export class QueryPagingEngine {
         | { outcome: 'pass-through' }
         | { outcome: 'unparseable' }
     {
-        const ast = SQLParser.ParseSQL(sql, dialect);
-        if (!ast) return { outcome: 'unparseable' };
+        // The instance parser applies preprocessing fallbacks on a direct-parse
+        // failure (bracket-identifier aliasing for Skip-style CTE names, trailing
+        // OPTION splitting); ToSQL restores them. This widens the set of shapes
+        // that reach the precise AST-inject path instead of the outer-wrap path.
+        const parsed = new SQLParser(sql, dialect);
+        if (!parsed.IsValid) return { outcome: 'unparseable' };
 
-        const rootNode = Array.isArray(ast) ? ast[0] : ast;
-        if (!rootNode) return { outcome: 'unparseable' };
-        const root = rootNode as unknown as Record<string, unknown>;
+        const kind = parsed.StatementKind;
+        if (kind === 'mutation' || kind === 'select-into') return { outcome: 'pass-through' };
+        if (kind === 'set-op') return { outcome: 'unparseable' };
+        if (kind !== 'select') return { outcome: 'pass-through' };
 
-        if (root.type !== 'select') return { outcome: 'pass-through' };
+        const existing = parsed.OuterCap;
 
-        const into = root.into as { position?: unknown } | undefined;
-        if (into && into.position) return { outcome: 'pass-through' };
+        // PERCENT and non-numeric (opaque) caps can't be reasoned about as row
+        // counts; let the caller outer-wrap them.
+        if (existing && existing.form !== 'numeric') return { outcome: 'wrap' };
 
-        if (root.set_op) return { outcome: 'unparseable' };
+        // Existing numeric cap — only modify when the requested cap is tighter.
+        if (existing && existing.value <= cap) return { outcome: 'capped', sql };
 
-        // Existing TOP — reduce to min(existing, cap). PERCENT and non-numeric
-        // values (e.g. TOP (@n)) can't be reasoned about as row counts; let
-        // the caller outer-wrap them.
-        const existingTop = root.top as { value: unknown; percent?: unknown } | null | undefined;
-        if (existingTop != null) {
-            if (existingTop.percent) return { outcome: 'wrap' };
-            const existingValue = typeof existingTop.value === 'number'
-                ? existingTop.value
-                : Number(existingTop.value);
-            if (!Number.isFinite(existingValue)) return { outcome: 'wrap' };
-            if (existingValue <= cap) return { outcome: 'capped', sql };
-            root.top = { value: cap, percent: null };
-            try {
-                return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
-            } catch {
-                return { outcome: 'unparseable' };
-            }
-        }
-
-        // Existing LIMIT — reduce the LIMIT value (preserves OFFSET).
-        // node-sql-parser shape for SQL Server / PostgreSQL:
-        //   `LIMIT N`           → value=[{value:N}],         seperator=''
-        //   `LIMIT N OFFSET M`  → value=[{value:N},{value:M}], seperator='offset'
-        // The LIMIT value is always at index 0 for these dialects.
-        const existingLimit = root.limit as { value: { value: unknown }[]; seperator?: string } | null | undefined;
-        if (existingLimit != null && Array.isArray(existingLimit.value) && existingLimit.value.length > 0) {
-            const limitNode = existingLimit.value[0];
-            const existingValue = typeof limitNode.value === 'number'
-                ? limitNode.value
-                : Number(limitNode.value);
-            if (!Number.isFinite(existingValue)) return { outcome: 'wrap' };
-            if (existingValue <= cap) return { outcome: 'capped', sql };
-            existingLimit.value[0] = { type: 'number', value: cap } as { type: 'number'; value: number };
-            try {
-                return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
-            } catch {
-                return { outcome: 'unparseable' };
-            }
-        }
-
-        // No existing cap — inject one.
-        if (dialect.PlatformKey === 'sqlserver') {
-            root.top = { value: cap, percent: null };
-        } else {
-            root.limit = {
-                seperator: '',
-                value: [{ type: 'number', value: cap }],
-            };
-        }
-
+        // No cap (or a looser one) — inject/replace.
+        parsed.SetOuterCap(cap);
         try {
-            return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
+            return { outcome: 'capped', sql: parsed.ToSQL() };
         } catch {
             return { outcome: 'unparseable' };
         }
@@ -363,80 +258,51 @@ export class QueryPagingEngine {
     // Count SQL — wrap in CTE, strip ORDER BY, SELECT COUNT(*)
     // ════════════════════════════════════════════════════════════════════
 
+    /**
+     * Builds count SQL that wraps the (cap-free, ORDER-BY-free) query in a
+     * `[__count]` CTE and selects `COUNT(*)`. A single instance-API path:
+     *   1. `ExtractCTEs` hoists any user CTEs as siblings (a CTE body can't
+     *      contain its own WITH) — AST parse first, paren-depth regex fallback.
+     *   2. `stripCountBody` removes the top-level ORDER BY (irrelevant for a
+     *      count, and illegal in a SQL Server CTE without TOP) and any outer
+     *      TOP / LIMIT (so the count reflects the full set, consistent with the
+     *      paged data query).
+     */
     private static buildCountSQL(sql: string, dialect: SQLDialect): string {
-        const astResult = QueryPagingEngine.buildCountSQLViaAST(sql, dialect);
-        if (astResult) return astResult;
-
-        return QueryPagingEngine.buildCountSQLViaRegex(sql, dialect);
-    }
-
-    private static buildCountSQLViaAST(sql: string, dialect: SQLDialect): string | null {
-        try {
-            const ast = SQLParser.ParseSQL(sql, dialect);
-            if (!ast) return null;
-
-            const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
-            if (!stmt) return null;
-
-            const existingCTEDefs = QueryPagingEngine.extractCTEsFromAST(stmt, dialect);
-
-            const orderByStmt = QueryPagingEngine.findOrderByStatement(stmt);
-            if (orderByStmt?.orderby) {
-                orderByStmt.orderby = null;
-            }
-
-            if (stmt.top) stmt.top = null;
-
-            stmt.with = null;
-            const mainSelectSQL = SQLParser.SqlifyAST(
-                stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], dialect
-            );
-
-            const countCTEName = dialect.QuoteIdentifier('__count');
-            const allCTEs = [...existingCTEDefs, `${countCTEName} AS (\n${mainSelectSQL}\n)`];
-            return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
-        } catch {
-            return null;
-        }
-    }
-
-    private static extractCTEsFromAST(
-        stmt: Record<string, unknown>,
-        dialect: SQLDialect
-    ): string[] {
-        const ctes = (stmt.with as unknown[] | null) || [];
-        return ctes.map(cte => {
-            const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
-            const quotedName = dialect.QuoteIdentifier(cteRecord.name.value);
-            const bodySQL = SQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof SQLParser.SqlifyAST>[0], dialect);
-            return `${quotedName} AS (\n${bodySQL}\n)`;
-        });
-    }
-
-    private static buildCountSQLViaRegex(sql: string, dialect: SQLDialect): string {
-        const extraction = SQLParser.ExtractCTEs(sql, dialect);
-
-        if (extraction) {
-            const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement, dialect);
-            const quotedCTEDefs = extraction.CTEDefinitions.map(def =>
-                QueryPagingEngine.quoteCteName(def, dialect)
-            );
-            const countCTEName = dialect.QuoteIdentifier('__count');
-            const allCTEs = [...quotedCTEDefs, `${countCTEName} AS (\n${sqlWithoutOrder}\n)`];
-            return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
-        }
-
-        const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(sql, dialect);
         const countCTEName = dialect.QuoteIdentifier('__count');
-        return `WITH ${countCTEName} AS (\n${sqlWithoutOrder}\n)\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
+
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+        const mainStatement = extraction ? extraction.MainStatement : sql;
+        const cteDefs = extraction
+            ? extraction.CTEDefinitions.map(def => QueryPagingEngine.quoteCteName(def, dialect))
+            : [];
+
+        const countBody = QueryPagingEngine.stripCountBody(mainStatement, dialect);
+
+        const allCTEs = [...cteDefs, `${countCTEName} AS (\n${countBody}\n)`];
+        return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // AST helpers — delegate to shared orderByAnalyzer
-    // ════════════════════════════════════════════════════════════════════
-
-    private static findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
-        return sharedFindOrderByStatement(stmt);
+    /**
+     * Strips the ORDER BY and any outer row cap (TOP on SQL Server, LIMIT on
+     * PostgreSQL) from the statement being counted, via a single parser
+     * round-trip — so the count reflects the full set rather than the capped
+     * subset. Falls back to a string-based ORDER BY strip when the statement
+     * can't be parsed (e.g. TRY_CAST, unresolved templates); the cap can't be
+     * reliably removed without a parse, matching the prior regex behavior.
+     */
+    private static stripCountBody(sql: string, dialect: SQLDialect): string {
+        const parser = new SQLParser(sql, dialect);
+        if (parser.IsValid) {
+            parser.ClearOuterCap();
+            parser.ClearOrderBy();
+            try {
+                return parser.ToSQL();
+            } catch {
+                // fall through to the string-based fallback
+            }
+        }
+        return QueryPagingEngine.extractOrderBy(sql, dialect).sqlWithoutOrder;
     }
 
     // ════════════════════════════════════════════════════════════════════

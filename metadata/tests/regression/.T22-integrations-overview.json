@@ -1,0 +1,80 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T22 - Integrations Overview",
+    "Description": "Navigates to the Integrations application and verifies the overview dashboard loads.",
+    "InputDefinition": {
+      "goal": "Use the application switcher to navigate to the Integrations application (if available). Verify that the integrations overview or connection list is displayed.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Integrations application is active",
+        "Overview or connection list is displayed"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression"
+  },
+  "primaryKey": {
+    "ID": "5266CE50-884B-4AAD-B450-07098B547C8D"
+  },
+  "sync": {
+    "lastModified": "2026-05-29T19:49:23.198Z",
+    "checksum": "920eaa0f36323bef9ef8f71631713b31989e53b100e3119a7494a969497489a6"
+  }
+}

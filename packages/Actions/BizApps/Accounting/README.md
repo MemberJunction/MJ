@@ -488,7 +488,7 @@ The package is designed for extensibility. To add support for a new accounting s
 
 ## Related Packages
 
-- [@memberjunction/actions](../../Engine/readme.md) -- Actions execution engine
+- [@memberjunction/actions](../../Engine/README.md) -- Actions execution engine
 - [@memberjunction/actions-base](../../Base/README.md) -- Base classes and interfaces
 - [@memberjunction/actions-bizapps-lms](../LMS/README.md) -- LMS integration actions (same BizApps pattern)
 - [BizApps Overview](../README.md) -- Parent directory with shared patterns

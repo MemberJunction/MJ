@@ -50,6 +50,8 @@ interface OverlayPrefs {
     height: number;
     /** Pixels the bubble has been dragged up from its default bottom position. Optional for back-compat with older saved prefs. */
     bubbleOffsetY?: number;
+    /** When true, the bubble is hidden and only a thin sliver shows on the right edge. */
+    bubbleHidden?: boolean;
 }
 
 @Component({
@@ -170,6 +172,13 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
      */
     public IsBubblePressed = false;
 
+    /**
+     * When true, the floating bubble is hidden and replaced by a thin sliver
+     * flush with the right edge of the viewport. Persisted across sessions via
+     * OverlayPrefs.bubbleHidden. Clicking the sliver restores the bubble.
+     */
+    public IsHidden = false;
+
     /** Active conversation ID managed locally */
     private _conversationId: string | null = null;
     public get ConversationId(): string | null {
@@ -235,6 +244,12 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
 
     /** Expand the overlay to show the chat panel */
     public Expand(): void {
+        // Expanding implies the user wants the chat visible — clear any hidden
+        // state so collapse returns to the bubble, not back to the sliver.
+        if (this.IsHidden) {
+            this.IsHidden = false;
+            this.savePreferences();
+        }
         this.State = 'expanded';
         this.UnreadCount = 0;
         this.bridge.NotifyOverlayActive(true);
@@ -325,6 +340,29 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.IsNewConversation = true;
         this.bridge.SetActiveFromOverlay(null);
         this.emitConversationSwitched(prevId, null);
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Hide the floating bubble — leaves a thin sliver on the right edge as the
+     * only affordance to bring it back. Invoked from the small "×" pill that
+     * appears on hover. Stops propagation so the bubble's own click handler
+     * doesn't fire and toggle the panel open.
+     */
+    public Hide(event: Event): void {
+        event.stopPropagation();
+        event.preventDefault();
+        if (this.IsHidden) return;
+        this.IsHidden = true;
+        this.savePreferences();
+        this.cdr.detectChanges();
+    }
+
+    /** Restore the floating bubble after it was hidden. Triggered by clicking the sliver. */
+    public Show(): void {
+        if (!this.IsHidden) return;
+        this.IsHidden = false;
+        this.savePreferences();
         this.cdr.detectChanges();
     }
 
@@ -542,6 +580,9 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
                 if (typeof prefs.bubbleOffsetY === 'number') {
                     this.BubbleOffsetY = Math.max(0, prefs.bubbleOffsetY);
                 }
+                if (typeof prefs.bubbleHidden === 'boolean') {
+                    this.IsHidden = prefs.bubbleHidden;
+                }
             }
         } catch {
             // Use defaults on error
@@ -553,7 +594,8 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         const prefs: OverlayPrefs = {
             width: this.PanelWidth,
             height: this.PanelHeight,
-            bubbleOffsetY: this.BubbleOffsetY
+            bubbleOffsetY: this.BubbleOffsetY,
+            bubbleHidden: this.IsHidden
         };
         UserInfoEngine.Instance.SetSettingDebounced(
             ChatAgentsOverlayComponent.SIZE_SETTING_KEY,
@@ -568,6 +610,17 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
             .subscribe((event: ConversationSwitchEvent) => {
                 if (event.Target === 'overlay') {
                     this.handleSwitchToOverlay(event);
+                }
+            });
+
+        // Allow arbitrary callers (Form Builder cockpit, etc.) to ask the
+        // overlay to expand. Idempotent if we're already expanded —
+        // Expand() is safe to call in any state.
+        this.bridge.ExpandOverlayRequested$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(() => {
+                if (this.State === 'collapsed') {
+                    this.Expand();
                 }
             });
 

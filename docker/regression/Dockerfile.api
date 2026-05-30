@@ -1,0 +1,60 @@
+# MemberJunction API Server — Test Environment
+# Runs the GraphQL server only. Database setup (migrations, AssociationDB, CodeGen)
+# is handled by the db-setup container which must complete before this starts.
+#
+# Health endpoint: /healthcheck (exposed by MJServer)
+
+FROM node:24-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY packages/ ./packages/
+COPY metadata/ ./metadata/
+COPY migrations/ ./migrations/
+
+# Overlay codegen output produced by the form-generator service (see
+# docker/regression/gen-forms.sh). `npm run regression:build` invokes
+# gen-forms before this build whenever .docker-generated/ is missing, so
+# these COPYs always have real content. Required so MJAPI's build can
+# compile the GraphQL resolvers that reference AssociationDemo entity
+# classes — without these the schema is missing types like
+# CreateAssociationDemoMemberInput and demo-entity queries fail at runtime.
+COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
+COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/generated/
+
+RUN npm install
+
+RUN npm run build:api
+
+# ─── Runtime ───────────────────────────────────────────────────────────────
+FROM node:24-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app ./
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/scripts/ ./docker/regression/scripts/
+
+# Patch userHandling config for the test environment.
+# See docker/regression/scripts/patch-test-api-config.cjs for the rationale —
+# in short: autoCreateNewUsers + UI/Integration roles + CreateUserApplicationRecords
+# so the test user gets full access without any manual SQL setup at runtime.
+RUN node docker/regression/scripts/patch-test-api-config.cjs
+
+EXPOSE 4000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=15 --start-period=30s \
+    CMD curl -f http://localhost:4000/healthcheck || exit 1
+
+# Database setup (migrations, CodeGen, AssociationDB) is handled by the db-setup container.
+# MJAPI just starts the GraphQL server.
+# --max-old-space-size=8192: 8GB heap to handle the load of 150 parallel regression tests
+# (default ~4GB OOMs under sustained GraphQL/subscription load)
+CMD ["node", "--experimental-specifier-resolution=node", "--max-old-space-size=8192", "packages/MJAPI/dist/index.js"]

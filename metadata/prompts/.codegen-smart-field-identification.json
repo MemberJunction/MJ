@@ -20,7 +20,8 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -72,7 +73,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 10
           },
@@ -80,14 +81,14 @@
             "ID": "7C6CC54F-6038-4DAB-810C-0D18A1CC659B"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:55.758Z",
-            "checksum": "0c37082d81bbfc64102c4d37d41dad6c079860f1c7a8f53fea8d8d3528518875"
+            "lastModified": "2026-05-29T19:48:59.211Z",
+            "checksum": "f73dcd14aeb277725c2bf0b147d266c30a90951d1f35572303cd1cf8aba4ca73"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 9
           },
@@ -95,14 +96,14 @@
             "ID": "4ACF758C-A505-4785-89CA-DC0A7BA6C2C6"
           },
           "sync": {
-            "lastModified": "2026-04-11T04:10:57.771Z",
-            "checksum": "a08c3ad07525e9d7816e797f52917f4ab7520cb7508936dcaef1d31c89029256"
+            "lastModified": "2026-05-29T19:48:59.228Z",
+            "checksum": "1702dcefdc5af476fedab1959e4a7b8e999f71bdf19c2f51f14e2c8b165f96f2"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -110,8 +111,8 @@
             "ID": "0BC09921-4C52-482E-A254-60BAFF7A9112"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:55.759Z",
-            "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
+            "lastModified": "2026-05-29T19:48:59.242Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
           }
         },
         {
@@ -150,8 +151,8 @@
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:53:38.332Z",
-      "checksum": "8096983d4586b0ce0e1c8eeae5248438dfa72545861c07bc16f664bcedfc85c5"
+      "lastModified": "2026-05-29T19:48:59.178Z",
+      "checksum": "cc1fc899599808ffbcf371bb7c934cc4e215c9f574a33a1d0abd8e1a5be7a542"
     }
   }
 ]

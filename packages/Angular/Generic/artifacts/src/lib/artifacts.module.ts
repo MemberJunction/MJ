@@ -11,6 +11,9 @@ import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { NgTreesModule } from '@memberjunction/ng-trees';
+// BaseFormsModule supplies `<mj-interactive-form>` for the form-aware
+// component-artifact viewer branch (componentRole === 'form').
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -29,6 +32,7 @@ import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar
 import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
 import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
 import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
+import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -71,6 +75,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    ImageArtifactViewerComponent,
   ],
   imports: [
     CommonModule,
@@ -82,6 +87,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     QueryViewerModule,
     SharedGenericModule,
     NgTreesModule,
+    BaseFormsModule,
     ComponentFeedbackPanelComponent,
     AgGridModule,
   ],
@@ -108,6 +114,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    ImageArtifactViewerComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -128,6 +135,7 @@ export class ArtifactsModule {
       PdfArtifactViewerComponent,
       XlsxArtifactViewerComponent,
       DocxArtifactViewerComponent,
+      ImageArtifactViewerComponent,
     ];
 
     // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.

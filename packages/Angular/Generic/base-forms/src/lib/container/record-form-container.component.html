@@ -28,6 +28,8 @@
   [ShowEmptyFields]="EffectiveShowEmptyFields"
   [WidthMode]="EffectiveWidthMode"
   [HasCustomSectionOrder]="EffectiveHasCustomSectionOrder"
+  [Variants]="EffectiveVariants"
+  [CurrentVariantID]="EffectiveCurrentVariantID"
   (Navigate)="OnNavigate($event)"
   (EditModeChange)="OnEditModeChange($event)"
   (BeforeSave)="BeforeSave.emit($event)"
@@ -50,11 +52,15 @@
   (WidthModeChange)="OnWidthModeChange($event)"
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
-  (TagsPanelToggled)="OnTagsPanelToggled()">
+  (TagsPanelToggled)="OnTagsPanelToggled()"
+  (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
 
 <!-- ============================================
      SCROLL AREA (full-width so mouse wheel works anywhere)
+     Variant picker is now embedded in <mj-form-toolbar> as a right-side
+     button — see the [Variants]/[CurrentVariantID] inputs + (VariantPicked)
+     output on the toolbar above. Inline strip was removed.
      ============================================ -->
 <div class="mj-forms-scroll-area">
   <div class="mj-forms-panels-container"
@@ -66,6 +72,23 @@
       <!-- All panels in a single flex container — CSS order drives sequencing -->
       <div class="mj-forms-all-panels">
         <ng-content></ng-content>
+
+        <!--
+          Container-provided fallback slot. ALWAYS present — last in document
+          order — so any panel whose registered slot isn't found in the current
+          form falls through here via FormSlotCoordinator's chain. Downstream
+          consumers that haven't rerun CodeGen against the slot-emitting
+          template still see every panel; they just render at the bottom
+          instead of at their preferred position.
+        -->
+        @if (Record && FormComponent) {
+          <mj-form-panel-slot
+            [Entity]="Record.EntityInfo.Name"
+            Slot="after-everything"
+            [Record]="Record"
+            [FormComponent]="FormComponent">
+          </mj-form-panel-slot>
+        }
 
         <!-- Empty state when no sections match search -->
         @if (EffectiveSearchFilter && VisibleSectionCount === 0) {

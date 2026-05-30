@@ -146,8 +146,12 @@ describe('GeminiLLM', () => {
       expect(callGetThinkingBudget('abc', 'gemini-2.5-flash')).toBeUndefined();
     });
 
-    it('should return 0 for very low effort on Flash models', () => {
-      expect(callGetThinkingBudget(3, 'gemini-2.5-flash')).toBe(0);
+    it('should return 0 only for effort 1 on Flash models (minimal)', () => {
+      expect(callGetThinkingBudget(1, 'gemini-2.5-flash')).toBe(0);
+      // effort 2 falls into the LOW band (1024-4096) — no longer disabled
+      const lowBudget = callGetThinkingBudget(2, 'gemini-2.5-flash');
+      expect(lowBudget).toBeGreaterThanOrEqual(1024);
+      expect(lowBudget).toBeLessThanOrEqual(4096);
     });
 
     it('should return low budget for effort level 20', () => {
