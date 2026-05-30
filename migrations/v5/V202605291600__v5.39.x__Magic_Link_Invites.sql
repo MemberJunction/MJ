@@ -9,9 +9,11 @@
 --   * The raw token is NEVER stored — only its SHA-256 hash (TokenHash),
 --     mirroring the @memberjunction/api-keys pattern. The raw token lives only
 --     in the emailed URL.
---   * Single-use is enforced at redemption: ConsumedAt / UseCount are written in
---     the same transaction that mints the JWT; an already-consumed, expired, or
---     revoked invite is rejected.
+--   * Single-use is enforced atomically at redemption: a compare-and-swap UPDATE
+--     (UseCount/ConsumedAt/Status, guarded by UseCount < MaxUses + Active + not
+--     expired) runs BEFORE the JWT is minted, so concurrent redemptions of a
+--     single-use link race on the row and exactly one wins (fail-closed). An
+--     already-consumed, expired, or revoked invite is rejected.
 --   * The RoleID is the real authorization boundary (entity-level permissions),
 --     not the nav filtering.
 --
@@ -158,6 +160,12 @@ EXEC sp_addextendedproperty @name=N'MS_Description',
 
 
 
+
+/*****************************************************************************************
+ *  CODE GEN RUN
+ *  Everything below this marker is the output of a CodeGen run against a database that
+ *  already had the hand-authored DDL above applied. Do NOT hand-edit — regenerate.
+ *****************************************************************************************/
 
 /* SQL generated to create new entity MJ: Magic Link Invites */
 

@@ -6,8 +6,10 @@ import {
   hashToken,
   evaluateInvite,
   buildSessionClaims,
+  buildConsumeInviteSQL,
   MAGIC_LINK_TOKEN_PREFIX,
 } from '../auth/magicLink/magicLinkCore.js';
+import { buildRedeemLandingHtml, escapeHtml } from '../auth/magicLink/redeemLanding.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 
 describe('magic-link core', () => {
@@ -94,6 +96,97 @@ describe('magic-link core', () => {
       expect(claims.exp - claims.iat).toBe(3600);
       expect(claims.email).toBe('ext@client.com');
       expect(claims.name).toBe('Ext User');
+    });
+  });
+
+  describe('buildConsumeInviteSQL', () => {
+    const table = '[__mj].[MagicLinkInvite]';
+    const sql = buildConsumeInviteSQL(table);
+
+    it('targets the supplied qualified table', () => {
+      expect(sql).toContain(`UPDATE ${table} `);
+    });
+
+    it('increments UseCount', () => {
+      expect(sql).toContain('UseCount = UseCount + 1');
+    });
+
+    it('stamps ConsumedAt only the first time (COALESCE preserves an existing value)', () => {
+      expect(sql).toContain('ConsumedAt = COALESCE(ConsumedAt, SYSUTCDATETIME())');
+    });
+
+    it('flips Status to Consumed exactly when the last use is taken', () => {
+      expect(sql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
+    });
+
+    it('returns the affected row via OUTPUT INTO a table var so the caller can detect a win (exactly one row)', () => {
+      // Must be OUTPUT ... INTO, not a bare OUTPUT: SQL Server forbids a bare
+      // OUTPUT clause on a table with enabled triggers, and CodeGen adds an
+      // __mj_UpdatedAt trigger to every MJ table. Regression guard for that bug.
+      expect(sql).toContain('OUTPUT INSERTED.ID INTO @consumed');
+      expect(sql).not.toMatch(/OUTPUT INSERTED\.ID(?!\s+INTO)/);
+      expect(sql).toContain('SELECT ID FROM @consumed');
+    });
+
+    it('guards atomically on Active + not-exhausted + not-expired — this IS the single-use gate', () => {
+      const where = sql.slice(sql.indexOf('WHERE'));
+      expect(where).toContain("Status = 'Active'");
+      expect(where).toContain('UseCount < MaxUses');
+      expect(where).toContain('ExpiresAt > SYSUTCDATETIME()');
+    });
+
+    it('binds the invite ID as a parameter, never interpolated (injection-safe)', () => {
+      expect(sql).toContain('ID = @p0');
+      // The id must not be string-interpolated with quotes around a value.
+      expect(sql).not.toMatch(/ID = '/);
+    });
+
+    it('is a self-contained batch: declare table var, update-with-output, select', () => {
+      // Intentionally a 3-statement batch (the OUTPUT-INTO requirement). The ID is
+      // still parameterized, so the batch carries no interpolated user input.
+      expect(sql).toContain('DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER)');
+      expect(sql.match(/;/g)?.length).toBe(3);
+      expect(sql.trim().endsWith(';')).toBe(true);
+    });
+  });
+
+  describe('escapeHtml', () => {
+    it('escapes the five significant HTML characters', () => {
+      expect(escapeHtml(`<>&"'`)).toBe('&lt;&gt;&amp;&quot;&#39;');
+    });
+
+    it('leaves a normal magic-link token untouched', () => {
+      const t = generateRawToken();
+      expect(escapeHtml(t)).toBe(t);
+    });
+  });
+
+  describe('buildRedeemLandingHtml', () => {
+    const token = generateRawToken();
+    const html = buildRedeemLandingHtml(token, '/magic-link/redeem');
+
+    it('renders a POST form to the redeem path (GET stays side-effect-free)', () => {
+      expect(html).toContain('method="POST"');
+      expect(html).toContain('action="/magic-link/redeem"');
+    });
+
+    it('carries the token in a hidden field for the click-to-continue submit', () => {
+      expect(html).toContain(`name="token" value="${token}"`);
+    });
+
+    it('requires a human click — it does NOT auto-submit (defeats link scanners)', () => {
+      expect(html).not.toContain('.submit()');
+      expect(html).not.toContain('onload');
+    });
+
+    it('discourages indexing', () => {
+      expect(html).toContain('name="robots"');
+    });
+
+    it('escapes a token containing HTML metacharacters into the form value', () => {
+      const evil = buildRedeemLandingHtml('a"><script>x</script>', '/magic-link/redeem');
+      expect(evil).not.toContain('<script>x</script>');
+      expect(evil).toContain('&lt;script&gt;');
     });
   });
 });

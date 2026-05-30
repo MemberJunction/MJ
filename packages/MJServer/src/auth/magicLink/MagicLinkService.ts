@@ -14,6 +14,7 @@ import {
   LogError,
   LogStatus,
   type DatabaseProviderBase,
+  type IMetadataProvider,
   type RoleInfo,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -30,7 +31,7 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
-import { generateRawToken, hashToken, evaluateInvite, buildSessionClaims, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import { generateRawToken, hashToken, evaluateInvite, buildSessionClaims, buildConsumeInviteSQL, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
@@ -64,10 +65,15 @@ export class MagicLinkService {
    *
    * @param params  invite parameters
    * @param creatingUser  the authenticated internal user issuing the invite
+   * @param provider  the request's metadata provider; falls back to the global default
    */
-  public async createInvite(params: CreateMagicLinkInviteParams, creatingUser: UserInfo): Promise<CreateMagicLinkInviteResult> {
+  public async createInvite(
+    params: CreateMagicLinkInviteParams,
+    creatingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<CreateMagicLinkInviteResult> {
     try {
-      const md = new Metadata();
+      const md = provider ?? Metadata.Provider;
 
       const roleId = params.roleId ?? this.resolveRestrictedRoleId(md);
       if (!roleId) {
@@ -122,10 +128,17 @@ export class MagicLinkService {
   }
 
   /**
-   * Redeems a raw token: validates the invite, provisions/links the user with
-   * the restricted role + app, marks the invite consumed, and mints a session
-   * JWT. Runs in the public (pre-auth) path, so it uses the global provider and
-   * a configured provisioning context user.
+   * Redeems a raw token: validates the invite, atomically consumes one use,
+   * provisions/links the user with the restricted role + app, and mints a
+   * session JWT. Runs in the public (pre-auth) path, so it uses the global
+   * provider and a configured provisioning context user.
+   *
+   * Single-use is enforced by a compare-and-swap UPDATE ({@link consumeInvite})
+   * BEFORE the token is minted — two concurrent redemptions of a single-use
+   * link race on the same row and exactly one wins. The consume is the gate:
+   * if a later step fails, the use is already burned (fail-closed). That is the
+   * correct trade-off for a single-use credential — burning a token on a server
+   * error is recoverable (re-issue); allowing replay is not.
    */
   public async redeemInvite(rawToken: string): Promise<RedeemMagicLinkResult> {
     try {
@@ -138,6 +151,10 @@ export class MagicLinkService {
         LogError('[MagicLink] No provisioning context user available for redemption.');
         return { success: false, errorCode: 'server_error', error: 'Server not configured for provisioning.' };
       }
+
+      // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet
+      const md = Metadata.Provider;
+      const provider = md as DatabaseProviderBase;
 
       const tokenHash = hashToken(rawToken);
       const rv = new RunView();
@@ -159,25 +176,35 @@ export class MagicLinkService {
         return { success: false, errorCode: 'not_found', error: 'Invite not found.' };
       }
 
+      // Fast, friendly pre-check (returns a precise reason). NOT the authority —
+      // the atomic consume below is what actually enforces single-use.
       const eligibility = evaluateInvite(invite, Date.now());
       if (!eligibility.ok) {
         return { success: false, errorCode: eligibility.errorCode, error: `Invite is ${eligibility.errorCode}.` };
       }
 
-      const md = new Metadata();
       const role = md.Roles.find((r) => UUIDsEqual(r.ID, invite.RoleID));
       if (!role) {
         LogError(`[MagicLink] Invite ${invite.ID} references missing role ${invite.RoleID}.`);
         return { success: false, errorCode: 'server_error', error: 'Invite role not found.' };
       }
 
-      const provision = await this.provisionUser(invite, role, contextUser);
-      if (!provision.success) {
-        return { success: false, errorCode: 'provisioning_failed', error: provision.error };
+      // Atomic consume BEFORE minting. If we lose the race (0 rows updated), the
+      // invite was concurrently consumed/expired — re-evaluate the now-stale
+      // in-memory copy only to surface a precise code; default to 'consumed'.
+      if (!(await this.consumeInvite(invite, provider, contextUser))) {
+        // Lost the race or the invite expired between the pre-check and the
+        // consume. The in-memory copy still looks eligible if only the DB-side
+        // use count changed, so default that case to 'consumed'.
+        const recheck = evaluateInvite(invite, Date.now());
+        return { success: false, errorCode: recheck.ok ? 'consumed' : recheck.errorCode, error: 'Invite already redeemed or expired.' };
       }
 
-      if (!(await this.markConsumed(invite, contextUser))) {
-        return { success: false, errorCode: 'server_error', error: 'Failed to record redemption.' };
+      const provision = await this.provisionUser(invite, role, contextUser);
+      if (!provision.success) {
+        // Token already consumed (fail-closed). The link cannot be reused.
+        LogError(`[MagicLink] Provisioning failed after consuming invite ${invite.ID}: ${provision.error}`);
+        return { success: false, errorCode: 'provisioning_failed', error: provision.error };
       }
 
       const nowSeconds = Math.floor(Date.now() / 1000);
@@ -203,6 +230,7 @@ export class MagicLinkService {
         expiresAt: new Date(claims.exp * 1000).toISOString(),
         applicationId: invite.ApplicationID,
         applicationName: app?.Name,
+        applicationPath: app?.Path || undefined,
         email: provision.email,
       };
     } catch (e) {
@@ -212,7 +240,7 @@ export class MagicLinkService {
   }
 
   /** Resolves the configured restricted role's ID, if present. */
-  private resolveRestrictedRoleId(md: Metadata): string | undefined {
+  private resolveRestrictedRoleId(md: IMetadataProvider): string | undefined {
     const name = this.config.restrictedRoleName.trim().toLowerCase();
     const role: RoleInfo | undefined = md.Roles.find((r) => r.Name.trim().toLowerCase() === name);
     return role?.ID;
@@ -253,15 +281,20 @@ export class MagicLinkService {
 
   /** Creates a new user with exactly the restricted role + single app, transactionally. */
   private async createScopedUser(invite: MJMagicLinkInviteEntity, role: RoleInfo, contextUser: UserInfo): Promise<ProvisionResult> {
-    const md = new Metadata();
-    const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet
+    // Single provider for BOTH the transaction and the entity writes, so the
+    // BeginTransaction/Save/Commit are provably on the same connection.
+    // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet.
+    const provider = Metadata.Provider as DatabaseProviderBase;
     const email = invite.Email;
+    // The invite does not persist a name; provision a sensible default. (The
+    // create-invite params accept first/last name but there is no column to
+    // store them yet — see types.ts CreateMagicLinkInviteParams.)
     const firstName = 'Guest';
     const lastName = email;
 
     await provider.BeginTransaction();
     try {
-      const user = await md.GetEntityObject<MJUserEntity>('MJ: Users', contextUser);
+      const user = await provider.GetEntityObject<MJUserEntity>('MJ: Users', contextUser);
       user.NewRecord();
       user.Name = email;
       user.Email = email;
@@ -273,7 +306,7 @@ export class MagicLinkService {
         throw new Error(`user save failed: ${user.LatestResult?.CompleteMessage ?? 'unknown'}`);
       }
 
-      const userRole = await md.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', contextUser);
+      const userRole = await provider.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', contextUser);
       userRole.NewRecord();
       userRole.UserID = user.ID;
       userRole.RoleID = invite.RoleID;
@@ -281,7 +314,7 @@ export class MagicLinkService {
         throw new Error(`user role save failed: ${userRole.LatestResult?.CompleteMessage ?? 'unknown'}`);
       }
 
-      const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
+      const userApp = await provider.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
       userApp.NewRecord();
       userApp.UserID = user.ID;
       userApp.ApplicationID = invite.ApplicationID;
@@ -381,22 +414,31 @@ export class MagicLinkService {
     }
   }
 
-  /** Increments use count, stamps ConsumedAt, and flips Status to Consumed when exhausted. */
-  private async markConsumed(invite: MJMagicLinkInviteEntity, contextUser: UserInfo): Promise<boolean> {
-    invite.ContextCurrentUser = contextUser;
-    const newCount = invite.UseCount + 1;
-    invite.UseCount = newCount;
-    if (!invite.ConsumedAt) {
-      invite.ConsumedAt = new Date();
-    }
-    if (newCount >= invite.MaxUses) {
-      invite.Status = 'Consumed';
-    }
-    if (!(await invite.Save())) {
-      LogError(`[MagicLink] Failed to mark invite consumed: ${invite.LatestResult?.CompleteMessage ?? 'unknown'}`);
+  /**
+   * Atomically consumes one use of the invite via a compare-and-swap UPDATE.
+   * The WHERE clause re-checks every eligibility condition (Active, not
+   * exhausted, not expired) at the DB level, so the increment and the guard are
+   * a single atomic operation. Returns true ONLY when this call updated the row
+   * (won the race); concurrent redemptions of a single-use link see 0 rows.
+   *
+   * Fail-closed: any DB error returns false and the redemption is rejected.
+   */
+  private async consumeInvite(invite: MJMagicLinkInviteEntity, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<boolean> {
+    try {
+      const entityInfo = provider.EntityByName(INVITE_ENTITY);
+      if (!entityInfo) {
+        LogError(`[MagicLink] Entity metadata for '${INVITE_ENTITY}' not found; cannot consume invite.`);
+        return false;
+      }
+      const table = `[${entityInfo.SchemaName}].[${entityInfo.BaseTable}]`;
+      // OUTPUT returns one row iff the WHERE matched — the atomic single-use gate.
+      const sql = buildConsumeInviteSQL(table);
+      const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [invite.ID], { isMutation: true }, contextUser);
+      return Array.isArray(rows) && rows.length === 1;
+    } catch (e) {
+      LogError(`[MagicLink] Atomic consume failed for invite ${invite.ID}: ${e instanceof Error ? e.message : String(e)}`);
       return false;
     }
-    return true;
   }
 
   /** Pushes a freshly created user into the UserCache with its single role. */

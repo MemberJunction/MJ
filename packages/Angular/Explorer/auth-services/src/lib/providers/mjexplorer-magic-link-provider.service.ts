@@ -8,6 +8,7 @@ import {
   AuthErrorType,
   TokenRefreshResult,
   SessionScope,
+  MagicLinkSessionClaims,
 } from '../auth-types';
 
 /** sessionStorage key holding the magic-link session token for this tab. */
@@ -35,7 +36,7 @@ export class MJMagicLinkProvider extends MJAuthBase {
   readonly type = MJMagicLinkProvider.PROVIDER_TYPE;
 
   private token: string | null = null;
-  private claims: Record<string, unknown> | null = null;
+  private claims: MagicLinkSessionClaims | null = null;
 
   constructor() {
     super({ name: MJMagicLinkProvider.PROVIDER_TYPE, type: MJMagicLinkProvider.PROVIDER_TYPE });
@@ -101,7 +102,7 @@ export class MJMagicLinkProvider extends MJAuthBase {
       return null;
     }
     const claims = this.claims ?? this.decode(idToken);
-    const exp = claims?.['exp'] as number | undefined;
+    const exp = claims?.exp;
     return { idToken, expiresAt: exp ? exp * 1000 : 0 };
   }
 
@@ -144,8 +145,8 @@ export class MJMagicLinkProvider extends MJAuthBase {
    * (`mj_app_id`), so the shell hides app-switching and keeps the user there.
    */
   override GetSessionScope(): SessionScope | null {
-    const appId = this.claims?.['mj_app_id'] as string | undefined;
-    if (this.claims?.['mj_magic_link'] === true && appId) {
+    const appId = this.claims?.mj_app_id;
+    if (this.claims?.mj_magic_link === true && appId) {
       return { restrictedToApplicationId: appId, magicLink: true };
     }
     return null;
@@ -175,32 +176,49 @@ export class MJMagicLinkProvider extends MJAuthBase {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 
-  /** Decodes a JWT payload (no verification — the server validates). */
-  private decode(token: string): Record<string, unknown> | null {
+  /**
+   * Decodes a JWT payload (no verification — the server validates via JWKS).
+   * UTF-8-safe: external users routinely have non-ASCII names, which a plain
+   * `atob` would mangle. Also restores base64url padding `atob` needs.
+   */
+  private decode(token: string): MagicLinkSessionClaims | null {
     try {
-      const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      return JSON.parse(atob(payload)) as Record<string, unknown>;
-    } catch {
+      const segment = token.split('.')[1];
+      if (!segment) {
+        return null;
+      }
+      let b64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+      b64 += '='.repeat((4 - (b64.length % 4)) % 4);
+      const json = decodeURIComponent(
+        atob(b64)
+          .split('')
+          .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+          .join(''),
+      );
+      return JSON.parse(json) as MagicLinkSessionClaims;
+    } catch (e) {
+      // A malformed token must not be silently indistinguishable from "no token".
+      console.error('[MagicLink] Failed to decode session token:', e);
       return null;
     }
   }
 
   private isExpired(): boolean {
-    const exp = this.claims?.['exp'] as number | undefined;
+    const exp = this.claims?.exp;
     return !!exp && Date.now() >= exp * 1000;
   }
 
-  private toUserInfo(claims: Record<string, unknown> | null): StandardUserInfo | null {
+  private toUserInfo(claims: MagicLinkSessionClaims | null): StandardUserInfo | null {
     if (!claims) {
       return null;
     }
-    const email = (claims['email'] as string) || '';
+    const email = claims.email || '';
     return {
-      id: (claims['sub'] as string) || email,
+      id: claims.sub || email,
       email,
-      name: (claims['name'] as string) || email,
-      givenName: claims['given_name'] as string | undefined,
-      familyName: claims['family_name'] as string | undefined,
+      name: claims.name || email,
+      givenName: claims.given_name,
+      familyName: claims.family_name,
       preferredUsername: email,
       emailVerified: true,
     };

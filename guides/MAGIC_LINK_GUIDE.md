@@ -46,14 +46,15 @@ role and its permissions, and that's what you version-control.
 ┌──────────────┐  2. emailed link                                │
 │  Recruiter   │ ◀───────────────────────────────────────────────┘
 │  (external)  │
-└──────────────┘  3. GET /magic-link/redeem?token=…   ┌──────────────────────────┐
-        │ ───────────────────────────────────────────▶│  MJServer                 │
-        │                                              │  • validate (single-use, │
-        │                                              │    expiry, status)        │
-        │  4. minted RS256 session JWT                 │  • provision user w/      │
-        │ ◀────────────────────────────────────────── │    restricted role + app  │
-        ▼                                              │  • mint JWT (RS256)       │
-   scoped session — recruiter sees only the            └──────────────────────────┘
+└──────────────┘  3a. GET /magic-link/redeem?token=…  ┌──────────────────────────┐
+        │ ───────────(safe: interstitial)────────────▶│  MJServer                 │
+        │  3b. POST (Continue click)                   │  • atomic consume (single-│
+        │ ───────────────────────────────────────────▶│    use CAS) then validate │
+        │                                              │  • provision user w/      │
+        │  4. minted RS256 session JWT                 │    restricted role + app  │
+        │ ◀────────────────────────────────────────── │  • mint JWT (RS256)       │
+        ▼                                              └──────────────────────────┘
+   scoped session — recruiter sees only the
    recruiting app's data; everything else is
    denied at the GraphQL/entity layer
 ```
@@ -149,6 +150,28 @@ exactly the entities recruiters should see — `Candidates` and nothing else:
 > directly still can't read anything outside this grant. Nav-hiding in the
 > Explorer is cosmetic on top of this — never the boundary.
 
+#### Step 2a — The Explorer "boot baseline" (already shipped)
+
+A pure deny-all role **cannot render MJExplorer at all** — the shell hangs on
+"Failed to create default workspace" and the UserInfo/Communication engines error
+out, because rendering the shell requires a small set of framework entities
+*before* any app data is shown. So the magic-link feature ships a minimum baseline
+in [`metadata/entity-permissions/.entity-permissions.json`](../metadata/entity-permissions/.entity-permissions.json),
+granted to `External App User`:
+
+| Entity | Grant | Why |
+|---|---|---|
+| `MJ: Workspaces`, `MJ: Workspace Items` | **CRUD** | Explorer creates + persists a per-user default workspace on first load. `CanCreate` is required — a read-only grant still hangs. |
+| `MJ: User Settings`, `MJ: User Favorites`, `MJ: User Record Logs`, `MJ: User Notification Preferences` | **CRUD** | `UserInfoEngine` bootstraps these per-user stores; preferences are written back. |
+| `MJ: Communication Base Message Types`, `MJ: Communication Providers`, `MJ: Communication Provider Message Types`, `MJ: Entity Communication Message Types`, `MJ: Entity Communication Fields` | **Read** | `CommunicationEngine` loads these at startup. |
+
+This baseline is **framework-level** (every magic-link Explorer user needs it) and
+is distinct from the **scenario data perms** in Step 2 (your `Candidates`-style
+grants, which are per-deployment). If you define a scenario-specific role instead
+of reusing `External App User`, **copy this baseline onto that role too**, or the
+shell won't boot. The baseline grants no business data — only the shell plumbing —
+so it doesn't widen the security boundary.
+
 ### Step 3 — Make the role able to enter the Application
 
 Recruiters land in one Application (the recruiting app). Grant the role access via
@@ -182,7 +205,8 @@ read on a different entity set), repeat with a new role — invites carry a per-
 > **Where this metadata lives:** if `Candidates` is *your client's* entity (not a
 > core MJ entity), these permission records belong in **that deployment's**
 > metadata, authored once the entity exists — not in the MJ framework repo. The
-> framework ships only the mechanism and the baseline role.
+> framework ships the mechanism, the baseline `External App User` role, and the
+> Explorer boot baseline (Step 2a); the **scenario data perms (Step 2) are yours.**
 
 ---
 
@@ -224,17 +248,24 @@ omitted. Otherwise you get the raw link back to deliver out of band.
 
 ## 6. Redeeming
 
-`GET /magic-link/redeem?token=…` validates the invite (single-use, expiry, status),
-provisions/links the user with the restricted role + single app, marks the invite
-consumed, and returns a minted RS256 session JWT.
+Redemption is a **two-step, GET-safe** flow so that link prefetchers and email
+security scanners can't burn a single-use token by merely fetching the URL:
 
-> **Phase 1 status:** redeem currently returns the token as JSON (testable via
-> `curl`). **Phase 2** turns this into a redirect to MJExplorer with the token, plus
-> a landing route that stores it and boots the (nav-confined) session.
+1. `GET /magic-link/redeem?token=…` is **side-effect-free** — it returns a small
+   interstitial page with a "Continue to sign in" button. No DB write, no token
+   minted. (API callers get `405` and must POST.)
+2. `POST /magic-link/redeem` (the form submit, or an API client's POST) performs
+   the actual redemption: it atomically consumes one use, provisions/links the
+   user with the restricted role + single app, and mints an RS256 session JWT.
+   For browsers it `302`-redirects into MJExplorer with the token in the URL
+   fragment (`#token=…`); API clients add `?format=json` (or `Content-Type:
+   application/json`) to get the JWT as JSON.
 
-Single-use is enforced transactionally: `ConsumedAt`/`UseCount` are written in the
-same transaction that mints the token. A second redemption of a single-use link is
-rejected (`410 Gone`, `errorCode: "consumed"`).
+Single-use is enforced **atomically**: a compare-and-swap `UPDATE` (guarded by
+`UseCount < MaxUses AND Status = 'Active' AND ExpiresAt > now`) runs *before* the
+token is minted, so two concurrent redemptions of a single-use link race on the
+row and exactly one wins (fail-closed). A losing/late redemption is rejected
+(`410 Gone`, `errorCode: "consumed"`).
 
 ---
 
@@ -288,7 +319,8 @@ No new mechanism — it's reads over existing data:
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /magic-link/create` | Internal user | Create + (optionally) email an invite |
-| `GET /magic-link/redeem?token=…` | Public | Redeem → provision → mint session JWT |
+| `GET /magic-link/redeem?token=…` | Public | Safe interstitial (no side effects); renders "Continue" → POST |
+| `POST /magic-link/redeem` | Public | Redeem → consume → provision → mint session JWT |
 | `GET /magic-link/jwks.json` | Public | RS256 public key set (used by token validation) |
 
 | `magicLink.*` config | Default | Meaning |
@@ -297,6 +329,9 @@ No new mechanism — it's reads over existing data:
 | `rsaPrivateKey` | ephemeral | RS256 signing key (PEM, raw or base64) |
 | `defaultExpiresInHours` | `72` | Unredeemed-link lifetime |
 | `sessionTokenTtlHours` | `8` | Session JWT lifetime |
+| `rateLimitWindowMs` | `60000` | Rate-limit window for `/redeem` + `/create` |
+| `redeemRateLimitMax` | `20` | Max `/redeem` attempts per IP per window |
+| `createRateLimitMax` | `30` | Max `/create` requests per IP per window |
 | `restrictedRoleName` | `External App User` | Default role when an invite omits `roleId` |
 | `contextUserForProvisioning` | — | User context for provisioning writes |
 | `communicationProvider` | — | CommunicationEngine provider for invite email |

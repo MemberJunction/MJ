@@ -342,9 +342,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (lockedId) {
           const scopedApp = this.appManager.GetAppById(lockedId);
           if (scopedApp) {
-            const slug = scopedApp.Name.trim().toLowerCase().replace(/\s+/g, '-');
+            // Resolve the app the URL currently names and compare by ID — never
+            // string-match a hand-rolled name slug, which diverges from a custom
+            // Path and would loop the redirect. (navigateToApp uses app.Path.)
             const path = (this.router.url || '').split('#')[0].split('?')[0];
-            if (!path.startsWith(`/app/${slug}`)) {
+            const urlAppPath = path.match(/\/app\/([^\/?#]+)/)?.[1];
+            const currentApp = urlAppPath ? this.appManager.GetAppByPath(decodeURIComponent(urlAppPath)) : undefined;
+            if (!currentApp || !UUIDsEqual(currentApp.ID, lockedId)) {
               await this.navigateToApp(scopedApp);
               return;
             }
@@ -2974,8 +2978,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // Update URL to reflect the new app
-    const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
+    this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
   /**

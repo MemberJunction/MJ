@@ -81,6 +81,8 @@ export interface RedeemMagicLinkResult {
   applicationId?: string;
   /** The Application's display name (used to deep-link the browser into that app). */
   applicationName?: string;
+  /** The Application's URL path slug (preferred for deep-linking; falls back to name). */
+  applicationPath?: string;
   email?: string;
   error?: string;
   errorCode?: RedeemErrorCode;

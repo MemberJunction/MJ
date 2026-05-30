@@ -1,19 +1,79 @@
 [
   {
     "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Models",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspaces",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true,
-      "CanCreate": false,
-      "CanUpdate": false,
-      "CanDelete": false
-    },
-    "primaryKey": {
-      "ID": "12CEA483-6EAE-4E45-98A8-DD8445673FE4"
-    },
-    "sync": {
-      "lastModified": "2026-05-30T17:38:37.321Z",
-      "checksum": "6df62adf1a11b9bbb66285aa4265b6dfec6e507e18bc32c23fb1705a442b6fab"
+      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspace Items",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Settings",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Favorites",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Record Logs",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notification Preferences",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Base Message Types",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Providers",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Provider Message Types",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Message Types",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Fields",
+      "RoleID": "@lookup:MJ: Roles.Name=External App User",
+      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
     }
   }
 ]

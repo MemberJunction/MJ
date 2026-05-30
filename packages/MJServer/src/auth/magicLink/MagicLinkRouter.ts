@@ -8,13 +8,15 @@
  * @module @memberjunction/server/auth/magicLink
  */
 
-import { Router, json, type Request, type Response } from 'express';
+import { Router, json, urlencoded, type Request, type Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { LogError, LogStatus, type AuthProviderConfig } from '@memberjunction/core';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
 import { MagicLinkService } from './MagicLinkService.js';
-import type { CreateMagicLinkInviteParams } from './types.js';
+import { buildRedeemLandingHtml } from './redeemLanding.js';
+import type { CreateMagicLinkInviteParams, RedeemMagicLinkResult } from './types.js';
 
 /** The mount path for both routers (`/magic-link`). */
 export const MAGIC_LINK_MOUNT_PATH = '/magic-link';
@@ -35,6 +37,25 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
 
   const service = new MagicLinkService(publicUrl, config);
 
+  // Throttle the unauthenticated redemption endpoint and the authenticated
+  // create endpoint. /redeem is a public surface that does a DB lookup +
+  // (on a hit) user provisioning + token minting, so it must be rate-limited
+  // against guessing/enumeration/resource-exhaustion. Keyed by IP.
+  const redeemLimiter = rateLimit({
+    windowMs: config.rateLimitWindowMs,
+    limit: config.redeemRateLimitMax,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { success: false, errorCode: 'invalid', error: 'Too many redemption attempts. Try again later.' },
+  });
+  const createLimiter = rateLimit({
+    windowMs: config.rateLimitWindowMs,
+    limit: config.createRateLimitMax,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { success: false, error: 'Too many invite requests. Try again later.' },
+  });
+
   // ── Public (unauthenticated) ──────────────────────────────────────────────
   const publicRouter = Router();
 
@@ -42,10 +63,67 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     res.status(200).json(MagicLinkKeyManager.Instance.GetJWKS());
   });
 
-  publicRouter.get('/redeem', async (req: Request, res: Response) => {
-    const token = typeof req.query.token === 'string' ? req.query.token : '';
-    const wantsJson = req.query.format === 'json';
+  // Sends a completed redemption result: browser flow → 302 into Explorer with
+  // the session token in the URL fragment (never sent to a server, so it stays
+  // out of access/proxy logs); API flow → JSON with an appropriate status.
+  const sendRedeemResult = (res: Response, result: RedeemMagicLinkResult, wantsJson: boolean): void => {
     const explorerUrl = config.explorerUrl?.replace(/\/$/, '');
+    if (explorerUrl && !wantsJson) {
+      if (result.success && result.token) {
+        // Deep-link into the invited app's route (e.g. /app/data-explorer) rather
+        // than Explorer's root — root falls through to Explorer's default resource,
+        // which isn't the scoped app. Use the app's URL Path (what Explorer's
+        // GetAppByPath matches on); fall back to a name-slug only when Path is
+        // absent. Do NOT hand-roll a slug from the name when Path exists — the two
+        // can diverge and Explorer would fail to resolve the app.
+        const appSlug = result.applicationPath
+          ? result.applicationPath
+          : result.applicationName
+          ? result.applicationName.trim().toLowerCase().replace(/\s+/g, '-')
+          : '';
+        const path = appSlug ? `/app/${encodeURIComponent(appSlug)}` : '/';
+        res.redirect(302, `${explorerUrl}${path}#token=${encodeURIComponent(result.token)}`);
+      } else {
+        res.redirect(302, `${explorerUrl}/?mlError=${encodeURIComponent(result.errorCode ?? 'invalid')}`);
+      }
+      return;
+    }
+    // API/JSON flow.
+    // not_found / expired / consumed / revoked are client-side conditions (410 Gone);
+    // server_error / provisioning_failed are 500.
+    const status = result.success ? 200 : result.errorCode === 'server_error' || result.errorCode === 'provisioning_failed' ? 500 : 410;
+    res.status(status).json(result);
+  };
+
+  // GET /redeem is SAFE (no side effects). Link prefetchers and email security
+  // scanners routinely fetch URLs; a side-effectful GET would let them burn the
+  // single-use token before the human clicks. So GET renders an interstitial and
+  // the actual redemption happens only on POST (below), gated by a user click.
+  publicRouter.get('/redeem', redeemLimiter, (req: Request, res: Response) => {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    if (!token) {
+      res.status(400).json({ success: false, error: 'Missing token.' });
+      return;
+    }
+    // API callers must POST — GET never redeems.
+    if (req.query.format === 'json') {
+      res.status(405).json({ success: false, error: 'Redemption requires POST.', method: 'POST', path: `${MAGIC_LINK_MOUNT_PATH}/redeem` });
+      return;
+    }
+    res
+      .status(200)
+      .type('html')
+      .send(buildRedeemLandingHtml(token, `${MAGIC_LINK_MOUNT_PATH}/redeem`));
+  });
+
+  // POST /redeem performs the actual (side-effectful) redemption. Token arrives
+  // from the interstitial form body, an API client's JSON body, or the query.
+  publicRouter.post('/redeem', redeemLimiter, urlencoded({ extended: false }), json(), async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { token?: string };
+    const token =
+      (typeof body.token === 'string' && body.token) ||
+      (typeof req.query.token === 'string' ? req.query.token : '');
+    const wantsJson = req.query.format === 'json' || req.is('application/json') === 'application/json';
 
     if (!token) {
       res.status(400).json({ success: false, error: 'Missing token.' });
@@ -53,38 +131,13 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     }
 
     const result = await service.redeemInvite(token);
-
-    // Browser flow: redirect into Explorer with the session token in the URL
-    // fragment (Explorer's magic-link provider reads it). The fragment is never
-    // sent to a server, so the token stays out of server/proxy logs.
-    if (explorerUrl && !wantsJson) {
-      if (result.success && result.token) {
-        // Deep-link into the invited app's route (e.g. /app/data-explorer) rather
-        // than Explorer's root — root falls through to Explorer's default resource,
-        // which isn't the scoped app. The app slug mirrors Explorer's convention:
-        // lowercased, spaces → hyphens (e.g. "Data Explorer" → "data-explorer").
-        const appSlug = result.applicationName
-          ? result.applicationName.trim().toLowerCase().replace(/\s+/g, '-')
-          : '';
-        const path = appSlug ? `/app/${appSlug}` : '/';
-        res.redirect(302, `${explorerUrl}${path}#token=${encodeURIComponent(result.token)}`);
-      } else {
-        res.redirect(302, `${explorerUrl}/?mlError=${encodeURIComponent(result.errorCode ?? 'invalid')}`);
-      }
-      return;
-    }
-
-    // API/JSON flow.
-    // not_found / expired / consumed / revoked are client-side conditions (410 Gone);
-    // server_error / provisioning_failed are 500.
-    const status = result.success ? 200 : result.errorCode === 'server_error' || result.errorCode === 'provisioning_failed' ? 500 : 410;
-    res.status(status).json(result);
+    sendRedeemResult(res, result, wantsJson);
   });
 
   // ── Authenticated (invite creation) ───────────────────────────────────────
   const authenticatedRouter = Router();
 
-  authenticatedRouter.post('/create', json(), async (req: Request, res: Response) => {
+  authenticatedRouter.post('/create', createLimiter, json(), async (req: Request, res: Response) => {
     const creatingUser = req.userPayload?.userRecord;
     if (!creatingUser) {
       res.status(401).json({ success: false, error: 'Authentication required.' });

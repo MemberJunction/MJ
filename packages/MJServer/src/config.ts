@@ -244,6 +244,12 @@ const magicLinkSchema = z.object({
   fromAddress: z.string().optional(),
   /** Audience claim for minted JWTs and the auto-registered magic-link auth provider. */
   audience: z.string().optional().default('mj-magic-link'),
+  /** Rate-limit window (ms) for the public /redeem and authenticated /create endpoints. Default 60s. */
+  rateLimitWindowMs: z.coerce.number().optional().default(60_000),
+  /** Max /redeem attempts per IP per window. Default 20. */
+  redeemRateLimitMax: z.coerce.number().optional().default(20),
+  /** Max /create requests per IP per window. Default 30. */
+  createRateLimitMax: z.coerce.number().optional().default(30),
   /**
    * Base URL of the Explorer instance that redeems land in. When set, GET
    * /magic-link/redeem 302-redirects the browser to `${explorerUrl}/#token=<jwt>`

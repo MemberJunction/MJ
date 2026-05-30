@@ -48,6 +48,40 @@ export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { 
   return { ok: true };
 }
 
+/**
+ * Builds the atomic compare-and-swap UPDATE that consumes one use of an invite.
+ *
+ * The WHERE clause re-checks every eligibility condition at the DB level, so the
+ * increment and the guard are a single atomic operation: concurrent redemptions
+ * of a single-use link race on the row and exactly one matches (the matched row
+ * is returned via OUTPUT). This is what actually enforces single-use — the
+ * JS-side `evaluateInvite` is only a friendly pre-check.
+ *
+ * The invite ID MUST be bound as parameter `@p0` by the caller — it is never
+ * interpolated into the string, so this builder is injection-safe regardless of
+ * the ID's contents.
+ *
+ * OUTPUT goes `INTO` a table variable (not a bare OUTPUT): SQL Server forbids a
+ * bare OUTPUT clause on a table that has enabled triggers, and CodeGen adds an
+ * `__mj_UpdatedAt` trigger to every MJ table. The trailing SELECT returns exactly
+ * the matched row(s) so the caller can detect a win (exactly one row) regardless
+ * of trigger behavior.
+ *
+ * @param qualifiedTable  bracket-quoted `[schema].[table]` for MagicLinkInvite
+ */
+export function buildConsumeInviteSQL(qualifiedTable: string): string {
+  return (
+    `DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER); ` +
+    `UPDATE ${qualifiedTable} ` +
+    `SET UseCount = UseCount + 1, ` +
+    `ConsumedAt = COALESCE(ConsumedAt, SYSUTCDATETIME()), ` +
+    `Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END ` +
+    `OUTPUT INSERTED.ID INTO @consumed ` +
+    `WHERE ID = @p0 AND Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > SYSUTCDATETIME(); ` +
+    `SELECT ID FROM @consumed;`
+  );
+}
+
 /** Builds the session-token claims (pure). */
 export function buildSessionClaims(args: {
   issuer: string;

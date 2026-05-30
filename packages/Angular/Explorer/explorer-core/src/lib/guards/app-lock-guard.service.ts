@@ -45,7 +45,6 @@ export class AppLockGuardService implements CanActivate {
       return true; // already navigating within the scoped app
     }
 
-    const slug = scopedApp.Name.trim().toLowerCase().replace(/\s+/g, '-');
-    return this.router.parseUrl(`/app/${slug}`);
+    return this.router.parseUrl(this.appManager.GetAppUrl(scopedApp));
   }
 }
