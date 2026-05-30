@@ -20,15 +20,16 @@ This is the **developer's hub** for that story. It explains the architecture, th
    - [4. Write once, run on every tier — the isomorphic core in practice](#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice)
    - [5. The API layer](#5-the-api-layer)
    - [6. Security, permissions & audit](#6-security-permissions--audit)
-   - [7. The UI layer — MJExplorer & Angular](#7-the-ui-layer--mjexplorer--angular)
+   - [7. The UI layer — MJExplorer, reusable components & your framework](#7-the-ui-layer--mjexplorer-reusable-components--your-framework-of-choice)
    - [8. Business logic — the Actions framework](#8-business-logic--the-actions-framework)
    - [9. AI — the force multiplier](#9-ai--the-force-multiplier)
    - [10. Application metadata as code](#10-application-metadata-as-code)
    - [11. Deployment](#11-deployment)
 7. [Building AI-native applications](#building-ai-native-applications)
 8. [How MJ compares to other frameworks](#how-mj-compares-to-other-frameworks)
-9. [Cross-cutting developer guides](#cross-cutting-developer-guides)
-10. [A mental model to keep](#a-mental-model-to-keep)
+9. [Building on MJ & joining the community](#building-on-mj--joining-the-community)
+10. [Cross-cutting developer guides](#cross-cutting-developer-guides)
+11. [A mental model to keep](#a-mental-model-to-keep)
 
 ---
 
@@ -549,6 +550,32 @@ The throughline: because AI shares your app's object model and action surface, *
 ## How MJ compares to other frameworks
 
 If you're weighing MemberJunction against the stacks you already know — Next.js/Vercel, Supabase, Ruby on Rails, Django, or a hand-rolled Node + ORM + SPA — see the companion **[Framework Comparison Guide](FRAMEWORK_COMPARISON.md)**. It's an objective, where-each-shines breakdown: what MJ gives you out of the box (typed isomorphic object model, generated API/UI/security/audit, AI-native substrate), where the others are a better fit, and how to think about the trade-offs.
+
+---
+
+## Building on MJ & joining the community
+
+MemberJunction is open source (ISC), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
+
+### Build your application on MJ
+
+You're encouraged to build on MJ, whether your app is **commercial or open source**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **open-source apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+
+- **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
+- **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
+- **[Committees](https://github.com/MemberJunction/committees)** — a **governance platform** built on MJ that unifies committee structure, membership, meetings, motions and voting, action tracking, and document linking.
+
+These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
+
+### Help shape the platform
+
+If you want to extend the framework itself, the best first step isn't to fork in isolation — it's to **plug into the community**, where your ideas can land in the platform and benefit everyone:
+
+- **Join the community and get active in [Discussions](https://github.com/MemberJunction/MJ/discussions)** — ask questions, share what you're building, and float ideas early.
+- **File [Issues](https://github.com/MemberJunction/MJ/issues)** for bugs and feature requests.
+- **Raise pull requests** with fixes, new features, ideas, and plugins — see [`CONTRIBUTING.md`](../CONTRIBUTING.md) for setup, coding standards, and the PR process.
+
+And of course, because MJ is open source, you can always **read, fork, and extend** the platform directly. But contributing back through the community means your extensions are maintained with the project rather than diverging from it.
 
 ---
 
