@@ -34,8 +34,8 @@ dumps, transient pulls) are ignored by `mj sync push`.
    already in the database.
 4. Hand-curate semantic fields: `Description`, `DisplayName`, `Category`,
    `Sequence`, and the per-operation CRUD columns added in v5.39.x:
-   `CreateAPIPath`, `CreateAPIMethod`, `CreateAPIBodyShape`, `CreateAPIBodyKey`,
-   `CreateAPIIDLocation`, `Update*`, `DeleteAPIPath`, `DeleteIDLocation`,
+   `CreateAPIPath`, `CreateMethod`, `CreateBodyShape`, `CreateBodyKey`,
+   `CreateIDLocation`, `Update*`, `DeleteAPIPath`, `DeleteIDLocation`,
    `IncrementalWatermarkField`.
 5. Push:
    ```bash
@@ -88,7 +88,7 @@ overrides. The generic implementations in `BaseRESTIntegrationConnector` now
 read the per-operation CRUD columns. To migrate a connector:
 
 1. Move the per-object endpoint mapping into `.<vendor>.integration.json` (set
-   `CreateAPIPath`, `CreateAPIMethod`, `CreateAPIBodyKey`, `IDLocation`, etc.
+   `CreateAPIPath`, `CreateMethod`, `CreateBodyKey`, `IDLocation`, etc.
    on each `MJ: Integration Objects` row).
 2. Push the metadata.
 3. Delete the hand-rolled override from the connector class.

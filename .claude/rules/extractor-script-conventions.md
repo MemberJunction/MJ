@@ -83,13 +83,13 @@ For each IO with `SupportsCreate/Update/Delete=true`, emit the corresponding per
 | Column | What to extract |
 |---|---|
 | `CreateAPIPath` | POST path with template vars (e.g. `/contacts`, `/parents/{ParentID}/children`) |
-| `CreateAPIMethod` | Usually `POST`; some vendors use `PUT` for create-or-upsert |
-| `CreateAPIBodyShape` | `flat` (POST `{field: value}`) or `wrapped` (POST `{<key>: {field: value}}`) |
-| `CreateAPIBodyKey` | When BodyShape=wrapped, the outer key (e.g. `record`, `data`) |
-| `CreateAPIIDLocation` | Where the new ID appears in the response: `body.id`, `body.data.id`, `header.Location`, etc. |
+| `CreateMethod` | Usually `POST`; some vendors use `PUT` for create-or-upsert |
+| `CreateBodyShape` | `flat` (POST `{field: value}`) or `wrapped` (POST `{<key>: {field: value}}`) |
+| `CreateBodyKey` | When BodyShape=wrapped, the outer key (e.g. `record`, `data`) |
+| `CreateIDLocation` | Where the new ID appears in the response: `body.id`, `body.data.id`, `header.Location`, etc. |
 | `UpdateAPIPath` | PATCH/PUT path including the ID placeholder |
-| `UpdateAPIMethod` | `PATCH` or `PUT` |
-| `UpdateAPIBodyShape`, `UpdateAPIBodyKey`, `UpdateAPIIDLocation` | Same as Create |
+| `UpdateMethod` | `PATCH` or `PUT` |
+| `UpdateBodyShape`, `UpdateBodyKey`, `UpdateIDLocation` | Same as Create |
 | `DeleteAPIPath` | DELETE path including the ID placeholder |
 | `DeleteIDLocation` | Where the deleted-record ID is acknowledged in the response (path-templated or `body.id`) |
 | `IncrementalWatermarkField` | When `SupportsIncrementalSync=true`, the vendor-side cursor/timestamp field name |

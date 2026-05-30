@@ -77,7 +77,7 @@ Every slot in `packages/Integration/connector-builder-workshop/floor/phase0-slot
 
 ## v5.39.x per-operation columns
 
-Each IO row's per-operation CRUD columns (`CreateAPIPath`, `CreateAPIMethod`, `CreateAPIBodyShape`, `CreateAPIBodyKey`, `CreateAPIIDLocation`, `Update*`, `DeleteAPIPath`, `DeleteIDLocation`) MUST be cited individually. A single provenance entry citing "the write API section" is insufficient — each column gets its own targeted entry.
+Each IO row's per-operation CRUD columns (`CreateAPIPath`, `CreateMethod`, `CreateBodyShape`, `CreateBodyKey`, `CreateIDLocation`, `Update*`, `DeleteAPIPath`, `DeleteIDLocation`) MUST be cited individually. A single provenance entry citing "the write API section" is insufficient — each column gets its own targeted entry.
 
 The exception: when multiple columns share an evidence excerpt (e.g. an OpenAPI POST operation simultaneously declares path + method + body shape), one entry may list multiple `TargetField`s as an array. Default is single-field per entry.
 

@@ -51,8 +51,8 @@ Substring-include match is gone. Multi-level paths (`/orgs/{OrgID}/projects/{Pro
 
 | Operation | Path | Method | Body shape | Body key | ID location |
 |---|---|---|---|---|---|
-| Create | `CreateAPIPath` | `CreateAPIMethod` | `CreateAPIBodyShape` | `CreateAPIBodyKey` | `CreateAPIIDLocation` |
-| Update | `UpdateAPIPath` | `UpdateAPIMethod` | `UpdateAPIBodyShape` | `UpdateAPIBodyKey` | `UpdateAPIIDLocation` |
+| Create | `CreateAPIPath` | `CreateMethod` | `CreateBodyShape` | `CreateBodyKey` | `CreateIDLocation` |
+| Update | `UpdateAPIPath` | `UpdateMethod` | `UpdateBodyShape` | `UpdateBodyKey` | `UpdateIDLocation` |
 | Delete | `DeleteAPIPath` | `'DELETE'` (fixed) | n/a | n/a | `DeleteIDLocation` |
 | Get | `APIPath` (read path) | `'GET'` | n/a | n/a | path-templated |
 
@@ -60,7 +60,7 @@ Concrete connectors should **NOT** re-implement these unless the vendor has a ge
 
 ### Capability ↔ method consistency (bijection)
 
-If `SupportsCreate=true`, the IO MUST have non-null `CreateAPIPath` + `CreateAPIMethod`. Same for Update/Delete. The floor-check rejects rows that declare a capability without a path. No stubs — escalate metadata gaps upstream rather than stubbing.
+If `SupportsCreate=true`, the IO MUST have non-null `CreateAPIPath` + `CreateMethod`. Same for Update/Delete. The floor-check rejects rows that declare a capability without a path. No stubs — escalate metadata gaps upstream rather than stubbing.
 
 ## Incremental sync via WatermarkService + `IncrementalWatermarkField` (v5.39.x)
 

@@ -25,7 +25,7 @@ Applies to vitest test files under `packages/Integration/connectors-registry/<ve
 - **DiscoverObjects** — at least one IO present + capability flags (`SupportsCreate`/`SupportsUpdate`/`SupportsDelete`/`SupportsRead`) match the IO metadata.
 - **DiscoverFields** — at least one IOF per known IO; `IsPrimaryKey` set only where the source declares a PK (per the Phase 0 B-fix), not inferred from `IsUniqueKey`.
 - **Generic CRUD via per-operation IO columns** (v5.39.x — required when capability flag is true):
-  - `CreateRecord` — happy path (URL templated from `CreateAPIPath` + record; method = `CreateAPIMethod`; body shaped per `CreateAPIBodyShape`/`CreateAPIBodyKey`; ID extracted per `CreateAPIIDLocation`) + filters out `IsReadOnly` fields + applies `FieldMappingMJName` if set.
+  - `CreateRecord` — happy path (URL templated from `CreateAPIPath` + record; method = `CreateMethod`; body shaped per `CreateBodyShape`/`CreateBodyKey`; ID extracted per `CreateIDLocation`) + filters out `IsReadOnly` fields + applies `FieldMappingMJName` if set.
   - `UpdateRecord` — same as Create + honors `If-Match` ETag when the IO declares one.
   - `DeleteRecord` — happy path + soft-delete pattern if applicable; ID location per `DeleteIDLocation`.
   - `GetRecord` — happy path + 404 path.

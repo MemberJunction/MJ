@@ -125,35 +125,17 @@ const metadataResult = await agent(
     { agentType: 'metadata-writer', schema: METADATA_RESULT_SCHEMA, phase: 'MetadataWrite', label: `metadata:${VENDOR_SLUG}` }
 );
 
-// ── IOIOFExtract (the heaviest stage) ────────────────────────────────
-phase('IOIOFExtract');
-const extractStats = await workflow(
-    { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/extract-iiof-pipeline.workflow.js' },
-    {
-        vendor: VENDOR,
-        sourceID: sources.SourcesFile,
-        objectList: sources.TaxonomyLeaves,
-        writeBackPath: METADATA_FILE,
-        adversarialN: MANIFEST.adversarialVerifyMinReviewers,
-    }
-);
-log(`IOIOFExtract: ${extractStats.objectsExtracted} objects, ${extractStats.fieldsExtracted} fields, ${extractStats.gapsRemaining.length} gaps`);
-
-// ── FreezeContract ───────────────────────────────────────────────────
-phase('FreezeContract');
-const frozen = await workflow(
-    { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/freeze-contract.workflow.js' },
-    {
-        vendor: VENDOR,
-        contract: extractStats,
-        provenanceSidecar: {},
-        outputDir: `${RUNS_DIR}/output`,
-        adversarialN: MANIFEST.adversarialVerifyMinReviewers,
-    }
-);
-
-// ── IndependentReview ────────────────────────────────────────────────
-phase('IndependentReview');
+// ── Extract → Freeze → Review (amendment loop, max 3 rounds) ─────────
+//
+// Per agentic plan §13 + build-connector skill: when the reviewer flags
+// blocking gaps, RE-DISPATCH ioiof-extractor with the reviewer's evidence
+// as input. Re-freeze. Re-review. Up to 3 rounds.
+//
+// Two consecutive byte-identical emissions = convergence (the producer can't
+// fix what the reviewer wants; that's an honest escalation).
+// 3 rounds without resolution = escalate to human (Gap 5).
+//
+// CodeBuild only runs against a reviewer-approved contract.
 const REVIEW_SCHEMA = {
     type: 'object', required: ['ConfirmedGapsBlocking'],
     properties: {
@@ -164,18 +146,105 @@ const REVIEW_SCHEMA = {
         BijectionViolationsFound: { type: 'integer' },
         IndependentSourcesFetched: { type: 'integer' },
         ModelObserved: { type: 'string' },
+        ReviewFile: { type: 'string' },
+        FixInstructions: { type: 'array', items: { type: 'object' } },
     },
 };
-const review = await agent(
-    `Adversarial review of EXTRACTION_REPORT + emission for ${VENDOR}. Build your own expected inventory before opening the producer's report. Bijection violations are always Confirmed Gaps (Blocking).`,
-    { agentType: 'independent-reviewer', model: 'sonnet', schema: REVIEW_SCHEMA, phase: 'IndependentReview', label: `review:${VENDOR_SLUG}` }
-);
-if (review.ConfirmedGapsBlocking > 0) {
-    throw new Error(`IndependentReview blocked by ${review.ConfirmedGapsBlocking} confirmed gaps`);
+
+const MAX_AMENDMENT_ROUNDS = 3;
+let extractStats, frozen, review;
+let amendmentRound = 0;
+let previousReviewFingerprint = null;
+
+while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
+    const isAmendment = amendmentRound > 0;
+    const phaseLabel = isAmendment ? `AmendmentRound${amendmentRound}` : 'IOIOFExtract';
+
+    // ── Extract (round 0) or Re-extract with reviewer feedback (round >0) ──
+    phase(phaseLabel);
+    extractStats = await workflow(
+        { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/extract-iiof-pipeline.workflow.js' },
+        {
+            vendor: VENDOR,
+            sourceID: sources.SourcesFile,
+            objectList: sources.TaxonomyLeaves,
+            writeBackPath: METADATA_FILE,
+            adversarialN: MANIFEST.adversarialVerifyMinReviewers,
+            // Amendment feedback — null on first round, populated on subsequent
+            amendmentRound,
+            reviewerFindings: isAmendment ? review.FixInstructions : null,
+            reviewFile: isAmendment ? review.ReviewFile : null,
+        }
+    );
+    log(`Extract round ${amendmentRound}: ${extractStats.objectsExtracted} objects, ${extractStats.fieldsExtracted} fields, ${extractStats.gapsRemaining.length} gaps`);
+
+    // ── Freeze contract ────────────────────────────────────────────────
+    phase('FreezeContract');
+    frozen = await workflow(
+        { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/freeze-contract.workflow.js' },
+        {
+            vendor: VENDOR,
+            contract: extractStats,
+            provenanceSidecar: {},
+            outputDir: `${RUNS_DIR}/output`,
+            adversarialN: MANIFEST.adversarialVerifyMinReviewers,
+            amendmentRound,
+        }
+    );
+
+    // ── Independent review ────────────────────────────────────────────
+    phase('IndependentReview');
+    review = await agent(
+        `Adversarial review of EXTRACTION_REPORT + emission for ${VENDOR} (amendment round ${amendmentRound}). Build your own expected inventory BEFORE opening producer's report. Bijection violations are always Confirmed Gaps (Blocking). When you report Confirmed Gaps, populate FixInstructions with the exact mechanical change required (slot, before, after, locus) so the producer can apply them deterministically.`,
+        { agentType: 'independent-reviewer', model: 'sonnet', schema: REVIEW_SCHEMA, phase: 'IndependentReview', label: `review:r${amendmentRound}` }
+    );
+    log(`Review round ${amendmentRound}: ${review.ConfirmedGapsBlocking} blocking, ${review.JudgmentCalls ?? 0} judgment, ${review.BijectionViolationsFound ?? 0} bijection violations`);
+
+    // ── Loop exit conditions ──────────────────────────────────────────
+    if (review.ConfirmedGapsBlocking === 0) {
+        log(`Amendment loop converged at round ${amendmentRound} (no blocking gaps)`);
+        break;
+    }
+
+    // Convergence check: byte-identical reviewer fingerprint = producer can't fix what reviewer wants
+    const reviewFingerprint = JSON.stringify({
+        blocking: review.ConfirmedGapsBlocking,
+        violations: review.BijectionViolationsFound ?? 0,
+        fixes: (review.FixInstructions ?? []).map(f => f?.slot ?? '').sort(),
+    });
+    if (previousReviewFingerprint === reviewFingerprint) {
+        log(`Amendment loop deadlock at round ${amendmentRound}: reviewer findings byte-identical to prior round → escalate`);
+        return {
+            runID: RUN_ID,
+            vendor: VENDOR,
+            brand, identity, sources, metadataResult, extractStats, frozen, review,
+            amendmentRound,
+            status: 'EscalatedDeadlock',
+            message: `Producer + reviewer deadlocked after ${amendmentRound + 1} attempts; ${review.ConfirmedGapsBlocking} blocking gaps unresolved.`,
+        };
+    }
+    previousReviewFingerprint = reviewFingerprint;
+    amendmentRound++;
 }
 
-// ── CodeBuild ────────────────────────────────────────────────────────
-phase('CodeBuild');
+if (review.ConfirmedGapsBlocking > 0 && amendmentRound >= MAX_AMENDMENT_ROUNDS) {
+    log(`Amendment loop exhausted ${MAX_AMENDMENT_ROUNDS} rounds with ${review.ConfirmedGapsBlocking} unresolved blocking gaps`);
+    return {
+        runID: RUN_ID,
+        vendor: VENDOR,
+        brand, identity, sources, metadataResult, extractStats, frozen, review,
+        amendmentRound,
+        status: 'EscalatedMaxRounds',
+        message: `Amendment loop hit ${MAX_AMENDMENT_ROUNDS}-round cap with ${review.ConfirmedGapsBlocking} blocking gaps. Reviewer's evidence is at ${review.ReviewFile} — human intervention required.`,
+    };
+}
+
+// ── CodeBuild + ladder amendment loop (max 3 rounds) ────────────────
+//
+// CodeBuild can fail two ways: TypeScript doesn't compile (BuildClean=false),
+// or the verification ladder turns up a red rung. In both cases we route the
+// failure back to code-builder with the specific error as input; up to 3
+// rounds. Same convergence + max-round logic as the extract amendment loop.
 const CODE_RESULT_SCHEMA = {
     type: 'object', required: ['BuildClean'],
     properties: {
@@ -184,29 +253,84 @@ const CODE_RESULT_SCHEMA = {
         TestsWritten: { type: 'integer' },
         GenericCRUDUsedForIOCount: { type: 'integer' },
         OverriddenCRUDForIOCount: { type: 'integer' },
+        ConnectorFile: { type: 'string' },
+        TestFile: { type: 'string' },
+        BuildErrors: { type: 'array' },
         RemainingGaps: { type: 'array' },
     },
 };
-const codeResult = await agent(
-    `Build the connector class for ${brand.CanonicalName} from the frozen contract at ${frozen.contractPath}. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only for genuinely idiosyncratic vendor shapes.`,
-    { agentType: 'code-builder', schema: CODE_RESULT_SCHEMA, phase: 'CodeBuild', label: `code:${VENDOR_SLUG}` }
-);
-if (!codeResult.BuildClean) {
-    throw new Error('CodeBuild produced a non-clean build');
+
+const MAX_CODE_BUILD_ROUNDS = 3;
+let codeResult, ladder;
+let codeRound = 0;
+let previousCodeFingerprint = null;
+
+while (codeRound < MAX_CODE_BUILD_ROUNDS) {
+    const isAmendment = codeRound > 0;
+    phase(isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild');
+    codeResult = await agent(
+        isAmendment
+            ? `Re-build the ${brand.CanonicalName} connector. Prior round failed: ${JSON.stringify(codeResult?.BuildErrors ?? ladder?.classifiedFailures ?? [])}. Apply the specific fixes. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.`
+            : `Build the connector class for ${brand.CanonicalName} from the frozen contract at ${frozen.contractPath}. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.`,
+        { agentType: 'code-builder', schema: CODE_RESULT_SCHEMA, phase: isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild', label: `code:r${codeRound}` }
+    );
+    log(`CodeBuild round ${codeRound}: ${codeResult.LinesOfCode ?? 0} LOC, BuildClean=${codeResult.BuildClean}`);
+
+    if (!codeResult.BuildClean) {
+        codeRound++;
+        continue; // re-attempt with errors fed back
+    }
+
+    // Build clean — try the ladder
+    phase(isAmendment ? `VerificationLadderRound${codeRound}` : 'VerificationLadder');
+    ladder = await workflow(
+        { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/verification-ladder.workflow.js' },
+        {
+            vendor: VENDOR,
+            connectorName: identity.Identity.ClassName,
+            manifest: MANIFEST,
+            credentialReference: args?.credentialReference ?? null,
+            maxTier: MANIFEST.e2eTier,
+        }
+    );
+
+    const hasRed = (ladder?.tierResults ?? []).some(r => r?.status === 'red');
+    if (!hasRed) {
+        log(`Code+Ladder converged at round ${codeRound} (build clean + ladder achieved ${ladder?.achievedTier ?? '?'})`);
+        break;
+    }
+
+    // Ladder failed — anti-thrash check + convergence check + amend
+    const codeFingerprint = JSON.stringify({
+        clean: codeResult.BuildClean,
+        ladderRed: (ladder?.classifiedFailures ?? []).map(f => `${f?.tier}:${f?.code}:${f?.locus}`).sort(),
+    });
+    if (previousCodeFingerprint === codeFingerprint) {
+        log(`Code+Ladder deadlock at round ${codeRound}: identical failures to prior round → escalate`);
+        return {
+            runID: RUN_ID,
+            vendor: VENDOR,
+            brand, identity, sources, metadataResult, extractStats, frozen, review, codeResult, ladder,
+            amendmentRound, codeRound,
+            status: 'EscalatedCodeDeadlock',
+            message: `Code-builder + verification-ladder deadlocked after ${codeRound + 1} attempts. Same failures recur.`,
+        };
+    }
+    previousCodeFingerprint = codeFingerprint;
+    codeRound++;
 }
 
-// ── VerificationLadder ───────────────────────────────────────────────
-phase('VerificationLadder');
-const ladder = await workflow(
-    { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/verification-ladder.workflow.js' },
-    {
+if ((!codeResult?.BuildClean || (ladder?.tierResults ?? []).some(r => r?.status === 'red')) && codeRound >= MAX_CODE_BUILD_ROUNDS) {
+    log(`Code+Ladder loop exhausted ${MAX_CODE_BUILD_ROUNDS} rounds`);
+    return {
+        runID: RUN_ID,
         vendor: VENDOR,
-        connectorName: identity.Identity.ClassName,
-        manifest: MANIFEST,
-        credentialReference: args?.credentialReference ?? null,
-        maxTier: MANIFEST.e2eTier,
-    }
-);
+        brand, identity, sources, metadataResult, extractStats, frozen, review, codeResult, ladder,
+        amendmentRound, codeRound,
+        status: 'EscalatedCodeMaxRounds',
+        message: `Code+Ladder loop hit ${MAX_CODE_BUILD_ROUNDS}-round cap. Connector and/or ladder rungs still failing — human intervention required.`,
+    };
+}
 
 // ── FloorCheck (final gate) ──────────────────────────────────────────
 phase('FloorCheck');
@@ -226,11 +350,15 @@ return {
     vendor: VENDOR,
     brand,
     identity,
+    sources,
     metadataResult,
     extractStats,
     frozen,
     review,
+    amendmentRound,
     codeResult,
+    codeRound,
     ladder,
     verdict,
+    status: verdict?.pass ? 'Complete' : 'PartialPass',
 };

@@ -68,6 +68,30 @@ These do NOT trigger re-dispatch.
 
 Cases where your initial adversarial expectation didn't hold up against the producer's documented exclusion. You suspected a gap; the producer's reasoning addressed it. Document these honestly. A review with zero reviewer-errors might be a review that didn't actually challenge the producer.
 
+### FixInstructions (REQUIRED when ConfirmedGapsBlocking > 0)
+
+For every blocking gap, emit a structured `FixInstructions` entry the producer can apply mechanically without re-deriving from sources. **This is the amendment-loop hand-off — without it the producer can't converge.**
+
+Each FixInstruction:
+```json
+{
+  "slot": "io.<IOName>.<Slot>" | "iof.<IOName>.<IOFName>.<Slot>",
+  "operation": "rename" | "set" | "clear" | "downgrade-capability",
+  "before": <current value>,
+  "after": <correct value>,
+  "evidence": "<source URL or file path the producer should cite as new evidence>",
+  "rationale": "<one-line reason>"
+}
+```
+
+Mechanical fixes the producer should be able to apply 1:1:
+- FK target rename (singular→plural, mis-spelled IO name) — `operation: "rename"`.
+- Co-grouped slot fill (DeleteIDLocation missing when DeleteAPIPath set) — `operation: "set"`.
+- Capability flag downgrade when no evidence supports it — `operation: "downgrade-capability"`.
+- Fabricated value to clear — `operation: "clear"`.
+
+If a gap CANNOT be fixed mechanically (requires re-walking sources, ambiguity in vendor docs), emit it as a Confirmed Gap (Blocking) but mark `operation: null` with a `requiresEscalation: true` flag. That's the deadlock signal.
+
 ### Stats block at end
 
 ```json
@@ -78,7 +102,9 @@ Cases where your initial adversarial expectation didn't hold up against the prod
   "ReviewerErrors": N,
   "IndependentSourcesFetched": N,
   "BijectionViolationsFound": N,
-  "ModelObserved": "<best-effort detection: opus | sonnet | haiku>"
+  "ModelObserved": "<best-effort detection: opus | sonnet | haiku>",
+  "ReviewFile": "<path to INDEPENDENT_REVIEW.md>",
+  "FixInstructions": [<see above>]
 }
 ```
 

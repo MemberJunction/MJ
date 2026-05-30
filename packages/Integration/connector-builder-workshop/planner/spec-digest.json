@@ -321,14 +321,14 @@
       "type": "string",
       "cardinality": "many",
       "groupedWith": [
-        "CreateAPIMethod",
-        "CreateAPIBodyShape",
-        "CreateAPIBodyKey",
-        "CreateAPIIDLocation"
+        "CreateMethod",
+        "CreateBodyShape",
+        "CreateBodyKey",
+        "CreateIDLocation"
       ]
     },
     {
-      "id": "IntegrationObject.CreateAPIMethod",
+      "id": "IntegrationObject.CreateMethod",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -337,7 +337,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.CreateAPIBodyShape",
+      "id": "IntegrationObject.CreateBodyShape",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -346,7 +346,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.CreateAPIBodyKey",
+      "id": "IntegrationObject.CreateBodyKey",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -355,7 +355,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.CreateAPIIDLocation",
+      "id": "IntegrationObject.CreateIDLocation",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -373,7 +373,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.UpdateAPIMethod",
+      "id": "IntegrationObject.UpdateMethod",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -382,7 +382,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.UpdateAPIBodyShape",
+      "id": "IntegrationObject.UpdateBodyShape",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -391,7 +391,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.UpdateAPIBodyKey",
+      "id": "IntegrationObject.UpdateBodyKey",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
@@ -400,7 +400,7 @@
       "cardinality": "many"
     },
     {
-      "id": "IntegrationObject.UpdateAPIIDLocation",
+      "id": "IntegrationObject.UpdateIDLocation",
       "phase0Ref": "A schema (v5.39.x)",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",

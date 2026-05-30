@@ -117,9 +117,9 @@ function validateSlotsAgainstAgenticDoc(slots, agenticMd) {
         // grouped pieces.
         const operationStripped = last
             .replace(/^Create/, '').replace(/^Update/, '').replace(/^Delete/, '');
-        // Some columns prefix 'API' (CreateAPIIDLocation, UpdateAPIIDLocation)
-        // even though the shorthand group lists the unprefixed form (IDLocation).
-        // Accept either variant.
+        // The 'API'-prefixed columns (e.g. CreateAPIPath) strip down to APIPath,
+        // which the shorthand group lists directly.  Some historical variants
+        // dropped the 'API' prefix; accept either form to stay resilient.
         const altStripped = operationStripped.replace(/^API/, '');
         if (shorthandPieces.has(operationStripped) || shorthandPieces.has(altStripped)) continue;
         drift.push(slot.id);

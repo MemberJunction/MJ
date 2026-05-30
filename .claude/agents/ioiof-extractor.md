@@ -45,13 +45,30 @@ Must classify every COVERABLE taxonomy from `SOURCE_STUDY.md`:
 
 L1 container taxonomies are NOT in the coverage skeleton; classify their L2 leaves only.
 
+## Amendment-round behavior (CRITICAL)
+
+You may be dispatched with `amendmentRound > 0` and a `reviewerFindings` array of `FixInstructions` from `independent-reviewer`. When that happens:
+
+1. **Read `reviewFile` first.** It's `INDEPENDENT_REVIEW.md` from the prior round. Open it before doing anything else.
+2. **Apply the specific fixes verbatim.** Each `FixInstruction` has `slot`, `before`, `after`, `locus`. Mechanically transform: open the metadata file, find the slot, change the value. Do NOT re-derive from sources — the reviewer has already done that work.
+3. **Do NOT change other slots.** A fix to one slot must not touch unrelated ones. Surgical edit only.
+4. **Re-emit per-flag CODE_EVIDENCE** for changed slots, citing the reviewer's source citation as the new evidence.
+5. **Return updated per-object stats** with `amendmentApplied: <count>` indicating how many FixInstructions you successfully applied. Any FixInstruction you cannot apply (source no longer exists, evidence contradicts reviewer) goes in `amendmentRejected` with reason — surfaces to reviewer in the next round.
+
+**Common amendment shapes:**
+- FK target rename: `RelatedIntegrationObjectID` `@lookup:Name=Event` → `@lookup:Name=Events` (singular→plural collection name).
+- Co-grouped slot fill: `DeleteAPIPath` set but `DeleteIDLocation` null → populate from OpenAPI param `"in"` field.
+- Capability flag downgrade: `SupportsCreate=true` but no `CreateAPIPath` evidence → flip to `false`.
+
+The amendment loop converges when the reviewer reports `ConfirmedGapsBlocking=0`. If your output is byte-identical to the prior round (you couldn't apply the fixes), the workflow detects the deadlock and escalates — that's honest, don't fake compliance.
+
 ## Handoff contract
 
 When you finish:
 - Every IO the vendor exposes is upserted via `mj-metadata` MCP `upsert_integration_object`.
 - Every IOF on every IO is upserted via `upsert_integration_object_field`.
 - CODE_EVIDENCE.json has per-flag entries.
-- Structured stdout: `{IOCreated, IOFCreated, PKsExplicitlyEmitted, FKsEmitted, GapsForRuntimeD4, TraversalOrder}`. This is what the workflow reads.
+- Structured stdout: `{IOCreated, IOFCreated, PKsExplicitlyEmitted, FKsEmitted, GapsForRuntimeD4, TraversalOrder, amendmentApplied?, amendmentRejected?}`. This is what the workflow reads.
 
 ## Composition with locked primitives
 

@@ -11,7 +11,7 @@ Per ADR-001, there is no deterministic generator, no ConnectorSpec, no LLM_COMPL
 
 ## What the Phase 0 base does for you
 
-`BaseRESTIntegrationConnector` (v5.39.x) provides generic implementations of `CreateRecord` / `UpdateRecord` / `DeleteRecord` / `GetRecord` that read the per-operation IO columns (`CreateAPIPath`, `CreateAPIMethod`, `CreateAPIBodyShape`, `CreateAPIBodyKey`, `CreateAPIIDLocation`, `Update*`, `DeleteAPIPath`, `DeleteIDLocation`) and dispatch generically. **You should NOT re-implement these for typical REST vendors.** Override only when the vendor's CRUD is genuinely idiosyncratic (multipart upload, GraphQL mutation, SOAP envelope, batch-only). When you do override, document why in a one-line comment.
+`BaseRESTIntegrationConnector` (v5.39.x) provides generic implementations of `CreateRecord` / `UpdateRecord` / `DeleteRecord` / `GetRecord` that read the per-operation IO columns (`CreateAPIPath`, `CreateMethod`, `CreateBodyShape`, `CreateBodyKey`, `CreateIDLocation`, `Update*`, `DeleteAPIPath`, `DeleteIDLocation`) and dispatch generically. **You should NOT re-implement these for typical REST vendors.** Override only when the vendor's CRUD is genuinely idiosyncratic (multipart upload, GraphQL mutation, SOAP envelope, batch-only). When you do override, document why in a one-line comment.
 
 The `TransformRecord` protected hook (also v5.39.x) sits between `NormalizeResponse` and `ToExternalRecord`. Override it when the vendor returns records with stripping needs (Salesforce `attributes`), empty-string-vs-null coercion (some date fields), or per-record reshaping. Default is identity.
 
@@ -39,7 +39,7 @@ Write `packages/Integration/connectors/src/<Name>Connector.ts` (or `connectors-r
 
 - **Frozen contract input.** You read the contract produced by the `freeze-contract` locked primitive. You do NOT re-litigate metadata. If you discover something the contract got wrong, escalate via the workflow's `amendment-review` primitive — never silently fix it in code. The metadata file is the source of truth; if it's wrong, the workflow's amendment loop re-runs the upstream extractor.
 - **No `any`. No `.Get()`/`.Set()` on BaseEntity.** Strong typing throughout. Use `Record<string, unknown>` for opaque vendor JSON; type known shapes with Zod.
-- **No stubs.** If `SupportsCreate=true`, the IO MUST have non-null `CreateAPIPath` + `CreateAPIMethod` in the contract — the base class's generic `CreateRecord` will use them. If the contract has those, you don't write `CreateRecord` at all. If the contract is missing them, that's an upstream gap; escalate.
+- **No stubs.** If `SupportsCreate=true`, the IO MUST have non-null `CreateAPIPath` + `CreateMethod` in the contract — the base class's generic `CreateRecord` will use them. If the contract has those, you don't write `CreateRecord` at all. If the contract is missing them, that's an upstream gap; escalate.
 - **No inline crypto.** Use `@memberjunction/integration-engine/auth-helpers`. If a primitive is missing, extend the helpers — don't inline.
 - **Incremental sync respects partial-failure semantics.** If a batch fails mid-iteration, the watermark stays unchanged. Test this explicitly.
 - **Configuration JSON is the vendor-specifics landing zone.** Read `companyIntegration.Configuration` (typed property); type the parsed shape with Zod; use it for vendor quirks the canonical schema doesn't have a column for.
@@ -49,13 +49,36 @@ Write `packages/Integration/connectors/src/<Name>Connector.ts` (or `connectors-r
 - **Don't author `MetadataSource` values.** The pipeline sets them at persist time.
 - **Produce a structured CODE_REPORT.md** alongside your emission.
 
+## Amendment-round behavior (CRITICAL)
+
+You may be re-dispatched with `codeRound > 0` and one of two error sets:
+
+- **`BuildErrors`** — TypeScript compile errors from the prior round (`tsc --noEmit` output, captured as `{file, line, code, message}` records).
+- **`classifiedFailures`** — `verification-ladder` tier failures from the prior round, each tagged with `SyncErrorCode` + fix-locus.
+
+When re-dispatched:
+
+1. **Read the errors first.** Don't re-do unrelated work.
+2. **Fix the specific files at the specific lines.** Each error tells you locus; don't rewrite the whole connector.
+3. **Common compile-error shapes:**
+   - Type mismatch against `BaseRESTIntegrationConnector` method signature → check the actual base-class source (`packages/Integration/engine/src/BaseRESTIntegrationConnector.ts`).
+   - Missing import → add to the imports block.
+   - Bad property name on an entity class → check `entity_subclasses.ts` for the canonical name.
+4. **Common ladder-failure shapes:**
+   - T1 three-way name mismatch → `IntegrationName` getter doesn't match `MJ: Integrations.Name`. Fix the getter (verbatim string).
+   - T1 capability-method mismatch → `SupportsCreate=true` in metadata but the IO has no `CreateAPIPath` filled. Either: (a) escalate to `ioiof-extractor` via `RequiresExtractorAmendment` in your output (don't fix the metadata yourself), or (b) flip capability to `false` if vendor truly doesn't support it.
+   - T4 vitest red → read the failure, fix the connector logic or the fixture.
+5. **Return updated stats** with `amendmentApplied: <count>` and `amendmentRejected: [{error, reason}]` for errors you couldn't address (e.g., requires upstream metadata change).
+
+The amendment loop converges when build is clean AND no ladder rung is red. Byte-identical failures across rounds → deadlock → escalate.
+
 ## Handoff contract
 
 When you finish:
 - `<Name>Connector.ts` exists and `npm run build` in the connector package returns 0 errors.
 - `<Name>Connector.test.ts` exists; `npx vitest run` reports all tests passing.
 - Tiers T0-T4 (build / unit / static-analysis / metadata-consistency / dry-run) all green when the `verification-ladder` primitive runs through them.
-- Structured handoff summary: `{LinesOfCode, MethodsImplemented, TestsWritten, GenericCRUDUsedForIOCount, OverriddenCRUDForIOCount, TiersPassedDryRun}`.
+- Structured handoff summary: `{LinesOfCode, MethodsImplemented, TestsWritten, GenericCRUDUsedForIOCount, OverriddenCRUDForIOCount, TiersPassedDryRun, BuildErrors?, amendmentApplied?, amendmentRejected?, RequiresExtractorAmendment?}`.
 
 ## Verification
 

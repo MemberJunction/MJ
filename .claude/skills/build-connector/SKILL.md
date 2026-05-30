@@ -92,6 +92,23 @@ The Workflow itself runs the locked primitives (`audit-source`, `extract-iiof-pi
 
 The plan-script template at `packages/Integration/connector-builder-workshop/plans/_TEMPLATE.workflow.js` is the shape the planner is expected to customize. Read it once before the run so you know what the runtime will be executing.
 
+#### Amendment loops — REQUIRED, not optional
+
+The planner-emitted workflow MUST implement two amendment loops (the template does). A single `return` on first reviewer-blocking-gap is a broken orchestration — it wastes the entire upstream investment (sources + identity + metadata + extraction) and ships nothing. The amendment loop turns reviewer feedback into mechanical corrections the producer applies, then re-validates.
+
+**Extract amendment loop** — when `independent-reviewer` reports `ConfirmedGapsBlocking > 0`, the workflow re-dispatches `ioiof-extractor` with the reviewer's `FixInstructions` as input, re-freezes the contract, re-reviews. Up to 3 rounds.
+
+Exit conditions:
+- `ConfirmedGapsBlocking === 0` → proceed to CodeBuild.
+- Reviewer fingerprint byte-identical to prior round (same gaps, same fix instructions) → producer can't fix what reviewer wants → escalate as `EscalatedDeadlock`.
+- Hit `MAX_AMENDMENT_ROUNDS = 3` with unresolved gaps → escalate as `EscalatedMaxRounds`.
+
+**CodeBuild amendment loop** — when `code-builder` returns `BuildClean=false` OR `verification-ladder` shows a red rung, re-dispatch `code-builder` with the specific errors fed back. Up to 3 rounds. Same convergence + max-round rules.
+
+Anti-thrash: if a higher tier fails on something a lower tier could have caught, that's a gate-placement bug — fix the lower-tier check, don't silently re-run the higher tier.
+
+Mechanical fixes (singular-vs-plural FK target naming, missing co-grouped `DeleteIDLocation`, TypeScript type-mismatch) resolve in 1–2 rounds. Genuinely unresolvable issues surface as `EscalatedDeadlock` after the producer attempts and fails — which is honest escalation, not silent abandonment.
+
 ### Gate — Floor-check verdict
 
 After the Workflow returns, read the final `floor-check` verdict:
