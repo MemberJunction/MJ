@@ -253,14 +253,34 @@ flowchart LR
 
 Your application starts with a schema. MJ doesn't hide SQL from you — it embraces it and layers metadata on top.
 
-- **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations (Flyway): naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
+#### You own the schema — MJ never alters it behind your back
+
+A defining choice in MJ: **the database is the source of truth for your schema, and you (DBA/developer) own all DDL.** MJ performs **no implicit schema changes**. Instead, it **introspects** your database to discover tables, columns, keys, indexes, and relationships, **reads the documentation already in the database** (SQL Server extended properties / Postgres `COMMENT`s), and **keeps its metadata layer in sync** with what's actually there. You're free to use any column types, indexing strategy, schemas, computed columns, or vendor features you like — MJ adapts to your schema rather than dictating it.
+
+Schema changes flow through **explicit, versioned migrations** applied by **[Skyway](https://github.com/MemberJunction/skyway)** — MJ's open-source, **Flyway-compatible** migration engine written in TypeScript. This is what makes MJ's upgrade story **deterministic, verifiable, and robust**, and why it slots cleanly into CI/CD:
+
+- **Deterministic & repeatable.** The *same* immutable, versioned migration files run in dev, staging, and production, in the same order, producing the same result. No "it worked on my environment" schema drift.
+- **Verifiable.** Migrations are **checksum-verified** against the recorded history — if a previously-applied migration is altered, Skyway detects it and refuses to proceed, so tampering and accidental drift surface immediately instead of silently corrupting an environment.
+- **Atomic.** Skyway's per-run transaction mode wraps all pending migrations in a **single transaction** on databases with transactional DDL (SQL Server and PostgreSQL). A failed upgrade rolls back cleanly — you never end up with a half-applied schema.
+- **Reviewable as code.** Because schema changes are DDL files in source control (not side effects of editing metadata in a UI), they go through normal **pull-request review**, diff cleanly, and are gated by the same CI as the rest of your code.
+- **In sync automatically.** After a migration runs, **CodeGen** (see §2) introspects the change and regenerates the typed entities, base views, and CRUD procedures to match — so the application layer never drifts from the database.
+
+The loop is: **author DDL in a migration → Skyway applies it atomically → MJ introspects & syncs metadata → CodeGen regenerates the typed stack.** Each step is explicit, versioned, and reproducible — the foundation for a robust CI/CD pipeline.
+
+Two more freedoms worth knowing:
+
+- **UUID primary keys by default, but no fixed key shape.** MJ defaults to `UNIQUEIDENTIFIER` / UUID PKs, yet — because it reads keys from your schema rather than mandating them — supports **any primary-/foreign-key style, including composite and natural keys**. (MJ normalizes UUID casing differences between SQL Server and PostgreSQL for you.)
+- **Bring existing data as-is.** Point CodeGen at existing tables and MJ registers them as entities — migrations are how you *evolve* the schema over time, not a precondition for building.
+
+#### Reference material
+
+- **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations: naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
+- **[Skyway](https://github.com/MemberJunction/skyway)** — The open-source, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
 - **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Working with natural/composite keys, not just surrogate IDs.
 - **[ISA Relationships](../packages/MJCore/docs/isa-relationships.md)** — Modeling inheritance/subtyping across entities.
 - **[Virtual Entities](../packages/MJCore/docs/virtual-entities.md)** — Surface a view or external source as a first-class entity without a physical table.
 - **[Soft Deletes Guide](SOFT_DELETES_GUIDE.md)** — Opt into `DeleteType='Soft'` and get filtered views + soft-delete stored procedures managed for you.
 - **[Full-Text Search Guide](../packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** — Native SQL full-text search wired into entities.
-
-> **Already imported data and skipping migrations?** That's fine — point CodeGen at existing tables and MJ will register them as entities. Migrations are how you *evolve* the schema over time, not a precondition for building.
 
 ### 2. Code generation — the engine that ties it together
 

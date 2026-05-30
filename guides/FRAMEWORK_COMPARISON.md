@@ -95,6 +95,10 @@ This is MJ's most distinctive technical advantage. In most stacks, the server mo
 
 Supabase and Django generate the most "for free" among the alternatives (instant API; admin), but each stops at a boundary — Supabase at the backend, Django's admin at CRUD. MJ's CodeGen spans **entities + SQL views/sprocs + GraphQL + Angular forms + action stubs**, and re-runs to stay in sync. Rails scaffolds once and hands you ownership. Hand-rolled generates nothing.
 
+### Schema ownership & migrations (a CI/CD strength)
+
+MJ takes a **database-first** stance: it never auto-alters your schema. You own all DDL; MJ introspects the database (and its `COMMENT`/extended-property documentation) and syncs its metadata from what's actually there. Schema changes ship as **explicit, versioned migrations** applied by **Skyway**, MJ's open-source Flyway-compatible engine — **immutable, checksum-verified, and atomic** (all pending migrations run in a single transaction on SQL Server/PostgreSQL). The practical payoff is a **deterministic, verifiable, reviewable upgrade pathway**: the same migrations run dev → staging → prod, drift is detected by checksum, a failed upgrade rolls back cleanly instead of leaving a half-applied schema, and schema changes pass through PR review and CI like any other code. Rails and Django have mature migration stories too; MJ's distinguishing traits are the database-as-source-of-truth model (rather than the framework owning/scaffolding the schema) plus atomic, checksum-verified application — and CodeGen regenerating the typed stack to match after each migration.
+
 ### Security, audit, and governance
 
 MJ ships **row-level security, field-level permissions, automatic audit/change-tracking (Record Changes), and field encryption** as platform features enforced at the data layer regardless of tier. Supabase gives you Postgres RLS and auth (powerful, but you design the policies). Rails/Django/Next.js/hand-rolled provide auth primitives and leave audit/field-perms/versioning to gems or your own code. For regulated or governance-heavy business apps, this is often the deciding factor.
