@@ -9,7 +9,17 @@ import {
     type FetchContext,
     type FetchBatchResult,
 } from './BaseIntegrationConnector.js';
-import type { ExternalRecord, SourceSchemaInfo, SourceObjectInfo, SourceRelationshipInfo } from './types.js';
+import type {
+    ExternalRecord,
+    SourceSchemaInfo,
+    SourceObjectInfo,
+    SourceRelationshipInfo,
+    CreateRecordContext,
+    UpdateRecordContext,
+    DeleteRecordContext,
+    GetRecordContext,
+    CRUDResult,
+} from './types.js';
 
 // ─── REST-specific types ─────────────────────────────────────────────
 
@@ -147,6 +157,27 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         auth: RESTAuthContext
     ): string;
 
+    /**
+     * Optional per-record CUSTOMIZATION hook called between NormalizeResponse
+     * (vendor envelope-stripping) and ToExternalRecord (composite-PK assembly).
+     *
+     * Distinct from NormalizeResponse — that strips the vendor's response envelope
+     * to expose individual records. This hook is for vendor-specific record-level
+     * customization the standard pipeline shouldn't carry: nested-field flattening,
+     * empty-string→null coercion for date columns, computed fields, removing vendor
+     * metadata blobs (e.g. Salesforce 'attributes'), etc.
+     *
+     * Default is identity (no transform). Override only when a concrete connector
+     * needs vendor-specific shape changes.
+     */
+    protected TransformRecord(
+        raw: Record<string, unknown>,
+        _obj: MJIntegrationObjectEntity,
+        _fields: MJIntegrationObjectFieldEntity[]
+    ): Record<string, unknown> {
+        return raw;
+    }
+
     // ── BaseIntegrationConnector implementations ─────────────────────
 
     /**
@@ -225,6 +256,215 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         return this.FetchFlat(auth, baseURL, obj, fields, ctx);
     }
 
+    // ── Generic metadata-driven CRUD ─────────────────────────────────
+    //
+    // These implementations read per-operation columns from IntegrationObject
+    // (CreateAPIPath/Method/BodyShape/BodyKey/IDLocation, Update*, Delete*) and
+    // execute generically. Concrete connectors should only override when the API
+    // is genuinely idiosyncratic (multi-step writes, custom body envelopes that
+    // don't fit flat/wrapped, etc.) — the metadata-driven path handles the
+    // common case for ~all REST connectors and removes the duplicate write logic
+    // that previously lived in every concrete class.
+    //
+    // Null-capability honesty: if a metadata column is null, the corresponding
+    // verb is NOT supported via the generic path. SupportsCreate/Update/Delete
+    // capability getters on BaseIntegrationConnector should be overridden to
+    // reflect the actual column population.
+
+    /** Generic create: reads CreateAPIPath/Method/BodyShape/BodyKey/IDLocation from the IO row. */
+    public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.CreateAPIPath || !obj.CreateMethod) {
+            throw new Error(
+                `CreateRecord not supported for "${ctx.ObjectName}": ` +
+                `CreateAPIPath / CreateMethod not configured on IntegrationObject. ` +
+                `Either populate metadata or override CreateRecord in the concrete connector.`
+            );
+        }
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        const url = this.BuildFullURL(baseURL, obj.CreateAPIPath);
+        const body = this.BuildOperationBody(ctx.Attributes, obj.CreateBodyShape, obj.CreateBodyKey);
+        const response = await this.MakeHTTPRequest(auth, url, obj.CreateMethod, headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            const externalID = this.ExtractIDFromResponse(response, obj.CreateIDLocation);
+            return { Success: true, StatusCode: response.Status, ExternalID: externalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on create`,
+        };
+    }
+
+    /** Generic update: reads UpdateAPIPath/Method/BodyShape/BodyKey/IDLocation from the IO row. */
+    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.UpdateAPIPath || !obj.UpdateMethod) {
+            throw new Error(
+                `UpdateRecord not supported for "${ctx.ObjectName}": ` +
+                `UpdateAPIPath / UpdateMethod not configured on IntegrationObject.`
+            );
+        }
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        const url = this.BuildFullURL(
+            baseURL,
+            this.SubstituteIDInPath(obj.UpdateAPIPath, ctx.ExternalID, obj.UpdateIDLocation)
+        );
+        const body = this.BuildOperationBody(ctx.Attributes, obj.UpdateBodyShape, obj.UpdateBodyKey);
+        const response = await this.MakeHTTPRequest(auth, url, obj.UpdateMethod, headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on update`,
+        };
+    }
+
+    /** Generic delete: reads DeleteAPIPath/DeleteMethod/DeleteIDLocation from the IO row. */
+    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.DeleteAPIPath || !obj.DeleteMethod) {
+            throw new Error(
+                `DeleteRecord not supported for "${ctx.ObjectName}": ` +
+                `DeleteAPIPath / DeleteMethod not configured on IntegrationObject.`
+            );
+        }
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        const url = this.BuildFullURL(
+            baseURL,
+            this.SubstituteIDInPath(obj.DeleteAPIPath, ctx.ExternalID, obj.DeleteIDLocation)
+        );
+        const response = await this.MakeHTTPRequest(auth, url, obj.DeleteMethod, headers);
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on delete`,
+        };
+    }
+
+    /** Generic get-one: hits APIPath/{ID} via GET. Override if API uses non-standard get shape. */
+    public override async GetRecord(ctx: GetRecordContext): Promise<ExternalRecord | null> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        const fields = this.GetCachedFields(obj.ID);
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        // Reuse UpdateAPIPath when present (typically same as get-one path); fall back to APIPath + /{id}
+        const getPath = obj.UpdateAPIPath
+            ? this.SubstituteIDInPath(obj.UpdateAPIPath, ctx.ExternalID, obj.UpdateIDLocation)
+            : `${obj.APIPath.replace(/\/+$/, '')}/${encodeURIComponent(ctx.ExternalID)}`;
+        const url = this.BuildFullURL(baseURL, getPath);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status === 404) return null;
+        if (response.Status < 200 || response.Status >= 300) {
+            throw new Error(
+                `GetRecord failed for "${ctx.ObjectName}" id "${ctx.ExternalID}": HTTP ${response.Status}`
+            );
+        }
+        const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
+        if (records.length === 0) return null;
+        const transformed = this.TransformRecord(records[0], obj, fields);
+        return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields));
+    }
+
+    // ── CRUD helpers ─────────────────────────────────────────────────
+
+    /**
+     * Build the operation request body per BodyShape:
+     *  - 'flat'    → body = attributes verbatim
+     *  - 'wrapped' → body = { [BodyKey]: attributes }
+     *  - 'literal' → connector should have overridden the operation; fall back to flat as safety net
+     *  - null      → default to flat (most common shape)
+     */
+    protected BuildOperationBody(
+        attributes: Record<string, unknown>,
+        bodyShape: string | null,
+        bodyKey: string | null
+    ): unknown {
+        if (bodyShape === 'wrapped' && bodyKey) {
+            return { [bodyKey]: attributes };
+        }
+        return attributes;
+    }
+
+    /**
+     * Substitute the ExternalID into a URL path template at runtime. Path templates
+     * may use {ID}, {id}, or {ExternalID} as the placeholder; for symmetry with
+     * FetchChanges template-var handling, any unsubstituted {var} in the template
+     * is left in place (caller's responsibility to ensure consistency).
+     *
+     * For IDLocation='body' or 'header' the ID is not substituted into the path
+     * (caller must handle separately); we just return the raw path.
+     */
+    protected SubstituteIDInPath(
+        path: string,
+        externalID: string,
+        idLocation: string | null
+    ): string {
+        if (idLocation && idLocation !== 'path') return path;
+        const encoded = encodeURIComponent(externalID);
+        return path
+            .replace(/\{ID\}/g, encoded)
+            .replace(/\{id\}/g, encoded)
+            .replace(/\{ExternalID\}/g, encoded);
+    }
+
+    /** Best-effort error message extraction from a vendor response. Override for vendor-specific shapes. */
+    protected ExtractErrorMessage(response: RESTResponse): string | undefined {
+        if (!response.Body || typeof response.Body !== 'object') return undefined;
+        const b = response.Body as Record<string, unknown>;
+        if (typeof b.message === 'string') return b.message;
+        if (typeof b.error === 'string') return b.error;
+        if (b.errors && Array.isArray(b.errors) && b.errors.length > 0) {
+            return JSON.stringify(b.errors);
+        }
+        return undefined;
+    }
+
+    /** Extract the new record's external ID from a create response per IDLocation. */
+    protected ExtractIDFromResponse(response: RESTResponse, idLocation: string | null): string | undefined {
+        // Default: parse from response body — most APIs return the new object with its ID at root
+        if (!idLocation || idLocation === 'body') {
+            if (response.Body && typeof response.Body === 'object') {
+                const b = response.Body as Record<string, unknown>;
+                // Try common ID field names; concrete connectors can override for vendor-specific shapes
+                for (const k of ['id', 'ID', 'Id', 'externalID', 'ExternalID']) {
+                    if (typeof b[k] === 'string' || typeof b[k] === 'number') return String(b[k]);
+                }
+            }
+            return undefined;
+        }
+        if (idLocation === 'header') {
+            // Location header is the most common; concrete connectors override for non-standard headers
+            const loc = response.Headers?.['location'] ?? response.Headers?.['Location'];
+            if (typeof loc === 'string') {
+                const m = loc.match(/[/=]([^/?&#]+)$/);
+                return m ? m[1] : loc;
+            }
+            return undefined;
+        }
+        return undefined;
+    }
+
     // ── Flat fetch (no template variables) ───────────────────────────
 
     /**
@@ -242,7 +482,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
 
         return {
-            Records: result.Records.map(r => this.ToExternalRecord(r, ctx.ObjectName, pkFieldNames)),
+            Records: result.Records.map(r => this.ToExternalRecord(
+                this.TransformRecord(r, obj, fields),
+                ctx.ObjectName,
+                pkFieldNames
+            )),
             HasMore: result.HasMore,
             NextPage: result.NextPage,
             NextOffset: result.NextOffset,
@@ -285,7 +529,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
             const tagged = result.Records.map(r => {
                 r[parentInfo.fkFieldName] = parentID;
-                return this.ToExternalRecord(r, ctx.ObjectName, pkFieldNames);
+                const transformed = this.TransformRecord(r, obj, fields);
+                return this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames);
             });
 
             allRecords.push(...tagged);

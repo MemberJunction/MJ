@@ -58,7 +58,15 @@ export interface ExternalFieldSchema {
     DataType: string;
     /** Whether the field is required */
     IsRequired: boolean;
-    /** Whether the field is a unique identifier */
+    /**
+     * Whether this field is THE primary key of the object.
+     * Distinct from IsUniqueKey — an object can have several unique fields
+     * (email, phone) of which only one is the PK. Connectors that introspect
+     * a source whose docs distinguish PK from unique constraint should set
+     * BOTH flags correctly; consumers should treat them independently.
+     */
+    IsPrimaryKey?: boolean;
+    /** Whether the field is a unique identifier (may or may not be the PK) */
     IsUniqueKey: boolean;
     /** Whether the field is read-only */
     IsReadOnly: boolean;
@@ -461,11 +469,17 @@ export abstract class BaseIntegrationConnector {
                         Precision: f.Precision ?? null,
                         Scale: f.Scale ?? null,
                         DefaultValue: f.DefaultValue ?? null,
-                        IsPrimaryKey: f.IsUniqueKey,
+                        IsPrimaryKey: f.IsPrimaryKey ?? false,
                         IsForeignKey: f.IsForeignKey ?? false,
                         ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                     })),
-                    PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
+                    // Honest PK selection: only IsPrimaryKey=true fields qualify.
+                    // Prior behavior used IsUniqueKey which is wrong — an object
+                    // can have multiple unique fields (e.g. email + phone) of which
+                    // only one is the PK. Connectors that don't yet set IsPrimaryKey
+                    // on their DiscoverFields output will return an empty PrimaryKeyFields;
+                    // the runtime PK classifier (Phase 0 D2/D4) handles the residual.
+                    PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
                     Relationships: fields
                         .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
                         .map(f => ({
