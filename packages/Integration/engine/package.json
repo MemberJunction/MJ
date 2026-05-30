@@ -17,7 +17,9 @@
     "@memberjunction/core": "5.37.0",
     "@memberjunction/core-entities": "5.37.0",
     "@memberjunction/global": "5.37.0",
-    "@memberjunction/integration-engine-base": "5.37.0"
+    "@memberjunction/integration-engine-base": "5.37.0",
+    "@memberjunction/integration-pk-classifier": "5.37.0",
+    "@memberjunction/integration-progress-artifacts": "5.37.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

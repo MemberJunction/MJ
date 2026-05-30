@@ -1,11 +1,11 @@
 {
   "entity": "MJ: Integrations",
-  "filePattern": "**/.*.json",
+  "filePattern": "**/.*.integration.json",
   "defaults": {},
   "pull": {
-    "createNewFileIfNotFound": true,
-    "newFileName": ".integrations.json",
-    "appendRecordsToExistingFile": true,
+    "createNewFileIfNotFound": false,
+    "newFileName": ".integration.json",
+    "appendRecordsToExistingFile": false,
     "updateExistingRecords": true,
     "preserveFields": [],
     "excludeFields": [],
@@ -14,7 +14,20 @@
     "backupDirectory": ".backups",
     "filter": "",
     "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
     "lookupFields": {},
-    "relatedEntities": {}
+    "relatedEntities": {
+      "MJ: Integration Objects": {
+        "entity": "MJ: Integration Objects",
+        "foreignKey": "IntegrationID",
+        "relatedEntities": {
+          "MJ: Integration Object Fields": {
+            "entity": "MJ: Integration Object Fields",
+            "foreignKey": "IntegrationObjectID"
+          }
+        }
+      }
+    }
   }
 }

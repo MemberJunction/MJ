@@ -123,4 +123,16 @@ export { IntegrationEngine } from './IntegrationEngine.js';
 
 // Schema persistence — upserts dynamically discovered objects/fields to IntegrationObject/Field tables
 export { IntegrationSchemaSync } from './IntegrationSchemaSync.js';
-export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSchemaSync.js';
+export type {
+    PersistSchemaOptions,
+    PersistSchemaResult,
+    FieldMergeLog,
+    ObjectMergeLog,
+} from './IntegrationSchemaSync.js';
+
+// Creation pipeline — orchestrates connect→introspect→persist→PK-classify with structured progress
+export { IntegrationConnectorCreationPipeline } from './IntegrationConnectorCreationPipeline.js';
+export type {
+    ConnectorCreationPipelineOptions,
+    ConnectorCreationPipelineResult,
+} from './IntegrationConnectorCreationPipeline.js';

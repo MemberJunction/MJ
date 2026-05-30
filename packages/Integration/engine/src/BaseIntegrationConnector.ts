@@ -56,8 +56,23 @@ export interface ExternalFieldSchema {
     Description?: string;
     /** Field data type in the external system */
     DataType: string;
-    /** Whether the field is required */
+    /**
+     * Whether the field must be provided when creating a new record.
+     * Semantically distinct from AllowsNull — required is a create-time
+     * constraint; nullable is a record-state constraint. Often related but
+     * not always (e.g. a field can be required on create and become nullable
+     * later via update; a field can be optional on create with a default
+     * applied that produces a non-null stored value).
+     */
     IsRequired: boolean;
+    /**
+     * Whether NULL is a permitted value at rest.
+     * Distinct from IsRequired (see above). When the source system reports
+     * neither explicit nullability nor a NOT NULL constraint, leave undefined
+     * — consumers default to permissive (nullable). Per the framework's
+     * provable-only policy, don't infer NOT NULL from sample data.
+     */
+    AllowsNull?: boolean;
     /**
      * Whether this field is THE primary key of the object.
      * Distinct from IsUniqueKey — an object can have several unique fields
@@ -465,11 +480,14 @@ export abstract class BaseIntegrationConnector {
                         Description: f.Description,
                         SourceType: f.DataType,
                         IsRequired: f.IsRequired,
+                        AllowsNull: f.AllowsNull,
                         MaxLength: f.MaxLength ?? null,
                         Precision: f.Precision ?? null,
                         Scale: f.Scale ?? null,
                         DefaultValue: f.DefaultValue ?? null,
                         IsPrimaryKey: f.IsPrimaryKey ?? false,
+                        IsUniqueKey: f.IsUniqueKey,
+                        IsReadOnly: f.IsReadOnly,
                         IsForeignKey: f.IsForeignKey ?? false,
                         ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                     })),
