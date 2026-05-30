@@ -45,15 +45,64 @@ You never read the credential file. The workflow passes you an opaque `credentia
 
 T10/T11 runs produce real records (PII risk). The workflow's `scrub-fixture` primitive runs at the result boundary BEFORE results enter your context. You receive scrubbed records only. Raw records live in `connectors-registry/<vendor>/runs/<runID>/test-data/` and are wiped before PR-open.
 
-## Per-tier execution
+## Per-tier execution — what each tier ACTUALLY does (not perfunctory)
 
-For each tier dispatched to you:
+You are not allowed to return `status: 'green'` without doing the work the tier requires. Each tier has a specific check:
+
+### T0_StaticValidation
+- `jq . <metadata-file>` → file must parse as valid JSON.
+- For every PROVENANCE.json entry, re-fetch the URL (or re-read the attached file) and confirm the cited `Excerpt` still appears in the source. URL 404 / excerpt missing → red.
+- For every CODE_EVIDENCE.json entry citing an extractor script, re-run the script and compare stdout against cited values. Mismatch → red.
+- Run `compute-source-diff` between SOURCES.json universe and the IO/IOF emission set; `missing.length > 0` → red.
+
+### T1_InvariantValidator
+- **Three-way name match**: parse connector .ts `IntegrationName` getter; parse `@RegisterClass` driver string; parse metadata Integration row `Name`. All three byte-identical or → red.
+- **FK metadata correctness**: for every IOF with `IsForeignKey=true`, resolve `RelatedIntegrationObjectID` `@lookup:` reference against the IO emission set. Unresolved → red.
+- **Capability ↔ method match**: for every IO with `SupportsCreate=true`, `CreateAPIPath` is non-null. Same Update / Delete. Missing → red.
+- **PK/FK source-check matrix consistency** (Gap 10 revised 2026-05-30): for every IO with `IsPrimaryKey=true` on at least one IOF, confirm EXTRACTION_REPORT_MATRIX row shows ≥ 1 source-check `yes`. Empty matrix + emitted PK → red (fabrication signal). PK defer-rate > 50% across all IOs → red (producer was lazy across multi-source sweep).
+
+### T2_CrossProgrammaticConsistency
+- Run two independent extraction scripts over the same source (producer's `extract.mjs` + an independent re-derive). Cross-check claims for shared fields. Divergence > 1% → red with classified failures.
+
+### T3_DocStructureSelfCheck
+- Re-run the producer's scrape-pattern script. Structured output byte-identical to prior. Drift → red (scrape pattern broke or source changed).
+
+### T4_MockedFixture
+- `cd <connector-package> && npx vitest run`. Any failed test → red with test name + failure.
+
+### T5_MockHTTPServer
+- Boot local HTTP server (nock or msw) with the connector's recorded fixtures. Run connector against it for every IO. Connection failures → red. If no mock-server infra → `skipped` with reason `mock-server-not-implemented`.
+
+### T6_LocalSQLiteBackend
+- Spin up SQLite DB with MJ schema. Run connector sync end-to-end against T5 mock + SQLite. Assert rows land correctly. Failure → red.
+
+### T7_OpenAPIValidation
+- For every request the connector would issue, validate shape against the OpenAPI spec (when vendor publishes one). Violation → red. No OpenAPI → `skipped`.
+
+### T8_FailureModeInjection
+- Inject 429, 500, timeout, malformed JSON. Verify retry on 429/timeout, classification on 500, graceful handling of malformed. Failure → red.
+
+### T9_PropertyBasedFuzz
+- fast-check (or hypothesis) across CRUD methods. Assert no uncaught throws + correct error classification. Property violation → red.
+
+### T10_LiveAPIIntegration (creds-only)
+- Via `mj-test-runner` MCP. TestConnection + DiscoverObjects + one paginated list + (if SupportsWrite) one round-trip CRUD on a test object. Failure → red.
+
+### T11_SDKDifferential (creds-only)
+- Same operations via vendor SDK + via our connector. Results match (modulo normalization). Divergence → red.
+
+### T12_CommunityFixtures
+- Run against community fixtures if any. Failure → red but advisory.
+
+## Per-tier execution flow
+
 1. Record start time.
-2. Run the command via Bash with a wall-clock timeout (60s for T0/T1/T3, 5min for T4, 10min for T5/T6/T8/T9, 15min for T10/T11).
-3. Parse exit code + stdout. Pass = exit 0; Fail = non-zero.
-4. Capture the first ~500 chars of stderr if Fail.
-5. Classify any failure via `ClassifyError` against the `SyncErrorCode` enum; emit the classification + fix-locus.
-6. Return the per-tier result.
+2. Execute the tier-specific work. Wall-clock timeouts: 60s T0/T1/T3, 5min T4, 10min T5/T6/T8/T9, 15min T10/T11.
+3. Determine green / red / skipped per the tier definition. NEVER return green without running the actual check.
+4. On red, classify each failure via `ClassifyError` against `SyncErrorCode`; emit `{tier, label, status, durationMs, failures: [{code, locus, message}]}`.
+5. On skipped, emit `{tier, label, status: 'skipped', skipReason: '<specific reason>'}`. Generic "not implemented" without specifics is itself a red.
+
+The orchestrator's code amendment loop routes red rungs to the responsible upstream agent (T1 three-way mismatch → code-builder; T1 capability/method gap → ioiof-extractor via `RequiresExtractorAmendment`).
 
 ## Output schema (per tier)
 

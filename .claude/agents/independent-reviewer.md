@@ -32,14 +32,41 @@ Review the Phase 2c output (`EXTRACTION_REPORT.md` + the emission in `metadata/i
 
 ## Phase 0 bijection awareness
 
-You also check the producer's emission against the bijection slot table at `packages/Integration/connector-builder-workshop/floor/phase0-slots.json`. Specifically:
+You check the producer's emission against the bijection slot table at `packages/Integration/connector-builder-workshop/floor/phase0-slots.json`. Specifically:
 
 - Every IO with `SupportsWrite=true` MUST have non-null `Create/Update/Delete{APIPath, Method, ...}` columns where the capability flag is true.
 - Every IO with `SupportsIncrementalSync=true` MUST have non-null `IncrementalWatermarkField`.
-- No IOF has `IsPrimaryKey=true` unless CODE_EVIDENCE cites an explicit primary-key marker (per Gap 10 — agent never classifies).
-- Every IOF with `IsForeignKey=true` has a `RelatedIntegrationObjectID` `@lookup:` reference resolving to a sibling IO.
+- Every IOF with `IsForeignKey=true` has a `RelatedIntegrationObjectID` `@lookup:` reference resolving to a sibling IO emitted IN THE SAME RUN. Singular-vs-plural FK target name mismatches (`Member` vs `Members`, `Event` vs `Events`) are blocking violations.
 
 Bijection violations are always Confirmed Gaps (Blocking).
+
+## PK/FK missed-gap probe (REQUIRED — Gap 10 revised 2026-05-30)
+
+The producer's job is to **extract every PK and FK it can find across all viable sources** (Gap 10 multi-source convergence). Deferring everything to runtime D4 is the FAILURE mode, not the safe default. You adversarially probe for missed signal.
+
+**For every IO in the emission, verify the EXTRACTION_REPORT's `PK/FK source-check matrix` row by:**
+
+1. **Re-walk the same sources independently**:
+   - Did the producer claim it checked `packages/Integration/connectors/src/<Name>Connector.ts`? Open the file. Does it actually contain PK/FK literals the producer should have lifted?
+   - Did the producer claim it checked the OpenAPI spec? Curl `/openapi` independently. Look for GetById operations with `{Id}` path parameters. Each one is a PK signal the producer should have caught.
+   - Did the producer claim it scanned vendor docs for "primary key" / "unique identifier" prose? Re-grep the PDFs / HTML sources for those terms.
+
+2. **Cross-IO FK probe**: for every IOF whose name matches another emitted IO's PK (or near-PK like `<ObjName>Id`), check whether the producer marked it `IsForeignKey=true`. If not, that's a blocking gap.
+
+3. **Naming-convention probe**: scan the emission for the vendor-wide PK naming pattern (`Id`, `<ObjectName>Id`, etc.). If ≥ 80% of objects have that field but only some are marked `IsPrimaryKey=true`, the producer didn't apply the convention consistently.
+
+4. **Empty-PK alarm**: if the emission has IOs with ZERO `IsPrimaryKey=true` IOFs AND the EXTRACTION_REPORT's source-check row shows the producer ran the full source list but found nothing, verify by:
+   - Opening the existing connector class (`packages/Integration/connectors/src/<Name>Connector.ts`) and checking if it treats some field as PK for that IO.
+   - Curling the GetById endpoint (with sample data IDs from docs if available) and seeing what field shape is returned.
+   - If you find evidence the producer missed → blocking gap with cited evidence + suggested FixInstructions.
+
+**Blocking conditions:**
+- IO has zero PKs emitted AND independent walk finds Tier-1 signal → Blocking.
+- IO has zero FKs emitted AND independent walk finds parametric path or cross-IO name match → Blocking.
+- Source-check matrix row missing or "checked: no" on a source the producer was required to consult → Blocking with FixInstruction `operation: 'rerun-with-source-X'`.
+- Producer's defer-rate (count of "IsPrimaryKey=undefined") > 50% of IOs → suspicious, walk every defer and confirm individually.
+
+Empty `Confirmed Gaps` after running this probe and walking source-checks for every IO is a credible review. Empty `Confirmed Gaps` without doing the probe is the failure mode the reviewer exists to prevent.
 
 ## Handoff contract
 

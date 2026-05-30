@@ -28,8 +28,37 @@ The `extract-iiof-pipeline` locked primitive wraps each object you emit in a `ve
 - **Set-completeness applies bidirectionally.** At the end of an extraction run, any IO/IOF in the current metadata file that was NOT emitted in this run is an orphan from a prior run with stale logic. Delete it. The metadata file's contents after the run reflect this run's emissions only.
 - **Per-flag CODE_EVIDENCE.** Every hard-constraint flag (`IsPrimaryKey`, `IsRequired`, `IsReadOnly`, `IsUniqueKey`, `RelatedIntegrationObjectID`, per-operation `CreateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `IncrementalWatermarkField`) gets its own CODE_EVIDENCE entry citing the script + the structural signal observed.
 - **Receive + use the source study from Phase 2a.** You receive `SOURCE_STUDY.md` (the source-auditor's structured study including per-source TAXONOMIES — named categories of endpoints with source-mapping citation per category) as an input. Your extraction is INFORMED by that study — don't re-discover what's already documented there. If the study names a parametric-variable convention or hierarchy pattern, your script uses that knowledge; you don't reinvent it. The taxonomy list IS your coverage skeleton.
-- **PK detection — explicit only.** Per Gap 10: emit `IsPrimaryKey=true` ONLY when the source has an explicit primary-key marker ("primary key" / "unique identifier" / "system ID" wording, or an OpenAPI `x-primary-key` extension). Otherwise leave `IsPrimaryKey` unset. The runtime D4 `SoftPKClassifier` handles ambiguous cases. The agent does not classify.
-- **FK detection.** Emit `IsForeignKey=true` + `RelatedIntegrationObjectID` (as `@lookup:` reference) when the source declares an explicit FK relationship OR a required-ordering parametric path implies one (`/parents/{ParentID}/children` → child's `ParentID` references `Parents`). The Phase 0 D5 logic resolves name→ID at persist time.
+- **PK detection — multi-source convergence (Gap 10 revised 2026-05-30).** Extract every PK you can find across all viable sources before deferring. Deferring to runtime is the FAILURE mode — it leaves the connector unusable until live sample data exists. For each IO walk the source list IN ORDER:
+  1. **Existing connector source** at `packages/Integration/connectors/src/<Name>Connector.ts` (Tier-1 — vendor-validated production code).
+  2. **Existing metadata file** at `metadata/integrations/<vendor>/.<vendor>.integration.json` (legacy slugs include dot-vendor variants like `.your-membership.json`) for prior PK/FK assertions.
+  3. **OpenAPI spec** — `x-primary-key` extension; path operations like `GetById`; POST response `Location` header pointing at `/{Resource}/{field}`.
+  4. **Vendor PDFs / HTML docs** — prose markers ("primary key", "unique identifier", "system ID", "record ID", "must be unique and non-null").
+  5. **SDK type definitions** when published (TypeScript / Python / C# types carry annotations).
+  6. **Postman collection / community fixtures** for sample request/response data.
+  7. **Naming-convention scan** across the FULL emitted IO set — when ≥ 80% of objects follow the same pattern (e.g., every object has an `Id` that GetById uses), that's a Tier-2 signal applied per-IO.
+  8. **Cross-IO name matching** — every IOF whose name matches another emitted IO's PK is an FK candidate.
+
+  **Decision:**
+    - ≥ 1 Tier-1 signal → emit `IsPrimaryKey=true` with provenance citing each signal.
+    - ≥ 2 Tier-2 signals (no Tier-1 contradicts) → emit `IsPrimaryKey=true` + `EvidenceStrength='Convergent'` in CODE_EVIDENCE listing every contributing signal.
+    - 1 Tier-2 signal only → emit `IsUniqueKey=true` (when applicable), defer `IsPrimaryKey` to runtime D4, document in EXTRACTION_REPORT why convergence didn't reach the bar.
+    - 0 viable signals AFTER actually checking every source → defer to runtime D4; **the EXTRACTION_REPORT must list each source consulted and prove the field was actually examined.** "I didn't check" is not "I checked and found nothing."
+
+- **FK detection — multi-source convergence.** Same rule. Tier-1 signals:
+  - Prose docs explicitly describe relationship.
+  - Existing connector source code has FK assertion.
+  - Parametric child path `/Parent/{ParentId}/Children` where `ParentId` matches the parent's emitted PK → child's `ParentId` IS the FK.
+  - OpenAPI `x-foreign-key` extension (rare).
+
+  Tier-2 signals:
+  - Field name = sibling IO's PK name AND sibling IO exists in this emission (`Note.ContactId → Contact` when `Contact.Id` is the emitted PK).
+  - Documented relationships in prose that don't name "foreign key" but describe ownership ("Members belong to Organizations").
+
+  ≥ 1 Tier-1 OR ≥ 2 Tier-2 → emit `IsForeignKey=true` + `RelatedIntegrationObjectID` as `@lookup:` reference. **Critical**: the target name MUST match an IO you actually emit in the same run. Singular-vs-plural mismatches (`Member` vs `Members`, `Event` vs `Events`) are blocking bijection violations — verify against your own emission set BEFORE finalizing.
+
+- **No deferral when the same vendor's existing connector already knows the PK/FK.** When `packages/Integration/connectors/src/<Name>Connector.ts` exists and contains a `PrimaryKey: 'Id'` or `RelatedIntegrationObjectID: 'Members'` literal, that's Tier-1 — emit it.
+
+- **Probe sample endpoints when no creds.** Public read endpoints (ORCID public records, published Postman snippets) yield Tier-2 statistical signal via `curl`. Use that signal; it counts.
 - **v5.39.x per-operation CRUD columns.** For each IO with the corresponding capability flag true, emit `Create/Update/Delete` per-operation columns per `extractor-script-conventions.md` — each with its own CODE_EVIDENCE entry citing the source line.
 - **Bounds.** Cap IO at 1000 per run. Cap wall-clock at 10 minutes. If hit, exit non-zero — runaway extraction = bug.
 - **Hierarchy.** When URLs imply parent-child (`/parents/{ParentID}/children`), populate `ParentObjectName` + `ParentObjectIDFieldName` on the child IO. Compute a topological-sort `TraversalOrder` at the end. Halt + escalate if you detect cycles.
@@ -41,6 +70,7 @@ Must classify every COVERABLE taxonomy from `SOURCE_STUDY.md`:
 - **Taxonomies covered** — for each COVERABLE taxonomy where you emitted ≥1 IO: taxonomy label + count of IOs emitted under it + source citation.
 - **Taxonomies excluded with reasoning** — for each COVERABLE taxonomy where you emitted zero IOs: specific reason (parametric-only / runtime-bound / no GET surface / deprecated per source / out-of-scope) + source citation.
 - **Informational taxonomies applied** — for each INFORMATIONAL taxonomy, document HOW you used it (auth flow components → which auth flow you chose; rate-limit categories → which Configuration setting; etc.).
+- **PK/FK source-check matrix** — REQUIRED. One row per emitted IO. Columns: ExistingConnectorTs (yes/no/n/a) | ExistingMetadataJson (yes/no/n/a) | OpenAPI-x-primary-key (yes/no) | OpenAPI-pathOps (yes/no) | OpenAPI-LocationHeader (yes/no) | VendorDocsProseScan (yes/no) | SDKTypes (yes/no/n/a) | PostmanCommunity (yes/no/n/a) | NamingConvention (yes/no) | CrossIOMatch (yes/no) | PKVerdict (emit/defer/uniqueKey-only) | FKVerdict (emit-N/defer) | EvidenceCitations (count). This matrix is the floor-check's mechanical verification that you did the work. Missing rows = re-dispatch.
 - **Mechanical check** the workflow runs: union of (covered ∪ excluded) MUST equal the full COVERABLE-taxonomy list from SOURCE_STUDY. Any unclassified COVERABLE taxonomy → report rejected → re-dispatched.
 
 L1 container taxonomies are NOT in the coverage skeleton; classify their L2 leaves only.

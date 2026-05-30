@@ -170,6 +170,20 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
             objectList: sources.TaxonomyLeaves,
             writeBackPath: METADATA_FILE,
             adversarialN: MANIFEST.adversarialVerifyMinReviewers,
+            // Multi-source PK/FK detection inputs (Gap 10 revised 2026-05-30).
+            // Producer MUST consult each of these where it exists.
+            sourceBundle: {
+                existingConnectorTsPath: `packages/Integration/connectors/src/${identity.Identity.ClassName}.ts`,
+                existingMetadataPaths: [
+                    `metadata/integrations/${VENDOR_SLUG}/.${VENDOR_SLUG}.integration.json`,
+                    `metadata/integrations/.${VENDOR_SLUG}.json`,
+                    `metadata/integrations/.your-membership.json`, // legacy slugs
+                ].filter(Boolean),
+                openapiPath: sources.SourcesFile,
+                vendorDocsPaths: sources.VendorDocsPaths ?? [],
+                sdkPaths: sources.SDKPaths ?? [],
+                postmanPaths: sources.PostmanPaths ?? [],
+            },
             // Amendment feedback — null on first round, populated on subsequent
             amendmentRound,
             reviewerFindings: isAmendment ? review.FixInstructions : null,

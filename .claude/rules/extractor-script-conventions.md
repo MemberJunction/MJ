@@ -96,17 +96,101 @@ For each IO with `SupportsCreate/Update/Delete=true`, emit the corresponding per
 
 Every emitted per-operation column gets a CODE_EVIDENCE entry citing the extraction script + source line.
 
-## Soft PK boundary (D4 / Gap 10)
+## Multi-source PK/FK detection (Gap 10 revised 2026-05-30)
 
-The script emits `IsPrimaryKey=true` ONLY when the source has an explicit primary-key marker for the field ("primary key" / "unique identifier" / "system ID" wording, or an OpenAPI `x-primary-key` extension). Otherwise leave `IsPrimaryKey` unset; the runtime `SoftPKClassifier` handles ambiguous cases when sample data is available.
+**Deferring to runtime D4 is the FAILURE mode.** The script must aggregate evidence across every viable source before deferring. See `.claude/agents/ioiof-extractor.md` § "PK detection" / § "FK detection" for the rule; this section is the script-implementation.
 
-For vendor-wide PK conventions (e.g. "all HubSpot CRM object PKs are 'id'"), emit `Integration.Configuration.universalPK = { fieldName: 'id' }` — do NOT mark individual IOFs.
+### Source loaders (call all of them at the top of the script)
 
-## FK detection
+```typescript
+const sources = {
+    connectorSrc: await loadIfExists(`packages/Integration/connectors/src/${ClassName}.ts`),
+    existingMetadata: await loadIfExists(`metadata/integrations/${slug}/.${slug}.integration.json`)
+                   ?? await loadIfExists(`metadata/integrations/.${legacySlug}.json`),
+    openapi: await loadOpenAPISpec(openapiURL),                // x-primary-key, path ops, Location headers
+    vendorDocsText: await loadPDFsAndHTML(docPaths),           // grep "primary key" / "unique identifier"
+    sdkTypes: await loadSDKTypeDefs(sdkPaths),                 // annotations
+    postman: await loadPostmanCollections(postmanPaths),
+};
+```
 
-Emit `RelatedIntegrationObjectID` (via `@lookup:` reference resolved at sync push time) when the source declares an explicit FK relationship. Required-ordering in API paths (`/parents/{ParentID}/children` implies `ParentID` references parents) is acceptable evidence.
+The script **MUST** call every loader. Missing source-loads are visible to the reviewer via the source-check matrix.
 
-The Phase 0 `IntegrationSchemaSync` will resolve a `ForeignKeyTarget` name against sibling IO names at persist time (D5). Unresolvable targets leave the field FK-less.
+### Per-IOF signal aggregator
+
+```typescript
+type Tier = 1 | 2;
+type Signal = { source: string; tier: Tier; kind: 'PK' | 'FK'; locus: string; excerpt?: string };
+
+function aggregatePKFKSignals(fieldName: string, ioName: string, allSources: SourceBundle): Signal[] {
+    const out: Signal[] = [];
+
+    // Tier-1: existing connector source carries the answer
+    if (allSources.connectorSrc) {
+        const pkLiteral = new RegExp(`['"]${fieldName}['"][^}]*?(IsPrimaryKey|PrimaryKey)\\s*[:=]\\s*true`, 'i');
+        if (pkLiteral.test(allSources.connectorSrc)) {
+            out.push({ source: 'connector-src', tier: 1, kind: 'PK', locus: `${ClassName}.ts` });
+        }
+    }
+    // Tier-1: OpenAPI GetById path parameter == field
+    if (allSources.openapi) {
+        for (const [p, methods] of Object.entries(allSources.openapi.paths)) {
+            const m = p.match(/\/{([A-Za-z]+)}$/);
+            if (m && m[1].toLowerCase() === fieldName.toLowerCase() && methods.get) {
+                out.push({ source: 'openapi-getbyid', tier: 1, kind: 'PK', locus: p });
+            }
+        }
+    }
+    // Tier-1: OpenAPI POST response Location header → /<resource>/{field}
+    // Tier-1: vendor-docs prose grep "primary key|unique identifier|system ID" near field name
+    // Tier-2: naming convention applied ≥ 80% of objects
+    // Tier-2: field name == sibling IO's emitted PK (cross-IO match for FK)
+    // ...
+    return out;
+}
+
+function classifyPK(signals: Signal[]): 'emit' | 'unique-only' | 'defer' {
+    const pk = signals.filter(s => s.kind === 'PK');
+    if (pk.filter(s => s.tier === 1).length >= 1) return 'emit';
+    if (pk.filter(s => s.tier === 2).length >= 2) return 'emit';
+    if (pk.filter(s => s.tier === 2).length === 1) return 'unique-only';
+    return 'defer';
+}
+```
+
+### Vendor-wide universal-PK hint
+
+When the script detects a consistent vendor-wide PK pattern (≥ 80% of objects), emit BOTH:
+1. `Integration.Configuration.universalPK = { fieldName: 'id' }` (or whatever the convention is).
+2. Individual IOF `IsPrimaryKey=true` on the matched fields per their multi-signal verdict.
+
+The hint is for runtime D4 acceleration; the per-IOF flags are the actual emission floor-check cares about.
+
+### FK detection
+
+Tier-1 signals the script extracts:
+- Parametric child path `/Parent/{ParentId}/Children` where `ParentId` matches the parent's emitted PK name.
+- Existing connector source contains `RelatedIntegrationObjectID: '<TargetIO>'` literal for this field.
+- Vendor docs explicitly describe relationship.
+
+Tier-2:
+- Field name == sibling IO's emitted PK AND sibling IO exists in this run.
+
+The script emits `RelatedIntegrationObjectID` as `@lookup:` reference. **Cross-check the lookup target name matches an IO this script actually emits** — singular-vs-plural mismatches (`Member` vs `Members`) are blocking violations the reviewer will catch.
+
+### One CODE_EVIDENCE entry per signal
+
+The script appends one CODE_EVIDENCE entry **per signal that contributes** to the emission. Multi-signal PK emission with 3 signals → 3 CODE_EVIDENCE entries. Each entry cites its source + locus + excerpt.
+
+### Source-check matrix output
+
+The script appends one row per emitted IO to `output/EXTRACTION_REPORT_MATRIX.csv`:
+
+```
+IOName,ExistingConnectorTs,ExistingMetadataJson,OpenAPIxPK,OpenAPIPathOps,OpenAPILocationHeader,VendorDocsProseScan,SDKTypes,PostmanCommunity,NamingConvention,CrossIOMatch,PKVerdict,FKVerdict,EvidenceCount
+```
+
+Each column is `yes` / `no` / `n/a` (`n/a` when the source doesn't exist for this vendor). The reviewer and floor-check cross-validate this matrix against the emission and the source bundle.
 
 ## Hierarchy + traversal order
 

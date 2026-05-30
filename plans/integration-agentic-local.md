@@ -962,27 +962,71 @@ Implementation: each script element annotated with `gateAffecting: boolean`; dif
 walks both trees; gate-affecting changes route to full review, cosmetic changes
 auto-approve.
 
-### Gap 10 — Static-vs-runtime PK boundary (clean separation)
+### Gap 10 — Static PK/FK detection (multi-source evidence convergence)
 
-**Rule for the agent's static research:**
+**Revised 2026-05-30 after YourMembership test surfaced 126 deferred PKs and 0 emitted FKs against a vendor whose REST PDF + existing connector source + parametric paths all carried valid signal. The "explicit-OpenAPI-marker only" rule was too narrow and produced empty emissions.**
 
-| Doc condition | Agent emission |
+The agent **MUST extract every PK and FK it can find across all viable sources** before deferring to runtime D4. Deferring to runtime is the failure mode, not the safe default — it leaves the connector unusable until live sample data exists.
+
+#### Viable source tier (any of these qualifies as evidence)
+
+| Tier | Source | What it tells you |
+|---|---|---|
+| 1 | OpenAPI `x-primary-key` extension | Explicit PK |
+| 1 | Vendor docs prose: "primary key" / "unique identifier" / "system ID" / "record ID" / "must be unique and non-null" | Explicit PK |
+| 1 | Existing connector source code (when present) — `IsPrimaryKey`, `RelatedIntegrationObjectID`, PK-field literals | **Tier-1 evidence**: vendor-validated code that works in production |
+| 1 | GetById / GetByX operation: the path parameter IS the field | Explicit PK |
+| 1 | POST response `Location` header points at `/{Resource}/{field}` | Explicit PK (field is the new record's identifier) |
+| 1 | POST response body returns the same field as the new record's identifier | Explicit PK |
+| 1 | Parametric child paths `/Parent/{ParentId}/Children` where `ParentId` matches the parent's emitted PK | Explicit FK (`Children.ParentId → Parent`) |
+| 2 | Consistent vendor-wide naming convention applied ≥ 80% of objects (e.g., every object has an `Id` field that GetById uses) | Strong convention signal |
+| 2 | Field name = sibling-IO's-PK-name AND sibling IO exists in this emission | Strong cross-IO FK signal (`Note.ContactId → Contact` when `Contact.Id` is PK) |
+| 2 | Sample response data shows the field is unique + non-null across N records | Statistical signal (when sample data fetchable without creds) |
+
+#### Decision rule
+
+The producer aggregates evidence across ALL applied sources, then emits per this table:
+
+| Evidence convergence | Emission |
 |---|---|
-| Explicit "primary key" / "unique identifier" / "system ID" marker | `IsPrimaryKey: true` with provenance |
-| "Unique" without "primary" | `IsUniqueKey: true`, `IsPrimaryKey: undefined` (defer) |
-| Ambiguous wording | NO PK emission; deferred to runtime |
-| Silent on PK | NO PK emission; deferred to runtime |
-| Vendor-wide convention exists (e.g., "all HubSpot object PKs are 'id'") | `Integration.Configuration.universalPK = {fieldName: 'id'}` — agent does NOT mark individual fields |
+| ≥ 1 Tier-1 signal | `IsPrimaryKey=true` / `IsForeignKey=true` with provenance per signal |
+| ≥ 2 Tier-2 signals (no Tier-1 contradicts) | `IsPrimaryKey=true` / `IsForeignKey=true` with provenance per signal; mark `EvidenceStrength='Convergent'` in CODE_EVIDENCE |
+| 1 Tier-2 signal only, no Tier-1 | `IsUniqueKey=true` (when applicable); `IsPrimaryKey=undefined` (defer); note in EXTRACTION_REPORT.md why convergence didn't reach the bar |
+| 0 viable signals AFTER actually checking each source | Defer to runtime D4 — but **the EXTRACTION_REPORT must list every source checked and prove the field was actually examined** |
 
-**The agent NEVER invokes a classifier itself.** That's runtime D4's job. The agent's
-job is strictly extract-or-defer. Runtime D4 (Phase 0) consumes the agent's
-`universalPK` hint as input but runs the actual classification at pipeline time
-when sample data may be available.
+#### Honesty rules
 
-**Clean separation:**
-- Agent: provable extraction only.
-- Runtime: classifier for the residual, using agent's hints.
-- Floor-check: confirms agent emitted nothing speculative for PK.
+- **NO FABRICATION.** A field that has zero signal across all sources still defers — but the EXTRACTION_REPORT must enumerate every source consulted (per the checklist below). "I didn't check" is not "I checked and found nothing."
+- **Provenance per signal.** Every Tier-1 / Tier-2 signal cites its source + locus. Multi-signal emissions list each contributing signal independently in CODE_EVIDENCE.
+- **Cross-IO FK resolution.** When emitting a FK, the `RelatedIntegrationObjectID` target name MUST match an IO emitted in the same run. Singular-vs-plural mismatches (`Member` vs `Members`, `Event` vs `Events`) are bijection violations that the independent-reviewer will block.
+
+#### Sources the producer MUST consult (in order)
+
+For each IO:
+
+1. **Existing connector source** at `packages/Integration/connectors/src/<Name>Connector.ts` (when present) — read it for PK/FK literals.
+2. **Existing metadata file** at `metadata/integrations/<vendor>/.<vendor>.integration.json` (when present, may be legacy slug like `.<dot-vendor>.json`) — extract prior PK/FK assertions.
+3. **OpenAPI spec** — `x-primary-key`, path operations, response Location headers.
+4. **Vendor PDF / HTML docs** — prose markers for PK/unique identifier/FK relationships.
+5. **SDK type definitions** — TypeScript / Python / C# SDK types carry annotations.
+6. **Postman collection / community fixtures** — sample request/response data.
+7. **Naming convention scan** — apply across the full emitted IO set; ≥ 80% threshold to qualify as Tier-2.
+8. **Cross-IO name matching** — every IOF whose name matches another emitted IO's PK is an FK candidate.
+
+#### Runtime D4 SoftPKClassifier still exists
+
+D4 still runs at pipeline time for the residual (objects the agent honestly couldn't determine PK for after the multi-source sweep). But it's the **last** classifier, not the first. The agent is no longer entitled to "explicit marker only" laziness.
+
+#### Floor-check enforcement
+
+Floor-check inspects every IO's IOF set and rejects when:
+- No IOF is marked `IsPrimaryKey=true` AND the EXTRACTION_REPORT does not enumerate the source-checks performed → producer was lazy, re-dispatch.
+- A field named `<ObjName>Id` or `Id` is `IsPrimaryKey=false` AND no Tier-1 signal contradicts → suspicious miss, re-dispatch with reviewer evidence.
+- A field name matches another IO's PK name AND `IsForeignKey=false` → suspicious miss, re-dispatch.
+
+#### Sample data probing without credentials
+
+For vendors where parts of the API are accessible without credentials (public ORCID record reads; published Postman snippets), the producer SHOULD probe sample endpoints to gather statistical signal — uniqueness, non-null, format patterns. This is Tier-2 evidence. The probe is a `curl` against a public path; nothing fancy.
 
 ## 13. Sequencing with PR 1
 
