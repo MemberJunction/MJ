@@ -169,5 +169,5 @@ Uses the BeforeX/AfterX cancelable pattern:
 
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/README.md) -- RunView for data loading
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- Entity types
+- [@memberjunction/core](../../../MJCore/readme.md) -- RunView for data loading
+- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- Entity types

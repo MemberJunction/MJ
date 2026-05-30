@@ -9,7 +9,7 @@
 <h3 align="center">The open-source, AI-native data platform.</h3>
 
 <p align="center">
-  Unify your data. Add intelligence. Ship faster.
+  Unify your data. Add intelligence. <strong>Build AI-native apps on top of it.</strong>
 </p>
 
 <p align="center">
@@ -29,7 +29,9 @@ MemberJunction is a **metadata-driven application platform** that turns your dat
 
 What makes it different: **175 modular TypeScript packages** that work together or independently, **15+ AI providers** behind a single abstraction layer, and an **agent framework** for building autonomous workflows — all driven by metadata, not boilerplate.
 
-> **Already getting your data into MJ and wondering what else you can build?** MemberJunction is also a first-class **application development platform** for database-driven business apps. See **[Building Applications on MemberJunction](./guides/BUILDING_APPS_ON_MJ.md)** — the developer's hub that walks the schema-to-app model and links every layer of the stack.
+It's two things in one. A **data platform** for unifying and reasoning over your data — *and* a **full-stack framework for building AI-native applications** on top of it, where agents, prompts, and RAG operate directly on your entities. And because the whole stack is **TypeScript with one object model that runs identically on the server, in the browser, in the CLI, and inside agents**, you write your data and business logic once and run it on every tier.
+
+> **Already getting your data into MJ and wondering what else you can build?** MJ is a first-class platform for building **AI-native applications** on your unified data. Start with **[Building Applications on MemberJunction](./guides/BUILDING_APPS_ON_MJ.md)** — the developer's hub that walks the schema-to-app model and links every layer — and the **[framework comparison](./guides/FRAMEWORK_COMPARISON.md)** vs. Next.js/Vercel, Supabase, Rails, and Django.
 
 ```typescript
 // Three lines to load, modify, and save any entity — fully typed, validated, and audited

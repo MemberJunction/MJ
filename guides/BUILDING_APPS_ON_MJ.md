@@ -1,6 +1,6 @@
 # Building Applications on MemberJunction
 
-> **The short version** — MemberJunction is best known as an AI data platform: unify your data, add intelligence, ship faster. But the engine that ingests and reasons over your data is also a **first-class application development platform** for database-driven business apps. You model a schema; MJ generates a complete, type-safe, secured full-stack application around it — typed data access, APIs, UI, business logic, and AI — all in **one language (TypeScript)** with **one object model that runs identically on every tier**. Once your data is in MJ, you build directly on it. You don't move it somewhere else first.
+> **The short version** — MemberJunction is best known as an AI data platform: unify your data, add intelligence, ship faster. But the engine that ingests and reasons over your data is also a **first-class application development platform** for database-driven business apps. You model a schema; MJ generates a complete, type-safe, secured full-stack application around it — typed data access, APIs, UI, business logic, and AI — all in **one language (TypeScript)** with **one object model that runs identically on every tier**. AI isn't bolted on at the end: agents, prompts, and RAG are first-class building blocks that operate directly on the same entities and actions your UI uses, so the apps you build are **AI-native by default**. Once your data is in MJ, you build directly on it. You don't move it somewhere else first.
 
 This is the **developer's hub** for that story. It explains the architecture, the model that makes it work, and links to the authoritative README/guide for every layer so you can go from "my data is in MJ" to "I'm shipping a custom application on MJ."
 
@@ -25,8 +25,10 @@ This is the **developer's hub** for that story. It explains the architecture, th
    - [9. AI — the force multiplier](#9-ai--the-force-multiplier)
    - [10. Application metadata as code](#10-application-metadata-as-code)
    - [11. Deployment](#11-deployment)
-7. [Cross-cutting developer guides](#cross-cutting-developer-guides)
-8. [A mental model to keep](#a-mental-model-to-keep)
+7. [Building AI-native applications](#building-ai-native-applications)
+8. [How MJ compares to other frameworks](#how-mj-compares-to-other-frameworks)
+9. [Cross-cutting developer guides](#cross-cutting-developer-guides)
+10. [A mental model to keep](#a-mental-model-to-keep)
 
 ---
 
@@ -478,6 +480,69 @@ Beyond schema, your *application configuration* — apps, navigation, seed/refer
 - **[DEPLOYMENT.md](../DEPLOYMENT.md)** — Containerized deployment, environment configuration.
 - **[docker/CLAUDE.md](../docker/CLAUDE.md)** — MJAPI container and workbench configurations.
 - **[UPDATES.md](../UPDATES.md)** & **[v5.0 Upgrade Guide](../UPGRADE-v5.0.md)** — Promoting changes across dev/stage/prod and upgrading MJ versions.
+
+---
+
+## Building AI-native applications
+
+"AI-native" doesn't mean "has a chatbot in the corner." In MemberJunction it means AI is woven into the fabric of the application: the *same* entities, actions, and metadata that power your screens are the things your AI agents read, reason over, and act on. There's no separate "AI integration layer" to build and keep in sync — because there's no second model of your domain to integrate with.
+
+### Why MJ apps are AI-native by construction
+
+Everything an AI feature needs is already first-class in the platform:
+
+- **A governed, unified data substrate.** Your data is already modeled as entities with relationships, permissions, and descriptions. That metadata is exactly what an LLM needs to query and manipulate data safely — and what powers RAG without a bespoke pipeline.
+- **Actions as a tool surface.** The [Actions framework](#8-business-logic--the-actions-framework) is metadata-driven and discoverable, which is precisely the shape an agent needs to call your business logic. The action a user triggers from a button is the same action an agent invokes as a tool.
+- **The shared object model.** An agent running server-side uses the same `BaseEntity` / `RunView` / `.Save()` code your UI uses ([§4](#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice)). Human and agent paths can't drift, because they're literally the same code.
+- **Provider independence.** [15+ AI providers](../packages/AI/README.md) sit behind one abstraction, so you choose models per task without rewrites.
+
+### The AI-native loop
+
+```mermaid
+flowchart LR
+    subgraph App["Your AI-native application"]
+        direction TB
+        USER["User"]
+        AGENT["AI Agent<br/>(plan · decide · act)"]
+        PROMPT["Prompts<br/>(hierarchical templates)"]
+        RAG["RAG / Vector search<br/>over your entities"]
+    end
+
+    subgraph Shared["Shared domain — same model for humans &amp; AI"]
+        direction TB
+        ENT["Entities<br/>(BaseEntity)"]
+        ACT["Actions<br/>(business logic / tools)"]
+        DATA[("Your unified data")]
+    end
+
+    USER <--> AGENT
+    AGENT --> PROMPT
+    AGENT --> RAG
+    AGENT -->|"invokes as tools"| ACT
+    RAG --> ENT
+    ACT --> ENT
+    ENT --> DATA
+
+    style App fill:#7c5295,stroke:#563a6b,color:#fff
+    style Shared fill:#1f9d8f,stroke:#147068,color:#fff
+    style DATA fill:#64748b,stroke:#475569,color:#fff
+```
+
+### Patterns for AI-native features
+
+- **Agentic workflows over your data** — multi-step agents that read entities, call actions, and write results back, with sub-agent delegation. See [Agents README](../packages/AI/Agents/README.md).
+- **RAG grounded in your entities** — semantic search and retrieval scoped to the records a user is allowed to see. See [Search Scopes & RAG+ Guide](SEARCH_SCOPES_AND_RAG_GUIDE.md).
+- **AI-assisted content** — generate documents, emails, and summaries from entity data via the [Templates engine](../packages/Templates/README.md) and [Prompts](../packages/AI/Prompts/README.md).
+- **Automatic classification & enrichment** — autotagging and taxonomy assignment as records arrive. See [Content Autotagging](CONTENT_AUTOTAGGING_GUIDE.md) and [Taxonomy & Tagging](TAXONOMY_TAGGING_GUIDE.md).
+- **In-app AI surfaces** — embed chat, agent test harnesses, and conversation UIs from the Angular generic component library (`@memberjunction/ng-conversations`, `@memberjunction/ng-ai-test-harness`).
+
+The throughline: because AI shares your app's object model and action surface, **adding intelligence is additive, not architectural**. You don't re-platform to become AI-native — you already are.
+
+---
+
+## How MJ compares to other frameworks
+
+If you're weighing MemberJunction against the stacks you already know — Next.js/Vercel, Supabase, Ruby on Rails, Django, or a hand-rolled Node + ORM + SPA — see the companion **[Framework Comparison Guide](FRAMEWORK_COMPARISON.md)**. It's an objective, where-each-shines breakdown: what MJ gives you out of the box (typed isomorphic object model, generated API/UI/security/audit, AI-native substrate), where the others are a better fit, and how to think about the trade-offs.
 
 ---
 

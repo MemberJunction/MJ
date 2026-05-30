@@ -540,6 +540,6 @@ sequenceDiagram
 ## Related Packages
 
 - **[@memberjunction/actions-base](../Base/README.md)** -- Base classes, interfaces, and metadata engines
-- **[@memberjunction/actions](../Engine/readme.md)** -- Server-side action execution engine
+- **[@memberjunction/actions](../Engine/README.md)** -- Server-side action execution engine
 - **[Parent Actions README](../README.md)** -- Framework overview, generated actions guide, and best practices
 - **[Parent Actions CLAUDE.md](../CLAUDE.md)** -- Design philosophy and development guidelines
