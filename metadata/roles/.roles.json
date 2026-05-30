@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "External App User",
+      "Description": "Restricted role for external users who enter MJ via a magic-link invite. Grants no entity access by default (deny-all baseline). Per-deployment, attach Entity Permissions to this role scoped to ONLY the entities the shared Application exposes — this is the real authorization boundary that keeps external users out of the rest of MJ. Never assign this role to internal/SSO users."
+    },
+    "primaryKey": {
+      "ID": "611283EE-C8AB-4A2D-A378-53BEED1E0D89"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T17:30:47.069Z",
+      "checksum": "4a853ff57ef0996ade85c89e2da4ed3e375801640643d2566a6454642e2cf477"
+    }
+  }
+]

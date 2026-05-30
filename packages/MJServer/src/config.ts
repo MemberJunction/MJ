@@ -221,8 +221,41 @@ const feedbackSettingsSchema = z.object({
   github: feedbackGithubSettingsSchema.optional(),
 });
 
+const magicLinkSchema = z.object({
+  /** Master switch for the magic-link feature. When false, routes are not mounted and the auth provider is not registered. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * PEM-encoded RS256 private key used to sign session JWTs. May be raw PEM or
+   * base64-encoded PEM. If omitted, an ephemeral keypair is generated at startup
+   * (dev only — restarting the server invalidates all outstanding sessions).
+   */
+  rsaPrivateKey: z.string().optional().default(process.env.MJ_MAGIC_LINK_PRIVATE_KEY || ''),
+  /** Hours an unredeemed invite link remains valid (hard expiry). Default 72. */
+  defaultExpiresInHours: z.coerce.number().optional().default(72),
+  /** Hours the minted session JWT remains valid after redemption. No refresh tokens. Default 8. */
+  sessionTokenTtlHours: z.coerce.number().optional().default(8),
+  /** Name of the restricted Role assigned to redeeming users when an invite does not specify one. */
+  restrictedRoleName: z.string().optional().default('External App User'),
+  /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
+  contextUserForProvisioning: z.string().optional(),
+  /** CommunicationEngine provider name used to deliver invite emails (e.g. 'SendGrid', 'Microsoft Graph'). When unset, emails are not sent and the redemption link is returned to the caller instead. */
+  communicationProvider: z.string().optional(),
+  /** From address for invite emails. */
+  fromAddress: z.string().optional(),
+  /** Audience claim for minted JWTs and the auto-registered magic-link auth provider. */
+  audience: z.string().optional().default('mj-magic-link'),
+  /**
+   * Base URL of the Explorer instance that redeems land in. When set, GET
+   * /magic-link/redeem 302-redirects the browser to `${explorerUrl}/#token=<jwt>`
+   * (Explorer's magic-link auth provider reads the fragment). When unset, redeem
+   * returns the token as JSON. Append `?format=json` to force JSON regardless.
+   */
+  explorerUrl: z.string().optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
+  magicLink: magicLinkSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -270,6 +303,7 @@ const configInfoSchema = z.object({
 });
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
+export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;

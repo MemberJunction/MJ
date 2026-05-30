@@ -286,6 +286,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 
 - **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
 
+- **[Magic Link Access Guide](guides/MAGIC_LINK_GUIDE.md)**: How to share an app-scoped, passwordless session with **external** users (MJ-issued RS256 magic links). Covers enabling the feature, the **two-layer model** (framework mechanism vs. per-deployment scenario config vs. runtime-provisioned users), and the **recipe for defining an external-access scenario** via metadata (restricted role + entity permissions + application role). Read before wiring up external/guest access — external user *accounts* are runtime-provisioned, but the role + permissions that scope them are version-controlled metadata.
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---

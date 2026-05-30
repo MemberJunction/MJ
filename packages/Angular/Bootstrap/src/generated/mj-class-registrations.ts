@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (349 classes)
+// @memberjunction/core-entities (350 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -248,6 +248,7 @@ import {
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMagicLinkInviteEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -419,11 +420,12 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (4 classes)
+// @memberjunction/ng-auth-services (5 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
+    MJMagicLinkProvider,
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
@@ -821,6 +823,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMagicLinkInviteEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -969,6 +972,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
+    MJMagicLinkProvider,
     MJOktaProvider,
     FlowAgentFormSectionComponent,
     MJAIAgentFormComponentExtended,
@@ -1109,7 +1113,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 513;
+export const CLASS_REGISTRATIONS_COUNT = 515;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

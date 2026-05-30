@@ -280,6 +280,22 @@ export interface StandardAuthError {
 }
 
 /**
+ * Describes constraints an auth provider places on the session.
+ *
+ * Most providers (MSAL/Auth0/Okta) impose no constraints and return `null` from
+ * `GetSessionScope()`. Constrained providers (e.g. magic-link) can lock the
+ * session to a single application so the host UI hides app-switching chrome and
+ * keeps the user within their scoped app. This is a UI-confinement signal —
+ * data access is still enforced server-side by the user's role/permissions.
+ */
+export interface SessionScope {
+  /** When set, the session is locked to this single Application (by ID). */
+  restrictedToApplicationId?: string;
+  /** True when this is a passwordless magic-link session. */
+  magicLink?: boolean;
+}
+
+/**
  * Token refresh result
  *
  * Returned by refreshToken() to indicate success or failure.

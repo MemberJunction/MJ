@@ -336,6 +336,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           return;
         }
 
+        // App-locked session (e.g. magic-link): ignore whatever app the URL names
+        // (including a pasted /app/home) and keep the user on their scoped app.
+        const lockedId = this.authBase.GetSessionScope()?.restrictedToApplicationId;
+        if (lockedId) {
+          const scopedApp = this.appManager.GetAppById(lockedId);
+          if (scopedApp) {
+            const slug = scopedApp.Name.trim().toLowerCase().replace(/\s+/g, '-');
+            const path = (this.router.url || '').split('#')[0].split('?')[0];
+            if (!path.startsWith(`/app/${slug}`)) {
+              await this.navigateToApp(scopedApp);
+              return;
+            }
+            // already on the scoped app — fall through to normal handling below
+          }
+        }
+
         // Check if URL specifies an app by parsing the browser URL
         const currentUrl = this.router.url;
         const appMatch = currentUrl.match(/\/app\/([^\/]+)/);
@@ -1408,6 +1424,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * a race condition in components we DO NOT control, so while the naming
    * is intended to imply the goal it doesn't "hurt" to have this work this way
    */
+  /**
+   * True when the auth session is locked to a single application (e.g. a
+   * magic-link session). The header hides app-switching chrome so the external
+   * user stays within their scoped app. Data access is still enforced
+   * server-side by the user's role; this is the UI-confinement layer.
+   */
+  public get appSwitchingLocked(): boolean {
+    return !!this.authBase.GetSessionScope()?.restrictedToApplicationId;
+  }
+
   onFirstResourceLoadComplete(): void {
     this.waitingForFirstResource = false;
     this.loading = false;
