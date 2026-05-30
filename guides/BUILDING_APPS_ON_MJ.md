@@ -411,11 +411,19 @@ Security isn't an add-on you wire up per screen — it's generated into the data
 - **API authorization** — [APIKeys README](../packages/APIKeys/README.md) for scoped, key-based access.
 - **Field-level encryption** — [Encryption README](../packages/Encryption/README.md) for AES-256 encryption of sensitive columns.
 
-### 7. The UI layer — MJExplorer & Angular
+### 7. The UI layer — MJExplorer, reusable components & your framework of choice
 
-MJ ships a complete Angular application shell plus a large library of reusable components. You can run inside Explorer or assemble your own app from the pieces — and because the UI speaks the same object model, components bind directly to typed entities.
+MJ ships **MJExplorer** — a complete Angular application — as the **default tool for exploring data, chat, dashboards, and administration**. But "the default UI is Angular" doesn't mean you're locked into Angular:
+
+- **Most of Explorer is generic, reusable Angular.** The large majority of what's in Explorer is a library of **generic Angular components** (grids, viewers, dialogs, chat, filter builders, dashboards, and more) designed to be used in **any Angular application** — Explorer is largely a curated assembly of these reusable pieces, not a monolith. Drop them into your own Angular app.
+- **A React bridge** lets teams build their UI in **React** while still using MJ component capabilities — see the [React runtime](../packages/React/README.md).
+- **The TypeScript object model is frontend-agnostic.** `Metadata`, `BaseEntity`, `RunView`, and the GraphQL data provider are plain TypeScript with **no UI-framework dependency**, so they work in **any TS-enabled environment** — Vue, Next.js, Svelte, a Node service, or a CLI. You consume your data and business logic identically regardless of frontend.
+
+So the UI story is: a great default app (Explorer) + reusable Angular components + a React bridge + a framework-agnostic TypeScript core. Because every surface speaks the same object model, components bind directly to typed entities.
 
 - **[Angular README](../packages/Angular/README.md)** — Overview of the 60+ Angular packages: the Explorer app, the generic component library, bootstrap.
+- **[Generic Angular component library](../packages/Angular/Generic/README.md)** — Reusable components usable in any Angular app (grids, viewers, dialogs, chat, filter builder, dashboards, and more).
+- **[React runtime](../packages/React/README.md)** — The React bridge for building MJ UIs in React.
 - **[Angular CLAUDE.md](../packages/Angular/CLAUDE.md)** — Conventions: standalone vs NgModule, change detection, custom forms, naming, the MJ UI components.
 - **[Explorer README](../packages/Angular/Explorer/README.md)** — The Explorer application: shell, routing, generated entity forms, custom forms, lists, dashboards.
 - **[MJExplorer README](../packages/MJExplorer/README.md)** — The runnable Explorer app itself.

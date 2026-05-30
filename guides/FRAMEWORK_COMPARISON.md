@@ -18,7 +18,7 @@ These tools aren't all the same *kind* of thing, which is the first thing to get
 
 So the honest comparison isn't "which is best" but "which layer are you solving, and how much do you want generated for you versus assembled by hand."
 
-> **Scope note:** MJ is opinionated about its foundation — **TypeScript** end to end, **SQL Server or PostgreSQL** as the database, and **Angular** for the Explorer UI. If your team is committed to a different language, database, or frontend framework, weight that heavily; it's the biggest single factor in whether MJ fits.
+> **Scope note:** MJ is opinionated about its foundation — **TypeScript** end to end and **SQL Server or PostgreSQL** as the database. It's *less* prescriptive about the frontend than it first appears: the default app (MJExplorer) is **Angular**, and most of it is **generic Angular components reusable in any Angular app**, but the core object model (`Metadata`, `BaseEntity`, `RunView`) is **framework-agnostic TypeScript** that works in **Vue, Next.js, Svelte, Node, or a CLI**, and a **React bridge** is provided. The firm commitments are TypeScript and SQL Server/PostgreSQL; the frontend is flexible. Weight those accordingly.
 
 ---
 
@@ -79,7 +79,7 @@ So the honest comparison isn't "which is best" but "which layer are you solving,
 
 **What it's great at.** **Total control.** No platform conventions, pick every library, shape every layer exactly as you wish. For a small, unusual system this can be the right call.
 
-**How MJ differs.** This is the baseline MJ is designed to save you from re-building. In a hand-rolled stack you write and maintain — separately — your ORM models, DTOs, API resolvers, client-side types, validation (twice), authorization, audit, admin screens, and any AI plumbing, and you keep them all in sync by hand. MJ **generates that column from one metadata source** and gives you **one object model that runs on every tier** (see [§4 of the app guide](BUILDING_APPS_ON_MJ.md#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice)). The trade you make is **adopting MJ's conventions** (TypeScript, SQL Server/Postgres, Angular Explorer) in exchange for not maintaining that plumbing.
+**How MJ differs.** This is the baseline MJ is designed to save you from re-building. In a hand-rolled stack you write and maintain — separately — your ORM models, DTOs, API resolvers, client-side types, validation (twice), authorization, audit, admin screens, and any AI plumbing, and you keep them all in sync by hand. MJ **generates that column from one metadata source** and gives you **one object model that runs on every tier** (see [§4 of the app guide](BUILDING_APPS_ON_MJ.md#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice)). The trade you make is **adopting MJ's conventions** (TypeScript and SQL Server/PostgreSQL; UI in Angular, React, or any TS frontend) in exchange for not maintaining that plumbing.
 
 **Pick hand-rolled when** your system is small/idiosyncratic or you have hard constraints that rule out a platform's conventions. **Pick MJ when** you'd otherwise spend months building and maintaining the same data/API/UI/security/AI plumbing for the Nth time.
 
@@ -115,7 +115,7 @@ Be honest about this in your own context: **Rails, Django, Next.js, and the Node
 - You want **AI woven into the app** (agents, RAG, automation) operating on **unified, governed data**, not bolted on.
 - You value **end-to-end TypeScript with one object model across tiers** and want to stop maintaining duplicate models/DTOs/clients.
 - You need **enterprise governance** — row/field security, audit trails, change history — without building it yourself.
-- You're on (or fine adopting) **SQL Server or PostgreSQL** and **Angular** for the admin/app shell.
+- You're on (or fine adopting) **SQL Server or PostgreSQL** and **TypeScript** — with the freedom to build the UI in Angular (the default), React (via the bridge), or any TS frontend consuming the framework-agnostic object model.
 
 ## When to reach for something else
 
@@ -123,7 +123,7 @@ Be honest about this in your own context: **Rails, Django, Next.js, and the Node
 - You want a **minimal managed backend** and will build the app layer yourself in your own frontend → **Supabase**.
 - Your team is **committed to Ruby or Python** (or needs that ecosystem / Python ML) → **Rails / Django**.
 - You're shipping a **tiny, idiosyncratic service** where platform conventions are overhead → **hand-rolled**.
-- You **can't adopt** TypeScript, SQL Server/Postgres, or Angular → weight that decisively.
+- You **can't adopt** TypeScript or SQL Server/PostgreSQL → weight that decisively. (Frontend framework is *not* a blocker — Angular, React, or any TS frontend works.)
 
 ---
 
