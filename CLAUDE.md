@@ -442,7 +442,7 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
 - `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` -- regenerate bootstrap pre-built manifests
 - `npm run mj:manifest:api` / `mj:manifest:explorer` -- regenerate app supplemental manifests
 
-**See:** [packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system, including how external consumers and MJ distribution users should configure their projects.
+**See:** [packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system, including how external consumers and MJ distribution users should configure their projects.
 
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
