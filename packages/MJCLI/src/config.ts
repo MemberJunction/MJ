@@ -33,6 +33,7 @@ const DEFAULT_CLI_CONFIG = {
   baselineOnMigrate: true,
   transactionMode: 'per-migration' as const,
   mjRepoUrl: MJ_REPO_URL,
+  mjRepoBranch: 'main',
   migrationsLocation: 'filesystem:./migrations',
 };
 
@@ -120,6 +121,9 @@ const mjConfigSchema = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
+  // Default branch fetched when no explicit tag is given. `main` is the published-code
+  // branch; `next` is integration-only and never a default migrate/install target.
+  mjRepoBranch: z.string().optional().default('main'),
   baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
   outOfOrder: z.boolean().optional().default(false),
@@ -146,6 +150,7 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
+  mjRepoBranch: z.string().optional().default('main'),
   baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
   outOfOrder: z.boolean().optional().default(false),
