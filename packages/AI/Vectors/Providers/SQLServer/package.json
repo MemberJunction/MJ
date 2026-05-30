@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-vectors-sqlserver",
   "type": "module",
   "version": "5.37.0",
-  "description": "MemberJunction: SQL Server 2025 native VECTOR implementation for AI Vector Database (colocated)",
+  "description": "SQL Server 2025 native VECTOR implementation for AI Vector Database (colocated)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

@@ -26,7 +26,7 @@ class StubVectorDB extends VectorDBBase {
 }
 
 const fakeHost: IColocatedVectorHost = {
-    ColocatedDialect: 'PostgreSQL',
+    ColocatedDialect: 'postgresql',
     ColocatedSchema: '__mj',
     RunColocatedSQL: async <T = Record<string, unknown>>() => [] as T[],
 };
@@ -34,13 +34,15 @@ const fakeHost: IColocatedVectorHost = {
 describe('IsColocatedVectorHost', () => {
     it('accepts a well-formed host', () => {
         expect(IsColocatedVectorHost(fakeHost)).toBe(true);
-        expect(IsColocatedVectorHost({ ...fakeHost, ColocatedDialect: 'SQLServer' })).toBe(true);
+        expect(IsColocatedVectorHost({ ...fakeHost, ColocatedDialect: 'sqlserver' })).toBe(true);
     });
     it('rejects malformed / non-host values', () => {
         expect(IsColocatedVectorHost(null)).toBe(false);
         expect(IsColocatedVectorHost({})).toBe(false);
-        expect(IsColocatedVectorHost({ ColocatedDialect: 'Mongo', ColocatedSchema: 'x', RunColocatedSQL: () => [] })).toBe(false);
-        expect(IsColocatedVectorHost({ ColocatedDialect: 'PostgreSQL', ColocatedSchema: 'x' })).toBe(false);
+        // structural guard: dialect must be a string, schema a string, RunColocatedSQL a function
+        expect(IsColocatedVectorHost({ ColocatedDialect: 123, ColocatedSchema: 'x', RunColocatedSQL: () => [] })).toBe(false);
+        expect(IsColocatedVectorHost({ ColocatedSchema: 'x', RunColocatedSQL: () => [] })).toBe(false);
+        expect(IsColocatedVectorHost({ ColocatedDialect: 'postgresql', ColocatedSchema: 'x' })).toBe(false);
     });
 });
 

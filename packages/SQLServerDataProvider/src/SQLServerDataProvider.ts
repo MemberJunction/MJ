@@ -73,7 +73,8 @@ import {
 } from './types.js';
 
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import type { ColocatedDialect, IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -1577,8 +1578,8 @@ export class SQLServerDataProvider
   // vectors) store and query vectors in THIS database, reusing this connection — instead of
   // opening a separate pool to a remote vector store.
 
-  public get ColocatedDialect(): ColocatedDialect {
-    return 'SQLServer';
+  public get ColocatedDialect(): DatabasePlatform {
+    return 'sqlserver';
   }
 
   public get ColocatedSchema(): string {

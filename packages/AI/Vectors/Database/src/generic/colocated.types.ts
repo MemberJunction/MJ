@@ -11,9 +11,7 @@
  *
  * @module @memberjunction/ai-vectordb
  */
-
-/** Dialect of the host relational database backing a colocated vector store. */
-export type ColocatedDialect = 'PostgreSQL' | 'SQLServer';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /** Matches a safe, unquoted SQL identifier: a letter/underscore followed by word characters. */
 const SQL_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -41,8 +39,9 @@ export function ValidateSqlIdentifier(name: string, kind = 'identifier'): string
  * the vector provider never opens its own pool.
  */
 export interface IColocatedVectorHost {
-    /** Which SQL dialect this host speaks — selects the colocated provider's SQL/placeholder syntax. */
-    readonly ColocatedDialect: ColocatedDialect;
+    /** Which SQL platform this host speaks — selects the colocated provider's SQL/placeholder syntax.
+     *  Reuses the canonical {@link DatabasePlatform} from `@memberjunction/sql-dialect`. */
+    readonly ColocatedDialect: DatabasePlatform;
     /** Default schema where MJ entity tables/views live (e.g. `"__mj"`). */
     readonly ColocatedSchema: string;
     /**
@@ -62,7 +61,9 @@ export function IsColocatedVectorHost(obj: unknown): obj is IColocatedVectorHost
         return false;
     }
     const o = obj as Record<string, unknown>;
-    return (o['ColocatedDialect'] === 'PostgreSQL' || o['ColocatedDialect'] === 'SQLServer')
+    // Structural check only — don't enumerate specific platforms, so this stays correct as
+    // DatabasePlatform grows. The compile-time type enforces the valid platform set.
+    return typeof o['ColocatedDialect'] === 'string'
         && typeof o['ColocatedSchema'] === 'string'
         && typeof o['RunColocatedSQL'] === 'function';
 }

@@ -23,7 +23,7 @@ import {
 
 
 import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
-import type { ColocatedDialect, IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -338,8 +338,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     // in THIS database, reusing this connection — and, when a transaction is open, the
     // same transaction — instead of opening a separate pool to a remote vector store.
 
-    public get ColocatedDialect(): ColocatedDialect {
-        return 'PostgreSQL';
+    public get ColocatedDialect(): DatabasePlatform {
+        return 'postgresql';
     }
 
     public get ColocatedSchema(): string {
