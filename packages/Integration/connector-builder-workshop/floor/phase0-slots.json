@@ -1,0 +1,579 @@
+{
+  "_doc": "Bijection slot table — every slot Phase 0 expects MUST be filled by exactly one agent producer via exactly one locked primitive, OR explicitly nullable. The floor-check iterates this universe at the end of every run and rejects builds with missing/unverified/unprovable-required slots. Source: plans/integration-agentic-local.md §0a.",
+  "_lastUpdatedFrom": "plans/integration-agentic-local.md",
+  "slots": [
+    {
+      "id": "Integration.Name",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.Description",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.ClassName",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.ImportPath",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.NavigationBaseURL",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "id": "Integration.BatchMaxRequestCount",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "integer"
+    },
+    {
+      "id": "Integration.BatchRequestWaitTime",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "integer"
+    },
+    {
+      "id": "Integration.CredentialTypeID",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "uuid"
+    },
+    {
+      "id": "Integration.Icon",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "id": "IntegrationObject.Name",
+      "phase0Ref": "A schema; D0 discovery",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DisplayName",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Description",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Category",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.APIPath",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.ResponseDataKey",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DefaultPageSize",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.PaginationType",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.SupportsPagination",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.SupportsIncrementalSync",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.IncrementalWatermarkField",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.SupportsWrite",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateAPIPath",
+      "phase0Ref": "A schema (v5.39.x write columns); C generic CRUD",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many",
+      "groupedWith": ["CreateAPIMethod", "CreateAPIBodyShape", "CreateAPIBodyKey", "CreateAPIIDLocation"]
+    },
+    {
+      "id": "IntegrationObject.CreateAPIMethod",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateAPIBodyShape",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateAPIBodyKey",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateAPIIDLocation",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateAPIPath",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateAPIMethod",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateAPIBodyShape",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateAPIBodyKey",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateAPIIDLocation",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DeleteAPIPath",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DeleteIDLocation",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.MetadataSource",
+      "phase0Ref": "A schema enum (v5.39.x)",
+      "producer": "deterministic-pipeline",
+      "primitive": "(none - set by IntegrationConnectorCreationPipeline)",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many",
+      "fixedValue": "Declared"
+    },
+    {
+      "id": "IntegrationObject.DefaultQueryParams",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Configuration",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "json",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Sequence",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Status",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Name",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.DisplayName",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Description",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Type",
+      "phase0Ref": "A schema; B4 provable-only",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Length",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Precision",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Scale",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.AllowsNull",
+      "phase0Ref": "A schema; B4 provable-only",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "boolean",
+      "cardinality": "many",
+      "_note": "type: [boolean, null] for unprovable per provable-only policy"
+    },
+    {
+      "id": "IntegrationObjectField.DefaultValue",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsRequired",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsReadOnly",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsUniqueKey",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsPrimaryKey",
+      "phase0Ref": "A schema; D2 PK rule",
+      "producer": "ioiof-extractor-if-declared-or-deferred-to-runtime",
+      "primitive": "extract-iiof-pipeline (declared) OR D4-SoftPKClassifier (runtime)",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many",
+      "_note": "Static agent emits true ONLY for explicit PK markers in docs; ambiguous cases deferred to runtime D4 classifier (Gap 10)"
+    },
+    {
+      "id": "IntegrationObjectField.RelatedIntegrationObjectID",
+      "phase0Ref": "A schema; D5 FK-graph",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "uuid",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.RelatedIntegrationObjectFieldName",
+      "phase0Ref": "A schema; D5 FK-graph",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Category",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Sequence",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Status",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "MetadataFile.integration.json",
+      "phase0Ref": "E folder; D1 step 2",
+      "producer": "metadata-writer + ioiof-extractor (assembled)",
+      "primitive": "freeze-contract",
+      "nullable": false,
+      "type": "file",
+      "_note": "metadata/integrations/<vendor>/.<vendor>.integration.json"
+    },
+    {
+      "id": "Connector.Authenticate",
+      "phase0Ref": "C BaseREST; I auth helpers",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.BuildHeaders",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.MakeHTTPRequest",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.NormalizeResponse",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.ExtractPaginationInfo",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.GetBaseURL",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.TestConnection",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.TransformRecord",
+      "phase0Ref": "C BaseREST hook (v5.39.x)",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": true,
+      "type": "code-block",
+      "_note": "Optional override; default identity inherited from base"
+    }
+  ]
+}
