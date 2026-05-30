@@ -30,7 +30,7 @@ LoadVoiceWidget();
     selector: 'mj-voice-demo-resource',
     template: `
         <div class="voice-demo-resource">
-            <mj-voice-widget [AgentID]="AgentID" [ChannelName]="'voice-cascaded'"></mj-voice-widget>
+            <mj-voice-widget [AgentID]="AgentID" [ChannelName]="'voice-realtime'"></mj-voice-widget>
         </div>
     `,
     styles: [

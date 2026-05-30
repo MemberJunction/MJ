@@ -132,6 +132,11 @@ export class VoiceWidgetService {
                     IsFinal
                     ActionableCommands
                     ResponseForm
+                    CallID
+                    ToolName
+                    Label
+                    Status
+                    Detail
                 }
             }
         `;

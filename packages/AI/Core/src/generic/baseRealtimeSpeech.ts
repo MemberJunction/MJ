@@ -99,6 +99,13 @@ export interface AudioFrame {
  */
 export interface RealtimeSpeechConnectOptions {
     SystemPrompt: string;
+    /**
+     * The provider model identifier to open the session against (e.g.
+     * `'gemini-2.0-flash-live-001'`, `'gpt-4o-realtime-preview'`). The channel
+     * runtime resolves this from the bound `AIModel.APIName`. Optional so a
+     * driver can fall back to a provider-appropriate default.
+     */
+    ModelAPIName?: string;
     /** Voice configuration. Swap to `AIVoiceProfileEntity` once CodeGen emits it. */
     VoiceProfile?: VoiceProfileLike;
     /** Tools the model may call. Empty for tool-less S2S like PersonaPlex. */
@@ -115,6 +122,14 @@ export interface RealtimeSpeechConnectOptions {
 export interface RealtimeSpeechSession {
     /** Send a single audio frame to the model. */
     SendAudio(chunk: AudioFrame): void;
+    /**
+     * Send a user text turn to the model (it still replies with audio). Lets a
+     * realtime session run text-in / voice-out — i.e. through the same widget
+     * as the cascaded path, with no microphone/WebRTC required. Gemini Live
+     * (`sendRealtimeInput({text})`) and OpenAI Realtime (`input_text` item +
+     * `response.create`) both support this.
+     */
+    SendText(text: string): void;
     /** Subscribe to audio frames coming back from the model. */
     OnAudio(cb: (chunk: AudioFrame) => void): void;
     /** Subscribe to transcript fragments (user or assistant, partial or final). */

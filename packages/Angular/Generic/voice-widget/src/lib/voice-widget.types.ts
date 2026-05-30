@@ -30,9 +30,13 @@ export type VoiceChannelName = 'voice-cascaded' | 'voice-realtime';
  * stream back text; only PCM frames).
  */
 export interface VoiceTranscriptEntry {
-    Role: 'user' | 'agent' | 'system';
+    Role: 'user' | 'agent' | 'system' | 'tool';
     Text: string;
     Timestamp: Date;
+    /** For `tool` blocks: correlation id used to upsert the block in place. */
+    CallID?: string;
+    /** For `tool` blocks: 'running' | 'complete' | 'error' — drives spinner/checkmark. */
+    Status?: 'running' | 'complete' | 'error';
 }
 
 /**
@@ -77,11 +81,17 @@ export interface EndSessionResult {
  */
 export interface VoiceTranscriptEvent {
     SessionID: string;
-    Kind: 'user' | 'assistant-text' | 'agent-response' | 'error';
+    Kind: 'user' | 'assistant-text' | 'agent-response' | 'tool-call' | 'error';
     Text?: string;
     IsFinal?: boolean;
     ActionableCommands?: VoiceActionableCommand[];
     ResponseForm?: Record<string, unknown>;
+    // tool-call block fields (Kind === 'tool-call')
+    CallID?: string;
+    ToolName?: string;
+    Label?: string;
+    Status?: string;
+    Detail?: string;
 }
 
 /**

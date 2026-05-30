@@ -61,6 +61,20 @@ export interface VoiceCascadedConfig {
         Phrases: string[];
     };
     BargeIn?: boolean;
+    /**
+     * When `true`, stream the agent's user-facing text to TTS token-by-token
+     * (via the normalized `AgentStreamEvent` / `TextDelta` substrate) as the
+     * agent runs, instead of synthesizing the whole final message after
+     * `Execute()` returns. Drops time-to-first-audio from
+     * `(full LLM run) + (TTS first chunk)` to `(first token) + (TTS first chunk)`.
+     *
+     * Demo constraint: only safe for single-step agents (one `message`
+     * envelope per turn). Multi-step loop agents emit a `message` per step, so
+     * enabling this would speak every step. Defaults to `false` (the proven
+     * "synthesize final message" path) — flip per-agent once the agent is
+     * known to be single-step. See `plans/streaming-architecture-analysis.md`.
+     */
+    StreamToTTS?: boolean;
 }
 
 /**

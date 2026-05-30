@@ -66,10 +66,16 @@
                 <div class="voice-widget__avatar"
                      [class.voice-widget__avatar--user]="entry.Role === 'user'"
                      [class.voice-widget__avatar--agent]="entry.Role === 'agent'"
-                     [class.voice-widget__avatar--system]="entry.Role === 'system'">
+                     [class.voice-widget__avatar--system]="entry.Role === 'system'"
+                     [class.voice-widget__avatar--tool]="entry.Role === 'tool'">
                     @switch (entry.Role) {
                         @case ('user') { <i class="fa-solid fa-user"></i> }
                         @case ('agent') { <i class="fa-solid fa-robot"></i> }
+                        @case ('tool') {
+                            @if (entry.Status === 'running') { <i class="fa-solid fa-spinner fa-spin"></i> }
+                            @else if (entry.Status === 'error') { <i class="fa-solid fa-triangle-exclamation"></i> }
+                            @else { <i class="fa-solid fa-check"></i> }
+                        }
                         @default { <i class="fa-solid fa-triangle-exclamation"></i> }
                     }
                 </div>
@@ -79,12 +85,15 @@
                             @switch (entry.Role) {
                                 @case ('user') { You }
                                 @case ('agent') { Agent }
+                                @case ('tool') { Tool }
                                 @default { System }
                             }
                         </span>
                         <span class="voice-widget__msg-time">{{ entry.Timestamp | date:'HH:mm:ss' }}</span>
                     </div>
-                    <div class="voice-widget__msg-bubble">{{ entry.Text }}</div>
+                    <div class="voice-widget__msg-bubble"
+                         [class.voice-widget__msg-bubble--tool]="entry.Role === 'tool'"
+                         style="white-space: pre-line">{{ entry.Text }}</div>
                 </div>
             </div>
         }

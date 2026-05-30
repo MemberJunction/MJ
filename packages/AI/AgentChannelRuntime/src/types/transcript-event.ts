@@ -31,6 +31,7 @@ export type ChannelTranscriptEvent =
     | UserTranscriptEvent
     | AssistantTextEvent
     | AgentResponseEvent
+    | ToolCallBlockEvent
     | TranscriptErrorEvent;
 
 export interface UserTranscriptEvent {
@@ -74,6 +75,32 @@ export interface AgentResponseEvent {
     ActionableCommands?: unknown[];
     /** Pass-through of `LoopAgentResponse.responseForm` for input prompts. */
     ResponseForm?: unknown;
+}
+
+/**
+ * A tool-call "block" — the unit that makes the block stream *functional*, not
+ * just text. Emitted when a (realtime or cascaded) agent invokes a tool/sub-agent
+ * mid-conversation, with a lifecycle the UI renders as a live progress block:
+ *   `running`  → the tool/sub-agent is executing (show spinner + elapsed)
+ *   `complete` → finished; `Detail` carries a short result summary
+ *   `error`    → failed; `Detail` carries the message
+ *
+ * This is what gives "delegate to Code Smith and calculate the loan interest"
+ * visible, low-latency progress instead of dead air — and proves the agent
+ * actually did work (vs. a model just claiming it did).
+ */
+export interface ToolCallBlockEvent {
+    Kind: 'tool-call';
+    /** Provider-correlated call id (also used to upsert the block in the UI). */
+    CallID: string;
+    /** Tool/function invoked, e.g. `delegate_to_agent`. */
+    ToolName: string;
+    /** Human-readable label, e.g. "Delegating to Code Smith…". */
+    Label: string;
+    /** Lifecycle stage of this block. */
+    Status: 'running' | 'complete' | 'error';
+    /** Short args summary (on running) or result/error snippet (on complete/error). */
+    Detail?: string;
 }
 
 export interface TranscriptErrorEvent {

@@ -278,6 +278,23 @@ export class ChannelTranscriptEventDTO {
     /** `agent-response.responseForm` — for prompt-the-user input forms. */
     @Field(() => GraphQLJSONObject, { nullable: true })
     ResponseForm?: Record<string, unknown>;
+
+    // --- tool-call block fields (Kind === 'tool-call') ---
+    /** Provider call id; the widget upserts the block by this. */
+    @Field({ nullable: true })
+    CallID?: string;
+    /** Tool/function name, e.g. `delegate_to_agent`. */
+    @Field({ nullable: true })
+    ToolName?: string;
+    /** Human label, e.g. "Delegating to Code Smith…". */
+    @Field({ nullable: true })
+    Label?: string;
+    /** Block lifecycle: 'running' | 'complete' | 'error'. */
+    @Field({ nullable: true })
+    Status?: string;
+    /** Short args/result/error snippet for the block. */
+    @Field({ nullable: true })
+    Detail?: string;
 }
 
 /** Internal pubsub payload for transcript events — shape parallels the DTO. */
@@ -288,6 +305,11 @@ export interface ChannelTranscriptPayload {
     IsFinal?: boolean;
     ActionableCommands?: Record<string, unknown>[];
     ResponseForm?: Record<string, unknown>;
+    CallID?: string;
+    ToolName?: string;
+    Label?: string;
+    Status?: string;
+    Detail?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -559,6 +581,11 @@ export class ChannelSessionResolver extends ResolverBase {
             IsFinal: notification.IsFinal,
             ActionableCommands: notification.ActionableCommands,
             ResponseForm: notification.ResponseForm,
+            CallID: notification.CallID,
+            ToolName: notification.ToolName,
+            Label: notification.Label,
+            Status: notification.Status,
+            Detail: notification.Detail,
         };
     }
 
@@ -688,11 +715,13 @@ export class ChannelSessionResolver extends ResolverBase {
         input: StartChannelSessionInput,
         contextUser: UserInfo
     ): Promise<ITransportAdapter> {
-        if (channelKind === 'voice-cascaded' && !input.RoomName) {
-            // Text-in / voice-out demo path. SessionID is patched in after
-            // construction — the transport accepts it via Options but only
-            // uses it for logging / subscription keying, so a stable value
-            // isn't strictly required at construction time.
+        if ((channelKind === 'voice-cascaded' || channelKind === 'voice-realtime') && !input.RoomName) {
+            // Text-in / voice-out path. For voice-cascaded this drives the
+            // STT→LLM→TTS engine; for voice-realtime the RealtimeChannelEngine
+            // forwards the typed turn to the S2S model (Gemini Live / GPT
+            // Realtime), which replies with audio — so realtime demos through
+            // the same widget with no microphone/WebRTC. SessionID is patched
+            // in after construction.
             return new TextInputAudioOutputTransport({
                 SessionID: 'pending',
                 UserDisplayName: contextUser.Email ?? contextUser.ID,
@@ -918,6 +947,11 @@ export class ChannelSessionResolver extends ResolverBase {
                 event.Kind === 'agent-response'
                     ? (event.ResponseForm as Record<string, unknown> | undefined)
                     : undefined,
+            CallID: event.Kind === 'tool-call' ? event.CallID : undefined,
+            ToolName: event.Kind === 'tool-call' ? event.ToolName : undefined,
+            Label: event.Kind === 'tool-call' ? event.Label : undefined,
+            Status: event.Kind === 'tool-call' ? event.Status : undefined,
+            Detail: event.Kind === 'tool-call' ? event.Detail : undefined,
         };
         PubSubManager.Instance.Publish(
             CHANNEL_TRANSCRIPT_TOPIC,

@@ -201,6 +201,17 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
      * agent-response finalization.
      */
     private assistantBuffer = '';
+    /**
+     * Accumulates finalized speech fragments across short pauses. We submit the
+     * whole utterance only after the user goes quiet for `turnSilenceMs`, so a
+     * mid-thought pause no longer fires a turn (which made the agent jump in
+     * and talk over the user).
+     */
+    private pendingUtterance = '';
+    /** Fires the debounced turn submission once the user stops speaking. */
+    private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Pause length that counts as "done speaking" → submit the turn. */
+    private readonly turnSilenceMs = 1400;
     private audioCtx: AudioContext | null = null;
     /** Next scheduled start time for the audio graph — drives gapless playback. */
     private nextStartTime = 0;
@@ -266,6 +277,10 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
 
     public async ngOnDestroy(): Promise<void> {
         this.stopAgentSpeakingTimer();
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
         if (this.beforeUnloadHandler) {
             window.removeEventListener('beforeunload', this.beforeUnloadHandler);
             window.removeEventListener('pagehide', this.beforeUnloadHandler);
@@ -507,11 +522,18 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
                     interim += result[0].transcript;
                 }
             }
-            this.InterimTranscript = interim;
             const trimmed = final.trim();
             if (trimmed) {
-                this.InterimTranscript = '';
-                void this.submitUserText(trimmed);
+                this.pendingUtterance = this.pendingUtterance
+                    ? `${this.pendingUtterance} ${trimmed}`
+                    : trimmed;
+            }
+            // Live feedback: accumulated-so-far plus the current interim words.
+            this.InterimTranscript = [this.pendingUtterance, interim].filter(Boolean).join(' ');
+            // Debounce: only submit after the user pauses (turn boundary), so
+            // pausing mid-thought doesn't trigger the agent.
+            if (this.pendingUtterance) {
+                this.armSilenceFlush();
             }
             this.cdr.markForCheck();
         };
@@ -541,6 +563,27 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
                 }, 100);
             }
         };
+    }
+
+    /**
+     * (Re)start the silence timer. Each new finalized fragment pushes the
+     * deadline out; when the user finally pauses for `turnSilenceMs`, the
+     * accumulated utterance is submitted as one turn.
+     */
+    private armSilenceFlush(): void {
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+        }
+        this.silenceTimer = setTimeout(() => {
+            this.silenceTimer = null;
+            const utterance = this.pendingUtterance.trim();
+            this.pendingUtterance = '';
+            this.InterimTranscript = '';
+            if (utterance) {
+                void this.submitUserText(utterance);
+            }
+            this.cdr.markForCheck();
+        }, this.turnSilenceMs);
     }
 
     /**
@@ -623,19 +666,24 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
             case 'user':
                 if (event.Text) {
                     this.appendTranscript('user', event.Text);
+                    // New user turn — reset the assistant accumulator so the
+                    // next reply starts a fresh bubble.
+                    this.assistantBuffer = '';
                     // A user turn just started — agent will now think.
                     this.IsAgentThinking = true;
                 }
                 break;
             case 'assistant-text':
-                // Intentionally not rendered to the transcript. Multi-step
-                // loop agents emit a `message` field per step; piping every
-                // delta into the bubble produces concatenated nonsense like
-                // "Hello!I'm doing well…". The `agent-response` event below
-                // carries the canonical final message — that's what we
-                // display. We could surface intermediate planner output as
-                // a separate ephemeral "thinking" bubble later, but the
-                // typing-dots indicator is enough liveness for now.
+                // Realtime S2S models (Gemini Live / GPT Realtime) stream their
+                // output transcription here — that IS the spoken answer, so we
+                // render it live (type-in-place). For the cascaded loop-agent
+                // path we still suppress it: multi-step agents emit a `message`
+                // per step and the canonical text arrives via `agent-response`.
+                if (this.ChannelName === 'voice-realtime' && event.Text) {
+                    this.IsAgentThinking = false;
+                    this.assistantBuffer += event.Text;
+                    this.upsertAssistantTranscript(this.assistantBuffer);
+                }
                 break;
             case 'agent-response':
                 this.IsAgentThinking = false;
@@ -646,6 +694,9 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
                     this.ActionableCommands = event.ActionableCommands;
                 }
                 this.assistantBuffer = '';
+                break;
+            case 'tool-call':
+                this.upsertToolBlock(event);
                 break;
             case 'error':
                 this.IsAgentThinking = false;
@@ -862,6 +913,33 @@ export class VoiceWidgetComponent implements OnInit, OnDestroy, AfterViewChecked
 
     private appendTranscript(role: 'user' | 'agent' | 'system', text: string): void {
         this.Transcript = [...this.Transcript, { Role: role, Text: text, Timestamp: new Date() }];
+    }
+
+    /**
+     * Render a tool-call BLOCK. Upserts by `CallID` so the same block updates
+     * in place across its running → complete/error lifecycle (the visible
+     * "Delegating to Code Smith… → done" progress).
+     */
+    private upsertToolBlock(event: VoiceTranscriptEvent): void {
+        const status = (event.Status as 'running' | 'complete' | 'error') ?? 'running';
+        const headline = event.Label ?? event.ToolName ?? 'Working…';
+        const text = event.Detail ? `${headline}\n${event.Detail}` : headline;
+        const existing = event.CallID
+            ? this.Transcript.find((e) => e.Role === 'tool' && e.CallID === event.CallID)
+            : undefined;
+        if (existing) {
+            existing.Text = text;
+            existing.Status = status;
+            this.Transcript = this.Transcript.slice();
+        } else {
+            this.Transcript = [
+                ...this.Transcript,
+                { Role: 'tool', Text: text, Timestamp: new Date(), CallID: event.CallID, Status: status },
+            ];
+        }
+        // A tool block means the agent is actively doing work, not idle-thinking.
+        this.IsAgentThinking = false;
+        this.cdr.markForCheck();
     }
 
     private formatError(err: unknown): string {

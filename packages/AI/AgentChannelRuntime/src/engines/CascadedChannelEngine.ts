@@ -30,6 +30,7 @@ import type {
 import { BaseAudioGenerator, GetAIAPIKey } from '@memberjunction/ai';
 import { AudioFrameBus } from './AudioFrameBus';
 import type { ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentEventStream } from '@memberjunction/ai-core-plus';
 import { AgentRunner, ClientToolRequestManager } from '@memberjunction/ai-agents';
 import { BaseChannelEngine, ChannelRunContext, ChannelStopReason } from '../BaseChannelEngine';
 import { VoiceCascadedConfig } from '../types/channel-config';
@@ -357,14 +358,19 @@ export class CascadedChannelEngine extends BaseChannelEngine {
         // For a 1-step chat agent it's ~1s. Acceptable for the prototype;
         // the next optimisation is "detect terminal step (taskComplete /
         // nextStep.Chat) and stream from there only."
+        // When `StreamToTTS` is on we speak the answer token-by-token DURING
+        // execution; otherwise we synthesize the final assembled message after
+        // `Execute()` returns. `spokenDuringRun` tracks which path ran so we
+        // don't double-speak below.
+        const streamToTTS = cfg.StreamToTTS === true;
         try {
             const executeStart = Date.now();
-            LogStatus(`[ChannelSession ${ctx.SessionID}] execute-begin`);
-            const { result: agentResult, agentResponseDetailId } = await this.runAgent(
-                ctx,
-                userText,
-                abort.signal
+            LogStatus(
+                `[ChannelSession ${ctx.SessionID}] execute-begin streamToTTS=${streamToTTS}`
             );
+            const { result: agentResult, agentResponseDetailId } = streamToTTS
+                ? await this.streamAgentTurnToTTS(ctx, providers, userText, abort.signal)
+                : await this.runAgent(ctx, userText, abort.signal);
             const executeDuration = Date.now() - executeStart;
             const stepCount = (agentResult as { agentRun?: { TotalPromptIterations?: number } })
                 .agentRun?.TotalPromptIterations ?? '?';
@@ -379,12 +385,13 @@ export class CascadedChannelEngine extends BaseChannelEngine {
                 return;
             }
 
-            // First TTS the conversation-manager's status message (e.g.
-            // "I've delegated to Research Agent"). This gives the user
-            // immediate audible feedback before the long-running
-            // orchestration starts.
+            // TTS the conversation-manager's status message (e.g. "I've
+            // delegated to Research Agent"). This gives the user immediate
+            // audible feedback before any long-running orchestration starts.
+            // In the StreamToTTS path this text was already spoken
+            // incrementally during the run, so skip it here.
             const initialText = agentResult.agentRun?.Message?.trim() ?? '';
-            if (initialText.length > 0) {
+            if (initialText.length > 0 && !streamToTTS) {
                 await this.speakText(ctx, providers, initialText, abort.signal);
             }
 
@@ -495,10 +502,11 @@ export class CascadedChannelEngine extends BaseChannelEngine {
      * `message` from every step in order — useful for voice progress
      * feedback during multi-step runs.
      */
-    private async runAgent(
+    protected async runAgent(
         ctx: ChannelRunContext,
         userText: string,
-        cancellationToken: AbortSignal
+        cancellationToken: AbortSignal,
+        eventStream?: AgentEventStream
     ): Promise<{ result: AgentExecutionResultLike; agentResponseDetailId: string | undefined }> {
         // Voice rides on the conversation infrastructure rather than
         // bypassing it (see `plans/audio-agent-architecture.md`,
@@ -547,13 +555,17 @@ export class CascadedChannelEngine extends BaseChannelEngine {
             ctx.SessionID
         );
 
-        // The streaming JSON parser still drives the transcript event
-        // stream so the widget can show partial planner output / "thinking"
-        // text in real time. TTS does NOT consume the stream — see the
-        // caller (runOneTurnFromTranscript) which speaks only the final
-        // assembled `agentRun.Message`.
+        // The streaming JSON parser normalizes the loop agent's per-step JSON
+        // envelope down to just the `message` value. It always drives the
+        // transcript event stream (widget liveness). When `eventStream` is
+        // provided (the `StreamToTTS` path), each extracted chunk is ALSO
+        // emitted as a normalized `TextDelta` so the caller can pump it to TTS
+        // concurrently with execution. The extractor lives here, behind the
+        // typed `AgentStreamEvent` boundary — it is the conductor-path
+        // normalizer, not the engine's streaming contract.
         const extractor = new MessageFieldExtractor('message');
         let lastStepEntityId: string | undefined;
+        eventStream?.EmitTurnStart();
 
         // Channel context — surfaced to the prompt template via
         // `data.channelKind` and friends. The Loop Agent Type system
@@ -602,25 +614,37 @@ export class CascadedChannelEngine extends BaseChannelEngine {
                             Text: partial,
                             IsFinal: false,
                         });
+                        eventStream?.EmitTextDelta(partial);
                     }
                 }
             },
         };
 
         const runner = new AgentRunner();
-        const conversationResult = await runner.RunAgentInConversation(
-            params,
-            {
-                conversationId,
-                userMessage: userText,
-                conversationName: `Voice with ${ctx.AgentMetadata.Name}`,
-                createArtifacts: false,
-            }
-        );
+        let conversationResult: Awaited<ReturnType<AgentRunner['RunAgentInConversation']>>;
+        try {
+            conversationResult = await runner.RunAgentInConversation(
+                params,
+                {
+                    conversationId,
+                    userMessage: userText,
+                    conversationName: `Voice with ${ctx.AgentMetadata.Name}`,
+                    createArtifacts: false,
+                }
+            );
+        } catch (err) {
+            // Errors-as-values on the event stream: a thrown run terminates the
+            // stream as an `Error` event (so the TTS consumer stops cleanly)
+            // rather than leaving it open. We still rethrow for `runAgent`'s
+            // awaiters, which have their own try/catch.
+            eventStream?.Fail(cancellationToken.aborted ? 'Aborted' : 'Error', errorMessage(err));
+            throw err;
+        }
 
         const result = conversationResult.agentResult;
         if (!result.success) {
             const msg = result.agentRun?.ErrorMessage ?? 'unknown agent failure';
+            eventStream?.Fail('Error', msg);
             throw new Error(`Agent execution failed: ${msg}`);
         }
 
@@ -634,10 +658,94 @@ export class CascadedChannelEngine extends BaseChannelEngine {
             ResponseForm: result.responseForm as unknown,
         });
 
+        // Close the normalized stream. If the model never streamed any tokens
+        // (non-streaming provider, or a step with no user-visible text), no
+        // TextDelta was emitted and `Complete()` simply yields TurnEnd + Done
+        // with an empty turn — the caller then falls back to synthesizing the
+        // final assembled message.
+        eventStream?.Complete('Stop');
+
         return {
             result: result as AgentExecutionResultLike,
             agentResponseDetailId: conversationResult.agentResponseDetailId,
         };
+    }
+
+    /**
+     * `StreamToTTS` path: run the agent and pump its user-facing text to TTS
+     * token-by-token *as it streams*, instead of synthesizing the whole final
+     * message after `Execute()` returns. Three things run concurrently:
+     *   1. `runAgent(..., eventStream)` — emits normalized `TextDelta` events.
+     *   2. a consumer that forwards each `TextDelta` into a `TokenQueue`.
+     *   3. `streamTokenQueueToTransport` — drives `TTS.SynthesizeStream()` off
+     *      that queue and forwards audio frames to the transport.
+     *
+     * Time-to-first-audio drops from `(full LLM run) + (TTS first chunk)` to
+     * roughly `(first token) + (TTS first chunk)`.
+     *
+     * Fallback: if the model never streamed any user-visible text (non-stream
+     * provider, or a step with no `message`), the queue stays empty and we
+     * synthesize the final assembled message the proven way.
+     *
+     * Single-step constraint applies (see `VoiceCascadedConfig.StreamToTTS`):
+     * a multi-step agent would stream every step's `message`.
+     */
+    protected async streamAgentTurnToTTS(
+        ctx: ChannelRunContext,
+        providers: ResolvedProviders,
+        userText: string,
+        signal: AbortSignal
+    ): Promise<{ result: AgentExecutionResultLike; agentResponseDetailId: string | undefined }> {
+        const eventStream = new AgentEventStream();
+        const tokenQueue = new TokenQueue();
+
+        // (1) kick off the agent — NOT awaited yet; it fills `eventStream`.
+        const runPromise = this.runAgent(ctx, userText, signal, eventStream);
+
+        // (2) forward TextDeltas into the token queue as they arrive.
+        const consumePromise = (async () => {
+            for await (const ev of eventStream) {
+                if (signal.aborted || this.stopped) break;
+                if (ev.Kind === 'TextDelta') {
+                    tokenQueue.Push(ev.Delta);
+                }
+                // Error/Done are terminal; the loop ends when the stream closes.
+                // The transcript `error` event is emitted by the run path.
+            }
+            tokenQueue.Close();
+        })();
+
+        // (3) pump the queue to TTS concurrently.
+        const ttsPromise = this.streamTokenQueueToTransport(ctx, providers, tokenQueue, signal);
+
+        let runResult: { result: AgentExecutionResultLike; agentResponseDetailId: string | undefined };
+        try {
+            runResult = await runPromise;
+        } catch (err) {
+            // Guarantee the consumer unwinds: terminate the event stream
+            // (idempotent — `runAgent` normally already did). This lets the
+            // consume loop drain any buffered deltas into the queue and close
+            // it, so the TTS pump flushes the partial before we propagate.
+            // Do NOT close the queue directly here — that would race the
+            // consumer and drop the last buffered delta.
+            eventStream.Fail(signal.aborted ? 'Aborted' : 'Error', errorMessage(err));
+            await consumePromise.catch(() => undefined);
+            await ttsPromise.catch(() => undefined);
+            throw err;
+        }
+
+        await consumePromise;
+        await ttsPromise;
+
+        // Fallback: nothing streamed → speak the final assembled message.
+        if (!tokenQueue.HasReceivedAnyContent && !signal.aborted && !this.stopped) {
+            const finalText = runResult.result.agentRun?.Message?.trim() ?? '';
+            if (finalText.length > 0) {
+                await this.speakText(ctx, providers, finalText, signal);
+            }
+        }
+
+        return runResult;
     }
 
     /**
@@ -723,10 +831,12 @@ export class CascadedChannelEngine extends BaseChannelEngine {
         // Non-null assertion safe — resolveProviders validated SynthesizeStream.
         const audioStream = providers.Tts.SynthesizeStream!(ttsOpts);
 
+        let frameCount = 0;
         try {
             for await (const frame of audioStream) {
                 if (cancellationToken.aborted || this.stopped) return;
                 ctx.Transport.SendAudioFrame(frame);
+                frameCount++;
             }
         } catch (err) {
             if (!cancellationToken.aborted) {
@@ -734,6 +844,10 @@ export class CascadedChannelEngine extends BaseChannelEngine {
                     `CascadedChannelEngine: streaming TTS pump failed: ${errorMessage(err)}`
                 );
             }
+        } finally {
+            LogStatus(
+                `[ChannelSession ${ctx.SessionID}] tts-stream-pump frames=${frameCount}`
+            );
         }
     }
 

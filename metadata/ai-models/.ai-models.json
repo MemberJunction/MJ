@@ -1962,7 +1962,7 @@
             "ID": "0C1A95DD-0DC8-4323-B860-75D5271A3FE0"
           },
           "sync": {
-            "lastModified": "2026-05-22T22:48:05.423Z",
+            "lastModified": "2026-05-30T18:16:37.109Z",
             "checksum": "5096137609130ab19c8c3fd96914e90f4841b3ae40a47534c5fd004be5414bed"
           }
         },
@@ -1981,7 +1981,7 @@
             "ID": "64047AE0-A817-4670-B05C-34E34DCF80C6"
           },
           "sync": {
-            "lastModified": "2026-05-22T22:48:05.436Z",
+            "lastModified": "2026-05-30T18:16:37.122Z",
             "checksum": "d295f2f6a95ced6db835bb640b3a66c982815f8cb2cdafcbd6bece2e6bb0e4f6"
           }
         }
@@ -1991,7 +1991,7 @@
       "ID": "4883F664-D241-4673-8A8F-6C11867A5528"
     },
     "sync": {
-      "lastModified": "2026-05-22T22:48:01.978Z",
+      "lastModified": "2026-05-30T18:16:34.309Z",
       "checksum": "6fbda13b029caf072b07fe08f6cd805af10ccee47bdc2c3378abe52479fe8f8d"
     }
   },
@@ -13786,7 +13786,7 @@
       "Name": "GPT Realtime 2",
       "PowerRank": 11,
       "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input.",
-      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=RealtimeSpeech",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 8,
@@ -13819,7 +13819,7 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1,
             "Status": "Active",
-            "DriverClass": "OpenAIRealtime",
+            "DriverClass": "OpenAIRealtimeSpeech",
             "APIName": "gpt-realtime-2",
             "MaxInputTokens": 128000,
             "SupportedResponseFormats": "Any",
@@ -13831,8 +13831,8 @@
             "ID": "3393668B-A813-437E-A753-2C01BFC39C01"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:53.127Z",
-            "checksum": "67e746c14b122f8b3af5ca311ed501b062f5a219b274f8c1bd4538199d81f7f8"
+            "lastModified": "2026-05-30T18:16:41.925Z",
+            "checksum": "ebefed989e47ae6810fbfeaa240aa8f7801b9f107436f5c366d5ec8ee8125db8"
           }
         }
       ],
@@ -13865,8 +13865,69 @@
       "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:47.961Z",
-      "checksum": "e6e0ee9add0c539048051161bf21e2c24af5e0d1804ad80ad33f45de8fa059e4"
+      "lastModified": "2026-05-30T18:16:36.104Z",
+      "checksum": "844ff793cfa60eda800c7fdc7e41f51a6c1fae0abdd05bdae267ebd83ce4ddf3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 2.0 Flash Live",
+      "Description": "Google Gemini 2.0 Flash Live — bidirectional speech-to-speech realtime model (audio in/out, server-side VAD, native tool calls, text input supported). Used by the voice-realtime channel via the GeminiLiveRealtimeSpeech driver.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=RealtimeSpeech",
+      "IsActive": true,
+      "PowerRank": 10,
+      "SpeedRank": 9,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "D19104B3-A9CF-415C-913E-719A42CFB483"
+          },
+          "sync": {
+            "lastModified": "2026-05-30T19:35:57.541Z",
+            "checksum": "09d04ae685b05f18700070dd0d27fb66912cf1068398225cf9023deda9d58407"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLiveRealtimeSpeech",
+            "APIName": "gemini-2.5-flash-native-audio-latest",
+            "SupportedResponseFormats": "Any",
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "BB8402CD-A519-4F0A-8A62-2EA3B9886945"
+          },
+          "sync": {
+            "lastModified": "2026-05-30T20:01:19.623Z",
+            "checksum": "62edb9bbb5b709604840cc04e5719a5de45f0798b76e57c213180949b7b2c35c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0407F177-B280-4442-A405-B612E1831F43"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T19:35:55.361Z",
+      "checksum": "675e91c7e579f30d94e548b5a2d96ad329e21f31101fca976619bb32cb396ebb"
     }
   },
   {
@@ -14989,7 +15050,7 @@
             "ID": "327ED5D1-57BE-4EA9-8F87-29EB5206B4C2"
           },
           "sync": {
-            "lastModified": "2026-05-22T22:48:12.414Z",
+            "lastModified": "2026-05-30T18:16:42.315Z",
             "checksum": "d3f59c83613347384f631feb909ed0dd292718aff5c656d92112eacf862b8b84"
           }
         },
@@ -15008,7 +15069,7 @@
             "ID": "79358E65-D8EE-4771-BDDC-06DAD3A1AF1A"
           },
           "sync": {
-            "lastModified": "2026-05-22T22:48:12.430Z",
+            "lastModified": "2026-05-30T18:16:42.327Z",
             "checksum": "3ea0b6ae27af2dd59b09ff034db7a4bbe4a8a32c27f0498c39de31c1cd1406ef"
           }
         }
@@ -15018,7 +15079,7 @@
       "ID": "C9716A0E-7D06-4AE4-9D4A-B9AAC1AF3A64"
     },
     "sync": {
-      "lastModified": "2026-05-22T22:48:04.151Z",
+      "lastModified": "2026-05-30T18:16:36.133Z",
       "checksum": "a5f597142961fc6d73d833edf8a2626444d1252a83b7cc44f5e4d8a285b2be93"
     }
   }

@@ -63,10 +63,11 @@ import {
     FireworksLLM,
 } from '@memberjunction/ai-fireworks';
 
-// @memberjunction/ai-gemini (2 classes)
+// @memberjunction/ai-gemini (3 classes)
 import {
     GeminiImageGenerator,
     GeminiLLM,
+    GeminiLiveRealtimeSpeech,
 } from '@memberjunction/ai-gemini';
 
 // @memberjunction/ai-groq (1 classes)
@@ -101,12 +102,13 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (4 classes)
+// @memberjunction/ai-openai (5 classes)
 import {
     OpenAIAudioGenerator,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAIRealtimeSpeech,
 } from '@memberjunction/ai-openai';
 
 // @memberjunction/ai-inception (1 classes)
@@ -992,6 +994,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FireworksLLM,
     GeminiImageGenerator,
     GeminiLLM,
+    GeminiLiveRealtimeSpeech,
     GroqLLM,
     HeyGenVideoGenerator,
     LMStudioLLM,
@@ -1004,6 +1007,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAIRealtimeSpeech,
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
@@ -1717,7 +1721,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 733;
+export const CLASS_REGISTRATIONS_COUNT = 735;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

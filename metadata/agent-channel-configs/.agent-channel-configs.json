@@ -26,6 +26,7 @@
         },
         "LatencyBudgetMs": 900,
         "BargeIn": true,
+        "StreamToTTS": true,
         "FillerPolicy": {
           "ThresholdMs": 10000,
           "Phrases": [
@@ -40,8 +41,31 @@
       "ID": "F07F9FB4-81B4-44CB-8BF3-89404D3CC1F8"
     },
     "sync": {
-      "lastModified": "2026-05-23T19:00:34.486Z",
-      "checksum": "9295ff1b2cad96d2d7f4a6c7ba2809637cda08e48467e266e7440bd3dccefe11"
+      "lastModified": "2026-05-30T18:17:15.585Z",
+      "checksum": "6168c2eac57e57903eca7d034659a2cc9433132bfdb87d661da47728f57bbf44"
+    }
+  },
+  {
+    "fields": {
+      "AIAgentID": "@lookup:MJ: AI Agents.Name=Sage",
+      "AIAgentChannelID": "@lookup:MJ: AI Agent Channels.Name=voice-realtime",
+      "Sequence": 2,
+      "Status": "Active",
+      "ConfigJSON": {
+        "Kind": "voice-realtime",
+        "Realtime": {
+          "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 2.0 Flash Live"
+        },
+        "ToolCallStrategy": "native",
+        "BargeIn": true
+      }
+    },
+    "primaryKey": {
+      "ID": "D3B9EE9B-F75F-452B-B48D-D8D6B12D42FD"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T19:53:30.783Z",
+      "checksum": "36e8067c1ed412c4c074004c2d9757bdaee0c451f1dd970d46b9ddff0d831b49"
     }
   }
 ]

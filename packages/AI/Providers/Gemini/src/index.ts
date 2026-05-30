@@ -845,3 +845,6 @@ export class GeminiLLM extends BaseLLM {
 
 // Export image generation
 export * from './geminiImage';
+
+// Export Gemini Live realtime speech-to-speech driver
+export * from './geminiLive';

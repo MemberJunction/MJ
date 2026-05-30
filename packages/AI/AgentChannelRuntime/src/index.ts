@@ -9,6 +9,7 @@ export * from './ChannelSession';
 export * from './BaseChannelEngine';
 export * from './engines/TextChatChannelEngine';
 export * from './engines/CascadedChannelEngine';
+export * from './engines/RealtimeChannelEngine';
 export * from './interrupt/InterruptChannel';
 export * from './frames/frame-bus';
 export * from './types/channel-config';
