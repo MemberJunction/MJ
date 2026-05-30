@@ -4,6 +4,10 @@ This folder is the home for cross-cutting, "read this before you build that" ref
 
 If you're about to start work in one of the areas below, **read the guide first** — these documents capture patterns that have already been litigated.
 
+## Start here
+
+- **[Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md)** — The hub guide for using MJ as a first-class application development platform. Explains the metadata-driven, schema-to-app model and links out to the authoritative README/guide for every layer (data modeling, CodeGen, entities, API, UI, Actions, AI, deployment). Start here if you've got data in MJ and want to build on it.
+
 ## Framework fundamentals
 
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — Patterns for server-side `BaseEntity` subclasses: persisted embeddings, cross-record invariants via `ValidateAsync`, FK cleanup before delete. Read before writing a new entity subclass under `MJCoreEntitiesServer`.
