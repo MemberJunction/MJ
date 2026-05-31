@@ -51,7 +51,9 @@
     "tests",
     "test-suites",
     "entities",
-    "entity-settings"
+    "entity-settings",
+    "roles",
+    "entity-permissions"
   ],
   "sqlLogging": {
     "enabled": true,

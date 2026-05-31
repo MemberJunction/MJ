@@ -3,77 +3,187 @@
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspaces",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "677F4E7E-9EB6-4335-A2D6-01D759AD79DD"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.850Z",
+      "checksum": "a949513046a1806f1aa305b92a33099b578eb54795b645b71cc611655941133a"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspace Items",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "68F43C79-53AF-43D5-9434-47CBE82C2276"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.869Z",
+      "checksum": "d048a067aa8fbd275d2af2cf59653b27607bdefbcbaca0e7a75b04e2aa8460d9"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Settings",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "E658EA96-64F8-473E-9EBC-0EE92672237A"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.886Z",
+      "checksum": "b6e28c9cf1fb0702e7fe157ba774da752211adf85dcf7bcbdc6974197f130945"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Favorites",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "BFD5321D-B170-432F-945B-223A92EA35E2"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.902Z",
+      "checksum": "3796fec996c563d1e3cdd6ea35281752ba36415bf591901da2779cea1e91235b"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Record Logs",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "B48D8799-C03E-43CA-ADD6-BB77C160B31A"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.918Z",
+      "checksum": "19caeea88d09eb146523f3406f856fc2ecf4eab2a552584955d3672a13e4b082"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notification Preferences",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": true, "CanUpdate": true, "CanDelete": true
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "F8388976-E46E-4710-95AA-28C63D66B16E"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.933Z",
+      "checksum": "b5154c13ecc097117f82888dc38f859f5eca48e3a1f84ddbc4dbfccbadecb4db"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Base Message Types",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "87AEBFA9-5F0A-473B-B3D0-21A0B9350D13"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.952Z",
+      "checksum": "cebc34274d57a5d0b992a2c06c94cae8930edd314daec3f40427f9ed465b9571"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Providers",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "F52B339B-1537-4A1C-9908-1F7251DAF177"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.967Z",
+      "checksum": "8e141362560ba8e9d2fe4fefe5beb83172f7e611745c35370bd33ba5cef810b7"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Provider Message Types",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "637E3139-6AA1-42CD-A7B3-97A75E7FBBA0"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.983Z",
+      "checksum": "cfa9a3d5afd2f8e1218e45ec39b7d7932bd1a43864f8fc5f2bb7d8351df6b363"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Message Types",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "AF2E8528-4D50-4298-9A40-1B75F2A541D6"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:03.997Z",
+      "checksum": "5b3c321534468d708fe812209f2a86ada635c4feced85f71997d6ce8c9bffaff"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Fields",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true, "CanCreate": false, "CanUpdate": false, "CanDelete": false
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "840088AC-4E42-490A-9AC9-77003C3301DE"
+    },
+    "sync": {
+      "lastModified": "2026-05-31T18:01:04.017Z",
+      "checksum": "4a3fc73b309b3ee65e1e0dff652cff61dcb9529da50f406ee8c518f930a5eff9"
     }
   }
 ]
