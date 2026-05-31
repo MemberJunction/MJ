@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Simple Vector Service Provider",
+      "Description": "In-process VectorDBBase provider that rehydrates per-EntityDocument vector pools from MJ: Entity Record Documents.VectorJSON. Used by Provider.SearchEntities for semantic ranking without requiring an external vector database. See @memberjunction/ai-vectors-memory.",
+      "ClassKey": "SimpleVectorServiceProvider"
+    },
+    "primaryKey": {
+      "ID": "0C64B230-CB66-417C-8EA5-F7A5FF5B097D"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T12:05:44.290Z",
+      "checksum": "0ef94f8917c602ad6d1ff759204a523e6287ec804d8b52ba9e6b9fac1609bdac"
+    }
+  }
+]

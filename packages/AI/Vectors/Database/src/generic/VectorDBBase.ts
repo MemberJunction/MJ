@@ -21,6 +21,20 @@ export abstract class VectorDBBase {
         this._apiKey = apiKey;
     }
 
+    /**
+     * True when this driver does not accept ingestion via `CreateRecord(s)` /
+     * `UpdateRecord(s)` — implies vectors are managed out-of-band (e.g.
+     * `SimpleVectorServiceProvider` reads embeddings directly from
+     * `MJ: Entity Record Documents.VectorJSON`). Pipelines that would
+     * otherwise call ingestion APIs should short-circuit when this is true
+     * to avoid spurious "unsupported" error logs.
+     *
+     * Subclasses that genuinely support ingestion leave the default `false`.
+     */
+    public get IsReadOnly(): boolean {
+        return false;
+    }
+
     //Union types to allow the sub class implementing the functions to mark them as async or not
     abstract ListIndexes(): IndexList | Promise<IndexList>;
     abstract GetIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
