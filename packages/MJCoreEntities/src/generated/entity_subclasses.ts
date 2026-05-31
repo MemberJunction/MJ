@@ -22464,7 +22464,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`),
     NotifyViaInApp: z.boolean().describe(`
         * * Field Name: NotifyViaInApp
-        * * Display Name: Notify Via In App
+        * * Display Name: Notify Via In-App
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`),
@@ -22509,6 +22509,12 @@ export const MJScheduledJobSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RunImmediatelyIfNeverRun: z.boolean().describe(`
+        * * Field Name: RunImmediatelyIfNeverRun
+        * * Display Name: Run Immediately If Never Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`),
     JobType: z.string().describe(`
         * * Field Name: JobType
         * * Display Name: Job Type
@@ -85957,7 +85963,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyViaInApp
-    * * Display Name: Notify Via In App
+    * * Display Name: Notify Via In-App
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.
@@ -86058,6 +86064,20 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RunImmediatelyIfNeverRun
+    * * Display Name: Run Immediately If Never Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.
+    */
+    get RunImmediatelyIfNeverRun(): boolean {
+        return this.Get('RunImmediatelyIfNeverRun');
+    }
+    set RunImmediatelyIfNeverRun(value: boolean) {
+        this.Set('RunImmediatelyIfNeverRun', value);
     }
 
     /**

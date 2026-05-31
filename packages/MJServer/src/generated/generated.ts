@@ -65904,6 +65904,9 @@ export class MJScheduledJob_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`}) 
+    RunImmediatelyIfNeverRun: boolean;
+        
     @Field() 
     @MaxLength(100)
     JobType: string;
@@ -66007,6 +66010,9 @@ export class CreateMJScheduledJobInput {
     @Field({ nullable: true })
     ConcurrencyMode?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    RunImmediatelyIfNeverRun?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -66094,6 +66100,9 @@ export class UpdateMJScheduledJobInput {
 
     @Field({ nullable: true })
     ConcurrencyMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RunImmediatelyIfNeverRun?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
