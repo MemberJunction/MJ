@@ -48,6 +48,12 @@ export interface ConfigureContext {
    * `environment.ts`) with installer-generated values instead of preserving them.
    */
   OverwriteConfig?: boolean;
+  /**
+   * Concrete release tag resolved by the scaffold phase (e.g. `'v5.38.0'`). When
+   * provided, it is pinned into `mj.config.cjs` as `mjRepoVersion` so later
+   * `mj migrate` runs target the same version as the installed code.
+   */
+  ResolvedVersion?: string;
 }
 
 /**
@@ -169,6 +175,10 @@ export class ConfigurePhase {
         updatedContent = this.patchNewUserSetup(updatedContent, config.CreateNewUser);
       }
 
+      if (context.ResolvedVersion) {
+        updatedContent = this.patchRepoVersion(updatedContent, context.ResolvedVersion);
+      }
+
       if (updatedContent !== existingContent) {
         await this.fileSystem.WriteText(configCjsPath, updatedContent);
         filesWritten.push(configCjsPath);
@@ -181,7 +191,7 @@ export class ConfigurePhase {
         Phase: 'configure',
         Message: 'Writing mj.config.cjs...',
       });
-      await this.writeMjConfigCjs(configCjsPath, config);
+      await this.writeMjConfigCjs(configCjsPath, config, context.ResolvedVersion);
       filesWritten.push(configCjsPath);
     }
 
@@ -446,7 +456,7 @@ ASK_SKIP_ORGANIZATION_ID=1
    * @param configPath - Absolute path to write the config file.
    * @param config - Fully resolved config.
    */
-  private async writeMjConfigCjs(configPath: string, config: InstallConfig): Promise<void> {
+  private async writeMjConfigCjs(configPath: string, config: InstallConfig, resolvedVersion?: string): Promise<void> {
     const newUserSection = config.CreateNewUser
       ? `  newUserSetup: {
     userName: '${config.CreateNewUser.Username}',
@@ -456,6 +466,8 @@ ASK_SKIP_ORGANIZATION_ID=1
   },
 `
       : '';
+
+    const versionSection = resolvedVersion ? `  mjRepoVersion: '${resolvedVersion}',\n` : '';
 
     const content = `module.exports = {
   settings: {
@@ -467,7 +479,7 @@ ASK_SKIP_ORGANIZATION_ID=1
   encryptionKeys: {
     MJ_BASE_ENCRYPTION_KEY: process.env.MJ_BASE_ENCRYPTION_KEY || '',
   },
-${newUserSection}  output: [],
+${versionSection}${newUserSection}  output: [],
   commands: [],
 };
 `;
@@ -548,6 +560,34 @@ ${newUserSection}  output: [],
     const insertPoint = content.lastIndexOf('};');
     if (insertPoint >= 0) {
       return content.slice(0, insertPoint) + block + content.slice(insertPoint);
+    }
+
+    return content;
+  }
+
+  /**
+   * Insert or replace the `mjRepoVersion` pin in an existing `mj.config.cjs`.
+   *
+   * Records the concrete installed release tag so later `mj migrate` runs target
+   * the same version as the installed code. Replaces an existing pin in-place, or
+   * inserts one right after the `module.exports = {` opening.
+   *
+   * @param content - Current `mj.config.cjs` file content.
+   * @param version - Concrete resolved release tag (e.g. `'v5.38.0'`).
+   * @returns The content with `mjRepoVersion` guaranteed present.
+   */
+  private patchRepoVersion(content: string, version: string): string {
+    const line = `mjRepoVersion: '${version}'`;
+    const existing = /mjRepoVersion\s*:\s*'[^']*'/;
+    if (existing.test(content)) {
+      return content.replace(existing, line);
+    }
+
+    const marker = 'module.exports = {';
+    const opening = content.indexOf(marker);
+    if (opening >= 0) {
+      const insertAt = opening + marker.length;
+      return `${content.slice(0, insertAt)}\n  ${line},${content.slice(insertAt)}`;
     }
 
     return content;

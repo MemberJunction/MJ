@@ -29,10 +29,18 @@ export default class Migrate extends Command {
     const { flags } = await this.parse(Migrate);
     const config = getValidatedConfig();
 
-    // For a remote tag we fetch only the slice Skyway will actually run (highest
+    // For a remote ref we fetch only the slice Skyway will actually run (highest
     // baseline + the versioned tail after it + repeatables) into a temp dir, then
     // hand that dir to Skyway. cleanup() runs on every exit path.
-    const fetched = flags.tag ? await fetchMigrationSlice({ repoUrl: config.mjRepoUrl, ref: resolveGitRef(flags.tag), dialect: config.dbPlatform }) : null;
+    //
+    // Explicit --tag wins; otherwise the install-pinned version (mjRepoVersion) drives
+    // the fetch so migrate stays consistent with the installed code. An explicit --dir
+    // override (without --tag) keeps using the local filesystem and skips fetching, so
+    // monorepo developers are unaffected.
+    const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
+    const fetched = ref
+      ? await fetchMigrationSlice({ repoUrl: config.mjRepoUrl, ref: resolveGitRef(ref), dialect: config.dbPlatform })
+      : null;
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);

@@ -100,6 +100,20 @@ export { GitHubReleaseProvider } from './adapters/GitHubReleaseProvider.js';
 export { FileSystemAdapter } from './adapters/FileSystemAdapter.js';
 export { ProcessRunner, type ProcessResult, type ProcessOptions } from './adapters/ProcessRunner.js';
 export { SqlServerAdapter, type SqlConnectivityResult } from './adapters/SqlServerAdapter.js';
+export { RepoFetcher, type SparseFetchOptions, type SparseFetchResult } from './adapters/RepoFetcher.js';
+
+// Distribution assembly (sparse-checkout install + `mj bundle`)
+export {
+  DistributionAssembler,
+  distributionSourcePaths,
+  type WriteOp,
+  type AssembleOptions,
+} from './distribution/DistributionAssembler.js';
+export {
+  createDistributionBundle,
+  type CreateBundleOptions,
+  type CreateBundleResult,
+} from './distribution/createBundle.js';
 
 // Phases (exported for testing and direct use)
 export { PreflightPhase, type PreflightContext, type PreflightResult } from './phases/PreflightPhase.js';
