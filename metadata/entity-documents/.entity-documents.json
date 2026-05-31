@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Entities Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entities",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-entities-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "B47497B3-AD66-44E6-B50B-5F03C3FA2D04"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:59:23.548Z",
+      "checksum": "f02072e35ad369f0373d75fc68ec1d8a0b8f499d43f0842fcf39048d44a5e059"
+    }
+  }
+]
