@@ -81,6 +81,14 @@ module.exports = {
     defaultExpiresInHours: 72,        // unredeemed-link lifetime
     sessionTokenTtlHours: 8,          // minted session lifetime (no refresh tokens)
     restrictedRoleName: 'External App User',   // default role when an invite omits roleId
+    // Authorization (secure defaults — see §9):
+    //   Who may call POST /create: Owners always; plus members of any role named here.
+    //   Empty (default) ⇒ Owner-only. NEVER list the restricted role here.
+    inviteIssuerRoleNames: [],                 // e.g. ['App Admin']
+    //   Which role an invite may grant: the restricted role always; plus any named here.
+    //   Empty (default) ⇒ restricted-role-only. A caller-supplied roleId outside this
+    //   set is rejected — this is what blocks granting Owner/Admin to an external user.
+    grantableRoleNames: [],                    // e.g. ['Recruiter']
     contextUserForProvisioning: 'system@yourco.com', // owns provisioning writes
     communicationProvider: 'SendGrid', // CommunicationEngine provider for invite emails
     fromAddress: 'no-reply@yourco.com',
@@ -152,25 +160,44 @@ exactly the entities recruiters should see — `Candidates` and nothing else:
 
 #### Step 2a — The Explorer "boot baseline" (already shipped)
 
-A pure deny-all role **cannot render MJExplorer at all** — the shell hangs on
-"Failed to create default workspace" and the UserInfo/Communication engines error
-out, because rendering the shell requires a small set of framework entities
-*before* any app data is shown. So the magic-link feature ships a minimum baseline
-in [`metadata/entity-permissions/.entity-permissions.json`](../metadata/entity-permissions/.entity-permissions.json),
-granted to `External App User`:
+Rendering the MJExplorer shell needs a **small** set of framework entities that the
+guest must actually *use* (their own workspace/settings, their identity, and the
+app-scope tables). Everything else the shell's startup engines try to load — AI,
+Dashboards, Queries, Encryption, Integrations, etc. — a deny-all guest simply
+**can't read, and doesn't need to**: `BaseEngine` treats a permission-denied load
+as a permanent condition and loads that engine *empty* instead of hanging (see
+[§ Engine degradation](#engine-degradation)). So the baseline shipped in
+[`metadata/entity-permissions/.entity-permissions.json`](../metadata/entity-permissions/.entity-permissions.json)
+for `External App User` is just these **9** grants:
 
 | Entity | Grant | Why |
 |---|---|---|
 | `MJ: Workspaces`, `MJ: Workspace Items` | **CRUD** | Explorer creates + persists a per-user default workspace on first load. `CanCreate` is required — a read-only grant still hangs. |
 | `MJ: User Settings`, `MJ: User Favorites`, `MJ: User Record Logs`, `MJ: User Notification Preferences` | **CRUD** | `UserInfoEngine` bootstraps these per-user stores; preferences are written back. |
-| `MJ: Communication Base Message Types`, `MJ: Communication Providers`, `MJ: Communication Provider Message Types`, `MJ: Entity Communication Message Types`, `MJ: Entity Communication Fields` | **Read** | `CommunicationEngine` loads these at startup. |
+| `MJ: User Roles` | **Read** | Server-side `CurrentUserAndRoles` resolves the user's own roles through a permission-checked field — needed to establish `CurrentUser`. |
+| `MJ: User Applications` | **Read** | App access check (`CheckUserApplicationAccess`). Without it the invited app reads as "not installed." |
+| `MJ: Application Roles` | **Read** | App authorization (the role's `CanAccess` to the invited app). |
 
 This baseline is **framework-level** (every magic-link Explorer user needs it) and
 is distinct from the **scenario data perms** in Step 2 (your `Candidates`-style
-grants, which are per-deployment). If you define a scenario-specific role instead
-of reusing `External App User`, **copy this baseline onto that role too**, or the
-shell won't boot. The baseline grants no business data — only the shell plumbing —
-so it doesn't widen the security boundary.
+grants, per-deployment). If you define a scenario-specific role instead of reusing
+`External App User`, **copy this baseline onto that role too**, or the shell won't
+boot. It grants no business data — only the shell plumbing and the app-scope tables.
+
+> The three `Read` grants (`User Roles`, `User Applications`, `Application Roles`)
+> are *entity-wide* reads under MJ's permission model, so a guest could in principle
+> query all rows, not just their own. They're the minimum needed to boot + resolve
+> app scope. Narrowing these to the current user's own rows is a tracked follow-up
+> (server-side: `CurrentUserAndRoles` shouldn't require a blanket entity read).
+
+<a id="engine-degradation"></a>
+**Engine degradation (why the baseline is small).** `BaseEngine.HandleSingleViewResult`
+classifies a failed config load: if it failed because the context user lacks Read on
+that entity, that's *permanent* (a retry never succeeds for this role), so the engine
+property loads empty and is marked loaded — the shell finishes booting. Only genuinely
+transient failures (network, MJAPI restart) keep retrying. This is general restricted-role
+robustness, not magic-link-specific: any least-privilege role boots cleanly without
+being granted reads on every engine's entities.
 
 ### Step 3 — Make the role able to enter the Application
 
@@ -305,6 +332,16 @@ No new mechanism — it's reads over existing data:
 - **Single-use + short TTL** — `maxUses` (default 1) and `defaultExpiresInHours`
   bound the link; `sessionTokenTtlHours` bounds the session. No refresh tokens for
   external users.
+- **Who may issue invites** — `POST /create` is authorization-gated, not just
+  authenticated: the caller must be an **Owner** or a member of a role listed in
+  `inviteIssuerRoleNames` (empty ⇒ Owner-only). This stops any authenticated user —
+  including an external user already holding a restricted magic-link session — from
+  minting invites.
+- **Which role an invite may grant** — an invite can only assign the
+  `restrictedRoleName` or a role explicitly listed in `grantableRoleNames`. A
+  caller-supplied `roleId` outside that set is rejected (`400 invalid_role`). This
+  prevents attaching a privileged role (e.g. Owner/Admin) to an external user, even
+  for Owner callers — broadening it is an explicit, per-deployment opt-in.
 - **The restricted role is the real boundary** — entity permissions are enforced
   server-side. UI confinement is cosmetic.
 - **Revocation** — set an invite's `Status` to `Revoked` to kill an unredeemed
@@ -318,7 +355,7 @@ No new mechanism — it's reads over existing data:
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `POST /magic-link/create` | Internal user | Create + (optionally) email an invite |
+| `POST /magic-link/create` | Owner / issuer role | Create + (optionally) email an invite (403 if caller not authorized) |
 | `GET /magic-link/redeem?token=…` | Public | Safe interstitial (no side effects); renders "Continue" → POST |
 | `POST /magic-link/redeem` | Public | Redeem → consume → provision → mint session JWT |
 | `GET /magic-link/jwks.json` | Public | RS256 public key set (used by token validation) |
@@ -333,6 +370,8 @@ No new mechanism — it's reads over existing data:
 | `redeemRateLimitMax` | `20` | Max `/redeem` attempts per IP per window |
 | `createRateLimitMax` | `30` | Max `/create` requests per IP per window |
 | `restrictedRoleName` | `External App User` | Default role when an invite omits `roleId` |
+| `inviteIssuerRoleNames` | `[]` | Roles (besides Owner) allowed to call `/create`. Empty ⇒ Owner-only |
+| `grantableRoleNames` | `[]` | Roles (besides the restricted role) an invite may grant |
 | `contextUserForProvisioning` | — | User context for provisioning writes |
 | `communicationProvider` | — | CommunicationEngine provider for invite email |
 | `fromAddress` | — | Invite email From |

@@ -162,7 +162,10 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
       },
       creatingUser,
     );
-    res.status(result.success ? 200 : 400).json(result);
+    // forbidden → 403 (caller not allowed to issue invites); invalid_role and
+    // other validation failures → 400.
+    const status = result.success ? 200 : result.errorCode === 'forbidden' ? 403 : 400;
+    res.status(status).json(result);
   });
 
   return { publicRouter, authenticatedRouter };

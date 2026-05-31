@@ -31,7 +31,7 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
-import { generateRawToken, hashToken, evaluateInvite, buildSessionClaims, buildConsumeInviteSQL, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import { generateRawToken, hashToken, evaluateInvite, buildSessionClaims, buildConsumeInviteSQL, canIssueInvites, isRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
@@ -75,9 +75,33 @@ export class MagicLinkService {
     try {
       const md = provider ?? Metadata.Provider;
 
+      // Authorization: only Owners (or members of configured issuer roles) may
+      // mint invites. Without this, ANY authenticated user — including an
+      // external user already holding a restricted magic-link session — could
+      // issue invites and escalate.
+      const callerRoleNames = (creatingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+      if (!canIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+        return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
+      }
+
       const roleId = params.roleId ?? this.resolveRestrictedRoleId(md);
       if (!roleId) {
         return { success: false, error: `Restricted role '${this.config.restrictedRoleName}' not found and no roleId supplied.` };
+      }
+
+      // Role allow-list: an invite may only grant the restricted role (or roles
+      // the deployment explicitly opted into). Blocks the escalation where a
+      // caller supplies the roleId of a privileged role (e.g. Owner).
+      const roleToGrant = md.Roles.find((r) => UUIDsEqual(r.ID, roleId));
+      if (!roleToGrant) {
+        return { success: false, errorCode: 'invalid_role', error: `Role '${roleId}' not found.` };
+      }
+      if (!isRoleGrantable(roleToGrant.Name, this.config.restrictedRoleName, this.config.grantableRoleNames)) {
+        return {
+          success: false,
+          errorCode: 'invalid_role',
+          error: `Role '${roleToGrant.Name}' is not grantable via magic-link. Add it to magicLink.grantableRoleNames to allow it.`,
+        };
       }
 
       const app = md.Applications.find((a) => UUIDsEqual(a.ID, params.applicationId));

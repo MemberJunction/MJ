@@ -30,6 +30,54 @@ export interface InviteEvaluationInput {
   UseCount: number;
 }
 
+/** Normalizes a role/name for case- and whitespace-insensitive comparison. */
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Pure authorization check for WHO may issue magic-link invites.
+ *
+ * Owners are always allowed (Owner is MJ's superuser type). Otherwise the caller
+ * must be a member of one of `issuerRoleNames`. An empty `issuerRoleNames` means
+ * Owner-only — the secure default. This is what stops any authenticated user
+ * (including an external user already holding a restricted magic-link session)
+ * from minting invites.
+ */
+export function canIssueInvites(
+  userType: string | null | undefined,
+  userRoleNames: readonly string[],
+  issuerRoleNames: readonly string[],
+): boolean {
+  if (normalizeName(userType ?? '') === 'owner') {
+    return true;
+  }
+  const allowed = new Set(issuerRoleNames.map(normalizeName));
+  if (allowed.size === 0) {
+    return false;
+  }
+  return userRoleNames.some((r) => allowed.has(normalizeName(r)));
+}
+
+/**
+ * Pure check for WHAT role an invite may grant. The restricted role is always
+ * grantable; any other role must be explicitly listed in `grantableRoleNames`.
+ * Applied to every caller (Owners included) so a privileged role can never be
+ * attached to an external magic-link user unless the deployment opts in.
+ */
+export function isRoleGrantable(
+  roleName: string | null | undefined,
+  restrictedRoleName: string,
+  grantableRoleNames: readonly string[],
+): boolean {
+  const target = normalizeName(roleName ?? '');
+  if (!target) {
+    return false;
+  }
+  const allowed = new Set<string>([normalizeName(restrictedRoleName), ...grantableRoleNames.map(normalizeName)]);
+  return allowed.has(target);
+}
+
 /** Pure redemption-eligibility check. Returns ok + an error code when not. */
 export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
   if (invite.Status === 'Revoked') {

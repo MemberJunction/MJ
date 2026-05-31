@@ -236,6 +236,19 @@ const magicLinkSchema = z.object({
   sessionTokenTtlHours: z.coerce.number().optional().default(8),
   /** Name of the restricted Role assigned to redeeming users when an invite does not specify one. */
   restrictedRoleName: z.string().optional().default('External App User'),
+  /**
+   * Role names (besides Owner) whose members may issue invites via POST /create.
+   * Empty (default) means Owner-only — the secure default. The restricted role
+   * must never be listed here, or external users could mint their own invites.
+   */
+  inviteIssuerRoleNames: z.array(z.string()).optional().default([]),
+  /**
+   * Role names an invite may grant, IN ADDITION to restrictedRoleName (which is
+   * always allowed). A caller-supplied roleId is rejected unless its role name is
+   * the restricted role or appears here. This is the guard that stops a caller
+   * from attaching a privileged role (e.g. Owner) to an external magic-link user.
+   */
+  grantableRoleNames: z.array(z.string()).optional().default([]),
   /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
   contextUserForProvisioning: z.string().optional(),
   /** CommunicationEngine provider name used to deliver invite emails (e.g. 'SendGrid', 'Microsoft Graph'). When unset, emails are not sent and the redemption link is returned to the caller instead. */

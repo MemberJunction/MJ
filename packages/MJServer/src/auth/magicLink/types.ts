@@ -65,6 +65,12 @@ export interface CreateMagicLinkInviteResult {
   /** ISO expiry timestamp. */
   expiresAt?: string;
   error?: string;
+  /**
+   * Set when the request was rejected for authorization reasons:
+   * `forbidden` — caller may not issue invites; `invalid_role` — the requested
+   * role is not grantable via magic-link. Drives the HTTP status in the router.
+   */
+  errorCode?: 'forbidden' | 'invalid_role';
 }
 
 /** Why a redemption failed. */

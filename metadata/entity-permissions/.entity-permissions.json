@@ -103,7 +103,7 @@
   },
   {
     "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Base Message Types",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
       "CanRead": true,
       "CanCreate": false,
@@ -111,16 +111,16 @@
       "CanDelete": false
     },
     "primaryKey": {
-      "ID": "87AEBFA9-5F0A-473B-B3D0-21A0B9350D13"
+      "ID": "83A2DB79-1F88-4483-A647-ED80EB458CAF"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.952Z",
-      "checksum": "cebc34274d57a5d0b992a2c06c94cae8930edd314daec3f40427f9ed465b9571"
+      "lastModified": "2026-05-31T18:48:56.571Z",
+      "checksum": "6ce693451904a701dfe41f706030cde0f0a2c35a1ba2982eed63b618b9b718f0"
     }
   },
   {
     "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Providers",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Applications",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
       "CanRead": true,
       "CanCreate": false,
@@ -128,16 +128,16 @@
       "CanDelete": false
     },
     "primaryKey": {
-      "ID": "F52B339B-1537-4A1C-9908-1F7251DAF177"
+      "ID": "D9976037-BE90-4E42-969D-3F556C8E47D4"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.967Z",
-      "checksum": "8e141362560ba8e9d2fe4fefe5beb83172f7e611745c35370bd33ba5cef810b7"
+      "lastModified": "2026-05-31T18:48:56.592Z",
+      "checksum": "800da10bab81f6fe6a07a62f8c85454220e0f1b47edcb90b5d77f68a6dffd6d2"
     }
   },
   {
     "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Provider Message Types",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Application Roles",
       "RoleID": "@lookup:MJ: Roles.Name=External App User",
       "CanRead": true,
       "CanCreate": false,
@@ -145,45 +145,11 @@
       "CanDelete": false
     },
     "primaryKey": {
-      "ID": "637E3139-6AA1-42CD-A7B3-97A75E7FBBA0"
+      "ID": "3B6D257A-10CC-412B-9372-6DDA3E66A353"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.983Z",
-      "checksum": "cfa9a3d5afd2f8e1218e45ec39b7d7932bd1a43864f8fc5f2bb7d8351df6b363"
-    }
-  },
-  {
-    "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Message Types",
-      "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true,
-      "CanCreate": false,
-      "CanUpdate": false,
-      "CanDelete": false
-    },
-    "primaryKey": {
-      "ID": "AF2E8528-4D50-4298-9A40-1B75F2A541D6"
-    },
-    "sync": {
-      "lastModified": "2026-05-31T18:01:03.997Z",
-      "checksum": "5b3c321534468d708fe812209f2a86ada635c4feced85f71997d6ce8c9bffaff"
-    }
-  },
-  {
-    "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Fields",
-      "RoleID": "@lookup:MJ: Roles.Name=External App User",
-      "CanRead": true,
-      "CanCreate": false,
-      "CanUpdate": false,
-      "CanDelete": false
-    },
-    "primaryKey": {
-      "ID": "840088AC-4E42-490A-9AC9-77003C3301DE"
-    },
-    "sync": {
-      "lastModified": "2026-05-31T18:01:04.017Z",
-      "checksum": "4a3fc73b309b3ee65e1e0dff652cff61dcb9529da50f406ee8c518f930a5eff9"
+      "lastModified": "2026-05-31T18:48:56.609Z",
+      "checksum": "5e908d3ff6486250942221fef35a311c8f7cb3c08d7b8eda5cdc8ebdc4d62e6a"
     }
   }
 ]

@@ -7,6 +7,8 @@ import {
   evaluateInvite,
   buildSessionClaims,
   buildConsumeInviteSQL,
+  canIssueInvites,
+  isRoleGrantable,
   MAGIC_LINK_TOKEN_PREFIX,
 } from '../auth/magicLink/magicLinkCore.js';
 import { buildRedeemLandingHtml, escapeHtml } from '../auth/magicLink/redeemLanding.js';
@@ -147,6 +149,59 @@ describe('magic-link core', () => {
       expect(sql).toContain('DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER)');
       expect(sql.match(/;/g)?.length).toBe(3);
       expect(sql.trim().endsWith(';')).toBe(true);
+    });
+  });
+
+  describe('canIssueInvites', () => {
+    it('always allows Owners, regardless of issuer-role config (case/space-insensitive)', () => {
+      expect(canIssueInvites('Owner', [], [])).toBe(true);
+      expect(canIssueInvites('  owner ', [], [])).toBe(true);
+    });
+
+    it('Owner-only by default: a non-Owner with no configured issuer roles is denied', () => {
+      expect(canIssueInvites('User', ['Developer', 'External App User'], [])).toBe(false);
+    });
+
+    it('denies an external user holding the restricted role (the escalation we are blocking)', () => {
+      // restricted role is never an issuer role, so this stays false even if someone
+      // mistakenly leaves issuerRoleNames empty
+      expect(canIssueInvites('User', ['External App User'], [])).toBe(false);
+    });
+
+    it('allows a non-Owner only when one of their roles is a configured issuer role', () => {
+      expect(canIssueInvites('User', ['Sales Admin'], ['Sales Admin'])).toBe(true);
+      expect(canIssueInvites('User', ['sales admin'], ['Sales Admin'])).toBe(true); // case-insensitive
+      expect(canIssueInvites('User', ['Marketing'], ['Sales Admin'])).toBe(false);
+    });
+
+    it('handles null/undefined type and empty role lists safely', () => {
+      expect(canIssueInvites(null, [], ['X'])).toBe(false);
+      expect(canIssueInvites(undefined, ['X'], ['X'])).toBe(true);
+    });
+  });
+
+  describe('isRoleGrantable', () => {
+    const restricted = 'External App User';
+
+    it('always allows the restricted role (case/space-insensitive)', () => {
+      expect(isRoleGrantable('External App User', restricted, [])).toBe(true);
+      expect(isRoleGrantable(' external app user ', restricted, [])).toBe(true);
+    });
+
+    it('rejects a privileged role by default — blocks roleId=Owner escalation', () => {
+      expect(isRoleGrantable('Owner', restricted, [])).toBe(false);
+      expect(isRoleGrantable('Administrator', restricted, [])).toBe(false);
+    });
+
+    it('allows additional roles only when explicitly opted in', () => {
+      expect(isRoleGrantable('Read Only Guest', restricted, ['Read Only Guest'])).toBe(true);
+      expect(isRoleGrantable('read only guest', restricted, ['Read Only Guest'])).toBe(true);
+      expect(isRoleGrantable('Owner', restricted, ['Read Only Guest'])).toBe(false);
+    });
+
+    it('rejects empty/null role names', () => {
+      expect(isRoleGrantable('', restricted, [])).toBe(false);
+      expect(isRoleGrantable(null, restricted, [])).toBe(false);
     });
   });
 
