@@ -22,11 +22,11 @@ Make CodeGen correctly distinguish SQL computed/generated columns from view-only
 This plan emerges from a sequence of findings:
 
 - **The metadata view conflates the two flavors**. `vwSQLColumnsAndEntityFields` defines `IsVirtual` as `IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0)`. The first disjunct catches view-only columns; the second catches SQL Server computed columns. Once the bit is set, downstream code can't tell the cases apart.
-- **The conflation propagates into the FK Name-lookup join target**. [`packages/CodeGenLib/src/Database/sql_codegen.ts:1645`](packages/CodeGenLib/src/Database/sql_codegen.ts#L1645) chooses `RelatedEntityBaseView` whenever the related entity's Name Field is virtual — even when the column is physically in the base table.
+- **The conflation propagates into the FK Name-lookup join target**. [`packages/CodeGenLib/src/Database/sql_codegen.ts:1645`](../../packages/CodeGenLib/src/Database/sql_codegen.ts#L1645) chooses `RelatedEntityBaseView` whenever the related entity's Name Field is virtual — even when the column is physically in the base table.
 - **The conflation creates a latent self-FK bug**. For a self-FK whose Name Field is a computed column, CodeGen tries to emit `LEFT JOIN vwFoo AS parent ...` inside `CREATE VIEW vwFoo AS ...`. SQL Server (DROP+CREATE pattern + immediate name resolution) and PostgreSQL (`CREATE OR REPLACE VIEW` + parse-time name resolution) both reject the self-reference. PR #2556 papered over this with a capability flag (`canSelfJoinViewForVirtualNameField()`) that defaults to `false` and skips the join entirely. The skip drops the virtual lookup column from the view.
 - **No emitted view in the migrations tree exercises the broken path today**. The only existing self-FK base view (`vwTags` for `Tag.ParentID → Tag.ID`) joins to the base table because `Tag.Name` is a regular column. The combination (self-FK) + (computed Name Field) has never coincided in the schema, so the bug is latent.
 - **`vwSQLColumnsAndEntityFields` already exposes `cc.definition AS ComputedColumnDefinition`**. The catalog data is right there; we just don't use it.
-- **`AllowUpdateAPI` is already set to 0 for `IsVirtual = 1` columns** by [`SQLServerCodeGenProvider.ts:1336-1339`](packages/CodeGenLib/src/Database/providers/sqlserver/SQLServerCodeGenProvider.ts#L1336-L1339), so the runtime `ReadOnly` getter (`!AllowUpdateAPI || IsPrimaryKey || IsSpecialDateField`) handles computed columns correctly today regardless of `IsVirtual`.
+- **`AllowUpdateAPI` is already set to 0 for `IsVirtual = 1` columns** by [`SQLServerCodeGenProvider.ts:1336-1339`](../../packages/CodeGenLib/src/Database/providers/sqlserver/SQLServerCodeGenProvider.ts#L1336-L1339), so the runtime `ReadOnly` getter (`!AllowUpdateAPI || IsPrimaryKey || IsSpecialDateField`) handles computed columns correctly today regardless of `IsVirtual`.
 
 ## Current Consumers of `IsVirtual` (Inventory)
 
@@ -34,16 +34,16 @@ Captured for clarity — this plan **does not touch any of them**. They continue
 
 | File | Line | What `IsVirtual = 1` means here |
 |---|---|---|
-| [`codeGenDatabaseProvider.ts:430`](packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts#L430) | `shouldIncludeFieldInParams` | Skip in spCreate / spUpdate parameter lists |
-| [`codeGenDatabaseProvider.ts:569`](packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts#L569) | UPDATE column list | Skip in UPDATE column list |
-| [`graphql_server_codegen.ts:495`](packages/CodeGenLib/src/Misc/graphql_server_codegen.ts#L495) | GraphQL input type filter | Exclude from mutation input (unless IS-A parent field) |
-| [`angular-codegen.ts:712`](packages/CodeGenLib/src/Angular/angular-codegen.ts#L712) | Form generation | Skip rendering as form input when paired with FK |
-| [`GenericDatabaseProvider.ts:2957`](packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts#L2957) | RLS projection | Skip in row-level-security projection check |
-| [`manage-metadata.ts:1932-1983`](packages/CodeGenLib/src/Database/manage-metadata.ts#L1932-L1983) | IS-A inheritance | Combined with `AllowUpdateAPI = 1` to identify IS-A parent fields |
-| [`entityInfo.ts:1005-1013`](packages/MJCore/src/generic/entityInfo.ts#L1005-L1013) `ReadOnly` getter | (intentionally ignores `IsVirtual`) | — |
-| [`entityInfo.ts:1906`](packages/MJCore/src/generic/entityInfo.ts#L1906) | Parent field filter | Exclude from parent-field iteration |
-| [`sql_codegen.ts:1645`](packages/CodeGenLib/src/Database/sql_codegen.ts#L1645) | **THIS PLAN TOUCHES THIS LINE** | Choose `RelatedEntityBaseView` over `RelatedEntityBaseTable` |
-| [`sql_codegen.ts:1782`](packages/CodeGenLib/src/Database/sql_codegen.ts#L1782) | **THIS PLAN TOUCHES THIS LINE** | Skip self-FK virtual-NameField join when capability flag is `false` |
+| [`codeGenDatabaseProvider.ts:430`](../../packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts#L430) | `shouldIncludeFieldInParams` | Skip in spCreate / spUpdate parameter lists |
+| [`codeGenDatabaseProvider.ts:569`](../../packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts#L569) | UPDATE column list | Skip in UPDATE column list |
+| [`graphql_server_codegen.ts:495`](../../packages/CodeGenLib/src/Misc/graphql_server_codegen.ts#L495) | GraphQL input type filter | Exclude from mutation input (unless IS-A parent field) |
+| [`angular-codegen.ts:712`](../../packages/CodeGenLib/src/Angular/angular-codegen.ts#L712) | Form generation | Skip rendering as form input when paired with FK |
+| [`GenericDatabaseProvider.ts:2957`](../../packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts#L2957) | RLS projection | Skip in row-level-security projection check |
+| [`manage-metadata.ts:1932-1983`](../../packages/CodeGenLib/src/Database/manage-metadata.ts#L1932-L1983) | IS-A inheritance | Combined with `AllowUpdateAPI = 1` to identify IS-A parent fields |
+| [`entityInfo.ts:1005-1013`](../../packages/MJCore/src/generic/entityInfo.ts#L1005-L1013) `ReadOnly` getter | (intentionally ignores `IsVirtual`) | — |
+| [`entityInfo.ts:1906`](../../packages/MJCore/src/generic/entityInfo.ts#L1906) | Parent field filter | Exclude from parent-field iteration |
+| [`sql_codegen.ts:1645`](../../packages/CodeGenLib/src/Database/sql_codegen.ts#L1645) | **THIS PLAN TOUCHES THIS LINE** | Choose `RelatedEntityBaseView` over `RelatedEntityBaseTable` |
+| [`sql_codegen.ts:1782`](../../packages/CodeGenLib/src/Database/sql_codegen.ts#L1782) | **THIS PLAN TOUCHES THIS LINE** | Skip self-FK virtual-NameField join when capability flag is `false` |
 
 The runtime read-only semantics stay correct because `AllowUpdateAPI = 0` is auto-set for any `IsVirtual = 1` field, including computed columns.
 
@@ -186,7 +186,7 @@ Both `MJ_BASE_BEFORE_SQL.sql` (CodeGen-applied baseline) and the migration scrip
 
 ### Step 3 — Add PostgreSQL Generated-Column Detection
 
-**Investigation finding**: PG has no equivalent of `vwSQLColumnsAndEntityFields`. CodeGen reads PG metadata via direct queries against `information_schema.columns` from multiple call sites in [`packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts`](packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts) (around lines 626, 841, 845).
+**Investigation finding**: PG has no equivalent of `vwSQLColumnsAndEntityFields`. CodeGen reads PG metadata via direct queries against `information_schema.columns` from multiple call sites in [`packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts`](../../packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts) (around lines 626, 841, 845).
 
 PostgreSQL stores generated-column status in `pg_attribute.attgenerated`:
 - `''` (empty) — regular column
@@ -230,7 +230,7 @@ The exact predicate for "view-only" requires more investigation against the exis
 ### Step 4 — Update Metadata Sync Logic to Propagate `IsComputed`
 
 **Field-creation path** (new column being added to `EntityField` for the first time):
-- File: [`packages/CodeGenLib/src/Database/manage-metadata.ts`](packages/CodeGenLib/src/Database/manage-metadata.ts), function `getPendingEntityFieldINSERTSQL` around lines 3151–3248.
+- File: [`packages/CodeGenLib/src/Database/manage-metadata.ts`](../../packages/CodeGenLib/src/Database/manage-metadata.ts), function `getPendingEntityFieldINSERTSQL` around lines 3151–3248.
 - Today the function builds an `INSERT INTO EntityField (...)` with these columns: `ID, EntityID, Sequence, Name, DisplayName, Description, Type, Length, Precision, Scale, AllowsNull, DefaultValue, AutoIncrement, AllowUpdateAPI, IsVirtual, RelatedEntityID, RelatedEntityFieldName, IsNameField, IncludeInUserSearchAPI, IncludeRelatedEntityNameFieldInBaseView, DefaultInView, IsPrimaryKey, IsUnique, RelatedEntityDisplayType`.
 - Add `IsComputed` to the column list and to the corresponding `VALUES` expression. Source the value from the metadata-view row produced in Steps 2 and 3.
 
@@ -242,7 +242,7 @@ The exact predicate for "view-only" requires more investigation against the exis
 
 ### Step 5 — CodeGen TypeScript: Track `IsComputed` on FK Name-Lookup State
 
-**File**: [`packages/CodeGenLib/src/Database/sql_codegen.ts`](packages/CodeGenLib/src/Database/sql_codegen.ts)
+**File**: [`packages/CodeGenLib/src/Database/sql_codegen.ts`](../../packages/CodeGenLib/src/Database/sql_codegen.ts)
 
 Today there's a tracker `_RelatedEntityNameFieldIsVirtual` on the FK field (set around lines 1815, 1862, 1869, 1881–1887). Add a parallel tracker:
 
@@ -267,11 +267,11 @@ protected getIsNameFieldForSingleEntity(entityName: string): {
 }
 ```
 
-The corresponding `EntityFieldInfo` type in [`packages/MJCore/src/generic/entityInfo.ts`](packages/MJCore/src/generic/entityInfo.ts) gets a new `IsComputed` getter — this is auto-generated by CodeGen from the EntityField table column, so no manual edit. **However**, the bootstrap step on a fresh checkout requires that the generated entity classes have run *after* the migration applied. Document this in the rollout section.
+The corresponding `EntityFieldInfo` type in [`packages/MJCore/src/generic/entityInfo.ts`](../../packages/MJCore/src/generic/entityInfo.ts) gets a new `IsComputed` getter — this is auto-generated by CodeGen from the EntityField table column, so no manual edit. **However**, the bootstrap step on a fresh checkout requires that the generated entity classes have run *after* the migration applied. Document this in the rollout section.
 
 ### Step 6 — Refine the Join-Target Decision
 
-**File**: [`packages/CodeGenLib/src/Database/sql_codegen.ts:1645`](packages/CodeGenLib/src/Database/sql_codegen.ts#L1645)
+**File**: [`packages/CodeGenLib/src/Database/sql_codegen.ts:1645`](../../packages/CodeGenLib/src/Database/sql_codegen.ts#L1645)
 
 ```typescript
 // BEFORE
@@ -291,7 +291,7 @@ const relatedTable = useView
 
 ### Step 7 — Refine the Self-FK Skip Condition
 
-**File**: [`packages/CodeGenLib/src/Database/sql_codegen.ts:1782`](packages/CodeGenLib/src/Database/sql_codegen.ts#L1782)
+**File**: [`packages/CodeGenLib/src/Database/sql_codegen.ts:1782`](../../packages/CodeGenLib/src/Database/sql_codegen.ts#L1782)
 
 ```typescript
 // BEFORE
@@ -431,10 +431,10 @@ After regenerating views with the new logic, diff against the previous output. E
 ## References
 
 - PR #2556 — Disable view self-join for virtual NameField across all providers (the capability-flag mitigation that this plan reaches past)
-- [`packages/CodeGenLib/src/Database/sql_codegen.ts`](packages/CodeGenLib/src/Database/sql_codegen.ts) — primary CodeGen logic touched in Steps 5–7
-- [`packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts`](packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts) — base provider; `canSelfJoinViewForVirtualNameField()` lives here
+- [`packages/CodeGenLib/src/Database/sql_codegen.ts`](../../packages/CodeGenLib/src/Database/sql_codegen.ts) — primary CodeGen logic touched in Steps 5–7
+- [`packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts`](../../packages/CodeGenLib/src/Database/codeGenDatabaseProvider.ts) — base provider; `canSelfJoinViewForVirtualNameField()` lives here
 - [`SQL Scripts/MJ_BASE_BEFORE_SQL.sql`](SQL Scripts/MJ_BASE_BEFORE_SQL.sql) — `vwSQLColumnsAndEntityFields` source of truth
-- [`packages/CodeGenLib/src/Database/manage-metadata.ts`](packages/CodeGenLib/src/Database/manage-metadata.ts) — EntityField sync logic
-- [`packages/MJCore/src/generic/entityInfo.ts`](packages/MJCore/src/generic/entityInfo.ts) — runtime `ReadOnly` getter (intentionally ignores `IsVirtual`; will not change)
+- [`packages/CodeGenLib/src/Database/manage-metadata.ts`](../../packages/CodeGenLib/src/Database/manage-metadata.ts) — EntityField sync logic
+- [`packages/MJCore/src/generic/entityInfo.ts`](../../packages/MJCore/src/generic/entityInfo.ts) — runtime `ReadOnly` getter (intentionally ignores `IsVirtual`; will not change)
 - `migrations/CLAUDE.md` — migration authoring conventions
 - `CLAUDE.md` (root) — project-wide standards including "no `any` types," BaseEntity patterns, Publish-Then-No-Breaking-Changes

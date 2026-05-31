@@ -77,6 +77,39 @@ describe('Manifest Validation', () => {
         });
     });
 
+    describe('Dependencies', () => {
+        it('should accept the canonical record form (object variant)', () => {
+            const m = {
+                ...minimalManifest(),
+                dependencies: {
+                    'mj-bizapps-common': { version: '>=5.30.0 <6.0.0', repository: 'https://github.com/MemberJunction/bizapps-common' },
+                },
+            };
+            const result = ValidateManifestObject(m);
+            expect(result.Success).toBe(true);
+            expect(result.Manifest!.dependencies).toEqual({
+                'mj-bizapps-common': { version: '>=5.30.0 <6.0.0', repository: 'https://github.com/MemberJunction/bizapps-common' },
+            });
+        });
+
+        it('should accept the bare-range string variant', () => {
+            const m = { ...minimalManifest(), dependencies: { 'dep-app-one': '^1.0.0' } };
+            const result = ValidateManifestObject(m);
+            expect(result.Success).toBe(true);
+            expect(result.Manifest!.dependencies).toEqual({ 'dep-app-one': '^1.0.0' });
+        });
+
+        it('should reject the array form (only the record form is supported)', () => {
+            const m = {
+                ...minimalManifest(),
+                dependencies: [
+                    { name: 'mj-bizapps-common', repository: 'https://github.com/MemberJunction/bizapps-common', versionRange: '>=5.30.0 <6.0.0' },
+                ],
+            };
+            expect(ValidateManifestObject(m).Success).toBe(false);
+        });
+    });
+
     describe('Invalid Name', () => {
         it('should reject name too short (2 chars)', () => {
             const m = { ...minimalManifest(), name: 'ab' };

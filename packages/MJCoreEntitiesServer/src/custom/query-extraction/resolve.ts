@@ -10,6 +10,7 @@ import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, Que
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
+import { SQLServerDialect } from "@memberjunction/sql-dialect";
 import type { MJParameterInfo, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
 import type {
@@ -534,7 +535,7 @@ export function ExtractEntityMetadataFromSQL(
     const results: EntityMetadataEntry[] = [];
 
     try {
-        const columnRefs = SQLParser.ExtractColumnRefs(sql);
+        const columnRefs = SQLParser.ExtractColumnRefs(sql, new SQLServerDialect());
 
         for (const tableRef of tableRefs) {
             const matchingEntity = findEntityByTableRef(md, tableRef);

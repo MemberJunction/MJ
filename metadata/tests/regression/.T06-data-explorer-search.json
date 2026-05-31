@@ -1,0 +1,80 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T06 - Data Explorer Search",
+    "Description": "Uses the search functionality to find an entity or record. Searches for 'Event' and verifies results appear.",
+    "InputDefinition": {
+      "goal": "Use the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Search input contains 'Event' or similar",
+        "Results related to Events are displayed"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "8D4FF31A-B6D0-4E02-9528-4F0D0E240851"
+  },
+  "sync": {
+    "lastModified": "2026-05-29T19:49:22.842Z",
+    "checksum": "e61701c54f14e8832f17f08c910eadb16c901d1690d8de6b27e6beffe2d5e251"
+  }
+}

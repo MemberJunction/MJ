@@ -258,9 +258,9 @@ See `EVENT-ABSTRACT-SUBMISSION-AGENT-README.md` for detailed technical documenta
 ## Learn More
 
 - [MemberJunction Agents Documentation](https://docs.memberjunction.org)
-- [Flow Agent Guide](../../../packages/AI/Agents/README.md)
-- [Actions Framework](../../../packages/Actions/README.md)
-- [Typeform Integration](../../../packages/Actions/BizApps/FormBuilders/README.md)
+- [Flow Agent Guide](../../packages/AI/Agents/README.md)
+- [Actions Framework](../../packages/Actions/README.md)
+- [Typeform Integration](../../packages/Actions/BizApps/FormBuilders/README.md)
 
 ## Contributing
 

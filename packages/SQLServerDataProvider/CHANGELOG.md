@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.38.0
+
+### Patch Changes
+
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/query-processor@5.38.0
+  - @memberjunction/ai-vector-dupe@5.38.0
+  - @memberjunction/queue@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/encryption@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ai-provider-bundle@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes
