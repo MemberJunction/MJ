@@ -1,0 +1,87 @@
+[
+  {
+    "fields": {
+      "Name": "text-chat",
+      "Description": "Text-chat interaction channel — the trivial engine that wraps every direct BaseAgent.Run() invocation, so analytics, run records, and future per-channel prompt overrides apply uniformly to text and voice.",
+      "DriverClass": "TextChatChannelEngine",
+      "ConfigJSONSchemaName": "TextChatConfig",
+      "DefaultConfigJSON": "{\"kind\":\"text-chat\"}",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D6B2D269-EEF8-40F3-8EC6-A4578D8D89F5"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:17:10.044Z",
+      "checksum": "6d3f134a139b18c093cabfdbf52a3911e1af78c904e0fb967f132d043d9b521f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "voice-cascaded",
+      "Description": "Cascaded voice pipeline: STT → LLM → TTS. Suitable for any agent whose LLM is fast enough to TTFT under the channel's latency budget. Barge-in handled by VAD + interrupt signal.",
+      "DriverClass": "CascadedChannelEngine",
+      "ConfigJSONSchemaName": "VoiceCascadedConfig",
+      "DefaultConfigJSON": "{\"kind\":\"voice-cascaded\",\"vad\":{\"driverClass\":\"SileroVAD\"},\"turnDetector\":{\"driverClass\":\"SilenceTurnDetector\"},\"bargeIn\":true,\"latencyBudgetMs\":900,\"fillerPolicy\":{\"thresholdMs\":500,\"phrases\":[\"one moment...\",\"let me look that up...\"]}}",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "46A02966-1505-432D-9F35-2FC2A347E5B7"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:17:10.061Z",
+      "checksum": "ffc63143bf6a1ecb228f410a3c747c1084bbd49891bfbc426ce6a4924d9dde4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "voice-realtime",
+      "Description": "Unified speech-to-speech channel: a single bidirectional model handles audio in and out (gpt-realtime, Gemini Live, ElevenLabs Conv AI, PersonaPlex). Lowest latency path; tool calls route through BaseAgent via either native or hand-off-to-llm strategy.",
+      "DriverClass": "RealtimeChannelEngine",
+      "ConfigJSONSchemaName": "VoiceRealtimeConfig",
+      "DefaultConfigJSON": "{\"kind\":\"voice-realtime\",\"toolCallStrategy\":\"native\",\"bargeIn\":true}",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4EF4139C-E044-43D0-A4DB-2C838B463CE7"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:17:10.071Z",
+      "checksum": "23b94a182d293ab774a03f7b2eabfcbb771909b16f7c34e68daf9d4422d017b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "phone",
+      "Description": "PSTN bridge channel. Routes to a cascaded or realtime engine depending on the configured bridge (Twilio ConversationRelay, Twilio Media Streams, or LiveKit SIP).",
+      "DriverClass": "PhoneChannelEngine",
+      "ConfigJSONSchemaName": "PhoneConfig",
+      "DefaultConfigJSON": "{\"kind\":\"phone\",\"bridge\":\"twilio-conv-relay\"}",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "364E336C-9B58-46F9-B3DB-6DCB277EFECA"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:17:10.081Z",
+      "checksum": "e383f23d888786567b1bf562fe1a9c6529d9f682fc005763703cbf7ff31c2629"
+    }
+  },
+  {
+    "fields": {
+      "Name": "video-realtime",
+      "Description": "Skeleton placeholder for future video-realtime channels. The engine class exists but throws 'not yet implemented'. Reserved so metadata, config-type validation, and transport contracts are forward-compatible.",
+      "DriverClass": "VideoRealtimeChannelEngine",
+      "ConfigJSONSchemaName": "VideoRealtimeConfig",
+      "DefaultConfigJSON": "{\"kind\":\"video-realtime\"}",
+      "Status": "Pending"
+    },
+    "primaryKey": {
+      "ID": "D9CC2650-546A-44D9-8EA0-665796E5C1C7"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:17:10.092Z",
+      "checksum": "871fa5eb0c5d83d7f04b1e550be35e0b9503c427d2f4abe15c9a137d80a38055"
+    }
+  }
+]

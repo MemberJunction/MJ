@@ -1,5 +1,112 @@
 # @memberjunction/ng-explorer-app
 
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/ng-explorer-core@5.36.0
+  - @memberjunction/ng-bootstrap@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-client@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-workspace-initializer@5.36.0
+  - @memberjunction/ng-conversations@5.36.0
+  - @memberjunction/ng-feedback@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-auth-services@5.36.0
+  - @memberjunction/ng-agent-client@5.36.0
+  - @memberjunction/ng-explorer-service-worker@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [2c905e3]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-conversations@5.35.0
+  - @memberjunction/ai-agent-client@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/ng-explorer-core@5.35.0
+  - @memberjunction/ng-bootstrap@5.35.0
+  - @memberjunction/ng-auth-services@5.35.0
+  - @memberjunction/ng-base-application@5.35.0
+  - @memberjunction/ng-workspace-initializer@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-feedback@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-agent-client@5.35.0
+  - @memberjunction/ng-explorer-service-worker@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ng-base-application@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-agent-client@5.34.1
+  - @memberjunction/ng-bootstrap@5.34.1
+  - @memberjunction/ng-auth-services@5.34.1
+  - @memberjunction/ng-explorer-core@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-workspace-initializer@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-conversations@5.34.1
+  - @memberjunction/ng-feedback@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-agent-client@5.34.1
+  - @memberjunction/ng-explorer-service-worker@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- b03bfb4: Replace hardcoded colors with semantic design tokens across Angular components and shared styles, restoring correct dark-mode behavior and enabling white-labeling. Also maps the System Diagnostics PerfMon chrome (background, borders, text, controls) to MJ semantic tokens so the panel adapts to the active theme; series colors stay categorical.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [a6a16fa]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [ad61267]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-bootstrap@5.34.0
+  - @memberjunction/ng-explorer-core@5.34.0
+  - @memberjunction/ai-agent-client@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/ng-auth-services@5.34.0
+  - @memberjunction/ng-base-application@5.34.0
+  - @memberjunction/ng-explorer-service-worker@5.34.0
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-workspace-initializer@5.34.0
+  - @memberjunction/ng-agent-client@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-conversations@5.34.0
+  - @memberjunction/ng-feedback@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/core@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

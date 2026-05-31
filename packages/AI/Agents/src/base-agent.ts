@@ -22,6 +22,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentContextInjector } from './agent-context-injector';
+import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import { RerankerService } from '@memberjunction/ai-reranker';
 import {
     AIPromptParams,
@@ -54,13 +55,14 @@ import {
     mergeAssignmentStrategies,
     AgentClientToolInvocation,
     ClientToolResultSummary,
-    ClientToolMetadata
+    ClientToolMetadata,
+    InputArtifact
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
-import { ArtifactToolManager, ArtifactToolCall, InputArtifact } from './ArtifactToolManager';
+import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
@@ -979,16 +981,28 @@ export class BaseAgent {
                     params
                 );
 
-                // Merge with existing data/context/payload (caller values take precedence)
+                // Merge with existing data/context/payload (caller values take precedence).
+                // IMPORTANT: Do NOT spread params.context — it may be a class instance
+                // whose getters/methods would be destroyed by spreading into a plain object.
+                // Instead, copy preloaded properties onto the existing context object.
                 params.data = {
                     ...preloadedResult.data,
                     ...params.data
                 };
 
-                params.context = {
-                    ...preloadedResult.context,
-                    ...params.context
-                };
+                if (preloadedResult.context && typeof preloadedResult.context === 'object') {
+                    if (!params.context || typeof params.context !== 'object') {
+                        params.context = preloadedResult.context;
+                    } else {
+                        // Copy preloaded properties onto the existing context without
+                        // replacing it, so class identity (prototype, getters) is preserved.
+                        for (const key of Object.keys(preloadedResult.context)) {
+                            if (!(key in params.context)) {
+                                (params.context as Record<string, unknown>)[key] = (preloadedResult.context as Record<string, unknown>)[key];
+                            }
+                        }
+                    }
+                }
 
                 params.payload = {
                     ...preloadedResult.payload,
@@ -1181,8 +1195,12 @@ export class BaseAgent {
             this._scratchpadManager.Clear();
             this._artifactToolManager.Clear();
 
-            // Initialize artifact tools with any input artifacts from the conversation
-            const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
+            // Initialize artifact tools with any input artifacts attached to the run.
+            // Artifacts arrive as a typed first-class field on ExecuteAgentParams —
+            // they are NOT routed through `data` because prompt-template rendering
+            // would otherwise serialize artifact bodies into the LLM payload. Only
+            // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
+            const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
             if (inputArtifacts?.length) {
                 this._artifactToolManager.Initialize(inputArtifacts);
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
@@ -1326,6 +1344,17 @@ export class BaseAgent {
                     primaryScopeRecordId,
                     secondaryScopes,
                     scopeConfig
+                ),
+                this.InjectPreExecutionRAG(
+                    typeof inputText === 'string' ? inputText : '',
+                    params.agent,
+                    params.contextUser,
+                    wrappedParams.conversationMessages,
+                    params.conversationMessages,
+                    primaryScopeEntityId,
+                    primaryScopeRecordId,
+                    secondaryScopes,
+                    params.payload
                 )
             ]);
 
@@ -1536,6 +1565,15 @@ export class BaseAgent {
     private _injectedMemory: { notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] } = { notes: [], examples: [] };
 
     /**
+     * Storage for injected pre-execution RAG context (Phase 1C of search-scopes-rag-plus).
+     * Contains the formatted `<retrieved_context>` system-message block actually injected
+     * into `conversationMessages`, plus the structured per-scope / combined result detail
+     * for downstream observability and artifact persistence.
+     */
+    private _ragContext: string = '';
+    private _injectedRAG: AgentPreExecutionRAGResult | null = null;
+
+    /**
      * Determine the scope label for a note based on its scope fields.
      * Used for memory attribution logging to help identify which scope level
      * a note belongs to.
@@ -1608,8 +1646,7 @@ export class BaseAgent {
         const injector = new AgentContextInjector();
 
         // Parse reranker configuration if present
-        // Access dynamically since field may not exist until CodeGen runs after migration
-        const rerankerConfigJson = agent.Get('RerankerConfiguration') as string | null;
+        const rerankerConfigJson = agent.RerankerConfiguration;
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
 
         // Get notes if injection enabled
@@ -1678,6 +1715,81 @@ export class BaseAgent {
         this._injectedMemory = { notes, examples };
 
         return { notes, examples };
+    }
+
+    /**
+     * Inject pre-execution RAG context for this agent using scoped search.
+     *
+     * Runs in parallel with `InjectContextMemory` during Phase 2 of `Execute()`. Loads the
+     * agent's `AIAgentSearchScope` rows (Phase IN 'PreExecution'|'Both'), renders any per-scope
+     * query templates, calls `SearchEngine.Search()` per scope, cross-scope RRF fuses the
+     * results when multiple scopes contributed, and unshifts a `<retrieved_context>` system
+     * message onto `conversationMessages`.
+     *
+     * When the agent has no active pre-execution scopes (or all scopes returned zero results),
+     * this method is a no-op — no system message is injected and `_injectedRAG` stays null.
+     *
+     * See plans/search-scopes-rag-plus.md §4 (Agent Integration — Pre-Execution RAG).
+     *
+     * @param lastUserMessage - The most recent user message text.
+     * @param agent - The agent being executed.
+     * @param contextUser - Calling user (threaded to SearchEngine + Metadata).
+     * @param conversationMessages - The mutated message array that flows to the LLM (system msg is unshifted here).
+     * @param originalMessages - The unmodified messages array (for template `recentMessages`).
+     * @param primaryScopeEntityId - Multi-tenant primary scope entity ID.
+     * @param primaryScopeRecordId - Multi-tenant primary scope record ID.
+     * @param secondaryScopes - Multi-tenant secondary scope dimensions.
+     * @param payload - The agent's current payload (for template rendering).
+     * @returns The structured RAG result, or `null` if no scopes produced results.
+     */
+    protected async InjectPreExecutionRAG(
+        lastUserMessage: string,
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo | undefined,
+        conversationMessages: ChatMessage[] | undefined,
+        originalMessages: ChatMessage[] | undefined,
+        primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string,
+        secondaryScopes?: Record<string, SecondaryScopeValue>,
+        payload?: unknown
+    ): Promise<AgentPreExecutionRAGResult | null> {
+        try {
+            if (!contextUser) return null;
+            if (!agent?.ID) return null;
+
+            const rag = new AgentPreExecutionRAG();
+            const result = await rag.Execute({
+                agent,
+                lastUserMessage,
+                recentMessages: originalMessages ? originalMessages.slice(-5) : undefined,
+                payload,
+                primaryScopeRecordId,
+                primaryScopeEntityId,
+                secondaryScopes,
+                contextUser
+            });
+
+            if (!result) return null;
+
+            if (conversationMessages && result.formattedSystemMessage) {
+                this._ragContext = result.formattedSystemMessage;
+                conversationMessages.unshift({ role: 'system', content: this._ragContext });
+                this.logStatus(
+                    `🔎 Injected pre-execution RAG context: ${result.combinedResults.length} result(s) from ${result.queriedScopeIDs.length} scope(s)`,
+                    true
+                );
+            }
+
+            this._injectedRAG = result;
+            return result;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logError(`InjectPreExecutionRAG failed — continuing without RAG context: ${msg}`, {
+                agent,
+                category: 'AgentPreExecutionRAG'
+            });
+            return null;
+        }
     }
 
     /**
@@ -2066,12 +2178,15 @@ export class BaseAgent {
                 promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
             }
 
-            // Inject artifact tools template variables if enabled and artifacts are present
+            // Inject artifact tools template variables if enabled and artifacts are present.
+            // Note: prior tool results are NO LONGER injected via a per-turn template var.
+            // They are pushed into conversationMessages as a one-shot 'tool-result'
+            // message at execution time (see injectArtifactToolResultsMessage) and decay
+            // via pruneAndCompactExpiredMessages — same lifecycle as action results.
             const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
             if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
-                promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
                 promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
@@ -3349,7 +3464,7 @@ export class BaseAgent {
     }
 
     /**
-     * Recovery Strategy 1: Remove oldest action-result messages.
+     * Recovery Strategy 1: Remove oldest tool-result messages.
      * Targets messages older than minAge turns for removal.
      *
      * @param params - Agent execution parameters
@@ -3359,7 +3474,7 @@ export class BaseAgent {
      * @returns Result with tokens saved and strategy description
      * @protected
      */
-    protected recoveryStrategy_RemoveOldestActionResults(
+    protected recoveryStrategy_RemoveOldestToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
@@ -3368,7 +3483,7 @@ export class BaseAgent {
         let tokensSaved = 0;
         const removedIndices: number[] = [];
 
-        // Find action-result messages older than minAge turns
+        // Find tool-result messages older than minAge turns
         const candidates = params.conversationMessages
             .map((msg, index) => ({
                 message: msg,
@@ -3390,7 +3505,7 @@ export class BaseAgent {
             tokensSaved += candidate.tokens;
 
             this.logStatus(
-                `Removing action-result from ${candidate.age} turns ago (${candidate.tokens} tokens)`,
+                `Removing tool-result from ${candidate.age} turns ago (${candidate.tokens} tokens)`,
                 true,
                 params
             );
@@ -3406,19 +3521,19 @@ export class BaseAgent {
                 turn: currentStepCount,
                 messageIndex: index,
                 message: removed as AgentChatMessage,
-                reason: 'Context recovery - oldest action results',
+                reason: 'Context recovery - oldest tool results',
                 tokensSaved: this.estimateTokens(removed.content)
             });
         });
 
         return {
             tokensSaved,
-            strategyName: `Removed ${removedIndices.length} old action-results (${minAge}+ turns)`
+            strategyName: `Removed ${removedIndices.length} old tool-results (${minAge}+ turns)`
         };
     }
 
     /**
-     * Recovery Strategy 2: Compact old action-result messages.
+     * Recovery Strategy 2: Compact old tool-result messages.
      * Uses smart trimming to reduce size while preserving some content.
      *
      * @param params - Agent execution parameters
@@ -3428,7 +3543,7 @@ export class BaseAgent {
      * @returns Result with tokens saved and strategy description
      * @protected
      */
-    protected async recoveryStrategy_CompactOldActionResults(
+    protected async recoveryStrategy_CompactOldToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
@@ -3437,7 +3552,7 @@ export class BaseAgent {
         let tokensSaved = 0;
         let compactedCount = 0;
 
-        // Find action-result messages to compact
+        // Find tool-result messages to compact
         const candidates = params.conversationMessages
             .map((msg, index) => ({
                 message: msg,
@@ -3492,7 +3607,7 @@ export class BaseAgent {
                 compactedCount++;
 
                 this.logStatus(
-                    `Compacted action-result from ${candidate.age} turns ago (saved ${saved} tokens)`,
+                    `Compacted tool-result from ${candidate.age} turns ago (saved ${saved} tokens)`,
                     true,
                     params
                 );
@@ -3501,12 +3616,12 @@ export class BaseAgent {
 
         return {
             tokensSaved,
-            strategyName: `Compacted ${compactedCount} old action-results (${minAge}+ turns)`
+            strategyName: `Compacted ${compactedCount} old tool-results (${minAge}+ turns)`
         };
     }
 
     /**
-     * Recovery Strategy 3: Aggressively compact ALL action-result messages.
+     * Recovery Strategy 3: Aggressively compact ALL tool-result messages.
      * Used when gentler strategies haven't freed enough space.
      *
      * @param params - Agent execution parameters
@@ -3514,14 +3629,14 @@ export class BaseAgent {
      * @returns Result with tokens saved and strategy description
      * @protected
      */
-    protected async recoveryStrategy_CompactAllActionResults(
+    protected async recoveryStrategy_CompactAllToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number
     ): Promise<{ tokensSaved: number; strategyName: string }> {
         let tokensSaved = 0;
         let compactedCount = 0;
 
-        // Find ALL action-result messages that aren't already compacted
+        // Find ALL tool-result messages that aren't already compacted
         const candidates = params.conversationMessages
             .map((msg, index) => ({
                 message: msg,
@@ -3576,7 +3691,7 @@ export class BaseAgent {
 
         return {
             tokensSaved,
-            strategyName: `Aggressively compacted ${compactedCount} action-results`
+            strategyName: `Aggressively compacted ${compactedCount} tool-results`
         };
     }
 
@@ -3649,7 +3764,7 @@ export class BaseAgent {
     /**
      * Attempts to recover from a context length exceeded error using multiple strategies.
      * Uses escalating strategies: remove old results → compact old results → compact all → trim user message.
-     * This approach preserves the user's original request while removing stale action results.
+     * This approach preserves the user's original request while removing stale tool results.
      *
      * @param params - Agent execution parameters (conversationMessages will be modified)
      * @param payload - Current payload to carry forward
@@ -3699,10 +3814,10 @@ export class BaseAgent {
 
         // Try multiple recovery strategies in order
         const strategies = [
-            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentPromptTurn, 5),
-            () => this.recoveryStrategy_CompactOldActionResults(params, tokensToSave, currentPromptTurn, 3),
-            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentPromptTurn, 2),
-            () => this.recoveryStrategy_CompactAllActionResults(params, tokensToSave),
+            () => this.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 5),
+            () => this.recoveryStrategy_CompactOldToolResults(params, tokensToSave, currentPromptTurn, 3),
+            () => this.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 2),
+            () => this.recoveryStrategy_CompactAllToolResults(params, tokensToSave),
             () => Promise.resolve(this.recoveryStrategy_TrimLastUserMessage(params, tokensToSave))
         ];
 
@@ -3807,39 +3922,110 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * Creates a chat message containing action execution results.
-     * 
-     * @param {AgentAction[]} actions - The actions that were executed
-     * @param {any[]} results - The results from action execution
-     * @returns {ChatMessage} A formatted message with action results
+     * Executes a batch of artifact tool calls, recording each as its own
+     * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
+     * with full inputs/outputs captured in InputData/OutputData. Returns the
+     * stored results so the caller can render them into a single recall-friendly
+     * message for the next prompt turn.
+     *
+     * Step naming convention: `Artifact Tool: {toolName}` for log/UI clarity.
+     *
      * @protected
      */
-    protected createActionResultMessage(actions: AgentAction[], results: ActionResult[]): ChatMessage {
-        const actionSummaries: ActionResultSummary[] = actions.map((action, index) => {
-            const result = results[index];
-            const outputParams = result.Params?.filter(p =>
-                p.Type === 'Output' || p.Type === 'Both'
-            ) || [];
+    protected async executeArtifactToolCallsAsSteps(
+        calls: ArtifactToolCall[],
+        params: ExecuteAgentParams,
+    ): Promise<StoredToolResult[]> {
+        // No parentId: artifact tool steps are siblings of the prompt step that
+        // requested them, matching how action steps render. ParentID is reserved
+        // for genuine control-flow nesting (ForEach/While loops, sub-agents), which
+        // artifact tools are never dispatched from.
+        const results = await Promise.all(
+            calls.map(async (call) => {
+                const toolStep = await this.createStepEntity({
+                    stepType: 'Tool',
+                    stepName: `Artifact Tool: ${call.tool}`,
+                    contextUser: params.contextUser,
+                    inputData: {
+                        artifactId: call.artifactId,
+                        tool: call.tool,
+                        input: call.input,
+                    },
+                });
 
-            return {
-                actionName: action.name,
-                success: result.Success,
-                params: outputParams,
-                resultCode: result.Result?.ResultCode || 'N/A',
-                message: result.Message || '(no message)',
-                aiDirectives: result.AIDirectives,
-            };
-        });
+                const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
 
-        return {
+                await this.finalizeStepEntity(
+                    toolStep,
+                    stored.result.success,
+                    stored.result.success ? undefined : stored.result.errorMessage,
+                    {
+                        artifactId: stored.artifactId,
+                        tool: stored.tool,
+                        input: stored.input,
+                        result: stored.result,
+                        durationMs: stored.durationMs,
+                    },
+                );
+
+                return stored;
+            }),
+        );
+        return results;
+    }
+
+    /**
+     * Pushes a single user-role message containing rendered artifact-tool
+     * results into the conversation. This mirrors the action-result
+     * "inject once, then expire" pattern — the LLM sees the results on its
+     * next turn, and older messages are pruned/compacted by
+     * `pruneAndCompactExpiredMessages` instead of being re-rendered into
+     * every system-prompt turn.
+     *
+     * @protected
+     */
+    protected injectArtifactToolResultsMessage(
+        params: ExecuteAgentParams,
+        toolResults: StoredToolResult[],
+    ): void {
+        if (toolResults.length === 0) return;
+        const header = toolResults.length === 1
+            ? 'Artifact tool result:'
+            : `Artifact tool results (${toolResults.length} calls):`;
+        const body = toolResults.map((r, i) => {
+            const heading = `### ${i + 1}. ${r.artifactId}.${r.tool}(${JSON.stringify(r.input)})`;
+            if (r.result.success) {
+                const data = typeof r.result.data === 'string'
+                    ? r.result.data
+                    : JSON.stringify(r.result.data, null, 2);
+                return `${heading}\n\`\`\`json\n${data}\n\`\`\``;
+            }
+            return `${heading}\n**Error:** ${r.result.errorMessage}`;
+        }).join('\n\n');
+
+        const message: AgentChatMessage = {
             role: 'user',
-            content: `Action results:\n${this.formatActionResultsAsMarkdown(actionSummaries)}`
+            content: `${header}\n${body}`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                // Default: keep results visible for a few turns then compact to a
+                // first-N-chars preview. The LLM is taught (via the loop-agent
+                // system prompt) that older tool results are summarised and that
+                // it can re-call the tool if it needs the full result back.
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
         };
+        params.conversationMessages.push(message);
     }
 
     /**
      * Creates a chat message containing sub-agent execution results.
-     * 
+     *
      * @param {AgentSubAgentRequest} subAgent - The sub-agent that was executed
      * @param {any} result - The result from sub-agent execution
      * @returns {ChatMessage} A formatted message with sub-agent results
@@ -4144,10 +4330,16 @@ The context is now within limits. Please retry your request with the recovered c
                 Type: 'Input' as const
             }));
 
-            // Build action context: preserve the agent's context and inject resolved storage account ID
-            const actionContext = this._resolvedStorageAccountId
-                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
-                : params.context;
+            // Build action context: preserve the agent's context by reference
+            // (do NOT spread — spreading destroys class instances, losing
+            // getters/methods on typed contexts like SkipAgentContext).
+            // Stamp the calling agent's identity and resolved storage account ID
+            // directly onto the original context object.
+            const actionContext = typeof params.context === 'object' && params.context ? params.context : {};
+            (actionContext as Record<string, unknown>).AgentID = params.agent.ID;
+            if (this._resolvedStorageAccountId) {
+                (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
+            }
 
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
@@ -5509,8 +5701,8 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
-            // Type assertion required because 'ClientTools' is not yet in the DB StepType value list.
-            // The LoopAgentType.DetermineNextStep() emits this value when the LLM chooses client tools.
+            // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
+            // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
                 return await this.executeClientToolsStep(params, config, previousDecision, stepCount);
             case 'Chat':
@@ -5905,7 +6097,19 @@ The context is now within limits. Please retry your request with the recovered c
             const artifactToolsExecutedThisTurn = !!(artifactToolCalls?.length);
             if (artifactToolsExecutedThisTurn) {
                 this.logStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`, true, params);
-                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls!);
+                // Per-call observability: wrap each invocation in its own AIAgentRunStep
+                // (StepType='Tool') so the run tree shows the calls + their inputs/outputs
+                // at full fidelity instead of a summary buried inside the parent Prompt
+                // step's OutputData. Step naming convention is "Artifact Tool: {tool}".
+                // The result is also surfaced to the agent on the NEXT turn via a
+                // one-shot ChatMessage push (see injectArtifactToolResultsMessage below),
+                // mirroring the action-result inject-once-then-expire pattern instead of
+                // the previous re-render-every-turn `_ARTIFACT_TOOL_RESULTS` template var.
+                const toolResults = await this.executeArtifactToolCallsAsSteps(
+                    artifactToolCalls!,
+                    params,
+                );
+                this.injectArtifactToolResultsMessage(params, toolResults);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
             }
@@ -7580,12 +7784,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Execute tools sequentially (client may not support parallel UI operations)
         for (const tool of clientTools) {
             const stepEntity = await this.createStepEntity({
-                // INTENTIONAL: We use 'Actions' as the DB step type because the MJ: AI Agent Run Steps
-                // entity's StepType value list does not yet include 'ClientTools'. A future database
-                // migration will add 'ClientTools' to the allowed values in the StepType CHECK constraint
-                // and CodeGen will regenerate the types. Until then, client tool steps are recorded under
-                // 'Actions' in the run history. The step name ("Client Tool: {name}") distinguishes them.
-                stepType: 'Actions' as MJAIAgentRunStepEntityExtended['StepType'],
+                stepType: 'Tool',
                 stepName: `Client Tool: ${tool.Name}`,
                 inputData: { toolName: tool.Name, params: tool.Params },
                 contextUser: params.contextUser,
@@ -9522,7 +9721,9 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected IsToolResultMessage(msg: ChatMessage): boolean {
         const messageType = (msg as AgentChatMessage).metadata?.messageType;
-        return messageType === 'action-result' || messageType === 'client-tool-result';
+        return messageType === 'action-result'
+            || messageType === 'client-tool-result'
+            || messageType === 'tool-result';
     }
 
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {

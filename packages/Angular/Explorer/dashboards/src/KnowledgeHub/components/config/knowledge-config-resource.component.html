@@ -1,35 +1,51 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Configuration"
+    Icon="fa-solid fa-cogs"
+    Subtitle="Pipeline, vector store, search, and automation settings">
+    <div meta>
+      @if (HasUnsavedChanges) {
+        <mj-stat-badge
+          Icon="fa-solid fa-circle-exclamation"
+          Label="Unsaved changes"
+          Variant="warning">
+        </mj-stat-badge>
+      }
+    </div>
+    <div actions>
+      @if (HasUnsavedChanges) {
+        <button mjButton variant="secondary" size="sm" (click)="ResetConfiguration()" [disabled]="IsSaving" title="Discard unsaved changes">
+          <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+        </button>
+        <button mjButton variant="primary" size="sm" (click)="SaveConfiguration()" [disabled]="IsSaving" title="Save all settings">
+          <i class="fa-solid fa-floppy-disk"></i> {{IsSaving ? 'Saving…' : 'Save'}}
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 @if (IsLoading) {
     <div class="config-loading">
         <mj-loading text="Loading configuration..." size="medium"></mj-loading>
     </div>
 } @else {
     <div class="config-layout">
-        <!-- Left Navigation -->
-        <nav class="config-nav">
-            <div class="config-nav-header">
-                <i class="fa-solid fa-cogs"></i>
-                <span>Configuration</span>
-            </div>
-            @for (section of Sections; track section.ID) {
-                <button
-                    class="config-nav-item"
-                    [class.config-nav-item-active]="ActiveSection === section.ID"
-                    (click)="SelectSection(section.ID)"
-                >
-                    <i [class]="section.Icon"></i>
-                    <span>{{ section.Label }}</span>
-                </button>
-            }
-        </nav>
+        <mj-left-nav
+            [Sections]="navSections"
+            [ActiveId]="ActiveSection"
+            (ItemClicked)="onNavItemClicked($event)">
+        </mj-left-nav>
 
-        <!-- Content Area -->
-        <div class="config-content">
+        <mj-left-nav-content>
+        <mj-page-header-interior
+            [Title]="currentSection?.Label || ''"
+            [Subtitle]="currentSection?.Description || ''">
+        </mj-page-header-interior>
+        <mj-page-body-interior>
             <!-- Pipeline Settings -->
             @if (ActiveSection === 'pipeline') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Pipeline Settings</h2>
-                    <p class="config-section-desc">Configure how the Knowledge Pipeline processes incoming content.</p>
-
                     <div class="config-group">
                         <label class="config-toggle-row">
                             <div class="config-toggle-info">
@@ -69,8 +85,6 @@
             <!-- Vector Database Settings -->
             @if (ActiveSection === 'vectordb') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Vector Database</h2>
-                    <p class="config-section-desc">Manage the shared vector index and database connection.</p>
 
                     <!-- Setup Progress -->
                     <div class="setup-progress">
@@ -279,8 +293,6 @@
             <!-- Full-Text Indexes -->
             @if (ActiveSection === 'fulltext') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Full-Text Search Entities</h2>
-                    <p class="config-section-desc">Configure which entities are included in full-text search. Entities with text fields (Name, Description, etc.) are automatically discovered.</p>
 
                     @if (IsLoadingFTSEntities) {
                         <mj-loading text="Discovering searchable entities..." size="medium"></mj-loading>
@@ -332,8 +344,6 @@
             <!-- Embedding Models -->
             @if (ActiveSection === 'embedding') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Embedding Models</h2>
-                    <p class="config-section-desc">AI models used for generating vector embeddings from text.</p>
 
                     @if (HasEmbeddingModel) {
                         <div class="config-group">
@@ -376,8 +386,6 @@
             <!-- Thresholds -->
             @if (ActiveSection === 'thresholds') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Scoring Thresholds</h2>
-                    <p class="config-section-desc">Set the scoring thresholds used by search, duplicate detection, and autotagging.</p>
 
                     <div class="config-group">
                         <div class="config-field-row">
@@ -415,13 +423,377 @@
                 </div>
             }
 
+            <!-- Search Scopes Section -->
+            @if (ActiveSection === 'search-scopes') {
+                <div class="config-section">
+                    <div class="scope-manager">
+                        <!-- Scope list -->
+                        <aside class="scope-manager-list">
+                            <div class="scope-manager-list-header">
+                                <span>Scopes ({{ SearchScopes.length }})</span>
+                                <button type="button" class="scope-manager-new-btn" (click)="CreateNewScope()">
+                                    <i class="fa-solid fa-plus"></i> New
+                                </button>
+                            </div>
+                            @if (IsLoadingScopes) {
+                                <div class="scope-manager-loading">Loading&hellip;</div>
+                            } @else if (SearchScopes.length === 0) {
+                                <div class="scope-manager-empty">
+                                    No scopes defined yet. Click <strong>New</strong> to create one.
+                                </div>
+                            } @else {
+                                @for (s of SearchScopes; track s.ID) {
+                                    <button
+                                        type="button"
+                                        class="scope-manager-list-item"
+                                        [class.active]="ActiveScopeID === s.ID"
+                                        (click)="SelectScope(s.ID)">
+                                        <i [class]="s.Icon || 'fa-solid fa-filter'" aria-hidden="true"></i>
+                                        <span class="scope-manager-list-name">{{ s.Name }}</span>
+                                        @if (s.IsGlobal) {
+                                            <span class="scope-manager-badge">Global</span>
+                                        } @else if (s.IsDefault) {
+                                            <span class="scope-manager-badge">Default</span>
+                                        }
+                                    </button>
+                                }
+                            }
+                        </aside>
+
+                        <!-- Scope detail -->
+                        <section class="scope-manager-detail">
+                            @if (ActiveScope) {
+                                <!-- Tab strip -->
+                                <div class="scope-manager-tabs">
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'definition'" (click)="SelectScopeTab('definition')">Definition</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'providers'" (click)="SelectScopeTab('providers')">Providers</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'indexes'" (click)="SelectScopeTab('indexes')">External Indexes</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'entities'" (click)="SelectScopeTab('entities')">Entities</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'storage'" (click)="SelectScopeTab('storage')">Storage</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'permissions'" (click)="SelectScopeTab('permissions')">Permissions</button>
+                                    <div class="scope-manager-tab-spacer"></div>
+                                    @if (ActiveScope.ID) {
+                                        <button type="button" class="scope-manager-open-btn"
+                                                (click)="OpenActiveScopeFullForm()"
+                                                title="Open the full custom form for this scope (Live Preview, Fusion Weights, Reranker, Test Queries, Execution Logs)">
+                                            <i class="fa-solid fa-up-right-from-square"></i> Open Full Form
+                                        </button>
+                                    }
+                                    <button type="button" class="scope-manager-save-btn" (click)="SaveActiveScope()">
+                                        <i class="fa-solid fa-save"></i> Save
+                                    </button>
+                                    @if (!ActiveScope.IsGlobal) {
+                                        <button type="button" class="scope-manager-delete-btn" (click)="DeleteActiveScope()" title="Delete scope">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    }
+                                </div>
+
+                                <!-- Definition tab -->
+                                @if (ActiveScopeTab === 'definition') {
+                                    <div class="scope-definition-grid">
+                                        <label>
+                                            <span>Name</span>
+                                            <input type="text" class="mj-input" [value]="ActiveScope.Name" (change)="ActiveScope.Name = $any($event.target).value">
+                                        </label>
+                                        <label>
+                                            <span>Icon (Font Awesome class)</span>
+                                            <input type="text" class="mj-input" [value]="ActiveScope.Icon || ''" (change)="ActiveScope.Icon = $any($event.target).value">
+                                        </label>
+                                        <label class="scope-definition-full">
+                                            <span>Description</span>
+                                            <textarea rows="2" class="mj-textarea" [value]="ActiveScope.Description || ''" (change)="ActiveScope.Description = $any($event.target).value"></textarea>
+                                        </label>
+                                        <label>
+                                            <span>Status</span>
+                                            <select class="mj-input" [value]="ActiveScope.Status" (change)="ActiveScope.Status = $any($event.target).value">
+                                                <option value="Active">Active</option>
+                                                <option value="Inactive">Inactive</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span>Start at</span>
+                                            <input type="datetime-local" class="mj-input" [value]="FormatScopeDate(ActiveScope.StartAt)" (change)="SetScopeDate(ActiveScope, 'StartAt', $any($event.target).value)">
+                                        </label>
+                                        <label>
+                                            <span>End at</span>
+                                            <input type="datetime-local" class="mj-input" [value]="FormatScopeDate(ActiveScope.EndAt)" (change)="SetScopeDate(ActiveScope, 'EndAt', $any($event.target).value)">
+                                        </label>
+                                        <label class="scope-definition-toggle">
+                                            <input type="checkbox" [checked]="ActiveScope.IsDefault" (change)="ActiveScope.IsDefault = $any($event.target).checked" [disabled]="ActiveScope.IsGlobal">
+                                            <span>Default scope — picked when users/agents don't specify one</span>
+                                        </label>
+                                        <label class="scope-definition-toggle">
+                                            <input type="checkbox" [checked]="ActiveScope.IsGlobal" disabled>
+                                            <span>Global — reserved for the built-in Global scope (read-only)</span>
+                                        </label>
+                                        <label class="scope-definition-full">
+                                            <span>Scope Config (JSON)</span>
+                                            <textarea rows="4" class="mj-textarea scope-code-block" spellcheck="false" [value]="ActiveScope.ScopeConfig || ''" (change)="ActiveScope.ScopeConfig = $any($event.target).value"></textarea>
+                                        </label>
+                                        <label class="scope-definition-full">
+                                            <span>Search Context Config (JSON)</span>
+                                            <textarea rows="4" class="mj-textarea scope-code-block" spellcheck="false" [value]="ActiveScope.SearchContextConfig || ''" (change)="ActiveScope.SearchContextConfig = $any($event.target).value"></textarea>
+                                        </label>
+                                    </div>
+                                }
+
+                                @if (ActiveScopeTab === 'providers') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Providers"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeProviderColumns"
+                                        AddButtonLabel="+ Add provider"
+                                        EmptyMessage="No providers assigned. Without any providers, this scope searches nothing.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'indexes') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope External Indexes"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeExternalIndexColumns"
+                                        AddButtonLabel="+ Add external index"
+                                        EmptyMessage="No external indexes configured for this scope.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'entities') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Entities"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeEntityColumns"
+                                        AddButtonLabel="+ Add entity"
+                                        EmptyMessage="No entities configured. Scoped entity search will return no rows.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'storage') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Storage Accounts"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeStorageColumns"
+                                        AddButtonLabel="+ Add storage folder"
+                                        EmptyMessage="No storage accounts linked to this scope.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'permissions') {
+                                    <div class="scope-permissions-help" style="margin-bottom: 12px; padding: 8px 12px; background: var(--mj-bg-surface-card); border-left: 3px solid var(--mj-brand-primary); border-radius: 4px;">
+                                        <p style="margin: 0; font-size: 0.95em;">
+                                            <i class="fa-solid fa-shield-halved" style="color: var(--mj-brand-primary);"></i>
+                                            <strong>Per-user / per-role grants on this scope.</strong>
+                                            Each row binds <em>either</em> a User <em>or</em> a Role (not both). Levels:
+                                            <code>None</code> = explicit deny that overrides role grants,
+                                            <code>Read</code> = view scope metadata,
+                                            <code>Search</code> = invoke ScopedSearchAction,
+                                            <code>Manage</code> = full edit including authoring permissions.
+                                            Combined with <code>AIAgent.SearchScopeAccess</code> via the resolver — see the spec for the full resolution order.
+                                        </p>
+                                    </div>
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Permissions"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopePermissionColumns"
+                                        AddButtonLabel="+ Grant access"
+                                        EmptyMessage="No explicit grants. Access falls back to agent SearchScopeAccess only.">
+                                    </mj-search-scope-child-grid>
+                                }
+                            } @else {
+                                <div class="scope-manager-empty-detail">
+                                    Select a scope on the left, or click <strong>New</strong> to create one.
+                                </div>
+                            }
+                        </section>
+                    </div>
+                </div>
+            }
+
+            <!-- Search Analytics Section (P3.3) — driven by SearchExecutionLog -->
+            @if (ActiveSection === 'search-analytics') {
+                <div class="config-section-content">
+
+                    @if (AnalyticsLoading) {
+                        <mj-loading text="Loading analytics…" size="medium"></mj-loading>
+                    } @else if (!AnalyticsLoaded) {
+                        <button class="mj-input" type="button" (click)="LoadSearchAnalytics()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Load analytics
+                        </button>
+                    } @else {
+                        <div class="search-analytics-kpi-grid">
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Total runs</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsTotalRuns | number }}</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Success rate</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsSuccessRate }}%</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Hit rate</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsHitRate }}%</span>
+                                <span class="search-analytics-kpi-hint">% of successful runs that returned ≥1 result</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Avg latency</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsAvgLatencyMs }}ms</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">P95 latency</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsP95LatencyMs }}ms</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Reranker spend</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsTotalRerankerCostCents | number:'1.0-2' }}¢</span>
+                            </div>
+                        </div>
+
+                        <h3 class="search-analytics-h3">Top scopes by volume</h3>
+                        @if (AnalyticsTopScopes.length === 0) {
+                            <p class="search-analytics-empty">No runs in the window.</p>
+                        } @else {
+                            <table class="search-analytics-table">
+                                <thead>
+                                    <tr><th>Scope</th><th>Runs</th><th>Avg latency</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (s of AnalyticsTopScopes; track s.ScopeID) {
+                                        <tr>
+                                            <td>{{ s.Name }}</td>
+                                            <td>{{ s.Count | number }}</td>
+                                            <td>{{ s.AvgLatencyMs }}ms</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <h3 class="search-analytics-h3">Reranker spend by driver</h3>
+                        @if (AnalyticsRerankerSpend.length === 0) {
+                            <p class="search-analytics-empty">No rerank invocations in the window.</p>
+                        } @else {
+                            <table class="search-analytics-table">
+                                <thead>
+                                    <tr><th>Reranker</th><th>Calls</th><th>Total cents</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (r of AnalyticsRerankerSpend; track r.Reranker) {
+                                        <tr>
+                                            <td>{{ r.Reranker }}</td>
+                                            <td>{{ r.Count | number }}</td>
+                                            <td>{{ r.TotalCents | number:'1.0-2' }}¢</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <h3 class="search-analytics-h3">Top failure reasons</h3>
+                        @if (AnalyticsTopFailures.length === 0) {
+                            <p class="search-analytics-empty">No failures in the window.</p>
+                        } @else {
+                            <table class="search-analytics-table">
+                                <thead>
+                                    <tr><th>Reason</th><th>Count</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (f of AnalyticsTopFailures; track f.Reason) {
+                                        <tr>
+                                            <td>{{ f.Reason }}</td>
+                                            <td>{{ f.Count | number }}</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <button class="mj-input search-analytics-refresh" type="button" (click)="LoadSearchAnalytics()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                        </button>
+                    }
+                </div>
+            }
+
+            <!-- Permissions Audit Section (P2A.7) -->
+            @if (ActiveSection === 'search-permissions') {
+                <div class="config-section-content">
+                    @if (PermissionsLoading) {
+                        <div class="search-permissions-loading">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading permission rows...
+                        </div>
+                    }
+
+                    @if (PermissionsLoaded && !PermissionsLoading) {
+                        <div class="search-permissions-filters">
+                            <input class="mj-input" type="text" placeholder="Filter by scope name..." [(ngModel)]="PermissionsFilterScope" />
+                            <input class="mj-input" type="text" placeholder="Filter by user/role (name or email)..." [(ngModel)]="PermissionsFilterPrincipal" />
+                            <select class="mj-input" [(ngModel)]="PermissionsFilterLevel">
+                                <option value="">All levels</option>
+                                <option value="None">None</option>
+                                <option value="Read">Read</option>
+                                <option value="Search">Search</option>
+                                <option value="Manage">Manage</option>
+                            </select>
+                            <button class="mj-input" type="button" (click)="RefreshPermissionsAudit()">
+                                <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                            </button>
+                        </div>
+
+                        <div class="search-permissions-summary">
+                            Showing {{ FilteredPermissionsRows.length }} of {{ PermissionsRows.length }} rows
+                        </div>
+
+                        @if (FilteredPermissionsRows.length === 0) {
+                            <div class="search-permissions-empty">
+                                No permission rows match your filters.
+                            </div>
+                        } @else {
+                            <table class="search-permissions-table">
+                                <thead>
+                                    <tr>
+                                        <th>Scope</th>
+                                        <th>Principal</th>
+                                        <th>Type</th>
+                                        <th>Permission Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (row of FilteredPermissionsRows; track row.ID) {
+                                        <tr>
+                                            <td>{{ row.SearchScopeName }}</td>
+                                            <td>
+                                                @if (row.UserID) {
+                                                    {{ row.UserName }} <span class="search-permissions-secondary">({{ row.UserEmail }})</span>
+                                                } @else {
+                                                    {{ row.RoleName }}
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (row.UserID) { <span class="search-permissions-tag">User</span> }
+                                                @if (row.RoleID) { <span class="search-permissions-tag">Role</span> }
+                                            </td>
+                                            <td>
+                                                <span class="search-permissions-level search-permissions-level-{{ row.PermissionLevel | lowercase }}">{{ row.PermissionLevel }}</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+            }
+
             <!-- Scheduling Section -->
             @if (ActiveSection === 'scheduling') {
                 <div class="config-section-content">
-                    <h2 class="config-section-title"><i class="fa-solid fa-clock"></i> Scheduling</h2>
-                    <p class="config-section-desc">Manage automated pipeline schedules for content classification and vector sync. Create schedules here or manage all schedules in the dedicated Scheduling app.</p>
                     <div style="margin-top: 16px;">
-                        <app-scheduling-resource></app-scheduling-resource>
+                        <app-scheduling-resource [HideToolbar]="true"></app-scheduling-resource>
                     </div>
                 </div>
             }
@@ -442,6 +814,9 @@
                     </button>
                 </div>
             }
-        </div>
+        </mj-page-body-interior>
+        </mj-left-nav-content>
     </div>
 }
+  </mj-page-body>
+</mj-page-layout>

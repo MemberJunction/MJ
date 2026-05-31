@@ -1,5 +1,32 @@
 # @memberjunction/ng-kanban
 
+## 5.36.0
+
+### Patch Changes
+
+- @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/global@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [389d356]
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

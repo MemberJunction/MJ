@@ -1369,6 +1369,59 @@ export function EscapeHTML(text: string): string {
 }
 
 /**
+ * Build an HTML-safe string with every case-insensitive occurrence of `query` inside
+ * `text` wrapped in the supplied `<mark>` tag. Designed for search-result UIs whose
+ * output is bound to Angular's `[innerHTML]` (or any equivalent that trusts raw HTML).
+ *
+ * SECURITY: The result IS raw HTML. Each text segment (before / match / after) is
+ * HTML-escaped *individually* before concatenation. Callers must pass plain text,
+ * not pre-escaped HTML — escaping the input up-front would corrupt entity codes
+ * when the search term overlaps an entity (e.g. searching "amp" inside `&amp;`)
+ * and is the exact failure mode this helper is built to prevent.
+ *
+ * Behavior notes:
+ *  - Case-insensitive match; original casing of `text` is preserved in the output.
+ *  - All occurrences are highlighted (matches the behavior of a `/.../gi` regex).
+ *  - `query` is treated as a literal string — no regex semantics, so search terms
+ *    like `.` or `$10` work as users expect.
+ *  - Empty/falsy `query` returns `EscapeHTML(text)` so the result is always
+ *    `[innerHTML]`-safe.
+ *
+ * @param text - The plain text to search and render.
+ * @param query - The substring to highlight (literal match, case-insensitive).
+ * @param markClass - Optional CSS class to apply to the `<mark>` element.
+ * @returns An HTML string safe for `[innerHTML]` binding.
+ */
+export function HighlightSearchMatches(text: string, query: string, markClass?: string): string {
+  if (!text) return text;
+  const trimmed = query?.trim() ?? '';
+  if (!trimmed) return EscapeHTML(text);
+
+  const queryLower = trimmed.toLowerCase();
+  const queryLen = trimmed.length;
+  const textLower = text.toLowerCase();
+
+  let cursor = 0;
+  let result = '';
+  let matchIndex = textLower.indexOf(queryLower, cursor);
+
+  if (matchIndex === -1) return EscapeHTML(text);
+
+  const openTag = markClass ? `<mark class="${EscapeHTML(markClass)}">` : '<mark>';
+
+  while (matchIndex !== -1) {
+    const before = text.substring(cursor, matchIndex);
+    const match = text.substring(matchIndex, matchIndex + queryLen);
+    result += `${EscapeHTML(before)}${openTag}${EscapeHTML(match)}</mark>`;
+    cursor = matchIndex + queryLen;
+    matchIndex = textLower.indexOf(queryLower, cursor);
+  }
+
+  result += EscapeHTML(text.substring(cursor));
+  return result;
+}
+
+/**
  * Checks if two dates differ only by a timezone-like shift.
  * Returns true if the difference is EXACTLY a whole number of hours
  * (no variance in minutes/seconds/milliseconds) and within 23 hours.

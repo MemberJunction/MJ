@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "STT",
+      "Description": "Speech-to-text. Streaming or batch transcription of audio into text. Providers: Deepgram, AssemblyAI, OpenAI Whisper, Azure Speech.",
+      "DefaultInputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "DefaultOutputModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+      "SupportsPrefill": false
+    },
+    "primaryKey": {
+      "ID": "171298BA-5025-4C45-AB02-F6497F71FE17"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:16:21.134Z",
+      "checksum": "510333e610bb75bf7960e9c9786e28d881e9b5d7acc8836d5c61a15ab6de7394"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TTS",
+      "Description": "Text-to-speech. Streaming or batch synthesis of text into audio. Providers: ElevenLabs, Cartesia, Azure Speech, OpenAI.",
+      "DefaultInputModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+      "DefaultOutputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "SupportsPrefill": false
+    },
+    "primaryKey": {
+      "ID": "45AEA168-0721-443E-9D22-E3C3466E06D4"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:16:21.145Z",
+      "checksum": "3b3eba92ccad1108953cb98bfe05d7902d06b4f1f5ffb939a5357a39c031b2dd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "RealtimeSpeech",
+      "Description": "Bidirectional speech-to-speech. A single model that ingests audio and emits audio (with or without native tool calling). Providers: OpenAI gpt-realtime, Google Gemini Live, ElevenLabs Conversational AI, NVIDIA PersonaPlex, Kyutai Moshi.",
+      "DefaultInputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "DefaultOutputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "SupportsPrefill": false
+    },
+    "primaryKey": {
+      "ID": "A60C30D5-9713-4A4E-BA8B-E15C1624486A"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:16:21.154Z",
+      "checksum": "827b80d6c00bc3d3ef9fc3603d3bceb953156409a583bf0fb39a1e4fcfc6a65f"
+    }
+  }
+]

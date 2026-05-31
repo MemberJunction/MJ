@@ -46,20 +46,6 @@ interface ErrorHotspot {
   standalone: false,
   selector: 'app-analytics-executive-summary',
   template: `
-    <!-- Filter Bar -->
-    <app-analytics-filter-bar
-      [TimeRange]="TimeRange"
-      [Filters]="Filters"
-      [ShowCompareToggle]="true"
-      [ShowModelFilter]="false"
-      [ShowAgentFilter]="false"
-      [ShowPromptFilter]="false"
-      [ShowStatusFilter]="false"
-      (TimeRangeChange)="OnTimeRangeChange($event)"
-      (FiltersChange)="OnFiltersChange($event)"
-      (CompareToggled)="OnCompareToggled($event)"
-    ></app-analytics-filter-bar>
-
     @if (IsLoading && KpiCards.length === 0) {
       <div class="loading-container">
         <mj-loading text="Loading executive summary..." size="medium"></mj-loading>

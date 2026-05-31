@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -17,7 +17,7 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { sep } from 'node:path';
+import { sep, dirname, join } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -101,9 +101,12 @@ export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
+export * from './resolvers/SearchKnowledgeStreamResolver.js';
+export * from './resolvers/AvailableSearchProvidersResolver.js';
 export * from './resolvers/FetchEntityVectorsResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
+export * from './resolvers/ChannelSessionResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
 export * from './resolvers/TaskResolver.js';
@@ -422,7 +425,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       url: process.env.REDIS_URL,
       keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
       enablePubSub: true,
-      enableLogging: true,
+      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
     });
     (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
     await redisProvider.StartListening();
@@ -727,6 +730,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     res.status(200).json({ status: 'ok' });
   });
 
+  // Static-file serving for ./public — used by the voice demo page and any
+  // other developer-facing static assets. Registered before auth middleware
+  // so the demo HTML loads without a token; the page itself authenticates
+  // its GraphQL calls. Source path resolves regardless of dist/ layout.
+  const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+  app.use(express.static(publicDir));
+
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
     app.use(mw);
@@ -904,6 +914,19 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       } catch (error) {
         console.error('❌ Error stopping scheduled jobs service:', error);
       }
+    }
+
+    // Drain anything self-registered with ShutdownRegistry — QueueManager,
+    // future engines/services with timers/intervals/listeners. Each is
+    // responsible for being idempotent and not throwing.
+    try {
+      const count = ShutdownRegistry.Instance.Count;
+      if (count > 0) {
+        await ShutdownRegistry.Instance.ShutdownAll();
+        console.log(`✅ ShutdownRegistry drained ${count} registered service(s)`);
+      }
+    } catch (error) {
+      console.error('❌ Error draining ShutdownRegistry:', error);
     }
 
     // Close server

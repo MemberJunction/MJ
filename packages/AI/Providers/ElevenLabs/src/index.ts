@@ -1,10 +1,26 @@
 import { RegisterClass } from "@memberjunction/global";
-import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer, AudioFrame, StreamingTTSOptions } from "@memberjunction/ai";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import WebSocket from "ws";
+import { AsyncQueue } from "./helpers/AsyncQueue";
+
+/**
+ * Loose shape for inbound ElevenLabs WS messages. The server emits
+ * `{ audio: <base64>, isFinal?: boolean }` for audio chunks; final messages
+ * may omit `audio`. Other shapes (e.g. error envelopes) are tolerated.
+ */
+interface ElevenLabsInboundMessage {
+    audio?: string | null;
+    isFinal?: boolean;
+    error?: string;
+    message?: string;
+}
 
 @RegisterClass(BaseAudioGenerator, "ElevenLabsAudioGenerator")
 export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     private _elevenLabs: ElevenLabsClient;
+
+    public override SupportsStreaming = true;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -167,6 +183,152 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     }
 
     public async GetSupportedMethods() {
-        return ["CreateSpeech", "GetVoices", "GetModels", "GetPronounciationDictionaries"];
+        return ["CreateSpeech", "SynthesizeStream", "GetVoices", "GetModels", "GetPronounciationDictionaries"];
+    }
+
+    /**
+     * Resolves the ElevenLabs voice ID to use for a streaming request.
+     * Order of precedence:
+     *   1. `opts.VoiceProfile.ProviderOverridesJSON.elevenlabs.voiceId`
+     *   2. Env var `ELEVENLABS_DEFAULT_VOICE_ID`
+     *   3. First voice returned by `GetVoices()`
+     */
+    private async ResolveVoiceId(opts: StreamingTTSOptions): Promise<string> {
+        // 1. ProviderOverridesJSON
+        const overrides = opts.VoiceProfile?.ProviderOverridesJSON;
+        if (overrides) {
+            try {
+                const parsed = JSON.parse(overrides) as { elevenlabs?: { voiceId?: string } };
+                const voiceId = parsed?.elevenlabs?.voiceId;
+                if (voiceId && typeof voiceId === 'string') return voiceId;
+            } catch {
+                // ignore malformed overrides; fall through to next strategy
+            }
+        }
+
+        // 2. Env var
+        const envVoiceId = process.env.ELEVENLABS_DEFAULT_VOICE_ID;
+        if (envVoiceId) return envVoiceId;
+
+        // 3. First listed voice
+        const voices = await this.GetVoices();
+        if (voices.length === 0) {
+            throw new Error('ElevenLabs SynthesizeStream: no voices available — supply VoiceProfile.ProviderOverridesJSON.elevenlabs.voiceId or set ELEVENLABS_DEFAULT_VOICE_ID.');
+        }
+        return voices[0].id;
+    }
+
+    /**
+     * Streaming text-to-speech via ElevenLabs WebSocket API. Consumes
+     * `opts.TextStream` incrementally and yields PCM16 audio frames as the
+     * server emits them. Uses Flash v2.5 by default (~75 ms first-chunk
+     * latency) — override via `ELEVENLABS_TTS_MODEL` env var.
+     *
+     * Cleans up the WS connection when the caller stops iterating (via the
+     * async iterator's `return()` hook).
+     */
+    public override async *SynthesizeStream(opts: StreamingTTSOptions): AsyncIterable<AudioFrame> {
+        const voiceId = await this.ResolveVoiceId(opts);
+        const modelId = process.env.ELEVENLABS_TTS_MODEL || 'eleven_flash_v2_5';
+        const sampleRateHz = opts.SampleRateHz ?? 16000;
+        const url = `wss://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream-input?model_id=${encodeURIComponent(modelId)}&output_format=pcm_${sampleRateHz}`;
+
+        const ws = new WebSocket(url);
+        const audioQueue = new AsyncQueue<AudioFrame>();
+
+        // Wait for the socket to open before sending anything.
+        await new Promise<void>((resolve, reject) => {
+            ws.once('open', () => resolve());
+            ws.once('error', (err: Error) => reject(err));
+        });
+
+        // Send initial voice settings + auth in one frame (ElevenLabs accepts
+        // xi_api_key on the first message instead of a header).
+        ws.send(JSON.stringify({
+            text: ' ', // ElevenLabs requires a non-empty first message; space is the documented init token
+            voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+            generation_config: { chunk_length_schedule: [120, 160, 250, 290] },
+            xi_api_key: this.apiKey,
+        }));
+
+        // Wire up server -> queue plumbing.
+        ws.on('message', (raw: WebSocket.RawData) => {
+            try {
+                const text = typeof raw === 'string' ? raw : raw.toString('utf8');
+                const msg = JSON.parse(text) as ElevenLabsInboundMessage;
+                if (msg.error) {
+                    audioQueue.Fail(new Error(`ElevenLabs stream error: ${msg.error}${msg.message ? ` — ${msg.message}` : ''}`));
+                    return;
+                }
+                if (msg.audio) {
+                    const data = Buffer.from(msg.audio, 'base64');
+                    audioQueue.Push({
+                        data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+                        sampleRateHz,
+                        channelCount: 1,
+                        mediaType: 'audio/pcm',
+                    });
+                }
+                if (msg.isFinal === true) {
+                    audioQueue.Close();
+                }
+            } catch (err) {
+                audioQueue.Fail(err instanceof Error ? err : new Error(String(err)));
+            }
+        });
+
+        ws.on('error', (err: Error) => {
+            audioQueue.Fail(err);
+        });
+
+        ws.on('close', () => {
+            audioQueue.Close();
+        });
+
+        // Drive the input stream in the background so we can yield audio
+        // concurrently. Errors propagate via audioQueue.Fail().
+        void (async () => {
+            try {
+                for await (const token of opts.TextStream) {
+                    if (ws.readyState !== WebSocket.OPEN) break;
+                    if (token.length === 0) continue;
+                    ws.send(JSON.stringify({ text: token, try_trigger_generation: false }));
+                }
+                if (ws.readyState === WebSocket.OPEN) {
+                    // End-of-input sentinel: per ElevenLabs's `stream-input`
+                    // WebSocket API, an empty-string message terminates the
+                    // input stream — ElevenLabs then sends final audio + an
+                    // `isFinal: true` event and closes the socket.
+                    //
+                    // DO NOT include `flush: true` here. `flush: true` means
+                    // "generate audio for the buffered text RIGHT NOW but
+                    // keep accepting more text." We were sending both, which
+                    // ElevenLabs interpreted as "flush, stay open"; the
+                    // socket then idled for 20s and they fired
+                    // `input_timeout_exceeded`. That surfaced to the engine
+                    // as a turn-level error AFTER the user had already heard
+                    // their reply — confusing and broken.
+                    ws.send(JSON.stringify({ text: '' }));
+                }
+            } catch (err) {
+                audioQueue.Fail(err instanceof Error ? err : new Error(String(err)));
+                this.SafeCloseSocket(ws);
+            }
+        })();
+
+        try {
+            for await (const frame of audioQueue) {
+                yield frame;
+            }
+        } finally {
+            // Honor caller cancellation (early `break`) by closing the socket.
+            this.SafeCloseSocket(ws);
+        }
+    }
+
+    private SafeCloseSocket(ws: WebSocket): void {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            try { ws.close(); } catch { /* ignore */ }
+        }
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ui-components",
-  "version": "5.33.0",
+  "version": "5.36.0",
   "description": "MemberJunction: Angular UI Components - reusable standalone components replacing Kendo UI dependencies.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -10,7 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "npm run clean && ngc && npm run copy-assets",
-    "copy-assets": "cpy src/lib/button/button.scss dist/lib/button --flat && cpy src/lib/dialog/dialog.scss dist/lib/dialog --flat && cpy src/lib/dropdown/dropdown.scss dist/lib/dropdown --flat && cpy src/lib/combobox/combobox.scss dist/lib/combobox --flat && cpy src/lib/input/input.scss dist/lib/input --flat && cpy src/lib/input/input-switch-progress.scss dist/lib/input --flat && cpy src/lib/datepicker/datepicker.scss dist/lib/datepicker --flat && cpy src/lib/splitter/splitter.scss dist/lib/splitter --flat && cpy src/lib/accordion/accordion.scss dist/lib/accordion --flat && cpy src/lib/window/window.scss dist/lib/window --flat && cpy src/lib/input/chip.scss dist/lib/input --flat",
+    "copy-assets": "cpy src/lib/button/button.scss dist/lib/button --flat && cpy src/lib/dialog/dialog.scss dist/lib/dialog --flat && cpy src/lib/dropdown/dropdown.scss dist/lib/dropdown --flat && cpy src/lib/combobox/combobox.scss dist/lib/combobox --flat && cpy src/lib/input/input.scss dist/lib/input --flat && cpy src/lib/input/input-switch-progress.scss dist/lib/input --flat && cpy src/lib/datepicker/datepicker.scss dist/lib/datepicker --flat && cpy src/lib/splitter/splitter.scss dist/lib/splitter --flat && cpy src/lib/accordion/accordion.scss dist/lib/accordion --flat && cpy src/lib/window/window.scss dist/lib/window --flat && cpy src/lib/input/chip.scss dist/lib/input --flat && cpy src/lib/page-header/page-header.scss dist/lib/page-header --flat",
     "clean": "rimraf dist",
     "test:watch": "vitest"
   },

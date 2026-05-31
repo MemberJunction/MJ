@@ -1,5 +1,6 @@
 import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } from '@memberjunction/core';
 import { GetDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { SQLParser } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
@@ -262,27 +263,83 @@ export class RenderPipeline {
         };
     }
 
+    /**
+     * Injects a row-cap (`TOP N` for SQL Server, `LIMIT N` for Postgres) onto
+     * the outermost SELECT of `sql`.
+     *
+     * Uses an AST-based rewrite so CTE queries (`WITH … SELECT …`), nested
+     * subqueries, comments, and casing are all handled correctly. The cap is
+     * applied to the outermost projection only, leaving any inner `TOP N` /
+     * `LIMIT N` clauses inside CTE definitions or subqueries untouched.
+     *
+     * For shapes the parser can't represent at the top level
+     * (UNION/INTERSECT/EXCEPT, vendor-specific T-SQL the parser rejects, sqlify
+     * round-trip failures), falls back to wrapping the original SQL in
+     * `SELECT TOP N * FROM (<original>) AS _capped` — always safe because the
+     * inner SQL is treated as opaque.
+     */
     private static applyMaxRows(sql: string, maxRows: number, platform: DatabasePlatform): string {
-        const trimmed = sql.trim();
-
-        if (/\bTOP\s+\d/i.test(trimmed) || /\bLIMIT\s+\d/i.test(trimmed)) {
-            return sql;
-        }
-
         const dialect = RenderPipeline.getDialect(platform);
-        const limitResult = dialect.LimitClause(maxRows);
+        const fromAst = RenderPipeline.applyMaxRowsViaAst(sql, maxRows, dialect);
+        if (fromAst !== null) return fromAst;
+        return RenderPipeline.applyMaxRowsViaSubqueryWrap(sql, maxRows, dialect);
+    }
 
-        if (limitResult.prefix) {
-            // SQL Server style: inject TOP N after SELECT
-            return trimmed.replace(
-                /^(SELECT\s+(?:DISTINCT\s+)?)/i,
-                `$1${limitResult.prefix} `
-            );
+    private static applyMaxRowsViaAst(sql: string, maxRows: number, dialect: SQLDialect): string | null {
+        const ast = SQLParser.ParseSQL(sql, dialect);
+        if (!ast) return null;
+
+        const root = Array.isArray(ast) ? ast[0] : ast;
+        if (!root) return null;
+
+        // Non-SELECT (INSERT/UPDATE/DELETE/MERGE): row caps don't apply — leave alone.
+        // Discriminating on `type` narrows `root` to node-sql-parser's `Select` shape.
+        if (root.type !== 'select') return sql;
+
+        // `top` is a SQL Server-specific field on the Select node that node-sql-parser's
+        // published .d.ts omits. Widen the narrowed type via intersection so we can
+        // read/write it without an `as unknown` escape hatch.
+        const selectNode = root as typeof root & {
+            top?: { value: number; percent: number | null } | null;
+        };
+
+        // UNION/INTERSECT/EXCEPT: outer SELECT has set_op + _next branches. Injecting
+        // `top` here only caps the first branch, so defer to the subquery wrap.
+        if (selectNode.set_op) return null;
+
+        // Idempotency: an explicit outer TOP/LIMIT wins over MaxRows.
+        // node-sql-parser distinguishes "no LIMIT" by an empty `limit.value` array
+        // on Postgres (the wrapper object is always present), while SQL Server uses
+        // `top === null`. Check both shapes so we don't double-inject.
+        if (selectNode.top != null) return sql;
+        if (selectNode.limit != null && selectNode.limit.value.length > 0) return sql;
+
+        const limitClause = dialect.LimitClause(maxRows);
+        if (limitClause.prefix) {
+            // SQL Server: { value, percent } matches node-sql-parser's parsed shape
+            selectNode.top = { value: maxRows, percent: null };
+        } else {
+            // PostgreSQL: { seperator, value[] } — note the parser's spelling of "seperator"
+            selectNode.limit = { seperator: '', value: [{ type: 'number', value: maxRows }] };
         }
 
-        // PostgreSQL style: append LIMIT N
-        const withoutSemicolon = trimmed.replace(/;\s*$/, '');
-        return `${withoutSemicolon}\n${limitResult.suffix}`;
+        try {
+            return SQLParser.SqlifyAST(ast, dialect);
+        } catch {
+            return null;
+        }
+    }
+
+    private static applyMaxRowsViaSubqueryWrap(sql: string, maxRows: number, dialect: SQLDialect): string {
+        const trimmed = sql.trim().replace(/;\s*$/, '');
+        const limitClause = dialect.LimitClause(maxRows);
+
+        if (limitClause.prefix) {
+            // SQL Server: outer projection cap. The optimizer pushes TOP N through trivially.
+            return `SELECT ${limitClause.prefix} * FROM (${trimmed}) AS _capped`;
+        }
+        // PostgreSQL: appending LIMIT N is always legal at the end of a SELECT/CTE.
+        return `${trimmed}\n${limitClause.suffix}`;
     }
 
     private static getDialect(platform: DatabasePlatform): SQLDialect {

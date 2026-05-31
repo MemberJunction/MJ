@@ -1,0 +1,46 @@
+{
+  "name": "@memberjunction/ai-agent-channel-runtime",
+  "type": "module",
+  "version": "5.36.0",
+  "description": "MemberJunction: AI Agent Channel Runtime — orchestrates per-channel turn loops (text-chat, voice-cascaded, voice-realtime, phone, video-realtime) on top of @memberjunction/ai-agents. Skeleton; concrete engines/transports land in later sub-phases.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/global": "5.36.0",
+    "@memberjunction/core": "5.36.0",
+    "@memberjunction/core-entities": "5.36.0",
+    "@memberjunction/ai": "5.36.0",
+    "@memberjunction/ai-core-plus": "5.36.0",
+    "@memberjunction/ai-agents": "5.36.0",
+    "@memberjunction/aiengine": "5.36.0",
+    "@livekit/rtc-node": "^0.13.28",
+    "livekit-server-sdk": "^2.15.3",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "@types/ws": "8.18.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "optionalDependencies": {
+    "onnxruntime-node": "^1.26.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

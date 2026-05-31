@@ -1,8 +1,9 @@
 import { BaseModel, BaseParams } from "./baseModel";
 import { ChatResult } from "./chat.types";
+import { AudioFrame, StreamingSTTOptions, StreamingTTSOptions, TranscriptEvent } from "./baseRealtimeSpeech";
 
 /**
- * Base class for all audio generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all 
+ * Base class for all audio generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all
  * sub-classes will support all methods. If a method is not supported an exception will be thrown, use the GetSupportedMethods method to determine
  * what methods are supported by a specific sub-class.
  */
@@ -13,6 +14,29 @@ export abstract class BaseAudioGenerator extends BaseModel {
     public abstract GetModels(): Promise<AudioModel[]>
     public abstract GetPronounciationDictionaries(): Promise<PronounciationDictionary[]>
     public abstract GetSupportedMethods(): Promise<string[]>
+
+    /**
+     * Optional streaming speech-to-text. Providers that support incremental
+     * transcription (e.g. Deepgram, AssemblyAI realtime) implement this to yield
+     * partial and final `TranscriptEvent`s as audio flows in. Existing batch-only
+     * subclasses can omit this entirely — it is intentionally optional so they
+     * compile unchanged.
+     */
+    public TranscribeStream?(opts: StreamingSTTOptions): AsyncIterable<TranscriptEvent>;
+
+    /**
+     * Optional streaming text-to-speech. Providers that can begin emitting audio
+     * before the full text is known (e.g. ElevenLabs websocket, Azure TTS streaming)
+     * implement this. Existing batch-only subclasses can omit it.
+     */
+    public SynthesizeStream?(opts: StreamingTTSOptions): AsyncIterable<AudioFrame>;
+
+    /**
+     * Optional capability flag. When `true`, callers can rely on `TranscribeStream`
+     * / `SynthesizeStream` being implemented. Subclasses that only do batch leave
+     * this `undefined` (falsy).
+     */
+    public SupportsStreaming?: boolean;
 }
 
 /**

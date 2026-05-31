@@ -11,6 +11,7 @@ import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
+import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 /**
  * Reusable collapsible panel for form sections.
@@ -156,6 +157,8 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   @ViewChild('panelContent') private panelContentRef?: ElementRef<HTMLElement>;
   private resizeObserver?: ResizeObserver;
   private resizeDebounceTimer?: ReturnType<typeof setTimeout>;
+  /** ResizeObserver fires once synchronously on observe(); that initial measurement is not a user resize. */
+  private resizeObserverPrimed = false;
 
   /**
    * Persisted panel height for related-entity panels.
@@ -360,6 +363,16 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // Run outside Angular zone to avoid triggering change detection on every resize frame
     this.ngZone.runOutsideAngular(() => {
       this.resizeObserver = new ResizeObserver((entries) => {
+        // Skip the synchronous initial fire emitted when observe() is called — it's the
+        // panel's own first measurement on load, not a user-initiated resize. Persisting
+        // it would write a spurious panelHeight for every panel on form open.
+        if (!this.resizeObserverPrimed) {
+          this.resizeObserverPrimed = true;
+          return;
+        }
+        // Only a height change while the panel is expanded reflects a genuine user drag of
+        // the resize handle. Ignore reflows while collapsed (e.g. content settling on load).
+        if (!this.Expanded) return;
         const entry = entries[0];
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
@@ -396,13 +409,11 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     const fieldsMatch = this.FieldNames.includes(searchTerm);
     this.IsVisible = sectionMatches || fieldsMatch;
 
-    if (this.IsVisible && sectionMatches) {
-      const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escaped, 'gi');
-      this.DisplayName = this.SectionName.replace(regex, '<mark class="mj-forms-search-highlight">$&</mark>');
-    } else {
-      this.DisplayName = this.SectionName;
-    }
+    // DisplayName is bound to `[innerHTML]` in the template — must always be HTML-safe.
+    this.DisplayName =
+      this.IsVisible && sectionMatches
+        ? HighlightSearchMatches(this.SectionName, searchTerm, 'mj-forms-search-highlight')
+        : EscapeHTML(this.SectionName);
 
     this.cdr.markForCheck();
   }

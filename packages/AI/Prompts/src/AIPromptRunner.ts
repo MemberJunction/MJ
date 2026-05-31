@@ -20,10 +20,21 @@ import {
     AIPromptParams
 } from '@memberjunction/ai-core-plus';
 import * as JSON5 from 'json5';
- 
 
-
-
+/**
+ * Best-guess MIME family for a ChatMessage content block type when the block
+ * doesn't carry its own mimeType. Used by stripUnsupportedMediaBlocks to
+ * compare against the driver's GetFileCapabilities() list.
+ */
+function mimeFromBlockType(type: string): string {
+    switch (type) {
+        case 'image_url': return 'image/*';
+        case 'audio_url': return 'audio/*';
+        case 'video_url': return 'video/*';
+        case 'file_url': return 'application/octet-stream';
+        default: return 'application/octet-stream';
+    }
+}
 
 
 
@@ -3351,8 +3362,59 @@ export class AIPromptRunner {
       // and inject qualifying files as content blocks in the last user message.
       this.injectNativeFileInputs(params, llm, chatParams, verbose);
 
+      // Strip media content blocks (image_url / audio_url / video_url / file_url)
+      // that the selected driver doesn't support — the conversation builder
+      // doesn't know which model the prompt will pick, so unsupported blocks
+      // are turned into visible text markers so the agent knows the file is
+      // attached but can't process it with the current model. See
+      // plans/artifact-attachment-unification.md §4 (modality enforcement).
+      this.stripUnsupportedMediaBlocks(llm, chatParams, model, verbose, params);
+
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
+
+      // Wire token-level streaming when the caller has provided an `onStreaming`
+      // callback on AIPromptParams. BaseLLM.ChatCompletion() dispatches to its
+      // streaming branch only when `streaming === true`, `streamingCallbacks`
+      // is set, AND the provider has `SupportsStreaming === true` — providers
+      // that don't support streaming silently fall back to the non-streaming
+      // path, which is the correct behavior. See chat.types.ts:108 for the
+      // StreamingChatCallbacks contract and baseLLM.ts:241-291 for the dispatch
+      // logic.
+      //
+      // The user-supplied `onStreaming` callback is wrapped in try/catch on
+      // every invocation — a buggy user callback must never tear down the
+      // streaming pipeline mid-completion.
+      if (params.onStreaming) {
+        chatParams.streaming = true;
+        const userOnStreaming = params.onStreaming;
+        chatParams.streamingCallbacks = {
+          OnContent: (chunk: string, isComplete: boolean) => {
+            try {
+              userOnStreaming({ content: chunk, isComplete });
+            } catch (cbErr) {
+              this.logError(cbErr instanceof Error ? cbErr : String(cbErr), { category: 'StreamingCallback', model });
+            }
+          },
+          OnComplete: (_result: ChatResult) => {
+            // No-op: the final ChatResult is returned by ChatCompletion() and
+            // flows through the normal post-processing path. The streaming
+            // callback contract is concerned with deltas, not the final value.
+          },
+          OnError: (err: unknown) => {
+            // Best-effort: surface the error to the user callback as a final
+            // "isComplete" delta so a consumer that's bridging into a queue
+            // can close it. We log here regardless.
+            const errArg = err instanceof Error ? err : String(err);
+            this.logError(errArg, { category: 'StreamingError', model });
+            try {
+              userOnStreaming({ content: '', isComplete: true });
+            } catch (cbErr) {
+              this.logError(cbErr instanceof Error ? cbErr : String(cbErr), { category: 'StreamingCallback', model });
+            }
+          },
+        };
+      }
 
       // Execute the model with cancellation support
       if (cancellationToken) {
@@ -3389,8 +3451,142 @@ export class AIPromptRunner {
   }
 
   /**
-   * Builds the message array combining rendered prompt with conversation messages
+   * Walks every message in chatParams and rewrites media content blocks
+   * (image_url / audio_url / video_url / file_url) into visible text markers
+   * when the selected driver doesn't support that MIME modality. Keeps text
+   * blocks intact. The replacement message tells the agent the file exists
+   * and the model can't view it — much better UX than silent failure (model
+   * receives image_url, ignores it, and the agent asks the user to "upload
+   * the image" the user already uploaded).
+   *
+   * No-op when the driver's GetFileCapabilities() returns non-null AND the
+   * block's MIME matches the supported list. The driver baseclass returns
+   * null by default; only providers that declare vision/file support override
+   * it (currently: OpenAI). For everyone else, every media block falls back
+   * to text — exactly what you want when running a text-only model.
    */
+  private stripUnsupportedMediaBlocks(
+    llm: BaseLLM,
+    chatParams: ChatParams,
+    model: { Name?: string } | null | undefined,
+    verbose: boolean,
+    params: AIPromptParams,
+  ): void {
+    const caps = llm.GetFileCapabilities();
+    const modelName = model?.Name ?? '<unknown model>';
+    let stripped = 0;
+
+    for (const msg of chatParams.messages) {
+      // Path 1: replace unsupported media content BLOCKS in array-content messages.
+      if (Array.isArray(msg.content)) {
+        msg.content = msg.content.map((block) => {
+          const blockType = (block as { type?: string }).type;
+          if (blockType !== 'image_url' && blockType !== 'audio_url' && blockType !== 'video_url' && blockType !== 'file_url') {
+            return block;
+          }
+          const blockMime = (block as { mimeType?: string }).mimeType ?? mimeFromBlockType(blockType);
+          if (this.driverSupportsModality(caps, blockMime)) {
+            return block;
+          }
+          const fileName = (block as { fileName?: string }).fileName ?? '(unnamed file)';
+          stripped++;
+          return {
+            type: 'text' as const,
+            content:
+              `[Attachment "${fileName}" (${blockMime}) was provided, but the active model "${modelName}" does not support this modality. ` +
+              `Tell the user the active model cannot process ${blockMime.split('/')[0]} content rather than guessing what the file contains.]`,
+          };
+        });
+        continue;
+      }
+
+      // Path 2: artifacts that went through the tool-dispatch path appear in
+      // the artifact manifest section of the rendered system prompt. The model
+      // gets the manifest as text and decides whether to call get_full — and
+      // for a non-vision model receiving an image manifest entry, get_full
+      // returns base64 it can't interpret, so it pattern-matches few-shot
+      // examples and pretends. Annotate the manifest inline so the model
+      // knows it can't actually view the artifact.
+      if (typeof msg.content === 'string' && msg.role === ChatMessageRole.system) {
+        const before = msg.content;
+        msg.content = this.annotateManifestForUnsupportedMedia(before, caps, modelName);
+        if (msg.content !== before) stripped++;
+      }
+    }
+
+    if (stripped > 0) {
+      this.logStatus(
+        `[ModalityCheck] Annotated ${stripped} unsupported media artifact reference(s) for model "${modelName}". Driver capabilities: ${caps ? caps.SupportedMimeTypes.join(', ') : 'none (driver declares no file support)'}.`,
+        verbose,
+        params,
+      );
+    }
+  }
+
+  /**
+   * Walks the rendered system-prompt text for the `## Available Artifacts`
+   * section emitted by ArtifactToolManager.ToManifestString(). For each
+   * artifact entry whose MIME hint indicates a media type the driver cannot
+   * process, appends a one-line warning so the model doesn't pretend to view
+   * an artifact it can only see as base64.
+   */
+  private annotateManifestForUnsupportedMedia(
+    systemText: string,
+    caps: import('@memberjunction/ai').FileCapabilities | null,
+    modelName: string,
+  ): string {
+    if (!systemText.includes('## Available Artifacts')) return systemText;
+
+    const lines = systemText.split('\n');
+    const result: string[] = [];
+    let inManifest = false;
+    let mutated = false;
+    const entryRegex = /^\*\*[A-Z]+\*\* — .+? \[(?<mime>[^\]]+)\]/;
+
+    for (const line of lines) {
+      if (line.startsWith('## Available Artifacts')) {
+        inManifest = true;
+        result.push(line);
+        continue;
+      }
+      if (inManifest && /^## /.test(line)) {
+        inManifest = false;
+      }
+      result.push(line);
+
+      if (!inManifest) continue;
+      const match = entryRegex.exec(line);
+      if (!match) continue;
+      const mime = (match.groups?.mime ?? '').toLowerCase();
+      const modality = mime.split('/')[0];
+      if (modality !== 'image' && modality !== 'audio' && modality !== 'video') continue;
+      if (this.driverSupportsModality(caps, mime)) continue;
+
+      result.push(
+        `    > ⚠ The active model "${modelName}" cannot process ${modality} content (${mime}). ` +
+          `Calling get_full returns base64 you cannot interpret visually — tell the user the model does not support ${modality} input rather than guessing what this file contains.`,
+      );
+      mutated = true;
+    }
+
+    return mutated ? result.join('\n') : systemText;
+  }
+
+  /**
+   * Returns true when the driver explicitly declares support for this MIME
+   * (exact or subtype-wildcard match). Returns false when capabilities are
+   * null (driver supports no files) or the MIME isn't on the supported list.
+   */
+  private driverSupportsModality(caps: import('@memberjunction/ai').FileCapabilities | null, mimeType: string): boolean {
+    if (!caps) return false;
+    const lower = mimeType.toLowerCase();
+    return caps.SupportedMimeTypes.some((pattern) => {
+      const p = pattern.toLowerCase();
+      if (p.endsWith('/*')) return lower.startsWith(p.slice(0, -1));
+      return lower === p;
+    });
+  }
+
   /**
    * Checks each nativeFileInput against the resolved driver's FileCapabilities
    * and injects qualifying files as content blocks in the last user message.

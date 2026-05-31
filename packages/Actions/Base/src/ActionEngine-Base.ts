@@ -276,6 +276,49 @@ export class RunActionParams<TContext = any> {
     * to honor the caller's provider when supplied while remaining backward compatible.
     */
    public Provider?: IMetadataProvider;
+
+   /**
+    * Optional progress callback for long-running actions. When supplied (typically
+    * by the voice/cascaded channel runtime), the action implementation can call
+    * `params.OnProgress?.('searching customer records...')` to emit human-readable
+    * status updates. The channel runtime uses these messages to drive filler TTS
+    * so the user isn't sitting in silence while a slow action runs.
+    *
+    * Action authors who don't care about progress simply don't invoke this hook;
+    * behavior is unchanged for all existing callers.
+    *
+    * @param status Short human-readable status message (e.g. "looking up account")
+    * @param percent Optional 0–100 completion percentage where applicable
+    */
+   public OnProgress?: (status: string, percent?: number) => void;
+
+   /**
+    * Optional channel context populated by the voice / multi-modal channel runtime
+    * when an action is invoked as part of a `ChannelSession` (voice cascaded,
+    * realtime, phone, etc.). Existing callers pass nothing and behavior is
+    * unchanged — only actions that want channel awareness (e.g. behaving slightly
+    * differently on phone vs. web, or returning shorter responses for TTS) need
+    * to read this field.
+    *
+    * See `plans/audio-agent-architecture.md` → "Tool & Action Integration" → 1.1
+    * for the design intent.
+    */
+   public ChannelContext?: {
+      /** Channel driver name, e.g. 'voice-cascaded', 'realtime', 'phone' */
+      ChannelName: string;
+      /** `ChannelSession` row id for this active session */
+      SessionID: string;
+      /** Optional conversation id when the channel session is bound to a conversation */
+      ConversationID?: string;
+      /** The `AIAgentRun.ID` the action is executing under */
+      AgentRunID: string;
+      /** Optional `AIAgentRunStep.ID` for the step that dispatched this action */
+      AgentRunStepID?: string;
+      /** Opaque handle the channel engine may use to look up transcript context */
+      TranscriptRef?: string;
+      /** True when this action is running in a post-call hook (e.g. ElevenLabs webhook), not live in-session */
+      IsPostCall?: boolean;
+   };
 };
  
 

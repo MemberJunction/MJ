@@ -705,10 +705,44 @@ export type AgentExecutionStreamingCallback = (chunk: {
 }) => void;
 
 /**
+ * An input artifact attached to an agent run. Surfaced to the agent via the
+ * artifact tool manifest and reached through artifact tool calls (json_path,
+ * json_search, etc.) rather than inlined into the prompt.
+ *
+ * This is the typed contract for `ExecuteAgentParams.inputArtifacts`. Lives in
+ * core-plus rather than ai-agents so callers (AgentRunner, base-agent, external
+ * orchestrators) can construct params without importing the runtime package.
+ */
+export interface InputArtifact {
+    name: string;
+    typeName: string;
+    content: string | Buffer;
+    /** MIME type of the artifact content (e.g., 'application/pdf').
+     *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
+    mimeType?: string;
+    /** Optional: class name from ArtifactType.ToolLibraryClass metadata.
+     *  When set, used for plugin-based resolution via ClassFactory. */
+    toolLibraryClass?: string;
+    /** Optional annotation surfaced verbatim on the artifact's manifest entry
+     *  (e.g. "configured for Inline but exceeds inline size cap; delivered via
+     *  tools"). Lets the resolver communicate routing decisions to the LLM. */
+    annotation?: string;
+    /** Resolved DefaultDeliveryMode for this artifact's type. When 'ToolsOnly',
+     *  the agent reaches the content via tool calls and we MUST NOT also offer
+     *  it as a native file input (otherwise we double-deliver: 1 MB JSON would
+     *  go through both the tool manager AND the native-file-input text fallback,
+     *  leaking the full content into the prompt). */
+    deliveryMode?: 'Inline' | 'ToolsOnly';
+    /** Per-instance override that forces ToolsOnly regardless of type default. */
+    forceToolsOnly?: boolean;
+}
+
+/**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
  *                      This allows for type-safe context propagation throughout the execution hierarchy.
+ *                      TContext may be a class instance with getters and methods — never spread it.
  *                      Defaults to any for backward compatibility.
  * @template P - Type of the payload passed to the agent execution
  * @template TAgentTypeParams - Type of agent-type-specific execution parameters.
@@ -814,19 +848,39 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentRun?: MJAIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
+    /**
+     * Optional input artifacts for this run. Consumed by the agent's
+     * ArtifactToolManager: each artifact is registered, surfaced in the
+     * `_ARTIFACT_MANIFEST` template variable, and reached by the LLM via
+     * artifact tool calls (json_path, json_search, etc.).
+     *
+     * Not propagated to sub-agents — sub-agents that need artifact access
+     * gather their own from the conversation in `AgentRunner`.
+     *
+     * @see InputArtifact
+     */
+    inputArtifacts?: InputArtifact[];
     /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
     payload?: P;
-    /** 
+    /**
      * Optional additional context data to pass to the agent execution.
-     * This context is propagated to all sub-agents and actions throughout 
+     * This context is propagated to all sub-agents and actions throughout
      * the execution hierarchy. Use this for runtime-specific data such as:
      * - Environment-specific configuration (API endpoints, feature flags)
      * - User-specific settings or preferences
      * - Session-specific data (request IDs, correlation IDs)
      * - External service credentials or connection information
-     * 
-     * Note: Avoid including sensitive data like passwords or API keys 
-     * unless absolutely necessary, as context may be passed to multiple 
+     *
+     * **IMPORTANT — class instances are supported and must be preserved.**
+     * TContext may be a class with getters, methods, and private state
+     * (e.g., Skip's `SkipAgentContext`). Any code that touches this object
+     * must NOT spread it into a plain object (`{...context}`) because the
+     * spread operator strips the prototype chain, destroying all getters
+     * and methods. Instead, mutate properties directly on the original
+     * object when augmentation is needed.
+     *
+     * Note: Avoid including sensitive data like passwords or API keys
+     * unless absolutely necessary, as context may be passed to multiple
      * agents and actions.
      */
     context?: TContext;
@@ -1369,7 +1423,7 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
@@ -1554,17 +1608,3 @@ export interface ActionChange {
     actionLimits?: Record<string, number>;
 }
 
-// ── Types for action-step output parsing (used by AgentRunner reprocessing) ──
-
-/** Typed shape of the OutputData JSON written by base-agent for action steps */
-export interface ActionStepOutputData {
-    actionResult?: {
-        parameters?: ActionParam[];
-    };
-}
-
-/** Minimal read-only shape loaded from MJ: AI Agent Run Steps for reprocessing */
-export interface ActionStepSummary {
-    ID: string;
-    OutputData: string | null;
-}

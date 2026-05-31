@@ -1,5 +1,107 @@
 # Change Log - @memberjunction/cli
 
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/server-bootstrap-lite@5.36.0
+  - @memberjunction/codegen-lib@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/metadata-sync@5.36.0
+  - @memberjunction/db-auto-doc@5.36.0
+  - @memberjunction/ai-cli@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/query-gen@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/testing-cli@5.36.0
+  - @memberjunction/open-app-engine@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/installer@5.36.0
+  - @memberjunction/sql-converter@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [39710b1]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/open-app-engine@5.35.0
+  - @memberjunction/codegen-lib@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/ai-cli@5.35.0
+  - @memberjunction/db-auto-doc@5.35.0
+  - @memberjunction/metadata-sync@5.35.0
+  - @memberjunction/query-gen@5.35.0
+  - @memberjunction/testing-cli@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/installer@5.35.0
+  - @memberjunction/sql-converter@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [16e799c]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/codegen-lib@5.34.1
+  - @memberjunction/ai-cli@5.34.1
+  - @memberjunction/db-auto-doc@5.34.1
+  - @memberjunction/metadata-sync@5.34.1
+  - @memberjunction/open-app-engine@5.34.1
+  - @memberjunction/query-gen@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/server-bootstrap-lite@5.34.1
+  - @memberjunction/testing-cli@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/installer@5.34.1
+  - @memberjunction/sql-converter@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [5d6110f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [1b258e6]
+- Updated dependencies [e999e0d]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-cli@5.34.0
+  - @memberjunction/codegen-lib@5.34.0
+  - @memberjunction/config@5.34.0
+  - @memberjunction/db-auto-doc@5.34.0
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/installer@5.34.0
+  - @memberjunction/metadata-sync@5.34.0
+  - @memberjunction/open-app-engine@5.34.0
+  - @memberjunction/query-gen@5.34.0
+  - @memberjunction/sql-converter@5.34.0
+  - @memberjunction/sqlserver-dataprovider@5.34.0
+  - @memberjunction/server-bootstrap-lite@5.34.0
+  - @memberjunction/testing-cli@5.34.0
+  - @memberjunction/core@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

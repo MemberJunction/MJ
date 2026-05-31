@@ -391,6 +391,34 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
+   * React to query param changes that arrive AFTER initial load — e.g. clicking a
+   * Home pin for a different conversation, or browser back/forward — when this tab
+   * already exists and is simply re-focused (so ngOnInit / applyConfigurationParams
+   * does NOT run again). Without this, every pin would land on whatever conversation
+   * was already open instead of the pinned one.
+   */
+  protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const conversationId = params['conversationId'] || null;
+    const artifactId = params['artifactId'] || null;
+    const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10) : null;
+
+    // Reflect any artifact intent so the chat area can open it.
+    this.pendingArtifactId = artifactId;
+    this.pendingArtifactVersionNumber = versionNumber;
+
+    if (conversationId && conversationId !== this.selectedConversationId) {
+      // The URL is already the source of truth here — suppress the echo back to it.
+      // selectConversation()'s body is synchronous up to its URL-update check, so
+      // toggling the flag around the call reliably gates that check.
+      const prevSkip = this.skipUrlUpdate;
+      this.skipUrlUpdate = true;
+      void this.selectConversation(conversationId);
+      this.skipUrlUpdate = prevSkip;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
    * Apply navigation state to local selection state.
    * Sets state synchronously so child components see values immediately.
    */

@@ -1,0 +1,632 @@
+/*
+ * Voice Widget — chat-bubble UI.
+ *
+ * Visual design borrowed from packages/Angular/Generic/conversations/
+ * (message-item.component.css, message-input-box.component.css,
+ * actionable-commands.component.css). Same avatar shapes, same asymmetric
+ * bubble radii, same focus-within composer glow. Voice-specific additions:
+ * status dot in the header, mic pulse animation, "speaking" indicator.
+ *
+ * All colors via design tokens. No hardcoded hex.
+ */
+
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.voice-widget {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 400px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    overflow: hidden;
+    color: var(--mj-text-primary);
+    font-family: inherit;
+    box-shadow: var(--mj-shadow-sm);
+}
+
+// ---------------------------------------------------------------------------
+// Header — agent identity + status + start/stop
+// ---------------------------------------------------------------------------
+
+.voice-widget__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.voice-widget__identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0; // allow truncation
+}
+
+.voice-widget__identity-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.voice-widget__identity-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--mj-text-primary);
+}
+
+.voice-widget__identity-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--mj-text-secondary);
+}
+
+.voice-widget__status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--mj-text-muted);
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+
+    &[data-status='connecting'] {
+        background: var(--mj-status-warning);
+        animation: voice-widget-pulse 1.2s ease-in-out infinite;
+    }
+    &[data-status='active'] {
+        background: var(--mj-status-success);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-success) 50%, transparent);
+        animation: voice-widget-status-pulse 2s ease-in-out infinite;
+    }
+    &[data-status='error'] {
+        background: var(--mj-status-error);
+    }
+    &[data-status='ended'] {
+        background: var(--mj-text-muted);
+    }
+}
+
+.voice-widget__speaking-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+    padding: 2px 8px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    color: var(--mj-brand-primary);
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 500;
+
+    i {
+        font-size: 0.7rem;
+        animation: voice-widget-pulse 1.2s ease-in-out infinite;
+    }
+}
+
+.voice-widget__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.voice-widget__icon-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    i {
+        font-size: 0.9rem;
+    }
+
+    &:hover {
+        background: color-mix(in srgb, var(--mj-text-primary) 6%, transparent);
+        color: var(--mj-text-primary);
+    }
+
+    &--danger:hover {
+        background: var(--mj-status-error-bg);
+        color: var(--mj-status-error);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Avatars — agent (square, brand color) vs user (circle, neutral)
+// ---------------------------------------------------------------------------
+
+.voice-widget__avatar {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: var(--mj-text-inverse);
+    flex-shrink: 0;
+
+    &--agent {
+        background: var(--mj-brand-primary);
+        border-radius: 8px;
+    }
+    &--user {
+        background: var(--mj-text-primary);
+        border-radius: 50%;
+    }
+    &--system {
+        background: var(--mj-status-warning);
+        border-radius: 8px;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transcript — chat bubbles
+// ---------------------------------------------------------------------------
+
+.voice-widget__transcript {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--mj-bg-surface);
+    scroll-behavior: smooth;
+}
+
+.voice-widget__transcript::-webkit-scrollbar {
+    width: 8px;
+}
+.voice-widget__transcript::-webkit-scrollbar-thumb {
+    background: var(--mj-border-strong);
+    border-radius: 4px;
+}
+.voice-widget__transcript::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.voice-widget__msg {
+    display: flex;
+    gap: 12px;
+    padding: 8px 16px;
+    animation: voice-widget-fade-in 0.25s ease;
+    position: relative;
+
+    &:hover {
+        background: color-mix(in srgb, var(--mj-text-primary) 2%, transparent);
+        border-radius: 8px;
+    }
+}
+
+.voice-widget__msg-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.voice-widget__msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+}
+
+.voice-widget__msg-sender {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    font-size: 0.8rem;
+}
+
+.voice-widget__msg-time {
+    color: var(--mj-text-muted);
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.voice-widget__msg-bubble {
+    color: var(--mj-text-primary);
+    line-height: 1.5;
+    word-wrap: break-word;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    font-size: 0.9rem;
+
+    // Asymmetric bubbles — borrowed verbatim from message-item.component.css
+    // (user "tail" bottom-left, agent "tail" top-left).
+    .voice-widget__msg[data-role='user'] & {
+        border-radius: 12px 12px 12px 4px;
+        background: color-mix(in srgb, var(--mj-text-primary) 5%, var(--mj-bg-surface-card));
+    }
+    .voice-widget__msg[data-role='agent'] & {
+        border-radius: 4px 12px 12px 12px;
+        background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface-card));
+    }
+    .voice-widget__msg[data-role='system'] & {
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface-card));
+        border-left: 3px solid var(--mj-status-warning);
+        color: var(--mj-status-warning-text);
+        font-size: 0.85rem;
+    }
+
+    &--interim {
+        opacity: 0.7;
+        font-style: italic;
+        background: var(--mj-bg-surface-sunken) !important;
+    }
+}
+
+// Empty state — friendly hint when transcript is blank.
+.voice-widget__empty {
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 32px 24px;
+    color: var(--mj-text-secondary);
+    max-width: 360px;
+}
+
+.voice-widget__empty-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    color: var(--mj-brand-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+}
+
+.voice-widget__empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin: 0 0 4px;
+}
+
+.voice-widget__empty-subtitle {
+    font-size: 0.85rem;
+    color: var(--mj-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+// ---------------------------------------------------------------------------
+// Typing-dots — agent thinking indicator
+// ---------------------------------------------------------------------------
+
+.voice-widget__msg-bubble--thinking {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 14px !important;
+}
+
+.voice-widget__typing-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--mj-text-muted);
+    border-radius: 50%;
+    animation: voice-widget-typing-dot 1.2s ease-in-out infinite;
+
+    &:nth-child(1) { animation-delay: 0s; }
+    &:nth-child(2) { animation-delay: 0.2s; }
+    &:nth-child(3) { animation-delay: 0.4s; }
+}
+
+@keyframes voice-widget-typing-dot {
+    0%, 60%, 100% {
+        opacity: 0.3;
+        transform: translateY(0);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Actionable commands — chip strip
+// ---------------------------------------------------------------------------
+
+.voice-widget__chips-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--mj-bg-surface-sunken);
+    border-top: 1px solid var(--mj-border-subtle);
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
+.voice-widget__chips-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.voice-widget__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.voice-widget__chip {
+    i {
+        margin-right: 4px;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Banners — inline error / info / warning
+// ---------------------------------------------------------------------------
+
+.voice-widget__banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    border-top: 1px solid var(--mj-border-subtle);
+
+    &--error {
+        background: var(--mj-status-error-bg);
+        color: var(--mj-status-error-text);
+
+        i {
+            color: var(--mj-status-error);
+        }
+    }
+    &--warning {
+        background: var(--mj-status-warning-bg);
+        color: var(--mj-status-warning-text);
+
+        i {
+            color: var(--mj-status-warning);
+        }
+    }
+    &--info {
+        background: var(--mj-status-info-bg);
+        color: var(--mj-status-info-text);
+
+        i {
+            color: var(--mj-status-info);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Composer — input box with inset mic + send buttons
+// ---------------------------------------------------------------------------
+
+.voice-widget__composer {
+    padding: 12px 16px;
+    background: var(--mj-bg-surface-card);
+    border-top: 1px solid var(--mj-border-default);
+}
+
+.voice-widget__composer-box {
+    display: flex;
+    align-items: flex-end;
+    background: var(--mj-bg-surface);
+    border: 2px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 4px 4px 4px 12px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: text;
+
+    &:focus-within {
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+    }
+
+    &--disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background: var(--mj-bg-surface-sunken);
+    }
+}
+
+.voice-widget__composer-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 36px;
+    max-height: 200px;
+    padding: 8px 0;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background: transparent;
+    color: var(--mj-text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    resize: none;
+
+    &::placeholder {
+        color: var(--mj-text-muted);
+    }
+    &:disabled {
+        cursor: not-allowed;
+    }
+    &:focus,
+    &:active,
+    &:focus-visible {
+        outline: 0 !important;
+        box-shadow: none !important;
+    }
+}
+
+.voice-widget__composer-actions {
+    display: flex;
+    gap: 4px;
+    align-self: flex-end;
+    padding-bottom: 2px;
+}
+
+.voice-widget__composer-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    flex-shrink: 0;
+
+    i {
+        font-size: 0.95rem;
+    }
+
+    &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
+        color: var(--mj-brand-primary);
+    }
+    &:active:not(:disabled) {
+        transform: scale(0.95);
+    }
+    &:disabled {
+        color: var(--mj-text-disabled);
+        cursor: not-allowed;
+    }
+
+    &--send {
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+
+        &:hover:not(:disabled) {
+            background: var(--mj-brand-primary-hover);
+            color: var(--mj-text-inverse);
+            transform: scale(1.05);
+        }
+        &:disabled {
+            background: var(--mj-border-default);
+            color: var(--mj-text-muted);
+        }
+    }
+
+    &--mic-on {
+        background: var(--mj-status-error);
+        color: var(--mj-text-inverse);
+
+        &:hover:not(:disabled) {
+            background: var(--mj-status-error);
+            color: var(--mj-text-inverse);
+            filter: brightness(1.1);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Animations
+// ---------------------------------------------------------------------------
+
+.voice-widget__pulse {
+    animation: voice-widget-mic-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes voice-widget-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes voice-widget-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.55;
+        transform: scale(1.2);
+    }
+}
+
+@keyframes voice-widget-mic-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.15);
+    }
+}
+
+@keyframes voice-widget-status-pulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-success) 50%, transparent);
+    }
+    70% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-status-success) 0%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-success) 0%, transparent);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Mobile adjustments
+// ---------------------------------------------------------------------------
+
+@media (max-width: 640px) {
+    .voice-widget {
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        min-height: 100vh;
+    }
+
+    .voice-widget__msg {
+        padding: 6px 12px;
+    }
+
+    .voice-widget__avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+    }
+
+    .voice-widget__composer {
+        padding: 8px 12px;
+    }
+}

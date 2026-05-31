@@ -1,3 +1,19 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integration Overview"
+    Icon="fa-solid fa-gauge-high"
+    Subtitle="Health, throughput, and activity across all integrations">
+    @if (Summaries.length > 0) {
+      <div meta>
+        <mj-stat-badge [Count]="KPIs.TotalIntegrations" Label="integrations"></mj-stat-badge>
+      </div>
+    }
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
 <div class="overview">
   <!-- Notification Banner -->
   @if (Notification) {
@@ -241,3 +257,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

@@ -200,7 +200,10 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - State management with getter/setters
   - Engine class patterns (no Angular services for data)
   - User preferences and local caching
+  - **Page Chrome** — the shared `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` trio that every Explorer dashboard uses, with slot rules (`[meta]`/`[actions]`/`[toolbar]`) and documented exceptions
   - Layout patterns, permission checking, and more
+
+- **[Explorer Chrome Conventions](plans/explorer-chrome-conventions.md)**: The full rulebook for MJ Explorer's shared chrome — slot rules (`[meta]` is state, `[actions]` is verbs, `[toolbar]` is secondary controls), filter UI decision tree, and the canonical exception list. Sub-pages of left-nav shells use `<mj-page-header-interior>` (Section 10) — a two-row card with `[Title]` + `[Subtitle]` inputs and the same slot conventions as `<mj-page-header>` — NOT their own `<mj-page-header>` (which would produce a doubled-header). Read before doing chrome work or deciding to deviate.
 
 - **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
   - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)
@@ -817,6 +820,36 @@ Key principles:
 - Use `RunViews` (plural) instead of multiple `RunView` calls
 - Group related queries together in a single batch operation
 - Example: Load all dashboard data in 2-3 calls instead of 30+
+
+### Deep Pagination — Use Keyset (`AfterKey`), not `StartRow`
+
+For background jobs, scheduled actions, or bulk processing that iterates through *all* records of a large entity, use **`RunViewParams.AfterKey`** (keyset / seek pagination) instead of `StartRow`. Keyset stays O(log N) per page regardless of depth — `StartRow` becomes progressively expensive as the offset grows (each page must enumerate and discard the skipped rows).
+
+```typescript
+import { CompositeKey } from '@memberjunction/core';
+
+let lastSeenKey: CompositeKey | undefined;
+while (true) {
+    const result = await rv.RunView({
+        EntityName: 'Tax Returns',
+        ExtraFilter: 'AddressLine1 IS NOT NULL',
+        AfterKey: lastSeenKey,
+        MaxRows: 500,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break;
+
+    const last = result.Results[result.Results.length - 1];
+    lastSeenKey = CompositeKey.FromID(last.ID);
+}
+```
+
+**Constraints**: single-column PK only; throws `AfterKeyNotSupportedError` for composite-PK entities (fall back to `StartRow`). UI grid pagination (a few hundred pages of a few hundred rows) should stay on `StartRow` — keyset isn't necessary there.
+
+See **[guides/KEYSET_PAGINATION_GUIDE.md](guides/KEYSET_PAGINATION_GUIDE.md)** for full details, examples, and the reference implementations (`ScheduledGeocodingAction`, `VectorBase`, `EntityVectorSyncer`).
 
 ### Client-Side Data Aggregation
 - Load raw data once, aggregate in memory

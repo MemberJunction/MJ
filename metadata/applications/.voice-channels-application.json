@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "Name": "Voice Channels",
+    "Description": "Voice channel demos — talk to MJ AI Agents via text-in / voice-out (Phase 1(g) voice widget surface).",
+    "Icon": "fa-solid fa-microphone",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 1090,
+    "Color": "#7e22ce",
+    "DefaultNavItems": [
+      {
+        "Label": "Voice Demo",
+        "Icon": "fa-solid fa-microphone",
+        "ResourceType": "Custom",
+        "DriverClass": "VoiceDemoResource",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "FB551064-9C99-466B-9848-2E7FEFFC906A"
+  },
+  "sync": {
+    "lastModified": "2026-05-30T19:26:28.282Z",
+    "checksum": "801afef25fd4650178e2bef90d26252a1076482f79cbd2e1a5ff1145913ee898"
+  }
+}

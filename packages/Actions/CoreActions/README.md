@@ -86,6 +86,14 @@ Several abstract base classes reduce duplication across related actions:
 
 The file `src/generated/action_subclasses.ts` contains actions produced by the MJ CodeGen system from natural-language `UserPrompt` descriptions stored in the database. Generated actions use a **composition pattern** -- they always extend `BaseAction` (never their parent action class) and invoke the parent action via `ActionEngineServer.Instance.RunAction()` at runtime. See the [parent README](../README.md) for details on the generated/child action architecture.
 
+### Scheduled Geocoding (`Scheduled Geocoding` action)
+
+`src/custom/geo/scheduled-geocoding.action.ts` is a safety-net maintenance action that finds records in geo-enabled entities (`Entity.SupportsGeoCoding = 1`) missing a `RecordGeoCode` row, retries failed geocoding attempts, and cleans up orphaned `RecordGeoCode` rows. **Live geocoding-on-save runs inline via `BaseEntity.OnSaveCompleted`** — this scheduled action is only needed to catch records inserted via bulk SQL imports or direct DB writes that bypass `BaseEntity.Save()`.
+
+The "find missing records" phase uses **keyset (seek) pagination** when the target entity has a single-column orderable PK (the common case for MJ entities). This keeps each page O(log N) regardless of how deep the iteration goes — important on multi-million-row entities like `Tax Returns`. Composite-PK entities fall back to `StartRow`-based OFFSET pagination automatically. See **[KEYSET_PAGINATION_GUIDE.md](../../../guides/KEYSET_PAGINATION_GUIDE.md)** for the pattern.
+
+Default cadence is **Saturday 2 AM UTC** (configured in `metadata/scheduled-jobs/.geocoding-maintenance-job.json`). Administrators can adjust the `CronExpression` per environment.
+
 ### Configuration
 
 External API keys used by certain actions (Perplexity, Google Custom Search, Gamma) are loaded from `mj.config.cjs` or environment variables via the `config.ts` module:

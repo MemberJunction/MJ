@@ -177,7 +177,7 @@ Every Open App has a `mj-app.json` file at the repository root. This is the sing
 | `publisher` | Yes | Object with `name` (required), `email` and `url` (optional) |
 | `repository` | Yes | GitHub URL (e.g., `https://github.com/acme/mj-crm`) |
 | `mjVersionRange` | Yes | Semver range for MJ compatibility (e.g., `>=5.0.0 <6.0.0`) |
-| `schema` | No | Database schema config (`name` must be lowercase + underscores, 3-128 chars) |
+| `schema` | No | Database schema config (`name` must be alphanumeric + underscores, 3-128 chars) |
 | `migrations` | No | Migration config (default engine: `skyway`, default directory: `migrations`) |
 | `metadata` | No | Dev-time metadata directory (not processed at install) |
 | `packages` | Yes | npm packages grouped by `server`, `client`, `shared` |
@@ -613,7 +613,7 @@ The `DriverClass` value must exactly match the second argument of `@RegisterClas
 }
 ```
 
-- `name`: Lowercase alphanumeric + underscores, 3-128 chars (`/^[a-z][a-z0-9_]{1,126}[a-z0-9]$/`)
+- `name`: Alphanumeric + underscores, 3-128 chars (`/^_{0,2}[a-zA-Z][a-zA-Z0-9_]{1,126}[a-zA-Z0-9]$/`)
 - `createIfNotExists`: If `true` (default), the CLI creates the schema during install
 
 ### Package Configuration

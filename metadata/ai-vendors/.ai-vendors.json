@@ -344,5 +344,19 @@
       "lastModified": "2026-05-08T00:53:49.018Z",
       "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
     }
+  },
+  {
+    "fields": {
+      "Name": "Deepgram",
+      "Description": "Deepgram — low-latency streaming speech-to-text (Nova-3) and batch transcription.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "90F6B1DF-9405-468B-8331-0BCEB09DADA0"
+    },
+    "sync": {
+      "lastModified": "2026-05-30T18:16:21.077Z",
+      "checksum": "47b97fd77d9a93f17a1e28f5057843d5a3f8873bc7759aed46fef10f23a60825"
+    }
   }
 ]

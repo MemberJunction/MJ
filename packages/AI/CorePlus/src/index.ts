@@ -1,5 +1,6 @@
 export * from './prompt.types';
 export * from './agent-types';
+export * from './agent-stream-events';
 export * from './agent-payload-change-request';
 export * from './prompt.system-placeholders';
 export * from './agent-spec';
