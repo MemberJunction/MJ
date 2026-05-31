@@ -23,4 +23,4 @@ artifact. Diff locally with `mj test regression compare`.
 
 > This is Mode B/C (drive a URL). For Mode D (boot your app in CI alongside the
 > runner) add your app via `docker compose` and `mj test regression remote
-> --overlay`, or a services: block. See [REGRESSION_TESTING.md](../../REGRESSION_TESTING.md).
+> --overlay`, or a services: block. See [REGRESSION_TESTING.md](../../../../../docker/regression/REGRESSION_TESTING.md).

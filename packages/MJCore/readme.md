@@ -1044,7 +1044,7 @@ This is intentional: it sidesteps the "did this PR change cache format?" review 
 
 For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
-> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ---
 
@@ -1315,20 +1315,20 @@ if (!saved) {
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/core-entities](../MJCoreEntities/README.md) | Extended entity classes for MemberJunction system entities |
+| [@memberjunction/core-entities](../MJCoreEntities/readme.md) | Extended entity classes for MemberJunction system entities |
 
 ### UI Frameworks
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ng-shared](../Angular/Shared/README.md) | Angular-specific components and services |
-| [@memberjunction/ng-explorer-core](../Angular/Explorer/core/README.md) | Core Angular explorer components |
+| [@memberjunction/ng-shared](../Angular/Generic/shared/README.md) | Angular-specific components and services |
+| [@memberjunction/ng-explorer-core](../Angular/Explorer/explorer-core/README.md) | Core Angular explorer components |
 
 ### AI Integration
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ai](../AI/Core/README.md) | AI framework core abstractions |
+| [@memberjunction/ai](../AI/Core/readme.md) | AI framework core abstractions |
 | [@memberjunction/aiengine](../AI/Engine/README.md) | AI orchestration engine |
 
 ### Communication
