@@ -267,6 +267,23 @@
   font-weight: 400;
 }
 
+/* Right-side cluster anchoring.
+   The first of these three siblings that actually renders absorbs the
+   `margin-left: auto`, pushing the whole cluster right. Subsequent siblings
+   then sit next to it (relying on the flex container's `gap`). This used to
+   live only on .time-pill, which broke when timePillText returned null after
+   agent completion — the gear icon would shift to the left. */
+.time-pill,
+.test-feedback-icon,
+.agent-run-icon {
+  margin-left: auto;
+}
+.time-pill ~ .test-feedback-icon,
+.time-pill ~ .agent-run-icon,
+.test-feedback-icon ~ .agent-run-icon {
+  margin-left: 8px;
+}
+
 /* Time pill - unified styling for all AI message states */
 .time-pill {
   display: inline-flex;
@@ -276,7 +293,6 @@
   border-radius: 10px;
   font-size: 11px;
   font-weight: 500;
-  margin-left: auto;
   transition: all 0.3s ease;
 }
 
@@ -754,7 +770,10 @@
    Agent Run Icon & Details Panel
    ============================================ */
 
-/* Agent run gear icon in header - muted style for power users */
+/* Agent run gear icon in header - muted style for power users.
+   Left-margin is governed by the right-side cluster rules above so the gear
+   stays right-anchored whether or not the time pill / test-feedback icon
+   renders alongside it. */
 .agent-run-icon {
   display: inline-flex;
   align-items: center;
@@ -765,7 +784,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
-  margin-left: 8px;
 }
 
 .agent-run-icon i.fa-cog {
@@ -781,7 +799,8 @@
   transform: scale(1.1);
 }
 
-/* Test feedback icon in header - appears for test runs */
+/* Test feedback icon in header - appears for test runs.
+   Left-margin handled by the right-side cluster rules above. */
 .test-feedback-icon {
   display: inline-flex;
   align-items: center;
@@ -792,7 +811,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
-  margin-left: 8px;
 }
 
 .test-feedback-icon i.fa-flask {

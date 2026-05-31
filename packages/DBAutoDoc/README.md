@@ -53,6 +53,7 @@ graph TD
 
 ### Advanced Features
 - **Relationship Discovery** -- Automatically detect missing primary and foreign keys using statistical analysis and LLM validation
+- **Organic Key Detection** -- Optional pass that finds cross-table *shared-identity* relationships (e.g. the same email or phone stored in different formats across systems) by clustering columns in business-meaning space, and emits MemberJunction PR #2193 organic-key metadata with per-column normalization
 - **Sample Query Generation** -- Generate reference SQL queries for AI agents with alignment tracking
 - **Ground Truth System** -- Provide authoritative descriptions for schemas, tables, and columns that AI analysis must respect
 - **Incremental State Saves** -- State persisted to disk after every phase (introspection, sampling, discovery, per-table analysis)
@@ -415,6 +416,23 @@ For legacy databases missing primary/foreign key constraints, DBAutoDoc can:
 Triggered automatically when:
 - Tables lack primary key constraints
 - Insufficient foreign key relationships detected (below threshold)
+
+### Organic Key Detection (Optional)
+
+Foreign keys require **shared exact values**. Organic keys (MemberJunction [PR #2193](https://github.com/MemberJunction/MJ/pull/2193)) capture the weaker-but-broader condition of **shared identity**: two columns refer to the same real-world thing once each is canonicalized through its own transformation. That joins far more cross-system data than exact-match FKs -- e.g. the same phone number stored as `+1 (555) 123-4567`, `5551234567`, and `555.123.4567` across HubSpot, Zendesk, and QuickBooks.
+
+This pass is **off by default** and runs after PK/FK detection. Enable it with `organicKeyDetection.enabled: true` (it reuses your existing `ai` provider for both the LLM and embeddings). The pipeline:
+
+1. **Prefilter** -- drop columns that can't carry identity (booleans, enums, measures, audit columns, free text, non-value-matchable types).
+2. **Normalize to business space** -- an LLM rewrites each column's description into a simplified, business-focused form and tags a *concept name* + a *normalization strategy*. Describing the same thing the same way pulls semantically-equal columns together in embedding space.
+3. **Embed & cluster** -- normalized descriptions are embedded (via MemberJunction's `BaseEmbeddings`) and grouped with agglomerative clustering using an auto-calibrated distance threshold.
+4. **Concept-name split** -- clusters that merged distinct concepts (e.g. `product_id` vs `product_category_id`) are split apart using the LLM concept tags.
+5. **Per-column normalization** -- each emitted organic key carries *its own* normalization function for its column, so differently-formatted columns each canonicalize to a shared form. One function per organic key, not one per cluster.
+6. **Transitive bridges** -- the FK graph is walked to find multi-hop paths between clustered tables; bridge-view SQL is generated and the transitive spoke fields are populated so PR #2193's runtime can surface multi-hop matches.
+
+Results are written into `additionalSchemaInfo.json` (see [CodeGen Integration](#codegen-integration-additional-schema-info)) as `OrganicKeys` entries, which CodeGen upserts into `EntityOrganicKey` / `EntityOrganicKeyRelatedEntity` metadata. At runtime, `EntityInfo.BuildOrganicKeyViewParams` applies each side's own normalization expression when matching records.
+
+> **Note:** Embeddings route through MemberJunction's `BaseEmbeddings` drivers (OpenAI, Mistral, Azure, Bedrock, Ollama, local), defaulting to `OpenAIEmbedding`. The detection pass therefore requires an embedding provider with a valid key configured.
 
 ### Sample Query Generation
 
@@ -815,6 +833,19 @@ This rich context enables AI to make accurate inferences.
       "backpropagation": {
         "enabled": true,
         "maxIterations": 5
+      }
+    },
+    "organicKeyDetection": {
+      "enabled": false,
+      "clusteringSensitivity": "balanced",
+      "minClusterSize": 2,
+      "minDistinctTables": 2,
+      "sampleValueCount": 5,
+      "refinementConcurrency": 4,
+      "maxRefinementRetries": 2,
+      "embedding": {
+        "provider": "openai",
+        "model": "text-embedding-3-small"
       }
     }
   },

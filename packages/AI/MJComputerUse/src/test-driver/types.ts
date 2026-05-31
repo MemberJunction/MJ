@@ -107,6 +107,22 @@ export interface ComputerUseTestConfig {
 
     /** MJ Actions to expose as tools to the controller LLM (resolved by MJComputerUseEngine) */
     actions?: Array<{ actionName?: string; actionId?: string }>;
+
+    /** Additional Chromium launch arguments (e.g., ["--unsafely-treat-insecure-origin-as-secure=http://example:4200"]) */
+    browserArgs?: string[];
+
+    /**
+     * Browser session strategy. Controls how the browser context is managed.
+     *
+     * - `"new"` — Fresh context every test (default for sequential execution)
+     * - `"shared:suite"` — Shared context per suite run + worker (default for parallel execution)
+     * - `"shared:global"` — Shared context globally per worker
+     * - Any other string — Used as a literal key for HeadlessBrowserEngine.GetRecycled()
+     *
+     * When running in parallel (workerIndex is set on context), defaults to "shared:suite"
+     * so that auth state persists between tests in the same worker.
+     */
+    browserSession?: string;
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────

@@ -3,7 +3,7 @@
 ## Changes from Run-11
 
 ### 1. Fixed Surrogate PK Rejection Bug ✅
-**Location**: [AnalysisEngine.ts:811-843](src/core/AnalysisEngine.ts#L811-L843)
+**Location**: [AnalysisEngine.ts:811-843](../../src/core/AnalysisEngine.ts#L811-L843)
 
 **Problem in Run-11**:
 - Line 818 unconditionally set `isPrimaryKey = false` for ANY column the LLM mentioned as a FK
@@ -29,7 +29,7 @@ if (isSurrogateKey) {
 ```
 
 ### 2. Limited Sample Values to 20 ✅
-**Location**: [SQLServerDriver.ts:394-413](src/drivers/SQLServerDriver.ts#L394-L413)
+**Location**: [SQLServerDriver.ts:394-413](../../src/drivers/SQLServerDriver.ts#L394-L413)
 
 **Problem in Run-11**:
 - Recording hundreds of sample values per column → massive JSON output

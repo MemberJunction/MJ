@@ -104,7 +104,7 @@ if (result.Success) {
 ## Related Packages
 
 - [`@memberjunction/ai-recommendations`](../../Recommendations) - Base recommendation provider abstraction
-- [`@memberjunction/ai-vectors-pinecone`](../Vectors-Pinecone) - Pinecone vector database provider (source of vector IDs)
+- [`@memberjunction/ai-vectors-pinecone`](../../Vectors/Providers/Pinecone) - Pinecone vector database provider (source of vector IDs)
 
 ## License
 

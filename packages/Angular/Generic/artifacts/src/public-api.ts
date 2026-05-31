@@ -9,6 +9,7 @@ export * from './lib/artifacts.module';
 export * from './lib/services/artifact-icon.service';
 export * from './lib/services/artifact-file.service';
 export * from './lib/services/analyze-artifact.service';
+export * from './lib/services/interactive-form-apply.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
@@ -42,3 +43,4 @@ export * from './lib/components/file-artifact-toolbar.component';
 export * from './lib/components/plugins/pdf-artifact-viewer.component';
 export * from './lib/components/plugins/xlsx-artifact-viewer.component';
 export * from './lib/components/plugins/docx-artifact-viewer.component';
+export * from './lib/components/plugins/image-artifact-viewer.component';

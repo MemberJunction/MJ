@@ -46,6 +46,12 @@ export default class TestRun extends Command {
       description: 'Show detailed execution information',
       default: false,
     }),
+    'oracles-module': Flags.string({
+      description:
+        'Path to a JS/TS module that exports custom IOracle classes or instances. ' +
+        'Each export is registered on the engine before the test runs — used by non-MJ ' +
+        'adopters to plug app-specific oracle types without modifying TestingFramework.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -64,6 +70,7 @@ export default class TestRun extends Command {
         output: flags.output,
         dryRun: flags['dry-run'],
         verbose: flags.verbose,
+        oraclesModule: flags['oracles-module'],
       });
 
     } catch (error) {

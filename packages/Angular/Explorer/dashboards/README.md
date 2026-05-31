@@ -170,6 +170,38 @@ export class AppModule {}
 
 All dashboard components are registered via `@RegisterClass(BaseResourceComponent, 'ClassName')` and are loaded dynamically based on application navigation configuration. They do not need to be referenced directly in templates.
 
+## Form Builder cockpit
+
+`FormBuilderResourceComponent` (under `src/FormBuilder/`) is the
+standalone Form Studio surface — reachable from the app rail. Cockpit
+layout:
+
+- **Left rail:** existing forms + version rail for the active form
+  (Active / Pending / Inactive flags via `joinVersionsWithOverrides`).
+  Row-level "Activate" / "Restore" buttons disambiguated by status.
+- **Center pane (tabbed):** Preview / Code / Layout
+  - **Preview:** live `<mj-interactive-form>` mount bound to a real
+    Top-1 record from the target entity (ORDER BY name field). Spec
+    merges live `EditableCode` over the saved spec so
+    `dataRequirements` / charts continue to work.
+  - **Code:** Monaco-style textarea editing of JSX.
+  - **Layout:** legacy drag-drop canvas. Shows a divergence banner when
+    the JSX has hand-authored content the canvas can't round-trip.
+- **Right rail (chat pane):** "Refine with AI" — fires
+  `ConversationBridgeService.RequestExpandOverlay()` and re-registers
+  ActiveForm context.
+
+**New-form flow** seeds the canvas + code from
+`buildDefaultFormScaffold(entityName, provider)` (in
+`@memberjunction/interactive-component-types/forms`). Manual create
+starts at the same baseline as the AI agent path.
+
+**EntityFormOverrideService** (under `ComponentStudio/services/`) holds
+`activateVersion()` and `revertToComponent()` — client-side mirrors of
+the server actions used by the cockpit's version-rail rows.
+
+See [/plans/interactive-forms/phase-2-runtime-loop.md](../../../../plans/interactive-forms/phase-2-runtime-loop.md) for the full architecture.
+
 ## Build
 
 ```bash

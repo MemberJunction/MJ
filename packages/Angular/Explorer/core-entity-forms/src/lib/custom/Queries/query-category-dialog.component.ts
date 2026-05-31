@@ -1,6 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { MJQueryCategoryEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { MJQueryCategoryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -30,27 +29,14 @@ export class QueryCategoryDialogComponent extends BaseAngularComponent implement
     public flattenedCategories: CategoryNode[] = [];
     public isCreating = false;
     
-    async ngOnInit() {
-        await this.loadCategories();
+    ngOnInit() {
+        this.loadCategories();
     }
     
-    async loadCategories() {
-        try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<MJQueryCategoryEntity>({
-                EntityName: 'MJ: Query Categories',
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            });
-            
-            if (result.Success && result.Results) {
-                this.categories = result.Results;
-                this.categoryTree = this.buildCategoryTree(this.categories);
-                this.flattenedCategories = this.flattenCategories(this.categoryTree, 0);
-            }
-        } catch (error) {
-            console.error('Error loading categories:', error);
-        }
+    loadCategories() {
+        this.categories = QueryEngine.Instance.Categories;
+        this.categoryTree = this.buildCategoryTree(this.categories);
+        this.flattenedCategories = this.flattenCategories(this.categoryTree, 0);
     }
     
     private buildCategoryTree(categories: MJQueryCategoryEntity[]): CategoryNode[] {

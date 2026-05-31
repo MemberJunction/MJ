@@ -13,7 +13,7 @@
  * Options:
  *   --dry-run    Show which queries would be updated without saving
  */
-import { RunView } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AIEngine } from '@memberjunction/aiengine';
 import sql from 'mssql';
@@ -93,21 +93,16 @@ async function main(): Promise<void> {
     await AIEngine.Instance.Config(false, contextUser);
     console.log('AIEngine initialized');
 
-    // Load all approved queries (simple result — we only need a few fields)
-    const rv = new RunView();
-    const result = await rv.RunView<QueryRow>({
-        EntityName: 'MJ: Queries',
-        ExtraFilter: "Status = 'Approved'",
-        Fields: ['ID', 'Name', 'Description', 'UserQuestion', 'EmbeddingVector'],
-        OrderBy: 'Name ASC',
-        ResultType: 'simple',
-    }, contextUser);
-
-    if (!result.Success) {
-        throw new Error(`RunView failed: ${result.ErrorMessage}`);
-    }
-
-    const queries = result.Results;
+    // Load all approved queries from QueryEngine's cache
+    const queries: QueryRow[] = QueryEngine.Instance.ApprovedQueries
+        .sort((a, b) => a.Name.localeCompare(b.Name))
+        .map(q => ({
+            ID: q.ID,
+            Name: q.Name,
+            Description: q.Description,
+            UserQuestion: q.UserQuestion,
+            EmbeddingVector: q.EmbeddingVector,
+        }));
     console.log(`Found ${queries.length} approved queries to re-embed\n`);
 
     if (dryRun) {

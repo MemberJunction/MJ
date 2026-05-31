@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "name": "staging-mj",
+  "kind": "mj-explorer",
+  "description": "Mode B: remote MJ Explorer deployment (staging). Reuses the MJ Explorer Regression Suite against a non-Docker MJ instance.",
+
+  "baseUrl": "https://staging-mj.example.com",
+  "allowedDomains": ["staging-mj.example.com", "*.auth0.com"],
+
+  "auth": {
+    "username": "env:STAGING_TEST_USER",
+    "password": "env:STAGING_TEST_PASSWORD",
+    "domains": ["staging-mj.example.com", "*.auth0.com"]
+  },
+
+  "suite": "MJ Explorer Regression Suite",
+
+  "archive": {
+    "tag": "staging-nightly",
+    "source": "staging-mj"
+  }
+}

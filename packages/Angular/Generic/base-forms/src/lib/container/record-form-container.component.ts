@@ -5,6 +5,7 @@ import {
   ViewChild, ViewEncapsulation
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -26,6 +27,18 @@ import { BaseFormComponent } from '../base-form-component';
 import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-record-changes';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
+
+/**
+ * Display shape for the variant picker. Kept minimal so the Generic
+ * container doesn't pull in resolver types; the Explorer-level component
+ * that owns the resolver shapes its rows into this.
+ */
+export interface VariantPickerItem {
+    ID: string;
+    Label: string;
+    Scope: 'User' | 'Role' | 'Global';
+    Status: 'Active' | 'Pending' | 'Inactive';
+}
 
 /**
  * Top-level container that composes the toolbar, content slots, and sticky behavior.
@@ -129,6 +142,26 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   @Input() ToolbarConfig: FormToolbarConfig = DEFAULT_TOOLBAR_CONFIG;
   @Input() WidthMode: FormWidthMode = 'centered';
 
+  /**
+   * Variants available for this entity record. When more than one variant is
+   * provided, a compact picker appears between the toolbar and the form body
+   * letting the user switch which form is rendered. Empty / single-variant
+   * lists hide the picker entirely.
+   *
+   * Each item is a plain object — we don't take a hard dep on the resolver's
+   * row type from here (this is a Generic component; the Explorer-level
+   * single-record component shapes the resolver row into this minimal form).
+   */
+  @Input() Variants: VariantPickerItem[] = [];
+
+  /**
+   * Override ID currently rendered. The picker highlights this entry. May be
+   * null when the active form is a class-based @RegisterClass form (no
+   * override is currently active) — in that case the picker still appears
+   * with "Default form" as the leading row.
+   */
+  @Input() CurrentVariantID: string | null = null;
+
   // ---- Outputs ----
 
   /** Emitted for all navigation actions (the host app maps these to its routing) */
@@ -175,6 +208,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Emitted when a custom toolbar button is clicked */
   @Output() CustomButtonClick = new EventEmitter<CustomToolbarButtonClickEventArgs>();
+
+  /**
+   * Emitted when the user chooses a different form variant from the picker.
+   * Carries the selected variant's override ID, or null when the user picks
+   * the "Default form" row. The host is responsible for persisting the choice
+   * (via FormResolverService.SetSelectedVariant) and reloading the record so
+   * the new form mounts.
+   */
+  @Output() VariantChange = new EventEmitter<string | null>();
 
   // ---- Content Children ----
 
@@ -747,6 +789,60 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.fc?.resetSectionOrder) {
       this.fc.resetSectionOrder();
       this.cdr.markForCheck();
+    }
+  }
+
+  // ---- Variant picker ----
+
+  /** Whether the variant dropdown menu is currently open. Toggled by the
+   *  control's click handler; closed on blur or after a row is picked. */
+  _variantMenuOpen = false;
+
+  /**
+   * Effective variants — prefer the form component's list (set by the host
+   * resolver) when present, fall back to the directly-bound @Input. This
+   * means generated form templates don't need to bind [Variants] explicitly;
+   * the host populates `instance.Variants` post-construction and the
+   * container reads it through this accessor.
+   */
+  get EffectiveVariants(): VariantPickerItem[] {
+    return (this.fc?.Variants as VariantPickerItem[] | undefined)
+        ?? this.Variants
+        ?? [];
+  }
+
+  get EffectiveCurrentVariantID(): string | null {
+    return this.fc?.CurrentVariantID ?? this.CurrentVariantID;
+  }
+
+  /** Whether to show the variant picker at all. Hidden when the entity has
+   *  zero or one applicable variant — there's nothing to switch between. */
+  get ShowVariantPicker(): boolean {
+    return (this.EffectiveVariants?.length ?? 0) > 1;
+  }
+
+  /** Label for the currently-selected variant (or "Default form" if none). */
+  get CurrentVariantLabel(): string {
+    const v = this.EffectiveVariants?.find(x => UUIDsEqual(x.ID, this.EffectiveCurrentVariantID));
+    return v?.Label ?? 'Default form';
+  }
+
+  /** Compact subtitle: scope + status, e.g. "User · Active". */
+  variantSubtitle(v: VariantPickerItem): string {
+    return `${v.Scope} · ${v.Status}`;
+  }
+
+  /**
+   * User picked an item from the variant menu. If the host installed a
+   * handler via `instance.OnVariantChanged`, call it; otherwise emit the
+   * VariantChange event for standalone consumers.
+   */
+  OnVariantPicked(variantID: string | null): void {
+    if (variantID === this.EffectiveCurrentVariantID) return;
+    if (this.fc && typeof this.fc.OnVariantChanged === 'function') {
+      this.fc.OnVariantChanged(variantID);
+    } else {
+      this.VariantChange.emit(variantID);
     }
   }
 

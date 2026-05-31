@@ -947,8 +947,8 @@ Unhandled promise rejections are caught and logged without crashing the server.
 
 | Package | Purpose |
 |---------|---------|
-| [@memberjunction/core](../MJCore/README.md) | Core metadata, entities, RunView |
-| [@memberjunction/core-entities](../MJCoreEntities/README.md) | Generated entity classes |
+| [@memberjunction/core](../MJCore/readme.md) | Core metadata, entities, RunView |
+| [@memberjunction/core-entities](../MJCoreEntities/readme.md) | Generated entity classes |
 | [@memberjunction/global](../MJGlobal/README.md) | ClassFactory, event system |
 | [@memberjunction/sqlserver-dataprovider](../SQLServerDataProvider/README.md) | SQL Server data provider |
 | [@memberjunction/graphql-dataprovider](../GraphQLDataProvider/README.md) | GraphQL field mapping |
@@ -964,20 +964,20 @@ Unhandled promise rejections are caught and logged without crashing the server.
 | [@memberjunction/ai-prompts](../AI/Prompts/README.md) | AI prompt execution |
 | [@memberjunction/ai-agents](../AI/Agents/README.md) | AI agent framework |
 | [@memberjunction/ai-core-plus](../AI/CorePlus/README.md) | AI prompt parameters |
-| [@memberjunction/aiengine](../AIEngine/README.md) | AI engine orchestration |
-| [@memberjunction/ai-provider-bundle](../AI/ProviderBundle/README.md) | Bundled AI providers |
+| [@memberjunction/aiengine](../AI/Engine/README.md) | AI engine orchestration |
+| [@memberjunction/ai-provider-bundle](../AI/Providers/Bundle/README.md) | Bundled AI providers |
 
 ### Infrastructure Packages
 
 | Package | Purpose |
 |---------|---------|
-| [@memberjunction/scheduling-engine](../SchedulingEngine/README.md) | Scheduled job execution |
+| [@memberjunction/scheduling-engine](../Scheduling/engine/README.md) | Scheduled job execution |
 | [@memberjunction/actions](../Actions/README.md) | Action framework |
 | [@memberjunction/templates](../Templates/README.md) | Template engine |
-| [@memberjunction/notifications](../Notifications/README.md) | Notification system |
-| [@memberjunction/storage](../Storage/README.md) | File storage |
-| [@memberjunction/communication-ms-graph](../Communication/providers/MSGraphProvider/README.md) | MS Graph communications |
-| [@memberjunction/communication-sendgrid](../Communication/providers/SendGridProvider/README.md) | SendGrid communications |
+| [@memberjunction/notifications](../Communication/notifications/README.md) | Notification system |
+| [@memberjunction/storage](../MJStorage/readme.md) | File storage |
+| [@memberjunction/communication-ms-graph](../Communication/providers/MSGraph/README.md) | MS Graph communications |
+| [@memberjunction/communication-sendgrid](../Communication/providers/sendgrid/README.md) | SendGrid communications |
 
 ### Third-Party Dependencies
 
@@ -997,9 +997,9 @@ Unhandled promise rejections are caught and logged without crashing the server.
 ## Related Packages
 
 - [@memberjunction/server-bootstrap](../ServerBootstrap/README.md) -- Pre-built class registration manifest for tree-shaking prevention
-- [MJAPI](../../MJAPI/README.md) -- Reference server application that consumes this package
-- [@memberjunction/core](../MJCore/README.md) -- Core framework that MJServer exposes via API
-- [Caching & Pub/Sub Guide](/guides/CACHING_AND_PUBSUB_GUIDE.md) -- Comprehensive guide to caching architecture, Redis cross-server sync, and GraphQL cache invalidation subscriptions
+- [MJAPI](../MJAPI/README.md) -- Reference server application that consumes this package
+- [@memberjunction/core](../MJCore/readme.md) -- Core framework that MJServer exposes via API
+- [Caching & Pub/Sub Guide](../../guides/CACHING_AND_PUBSUB_GUIDE.md) -- Comprehensive guide to caching architecture, Redis cross-server sync, and GraphQL cache invalidation subscriptions
 
 ## Troubleshooting
 
