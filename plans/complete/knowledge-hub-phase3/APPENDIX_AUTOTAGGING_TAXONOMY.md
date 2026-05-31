@@ -138,7 +138,7 @@ These interfaces will be registered as JSONType metadata so CodeGen emits typed 
 
 ### Current State
 
-`AutotagEntity` ([AutotagEntity.ts](packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts)):
+`AutotagEntity` ([AutotagEntity.ts](../../../packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts)):
 - Uses `ContentSourceParam` key/value pairs for `EntityName` and `EntityFields`
 - Concatenates raw field values into text (`field: value\n`)
 - Creates ContentItems directly with no link back to entity records
@@ -529,7 +529,7 @@ The LLM is instructed:
 
 Add a **Tags** button to the standard entity form toolbar, alongside existing buttons (Edit/Save, Favorite, Record Changes, Lists).
 
-**Location**: [base-form-component.ts](packages/Angular/Explorer/core-entity-forms/src/lib/base-form-component.ts) toolbar section
+**Location**: [base-form-component.ts](../../../packages/Angular/Generic/base-forms/src/lib/base-form-component.ts) toolbar section
 
 **Behavior**:
 - **Icon**: `fa-solid fa-tags`

@@ -17,8 +17,8 @@ You are debugging a MemberJunction AI Agent Run that has failed or has issues. Y
 ### MemberJunction AI Agent System Overview
 
 **Agent Architecture**:
-- All agents inherit from `BaseAgent` class ([packages/AI/Agents/src/base-agent.ts](../packages/AI/Agents/src/base-agent.ts))
-- Agents execute prompts using `AIPromptRunner` ([packages/AI/AICore/src/AIPromptRunner.ts](../packages/AI/AICore/src/AIPromptRunner.ts))
+- All agents inherit from `BaseAgent` class ([packages/AI/Agents/src/base-agent.ts](../../packages/AI/Agents/src/base-agent.ts))
+- Agents execute prompts using `AIPromptRunner` ([packages/AI/AICore/src/AIPromptRunner.ts](../../packages/AI/Prompts/src/AIPromptRunner.ts))
 - Agent metadata (prompts, settings, actions) is stored in `./metadata/agents/` directory
 - Agent runs create steps that log all operations with Input/Output data
 
@@ -209,10 +209,10 @@ After completing your analysis, provide:
 ## Architecture References
 
 When debugging agent code issues, refer to:
-- [packages/AI/Agents/src/base-agent.ts](../packages/AI/Agents/src/base-agent.ts) - Base agent implementation
-- [packages/AI/AICore/src/AIPromptRunner.ts](../packages/AI/AICore/src/AIPromptRunner.ts) - Prompt execution engine
+- [packages/AI/Agents/src/base-agent.ts](../../packages/AI/Agents/src/base-agent.ts) - Base agent implementation
+- [packages/AI/AICore/src/AIPromptRunner.ts](../../packages/AI/Prompts/src/AIPromptRunner.ts) - Prompt execution engine
 - [packages/AI/Agents/README.md](../packages/AI/Agents/README.md) - Agent system documentation
-- [packages/AI/AICore/README.md](../packages/AI/AICore/README.md) - AI Core documentation
+- [packages/AI/AICore/README.md](../../packages/AI/Core/readme.md) - AI Core documentation
 - [packages/Actions/README.md](../packages/Actions/README.md) - Action system documentation
 
 ---

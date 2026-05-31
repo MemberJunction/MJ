@@ -134,6 +134,6 @@ ReactDebugConfig.logLevel = 'verbose';
 
 ## Dependencies
 
-- [@memberjunction/global](../../MJGlobal/README.md) -- Global utilities
+- [@memberjunction/global](../../../MJGlobal/README.md) -- Global utilities
 - React and ReactDOM (loaded at runtime from CDN)
 - Babel standalone (loaded at runtime for JSX transpilation)
