@@ -3,7 +3,7 @@
 > **Status**: Draft v1
 > **Date**: March 27, 2026
 > **Supersedes**: [user-defined-tables-architecture.md](complete/user-defined-tables-architecture.md) (Jan 2025)
-> **Depends On**: [runtime-schema-update-plan.md](complete/runtime-schema-update-plan.md), [schema-management-automation.md](schema-management-automation.md)
+> **Depends On**: [runtime-schema-update-plan.md](runtime-schema-update-plan.md), [schema-management-automation.md](schema-management-automation.md)
 > **Branch**: TBD
 
 ---
@@ -884,7 +884,7 @@ migrations/v5/VYYYYMMDDHHMM__v5.x_Schema_Mgmt_Auths.sql  — Authorization seed 
 | Prior Plan | Relationship |
 |-----------|-------------|
 | [user-defined-tables-architecture.md](complete/user-defined-tables-architecture.md) (Jan 2025) | **Superseded** — this plan replaces it. Key differences: uses built RSU infrastructure instead of proposed CodeGenAPI, uses Agent Manager sub-agent pattern instead of standalone agent, uses Authorizations instead of custom permission flag. |
-| [runtime-schema-update-plan.md](complete/runtime-schema-update-plan.md) | **Depends on** — Entity Designer uses RSU pipeline as-is. No modifications to RSU needed. |
+| [runtime-schema-update-plan.md](runtime-schema-update-plan.md) | **Depends on** — Entity Designer uses RSU pipeline as-is. No modifications to RSU needed. |
 | [schema-management-automation.md](schema-management-automation.md) | **Depends on** — SchemaEngine interfaces are the foundation for Entity Designer's DDL generation. |
 | [integration-ddl-schema-management.md](integration-ddl-schema-management.md) | **Pattern reference** — Integration's SchemaBuilder is the model for how Entity Designer wraps SchemaEngine. |
 

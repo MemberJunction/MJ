@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Created:** January 25, 2025
-**Related:** [view-system-enhancements-2nd-pass.md](../view-system-enhancements-2nd-pass.md)
+**Related:** [view-system-enhancements-2nd-pass.md](view-system-enhancements-2nd-pass.md)
 
 ## Executive Summary
 
@@ -18,7 +18,7 @@ While functional, there are several opportunities to improve usability, visual h
 
 ### 1. Entity-Viewer Header
 
-**Location:** [entity-viewer.component.html:3-104](../../packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.html#L3-L104)
+**Location:** [entity-viewer.component.html:3-104](../packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.html#L3-L104)
 
 **Current Layout:**
 ```
@@ -39,7 +39,7 @@ While functional, there are several opportunities to improve usability, visual h
 
 ### 2. Entity-Data-Grid Toolbar
 
-**Location:** [entity-data-grid.component.html:8-260](../../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.html#L8-L260)
+**Location:** [entity-data-grid.component.html:8-260](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.html#L8-L260)
 
 **Current Layout:**
 ```

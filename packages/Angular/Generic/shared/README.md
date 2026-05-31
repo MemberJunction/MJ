@@ -162,5 +162,5 @@ For the full token catalog, architecture details, custom theme creation guide, a
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Core MJ framework
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- Entity types
+- [@memberjunction/core](../../MJCore/README.md) -- Core MJ framework
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- Entity types

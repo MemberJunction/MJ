@@ -27,6 +27,7 @@ Components for AI interactions, chat interfaces, and conversation management.
 | [conversations](./conversations/README.md) | `@memberjunction/ng-conversations` | Conversation, collection, and artifact management components |
 | [agents](./agents/README.md) | `@memberjunction/ng-agents` | Reusable components for AI Agent management including permissions panel, dialog, and slideover |
 | [ai-test-harness](./ai-test-harness/README.md) | `@memberjunction/ng-ai-test-harness` | Reusable component for testing AI agents and prompts with beautiful UX |
+| [skip-chat](./skip-chat/README.md) | `@memberjunction/ng-skip-chat` | **DEPRECATED** -- use `@memberjunction/ng-conversations` instead |
 | [artifacts](./artifacts/README.md) | `@memberjunction/ng-artifacts` | Artifact viewer plugin system for rendering different artifact types (JSON, Code, Markdown, HTML, SVG, Components) |
 
 ### Entity & Data
@@ -61,6 +62,7 @@ Components for building queries, viewing results, and filtering data.
 
 | Package | npm | Description |
 |---------|-----|-------------|
+| [query-grid](./query-grid/README.md) | `@memberjunction/ng-query-grid` | Grid to display any MemberJunction Query |
 | [query-viewer](./query-viewer/README.md) | `@memberjunction/ng-query-viewer` | Components for viewing and executing stored queries with parameter input, interactive results grid, and entity linking |
 | [filter-builder](./filter-builder/README.md) | `@memberjunction/ng-filter-builder` | Modern, intuitive filter builder for creating complex boolean filter expressions with portable JSON format |
 

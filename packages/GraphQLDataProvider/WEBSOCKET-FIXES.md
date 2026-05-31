@@ -123,10 +123,10 @@ if (value.activeSubscribers === 0 &&  // ← NEW: No active subscribers
 ```
 
 **Code Locations:**
-- [Line 1799](src/graphQLDataProvider.ts#L1799): Added `activeSubscribers` to Map type
-- [Lines 1994-2009](src/graphQLDataProvider.ts#L1994): Wrapped cached Observable to track subscribers
-- [Lines 2082-2100](src/graphQLDataProvider.ts#L2082): Wrapped new Observable to track subscribers
-- [Line 1910](src/graphQLDataProvider.ts#L1910): Added `activeSubscribers === 0` check in cleanup
+- [Line 1799](../src/graphQLDataProvider.ts#L1799): Added `activeSubscribers` to Map type
+- [Lines 1994-2009](../src/graphQLDataProvider.ts#L1994): Wrapped cached Observable to track subscribers
+- [Lines 2082-2100](../src/graphQLDataProvider.ts#L2082): Wrapped new Observable to track subscribers
+- [Line 1910](../src/graphQLDataProvider.ts#L1910): Added `activeSubscribers === 0` check in cleanup
 
 ---
 
@@ -147,7 +147,7 @@ this._activeSubscriptionCount++;  // ← After successful setup
 ```
 
 **Code Location:**
-- [Line 2051](src/graphQLDataProvider.ts#L2051): Moved increment inside Observable after successful subscribe
+- [Line 2051](../src/graphQLDataProvider.ts#L2051): Moved increment inside Observable after successful subscribe
 
 **Benefit:** Counter only increments if subscription succeeds, preventing stuck counters.
 
@@ -189,9 +189,9 @@ private completeAllSubjects(): void {
 ```
 
 **Code Locations:**
-- [Lines 1854-1864](src/graphQLDataProvider.ts#L1854): Simplified `disposeWSClient()`
-- [Lines 1870-1880](src/graphQLDataProvider.ts#L1870): New `completeAllSubjects()` method
-- [Lines 2111-2126](src/graphQLDataProvider.ts#L2111): Updated `disposeWebSocketResources()` to call both
+- [Lines 1854-1864](../src/graphQLDataProvider.ts#L1854): Simplified `disposeWSClient()`
+- [Lines 1870-1880](../src/graphQLDataProvider.ts#L1870): New `completeAllSubjects()` method
+- [Lines 2111-2126](../src/graphQLDataProvider.ts#L2111): Updated `disposeWebSocketResources()` to call both
 
 **Benefit:** Clear separation of concerns, no double-cleanup, easier to maintain.
 
@@ -220,8 +220,8 @@ if (!this._subscriptionCleanupTimer) {
 ```
 
 **Code Locations:**
-- [Line 1805](src/graphQLDataProvider.ts#L1805): Removed property declaration
-- [Lines 1837-1841](src/graphQLDataProvider.ts#L1837): Simplified timer creation
+- [Line 1805](../src/graphQLDataProvider.ts#L1805): Removed property declaration
+- [Lines 1837-1841](../src/graphQLDataProvider.ts#L1837): Simplified timer creation
 
 **Benefit:** Cleaner code, JavaScript's single-threaded model already provides protection.
 
@@ -242,7 +242,7 @@ if (shouldCleanup) {
 ```
 
 **Code Location:**
-- [Lines 1914-1919](src/graphQLDataProvider.ts#L1914): Added cleanup decision logging
+- [Lines 1914-1919](../src/graphQLDataProvider.ts#L1914): Added cleanup decision logging
 
 **Benefit:** Production teams can now see why subscriptions are being cleaned up.
 
@@ -259,7 +259,7 @@ private _activeSubscriptionCount = 0;
 ```
 
 **Code Location:**
-- [Lines 1800-1802](src/graphQLDataProvider.ts#L1800): Added documentation comment
+- [Lines 1800-1802](../src/graphQLDataProvider.ts#L1800): Added documentation comment
 
 **Benefit:** Future maintainers understand the variable's purpose.
 
@@ -387,7 +387,7 @@ All reviews concluded: **Production-ready, no critical bugs remaining.**
 
 ## Related Files
 
-- Source: [`packages/GraphQLDataProvider/src/graphQLDataProvider.ts`](src/graphQLDataProvider.ts)
+- Source: [`packages/GraphQLDataProvider/src/graphQLDataProvider.ts`](../src/graphQLDataProvider.ts)
 - Tests: (To be implemented as per recommendations above)
 
 ---

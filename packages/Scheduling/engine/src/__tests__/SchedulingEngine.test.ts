@@ -43,7 +43,6 @@ vi.mock('@memberjunction/core-entities', () => ({
         SuccessCount = 0;
         FailureCount = 0;
         LastRunAt: Date | null = null;
-        RunImmediatelyIfNeverRun = false;
         JobTypeID = '';
         NotifyOnSuccess = false;
         NotifyOnFailure = false;
@@ -138,7 +137,6 @@ vi.mock('../NotificationManager', () => ({
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
-import { CronExpressionHelper } from '../CronExpressionHelper';
 
 describe('SchedulingEngine', () => {
     let engine: SchedulingEngine;
@@ -148,12 +146,6 @@ describe('SchedulingEngine', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
-        // `vi.clearAllMocks()` wipes the mock return values declared at
-        // `vi.mock()` registration time, so re-install the CronExpressionHelper
-        // stubs here. Without this, GetNextRunTime returns undefined and the
-        // initializeNextRunTimes branch tests can't observe the cron-tick path.
-        (CronExpressionHelper.GetNextRunTime as ReturnType<typeof vi.fn>).mockReturnValue(new Date('2025-06-01T00:00:00Z'));
-        (CronExpressionHelper.IsExpressionDue as ReturnType<typeof vi.fn>).mockReturnValue(false);
         // Access the singleton and reset its state
         engine = SchedulingEngine.Instance;
         // Stop any existing polling
@@ -285,68 +277,6 @@ describe('SchedulingEngine', () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.OnJobChanged>[0];
             await engine.OnJobChanged(mockUser);
             expect(mockBase.UpdatePollingInterval).toHaveBeenCalled();
-        });
-    });
-
-    describe('initializeNextRunTimes — RunImmediatelyIfNeverRun', () => {
-        // Helper to build a minimal job object matching the MJScheduledJobEntity mock shape
-        const buildJob = (overrides: Partial<Record<string, unknown>>): Record<string, unknown> => ({
-            ID: 'job-1',
-            Name: 'Test Job',
-            CronExpression: '0 4 * * *',
-            Timezone: 'UTC',
-            NextRunAt: null,
-            LastRunAt: null,
-            RunImmediatelyIfNeverRun: false,
-            Save: vi.fn().mockResolvedValue(true),
-            ...overrides,
-        });
-
-        // The method we're testing is private. Calling via a typed cast is
-        // cleaner than the alternative of plumbing every code path that
-        // reaches it for the sake of one branch test.
-        const callInitialize = async (jobs: Array<Record<string, unknown>>): Promise<void> => {
-            (mockBase as Record<string, unknown>).ScheduledJobs = jobs;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (engine as any).initializeNextRunTimes({ ID: 'user-1' });
-        };
-
-        it('sets NextRunAt to the next cron tick when the flag is off', async () => {
-            const nextTick = new Date('2025-06-01T00:00:00Z');
-            const job = buildJob({ RunImmediatelyIfNeverRun: false, LastRunAt: null });
-            await callInitialize([job]);
-            expect(job.NextRunAt).toEqual(nextTick);
-            expect(job.Save).toHaveBeenCalledOnce();
-        });
-
-        it('sets NextRunAt to "now" when flag is on AND the job has never run', async () => {
-            vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
-            const job = buildJob({ RunImmediatelyIfNeverRun: true, LastRunAt: null });
-            await callInitialize([job]);
-            expect((job.NextRunAt as Date).toISOString()).toBe('2026-01-15T12:00:00.000Z');
-            expect(job.Save).toHaveBeenCalledOnce();
-        });
-
-        it('uses the cron tick when the flag is on but the job HAS run before', async () => {
-            const nextTick = new Date('2025-06-01T00:00:00Z');
-            const job = buildJob({
-                RunImmediatelyIfNeverRun: true,
-                LastRunAt: new Date('2026-01-10T00:00:00Z'),
-            });
-            await callInitialize([job]);
-            expect(job.NextRunAt).toEqual(nextTick);
-        });
-
-        it('does nothing when NextRunAt is already set', async () => {
-            const existing = new Date('2026-02-01T00:00:00Z');
-            const job = buildJob({
-                RunImmediatelyIfNeverRun: true,
-                LastRunAt: null,
-                NextRunAt: existing,
-            });
-            await callInitialize([job]);
-            expect(job.NextRunAt).toBe(existing);
-            expect(job.Save).not.toHaveBeenCalled();
         });
     });
 });

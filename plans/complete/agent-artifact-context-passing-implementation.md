@@ -6,7 +6,7 @@ Fixed the issue where artifacts from previous agent runs were NOT being passed i
 
 ## Changes Made
 
-### File: [conversation-agent.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts)
+### File: [conversation-agent.service.ts](packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts)
 
 #### 1. Added Missing Imports (Lines 1-10)
 ```typescript
@@ -128,7 +128,7 @@ WHERE ID IN ('vid1','vid2','vid3')
 ## Related Patterns
 
 This implementation follows the same batch-loading pattern used in:
-- [conversation-chat-area.component.ts:222-274](../../packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts#L222-L274) - Artifact loading for UI display
+- [conversation-chat-area.component.ts:222-274](packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts#L222-L274) - Artifact loading for UI display
 - Recent N+1 query fix for conversation loading
 
 ## Benefits
@@ -150,5 +150,5 @@ Potential improvements for future iterations:
 ## Documentation
 
 Created two documents:
-1. [agent-artifact-context-passing.md](agent-artifact-context-passing.md) - Design document
-2. [agent-artifact-context-passing-implementation.md](agent-artifact-context-passing-implementation.md) - This implementation summary
+1. [agent-artifact-context-passing.md](docs/agent-artifact-context-passing.md) - Design document
+2. [agent-artifact-context-passing-implementation.md](docs/agent-artifact-context-passing-implementation.md) - This implementation summary

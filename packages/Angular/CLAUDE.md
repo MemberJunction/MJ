@@ -68,7 +68,7 @@ Don't assume children will fall back to the global — they might, but you'd be 
 
 ### Migration Status
 
-There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](../../plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
+There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](/plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
 
 **For new components and any component you touch:** apply the pattern above. Don't add to the migration debt.
 
@@ -212,7 +212,7 @@ your-project@1.0.0
 
 ## 📚 Dashboard Development Guide
 
-**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](../../guides/DASHBOARD_BEST_PRACTICES.md)**.
+**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](/guides/DASHBOARD_BEST_PRACTICES.md)**.
 
 This guide covers:
 - Architecture patterns (no Angular data services - use MJ Engine classes)
@@ -221,7 +221,7 @@ This guide covers:
 - Getter/setter state management pattern
 - User preferences via UserInfoEngine
 - Data loading patterns with RunView and local caching
-- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](../../plans/explorer-chrome-conventions.md).
+- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md).
 - Layout patterns using CSS Flexbox/Grid
 - Permission checking patterns
 - Creating new Engine classes for domain logic
@@ -230,7 +230,7 @@ This guide covers:
 
 ### ⚠️ Page Chrome — exception to be aware of
 
-If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, the Dev Tools inspectors, SystemDiagnostics, Database Designer, etc.), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use **`<mj-page-header-interior>`** at the top of the body instead: a two-row card with `[Title]` + `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots (same slot conventions as `<mj-page-header>`, different visual shape). The toolbar row collapses entirely when empty. Full contract in Section 10 of [`plans/explorer-chrome-conventions.md`](../../plans/explorer-chrome-conventions.md). Reference implementations cover all four Admin shells (~15 sub-pages).
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, the Dev Tools inspectors, SystemDiagnostics, Database Designer, etc.), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use **`<mj-page-header-interior>`** at the top of the body instead: a two-row card with `[Title]` + `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots (same slot conventions as `<mj-page-header>`, different visual shape). The toolbar row collapses entirely when empty. Full contract in Section 10 of [`plans/explorer-chrome-conventions.md`](/plans/explorer-chrome-conventions.md). Reference implementations cover all four Admin shells (~15 sub-pages).
 
 ---
 

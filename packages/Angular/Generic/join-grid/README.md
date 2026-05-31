@@ -140,6 +140,6 @@ export class YourModule {}
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunView, BaseEntity
+- [@memberjunction/core](../../MJCore/README.md) -- Metadata, RunView, BaseEntity
 - [@memberjunction/ng-shared](../shared/README.md) -- Shared Angular utilities
 - `@progress/kendo-angular-grid` -- Grid rendering

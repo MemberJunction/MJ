@@ -391,7 +391,7 @@ src/
 
 - [@memberjunction/actions-bizapps-accounting](../Accounting/README.md) - Accounting system integrations (QuickBooks, etc.)
 - [@memberjunction/actions-bizapps-lms](../LMS/README.md) - Learning management system integrations (LearnWorlds, etc.)
-- [@memberjunction/actions](../../Engine/README.md) - Actions execution engine
+- [@memberjunction/actions](../../Engine/readme.md) - Actions execution engine
 - [@memberjunction/actions-base](../../Base/README.md) - Base classes and type definitions
 
 ## Adding New Providers

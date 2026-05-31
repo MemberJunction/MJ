@@ -38,4 +38,4 @@ export class MyGenericComponent {
 
 ## Related Guides
 
-- **[Navigation & Routing Guide](../../../guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, and back/forward work in MJ Explorer. Explains why Generic components must not touch Router.
+- **[Navigation & Routing Guide](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, and back/forward work in MJ Explorer. Explains why Generic components must not touch Router.

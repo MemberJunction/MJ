@@ -1,59 +1,5 @@
 # @memberjunction/ng-conversations
 
-## 5.38.0
-
-### Minor Changes
-
-- 8bd97f3: fix: image display + artifact/attachment unification cleanup
-  - Add ImageArtifactViewerPlugin for raster image artifacts
-  - Remove persist gate so agent-generated media always persists as artifacts
-  - AgentRunner writes media artifacts directly (bypass deprecated ConversationDetailAttachment)
-  - Remove deprecated SuggestedResponses feature (superseded by ResponseForm)
-  - Backfill migration for legacy ConversationDetailAttachment rows
-  - Remove all back-compat reads from deprecated ConversationDetailAttachment
-
-### Patch Changes
-
-- b2e6782: Propagate `inputArtifacts` from a parent agent to its sub-agents so delegates inherit the artifact manifest and tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references). Add `group_aggregate`, `compute` (safe arithmetic expression parser), `filter`, and `percentile` tools to the DataSnapshot artifact tool library. Improve client-side snapshot capture to wait for actual rows (not just registered tables) and bump the capture timeout to 15s so query-backed / server-paged components have time to load.
-- a529993: Keep the message header gear icon right-anchored after agent completion by moving the right-anchor onto the whole right-side cluster, and surface the frozen live-elapsed value as a fallback when neither the agent run nor message timestamps yield a duration.
-- Updated dependencies [6b6c321]
-- Updated dependencies [4ee0b06]
-- Updated dependencies [30f598d]
-- Updated dependencies [748b2e7]
-- Updated dependencies [ce7d2f5]
-- Updated dependencies [275afda]
-- Updated dependencies [d285996]
-- Updated dependencies [8bd97f3]
-- Updated dependencies [6a3ac36]
-- Updated dependencies [918d663]
-- Updated dependencies [c0b40c0]
-- Updated dependencies [d5a51b3]
-- Updated dependencies [b26d0ee]
-- Updated dependencies [3d739a3]
-- Updated dependencies [ebb0e3d]
-  - @memberjunction/ai-core-plus@5.38.0
-  - @memberjunction/core@5.38.0
-  - @memberjunction/core-entities@5.38.0
-  - @memberjunction/global@5.38.0
-  - @memberjunction/interactive-component-types@5.38.0
-  - @memberjunction/ng-artifacts@5.38.0
-  - @memberjunction/graphql-dataprovider@5.38.0
-  - @memberjunction/ng-code-editor@5.38.0
-  - @memberjunction/ai-engine-base@5.38.0
-  - @memberjunction/ng-forms@5.38.0
-  - @memberjunction/ng-tasks@5.38.0
-  - @memberjunction/ng-testing@5.38.0
-  - @memberjunction/ai-agent-client@5.38.0
-  - @memberjunction/ng-base-types@5.38.0
-  - @memberjunction/ng-container-directives@5.38.0
-  - @memberjunction/ng-notifications@5.38.0
-  - @memberjunction/ng-resource-permissions@5.38.0
-  - @memberjunction/ng-shared-generic@5.38.0
-  - @memberjunction/ai@5.38.0
-  - @memberjunction/ng-agent-client@5.38.0
-  - @memberjunction/ng-markdown@5.38.0
-  - @memberjunction/ng-ui-components@5.38.0
-
 ## 5.37.0
 
 ### Patch Changes

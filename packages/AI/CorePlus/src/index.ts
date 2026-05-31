@@ -20,4 +20,3 @@ export * from './MJAIModelEntityExtended';
 export * from './MJAIAgentRunEntityExtended';
 export * from './MJAIAgentRunStepEntityExtended';
 export * from './MJAIPromptRunEntityExtended';
-export * from './MJEntityDocumentEntityExtended';

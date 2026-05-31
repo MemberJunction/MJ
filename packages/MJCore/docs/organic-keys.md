@@ -2,7 +2,7 @@
 
 > **Package**: [@memberjunction/core](../readme.md)
 > **Related Guides**: [IS-A Relationships](./isa-relationships.md) | [Virtual Entities](./virtual-entities.md)
-> **Related Packages**: [@memberjunction/codegen-lib](../../CodeGenLib/README.md) | [@memberjunction/ng-base-forms](../../Angular/Generic/base-forms) | [@memberjunction/ng-entity-viewer](../../Angular/Generic/entity-viewer/README.md) | [@memberjunction/ng-core-entity-forms](../../Angular/Explorer/core-entity-forms/README.md)
+> **Related Packages**: [@memberjunction/codegen-lib](../../CodeGenLib/README.md) | [@memberjunction/ng-base-forms](../../Angular/Generic/base-forms/README.md) | [@memberjunction/ng-entity-viewer](../../Angular/Generic/entity-viewer/README.md) | [@memberjunction/ng-core-entity-forms](../../Angular/Explorer/core-entity-forms/README.md)
 
 ## Overview
 

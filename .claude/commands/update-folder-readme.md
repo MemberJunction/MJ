@@ -288,7 +288,7 @@ Use medium-brightness fills with explicit white text so diagrams are readable in
 
 2. **Link to docs/ Guides in Sub-Packages**:
    - If a sub-package has docs/ with topic guides, surface those in the folder README
-   - Example: `See the [Virtual Entities Guide](../../packages/MJCore/docs/virtual-entities.md)`
+   - Example: `See the [Virtual Entities Guide](./MJCore/docs/virtual-entities.md)`
 
 3. **Link to Related Folders**:
    - Use relative paths: `../Actions/README.md`

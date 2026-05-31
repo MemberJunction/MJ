@@ -463,7 +463,7 @@ private async resolveCredentialForExecution(
 
 ## Related Documentation
 
-- [Credentials System](../../Angular/Generic/credentials/README.md) - Core credential management
-- [Encryption System](../../Encryption/README.md) - Field-level encryption
-- [AI Core Package](../Core/readme.md) - Provider abstractions
+- [Credentials System](../../Credentials/README.md) - Core credential management
+- [Encryption System](../../Security/Encryption/README.md) - Field-level encryption
+- [AI Core Package](../Core/README.md) - Provider abstractions
 - [AI Prompts Package](./README.md) - Prompt execution engine

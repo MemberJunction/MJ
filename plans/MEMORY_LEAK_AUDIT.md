@@ -159,9 +159,9 @@ Per-session push-status subjects are cleaned every 5 minutes, but only when both
 
 `MJServer` registers `SIGTERM`/`SIGINT` handlers, but the singletons that have started timers, intervals, or subscriptions don't expose a `Shutdown()`/`Dispose()` method for the handler to call:
 
-- `LocalCacheManager` — eviction sweep `setInterval` ([packages/MJCore/src/generic/localCacheManager.ts:2237](../packages/MJCore/src/generic/localCacheManager.ts))
-- `SchedulingEngine` — recursive polling `setTimeout` ([packages/Scheduling/engine/src/ScheduledJobEngine.ts:185](../packages/Scheduling/engine/src/ScheduledJobEngine.ts))
-- `ArtifactBuilderService` — 5-minute cleanup `setInterval` ([packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts:444](../packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts))
+- `LocalCacheManager` — eviction sweep `setInterval` ([packages/MJCore/src/generic/localCacheManager.ts:2237](../../packages/MJCore/src/generic/localCacheManager.ts))
+- `SchedulingEngine` — recursive polling `setTimeout` ([packages/Scheduling/engine/src/ScheduledJobEngine.ts:185](../../packages/Scheduling/engine/src/ScheduledJobEngine.ts))
+- `ArtifactBuilderService` — 5-minute cleanup `setInterval` ([packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts:444](../../packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts))
 - `AuthorizationStateManager` and `ClientRegistry` (MCP OAuth) — cleanup `setInterval`s
 - `QueueManager` — running queues with no Stop hook (see C4)
 - `MCPClientManager` — `RateLimiterRegistry` with one timer per registered limiter

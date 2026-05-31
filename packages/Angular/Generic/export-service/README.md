@@ -4,7 +4,7 @@ Angular service and dialog component for exporting data to Excel, CSV, and JSON 
 
 ## Overview
 
-The `@memberjunction/ng-export-service` package wraps the [`@memberjunction/export-engine`](../../../MJExportEngine/README.md) for Angular usage. It provides an injectable `ExportService` with format-specific convenience methods and an `ExportDialogComponent` that presents a progressive UI for format selection, row sampling, and one-click download.
+The `@memberjunction/ng-export-service` package wraps the [`@memberjunction/export-engine`](../../../ExportEngine/README.md) for Angular usage. It provides an injectable `ExportService` with format-specific convenience methods and an `ExportDialogComponent` that presents a progressive UI for format selection, row sampling, and one-click download.
 
 ```mermaid
 flowchart LR

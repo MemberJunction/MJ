@@ -161,8 +161,8 @@ MemberJunction 2.x required ~350 lines of custom code in `app.component.ts` and 
 
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/readme.md) -- Core framework
+- [@memberjunction/core](../../MJCore/README.md) -- Core framework
 - [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) -- GraphQL client
-- [@memberjunction/ng-auth-services](../Explorer/auth-services/README.md) -- Authentication services
+- [@memberjunction/ng-auth-services](../auth-services/README.md) -- Authentication services
 - [@memberjunction/ng-explorer-core](../../Angular/Explorer/explorer-core/README.md) -- Explorer shell
-- [@memberjunction/ng-shared](../Generic/shared/README.md) -- Shared utilities
+- [@memberjunction/ng-shared](../shared/README.md) -- Shared utilities

@@ -916,8 +916,8 @@ ALTER TABLE __mj.EntityField ADD MobileDisplayName NVARCHAR(50) NULL;
 
 ## References
 
-- [EntityInfo Class](../../packages/MJCore/src/generic/entityInfo.ts)
-- [Angular CodeGen](../../packages/CodeGenLib/src/Angular/angular-codegen.ts)
-- [Base Form Component](../../packages/Angular/Generic/base-forms/src/lib/base-form-component.ts)
-- [Collapsible Panel](../../packages/Angular/Generic/base-forms/src/lib/panel/collapsible-panel.component.ts)
-- [Form Container CSS](../../packages/Angular/Generic/base-forms/src/lib/container/record-form-container.component.css)
+- [EntityInfo Class](packages/MJCore/src/generic/entityInfo.ts)
+- [Angular CodeGen](packages/CodeGenLib/src/angular-codegen.ts)
+- [Base Form Component](packages/Angular/Explorer/base-forms/src/lib/base-form-component.ts)
+- [Collapsible Panel](packages/Angular/Explorer/base-forms/src/lib/collapsible-panel.component.ts)
+- [Form Container CSS](packages/Angular/Explorer/form-toolbar/src/lib/record-form-container.component.css)

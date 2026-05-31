@@ -143,8 +143,8 @@ The service automatically handles these MJGlobal events:
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, UserInfo
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- UserNotificationEntity
-- [@memberjunction/global](../../../MJGlobal/README.md) -- MJGlobal event system
-- [@memberjunction/graphql-dataprovider](../../../GraphQLDataProvider/README.md) -- Push notification subscriptions
+- [@memberjunction/core](../../MJCore/README.md) -- Metadata, UserInfo
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- UserNotificationEntity
+- [@memberjunction/global](../../MJGlobal/README.md) -- MJGlobal event system
+- [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) -- Push notification subscriptions
 - `@progress/kendo-angular-notification` -- Toast notification rendering

@@ -592,8 +592,8 @@ The encryption infrastructure uses three metadata entities plus extensions to En
 
 This package depends on:
 - [@memberjunction/global](../MJGlobal/README.md) -- Class registration and the `ENCRYPTION_MARKER` constant
-- [@memberjunction/core](../MJCore/readme.md) -- `BaseEngine`, `RunView`, `Metadata`, `UserInfo`
-- [@memberjunction/core-entities](../MJCoreEntities/readme.md) -- `EncryptionEngineBase` and encryption entity types
+- [@memberjunction/core](../MJCore/README.md) -- `BaseEngine`, `RunView`, `Metadata`, `UserInfo`
+- [@memberjunction/core-entities](../MJCoreEntities/README.md) -- `EncryptionEngineBase` and encryption entity types
 - [@memberjunction/credentials](../Credentials/Engine/README.md) -- Credential management
 - [@memberjunction/actions-base](../Actions/Base/README.md) -- `RunActionParams` and `ActionResultSimple` for action definitions
 

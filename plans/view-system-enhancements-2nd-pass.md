@@ -31,7 +31,7 @@ This document outlines improvements to the MemberJunction entity viewer and data
 - Columns with long names like "Model Selection Mode" or "Final Payload Validation..." are cut off
 
 **Root Cause Analysis:**
-Location: [entity-data-grid.component.ts:1609-1663](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts#L1609-L1663)
+Location: [entity-data-grid.component.ts:1609-1663](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts#L1609-L1663)
 
 ```typescript
 private estimateColumnWidth(field: EntityFieldInfo): number {
@@ -55,7 +55,7 @@ private estimateColumnWidth(field: EntityFieldInfo): number {
 **Root Cause:**
 Two different column determination algorithms are used:
 
-1. **Grid's `shouldShowField()` method** ([entity-data-grid.component.ts:1599-1607](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts#L1599-L1607)):
+1. **Grid's `shouldShowField()` method** ([entity-data-grid.component.ts:1599-1607](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts#L1599-L1607)):
    ```typescript
    private shouldShowField(field: EntityFieldInfo): boolean {
      if (field.Name.startsWith('__mj_')) return false;
@@ -85,7 +85,7 @@ Two different column determination algorithms are used:
 - The detail panel properly handles FK clicks via `openForeignKeyRecord` event
 
 **Root Cause:**
-The grid's cell renderer ([entity-data-grid.component.ts:1864-1983](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts#L1864-L1983)) only has special rendering for:
+The grid's cell renderer ([entity-data-grid.component.ts:1864-1983](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts#L1864-L1983)) only has special rendering for:
 - Boolean fields (icons)
 - Date fields (formatting)
 - Currency/Number fields
@@ -139,7 +139,7 @@ private generateAgColumnDefs(entity: EntityInfo): ColDef[] {
 ```
 
 **Files to Modify:**
-- [entity-data-grid.component.ts](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts)
+- [entity-data-grid.component.ts](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts)
 
 ---
 
@@ -217,7 +217,7 @@ private calculateDataWidth(field: EntityFieldInfo): number {
 ```
 
 **Files to Modify:**
-- [entity-data-grid.component.ts](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts)
+- [entity-data-grid.component.ts](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts)
 
 ---
 
@@ -336,10 +336,10 @@ export interface ForeignKeyClickEvent {
 ```
 
 **Files to Modify:**
-- [entity-data-grid.component.ts](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts)
-- [entity-data-grid.component.css](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.css)
-- [grid-types.ts](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/models/grid-types.ts)
-- [entity-viewer.component.ts](../packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.ts) - wire up event
+- [entity-data-grid.component.ts](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts)
+- [entity-data-grid.component.css](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.css)
+- [grid-types.ts](packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/models/grid-types.ts)
+- [entity-viewer.component.ts](packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.ts) - wire up event
 
 ---
 

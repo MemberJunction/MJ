@@ -11,7 +11,7 @@
       <i class="fa-solid fa-chart-simple"></i>
       <span>{{ Aggregate ? 'Edit Aggregate' : 'Add Aggregate' }}</span>
     </div>
-    <button class="close-btn" (click)="onClose()" title="Close" aria-label="Close dialog">
+    <button class="close-btn" (click)="onClose()" title="Close">
       <i class="fa-solid fa-times"></i>
     </button>
   </div>
@@ -280,7 +280,7 @@
           @if (Icon) {
             <div class="selected-icon">
               <i [class]="Icon"></i>
-              <button class="clear-icon-btn" (click)="clearIcon()" title="Remove icon" aria-label="Remove icon">
+              <button class="clear-icon-btn" (click)="clearIcon()" title="Remove icon">
                 <i class="fa-solid fa-times"></i>
               </button>
             </div>

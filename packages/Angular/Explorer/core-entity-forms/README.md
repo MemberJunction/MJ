@@ -437,7 +437,7 @@ When viewing an entity that participates in IS-A relationships, the form display
 The IS-A visualization is built into the generated entity forms and automatically activates when an entity has IS-A relationships defined in the metadata. No additional configuration is required beyond setting up the IS-A relationships in the database schema.
 
 For more information on IS-A relationships and implementation, see:
-- [IS-A Relationships Documentation](../../../MJCore/docs/isa-relationships.md)
+- [IS-A Relationships Documentation](../../../../MJCore/docs/isa-relationships.md)
 
 ## Virtual Entity UI
 
@@ -478,5 +478,5 @@ Virtual entities are commonly used for:
 Virtual entities are defined by setting the `IsVirtualEntity` flag in the entity metadata. The form UI automatically detects this flag and applies the appropriate read-only restrictions and visual indicators.
 
 For more information on virtual entities and implementation, see:
-- [Virtual Entities Documentation](../../../MJCore/docs/virtual-entities.md)
+- [Virtual Entities Documentation](../../../../MJCore/docs/virtual-entities.md)
 

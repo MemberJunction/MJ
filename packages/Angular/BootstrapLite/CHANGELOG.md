@@ -1,44 +1,5 @@
 # @memberjunction/ng-bootstrap-lite
 
-## 5.38.0
-
-### Patch Changes
-
-- 60947be: Fix several entity-record save flow issues in MJ Explorer: re-key the tab and component cache when a "Create New Record" form transitions to a saved record so subsequent new-record clicks open a blank form; correct the URL-segment format used by ResourceRecordSaved so the form no longer fails to reload after save with a doubled-prefix key; wire up the previously no-op tab title refresh after save (including refreshing the Home app's dynamic nav-item label) so the user sees the latest entity name without navigating away.
-- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
-- Updated dependencies [6b6c321]
-- Updated dependencies [4ee0b06]
-- Updated dependencies [30f598d]
-- Updated dependencies [748b2e7]
-- Updated dependencies [ce7d2f5]
-- Updated dependencies [6a571d3]
-- Updated dependencies [275afda]
-- Updated dependencies [d285996]
-- Updated dependencies [8bd97f3]
-- Updated dependencies [6a3ac36]
-- Updated dependencies [918d663]
-- Updated dependencies [c0b40c0]
-- Updated dependencies [d5a51b3]
-- Updated dependencies [b26d0ee]
-- Updated dependencies [60947be]
-- Updated dependencies [ebb0e3d]
-  - @memberjunction/ai-core-plus@5.38.0
-  - @memberjunction/core@5.38.0
-  - @memberjunction/ng-core-entity-forms@5.38.0
-  - @memberjunction/core-entities@5.38.0
-  - @memberjunction/ng-shared@5.38.0
-  - @memberjunction/ng-explorer-core@5.38.0
-  - @memberjunction/ng-artifacts@5.38.0
-  - @memberjunction/graphql-dataprovider@5.38.0
-  - @memberjunction/ai-engine-base@5.38.0
-  - @memberjunction/ai-vectors-memory@5.38.0
-  - @memberjunction/actions-base@5.38.0
-  - @memberjunction/ng-auth-services@5.38.0
-  - @memberjunction/ng-dashboard-viewer@5.38.0
-  - @memberjunction/ng-file-storage@5.38.0
-  - @memberjunction/communication-types@5.38.0
-  - @memberjunction/entity-communications-base@5.38.0
-
 ## 5.37.0
 
 ### Patch Changes

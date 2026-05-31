@@ -1,28 +1,5 @@
 # @memberjunction/db-auto-doc
 
-## 5.38.0
-
-### Patch Changes
-
-- 275afda: DBAutoDoc organic-key detection + PR #2193 per-column normalization:
-  - **Organic-key detection phase** in DBAutoDoc's analyze pipeline (optional, off by default): prefilter → per-table LLM normalize (business-space descriptions + concept names + per-column normalization strategy + organic-key gate) → embed → agglomerative cluster → concept-name split → FK-graph transitive bridges → emit to `additionalSchemaInfo.json`. Runs on MemberJunction's AI infrastructure (`BaseLLM` / `BaseEmbeddings` via the ClassFactory), no standalone provider clients.
-  - **Per-column normalization**: each emitted `EntityOrganicKey` carries its own normalization function for its column, so a cluster of differently-formatted columns (e.g. phone numbers across systems) each canonicalize to a shared form. Runtime (`EntityInfo.BuildOrganicKeyViewParams`) applies each side's own expression at match time, looking up the spoke entity's organic key by name.
-
-- Updated dependencies [4ee0b06]
-- Updated dependencies [30f598d]
-- Updated dependencies [748b2e7]
-- Updated dependencies [ce7d2f5]
-- Updated dependencies [275afda]
-- Updated dependencies [6a3ac36]
-- Updated dependencies [c0b40c0]
-- Updated dependencies [d5a51b3]
-- Updated dependencies [3d739a3]
-- Updated dependencies [ebb0e3d]
-  - @memberjunction/core@5.38.0
-  - @memberjunction/global@5.38.0
-  - @memberjunction/server-bootstrap@5.38.0
-  - @memberjunction/ai@5.38.0
-
 ## 5.37.0
 
 ### Patch Changes

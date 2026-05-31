@@ -1,45 +1,5 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
-## 5.38.0
-
-### Patch Changes
-
-- Updated dependencies [67d6562]
-- Updated dependencies [4ee0b06]
-- Updated dependencies [30f598d]
-- Updated dependencies [748b2e7]
-- Updated dependencies [ce7d2f5]
-- Updated dependencies [6a571d3]
-- Updated dependencies [275afda]
-- Updated dependencies [d285996]
-- Updated dependencies [6a3ac36]
-- Updated dependencies [918d663]
-- Updated dependencies [c0b40c0]
-- Updated dependencies [d5a51b3]
-- Updated dependencies [b26d0ee]
-- Updated dependencies [60947be]
-- Updated dependencies [2ee14f1]
-- Updated dependencies [3d739a3]
-- Updated dependencies [ebb0e3d]
-  - @memberjunction/ng-base-application@5.38.0
-  - @memberjunction/core@5.38.0
-  - @memberjunction/core-entities@5.38.0
-  - @memberjunction/global@5.38.0
-  - @memberjunction/ng-base-forms@5.38.0
-  - @memberjunction/ng-shared@5.38.0
-  - @memberjunction/graphql-dataprovider@5.38.0
-  - @memberjunction/ng-code-editor@5.38.0
-  - @memberjunction/ng-entity-form-dialog@5.38.0
-  - @memberjunction/ng-entity-permissions@5.38.0
-  - @memberjunction/ng-simple-record-list@5.38.0
-  - @memberjunction/ng-base-types@5.38.0
-  - @memberjunction/ng-join-grid@5.38.0
-  - @memberjunction/ng-notifications@5.38.0
-  - @memberjunction/ng-shared-generic@5.38.0
-  - @memberjunction/ng-user-avatar@5.38.0
-  - @memberjunction/ng-tabstrip@5.38.0
-  - @memberjunction/ng-ui-components@5.38.0
-
 ## 5.37.0
 
 ### Patch Changes

@@ -16,7 +16,7 @@ Added comprehensive blacklist patterns to reject obvious non-PK columns:
   - Examples rejected: `ext`, `ref`
 
 ### 2. LLM Sanity Checker (NEW!)
-Created [LLMSanityChecker.ts](../../src/discovery/LLMSanityChecker.ts) that performs macro-level review of all PK/FK candidates after statistical detection.
+Created [LLMSanityChecker.ts](src/discovery/LLMSanityChecker.ts) that performs macro-level review of all PK/FK candidates after statistical detection.
 
 **Runs Once**: Only on iteration 1 after statistical PK/FK detection
 **Purpose**: Reject obvious errors before detailed per-table validation

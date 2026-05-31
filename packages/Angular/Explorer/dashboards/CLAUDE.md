@@ -42,10 +42,10 @@ Every new dashboard in this package must use **`<mj-page-layout>`** + **`<mj-pag
 **For pages with a section rail** (multi-section dashboards like AI Analytics, Knowledge Hub Configuration / Analytics / Tags / Classify): use **`<mj-left-nav>`** + **`<mj-left-nav-content>`** inside the body, and render a per-section **`<mj-page-header-interior>`** for section identity + section-specific controls. The outer chrome stays still as the user switches sections; only the inner card rebuilds. `<mj-left-nav>` supports both flat sections and trees (Testing Explorer is the canonical tree consumer).
 
 **Full reference:**
-- [/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome](../../../../guides/DASHBOARD_BEST_PRACTICES.md#page-chrome) — overview + shared component list
-- [/plans/explorer-chrome-conventions.md](../../../../plans/explorer-chrome-conventions.md) — the canonical rulebook with slot rules, filter UI decision tree, exception list
-- [/plans/chrome-slot-discipline-audit.md](../../../../plans/chrome-slot-discipline-audit.md) — Tasks A/B/C audit log; per-page record of what was changed and why
-- [/plans/list-page-standardization.md](../../../../plans/list-page-standardization.md) — forward-looking proposal for standardizing the list-page control set (not yet implemented)
+- [/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome](/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome) — overview + shared component list
+- [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md) — the canonical rulebook with slot rules, filter UI decision tree, exception list
+- [/plans/chrome-slot-discipline-audit.md](/plans/chrome-slot-discipline-audit.md) — Tasks A/B/C audit log; per-page record of what was changed and why
+- [/plans/list-page-standardization.md](/plans/list-page-standardization.md) — forward-looking proposal for standardizing the list-page control set (not yet implemented)
 
 ### Exception: dynamically-loaded sub-pages of a left-nav shell
 
@@ -106,4 +106,4 @@ Every Knowledge Hub dashboard reports its state to the AI agent and registers to
 | Vectors | TotalVectors, KPICount | (context only) |
 | Config | ActiveSection | (context only) |
 
-See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](../../../AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.
+See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.

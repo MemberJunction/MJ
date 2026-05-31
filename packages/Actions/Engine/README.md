@@ -392,12 +392,12 @@ Standalone OAuth2 token manager supporting multiple grant types.
 This package depends on:
 
 - [@memberjunction/global](../../MJGlobal/README.md) — ClassFactory and `@RegisterClass` decorator
-- [@memberjunction/core](../../MJCore/readme.md) — `Metadata`, `RunView`, `BaseEntity`, logging utilities
+- [@memberjunction/core](../../MJCore/README.md) — `Metadata`, `RunView`, `BaseEntity`, logging utilities
 - [@memberjunction/actions-base](../Base/README.md) — Shared types (`ActionEngineBase`, `RunActionParams`, `ActionResult`, `RuntimeActionBridgeBuilder` abstract)
-- [@memberjunction/core-entities](../../MJCoreEntities/readme.md) — Generated entity classes (`ActionExecutionLogEntity`, `ActionFilterEntity`, etc.)
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) — Generated entity classes (`ActionExecutionLogEntity`, `ActionFilterEntity`, etc.)
 - [@memberjunction/action-runtime](../Runtime/README.md) — Sandbox executor for `Type='Runtime'` actions
 - [@memberjunction/code-execution](../CodeExecution/README.md) — `BridgeHandlerMap` type (host-side bridge passed to the sandbox)
-- [@memberjunction/ai](../../AI/Core/readme.md) — AI model integration (shared types)
+- [@memberjunction/ai](../../AI/Core/README.md) — AI model integration (shared types)
 
 **Not a direct dependency any longer**: `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/aiengine`, `@memberjunction/ai-core-plus`. These used to be pulled in for the Runtime-action bridge; the bridge was extracted into [`@memberjunction/action-runtime-host`](../RuntimeHost/README.md) (top of the Actions stack), and this package now resolves the concrete bridge builder via `MJGlobal.ClassFactory.CreateInstance(RuntimeActionBridgeBuilder)`. See the RuntimeHost README for the cycle-breaking architecture.
 

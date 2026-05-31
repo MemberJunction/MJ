@@ -21,7 +21,7 @@
       <i class="fa-solid fa-sliders-h"></i>
       <span>{{ viewEntity ? 'Edit View' : 'Configure View' }}</span>
     </div>
-    <button class="close-btn" (click)="onClose()" title="Close" aria-label="Close panel">
+    <button class="close-btn" (click)="onClose()" title="Close">
       <i class="fa-solid fa-times"></i>
     </button>
   </div>
@@ -240,7 +240,7 @@
           @if (formatEditingColumn.userDisplayName) {
             <div class="format-row alias-info">
               <small class="muted-text">Original: {{ formatEditingColumn.displayName }}</small>
-              <button class="clear-alias-btn" (click)="formatEditingColumn.userDisplayName = undefined" title="Clear alias" aria-label="Clear alias">
+              <button class="clear-alias-btn" (click)="formatEditingColumn.userDisplayName = undefined" title="Clear alias">
                 <i class="fa-solid fa-times"></i>
               </button>
             </div>

@@ -4,7 +4,7 @@ Angular components for the MemberJunction Lists feature: list-membership
 management, sharing, refresh-from-source preview, audience picking,
 tagging, and lightweight stats. Drop-in pieces that any MJ app can use;
 the components here own the UI shape, and
-[`@memberjunction/lists`](../../../Lists) owns the underlying
+[`@memberjunction/lists`](../../../Lists/README.md) owns the underlying
 business logic.
 
 ## Installation
@@ -197,7 +197,7 @@ Three tabs: **List** (pick a saved `MJ: List`), **View** (pick a
 
 For the underlying business logic and the wire-format client:
 
-- [`@memberjunction/lists`](../../../Lists) — `ListOperations`,
+- [`@memberjunction/lists`](../../../Lists/README.md) — `ListOperations`,
   `ListSharing`, `AudienceResolver`, delta-token contract.
 - [`@memberjunction/graphql-dataprovider`](../../../GraphQLDataProvider/README.md)
   — `GraphQLListsClient` (typed client mirroring the `ListOperationsResolver`).
@@ -207,10 +207,10 @@ For the underlying business logic and the wire-format client:
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) — `Metadata`, `RunView`
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) — generated entity types
-- [@memberjunction/lists](../../../Lists) — `AudienceSource`, `ListDelta`, `SharePermissionLevel`, etc.
+- [@memberjunction/core](../../MJCore/README.md) — `Metadata`, `RunView`
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) — generated entity types
+- [@memberjunction/lists](../../../Lists/README.md) — `AudienceSource`, `ListDelta`, `SharePermissionLevel`, etc.
 - [@memberjunction/graphql-dataprovider](../../../GraphQLDataProvider/README.md) — `GraphQLListsClient`
 - [@memberjunction/ng-base-types](../base-types/README.md) — `BaseAngularComponent` for multi-provider support
 - [@memberjunction/ng-shared-generic](../shared/README.md) — loading component
-- [@memberjunction/ng-ui-components](../ui-components) — `mj-dialog`, `mjButton`, etc.
+- [@memberjunction/ng-ui-components](../ui-components/README.md) — `mj-dialog`, `mjButton`, etc.

@@ -141,3 +141,4 @@ export class YourModule {}
 
 ## Related Packages
 
+- [@memberjunction/ng-skip-chat](../skip-chat/README.md) -- Uses markdown for chat message rendering

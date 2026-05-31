@@ -115,6 +115,6 @@ export class YourComponent {}
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Core framework
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- TaskEntity
+- [@memberjunction/core](../../MJCore/README.md) -- Core framework
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- TaskEntity
 - `frappe-gantt` -- Gantt chart rendering (peer dependency)

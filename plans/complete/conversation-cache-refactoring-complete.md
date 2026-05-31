@@ -166,7 +166,7 @@ constructor(
 
 ## Files Modified
 
-### 1. [conversation-chat-area.component.ts](../../packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts)
+### 1. [conversation-chat-area.component.ts](packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts)
 
 **Changes:**
 - ✅ Added `conversationDataCache` map

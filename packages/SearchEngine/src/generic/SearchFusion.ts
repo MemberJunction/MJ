@@ -235,20 +235,36 @@ export class SearchFusion {
     }
 
     /**
-     * RRF with optional per-list weights. Delegates to the canonical `ComputeRRF()`
-     * from `@memberjunction/core`, which accepts an optional `weights` argument
-     * aligned by index with `rankedLists`.
+     * RRF with optional per-list weights.
      *
-     * Kept as a thin wrapper so callers within SearchFusion can pass weights as a
-     * required positional argument (clearer intent at the call sites) while the
-     * canonical function keeps `weights` optional for backwards-compatible behavior.
+     * When all weights are 1, falls back to the canonical `ComputeRRF()` from
+     * `@memberjunction/core` for identical behavior. When weights are non-uniform,
+     * computes `Σᵢ wᵢ / (k + rankᵢ(d))` per the standard weighted-RRF formulation and
+     * re-sorts candidates by the weighted fused score.
      */
     private computeWeightedRRF(
         rankedLists: ScoredCandidate[][],
         weights: number[],
         k: number = 60
     ): ScoredCandidate[] {
-        return ComputeRRF(rankedLists, k, weights);
+        const uniform = weights.every(w => w === 1);
+        if (uniform) {
+            return ComputeRRF(rankedLists, k);
+        }
+
+        const scores = new Map<string, number>();
+        rankedLists.forEach((list, listIdx) => {
+            const w = weights[listIdx] ?? 1;
+            list.forEach((candidate, position) => {
+                const rank = position + 1;
+                const contribution = w / (k + rank);
+                scores.set(candidate.ID, (scores.get(candidate.ID) ?? 0) + contribution);
+            });
+        });
+
+        return Array.from(scores.entries())
+            .map(([ID, Score]) => ({ ID, Score } as ScoredCandidate))
+            .sort((a, b) => b.Score - a.Score);
     }
 
     /**

@@ -1044,7 +1044,7 @@ This is intentional: it sidesteps the "did this PR change cache format?" review 
 
 For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
-> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
+> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ---
 
@@ -1216,73 +1216,6 @@ Features:
 
 ---
 
-## Ranked Entity Record Search (`SearchEntity` / `SearchEntities`)
-
-A two-tier ranked-search API for finding the most relevant **records** of an entity for a free-text request. Distinct from the other lookups MJ already exposes — see the comparison below.
-
-```typescript
-import { Metadata, EntitySearchResult } from '@memberjunction/core';
-
-const md = new Metadata();
-
-// Singular form — search one entity, return ranked record list
-const results: EntitySearchResult[] = await md.SearchEntity({
-    entityName: 'MJ: Entities',
-    searchText: userRequestText,
-    options: { mode: 'hybrid', topK: 10, weights: { lexical: 1.0, semantic: 1.5 }, contextUser }
-});
-
-// Plural form — search many entities in ONE round-trip
-// Returns an array of arrays, aligned by input order
-const groups = await md.SearchEntities([
-    { entityName: 'Invoices',  searchText: 'overdue payments', options: { topK: 5, contextUser } },
-    { entityName: 'Customers', searchText: 'overdue payments', options: { topK: 5, contextUser } },
-    { entityName: 'Notes',     searchText: 'overdue payments', options: { topK: 5, contextUser } },
-]);
-// groups[0] = top Invoices, groups[1] = top Customers, groups[2] = top Notes
-```
-
-**Modes:**
-- `lexical` — substring / prefix matching on the entity's name field and any `IncludeInUserSearchAPI` fields.
-- `semantic` — vector cosine against precomputed embeddings in `MJ: Entity Record Documents.VectorJSON`.
-- `hybrid` (default) — weighted RRF blend of the two, tunable via `options.weights` and `options.rrfK`.
-
-**Configuration:** semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds one for `MJ: Entities` so the entity catalog is searchable out of the box; users enable it for other entities via metadata (see `/metadata/entity-documents/`).
-
-**Provider implementation:** declared on `IMetadataProvider`, implemented polymorphically by each concrete provider. `GenericDatabaseProvider` runs the ranking in-process (embedding the query via `AIEngine.EmbedTextLocal` and querying `SimpleVectorServiceProvider` directly); `GraphQLDataProvider` proxies the whole batch to the server in one round-trip via the `SearchEntities` resolver. No registration or wiring required at startup.
-
-### How this differs from MJ's other search/lookup APIs
-
-| API | Purpose | Returns |
-|---|---|---|
-| `EntityByName(name)` / `EntityByID(id)` | Look up an entity **definition** (`EntityInfo`). Deterministic, not ranked. | One `EntityInfo` |
-| `FullTextSearch(params)` | Multi-entity server-side text search using each entity's `UserSearchString` rule (LIKE / FTS). Lexical only. | Groups of `FullTextSearchResultItem` |
-| **`SearchEntity(params)`** | "Find the N most relevant **records** of *this* entity for this query." Hybrid lexical + semantic. | `EntitySearchResult[]` |
-| **`SearchEntities(params[])`** | Batch — same ranking applied to multiple entities in one call. | `EntitySearchResult[][]` aligned by input |
-| `SearchEngine.Search()` ([`@memberjunction/search-engine`](../SearchEngine/README.md)) | **Cross-source** unified search across vectors, full-text, entities, and storage. Scoped via `SearchScope` metadata, optional reranker. | Aggregated `SearchResult` |
-
-**Picking the right one** is straightforward: if you know the entity and want ranked records, use `SearchEntity`. If you know the candidate entities, use `SearchEntities` (plural). If you don't know which entity / want cross-source results, use `SearchEngine.Search`. For exact-name metadata lookup, use `EntityByName`.
-
----
-
-## Weighted Reciprocal Rank Fusion (`ComputeRRF`)
-
-`ComputeRRF` is the canonical RRF implementation used wherever MJ blends ranked result lists (`SearchEntity` / `SearchEntities` hybrid mode, `SearchEngine` cross-scope fusion, dupe detection). It accepts an optional per-list `weights` array:
-
-```typescript
-import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
-
-const fused = ComputeRRF(
-    [lexicalResults, semanticResults],
-    /* k */ 60,
-    /* weights */ [1.0, 1.5]   // semantic contributes 1.5× per rank position
-);
-```
-
-Formula: `FusedScore(d) = Σ_i w_i / (k + rank_i(d))`. Omitting `weights` is equivalent to all-ones — canonical unweighted RRF.
-
----
-
 ## Utility Functions
 
 ```typescript
@@ -1382,20 +1315,20 @@ if (!saved) {
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/core-entities](../MJCoreEntities/readme.md) | Extended entity classes for MemberJunction system entities |
+| [@memberjunction/core-entities](../MJCoreEntities/README.md) | Extended entity classes for MemberJunction system entities |
 
 ### UI Frameworks
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ng-shared](../Angular/Generic/shared/README.md) | Angular-specific components and services |
-| [@memberjunction/ng-explorer-core](../Angular/Explorer/explorer-core/README.md) | Core Angular explorer components |
+| [@memberjunction/ng-shared](../Angular/Shared/README.md) | Angular-specific components and services |
+| [@memberjunction/ng-explorer-core](../Angular/Explorer/core/README.md) | Core Angular explorer components |
 
 ### AI Integration
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ai](../AI/Core/readme.md) | AI framework core abstractions |
+| [@memberjunction/ai](../AI/Core/README.md) | AI framework core abstractions |
 | [@memberjunction/aiengine](../AI/Engine/README.md) | AI orchestration engine |
 
 ### Communication

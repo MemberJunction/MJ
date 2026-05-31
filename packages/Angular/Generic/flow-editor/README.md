@@ -147,7 +147,7 @@ export class YourModule {}
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Core MJ functionality
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- Entity types for agent editor
+- [@memberjunction/core](../../MJCore/README.md) -- Core MJ functionality
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- Entity types for agent editor
 - `@foblex/flow` -- Canvas rendering engine
 - `@dagrejs/dagre` -- Graph layout algorithm

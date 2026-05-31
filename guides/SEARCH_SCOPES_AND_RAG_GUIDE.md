@@ -1,11 +1,6 @@
 # Search Scopes & RAG+ Guide
 
 > Implementation guide for MemberJunction's **Search Scopes** + **agent RAG+** architecture. Use this alongside the full design in [`plans/search-scopes-rag-plus.md`](../plans/search-scopes-rag-plus.md).
->
-> **Related search APIs:**
-> - **[SEARCH_OVERVIEW_GUIDE.md](./SEARCH_OVERVIEW_GUIDE.md)** — decision tree for picking the right search API.
-> - **[ENTITY_SEARCH_GUIDE.md](./ENTITY_SEARCH_GUIDE.md)** — `SearchEntity` / `SearchEntities` for ranked per-entity hybrid lexical + semantic search. Narrower than the cross-source `SearchEngine` covered here; use it when you know which entity (or set of entities) to search.
-> - **[Full-Text Search Guide](../packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** — lexical-only `FullTextSearch` over FTS-enabled entities.
 
 ---
 

@@ -229,9 +229,52 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
   });
 });
 
-// Parity check (every T-SQL V-migration has a committed PG counterpart) was
-// moved to scripts/check-pg-migration-parity.mjs. Rationale: turbo runs tests
-// in dependency order and stops on first failure, so a parity gap (expected
-// any time a T-SQL migration is added before pg-migrate runs) was masking
-// every downstream package's test failures. The script is invoked by the
-// `pg-migrate` skill and can be wired into pg-migrations.yml directly.
+describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression — parity', () => {
+  /**
+   * Intentionally-removed pre-baseline files. These T-SQL migrations exist
+   * upstream for SQL Server but have no PG counterpart by design — they were
+   * pre-baseline upgrades that the v5.0 PG baseline already incorporates, so
+   * shipping a PG version would re-apply the same DDL on top of the baseline.
+   * Removed in commit 37d65c66e1 in the migrations PR.
+   */
+  const INTENTIONALLY_NO_PG_COUNTERPART = new Set<string>([
+    'V202602131500__v5.0.x__Entity_Name_Normalization_And_ClassName_Prefix_Fix',
+    'V202602141421__v5.0.x__Add_AllowMultipleSubtypes_to_Entity',
+  ]);
+
+  // Enforces that every T-SQL V-migration has a committed PG counterpart in
+  // migrations-pg/v5/. This is the primary gate keeping migration content in
+  // sync between SQL Server and PostgreSQL — paired with pg-migrations.yml
+  // (which now applies committed PG files rather than regenerating them),
+  // this test makes sure the committed files actually exist.
+  //
+  // On a tooling-only branch where migrations-pg/v5/ is empty, the parent
+  // `describe.skipIf(!hasPGMigrations)` skips this test before it runs.
+  // On any branch where PG files are committed (the migrations PR, or the
+  // merged state on `next`), this test runs and fails if any T-SQL file
+  // lacks a PG counterpart (modulo the small `INTENTIONALLY_NO_PG_COUNTERPART`
+  // set above for pre-baseline migrations the v5.0 PG baseline already
+  // incorporates). When this test fails, run the `pg-migrate` skill to
+  // generate the missing PG file(s) and commit them to migrations-pg/v5/.
+  it('should have a PG counterpart for every T-SQL V-migration', () => {
+    const tsqlFiles = readdirSync(MIGRATIONS_DIR)
+      .filter(f => f.startsWith('V') && f.endsWith('.sql'))
+      .sort();
+    const pgBases = new Set(
+      readdirSync(PG_MIGRATIONS_DIR)
+        .filter(f => f.startsWith('V'))
+        .map(f => f.replace(/\.pg\.sql$/, '').replace(/\.pg-only\.sql$/, ''))
+    );
+
+    const missing = tsqlFiles
+      .map(f => f.replace(/\.sql$/, ''))
+      .filter(base => !pgBases.has(base))
+      .filter(base => !INTENTIONALLY_NO_PG_COUNTERPART.has(base));
+
+    if (missing.length > 0) {
+      console.log('T-SQL migrations without PG counterpart — run the `pg-migrate` skill to generate them:');
+      for (const m of missing) console.log(`  ${m}`);
+    }
+    expect(missing.length).toBe(0);
+  });
+});

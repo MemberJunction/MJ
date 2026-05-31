@@ -11,10 +11,9 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (1 classes)
 import {
     SimpleVectorDatabase,
-    SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
 // @memberjunction/core-entities (349 classes)
@@ -376,7 +375,7 @@ import {
     MJEntityActionEntityExtended,
 } from '@memberjunction/actions-base';
 
-// @memberjunction/ai-core-plus (8 classes)
+// @memberjunction/ai-core-plus (7 classes)
 import {
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
@@ -385,7 +384,6 @@ import {
     MJAIPromptCategoryEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
-    MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
 // @memberjunction/ai-engine-base (4 classes)
@@ -488,7 +486,6 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const CLASS_REGISTRATIONS: any[] = [
     SimpleVectorDatabase,
-    SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
@@ -847,7 +844,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptCategoryEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
-    MJEntityDocumentEntityExtended,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
     PerMillionTokensPriceUnitType,
@@ -911,7 +907,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 418;
+export const CLASS_REGISTRATIONS_COUNT = 416;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

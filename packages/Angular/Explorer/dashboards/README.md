@@ -200,7 +200,7 @@ starts at the same baseline as the AI agent path.
 `activateVersion()` and `revertToComponent()` — client-side mirrors of
 the server actions used by the cockpit's version-rail rows.
 
-See [/plans/interactive-forms/phase-2-runtime-loop.md](../../../../plans/interactive-forms/phase-2-runtime-loop.md) for the full architecture.
+See [/plans/interactive-forms/phase-2-runtime-loop.md](../../../plans/interactive-forms/phase-2-runtime-loop.md) for the full architecture.
 
 ## Build
 

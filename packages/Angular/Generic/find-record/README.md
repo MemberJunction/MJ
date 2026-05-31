@@ -114,8 +114,8 @@ Inherits all inputs from `FindRecordComponent`, plus:
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunView, BaseEntity
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- Entity type definitions
+- [@memberjunction/core](../../MJCore/README.md) -- Metadata, RunView, BaseEntity
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- Entity type definitions
 - [@memberjunction/ng-shared](../shared/README.md) -- Shared Angular utilities
 - `@progress/kendo-angular-grid` -- Grid display
 

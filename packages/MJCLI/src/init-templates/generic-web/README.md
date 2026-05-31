@@ -99,7 +99,7 @@ substitution layer auto-parses them.
    - Set `baseUrl` to your app's URL.
    - Set `allowedDomains` to the hosts the agent is allowed to touch.
    - Add an `auth` block if your app requires login (see
-     [`docker/regression/targets/staging-mj.example.target.json`](../../../../../docker/regression/targets/staging-mj.example.target.json)
+     [`docker/regression/targets/staging-mj.example.target.json`](../../targets/staging-mj.example.target.json)
      for the auth shape).
    - Rename `suite` to match your suite, update `extraMetadataDirs` to your
      metadata path, point `oraclesModule` at your oracles file.

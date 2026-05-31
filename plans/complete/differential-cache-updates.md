@@ -351,6 +351,6 @@ const shouldUseDifferential = (
 
 ## 8. References
 
-- [LocalCacheManager Implementation](../../packages/MJCore/src/generic/localCacheManager.ts)
+- [LocalCacheManager Implementation](../packages/MJCore/src/generic/localCacheManager.ts)
 - [BaseEngine CacheLocal Documentation](../packages/MJCore/src/generic/baseEngine.ts)
 - [MJ Timestamp Columns Pattern](https://docs.memberjunction.org)

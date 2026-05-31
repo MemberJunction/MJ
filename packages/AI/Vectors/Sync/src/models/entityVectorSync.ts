@@ -13,7 +13,7 @@ import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocume
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
-import { Transform, TransformCallback, Writable } from 'node:stream';
+import { PassThrough, Transform, TransformCallback } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
@@ -48,13 +48,7 @@ export class EntityVectorSyncer extends VectorBase {
    * @param contextUser The context user to use to refresh the cache and configure the engines
    */
   public async Config(forceRefresh: boolean, contextUser?: UserInfo): Promise<void> {
-    // Persist contextUser on the syncer so downstream helpers that read
-    // `super.CurrentUser` (GetActiveEntityDocuments, GetVectorDatabaseAndEmbeddingClassByEntityDocumentID,
-    // etc.) have a valid user. Without this, calls that only invoke Config()
-    // before a RunView() fail with "User not found in metadata".
-    if (contextUser) {
-      super.CurrentUser = contextUser;
-    }
+    super.CurrentUser;
     await EntityDocumentCache.Instance.Refresh(forceRefresh, contextUser);
     await AIEngine.Instance.Config(forceRefresh, contextUser);
     await KnowledgeHubMetadataEngine.Instance.Config(forceRefresh, contextUser);
@@ -109,7 +103,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateContent = template.Content[0];
 
     const vectorCreator = this.createVectorCreator(
-      template, templateContent, obj.embedding, obj.embeddingModelAPIName, delayTimeMS,
+      template, templateContent, obj.embedding, delayTimeMS,
       params.VectorizeBatchCount || pipelineConfig?.vectorizeBatchSize,
       pipelineConfig?.maxConcurrentEmbeddings
     );
@@ -192,24 +186,7 @@ export class EntityVectorSyncer extends VectorBase {
     this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize);
 
     LogStatus('Starting pipeline');
-    // Terminal sink: a Writable that discards each chunk after the
-    // progressTracker has accounted for it. Using a PassThrough here causes
-    // `pipeline()` to hang because PassThrough buffers its readable side
-    // (objectMode HWM=16) and nothing downstream drains it — write
-    // backpressure compounds until the writable side never emits 'finish'.
-    // An explicit Writable consumer eliminates that buffer and lets the
-    // pipeline complete the moment progressTracker forwards the last chunk.
-    await pipeline(
-      dataStream,
-      vectorCreator,
-      vectorUpserter,
-      erdUpserter,
-      progressTracker,
-      new Writable({
-        objectMode: true,
-        write(_chunk, _encoding, callback) { callback(); },
-      })
-    );
+    await pipeline(dataStream, vectorCreator, vectorUpserter, erdUpserter, progressTracker, new PassThrough({ objectMode: true }));
 
     const elapsedMs: number = new Date().getTime() - startTime;
     const elapsedSeconds = elapsedMs / 1000;
@@ -242,7 +219,6 @@ export class EntityVectorSyncer extends VectorBase {
     template: MJTemplateEntityExtended,
     templateContent: MJTemplateContentEntity,
     embedding: BaseEmbeddings,
-    embeddingModelAPIName: string,
     delayTimeMS: number,
     batchSize?: number,
     concurrencyLimit?: number
@@ -251,7 +227,7 @@ export class EntityVectorSyncer extends VectorBase {
       batchSize: batchSize || 50,
       concurrencyLimit: concurrencyLimit ?? 2,
       processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
-        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS),
+        this.renderAndEmbedBatch(batch, template, templateContent, embedding, delayTimeMS),
     });
   }
 
@@ -286,7 +262,6 @@ export class EntityVectorSyncer extends VectorBase {
     template: MJTemplateEntityExtended,
     templateContent: MJTemplateContentEntity,
     embedding: BaseEmbeddings,
-    embeddingModelAPIName: string,
     delayTimeMS: number
   ): Promise<EmbeddingData[]> {
     TemplateEngineServer.Instance.SetupNunjucks();
@@ -310,7 +285,7 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName });
+    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: null });
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
 
     return embeddings.vectors.map((vector: number[], index: number) => ({
@@ -414,18 +389,6 @@ export class EntityVectorSyncer extends VectorBase {
     indexName: string,
     delayTimeMS: number
   ): Promise<EmbeddingData[]> {
-    // Short-circuit for read-only providers (e.g. SimpleVectorServiceProvider,
-    // which reads vectors directly from MJ: Entity Record Documents.VectorJSON
-    // — there is no remote store to upsert into). Still stamp VectorIDs on the
-    // batch so the downstream ERD upserter has consistent record IDs to write.
-    if (vectorDB.IsReadOnly) {
-      for (const embeddingItem of batch) {
-        const raw = `${entityDocument.ID}_${embeddingItem.__mj_compositeKey}`;
-        embeddingItem.VectorID = createHash('sha1').update(raw).digest('hex');
-      }
-      return batch;
-    }
-
     // Parse entity document configuration for metadata enrichment settings
     const docConfig = this.parseDocumentConfig(entityDocument);
     const metadataConfig = docConfig.metadata;
@@ -668,15 +631,18 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorDBEntity: MJVectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
     const aiModelEntity: MJAIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
-    // Resolve API keys. Empty/null is legitimate for local-only providers
-    // (e.g., LocalEmbedding ONNX runtime, SimpleVectorServiceProvider in-process
-    // vector pool) so we no longer throw on missing keys — the driver class
-    // constructors decide whether they actually need one. If a cloud driver
-    // genuinely needs a key, the downstream inference call will fail with a
-    // real provider-level auth error that's more actionable than this guard.
-    const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass) || '';
-    const vectorDBAPIKey: string = (await this.ResolveVectorDBAPIKey(vectorDBEntity)) || '';
+    const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass);
+    const vectorDBAPIKey: string = await this.ResolveVectorDBAPIKey(vectorDBEntity);
 
+    if (!embeddingAPIKey) {
+      throw Error(`No API Key found for AI Model ${aiModelEntity.DriverClass}`);
+    }
+
+    if (!vectorDBAPIKey) {
+      throw Error(`No API Key found for Vector Database ${vectorDBEntity.ClassKey}`);
+    }
+
+    //LogStatus(`Embedding API Key: ${embeddingAPIKey} VectorDB API Key: ${vectorDBAPIKey}`);
     const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, aiModelEntity.DriverClass, embeddingAPIKey);
     const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDBEntity.ClassKey, vectorDBAPIKey);
 
@@ -696,8 +662,7 @@ export class EntityVectorSyncer extends VectorBase {
       vectorDBClassKey: vectorDBEntity.ClassKey,
       vectorDBAPIKey: vectorDBAPIKey,
       embeddingDriverClass: aiModelEntity.DriverClass,
-      embeddingAPIKey: embeddingAPIKey,
-      embeddingModelAPIName: aiModelEntity.APIName ?? '',
+      embeddingAPIKey: embeddingAPIKey
     };
 
     return obj;
@@ -755,71 +720,47 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * Returns active Entity Documents for vectorization. Defaults to the
-   * `Record Duplicate` document type for back-compat with the historical use
-   * case (duplicate detection); pass `entityDocumentType` to target a different
-   * type (e.g. `'Search'` for the search-tier vector pool that backs
-   * `Provider.SearchEntity`).
-   *
-   * When multiple active EntityDocuments exist for the same entity (e.g. for
-   * different content variants), only the first row encountered is kept — the
-   * one-doc-per-entity restriction matches what existing vectorize callers
-   * already expect.
-   *
-   * **Cache source.** Reads from `KnowledgeHubMetadataEngine`'s cached
-   * EntityDocuments array (already loaded by `Config()` above) — no fresh
-   * RunView. The denormalized `Type` and `Entity` columns are available on
-   * the cached rows, so the type and entity filters are pure client-side
-   * predicates.
-   *
-   * @param entityNames If provided, only Entity Documents for the specified entities will be returned.
-   * @param entityDocumentType Name of the EntityDocumentType to filter by. Defaults to 'Record Duplicate'.
+   * Returns all active Entity Documents of the 'Record Duplicate' type.
+   * Note that this only returns the first active Entity Document. Meaning if there are multiple Entity Documents for the same entity,
+   * only the oldest one will be returned.
+   * @param entityIDs If provided, only Entity Documents for the specified entities will be returned.
    */
-  public async GetActiveEntityDocuments(entityNames?: string[], entityDocumentType: string = 'Record Duplicate'): Promise<MJEntityDocumentEntity[]> {
-    // Ensure the engine is loaded (idempotent — Config() above already ran it,
-    // but defensive in case a caller invokes this method directly without
-    // calling Config first).
-    await KnowledgeHubMetadataEngine.Instance.Config(false, super.CurrentUser);
+  public async GetActiveEntityDocuments(entityNames?: string[]): Promise<MJEntityDocumentEntity[]> {
+    await EntityDocumentCache.Instance.Refresh(false, super.CurrentUser);
+    const entityDocumentType: MJEntityDocumentTypeEntity | undefined = EntityDocumentCache.Instance.GetDocumentTypeByName('Record Duplicate');
+    if (!entityDocumentType) {
+      throw new Error('Entity Document Type not found');
+    }
 
-    const typeNameLower = entityDocumentType.trim().toLowerCase();
-    const candidates = KnowledgeHubMetadataEngine.Instance.EntityDocuments.filter(d =>
-      d.Status === 'Active' &&
-      d.Type?.trim().toLowerCase() === typeNameLower
-    );
+    let filter = `TypeID = '${entityDocumentType.ID}' AND Status = 'Active' `;
+    if (entityNames && entityNames.length > 0) {
+      filter += ` AND Entity IN (${entityNames.map((entityName: string) => `'${entityName}'`).join(',')})`;
+    }
 
-    const entityNamesLower = entityNames && entityNames.length > 0
-      ? new Set(entityNames.map(n => n.trim().toLowerCase()))
-      : null;
-    const filtered = entityNamesLower
-      ? candidates.filter(d => entityNamesLower.has(d.Entity?.trim().toLowerCase() ?? ''))
-      : candidates;
+    const runViewResult: RunViewResult<MJEntityDocumentEntity> = await super.RunView.RunView<MJEntityDocumentEntity>({
+      EntityName: 'MJ: Entity Documents',
+      ExtraFilter: filter,
+      ResultType: 'entity_object',
+    }, super.CurrentUser);
 
-    if (filtered.length === 0 && candidates.length === 0) {
-      // The engine has no doc-type by that name — that's the only error case
-      // worth surfacing. An empty type filter would silently return [] before.
-      const typeExists = KnowledgeHubMetadataEngine.Instance.EntityDocuments.some(
-        d => d.Type?.trim().toLowerCase() === typeNameLower
-      );
-      if (!typeExists) {
-        // Only throw if we can confirm NO docs (active or inactive) reference
-        // the type — that's a real misconfiguration. Otherwise an empty result
-        // just means nothing is active right now.
-        const anyOfType = candidates.length > 0;
-        if (!anyOfType) {
-          throw new Error(`No EntityDocuments found for type "${entityDocumentType}" (also no inactive ones — type may not exist).`);
-        }
+    if(!runViewResult.Success){
+      throw new Error(runViewResult.ErrorMessage);
+    }
+
+    let entityDocuments: MJEntityDocumentEntity[] = [];
+    let seenEntities: string[] = [];
+
+    //we only want one entity document per entity
+    for(const entityDocument of runViewResult.Results){
+      if(seenEntities.includes(entityDocument.EntityID)){
+        continue;
       }
+
+      entityDocuments.push(entityDocument);
+      seenEntities.push(entityDocument.EntityID);
     }
 
-    // Dedupe per EntityID — preserve the existing "one doc per entity" contract.
-    const seen = new Set<string>();
-    const out: MJEntityDocumentEntity[] = [];
-    for (const doc of filtered) {
-      if (seen.has(doc.EntityID)) continue;
-      seen.add(doc.EntityID);
-      out.push(doc);
-    }
-    return out;
+    return entityDocuments;
   }
 
   /**

@@ -4,8 +4,8 @@ These packages comprise the **MJExplorer** application, MemberJunction's primary
 
 ## Guides
 
-- **[Navigation & Routing Guide](../../../guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, back/forward, and query param sub-navigation work in MJ Explorer
-- **[Dashboard Best Practices](../../../guides/DASHBOARD_BEST_PRACTICES.md)** — Architecture patterns for building dashboards
+- **[Navigation & Routing Guide](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, back/forward, and query param sub-navigation work in MJ Explorer
+- **[Dashboard Best Practices](/guides/DASHBOARD_BEST_PRACTICES.md)** — Architecture patterns for building dashboards
 
 ## Packages
 
@@ -29,9 +29,10 @@ Components for rendering, editing, and managing entity records through metadata-
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [base-forms](../Generic/base-forms) | `@memberjunction/ng-base-forms` | Base form components, field rendering, and validation framework |
+| [base-forms](./base-forms/) | `@memberjunction/ng-base-forms` | Base form components, field rendering, and validation framework |
 | [core-entity-forms](./core-entity-forms/) | `@memberjunction/ng-core-entity-forms` | Auto-generated and custom entity forms with dynamic form loading and registration |
 | [entity-form-dialog](./entity-form-dialog/) | `@memberjunction/ng-entity-form-dialog` | Modal dialog for displaying and editing any entity record |
+| [form-toolbar](./form-toolbar/) | `@memberjunction/ng-form-toolbar` | Form action toolbar providing save, cancel, delete, and navigation controls |
 
 ### Data Grids & Lists
 
@@ -134,7 +135,7 @@ The bundler sees named imports referenced in an exported array — it **cannot**
 
 For lazy-loaded modules, `ng-bootstrap-lite` intentionally **excludes** dashboard and settings packages. Those classes aren't in the initial manifest (so they're not in the initial bundle). They get pulled in via dynamic `import()` when the user navigates to them.
 
-See [/packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](../../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive manifest documentation.
+See [/packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](/packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md) for comprehensive manifest documentation.
 
 ### Key Files
 

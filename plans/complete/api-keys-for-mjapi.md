@@ -433,6 +433,6 @@ The `@memberjunction/encryption` package is already a dependency of MJServer:
 
 ## Related Documentation
 
-- [Encryption Package README](../../packages/Encryption/README.md) - API key generation and validation
+- [Encryption Package README](../packages/Encryption/README.md) - API key generation and validation
 - [Credentials Package README](../packages/Credentials/Engine/README.md) - Credential storage and caching
 - [MCP Server Implementation](../packages/MCP/README.md) - Uses same API key format

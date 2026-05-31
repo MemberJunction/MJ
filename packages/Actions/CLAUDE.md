@@ -754,7 +754,7 @@ export class Create_Conversation_Record_Action extends Create_Record_Action { }
    - No AI calls during build (fast and deterministic)
 
    **Key Files:**
-   - [action_subclasses_codegen.ts:generateSingleAction()](../CodeGenLib/src/Misc/action_subclasses_codegen.ts#L98-L132) - Wraps code in template
+   - [action_subclasses_codegen.ts:generateSingleAction()](./../../CodeGenLib/src/Misc/action_subclasses_codegen.ts#L98-L132) - Wraps code in template
 
 ### Code Review Workflow
 

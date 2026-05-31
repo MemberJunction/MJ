@@ -3,7 +3,7 @@
 > **Status**: In Progress — Executing Phases 0-7
 > **Date**: March 6, 2026
 > **Branch**: `claude/integration-engine-build`
-> **Prerequisites**: [Integration Engine Architecture](integration-engine-architecture.md), [Integration DDL & Schema Management](../integration-ddl-schema-management.md)
+> **Prerequisites**: [Integration Engine Architecture](integration-engine-architecture.md), [Integration DDL & Schema Management](integration-ddl-schema-management.md)
 > **Docs**: `packages/Integration/docs/` (7 comprehensive docs covering architecture, sync lifecycle, connectors, schema, mapping, dashboard, metadata)
 
 > **CRITICAL EXPECTATION**: Execute ALL 7 phases (0-7) without stopping until 100% complete. No commits (user will review). No mock/stub code — everything must be real. World-class UX at all times. READ ONLY for external APIs (real YM and HubSpot credentials exist in DB — can pull data but never write back). Schema naming: YM data → `YourMembership` schema, HubSpot data → `HubSpot` schema only. DO NOT STOP until all phases are done.

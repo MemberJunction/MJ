@@ -458,7 +458,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async executeJob(
         job: MJScheduledJobEntity,
         contextUser: UserInfo
-    ): Promise<MJScheduledJobRunEntity | null> {
+    ): Promise<MJScheduledJobRunEntity> {
         // Try to acquire lock for this job
         const lockAcquired = await this.tryAcquireLock(job);
 
@@ -810,25 +810,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Initialize NextRunAt for jobs that don't have it set.
-     *
-     * If a job has `RunImmediatelyIfNeverRun = true` AND has never run
-     * (`LastRunAt IS NULL`), `NextRunAt` is set to `now()` so the job
-     * executes on the next polling cycle instead of waiting for the next
-     * cron tick. Useful for freshly-seeded jobs that should not wait up
-     * to a full cron interval (e.g. 24h for a daily job) for their first run.
-     *
+     * Initialize NextRunAt for jobs that don't have it set
      * @private
      */
     private async initializeNextRunTimes(contextUser: UserInfo): Promise<void> {
         for (const job of this.ScheduledJobs) {
             if (!job.NextRunAt) {
-                if (job.RunImmediatelyIfNeverRun && !job.LastRunAt) {
-                    job.NextRunAt = new Date();
-                    console.log(`  ⏱️  Job ${job.Name} flagged RunImmediatelyIfNeverRun — scheduling for immediate execution`);
-                } else {
-                    job.NextRunAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
-                }
+                job.NextRunAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
                 try {
                     await job.Save();
                     console.log(`  ⚙️  Initialized NextRunAt for ${job.Name} -> ${job.NextRunAt.toISOString()}`);

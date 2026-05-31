@@ -1332,5 +1332,5 @@ The phased migration approach ensures backward compatibility while enabling orga
 
 ### MemberJunction Documentation
 - [API Keys for MJAPI Plan](./api-keys-for-mjapi.md)
-- [Encryption Package](../../packages/Encryption/README.md)
+- [Encryption Package](../packages/Encryption/README.md)
 - [Credentials Package](../packages/Credentials/Engine/README.md)

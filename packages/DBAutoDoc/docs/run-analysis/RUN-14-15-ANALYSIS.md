@@ -17,7 +17,7 @@
 ## Fix Implemented
 
 ### 1. Updated TableAnalysisContext Type
-**File**: [src/types/analysis.ts:58](../../src/types/analysis.ts#L58)
+**File**: [src/types/analysis.ts:58](src/types/analysis.ts#L58)
 
 Added `allTables` field to provide complete list of available tables:
 
@@ -38,7 +38,7 @@ export interface TableAnalysisContext {
 ```
 
 ### 2. Updated buildTableContext Method
-**File**: [src/core/AnalysisEngine.ts:274-280](../../src/core/AnalysisEngine.ts#L274-L280)
+**File**: [src/core/AnalysisEngine.ts:274-280](src/core/AnalysisEngine.ts#L274-L280)
 
 Added logic to populate `allTables` from state:
 
@@ -58,7 +58,7 @@ return {
 ```
 
 ### 3. Updated Table Analysis Prompt Template
-**File**: [prompts/table-analysis.md:65-73](../../prompts/table-analysis.md#L65-L73)
+**File**: [prompts/table-analysis.md:65-73](prompts/table-analysis.md#L65-L73)
 
 Added section that lists all available tables with explicit instruction:
 

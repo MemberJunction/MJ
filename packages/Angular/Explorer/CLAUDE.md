@@ -45,7 +45,7 @@ onEntitySelected(entity: EntityInfo): void {
 
 ## Agent Context & Client Tools
 
-Resource components can report their state to the AI agent and register tools the agent can invoke. See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](../../AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full guide.
+Resource components can report their state to the AI agent and register tools the agent can invoke. See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full guide.
 
 Quick reference:
 ```typescript
@@ -60,7 +60,7 @@ this.navigationService.SetAgentClientTools(this, [
 
 ## Navigation & Routing Guide
 
-See **[/guides/NAVIGATION_AND_ROUTING_GUIDE.md](../../../guides/NAVIGATION_AND_ROUTING_GUIDE.md)** for comprehensive documentation of how navigation, URL sync, and back/forward work in MJ Explorer.
+See **[/guides/NAVIGATION_AND_ROUTING_GUIDE.md](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** for comprehensive documentation of how navigation, URL sync, and back/forward work in MJ Explorer.
 
 ## Package Structure
 

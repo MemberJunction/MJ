@@ -328,42 +328,12 @@ results.forEach(r => {
 
 **Memory usage**: approximately `8 bytes * dimensions + ~100 bytes` per vector. Example: 10,000 vectors at 384 dimensions is roughly 31 MB.
 
-## VectorDBBase Providers
-
-This package ships **two `VectorDBBase` driver implementations** so the in-memory primitive can be consumed by the broader vector-sync / EntityDocument infrastructure without standing up a remote store:
-
-### `SimpleVectorDatabase`
-
-In-process VectorDBBase driver that reads from an `MJ: Vector Indexes` row configured to point at any entity and field. Use when you have arbitrary entity rows with embeddings stored in a column and want to make them queryable through the `SearchEngine` cross-scope fusion path.
-
-### `SimpleVectorServiceProvider` (new in v5.38)
-
-**EntityDocument-keyed** in-process driver, purpose-built for `Provider.SearchEntities()` and any other `EntityDocument`-backed search. Each "index" corresponds to one `MJ: Entity Documents` row; vectors come from `MJ: Entity Record Documents.VectorJSON` filtered by `EntityDocumentID`, and matches surface the **underlying entity record's RecordID** in their metadata (not the EntityRecordDocument PK).
-
-```typescript
-import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
-
-const provider = new SimpleVectorServiceProvider();
-const result = await provider.QueryIndex(
-    { id: entityDocumentId, vector: queryEmbedding, topK: 10 },
-    contextUser
-);
-// result.data.matches[i].metadata.RecordID is the parent record's ID
-```
-
-**Lazy cache:** `Map<EntityDocumentID, LoadedIndex>` with TTL eviction (default 15 minutes). After the vector-sync pipeline writes back fresh embeddings, call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` for deterministic cache refresh; TTL is the safety net.
-
-**Read-only:** ingestion methods (`CreateRecord`, `UpdateRecord`, etc.) throw via the `unsupported()` path. The vector-sync pipeline writes `EntityRecordDocument.VectorJSON` directly; this driver just rehydrates from those rows.
-
-**When NOT to use:** > a few thousand `EntityRecordDocument` rows per `EntityDocument`, multi-process deployments, scenarios that need a real ANN index (HNSW / IVF). For those, configure a remote provider (Pinecone, Qdrant, pgvector) on the `EntityDocument`'s `VectorDatabaseID` instead.
-
 ## Dependencies
 
 | Package | Purpose |
 |---|---|
-| `@memberjunction/core` | `LogError`, `RunView`, `UserInfo` |
-| `@memberjunction/global` | `RegisterClass` for VectorDBBase registrations |
-| `@memberjunction/ai-vectordb` | `VectorDBBase` contract that the two providers implement |
+| `@memberjunction/core` | `LogError` for error reporting |
+| `@memberjunction/global` | Global utilities |
 
 This package has minimal dependencies, making it lightweight and suitable for both server-side and client-side use.
 

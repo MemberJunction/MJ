@@ -121,7 +121,7 @@ type SlidePanelMode = 'slide' | 'dialog';
 
 ## Dependencies
 
-- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunView
-- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- RecordChange entities
-- [@memberjunction/graphql-dataprovider](../../../GraphQLDataProvider/README.md) -- Data provider
+- [@memberjunction/core](../../MJCore/README.md) -- Metadata, RunView
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- RecordChange entities
+- [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) -- Data provider
 - [@memberjunction/ng-shared-generic](../shared/README.md) -- Loading component

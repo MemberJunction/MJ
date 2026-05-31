@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult, SearchEntityParams, EntitySearchResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -660,56 +660,4 @@ export class Metadata {
         return provider.FullTextSearch(params, contextUser);
     }
 
-
-
-    /**
-     * Ranked search over **one** entity's records, blending lexical name/text-field
-     * matching with semantic embedding cosine. Results are post-filtered by the
-     * caller's row-level read permissions on that entity.
-     *
-     * ## How this differs from the other lookups on `IMetadataProvider`
-     *
-     * | Method | Purpose |
-     * |---|---|
-     * | {@link EntityByName} / {@link EntityByID} | Look up an entity **definition** by name or ID. Deterministic, not ranked, returns `EntityInfo`. |
-     * | {@link FullTextSearch} | Server-side text search across one or many entities using each entity's `UserSearchString` rule (DB-level LIKE / FTS). Returns flat per-entity result groups, no semantic ranking. |
-     * | **`SearchEntity`** (this) | Hybrid lexical-plus-semantic ranking of records **inside one entity**, backed by an `EntityDocument`-driven vector index. Use when you need "the N most relevant records of this entity for the user's free-text request". |
-     * | {@link SearchEntities} | Batch form — runs `SearchEntity` over many entities in one round-trip. |
-     *
-     * Semantic ranking requires an Active `EntityDocument` of type `Search`
-     * registered for the target entity (see `/metadata/entity-documents/` for
-     * the seeded one against `MJ: Entities`); without it, `mode: 'semantic'`
-     * returns no rows and `mode: 'hybrid'` degrades to lexical-only.
-     *
-     * @param params Target entity name, search text, and optional ranking knobs.
-     * @returns Ranked `EntitySearchResult[]` — descending by score, sliced to `topK`.
-     */
-    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
-        const provider = Metadata.Provider as unknown as IRunViewProvider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
-        return provider.SearchEntity(params);   
-    }
-
-    /**
-     * Batch form of {@link SearchEntity}. Runs the per-entity ranking against
-     * **many** entities in one call. Transports as a single JSON payload in both
-     * directions over GraphQL when invoked through `GraphQLDataProvider`, so
-     * N entity searches cost one round-trip instead of N.
-     *
-     * Server-side providers fan the call out via `Promise.all` to independent
-     * `SearchEntity` invocations — each entity's lexical pass, semantic pass,
-     * blending, and permission filter run independently, and the per-entity
-     * result arrays come back aligned by input order.
-     *
-     * Use this whenever an agent or workflow needs ranked results from more
-     * than one entity for the same user request (e.g., "find anything
-     * relevant to 'overdue payments'" across Invoices, Customers, and Notes).
-     *
-     * @param params One `SearchEntityParams` per target entity.
-     * @returns Array of result arrays, aligned by input order — `result[i]`
-     *          holds the ranked matches for `params[i]`.
-     */
-    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
-        const provider = Metadata.Provider as unknown as IRunViewProvider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
-        return provider.SearchEntities(params);
-    }
 }

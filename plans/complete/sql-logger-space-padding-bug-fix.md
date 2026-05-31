@@ -25,7 +25,7 @@
 
 ### Root Cause
 
-**File**: [packages/SQLServerDataProvider/src/SqlLogger.ts:544-559](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L544-L559)
+**File**: [packages/SQLServerDataProvider/src/SqlLogger.ts:544-559](../packages/SQLServerDataProvider/src/SqlLogger.ts#L544-L559)
 
 **Method**: `_getIndentForPosition(sql: string, position: number)`
 
@@ -311,9 +311,9 @@ If the fix causes issues:
 ## Related Files
 
 ### Code Files
-- [SqlLogger.ts:544-559](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L544-L559) - Bug location
-- [SqlLogger.ts:387-458](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L387-L458) - String splitting logic
-- [SqlLogger.ts:427](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L427) - Method invocation
+- [SqlLogger.ts:544-559](../packages/SQLServerDataProvider/src/SqlLogger.ts#L544-L559) - Bug location
+- [SqlLogger.ts:387-458](../packages/SQLServerDataProvider/src/SqlLogger.ts#L387-L458) - String splitting logic
+- [SqlLogger.ts:427](../packages/SQLServerDataProvider/src/SqlLogger.ts#L427) - Method invocation
 
 ### Test Data
 - Source: `metadata/components/spec/generic/simple-drilldown-chart.spec.json`

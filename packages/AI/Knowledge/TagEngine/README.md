@@ -144,4 +144,4 @@ The embedding text for each tag is composed as `"Name: Description"` (or just `"
 
 ## Further Reading
 
-See the [Content Autotagging Guide](../../../../guides/CONTENT_AUTOTAGGING_GUIDE.md) for full pipeline documentation including the tag taxonomy bridge, prompt structure, and configuration.
+See the [Content Autotagging Guide](/guides/CONTENT_AUTOTAGGING_GUIDE.md) for full pipeline documentation including the tag taxonomy bridge, prompt structure, and configuration.
