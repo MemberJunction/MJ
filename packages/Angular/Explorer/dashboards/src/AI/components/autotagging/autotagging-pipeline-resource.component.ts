@@ -18,6 +18,7 @@ import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-component
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ClassifyTagsTabComponent } from './tabs/tags-tab.component';
+import { ClassifyInboxTabComponent } from './tabs/inbox-tab.component';
 import { ClassifySourceTypeFormDialogComponent } from './dialogs/source-type-form.dialog.component';
 
 
@@ -233,7 +234,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
-    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'history'];
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'inbox', 'history'];
+
+    /** Lightweight count of Pending tag suggestions for the Inbox nav badge. */
+    public InboxPendingCount = 0;
+
+    /** Live reference to the Suggestions Inbox tab (for refresh after host actions). */
+    @ViewChild(ClassifyInboxTabComponent) private inboxTab?: ClassifyInboxTabComponent;
 
     async ngAfterViewInit(): Promise<void> {
         await Promise.all([
@@ -242,8 +249,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         ]);
         this.loadClassifyPreferences();
         this.applyIncomingConfiguration();
-        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache()]);
+        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache(), this.loadInboxPendingCount()]);
         this.tabDataLoaded.add('pipeline');
+        this.buildNavItems();
 
         // If user preferences or incoming config set a non-pipeline initial tab,
         // eagerly load that tab's data so it is not blank on first render.
@@ -316,6 +324,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             PipelineStatus: this.IsRunning ? 'running' : 'idle',
             PipelineProgress: this.RunProgress,
             ShowPipelineConfig: this.ShowPipelineConfig,
+            InboxPendingCount: this.InboxPendingCount,
         });
     }
 
@@ -328,7 +337,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 ParameterSchema: {
                     type: 'object',
                     properties: {
-                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'history'], description: 'The tab to switch to' },
+                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'inbox', 'history'], description: 'The tab to switch to' },
                     },
                     required: ['tab'],
                 },
@@ -400,13 +409,48 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 }))
             },
             {
-                items: [{
-                    id: 'history',
-                    label: 'Run History',
-                    icon: 'fa-solid fa-clock-rotate-left'
-                }]
+                items: [
+                    {
+                        id: 'inbox',
+                        label: 'Inbox',
+                        icon: 'fa-solid fa-inbox',
+                        badge: this.InboxPendingCount > 0 ? String(this.InboxPendingCount) : undefined
+                    },
+                    {
+                        id: 'history',
+                        label: 'Run History',
+                        icon: 'fa-solid fa-clock-rotate-left'
+                    }
+                ]
             }
         ];
+    }
+
+    /**
+     * Loads a lightweight count of Pending tag suggestions for the Inbox nav badge
+     * so the badge shows even before the Inbox tab is first opened. Mirrors the
+     * Inbox tab's default scope: excludes the 3 Health-owned reasons
+     * (MergeCandidate / LowUsage / WideNode).
+     */
+    private async loadInboxPendingCount(): Promise<void> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Tag Suggestions',
+            ExtraFilter: `Status='Pending' AND Reason NOT IN ('MergeCandidate','LowUsage','WideNode')`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        });
+        this.InboxPendingCount = result.Success ? result.TotalRowCount : 0;
+    }
+
+    /**
+     * Fired by the Inbox tab after a suggestion is approved/merged/rejected.
+     * Refreshes the nav badge count.
+     */
+    public async onInboxResolved(): Promise<void> {
+        await this.loadInboxPendingCount();
+        this.emitAgentContext();
+        this.cdr.detectChanges();
     }
 
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
@@ -441,6 +485,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 break;
             case 'tags':
                 await this.loadTagLibraryData();
+                break;
+            case 'inbox':
+                // The Inbox tab loads its own (transactional, uncached) data.
+                // Trigger CD so the ViewChild resolves, then ask it to load.
+                this.cdr.detectChanges();
+                await this.inboxTab?.EnsureLoaded();
                 break;
             case 'history':
                 await this.loadRunHistoryData();
