@@ -62,75 +62,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public SourceMinis: SourceMini[] = [];
     public TrendingTags: TagCloudItem[] = [];
 
-    // ── Pipeline feed search & pagination ──
-    public FeedSearchQuery = '';
-    public FeedPage = 0;
-    public readonly FeedPageSize = 20;
-    /** Sort order for the feed: 'newest' (default) or 'oldest' */
-    public FeedSortOrder: 'newest' | 'oldest' = 'newest';
-
-    /** Feed items filtered by search query and sorted */
-    public get FilteredFeedItems(): FeedItem[] {
-        let items = this.FeedItems;
-        if (this.FeedSearchQuery.trim()) {
-            const q = this.FeedSearchQuery.toLowerCase();
-            items = items.filter(item =>
-                item.Name.toLowerCase().includes(q) ||
-                item.SourceName.toLowerCase().includes(q) ||
-                item.Tags.some(t => t.toLowerCase().includes(q))
-            );
-        }
-        if (this.FeedSortOrder === 'oldest') {
-            return [...items].reverse();
-        }
-        return items;
-    }
-
-    /** Toggle feed sort order */
-    public ToggleFeedSort(): void {
-        this.FeedSortOrder = this.FeedSortOrder === 'newest' ? 'oldest' : 'newest';
-        this.FeedPage = 0;
-        this.cdr.detectChanges();
-    }
-
-    /** Paginated feed items for the current page */
-    public get PaginatedFeedItems(): FeedItem[] {
-        const items = this.FilteredFeedItems;
-        const start = this.FeedPage * this.FeedPageSize;
-        return items.slice(start, start + this.FeedPageSize);
-    }
-
-    /** Total pages for the feed */
-    public get FeedTotalPages(): number {
-        return Math.max(1, Math.ceil(this.FilteredFeedItems.length / this.FeedPageSize));
-    }
-
-    /** Handle feed search input change */
-    public OnFeedSearchChange(): void {
-        this.FeedPage = 0;
-        this.cdr.detectChanges();
-    }
-
-    /** Navigate to previous feed page */
-    public FeedPrevPage(): void {
-        if (this.FeedPage > 0) {
-            this.FeedPage--;
-            this.cdr.detectChanges();
-        }
-    }
-
-    /** Navigate to next feed page */
-    public FeedNextPage(): void {
-        if (this.FeedPage < this.FeedTotalPages - 1) {
-            this.FeedPage++;
-            this.cdr.detectChanges();
-        }
-    }
-
-    /** Get the index in the original FeedItems array for a paginated item */
-    public GetFeedItemOriginalIndex(item: FeedItem): number {
-        return this.FeedItems.indexOf(item);
-    }
+    // Pipeline feed search/sort/pagination moved to ClassifyPipelineTabComponent
+    // (tab-local presentational state). The host still builds FeedItems and owns
+    // OpenFeedItemDetail(index) — the tab emits the original index back up.
 
     // Pipeline run state
     public IsRunning = false;
@@ -182,11 +116,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
     }
 
-    public FormatTokenCount(tokens: number): string {
-        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-        if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
-        return String(tokens);
-    }
+    // FormatTokenCount moved to ClassifyPipelineTabComponent (only the pipeline
+    // config panel used it; the tab uses formatTokenCount from shared).
 
     // ── Sources tab ──
     // SourceCards + buildSourceCards() + the source-detail slide-in + the
