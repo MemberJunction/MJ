@@ -20,15 +20,16 @@ This is the **developer's hub** for that story. It explains the architecture, th
    - [4. Write once, run on every tier — the isomorphic core in practice](#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice)
    - [5. The API layer](#5-the-api-layer)
    - [6. Security, permissions & audit](#6-security-permissions--audit)
-   - [7. The UI layer — MJExplorer & Angular](#7-the-ui-layer--mjexplorer--angular)
+   - [7. The UI layer — MJExplorer, reusable components & your framework](#7-the-ui-layer--mjexplorer-reusable-components--your-framework-of-choice)
    - [8. Business logic — the Actions framework](#8-business-logic--the-actions-framework)
    - [9. AI — the force multiplier](#9-ai--the-force-multiplier)
    - [10. Application metadata as code](#10-application-metadata-as-code)
    - [11. Deployment](#11-deployment)
 7. [Building AI-native applications](#building-ai-native-applications)
 8. [How MJ compares to other frameworks](#how-mj-compares-to-other-frameworks)
-9. [Cross-cutting developer guides](#cross-cutting-developer-guides)
-10. [A mental model to keep](#a-mental-model-to-keep)
+9. [Building on MJ & joining the community](#building-on-mj--joining-the-community)
+10. [Cross-cutting developer guides](#cross-cutting-developer-guides)
+11. [A mental model to keep](#a-mental-model-to-keep)
 
 ---
 
@@ -252,14 +253,40 @@ flowchart LR
 
 Your application starts with a schema. MJ doesn't hide SQL from you — it embraces it and layers metadata on top.
 
-- **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations (Flyway): naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
-- **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Working with natural/composite keys, not just surrogate IDs.
-- **[ISA Relationships](../packages/MJCore/docs/isa-relationships.md)** — Modeling inheritance/subtyping across entities.
+#### You own the schema — MJ never alters it behind your back
+
+A defining choice in MJ: **the database is the source of truth for your schema, and you (DBA/developer) own all DDL.** MJ performs **no implicit schema changes**. Instead, it **introspects** your database to discover tables, columns, keys, indexes, and relationships, **reads the documentation already in the database** (SQL Server extended properties / Postgres `COMMENT`s), and **keeps its metadata layer in sync** with what's actually there. You're free to use any column types, indexing strategy, schemas, computed columns, or vendor features you like — MJ adapts to your schema rather than dictating it.
+
+Schema changes flow through **explicit, versioned migrations** applied by **[Skyway](https://github.com/MemberJunction/skyway)** — MJ's open-source, **Flyway-compatible** migration engine written in TypeScript. This is what makes MJ's upgrade story **deterministic, verifiable, and robust**, and why it slots cleanly into CI/CD:
+
+- **Deterministic & repeatable.** The *same* immutable, versioned migration files run in dev, staging, and production, in the same order, producing the same result. No "it worked on my environment" schema drift.
+- **Verifiable.** Migrations are **checksum-verified** against the recorded history — if a previously-applied migration is altered, Skyway detects it and refuses to proceed, so tampering and accidental drift surface immediately instead of silently corrupting an environment.
+- **Atomic.** Skyway's per-run transaction mode wraps all pending migrations in a **single transaction** on databases with transactional DDL (SQL Server and PostgreSQL). A failed upgrade rolls back cleanly — you never end up with a half-applied schema.
+- **Reviewable as code.** Because schema changes are DDL files in source control (not side effects of editing metadata in a UI), they go through normal **pull-request review**, diff cleanly, and are gated by the same CI as the rest of your code.
+- **In sync automatically.** After a migration runs, **CodeGen** (see §2) introspects the change and regenerates the typed entities, base views, and CRUD procedures to match — so the application layer never drifts from the database.
+
+The loop is: **author DDL in a migration → Skyway applies it atomically → MJ introspects & syncs metadata → CodeGen regenerates the typed stack.** Each step is explicit, versioned, and reproducible — the foundation for a robust CI/CD pipeline.
+
+Two more freedoms worth knowing:
+
+- **UUID primary keys by default, but no fixed key shape.** MJ defaults to `UNIQUEIDENTIFIER` / UUID PKs, yet — because it reads keys from your schema rather than mandating them — supports **any primary-/foreign-key style, including composite and natural keys**. (MJ normalizes UUID casing differences between SQL Server and PostgreSQL for you.)
+- **Bring existing data as-is.** Point CodeGen at existing tables and MJ registers them as entities — migrations are how you *evolve* the schema over time, not a precondition for building.
+
+#### Modeling beyond plain tables: type inheritance & organic (soft) keys
+
+Two metadata features matter especially when you're **ingesting data from third-party systems** and want to layer metadata-driven and AI intelligence on top of it:
+
+- **IS-A type inheritance (table-per-type).** A child entity can *be a* parent entity — it shares the parent's primary key and inherits all of the parent's fields (the generated view JOINs them in), while its own table holds only its unique columns. This models real hierarchies cleanly — e.g. a *Webinar* IS-A *Meeting* IS-A *Product* — and the inheritance is orchestrated in `BaseEntity` with no hand-written subclass code. It lets ingested or domain data be specialized without duplicating shared structure. See [IS-A Relationships](../packages/MJCore/docs/isa-relationships.md).
+- **Organic keys (natural / "soft" keys).** Relationships based on **shared business data** — email address, domain, tax ID, phone — rather than enforced foreign keys. This is the key to working with **third-party data**: records ingested from Mailchimp, QuickBooks, HubSpot, Salesforce, and the like arrive with their own IDs and *no* cross-system FKs, but they do share business values. Organic keys formalize that matching (with normalization, compound keys, and transitive joins through bridge views) so MJ can surface "related records" across integration boundaries — a contact's campaigns, invoices, and tickets matched by email. Because the matches are **first-class metadata**, the platform — and your **AI agents and RAG** — can reason over these cross-system relationships, use them for retrieval and enrichment, and even surface likely duplicates. See [Organic Keys](../packages/MJCore/docs/organic-keys.md).
+
+#### Reference material
+
+- **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations: naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
+- **[Skyway](https://github.com/MemberJunction/skyway)** — The open-source, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
+- **[IS-A Relationships](../packages/MJCore/docs/isa-relationships.md)** & **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Type inheritance and natural/soft-key matching (see above).
 - **[Virtual Entities](../packages/MJCore/docs/virtual-entities.md)** — Surface a view or external source as a first-class entity without a physical table.
 - **[Soft Deletes Guide](SOFT_DELETES_GUIDE.md)** — Opt into `DeleteType='Soft'` and get filtered views + soft-delete stored procedures managed for you.
 - **[Full-Text Search Guide](../packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** — Native SQL full-text search wired into entities.
-
-> **Already imported data and skipping migrations?** That's fine — point CodeGen at existing tables and MJ will register them as entities. Migrations are how you *evolve* the schema over time, not a precondition for building.
 
 ### 2. Code generation — the engine that ties it together
 
@@ -411,11 +438,19 @@ Security isn't an add-on you wire up per screen — it's generated into the data
 - **API authorization** — [APIKeys README](../packages/APIKeys/README.md) for scoped, key-based access.
 - **Field-level encryption** — [Encryption README](../packages/Encryption/README.md) for AES-256 encryption of sensitive columns.
 
-### 7. The UI layer — MJExplorer & Angular
+### 7. The UI layer — MJExplorer, reusable components & your framework of choice
 
-MJ ships a complete Angular application shell plus a large library of reusable components. You can run inside Explorer or assemble your own app from the pieces — and because the UI speaks the same object model, components bind directly to typed entities.
+MJ ships **MJExplorer** — a complete Angular application — as the **default tool for exploring data, chat, dashboards, and administration**. But "the default UI is Angular" doesn't mean you're locked into Angular:
+
+- **Most of Explorer is generic, reusable Angular.** The large majority of what's in Explorer is a library of **generic Angular components** (grids, viewers, dialogs, chat, filter builders, dashboards, and more) designed to be used in **any Angular application** — Explorer is largely a curated assembly of these reusable pieces, not a monolith. Drop them into your own Angular app.
+- **A React bridge** lets teams build their UI in **React** while still using MJ component capabilities — see the [React runtime](../packages/React/README.md).
+- **The TypeScript object model is frontend-agnostic.** `Metadata`, `BaseEntity`, `RunView`, and the GraphQL data provider are plain TypeScript with **no UI-framework dependency**, so they work in **any TS-enabled environment** — Vue, Next.js, Svelte, a Node service, or a CLI. You consume your data and business logic identically regardless of frontend.
+
+So the UI story is: a great default app (Explorer) + reusable Angular components + a React bridge + a framework-agnostic TypeScript core. Because every surface speaks the same object model, components bind directly to typed entities.
 
 - **[Angular README](../packages/Angular/README.md)** — Overview of the 60+ Angular packages: the Explorer app, the generic component library, bootstrap.
+- **[Generic Angular component library](../packages/Angular/Generic/README.md)** — Reusable components usable in any Angular app (grids, viewers, dialogs, chat, filter builder, dashboards, and more).
+- **[React runtime](../packages/React/README.md)** — The React bridge for building MJ UIs in React.
 - **[Angular CLAUDE.md](../packages/Angular/CLAUDE.md)** — Conventions: standalone vs NgModule, change detection, custom forms, naming, the MJ UI components.
 - **[Explorer README](../packages/Angular/Explorer/README.md)** — The Explorer application: shell, routing, generated entity forms, custom forms, lists, dashboards.
 - **[MJExplorer README](../packages/MJExplorer/README.md)** — The runnable Explorer app itself.
@@ -541,6 +576,32 @@ The throughline: because AI shares your app's object model and action surface, *
 ## How MJ compares to other frameworks
 
 If you're weighing MemberJunction against the stacks you already know — Next.js/Vercel, Supabase, Ruby on Rails, Django, or a hand-rolled Node + ORM + SPA — see the companion **[Framework Comparison Guide](FRAMEWORK_COMPARISON.md)**. It's an objective, where-each-shines breakdown: what MJ gives you out of the box (typed isomorphic object model, generated API/UI/security/audit, AI-native substrate), where the others are a better fit, and how to think about the trade-offs.
+
+---
+
+## Building on MJ & joining the community
+
+MemberJunction is open source (ISC), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
+
+### Build your application on MJ
+
+You're encouraged to build on MJ, whether your app is **commercial or open source**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **open-source apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+
+- **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
+- **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
+- **[Committees](https://github.com/MemberJunction/committees)** — a **governance platform** built on MJ that unifies committee structure, membership, meetings, motions and voting, action tracking, and document linking.
+
+These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
+
+### Help shape the platform
+
+If you want to extend the framework itself, the best first step isn't to fork in isolation — it's to **plug into the community**, where your ideas can land in the platform and benefit everyone:
+
+- **Join the community and get active in [Discussions](https://github.com/MemberJunction/MJ/discussions)** — ask questions, share what you're building, and float ideas early.
+- **File [Issues](https://github.com/MemberJunction/MJ/issues)** for bugs and feature requests.
+- **Raise pull requests** with fixes, new features, ideas, and plugins — see [`CONTRIBUTING.md`](../CONTRIBUTING.md) for setup, coding standards, and the PR process.
+
+And of course, because MJ is open source, you can always **read, fork, and extend** the platform directly. But contributing back through the community means your extensions are maintained with the project rather than diverging from it.
 
 ---
 

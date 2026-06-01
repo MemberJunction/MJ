@@ -21,7 +21,8 @@
             @if (FilterText) {
               <button
                 class="search-clear"
-                (click)="FilterText = ''">
+                (click)="FilterText = ''"
+                aria-label="Clear search">
                 <i class="fa-solid fa-times"></i>
               </button>
             }
