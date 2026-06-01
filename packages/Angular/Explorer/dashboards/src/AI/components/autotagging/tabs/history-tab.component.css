@@ -1,0 +1,8 @@
+/*
+ * Run History tab styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-*` rules are global and already style this tab's markup while it
+ * renders inside the host shell. Tab-specific rules live here as the shared CSS
+ * is partitioned during the host-slim step.
+ */
