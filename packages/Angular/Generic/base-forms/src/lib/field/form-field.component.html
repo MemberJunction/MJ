@@ -48,6 +48,20 @@
                   </div>
                 </span>
               }
+              @else if (RichTextMode === 'markdown') {
+                <div class="mj-forms-field-value mj-forms-field-value--rich">
+                  <mj-markdown [data]="FormatValue()"></mj-markdown>
+                </div>
+              }
+              @else if (RichTextMode === 'html') {
+                <!-- Angular's [innerHTML] binding sanitizes in HTML context (strips scripts/handlers) -->
+                <div class="mj-forms-field-value mj-forms-field-value--rich" [innerHTML]="FormatValue()"></div>
+              }
+              @else if (RichTextMode === 'code') {
+                <div class="mj-forms-field-value mj-forms-field-value--code">
+                  <mj-code-editor [value]="FormatValue()" [language]="CodeEditorLanguage" [readonly]="true"></mj-code-editor>
+                </div>
+              }
               @else if (IsLongText) {
                 <span class="mj-forms-field-value mj-forms-field-value--long">{{ FormatValue() }}</span>
               }
@@ -95,6 +109,14 @@
               </div>
             }
           </div>
+        }
+        @else if (EditRichTextMode !== 'plain') {
+          <!-- Markdown / HTML / Code long-text: edit raw with a syntax-highlighted code editor -->
+          <mj-code-editor
+            class="mj-forms-field-input--code"
+            [value]="FormatValue()"
+            [language]="CodeEditorLanguage"
+            (change)="OnCodeEditorChange($event)"></mj-code-editor>
         }
         @else {
           @switch (Type) {

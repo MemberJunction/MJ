@@ -1,9 +1,18 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityFieldInfo, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
+import { detectRichTextFormat, RichTextFormat } from './rich-text-detection';
+
+/**
+ * How a field's value should be rendered/edited beyond a plain input.
+ * - `markdown` / `html`: render formatted in read mode, code editor in edit mode
+ * - `code`: source code (uses the field's CodeType as the editor language)
+ * - `plain`: standard text rendering (default)
+ */
+export type FieldRichTextMode = 'markdown' | 'html' | 'code' | 'plain';
 
 /**
  * Represents a suggestion item for FK autocomplete search results.
@@ -733,9 +742,107 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   // GENERAL PROPERTIES
   // ============================================
 
-  /** Whether the field's varchar(max) - long text that gets markdown rendering */
+  /** Whether the field's varchar(max) - long text that gets the wide read-only style */
   get IsLongText(): boolean {
     return this.FieldInfo?.Length === -1;
+  }
+
+  /**
+   * Whether this field is large enough to be a candidate for rich-text (markdown/html)
+   * auto-detection. Generic & multi-platform: keys off the TS type and character length
+   * rather than a specific SQL type, so nvarchar(max)/ntext (MaxLength === 0 means
+   * unlimited) and longer fixed fields (nvarchar(400)/varchar(500)/...) all qualify,
+   * while short strings, UUIDs, numbers, dates, etc. do not.
+   */
+  get IsRichTextEligible(): boolean {
+    const fi = this.FieldInfo;
+    if (!fi || fi.TSType !== EntityFieldTSType.String) return false;
+    const maxLen = fi.MaxLength;
+    return maxLen === 0 || maxLen >= 255;
+  }
+
+  /**
+   * Resolved rendering mode for this field. Honors an explicit `ExtendedType` first
+   * ('Markdown' | 'HTML' | 'Code'); when `ExtendedType` is null, falls back to lightweight
+   * client-side content detection — but only for {@link IsRichTextEligible} long-text fields.
+   */
+  get RichTextMode(): FieldRichTextMode {
+    const fi = this.FieldInfo;
+    if (!fi) return 'plain';
+
+    switch (fi.ExtendedType) {
+      case 'Markdown': return 'markdown';
+      case 'HTML':     return 'html';
+      case 'Code':     return 'code';
+    }
+
+    // Any other explicit ExtendedType (Email, URL, Geo*, Tel, ...) is not rich text here.
+    if (fi.ExtendedType != null) return 'plain';
+
+    // ExtendedType is null → auto-detect, but only on eligible long-text fields.
+    if (!this.IsRichTextEligible) return 'plain';
+
+    return this.detectFormat();
+  }
+
+  /**
+   * Stable rendering mode for EDIT mode. Unlike {@link RichTextMode} (which re-detects on the
+   * live value), this is snapshotted when edit mode is entered so that typing markdown/html into
+   * a plain textarea doesn't swap the control out from under the user mid-keystroke. Explicit
+   * ExtendedType always wins regardless; only the auto-detect branch is frozen for the session.
+   */
+  private _editRichTextMode: FieldRichTextMode | null = null;
+  get EditRichTextMode(): FieldRichTextMode {
+    if (this._editRichTextMode === null) {
+      this._editRichTextMode = this.RichTextMode;
+    }
+    return this._editRichTextMode;
+  }
+
+  /** Cached detection result, keyed by the exact string value it was computed from. */
+  private _detectCacheValue: string | null = null;
+  private _detectCacheResult: RichTextFormat = 'plain';
+
+  /** Memoized content detection so the getter stays cheap under OnPush change detection. */
+  private detectFormat(): RichTextFormat {
+    const raw = this.Value;
+    const text = raw == null ? '' : String(raw);
+    if (text !== this._detectCacheValue) {
+      this._detectCacheValue = text;
+      this._detectCacheResult = detectRichTextFormat(text);
+    }
+    return this._detectCacheResult;
+  }
+
+  /**
+   * Editor language for the code editor. In edit mode it tracks the frozen
+   * {@link EditRichTextMode}; in read mode it tracks the live {@link RichTextMode}.
+   */
+  get CodeEditorLanguage(): string {
+    const mode = this.EditMode ? this.EditRichTextMode : this.RichTextMode;
+    switch (mode) {
+      case 'markdown': return 'markdown';
+      case 'html':     return 'html';
+      case 'code':     return this.codeTypeToLanguage(this.FieldInfo?.CodeType);
+      default:         return '';
+    }
+  }
+
+  /** Map the field's CodeType metadata value to a CodeMirror language id. */
+  private codeTypeToLanguage(codeType: string | null | undefined): string {
+    switch (codeType) {
+      case 'CSS':        return 'css';
+      case 'HTML':       return 'html';
+      case 'JavaScript': return 'javascript';
+      case 'SQL':        return 'sql';
+      case 'TypeScript': return 'typescript';
+      default:           return ''; // 'Other' / null → plain code editing
+    }
+  }
+
+  /** Handle value changes coming from the embedded code editor (emits a plain string). */
+  OnCodeEditorChange(value: string): void {
+    this.Value = value;
   }
 
   /** Format a value for display */
@@ -762,11 +869,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         // Reset validation state for new record
         this._touched = false;
         this._fieldErrors = [];
+        // Invalidate cached rich-text detection (recomputed lazily for the new value)
+        this._detectCacheValue = null;
+        this._detectCacheResult = 'plain';
+        this._editRichTextMode = null;
       }
       // Reset validation state when exiting edit mode
       if (changes['EditMode'] && !this.EditMode) {
         this._touched = false;
         this._fieldErrors = [];
+      }
+      // Re-snapshot the edit-mode rendering decision whenever edit mode toggles
+      if (changes['EditMode']) {
+        this._editRichTextMode = null;
       }
       this.cdr.markForCheck();
     }

@@ -45,6 +45,8 @@
     "@memberjunction/ng-record-changes": "5.38.0",
     "@memberjunction/ng-record-tags": "5.38.0",
     "@memberjunction/ng-entity-viewer": "5.38.0",
+    "@memberjunction/ng-markdown": "5.38.0",
+    "@memberjunction/ng-code-editor": "5.38.0",
     "@memberjunction/ng-react": "5.38.0",
     "@memberjunction/interactive-component-types": "5.38.0",
     "rxjs": "^7.8.2",

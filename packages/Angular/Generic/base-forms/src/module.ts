@@ -17,6 +17,8 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { RecordTagsModule } from '@memberjunction/ng-record-tags';
 import { MJReactModule } from '@memberjunction/ng-react';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 
 /**
@@ -59,7 +61,9 @@ import { InteractiveFormComponent } from './lib/interactive-form/interactive-for
     ListManagementModule,
     EntityViewerModule,
     RecordTagsModule,
-    MJReactModule
+    MJReactModule,
+    MarkdownModule,
+    CodeEditorModule
   ],
   exports: [
     MjFormToolbarComponent,
