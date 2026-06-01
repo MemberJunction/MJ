@@ -32870,7 +32870,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
+@ObjectType({ description: `Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
@@ -69630,6 +69630,10 @@ export class MJTagSynonym_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`}) 
+    @MaxLength(20)
+    Status: string;
+        
     @Field() 
     @MaxLength(255)
     Tag: string;
@@ -69653,6 +69657,9 @@ export class CreateMJTagSynonymInput {
     @Field({ nullable: true })
     Source?: string;
 
+    @Field({ nullable: true })
+    Status?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69674,6 +69681,9 @@ export class UpdateMJTagSynonymInput {
 
     @Field({ nullable: true })
     Source?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

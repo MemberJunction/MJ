@@ -1,0 +1,123 @@
+<mj-page-header-interior
+    Title="Run History"
+    Subtitle="Pipeline execution history and per-source run detail">
+  <div actions>
+    <mj-filter-popover
+        [ActiveCount]="historyActiveFilterCount"
+        [ShowClearAll]="historyActiveFilterCount > 0"
+        (ClearAllRequested)="onHistoryFilterReset()">
+      <mj-filter-panel
+          [Fields]="historyFilterFields"
+          [Values]="historyFilterValues"
+          (ValuesChange)="onHistoryFilterChange($event)"
+          (Reset)="onHistoryFilterReset()">
+      </mj-filter-panel>
+    </mj-filter-popover>
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+  <div class="at-main-area">
+    <div class="at-page-body">
+      <div class="at-card">
+        <div class="at-card-body" style="max-height: 600px; overflow-y: auto;">
+          <table class="at-run-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Source</th>
+                <th>Started</th>
+                <th>Duration</th>
+                <th>Items</th>
+                <th>Tags</th>
+                <th>Errors</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of FilteredRunRows; track row.ID) {
+                <tr class="at-run-row-clickable"
+                    [class.at-run-row-selected]="SelectedRunID === row.ID"
+                    (click)="OpenRunDetail(row.ID)">
+                  <td>
+                    <span class="at-run-status-badge" [class]="row.StatusClass">
+                      @if (row.StatusClass === 'running') {
+                        <i class="fa-solid fa-spinner fa-spin" style="font-size: 0.55rem"></i>
+                      }
+                      {{ row.Status }}
+                    </span>
+                  </td>
+                  <td class="at-run-source-name">{{ row.SourceName }}</td>
+                  <td>{{ row.StartedDisplay }}</td>
+                  <td class="at-run-duration">{{ row.Duration }}</td>
+                  <td>{{ row.Items }}</td>
+                  <td>{{ row.Tags }}</td>
+                  <td [class]="row.ErrorClass">{{ row.Errors }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Per-run detail panel -->
+      @if (SelectedRunID) {
+        <div class="at-card" style="margin-top: 12px;">
+          <div class="at-card-header">
+            <span class="at-card-title">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+              Run Detail: {{ SelectedRunID.slice(0, 14) }}...
+            </span>
+            <button class="at-action-btn at-secondary-btn" style="font-size: 11px; padding: 3px 8px;" (click)="CloseRunDetail()">
+              <i class="fa-solid fa-times"></i> Close
+            </button>
+          </div>
+          <div class="at-card-body">
+            @if (IsLoadingRunDetail) {
+              <mj-loading text="Loading run details..." size="small"></mj-loading>
+            } @else if (RunDetailRows.length > 0) {
+              <table class="at-run-table">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Source Type</th>
+                    <th>Status</th>
+                    <th>Items</th>
+                    <th>Tagged</th>
+                    <th>Vectorized</th>
+                    <th>Errors</th>
+                    <th>Tokens</th>
+                    <th>Cost</th>
+                    <th>Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (detail of RunDetailRows; track detail.SourceName) {
+                    <tr>
+                      <td class="at-run-source-name">{{ detail.SourceName }}</td>
+                      <td>{{ detail.SourceType }}</td>
+                      <td>
+                        <span class="at-run-status-badge" [class]="detail.StatusClass">{{ detail.Status }}</span>
+                      </td>
+                      <td>{{ detail.ItemsProcessed }}</td>
+                      <td>{{ detail.ItemsTagged }}</td>
+                      <td>{{ detail.ItemsVectorized }}</td>
+                      <td [class.run-error-text]="detail.ErrorCount > 0">{{ detail.ErrorCount }}</td>
+                      <td>{{ FormatTokenCount(detail.TotalTokens) }}</td>
+                      <td>{{ detail.TotalCost > 0 ? '$' + detail.TotalCost.toFixed(4) : '$0.00' }}</td>
+                      <td class="at-run-duration">{{ detail.Duration }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <div class="at-empty-state">
+                <i class="fa-solid fa-info-circle"></i>
+                <p>No per-source detail records found for this run.</p>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</mj-page-body-interior>

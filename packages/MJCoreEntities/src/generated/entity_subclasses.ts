@@ -23649,6 +23649,17 @@ export const MJTagSynonymSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Rejected
+        * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`),
     Tag: z.string().describe(`
         * * Field Name: Tag
         * * Display Name: Tag Name
@@ -46551,6 +46562,41 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
 
     /**
+    * MJ: Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJApplicationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -57596,7 +57642,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
+ * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -89016,6 +89062,25 @@ export class MJTagSynonymEntity extends BaseEntity<MJTagSynonymEntityType> {
     }
 
     /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Rejected
+    * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.
+    */
+    get Status(): 'Active' | 'Pending' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Rejected') {
+        this.Set('Status', value);
+    }
+
+    /**
     * * Field Name: Tag
     * * Display Name: Tag Name
     * * SQL Data Type: nvarchar(255)
@@ -93558,6 +93623,41 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: User Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJUserApplicationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
