@@ -356,20 +356,55 @@ them.)
 
 ## 9. Phasing
 
-1. **Migration** — `Sequence` (+ backfill + trigger), `SummaryPromptRunID`, agent
-   context-control fields on `AIAgentType`/`AIAgent`, `StepType='Compaction'`. CodeGen.
-2. **Assembly layer** — `ConversationEngine.GetAgentContextWindow`; add `conversationId`
+1. **Migration** ✅ *(done — `V202606012156__v5.40.x__Agent_Conversation_Compaction.sql`)* —
+   `Sequence` (+ backfill + trigger), `SummaryPromptRunID`, agent context-control fields on
+   `AIAgentType`/`AIAgent`, `StepType='Compaction'`.
+2. **CodeGen** ⏭️ **NEXT — run locally (see §9.1).** Generates entity classes, views, SPs
+   from the migration. No dependent TypeScript may be written until this is done.
+3. **Assembly layer** — `ConversationEngine.GetAgentContextWindow`; add `conversationId`
    to `ExecuteAgentParams`; route `RunAIAgentResolver` through it. Behavior-neutral until
    summaries exist.
-3. **Cross-turn compaction** — summary prompt + post-turn trigger + model validation +
+4. **Cross-turn compaction** — summary prompt + post-turn trigger + model validation +
    `'Compaction'` run step + `SummaryPromptRunID` write.
-4. **Retrieval tools** — `getMessageBySequence` / `getMessagesByRange` /
+5. **Retrieval tools** — `getMessageBySequence` / `getMessagesByRange` /
    `searchConversation`.
-5. **Recursive tool** — `summarizeRange` (cheap sub-call model, own run step).
-6. **Edit handling** — `OriginalMessageChanged` flagging + Record Changes surfacing.
+6. **Recursive tool** — `summarizeRange` (cheap sub-call model, own run step).
+7. **Edit handling** — `OriginalMessageChanged` flagging + Record Changes surfacing.
 
 Each phase: build the affected package (`npm run build` in the package dir), run/​update
 that package's Vitest suite, report results.
+
+### 9.1 Handoff — CodeGen must run locally before any code is written
+
+The migration is committed but **not yet applied**. The next action is to **run the
+migration + CodeGen on a local environment** (CodeGen scans the live DB schema + extended
+properties to regenerate generated code). This step is intentionally done locally, not in
+this remote session, because it needs a database.
+
+**Steps (local):**
+1. Pull branch `claude/sharp-faraday-nB59F`.
+2. Apply migrations (Flyway/Skyway) so the schema changes land in the dev DB.
+3. Run CodeGen. Expected regenerated/changed (do **not** hand-edit these):
+   - `packages/MJCoreEntities/src/generated/entity_subclasses.ts` — new typed properties:
+     `ConversationDetailEntity.Sequence` / `.SummaryPromptRunID`; the new
+     `AIAgentTypeEntity` and `AIAgentEntity` context-control fields; `AIAgentRunStepEntity`
+     `StepType` union now including `'Compaction'`.
+   - `packages/MJServer/src/generated/*` — resolvers/types.
+   - Generated Angular core-entity-forms for the touched entities.
+   - A `migrations/v5/CodeGen_Run_*.sql` capturing the metadata sync.
+4. Build affected packages; commit the generated output (separate commit, e.g.
+   "CodeGen output for conversation compaction schema").
+
+**Only after CodeGen** is it safe to write the strongly-typed code in Phases 3–7 (per the
+repo rule: never reference fields via `.Get()/.Set()` or before generated types exist).
+
+### 9.2 Resuming after CodeGen
+
+Work can resume **either** locally **or** back in this remote session. To resume here:
+push the CodeGen output to the branch first, then pick up at **Phase 3** (the assembly
+layer) — start with `ConversationEngine.GetAgentContextWindow` and the
+`ExecuteAgentParams.conversationId` wiring, since everything downstream depends on it. This
+plan file is the source of truth for the remaining phases.
 
 ---
 
