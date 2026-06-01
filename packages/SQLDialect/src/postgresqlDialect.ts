@@ -681,6 +681,28 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'VARCHAR(255)';
     }
 
+    // ─── Error Classification ────────────────────────────────────────
+
+    IsConnectionError(e: unknown): boolean {
+        if (!(e instanceof Error)) return false;
+
+        // pg driver throws plain Error with Node.js network error codes for
+        // connection failures. DatabaseError (from pg-protocol) is for
+        // server-side SQL errors, which are NOT connection errors.
+        if (e.name === 'DatabaseError') return false;
+
+        const code = (e as { code?: string }).code ?? '';
+        return (
+            code === 'ECONNREFUSED' ||
+            code === 'ECONNRESET' ||
+            code === 'ETIMEDOUT' ||
+            code === 'ENOTFOUND' ||
+            code === 'EPIPE' ||
+            e.message.includes('Connection terminated') ||
+            e.message.includes('connection is insecure')
+        );
+    }
+
     // ─── Private Helpers ─────────────────────────────────────────────
 
     private extractSchema(qualifiedName: string): string {
