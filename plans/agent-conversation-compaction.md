@@ -160,13 +160,13 @@ Redis-backed `CacheManager` for cross-instance sharing. Flagged, not built.
 #### Sequence assignment (insert-time)
 
 Concurrency risk is low (two simultaneous inserts in the *same* conversation is rare).
-**Recommended: a DB trigger** on `ConversationDetail` that assigns
-`Sequence = ISNULL(MAX(Sequence),0)+1` scoped to the row's `ConversationID`, because it
-covers **all** insert paths uniformly (agent flow, metadata sync, manual). Use an
-`UPDLOCK, HOLDLOCK` on the per-conversation max read to make the increment safe under the
-rare concurrent case. *Alternative:* assign app-side in `ConversationEngine` when creating
-a detail (it already holds the in-memory max). Trigger chosen as primary for uniform
-coverage; either is acceptable per the low-risk assessment.
+**Decision: a DB trigger** on `ConversationDetail` (`trgConversationDetail_AssignSequence`,
+`AFTER INSERT`) assigns `Sequence = ISNULL(MAX(Sequence),0) + row-number-within-batch`
+scoped to `ConversationID`, reading the current max under `UPDLOCK, HOLDLOCK` to stay safe
+under the rare concurrent case. This covers **all** insert paths uniformly (agent flow,
+metadata sync, manual) and avoids an app-layer round trip. The column carries
+`DEFAULT (0)` so the row satisfies `NOT NULL` at insert; the `AFTER INSERT` trigger then
+overwrites it with the real value (reflected back through CodeGen's `spCreate` SELECT).
 
 #### Backfill (REQUIRED in the migration)
 
@@ -201,12 +201,19 @@ has none.** So part of this work is:
 
 | Column (both entities) | Type | Meaning |
 |---|---|---|
-| `ContextWindowMaxTokens` | `INT NULL` | Effective working-context budget. `NULL` ⇒ use the selected model's `MaxInputTokens`. |
-| `CompactionTriggerPercent` | `INT NULL` | % of effective budget at which cross-turn compaction fires. Default ~75. |
-| `CompactionTargetPercent` | `INT NULL` | Target % of budget after compaction. Default ~30. |
-| `ConversationSummaryPromptID` | `UNIQUEIDENTIFIER NULL` | FK → `MJ: AI Prompts`. The **cross-turn** summary prompt (distinct from the in-turn `ContextCompressionPromptID`). |
+| `ContextWindowMaxTokens` | `INT NULL` (both) | Effective working-context budget. `NULL` ⇒ inherit / use the selected model's `MaxInputTokens`. |
+| `CompactionTriggerPercent` | `AIAgentType: INT NOT NULL DEFAULT 75` · `AIAgent: INT NULL` | % of effective budget at which cross-turn compaction fires. Type always provides a floor; agent `NULL` inherits. |
+| `CompactionTargetPercent` | `AIAgentType: INT NOT NULL DEFAULT 30` · `AIAgent: INT NULL` | Target % of budget after compaction. Type always provides a floor; agent `NULL` inherits. |
+| `ConversationSummaryPromptID` | `UNIQUEIDENTIFIER NULL` (both) | FK → `MJ: AI Prompts`. The **cross-turn** summary prompt (distinct from the in-turn `ContextCompressionPromptID`). |
 
-**Resolution order:** `AIAgent` value ?? `AIAgentType` value ?? system default.
+The promoted trio on `AIAgentType` (`ContextCompressionMessageThreshold`,
+`ContextCompressionPromptID`, `ContextCompressionMessageRetentionCount`) is `NULL`able
+(compression is optional). Only the two percents are `NOT NULL DEFAULT` so the type level
+always yields a usable value.
+
+**Resolution order:** `AIAgent` value ?? `AIAgentType` value ?? (for
+`ContextWindowMaxTokens` only) model `MaxInputTokens`. The two percents never bottom out at
+a hardcoded constant — the type's `DEFAULT` guarantees a value.
 
 **Model validation (per run, against the model about to run):**
 - Resolve effective budget. If it exceeds the selected model's `MaxInputTokens`, **clamp to
@@ -231,6 +238,8 @@ The `summarizeRange` retrieval tool (§5.3) likewise records an `AIAgentRunStep`
 `AIPromptRun` for its sub-call.
 
 ### 3.4 Migration checklist (single file, `migrations/v5/`)
+
+> **Implemented:** `migrations/v5/V202606012156__v5.40.x__Agent_Conversation_Compaction.sql`
 
 - `ALTER TABLE ConversationDetail ADD Sequence INT NULL, SummaryPromptRunID UNIQUEIDENTIFIER NULL` (single consolidated ALTER).
 - Backfill `Sequence` (§3.1).
