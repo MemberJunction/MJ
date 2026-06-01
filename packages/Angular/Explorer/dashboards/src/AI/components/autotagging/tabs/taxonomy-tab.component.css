@@ -1,0 +1,8 @@
+/*
+ * Taxonomy Governance tab styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-*` / `.at-tax-*` rules are global and already style this tab's
+ * markup while it renders inside the host shell. Tab-specific rules would live
+ * here; none are needed during the transition.
+ */
