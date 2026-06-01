@@ -186,3 +186,4 @@ Demos/sample-skip-code-fix-prompt.json
 # Per-run artifacts from /audit-memory-leaks
 plans/.memory-leak-snapshots/
 demo/
+openspec/
