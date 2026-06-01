@@ -35,6 +35,7 @@ import { ClassifyPipelineTabComponent } from './AI/components/autotagging/tabs/p
 import { ClassifyTaxonomyTabComponent } from './AI/components/autotagging/tabs/taxonomy-tab.component';
 import { ClassifyItemDetailDialogComponent } from './AI/components/autotagging/dialogs/item-detail.dialog.component';
 import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
+import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
@@ -100,6 +101,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClassifyTaxonomyTabComponent,
     ClassifyItemDetailDialogComponent,
     ClassifyNoContentTypeWarningComponent,
+    ClassifySourceTypeFormDialogComponent,
     TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
