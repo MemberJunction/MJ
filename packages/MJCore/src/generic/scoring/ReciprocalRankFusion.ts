@@ -26,12 +26,15 @@ export interface ScoredCandidate {
 }
 
 /**
- * Compute Reciprocal Rank Fusion across multiple ranked result lists.
+ * Compute Reciprocal Rank Fusion across multiple ranked result lists, with
+ * optional per-list weights.
  *
- * Formula: `FusedScore(d) = Σ_i 1 / (k + rank_i(d))`
+ * Unweighted formula: `FusedScore(d) = Σ_i 1 / (k + rank_i(d))`
+ * Weighted formula:   `FusedScore(d) = Σ_i w_i / (k + rank_i(d))`
  *
  * where `rank_i(d)` is the 1-based rank of document `d` in list `i`,
- * and `k` is a smoothing constant (default 60, per the original paper).
+ * `k` is a smoothing constant (default 60, per the original paper), and
+ * `w_i` is the optional weight for list `i` (default 1.0).
  *
  * Documents not present in a list receive no contribution from that list
  * (they are simply absent, not penalized).
@@ -41,9 +44,17 @@ export interface ScoredCandidate {
  * @param k - Smoothing constant. Higher values reduce the influence of top-ranked
  *            positions. Default: 60 (the standard value from the RRF paper and
  *            used by Azure AI Search, OpenSearch, and Elasticsearch).
+ * @param weights - Optional per-list weights aligned by index with `rankedLists`.
+ *                  Lists with no entry in the array fall back to a weight of 1.0.
+ *                  A weight of 0 suppresses that list's contribution entirely.
+ *                  Omitting the parameter is equivalent to all-ones (canonical RRF).
  * @returns Fused candidates sorted by descending RRF score.
  */
-export function ComputeRRF(rankedLists: ScoredCandidate[][], k: number = 60): ScoredCandidate[] {
+export function ComputeRRF(
+    rankedLists: ScoredCandidate[][],
+    k: number = 60,
+    weights?: number[]
+): ScoredCandidate[] {
     if (rankedLists.length === 0) {
         return [];
     }
@@ -54,10 +65,16 @@ export function ComputeRRF(rankedLists: ScoredCandidate[][], k: number = 60): Sc
 
     const fusedScores = new Map<string, { Score: number; Metadata?: Record<string, unknown> }>();
 
-    for (const list of rankedLists) {
+    for (let listIdx = 0; listIdx < rankedLists.length; listIdx++) {
+        const list = rankedLists[listIdx];
+        const weight = weights?.[listIdx] ?? 1.0;
+        if (weight === 0) {
+            continue;
+        }
+
         for (let rank = 0; rank < list.length; rank++) {
             const candidate = list[rank];
-            const rrfContribution = 1.0 / (k + rank + 1); // rank is 0-based, formula uses 1-based
+            const rrfContribution = weight * (1.0 / (k + rank + 1)); // rank is 0-based, formula uses 1-based
 
             const existing = fusedScores.get(candidate.ID);
             if (existing) {

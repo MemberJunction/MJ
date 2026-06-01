@@ -9,6 +9,7 @@ import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, 
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
+import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,24 +21,6 @@ import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-
-/**
- * Renders a value for one-line console logging without Node's `[Object]` truncation.
- * Arrays keep their structure; non-array objects collapse to JSON, truncated at `maxLen`.
- * Objects whose JSON exceeds `maxLen` and contain nested structure are recursed into so
- * outer keys remain visible.
- */
-function shortenForLog(value: unknown, maxLen = 300): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((v) => shortenForLog(v, maxLen));
-  const json = JSON.stringify(value);
-  if (json.length <= maxLen) return json;
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    result[k] = shortenForLog(v, maxLen);
-  }
-  return result;
-}
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -342,7 +325,7 @@ export const contextFunction =
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
     if (operationName !== 'IntrospectionQuery') {
-      console.dir({ operationName, variables: shortenForLog(reqAny.body?.variables) }, { depth: null, breakLength: 200 });
+      console.dir(buildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
     }
 
     // Auth already happened in the unified auth middleware — just read the result
