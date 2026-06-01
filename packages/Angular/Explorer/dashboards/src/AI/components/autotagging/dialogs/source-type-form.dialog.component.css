@@ -11,11 +11,36 @@
  * adapts to dark mode and white-labeling.
  */
 
-/* ── Classification section shell ── */
+/* ── Left-edge resize handle ──
+ * The slide-in panel slides in from the right, so its resizable edge is the LEFT.
+ * A thin full-height grab strip; tokenized hover color so it adapts to themes. */
+.cls-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 1002;
+    background: transparent;
+    transition: background 0.12s;
+}
+.cls-resize-handle:hover,
+.cls-resize-handle:active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+}
+
+/* ── Section shells (Source / Embedding / Classification / Run budgets / Crawl) ── */
 .cls-section {
     margin-top: 8px;
     padding-top: 12px;
     border-top: 1px solid var(--mj-border-subtle);
+}
+/* The first section needs no separator above it. */
+.cls-section--first {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
 }
 .cls-section-title {
     font-size: 13px;
@@ -28,17 +53,17 @@
 }
 .cls-section-title i { color: var(--mj-brand-primary); }
 
-/* Two-column: main controls + effective-values aside. Collapses on narrow panels. */
+/* "Show / hide effective values" toggle, pushed to the right of the section title. */
+.cls-eff-toggle {
+    margin-left: auto;
+    font-weight: 600;
+}
+
+/* Single-column control stack. The effective-values panel now renders inline
+ * below (full width within the section), not as a floating grid column. */
 .cls-config {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 220px;
-    gap: 16px;
-    align-items: start;
+    display: block;
 }
-@media (max-width: 720px) {
-    .cls-config { grid-template-columns: 1fr; }
-}
-.cls-main { min-width: 0; }
 
 /* ── Taxonomy mode cards ── */
 .cls-mode-grid {
@@ -154,12 +179,15 @@
 .cls-toggle-label .t { display: block; font-size: 13px; font-weight: 600; color: var(--mj-text-primary); }
 .cls-toggle-label .d { display: block; font-size: 11px; color: var(--mj-text-muted); margin-top: 2px; }
 
-/* ── Effective-values aside ── */
+/* ── Effective-values panel (inline + conditional) ──
+ * Repurposed from the old floating aside: renders inline at the end of the
+ * Classification section, full width within the section — never overlaps. */
 .cls-aside {
     background: var(--mj-bg-surface-card);
     border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     padding: 12px;
+    margin-top: 12px;
 }
 .cls-aside-title {
     font-size: 11px;

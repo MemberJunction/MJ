@@ -20,10 +20,10 @@
  *   - "Open advanced settings" navigates to the full entity form via the host's
  *     NavigationService through the `(NavigateToRecordRequested)` output.
  */
-import { Component, ChangeDetectorRef, EventEmitter, Output, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Output, inject, NgZone, OnDestroy } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField, UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -49,6 +49,13 @@ const SUGGEST_THRESHOLD_GAP = 0.05;
 const DEFAULT_SHARE_TAXONOMY = true;
 const DEFAULT_ENABLE_VECTORIZATION = true;
 
+/** Slide-in panel width bounds + default. The source form is field-rich, so it
+ *  defaults wider than the host's 420px shared default. */
+const PANEL_WIDTH_DEFAULT = 640;
+const PANEL_WIDTH_MIN = 420;
+/** UserInfoEngine setting key for the remembered source-form panel width. */
+const PANEL_WIDTH_SETTING_KEY = 'mj.classify.sourceForm.width';
+
 /** One row in the effective-values aside: the resolved value + where it came from. */
 interface EffectiveValueRow {
     label: string;
@@ -62,8 +69,22 @@ interface EffectiveValueRow {
     templateUrl: './source-type-form.dialog.component.html',
     styleUrls: ['./source-type-form.dialog.component.css']
 })
-export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent {
+export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent implements OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private zone = inject(NgZone);
+
+    // ── Resizable panel state ──
+
+    /** Current slide-in panel width (px). Bound to the panel via [style.width.px]. */
+    public PanelWidth: number = PANEL_WIDTH_DEFAULT;
+
+    /** Whether the inline "Effective values" panel is shown in the Classification section. */
+    public ShowEffectiveValues: boolean = false;
+
+    /** Active-drag bookkeeping for the left-edge resize handle. */
+    private isResizing = false;
+    private resizeMoveListener: ((e: MouseEvent) => void) | null = null;
+    private resizeUpListener: (() => void) | null = null;
 
     // ── Cross-tab / host intents ──
 
@@ -486,12 +507,16 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     public async OpenAddSource(): Promise<void> {
         await this.ensureFormDropdownsLoaded();
         this.resetSourceForm();
+        this.ShowEffectiveValues = false;
+        this.restorePanelWidth();
         this.FormMode = 'add-source';
         this.cdr.detectChanges();
     }
 
     public async OpenEditSource(card: SourceCard): Promise<void> {
         await this.ensureFormDropdownsLoaded();
+        this.ShowEffectiveValues = false;
+        this.restorePanelWidth();
         this.FormSourceName = card.Name;
         this.FormSourceTypeID = card.ContentSourceTypeID;
         this.FormContentTypeID = card.ContentTypeID;
@@ -880,6 +905,95 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         this.FormCrawlOtherSitesInTopLevelDomain = false;
         // Classification knobs — start empty; the typed getters apply defaults.
         this.workingConfig = {};
+    }
+
+    // ════════════════════════════════════════════
+    // EFFECTIVE-VALUES TOGGLE
+    // ════════════════════════════════════════════
+
+    /** Show / hide the inline effective-values panel in the Classification section. */
+    public ToggleEffectiveValues(): void {
+        this.ShowEffectiveValues = !this.ShowEffectiveValues;
+        this.cdr.detectChanges();
+    }
+
+    // ════════════════════════════════════════════
+    // RESIZABLE PANEL (drag the left edge) + width persistence
+    // ════════════════════════════════════════════
+
+    /** Clamp a candidate width to the allowed range (min .. 90% of viewport). */
+    private clampPanelWidth(width: number): number {
+        const max = window.innerWidth * 0.9;
+        return Math.max(PANEL_WIDTH_MIN, Math.min(width, max));
+    }
+
+    /**
+     * Restore the remembered panel width from UserInfoEngine (a synchronous cache
+     * read), falling back to the default. Called when a source form is opened.
+     */
+    private restorePanelWidth(): void {
+        const raw = UserInfoEngine.Instance.GetSetting(PANEL_WIDTH_SETTING_KEY);
+        if (raw) {
+            const n = parseInt(raw, 10);
+            if (!isNaN(n)) {
+                this.PanelWidth = this.clampPanelWidth(n);
+                return;
+            }
+        }
+        this.PanelWidth = PANEL_WIDTH_DEFAULT;
+    }
+
+    /**
+     * Begin a left-edge resize drag. The panel slides in from the right, so the
+     * resizable edge is its LEFT edge: dragging left widens the panel.
+     */
+    public StartResize(event: MouseEvent): void {
+        event.preventDefault();
+        if (this.isResizing) return;
+        this.isResizing = true;
+
+        const startX = event.clientX;
+        const startWidth = this.PanelWidth;
+        // Prevent text selection / iframe capture during the drag.
+        document.body.style.userSelect = 'none';
+
+        // Run move tracking outside Angular to avoid a CD cycle on every pixel;
+        // we re-enter the zone only to update the bound width.
+        this.zone.runOutsideAngular(() => {
+            this.resizeMoveListener = (e: MouseEvent) => {
+                const next = this.clampPanelWidth(startWidth + (startX - e.clientX));
+                this.zone.run(() => {
+                    this.PanelWidth = next;
+                    this.cdr.detectChanges();
+                });
+                // Debounced persistence while dragging — the final value is what sticks.
+                UserInfoEngine.Instance.SetSettingDebounced(PANEL_WIDTH_SETTING_KEY, String(Math.round(next)));
+            };
+            this.resizeUpListener = () => this.endResize();
+            document.addEventListener('mousemove', this.resizeMoveListener);
+            document.addEventListener('mouseup', this.resizeUpListener);
+        });
+    }
+
+    /** Tear down the active drag listeners and persist the final width. */
+    private endResize(): void {
+        if (!this.isResizing) return;
+        this.isResizing = false;
+        document.body.style.userSelect = '';
+        if (this.resizeMoveListener) {
+            document.removeEventListener('mousemove', this.resizeMoveListener);
+            this.resizeMoveListener = null;
+        }
+        if (this.resizeUpListener) {
+            document.removeEventListener('mouseup', this.resizeUpListener);
+            this.resizeUpListener = null;
+        }
+        UserInfoEngine.Instance.SetSettingDebounced(PANEL_WIDTH_SETTING_KEY, String(Math.round(this.PanelWidth)));
+    }
+
+    public ngOnDestroy(): void {
+        // Clean up any active drag listeners + body style if destroyed mid-drag.
+        this.endResize();
     }
 
     private resetTypeForm(): void {

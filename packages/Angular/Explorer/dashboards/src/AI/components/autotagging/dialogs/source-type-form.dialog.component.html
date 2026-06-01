@@ -1,7 +1,11 @@
 <!-- ══════ SLIDE-IN FORM OVERLAY ══════ -->
 @if (FormMode !== 'none') {
     <div class="at-slide-overlay" (click)="CloseForm()"></div>
-    <div class="at-slide-panel">
+    <div class="at-slide-panel" [style.width.px]="PanelWidth">
+        <!-- Left-edge drag handle: the panel slides in from the right, so its
+             resizable edge is the LEFT. Dragging left widens the panel. -->
+        <div class="cls-resize-handle" (mousedown)="StartResize($event)"
+             role="separator" aria-orientation="vertical" aria-label="Resize panel"></div>
         <div class="at-slide-header">
             <h3>
                 @if (FormMode === 'add-source') { Add Content Source }
@@ -15,6 +19,9 @@
 
             <!-- Source form -->
             @if (FormMode === 'add-source' || FormMode === 'edit-source') {
+                <!-- ══════ SOURCE ══════ -->
+                <div class="cls-section cls-section--first">
+                    <div class="cls-section-title"><i class="fa-solid fa-database"></i> Source</div>
                 <div class="at-form-group">
                     <label class="at-form-label">Name</label>
                     <input type="text" class="at-form-input" [(ngModel)]="FormSourceName" placeholder="Source name">
@@ -109,37 +116,49 @@
                         }
                     }
                 }
-                <div class="at-form-group">
-                    <label class="at-form-label">Embedding Model Override</label>
-                    <mj-tree-dropdown
-                        [BranchConfig]="EmbeddingVendorBranch"
-                        [LeafConfig]="EmbeddingModelsLeaf"
-                        SelectionMode="single"
-                        SelectableTypes="leaf"
-                        Placeholder="Use system default"
-                        [Clearable]="true"
-                        [Value]="ToCompositeKey(FormSourceEmbeddingModelID)"
-                        (ValueChange)="FormSourceEmbeddingModelID = FromCompositeKey($event)">
-                    </mj-tree-dropdown>
-                    <span class="at-form-hint">Overrides Content Type default</span>
-                </div>
-                <div class="at-form-group">
-                    <label class="at-form-label">Vector Index Override</label>
-                    <select class="at-form-select" [(ngModel)]="FormSourceVectorIndexID">
-                        <option value="">Use system default</option>
-                        @for (opt of VectorIndexOptions; track opt.ID) {
-                            <option [value]="opt.ID">{{ opt.Name }}</option>
-                        }
-                    </select>
-                    <span class="at-form-hint">Overrides Content Type default</span>
-                </div>
+                </div><!-- /Source section -->
+
+                <!-- ══════ EMBEDDING & VECTORS ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title"><i class="fa-solid fa-cubes"></i> Embedding &amp; Vectors</div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Embedding Model Override</label>
+                        <mj-tree-dropdown
+                            [BranchConfig]="EmbeddingVendorBranch"
+                            [LeafConfig]="EmbeddingModelsLeaf"
+                            SelectionMode="single"
+                            SelectableTypes="leaf"
+                            Placeholder="Use system default"
+                            [Clearable]="true"
+                            [Value]="ToCompositeKey(FormSourceEmbeddingModelID)"
+                            (ValueChange)="FormSourceEmbeddingModelID = FromCompositeKey($event)">
+                        </mj-tree-dropdown>
+                        <span class="at-form-hint">Overrides Content Type default</span>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Vector Index Override</label>
+                        <select class="at-form-select" [(ngModel)]="FormSourceVectorIndexID">
+                            <option value="">Use system default</option>
+                            @for (opt of VectorIndexOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                        <span class="at-form-hint">Overrides Content Type default</span>
+                    </div>
+                </div><!-- /Embedding & Vectors section -->
 
                 <!-- ══════ CLASSIFICATION (full config parity, in-app) ══════ -->
                 <div class="cls-section">
-                    <div class="cls-section-title"><i class="fa-solid fa-sliders"></i> Classification</div>
+                    <div class="cls-section-title">
+                        <i class="fa-solid fa-sliders"></i> Classification
+                        <button mjButton variant="flat" size="sm" class="cls-eff-toggle"
+                                (click)="ToggleEffectiveValues()">
+                            <i class="fa-solid" [class.fa-eye]="!ShowEffectiveValues" [class.fa-eye-slash]="ShowEffectiveValues"></i>
+                            {{ ShowEffectiveValues ? 'Hide effective values' : 'Show effective values' }}
+                        </button>
+                    </div>
 
                     <div class="cls-config">
-                        <div class="cls-main">
                             <!-- Taxonomy mode cards -->
                             <div class="at-form-group">
                                 <label class="at-form-label">Taxonomy mode</label>
@@ -211,10 +230,11 @@
                                 </div>
                                 <mj-switch [(ngModel)]="EnableVectorizationValue"></mj-switch>
                             </div>
-                        </div>
+                    </div><!-- /cls-config -->
 
-                        <!-- Effective-values aside -->
-                        <aside class="cls-aside">
+                    <!-- Effective-values panel — inline + conditional (no longer a floating aside) -->
+                    @if (ShowEffectiveValues) {
+                        <div class="cls-aside">
                             <h5 class="cls-aside-title">Effective values</h5>
                             @for (row of EffectiveValues; track row.label) {
                                 <div class="cls-eff-row">
@@ -224,10 +244,13 @@
                                     </span>
                                 </div>
                             }
-                        </aside>
-                    </div>
+                        </div>
+                    }
+                </div><!-- /Classification section -->
 
-                    <!-- Volume & cost budgets -->
+                <!-- ══════ RUN BUDGETS ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title"><i class="fa-solid fa-gauge"></i> Run budgets</div>
                     <div class="at-form-group">
                         <label class="at-form-label">Max items per run</label>
                         <input type="number" min="0" class="at-form-input"
@@ -268,32 +291,36 @@
                             <span class="at-form-hint">$ stops the run</span>
                         </div>
                     </div>
-                </div>
+                </div><!-- /Run budgets section -->
 
                 @if (IsWebsiteSourceTypeSelected) {
-                    <div class="at-form-group">
-                        <label class="at-form-label">Crawl depth</label>
-                        <input type="number" min="0" max="10" step="1" class="at-form-input"
-                               [(ngModel)]="FormMaxDepth" placeholder="2 (default)">
-                        <span class="at-form-hint">
-                            Recursion ceiling for in-domain links. <code>0</code> = just the start URL.
-                            <code>2</code> (default) = root + sections + content pages.
-                        </span>
-                    </div>
-                    <div class="at-form-group">
-                        <label class="at-form-label">
-                            <input type="checkbox" [(ngModel)]="FormCrawlSitesInLowerLevelDomain">
-                            Crawl sites in lower-level domain
-                        </label>
-                        <span class="at-form-hint">When on (default), the depth-aware recursive crawler runs. Turn off to crawl only the seed page.</span>
-                    </div>
-                    <div class="at-form-group">
-                        <label class="at-form-label">
-                            <input type="checkbox" [(ngModel)]="FormCrawlOtherSitesInTopLevelDomain">
-                            Crawl other sites in top-level domain
-                        </label>
-                        <span class="at-form-hint">When on, also adds sibling-path URLs found on the seed page. Off by default to avoid accidental fan-out.</span>
-                    </div>
+                    <!-- ══════ CRAWL SETTINGS (website source only) ══════ -->
+                    <div class="cls-section">
+                        <div class="cls-section-title"><i class="fa-solid fa-spider"></i> Crawl settings</div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Crawl depth</label>
+                            <input type="number" min="0" max="10" step="1" class="at-form-input"
+                                   [(ngModel)]="FormMaxDepth" placeholder="2 (default)">
+                            <span class="at-form-hint">
+                                Recursion ceiling for in-domain links. <code>0</code> = just the start URL.
+                                <code>2</code> (default) = root + sections + content pages.
+                            </span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">
+                                <input type="checkbox" [(ngModel)]="FormCrawlSitesInLowerLevelDomain">
+                                Crawl sites in lower-level domain
+                            </label>
+                            <span class="at-form-hint">When on (default), the depth-aware recursive crawler runs. Turn off to crawl only the seed page.</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">
+                                <input type="checkbox" [(ngModel)]="FormCrawlOtherSitesInTopLevelDomain">
+                                Crawl other sites in top-level domain
+                            </label>
+                            <span class="at-form-hint">When on, also adds sibling-path URLs found on the seed page. Off by default to avoid accidental fan-out.</span>
+                        </div>
+                    </div><!-- /Crawl settings section -->
                 }
 
                 <div class="at-form-actions">
