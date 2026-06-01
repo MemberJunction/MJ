@@ -673,7 +673,10 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
             syn.TagID = this.TaxSelectedNode.ID;
             syn.Synonym = text;
             syn.Source = 'Manual';
-            // TODO(post-CodeGen): gate pending/active via Status once the column is generated
+            // Manually-added synonyms are trusted and resolve immediately.
+            // Machine-proposed synonyms (Source = LLM/Imported) arrive as 'Pending'
+            // and only resolve once approved via ApproveSynonym() below.
+            syn.Status = 'Active';
             const saved = await syn.Save();
             if (saved) {
                 this.NewSynonymText = '';
@@ -704,6 +707,44 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to remove synonym: ${syn.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.SynonymSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Count of synonyms awaiting review (Source = LLM/Imported, Status = Pending). */
+    public get PendingSynonymCount(): number {
+        return this.Synonyms.filter(s => s.Status === 'Pending').length;
+    }
+
+    /** Approves a pending (machine-proposed) synonym so it begins resolving to its tag. */
+    public async ApproveSynonym(syn: MJTagSynonymEntity): Promise<void> {
+        await this.setSynonymStatus(syn, 'Active', 'Synonym approved');
+    }
+
+    /** Rejects a pending synonym; retained for audit and to suppress re-proposal. */
+    public async RejectSynonym(syn: MJTagSynonymEntity): Promise<void> {
+        await this.setSynonymStatus(syn, 'Rejected', 'Synonym rejected');
+    }
+
+    /** Shared transition for approve/reject of a synonym's Status. */
+    private async setSynonymStatus(syn: MJTagSynonymEntity, status: 'Active' | 'Rejected', successMsg: string): Promise<void> {
+        this.SynonymSaving = true;
+        this.cdr.detectChanges();
+        try {
+            syn.Status = status;
+            const saved = await syn.Save();
+            if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(successMsg, 'success', 2500);
+                await this.loadSynonyms();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to update synonym: ${syn.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
                 );
             }
         } catch (error) {

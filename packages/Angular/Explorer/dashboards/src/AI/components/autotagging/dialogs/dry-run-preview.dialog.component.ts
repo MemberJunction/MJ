@@ -205,6 +205,9 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
             tagById.set(t.ID.toLowerCase(), { id: t.ID, name: t.Name });
         }
         for (const syn of engine.TagSynonyms) {
+            // Only Active synonyms resolve — Pending (proposed, unapproved) and
+            // Rejected ones are not live, matching the server-side resolver.
+            if (syn.Status !== 'Active') continue;
             const owner = tagById.get((syn.TagID ?? '').toLowerCase());
             if (owner && syn.Synonym) {
                 synonymMap.set(syn.Synonym.trim().toLowerCase(), owner);

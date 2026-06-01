@@ -60,7 +60,7 @@ Tag Health signals are not a separate data path — the server-side `TagHealthJo
 
 ## Schema dependency (post-CodeGen)
 
-The migration `migrations/v5/V202606010800__v5.39.x__TagSynonym_Status.sql` adds `TagSynonym.Status` (`Active`/`Pending`/`Rejected`, default `Active`). After applying it and running CodeGen, the Synonyms panel can gate LLM/imported synonyms as `Pending` until approved (marked `TODO(post-CodeGen)` in `taxonomy-tab.component.ts`). Everything else works without it.
+The migration `migrations/v5/V202606010800__v5.39.x__TagSynonym_Status.sql` adds `TagSynonym.Status` (`Active`/`Pending`/`Rejected`, default `Active`). With CodeGen run, the Synonyms panel uses it: manually-added synonyms are `Active` (resolve immediately); machine-proposed synonyms (`Source` = LLM/Imported) arrive as `Pending` and show an Approve/Reject affordance — only `Active` synonyms resolve, in both the panel and the dry-run preview's client-side resolver.
 
 ## Tests
 

@@ -284,16 +284,37 @@
                                 @if (SynonymsLoading) {
                                     <div class="at-tag-editor-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading synonyms…</div>
                                 } @else {
+                                    @if (PendingSynonymCount > 0) {
+                                        <div class="at-syn-pending-bar">
+                                            <i class="fa-solid fa-clock-rotate-left"></i>
+                                            {{ PendingSynonymCount }} proposed {{ PendingSynonymCount === 1 ? 'synonym' : 'synonyms' }} awaiting review — these don't resolve until approved.
+                                        </div>
+                                    }
                                     @if (Synonyms.length > 0) {
                                         <div class="at-syn-list">
                                             @for (syn of Synonyms; track syn.ID) {
-                                                <div class="at-syn-item">
+                                                <div class="at-syn-item" [class.at-syn-item-pending]="syn.Status === 'Pending'">
                                                     <span class="at-syn-name">{{ syn.Synonym }}</span>
                                                     <span class="at-syn-pill" [class]="GetSynonymSourceClass(syn.Source)">{{ syn.Source }}</span>
-                                                    <button type="button" class="at-syn-delete" title="Remove synonym"
-                                                            [disabled]="SynonymSaving" (click)="DeleteSynonym(syn)">
-                                                        <i class="fa-solid fa-times"></i>
-                                                    </button>
+                                                    @if (syn.Status === 'Pending') {
+                                                        <span class="at-syn-pill at-syn-pill-pending">Pending</span>
+                                                        <button mjButton variant="success" size="sm" title="Approve synonym"
+                                                                [disabled]="SynonymSaving" (click)="ApproveSynonym(syn)">
+                                                            <i class="fa-solid fa-check"></i> Approve
+                                                        </button>
+                                                        <button mjButton variant="outline" size="sm" title="Reject synonym"
+                                                                [disabled]="SynonymSaving" (click)="RejectSynonym(syn)">
+                                                            <i class="fa-solid fa-xmark"></i> Reject
+                                                        </button>
+                                                    } @else {
+                                                        @if (syn.Status === 'Rejected') {
+                                                            <span class="at-syn-pill at-syn-pill-rejected">Rejected</span>
+                                                        }
+                                                        <button type="button" class="at-syn-delete" title="Remove synonym"
+                                                                [disabled]="SynonymSaving" (click)="DeleteSynonym(syn)">
+                                                            <i class="fa-solid fa-times"></i>
+                                                        </button>
+                                                    }
                                                 </div>
                                             }
                                         </div>
@@ -301,7 +322,6 @@
                                         <div class="at-tag-editor-empty">No synonyms yet for this tag.</div>
                                     }
 
-                                    <!-- TODO(post-CodeGen): gate pending/active via Status once the column is generated -->
                                     <div class="at-syn-add">
                                         <input type="text" class="at-form-input" placeholder="Add a synonym…"
                                                [(ngModel)]="NewSynonymText" (keyup.enter)="AddSynonym()">

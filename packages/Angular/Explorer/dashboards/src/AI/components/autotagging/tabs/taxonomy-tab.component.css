@@ -152,6 +152,30 @@
     background: color-mix(in srgb, var(--mj-status-warning) 14%, var(--mj-bg-surface));
     color: var(--mj-status-warning-text);
 }
+.at-syn-pill-pending {
+    background: color-mix(in srgb, var(--mj-status-warning) 18%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+}
+.at-syn-pill-rejected {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+}
+.at-syn-item-pending {
+    border-color: var(--mj-status-warning-border);
+    background: color-mix(in srgb, var(--mj-status-warning) 6%, var(--mj-bg-surface-card));
+}
+.at-syn-pending-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    border-radius: var(--mj-radius, 8px);
+    background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+}
 .at-syn-delete {
     background: transparent;
     border: none;
