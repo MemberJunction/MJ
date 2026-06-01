@@ -3815,7 +3815,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let queryVector: number[] | null = null;
         try {
             if (embeddingAIModelId) {
-                const model = AIEngine.Instance.Models.find(m => m.ID === embeddingAIModelId);
+                const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingAIModelId));
                 if (!model) {
                     LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
                     return [];

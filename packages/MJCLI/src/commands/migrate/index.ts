@@ -1,8 +1,11 @@
+import path from 'node:path';
 import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
-import type { MigrateResult, MigrationExecutionResult, ResolvedMigration } from '@memberjunction/skyway-core';
+import type { MigrateResult, MigrationExecutionResult, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { getValidatedConfig, getSkywayConfig } from '../../config';
+import { getValidatedConfig, getSkywayConfig, type MJConfig } from '../../config';
+import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
+import { verifyDatabaseConnection } from '../../lib/db-preflight';
 
 export default class Migrate extends Command {
   static description = 'Migrate MemberJunction database to latest version';
@@ -21,14 +24,82 @@ export default class Migrate extends Command {
     tag: Flags.string({ char: 't', description: 'Version tag to use for running remote migrations' }),
     schema: Flags.string({ char: 's', description: 'Target schema (overrides coreSchema from config)' }),
     dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
+    'check-connection': Flags.boolean({
+      description: 'Verify the database connection (including TLS) and exit without migrating',
+    }),
   };
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Migrate);
     const config = getValidatedConfig();
-    const targetSchema = flags.schema || config.coreSchema;
 
-    const skywayConfig = await getSkywayConfig(config, flags.tag, flags.schema, flags.dir);
+    // Connection preflight: a real connect with the configured TLS/auth settings, so a
+    // self-signed cert or bad credentials fails fast with an actionable hint instead of a
+    // cryptic error mid-migration. `--check-connection` runs only this and exits.
+    await this.preflightConnection(config, flags['check-connection']);
+    if (flags['check-connection']) return;
+
+    // For a remote ref we fetch only the slice Skyway will actually run (highest
+    // baseline + the versioned tail after it + repeatables) into a temp dir, then
+    // hand that dir to Skyway. cleanup() runs on every exit path.
+    //
+    // Explicit --tag wins; otherwise the install-pinned version (mjRepoVersion) drives
+    // the fetch so migrate stays consistent with the installed code. An explicit --dir
+    // override (without --tag) keeps using the local filesystem and skips fetching, so
+    // monorepo developers are unaffected.
+    const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
+    const fetched = ref ? await fetchMigrationSlice({ repoUrl: config.mjRepoUrl, ref: resolveGitRef(ref), dialect: config.dbPlatform }) : null;
+
+    try {
+      const sourceDir = this.resolveSourceDir(fetched, flags.dir);
+      const skywayConfig = await getSkywayConfig(config, undefined, flags.schema, sourceDir);
+      this.logFetchSummary(flags.verbose, fetched);
+      await this.executeMigration(config, flags, skywayConfig);
+    } finally {
+      if (fetched) await fetched.cleanup();
+    }
+  }
+
+  /**
+   * Verify the database is reachable with the configured TLS/auth settings before
+   * running migrations. On failure, prints a classified message (and an actionable
+   * suggestion such as DB_TRUST_SERVER_CERTIFICATE for a self-signed cert) and exits.
+   */
+  private async preflightConnection(config: MJConfig, checkOnly: boolean): Promise<void> {
+    const result = await verifyDatabaseConnection(config);
+    if (!result.Ok) {
+      const suggestion = result.Suggestion ? `\n→ ${result.Suggestion}` : '';
+      this.error(`Database connection failed: ${result.Message ?? 'unknown error'}${suggestion}`);
+    }
+    if (checkOnly) {
+      this.log(`Database connection OK (${config.dbHost}:${config.dbPort}, ${config.dbDatabase}).`);
+    }
+  }
+
+  /**
+   * Resolves the migration source directory handed to Skyway. With a fetched slice,
+   * the temp clone root is used (Skyway scans it recursively); a `--dir` override is
+   * applied as a subpath within that clone.
+   */
+  private resolveSourceDir(fetched: MigrationFetchResult | null, dirFlag: string | undefined): string | undefined {
+    if (!fetched) return dirFlag;
+    if (!dirFlag) return fetched.dir;
+    const subPath = dirFlag.replace(/^filesystem:/, '').replace(/^\.\//, '');
+    return path.join(fetched.dir, subPath);
+  }
+
+  private logFetchSummary(verbose: boolean, fetched: MigrationFetchResult | null): void {
+    if (!verbose || !fetched) return;
+    this.log(
+      fetched.usedFallback
+        ? 'Fetched full migration history (partial clone unavailable)'
+        : `Fetched ${fetched.selected.length} migration file(s) for the target slice`,
+    );
+  }
+
+  /** Runs Skyway against the prepared config and reports the outcome. */
+  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string }, skywayConfig: SkywayConfig): Promise<void> {
+    const targetSchema = skywayConfig.Migrations.DefaultSchema;
     const skyway = new Skyway(skywayConfig);
 
     // Always capture progress for error diagnostics; verbose mode prints it live
@@ -94,7 +165,7 @@ export default class Migrate extends Command {
 
       if (result.Details.length > 0) {
         // We have per-migration details — show them
-        const succeeded = result.Details.filter(d => d.Success);
+        const succeeded = result.Details.filter((d) => d.Success);
         if (succeeded.length > 0) {
           this.logToStderr(`  Applied ${succeeded.length} migration(s) before failure:`);
           for (const detail of succeeded) {
@@ -103,7 +174,7 @@ export default class Migrate extends Command {
           this.logToStderr('');
         }
 
-        const failed = result.Details.filter(d => !d.Success);
+        const failed = result.Details.filter((d) => !d.Success);
         for (const detail of failed) {
           this.logToStderr(`  FAILED: ${detail.Migration.Filename}`);
           this.logToStderr(`    Script: ${detail.Migration.FilePath}`);
@@ -127,11 +198,7 @@ export default class Migrate extends Command {
    * Prints error details captured by OnProgress callbacks.
    * Used when Skyway's result.Details is empty (transaction-level errors).
    */
-  private printCallbackErrors(
-    failedMigrations: MigrationExecutionResult[],
-    lastMigrationStarted: ResolvedMigration | undefined,
-    errorLog: string[]
-  ): void {
+  private printCallbackErrors(failedMigrations: MigrationExecutionResult[], lastMigrationStarted: ResolvedMigration | undefined, errorLog: string[]): void {
     // Show any migration failures captured by OnMigrationEnd
     if (failedMigrations.length > 0) {
       for (const detail of failedMigrations) {
@@ -152,7 +219,7 @@ export default class Migrate extends Command {
 
     // Show relevant log messages from Skyway (error/failure lines)
     const relevantLogs = errorLog.filter(
-      msg => msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') || msg.toLowerCase().includes('rolled back')
+      (msg) => msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') || msg.toLowerCase().includes('rolled back'),
     );
     if (relevantLogs.length > 0) {
       this.logToStderr('');
