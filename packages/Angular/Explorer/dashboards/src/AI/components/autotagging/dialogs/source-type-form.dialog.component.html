@@ -134,21 +134,140 @@
                     <span class="at-form-hint">Overrides Content Type default</span>
                 </div>
 
-                <!--
-                    Quick-edit knobs. Slide-in is intentionally a SUBSET of the
-                    full entity form — operators who need the niche knobs (other
-                    budgets, URL pattern, root URL, taxonomy mode, thresholds)
-                    click "Open advanced settings →" to land in the full form,
-                    which surfaces every panel via the BaseFormPanel slot system.
-                -->
-                <div class="at-form-group">
-                    <label class="at-form-label">Max items per run</label>
-                    <input type="number" min="0" class="at-form-input"
-                           [(ngModel)]="FormMaxItemsPerRun" placeholder="unlimited">
-                    <span class="at-form-hint">
-                        Caps the number of content items handed to the LLM. Skipped (unchanged) items don't count.
-                        Paused work resumes on the next run.
-                    </span>
+                <!-- ══════ CLASSIFICATION (full config parity, in-app) ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title"><i class="fa-solid fa-sliders"></i> Classification</div>
+
+                    <div class="cls-config">
+                        <div class="cls-main">
+                            <!-- Taxonomy mode cards -->
+                            <div class="at-form-group">
+                                <label class="at-form-label">Taxonomy mode</label>
+                                <div class="cls-mode-grid">
+                                    @for (m of TaxonomyModes; track m.value) {
+                                        <div class="cls-mode-card" [class.selected]="CurrentMode === m.value"
+                                             (click)="SetMode(m.value)">
+                                            <i class="fa-solid {{ m.icon }} cls-mode-ic"></i>
+                                            <div class="cls-mode-nm">{{ m.label }}</div>
+                                            <div class="cls-mode-best">{{ m.bestFor }}</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Tag root -->
+                            <div class="at-form-group">
+                                <label class="at-form-label">Tag root</label>
+                                <select class="at-form-select" [(ngModel)]="TagRootIDValue">
+                                    <option value="">(none / whole taxonomy)</option>
+                                    @for (opt of TagRootOptions; track opt.ID) {
+                                        <option [value]="opt.ID">{{ opt.Name }}</option>
+                                    }
+                                </select>
+                                <span class="at-form-hint">Restricts the LLM's visible taxonomy + auto-grow target. Leave blank for the full taxonomy.</span>
+                            </div>
+
+                            <!-- Thresholds + gradient band -->
+                            <div class="at-form-group">
+                                <label class="at-form-label">Confidence thresholds</label>
+                                <div class="cls-threshold-pair">
+                                    <div class="cls-slider-grid">
+                                        <div class="cls-slider-field">
+                                            <span class="cls-slider-cap">Match (auto-apply) <strong>{{ MatchThresholdValue | number: '1.2-2' }}</strong></span>
+                                            <input type="range" class="cls-slider" min="0.50" max="1.00" step="0.01"
+                                                   [ngModel]="MatchThresholdValue" (ngModelChange)="MatchThresholdValue = $event">
+                                        </div>
+                                        <div class="cls-slider-field">
+                                            <span class="cls-slider-cap">Suggest (route to inbox) <strong>{{ SuggestThresholdValue | number: '1.2-2' }}</strong></span>
+                                            <input type="range" class="cls-slider" min="0.50" max="1.00" step="0.01"
+                                                   [ngModel]="SuggestThresholdValue" (ngModelChange)="SuggestThresholdValue = $event">
+                                        </div>
+                                    </div>
+                                    <div class="cls-band" aria-hidden="true"></div>
+                                    @if (ThresholdValidationMessage) {
+                                        <div class="cls-validation"><i class="fa-solid fa-circle-exclamation"></i> {{ ThresholdValidationMessage }}</div>
+                                    } @else {
+                                        <div class="cls-band-legend">
+                                            <span class="cls-band-key reject">reject / new</span>
+                                            <span class="cls-band-key review">review (inbox)</span>
+                                            <span class="cls-band-key apply">auto-apply</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Toggles -->
+                            <div class="cls-toggle-row">
+                                <div class="cls-toggle-label">
+                                    <span class="t">Share full taxonomy with the LLM</span>
+                                    <span class="d">When on, the LLM prompt includes the visible taxonomy. Larger taxonomies → higher token cost.</span>
+                                </div>
+                                <mj-switch [(ngModel)]="ShareTaxonomyValue"></mj-switch>
+                            </div>
+                            <div class="cls-toggle-row">
+                                <div class="cls-toggle-label">
+                                    <span class="t">Vectorize new content</span>
+                                    <span class="d">When off, this source skips vectorization (the autotagger still runs).</span>
+                                </div>
+                                <mj-switch [(ngModel)]="EnableVectorizationValue"></mj-switch>
+                            </div>
+                        </div>
+
+                        <!-- Effective-values aside -->
+                        <aside class="cls-aside">
+                            <h5 class="cls-aside-title">Effective values</h5>
+                            @for (row of EffectiveValues; track row.label) {
+                                <div class="cls-eff-row">
+                                    <span class="cls-eff-label">{{ row.label }}</span>
+                                    <span class="cls-eff-value">{{ row.value }}
+                                        <span class="cls-eff-origin" [class.override]="row.origin === 'source override'">{{ row.origin }}</span>
+                                    </span>
+                                </div>
+                            }
+                        </aside>
+                    </div>
+
+                    <!-- Volume & cost budgets -->
+                    <div class="at-form-group">
+                        <label class="at-form-label">Max items per run</label>
+                        <input type="number" min="0" class="at-form-input"
+                               [(ngModel)]="FormMaxItemsPerRun" placeholder="unlimited">
+                        <span class="at-form-hint">
+                            Caps the number of content items handed to the LLM. Skipped (unchanged) items don't count.
+                            Paused work resumes on the next run.
+                        </span>
+                    </div>
+
+                    <div class="cls-budget-grid">
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max new tags / run</label>
+                            <input type="number" min="0" class="at-form-input"
+                                   [ngModel]="MaxNewTagsPerRunValue ?? ''" (ngModelChange)="MaxNewTagsPerRunValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">across all items</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max new tags / item</label>
+                            <input type="number" min="0" class="at-form-input"
+                                   [ngModel]="MaxNewTagsPerItemValue ?? ''" (ngModelChange)="MaxNewTagsPerItemValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">extras → suggestions</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max tokens / run</label>
+                            <input type="number" min="0" class="at-form-input"
+                                   [ngModel]="MaxTokensPerRunValue ?? ''" (ngModelChange)="MaxTokensPerRunValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">across all LLM calls</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max cost / run (USD)</label>
+                            <input type="number" min="0" step="0.01" class="at-form-input"
+                                   [ngModel]="MaxCostPerRunValue ?? ''" (ngModelChange)="MaxCostPerRunValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">$ stops the run</span>
+                        </div>
+                    </div>
                 </div>
 
                 @if (IsWebsiteSourceTypeSelected) {
@@ -189,8 +308,9 @@
                     <div class="at-form-advanced-link">
                         <a href="javascript:void(0)" (click)="OpenAdvancedSourceSettings()">
                             <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                            Open advanced settings — taxonomy mode, all budgets, URL pattern, &amp; more
+                            Open advanced settings — URL pattern, root URL, &amp; full entity form
                         </a>
+                        <span class="at-form-hint">The key classifier knobs (taxonomy mode, thresholds, tag root, budgets) are now editable inline above.</span>
                     </div>
                 }
             }

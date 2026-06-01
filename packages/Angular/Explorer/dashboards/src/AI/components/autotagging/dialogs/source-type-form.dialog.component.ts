@@ -23,12 +23,38 @@
 import { Component, ChangeDetectorRef, EventEmitter, Output, inject } from '@angular/core';
 import { BaseEntity, CompositeKey } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { SourceCard, ContentTypeCard, DropdownOption, FormMode } from '../shared/classify.types';
+
+/** The taxonomy-mode literal union, derived from the typed config so it can never drift. */
+type TaxonomyModeJson = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['TagTaxonomyMode']>;
+
+/** One selectable taxonomy-mode card (icon + name + one-line "best for"). */
+interface TaxonomyModeOption {
+    value: TaxonomyModeJson;
+    label: string;
+    icon: string;
+    bestFor: string;
+}
+
+/** Default classifier knob values — mirrors the autotagger's runtime defaults + the reference panel. */
+const DEFAULT_TAXONOMY_MODE: TaxonomyModeJson = 'auto-grow';
+const DEFAULT_MATCH_THRESHOLD = 0.85;
+const SUGGEST_THRESHOLD_GAP = 0.05;
+const DEFAULT_SHARE_TAXONOMY = true;
+const DEFAULT_ENABLE_VECTORIZATION = true;
+
+/** One row in the effective-values aside: the resolved value + where it came from. */
+interface EffectiveValueRow {
+    label: string;
+    value: string;
+    origin: 'source override' | 'default';
+}
 
 @Component({
     standalone: false,
@@ -94,6 +120,165 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     public FormMaxDepth: number | null = null;
     public FormCrawlSitesInLowerLevelDomain: boolean = true;
     public FormCrawlOtherSitesInTopLevelDomain: boolean = false;
+
+    // ── Classification (full config parity) ──────────────────────────────
+    // The classifier knobs that used to require navigating out to the entity
+    // form's "advanced settings" are now edited inline. They live on the typed
+    // Configuration JSON (`MJContentSourceEntity_IContentSourceConfiguration`),
+    // accessed via the `Config` getter / `setConfig` merge helper below.
+    //
+    // For EDIT we hydrate `workingConfig` from the loaded source's
+    // ConfigurationObject; for ADD we start from {} and accumulate. On SAVE the
+    // working config is merged into the entity's ConfigurationObject so we never
+    // clobber Website / SourceSpecificConfiguration sub-objects.
+    private workingConfig: MJContentSourceEntity_IContentSourceConfiguration = {};
+
+    /** Selectable taxonomy-mode cards. Exactly the three modes the type allows — no 'hybrid'. */
+    public readonly TaxonomyModes: TaxonomyModeOption[] = [
+        { value: 'constrained', label: 'Constrained', icon: 'fa-lock',     bestFor: 'Curated, regulated taxonomies' },
+        { value: 'auto-grow',   label: 'Auto-Grow',   icon: 'fa-seedling', bestFor: 'Bounded growth under a tag root' },
+        { value: 'free-flow',   label: 'Free-Flow',   icon: 'fa-water',    bestFor: 'Sandbox — anything goes' },
+    ];
+
+    /** Tags eligible to be the taxonomy root (loaded from TagEngineBase). */
+    public TagRootOptions: { ID: string; Name: string }[] = [];
+
+    // ── Config accessor + merge helper (mirrors TagPipelineConfigurationPanel) ──
+
+    /** The working classifier config — never null; defaults are applied by the typed getters below. */
+    public get Config(): MJContentSourceEntity_IContentSourceConfiguration {
+        return this.workingConfig;
+    }
+
+    /** Merge a partial patch into the working config (immutable spread, like the reference panel). */
+    public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
+        this.workingConfig = { ...this.workingConfig, ...patch };
+    }
+
+    // Taxonomy mode
+    public get CurrentMode(): TaxonomyModeJson {
+        return this.Config.TagTaxonomyMode ?? DEFAULT_TAXONOMY_MODE;
+    }
+    public SetMode(mode: TaxonomyModeJson): void {
+        this.setConfig({ TagTaxonomyMode: mode });
+    }
+
+    // Thresholds — match auto-applies; suggest routes to inbox. When match moves
+    // and suggest is unset/above it, default suggest to max(0, match - 0.05).
+    public get MatchThresholdValue(): number {
+        return this.Config.TagMatchThreshold ?? DEFAULT_MATCH_THRESHOLD;
+    }
+    public set MatchThresholdValue(v: number | string) {
+        const clamped = Math.max(0, Math.min(1, Number(v) || 0));
+        const cur = this.Config.SuggestThreshold;
+        const patch: Partial<MJContentSourceEntity_IContentSourceConfiguration> = { TagMatchThreshold: clamped };
+        if (cur == null || cur >= clamped) {
+            patch.SuggestThreshold = Math.max(0, clamped - SUGGEST_THRESHOLD_GAP);
+        }
+        this.setConfig(patch);
+    }
+    public get SuggestThresholdValue(): number {
+        return this.Config.SuggestThreshold ?? Math.max(0, this.MatchThresholdValue - SUGGEST_THRESHOLD_GAP);
+    }
+    public set SuggestThresholdValue(v: number | string) {
+        const clamped = Math.max(0, Math.min(this.MatchThresholdValue, Number(v) || 0));
+        this.setConfig({ SuggestThreshold: clamped });
+    }
+    public get ThresholdValidationMessage(): string | null {
+        const m = this.Config.TagMatchThreshold;
+        const s = this.Config.SuggestThreshold;
+        if (m != null && s != null && s >= m) {
+            return 'Suggest threshold must be lower than the match threshold.';
+        }
+        return null;
+    }
+
+    // Tag root + toggles
+    public get TagRootIDValue(): string {
+        return this.Config.TagRootID ?? '';
+    }
+    public set TagRootIDValue(v: string) {
+        this.setConfig({ TagRootID: v ? v : null });
+    }
+    public get ShareTaxonomyValue(): boolean {
+        return this.Config.ShareTaxonomyWithLLM !== false; // default true
+    }
+    public set ShareTaxonomyValue(v: boolean) {
+        this.setConfig({ ShareTaxonomyWithLLM: v });
+    }
+    public get EnableVectorizationValue(): boolean {
+        return this.Config.EnableVectorization !== false; // default true
+    }
+    public set EnableVectorizationValue(v: boolean) {
+        this.setConfig({ EnableVectorization: v });
+    }
+
+    // Budgets (blank = unlimited → key stripped from JSON)
+    public get MaxNewTagsPerRunValue(): number | null {
+        return this.Config.MaxNewTagsPerRun ?? null;
+    }
+    public set MaxNewTagsPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxNewTagsPerRun: this.normalizeNullableNumber(v) });
+    }
+    public get MaxNewTagsPerItemValue(): number | null {
+        return this.Config.MaxNewTagsPerItem ?? null;
+    }
+    public set MaxNewTagsPerItemValue(v: number | string | null) {
+        this.setConfig({ MaxNewTagsPerItem: this.normalizeNullableNumber(v) });
+    }
+    public get MaxTokensPerRunValue(): number | null {
+        return this.Config.MaxTokensPerRun ?? null;
+    }
+    public set MaxTokensPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxTokensPerRun: this.normalizeNullableNumber(v) });
+    }
+    public get MaxCostPerRunValue(): number | null {
+        return this.Config.MaxCostPerRun ?? null;
+    }
+    public set MaxCostPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
+    }
+
+    /**
+     * Coerce a possibly-blank input into a typed number. Returning undefined
+     * deletes the key from the persisted JSON when the setConfig spread is applied.
+     */
+    private normalizeNullableNumber(v: number | string | null | undefined): number | undefined {
+        if (v == null) return undefined;
+        if (typeof v === 'string') {
+            const trimmed = v.trim();
+            if (trimmed === '') return undefined;
+            const n = Number(trimmed);
+            return Number.isFinite(n) ? n : undefined;
+        }
+        return Number.isFinite(v) ? v : undefined;
+    }
+
+    /** Human label for the currently-selected tag root (for the effective-values aside). */
+    private get tagRootLabel(): string {
+        const id = this.Config.TagRootID;
+        if (!id) return 'Whole taxonomy';
+        const match = this.TagRootOptions.find(t => UUIDsEqual(t.ID, id));
+        return match?.Name ?? 'Whole taxonomy';
+    }
+
+    /**
+     * The effective value of each key knob + where it comes from. Since the tag
+     * classifier fields are source-level JSON (no content-type cascade), the
+     * effective value is the configured override or the documented default.
+     */
+    public get EffectiveValues(): EffectiveValueRow[] {
+        const c = this.Config;
+        const mode = this.TaxonomyModes.find(m => m.value === this.CurrentMode);
+        return [
+            { label: 'Taxonomy mode', value: mode?.label ?? this.CurrentMode, origin: c.TagTaxonomyMode != null ? 'source override' : 'default' },
+            { label: 'Tag root', value: this.tagRootLabel, origin: c.TagRootID ? 'source override' : 'default' },
+            { label: 'Match threshold', value: this.MatchThresholdValue.toFixed(2), origin: c.TagMatchThreshold != null ? 'source override' : 'default' },
+            { label: 'Suggest threshold', value: this.SuggestThresholdValue.toFixed(2), origin: c.SuggestThreshold != null ? 'source override' : 'default' },
+            { label: 'Share taxonomy w/ LLM', value: this.ShareTaxonomyValue ? 'On' : 'Off', origin: c.ShareTaxonomyWithLLM != null ? 'source override' : 'default' },
+            { label: 'Vectorization', value: this.EnableVectorizationValue ? 'On' : 'Off', origin: c.EnableVectorization != null ? 'source override' : 'default' },
+        ];
+    }
 
     /** True when the form's selected source type is Website — gates the crawler knobs. */
     public get IsWebsiteSourceTypeSelected(): boolean {
@@ -325,34 +510,41 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         this.FormMaxDepth = null;
         this.FormCrawlSitesInLowerLevelDomain = true;
         this.FormCrawlOtherSitesInTopLevelDomain = false;
+        this.workingConfig = {};
         const rawSource = this.RawSources.find(s => UUIDsEqual(s['ID'] as string, card.ID));
         if (rawSource) {
             const configStr = rawSource['Configuration'] as string | null;
             if (configStr) {
                 try {
-                    const parsed = JSON.parse(configStr) as Record<string, unknown> | null;
-                    const specific = parsed?.['SourceSpecificConfiguration'] as Record<string, string> | undefined;
+                    const parsed = JSON.parse(configStr) as MJContentSourceEntity_IContentSourceConfiguration | null;
+                    // Hydrate the working classifier config from the persisted JSON.
+                    // Defaults are applied lazily by the typed getters, so we only
+                    // copy what was actually stored (unset = "use default").
+                    if (parsed) {
+                        this.workingConfig = { ...parsed };
+                    }
+                    const specific = parsed?.SourceSpecificConfiguration as Record<string, string> | undefined;
                     if (specific) {
                         this.FormSourceSpecificConfig = { ...specific };
                     }
                     // Run-budget knob — pulled directly off the typed Configuration.
-                    const items = parsed?.['MaxItemsPerRun'];
+                    const items = parsed?.MaxItemsPerRun;
                     if (typeof items === 'number' && Number.isFinite(items)) {
                         this.FormMaxItemsPerRun = items;
                     }
                     // Website sub-object — only populates the inputs when present
                     // (matches the autotagger's "unset = default" semantics).
-                    const website = parsed?.['Website'] as Record<string, unknown> | undefined;
+                    const website = parsed?.Website;
                     if (website) {
-                        const depth = website['MaxDepth'];
+                        const depth = website.MaxDepth;
                         if (typeof depth === 'number' && Number.isFinite(depth)) {
                             this.FormMaxDepth = depth;
                         }
-                        if (typeof website['CrawlSitesInLowerLevelDomain'] === 'boolean') {
-                            this.FormCrawlSitesInLowerLevelDomain = website['CrawlSitesInLowerLevelDomain'] as boolean;
+                        if (typeof website.CrawlSitesInLowerLevelDomain === 'boolean') {
+                            this.FormCrawlSitesInLowerLevelDomain = website.CrawlSitesInLowerLevelDomain;
                         }
-                        if (typeof website['CrawlOtherSitesInTopLevelDomain'] === 'boolean') {
-                            this.FormCrawlOtherSitesInTopLevelDomain = website['CrawlOtherSitesInTopLevelDomain'] as boolean;
+                        if (typeof website.CrawlOtherSitesInTopLevelDomain === 'boolean') {
+                            this.FormCrawlOtherSitesInTopLevelDomain = website.CrawlOtherSitesInTopLevelDomain;
                         }
                     }
                 } catch {
@@ -502,6 +694,16 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
 
             // Store the full SourceSpecificConfiguration in the Configuration JSON
             const currentConfig = entity.ConfigurationObject ?? {};
+
+            // Merge the inline Classification knobs (taxonomy mode, thresholds,
+            // tag root, budgets, toggles) from the working config. We deliberately
+            // exclude the sub-objects owned by the dedicated quick-edit logic below
+            // (SourceSpecificConfiguration, MaxItemsPerRun, Website) so those stay
+            // single-owner and we never clobber crawl settings. Keys absent from the
+            // working config are left untouched on currentConfig.
+            const { SourceSpecificConfiguration: _ssc, MaxItemsPerRun: _mipr, Website: _web, ...classifierKnobs } = this.workingConfig;
+            Object.assign(currentConfig, classifierKnobs);
+
             currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
 
             // Persist the quick-edit knobs that don't have their own DB columns
@@ -645,6 +847,15 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
                     .filter(m => m.AIModelType?.trim().toLowerCase() === 'embeddings')
                     .map(m => ({ ID: m.ID, Name: m.Name }));
             }
+
+            // Tag-root candidates for the Classification section's root dropdown.
+            if (this.TagRootOptions.length === 0) {
+                const p = this.ProviderToUse;
+                await TagEngineBase.Instance.Config(false, p.CurrentUser, p);
+                this.TagRootOptions = TagEngineBase.Instance.Tags
+                    .map(t => ({ ID: t.ID, Name: t.Name }))
+                    .sort((a, b) => a.Name.localeCompare(b.Name));
+            }
         } catch (error) {
             console.error('[Autotagging] Error loading form dropdowns:', error);
         }
@@ -667,6 +878,8 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         this.FormMaxDepth = null;
         this.FormCrawlSitesInLowerLevelDomain = true;
         this.FormCrawlOtherSitesInTopLevelDomain = false;
+        // Classification knobs — start empty; the typed getters apply defaults.
+        this.workingConfig = {};
     }
 
     private resetTypeForm(): void {
