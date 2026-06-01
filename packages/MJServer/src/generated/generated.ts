@@ -69630,6 +69630,10 @@ export class MJTagSynonym_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`}) 
+    @MaxLength(20)
+    Status: string;
+        
     @Field() 
     @MaxLength(255)
     Tag: string;
@@ -69653,6 +69657,9 @@ export class CreateMJTagSynonymInput {
     @Field({ nullable: true })
     Source?: string;
 
+    @Field({ nullable: true })
+    Status?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69674,6 +69681,9 @@ export class UpdateMJTagSynonymInput {
 
     @Field({ nullable: true })
     Source?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
