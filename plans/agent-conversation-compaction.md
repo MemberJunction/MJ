@@ -33,7 +33,8 @@ Design influences, triangulated:
   `RunningSummary`): trigger on tokens before the window fills, keep user messages
   high-fidelity, recursive summaries (prior summary + delta), structured > prose, pair
   compaction with just-in-time retrieval.
-- **Recursive Language Models** (Zhang, Kraska, Khattab — MIT CSAIL, arXiv:2512.24601v3):
+- **Recursive Language Models** (Zhang, Kraska, Khattab — MIT CSAIL,
+  [arXiv:2512.24601](https://arxiv.org/abs/2512.24601)):
   keeping full content in an external, addressable environment and letting the model
   *programmatically examine/slice/recursively sub-summarize* it beats lossy compaction on
   tasks that need dense recall. Our summary is the "constant-size metadata/handle"; the
@@ -262,6 +263,11 @@ The `summarizeRange` retrieval tool (§5.3) likewise records an `AIAgentRunStep`
 
 Per the RLM lesson, the summary is primarily an **addressable map**, not an exhaustive
 recap:
+> Inspired by the Recursive Language Models paradigm
+> ([arXiv:2512.24601](https://arxiv.org/abs/2512.24601)): treat the full history as an
+> addressable external environment and expose a compact handle, rather than relying on a
+> lossy in-window summary.
+
 - A brief **200–400 token prose gist** of the conversation (orientation only).
 - **Sequence-numbered timeline markers** for decisions / key events / artifacts / actions
   (`decision X — seq 42`, `artifact Y introduced — seq 64`).
