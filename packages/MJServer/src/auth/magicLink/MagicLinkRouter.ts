@@ -130,7 +130,7 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
       return;
     }
 
-    const result = await service.redeemInvite(token);
+    const result = await service.RedeemInvite(token);
     sendRedeemResult(res, result, wantsJson);
   });
 
@@ -150,7 +150,7 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
       return;
     }
 
-    const result = await service.createInvite(
+    const result = await service.CreateInvite(
       {
         email: body.email,
         applicationId: body.applicationId,

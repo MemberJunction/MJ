@@ -67,7 +67,7 @@ export class MagicLinkService {
    * @param creatingUser  the authenticated internal user issuing the invite
    * @param provider  the request's metadata provider; falls back to the global default
    */
-  public async createInvite(
+  public async CreateInvite(
     params: CreateMagicLinkInviteParams,
     creatingUser: UserInfo,
     provider?: IMetadataProvider,
@@ -164,7 +164,7 @@ export class MagicLinkService {
    * correct trade-off for a single-use credential — burning a token on a server
    * error is recoverable (re-issue); allowing replay is not.
    */
-  public async redeemInvite(rawToken: string): Promise<RedeemMagicLinkResult> {
+  public async RedeemInvite(rawToken: string): Promise<RedeemMagicLinkResult> {
     try {
       if (!rawToken || !rawToken.startsWith(MAGIC_LINK_TOKEN_PREFIX)) {
         return { success: false, errorCode: 'invalid', error: 'Malformed token.' };
