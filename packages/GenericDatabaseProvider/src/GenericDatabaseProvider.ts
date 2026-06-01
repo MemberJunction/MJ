@@ -122,28 +122,6 @@ const GEO_EXTENDED_TYPES = new Set([
     'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
 ]);
 
-/**
- * Detects infrastructure-level connection errors that indicate the database is
- * unreachable (timeout, refused, pool closed, etc.) as opposed to query-level
- * errors (bad SQL, constraint violation). These should propagate as exceptions
- * so callers can distinguish "DB is down" from "query returned no results."
- *
- * Uses the mssql driver's structured error types: ConnectionError for connectivity
- * failures, RequestError for query-level errors. Falls back to error code checks
- * for non-mssql errors (e.g., POOL_CLOSED thrown by our own code).
- */
-function isConnectionError(e: unknown): boolean {
-    if (!(e instanceof Error)) return false;
-
-    // mssql driver sets error.name to 'ConnectionError' for all connectivity failures
-    // (timeout, refused, reset, TLS handshake, etc.)
-    if (e.name === 'ConnectionError') return true;
-
-    // Our own pool-closed errors and other non-mssql infra errors
-    const code = (e as { code?: string }).code ?? '';
-    return code === 'POOL_CLOSED';
-}
-
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // Composition engine is now owned by RenderPipeline
 
@@ -920,6 +898,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected getDialect(): SQLDialect | null {
         return null;
+    }
+
+    /**
+     * Detects infrastructure-level connection errors (timeout, refused, pool closed)
+     * as opposed to query-level errors (bad SQL, constraint violations).
+     * Delegates to the dialect's driver-specific error classification, with a
+     * fallback for POOL_CLOSED errors thrown by our own code.
+     */
+    protected isConnectionError(e: unknown): boolean {
+        // Dialect-specific check (mssql ConnectionError, pg network codes, etc.)
+        if (this.getDialect()?.IsConnectionError(e)) return true;
+
+        // Our own pool-closed errors are not dialect-specific
+        if (e instanceof Error) {
+            const code = (e as { code?: string }).code ?? '';
+            if (code === 'POOL_CLOSED') return true;
+        }
+
+        return false;
     }
 
     /**
@@ -1725,7 +1722,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Re-throw infrastructure errors (connection timeout, pool closed, etc.)
             // so callers can distinguish "database is unreachable" from "query returned
             // no results." Only query-level errors are safe to return as { Success: false }.
-            if (isConnectionError(e)) {
+            if (this.isConnectionError(e)) {
                 throw e;
             }
 
@@ -2797,7 +2794,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 CacheHit: false
             };
         } catch (e) {
-            if (isConnectionError(e)) {
+            if (this.isConnectionError(e)) {
                 throw e;
             }
 
