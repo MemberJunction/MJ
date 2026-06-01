@@ -8,11 +8,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 
-interface FetchResult { Dir: string; UsedFallback: boolean; Cleanup: () => Promise<void> }
+interface FetchResult {
+  Dir: string;
+  UsedFallback: boolean;
+  Cleanup: () => Promise<void>;
+}
 
 const mockFetchPaths = vi.fn<(opts: { RepoUrl: string; Ref: string; Paths: readonly string[] }) => Promise<FetchResult>>();
 vi.mock('../adapters/RepoFetcher.js', () => ({
-  RepoFetcher: function RepoFetcher() { return { FetchPaths: mockFetchPaths }; },
+  RepoFetcher: function RepoFetcher() {
+    return { FetchPaths: mockFetchPaths };
+  },
 }));
 
 import { createDistributionBundle } from '../distribution/createBundle.js';
@@ -50,6 +56,7 @@ beforeAll(async () => {
   await writeFixtureFile('packages/GeneratedActions/src/index.ts', 'export const a = 1;');
   await writeFixtureFile('SQL Scripts/MJ_Base.sql', 'CREATE TABLE x;');
   await writeFixtureFile('migrations/v5/V202601010000__x.sql', 'MIGRATION');
+  await writeFixtureFile('migrations-pg/v5/V202601010000__x.sql', 'PG MIGRATION');
 });
 
 afterAll(async () => {
@@ -74,13 +81,27 @@ describe('createDistributionBundle', () => {
     }
   });
 
-  it('includes migrations when requested', async () => {
+  it('includes both migration trees by default when requested', async () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-mig-'));
     const out = path.join(outDir, 'dist.zip');
     try {
       await createDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeMigrations: true });
       const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
       expect(names.has('migrations/v5/V202601010000__x.sql')).toBe(true);
+      expect(names.has('migrations-pg/v5/V202601010000__x.sql')).toBe(true);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it('narrows bundled migrations to one platform via MigrationPlatform', async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-pg-'));
+    const out = path.join(outDir, 'dist.zip');
+    try {
+      await createDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeMigrations: true, MigrationPlatform: 'postgresql' });
+      const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
+      expect(names.has('migrations-pg/v5/V202601010000__x.sql')).toBe(true);
+      expect([...names].some((n) => n.startsWith('migrations/'))).toBe(false);
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }

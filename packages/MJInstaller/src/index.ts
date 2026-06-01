@@ -69,27 +69,9 @@ export {
   loadConfigFile,
   mergeConfigs,
 } from './models/InstallConfig.js';
-export {
-  InstallPlan,
-  type CreatePlanInput,
-  type RunOptions,
-  type DoctorOptions,
-  type InstallResult,
-  type PhaseInfo,
-} from './models/InstallPlan.js';
-export {
-  InstallState,
-  type InstallStateData,
-  type PhaseState,
-  type PhaseStatus,
-} from './models/InstallState.js';
-export {
-  Diagnostics,
-  type DiagnosticCheck,
-  type DiagnosticStatus,
-  type EnvironmentInfo,
-  type LastInstallInfo,
-} from './models/Diagnostics.js';
+export { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult, type PhaseInfo } from './models/InstallPlan.js';
+export { InstallState, type InstallStateData, type PhaseState, type PhaseStatus } from './models/InstallState.js';
+export { Diagnostics, type DiagnosticCheck, type DiagnosticStatus, type EnvironmentInfo, type LastInstallInfo } from './models/Diagnostics.js';
 
 // Logging (exported for testing and extension use)
 export { EventLogger, type LogEntry, type LogLevel } from './logging/EventLogger.js';
@@ -103,17 +85,8 @@ export { SqlServerAdapter, type SqlConnectivityResult } from './adapters/SqlServ
 export { RepoFetcher, type SparseFetchOptions, type SparseFetchResult } from './adapters/RepoFetcher.js';
 
 // Distribution assembly (sparse-checkout install + `mj bundle`)
-export {
-  DistributionAssembler,
-  distributionSourcePaths,
-  type WriteOp,
-  type AssembleOptions,
-} from './distribution/DistributionAssembler.js';
-export {
-  createDistributionBundle,
-  type CreateBundleOptions,
-  type CreateBundleResult,
-} from './distribution/createBundle.js';
+export { DistributionAssembler, distributionSourcePaths, type WriteOp, type AssembleOptions, type DbPlatform } from './distribution/DistributionAssembler.js';
+export { createDistributionBundle, type CreateBundleOptions, type CreateBundleResult } from './distribution/createBundle.js';
 
 // Phases (exported for testing and direct use)
 export { PreflightPhase, type PreflightContext, type PreflightResult } from './phases/PreflightPhase.js';

@@ -10,14 +10,65 @@ import { mkdtemp, mkdir, writeFile, rm, readFile, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
-import { DistributionAssembler, type WriteOp } from '../distribution/DistributionAssembler.js';
+import { DistributionAssembler, distributionSourcePaths, type WriteOp } from '../distribution/DistributionAssembler.js';
 
 let sourceDir: string;
 
-async function writeFixtureFile(rel: string, content: string): Promise<void> {
-  const abs = path.join(sourceDir, ...rel.split('/'));
+async function writeUnder(dir: string, rel: string, content: string): Promise<void> {
+  const abs = path.join(dir, ...rel.split('/'));
   await mkdir(path.dirname(abs), { recursive: true });
   await writeFile(abs, content, 'utf-8');
+}
+
+/** Seed every required distribution source path EXCEPT the migration trees. */
+async function seedBaseFixture(dir: string): Promise<void> {
+  // Root distribution templates + base tsconfigs
+  await writeUnder(dir, 'tsconfig.server.json', '{ "compilerOptions": { "module": "es2022" } }');
+  await writeUnder(dir, 'tsconfig.angular.json', '{ "compilerOptions": { "target": "es2022" } }');
+  await writeUnder(dir, 'distribution.package.json', '{ "name": "memberjunction-distribution" }');
+  await writeUnder(dir, 'distribution.turbo.json', '{ "tasks": {} }');
+  await writeUnder(dir, 'distribution.config.cjs', 'module.exports = {};');
+  await writeUnder(dir, 'distribution.README.md', '# Distribution');
+  await writeUnder(dir, 'install.config.json', '{}');
+  await writeUnder(dir, 'packages/Update_MemberJunction_Packages_To_Latest.ps1', '# update script');
+
+  // MJAPI (server) — has tsc-alias and a generated dir + node_modules to exclude
+  await writeUnder(dir, 'packages/MJAPI/package.json', '{ "name": "mj_api", "scripts": { "build": "tsc && tsc-alias -f" } }');
+  await writeUnder(
+    dir,
+    'packages/MJAPI/tsconfig.json',
+    '{ "extends": "../../tsconfig.server.json", "compilerOptions": { "outDir": "dist" }, "exclude": ["../../node_modules", "dist"] }',
+  );
+  await writeUnder(dir, 'packages/MJAPI/src/index.ts', 'export const x = 1;');
+  await writeUnder(dir, 'packages/MJAPI/src/generated/gen.ts', 'export const g = 1;');
+  await writeUnder(dir, 'packages/MJAPI/node_modules/dep/index.js', 'module.exports = 1;');
+
+  // MJExplorer (angular) — port flag, ng-bootstrap alias, environments + generated to exclude
+  await writeUnder(dir, 'packages/MJExplorer/package.json', '{ "name": "mj_explorer", "scripts": { "start": "ng serve --port 4201" } }');
+  await writeUnder(
+    dir,
+    'packages/MJExplorer/tsconfig.json',
+    '{ "extends": "../../tsconfig.angular.json", "compilerOptions": { "paths": { "@memberjunction/ng-bootstrap": ["x"] } } }',
+  );
+  await writeUnder(dir, 'packages/MJExplorer/angular.json', '{ "version": 1 }');
+  await writeUnder(dir, 'packages/MJExplorer/src/main.ts', 'bootstrap();');
+  await writeUnder(dir, 'packages/MJExplorer/src/environments/environment.ts', 'export const secret = 1;');
+  await writeUnder(dir, 'packages/MJExplorer/src/app/generated/form.ts', 'export const f = 1;');
+  await writeUnder(dir, 'packages/MJExplorer/kendo-ui-license.txt', 'LICENSE');
+
+  // Generated packages (server)
+  await writeUnder(dir, 'packages/GeneratedEntities/package.json', '{ "name": "mj_generatedentities", "scripts": { "build": "tsc && tsc-alias" } }');
+  await writeUnder(dir, 'packages/GeneratedEntities/tsconfig.json', '{ "extends": "../../tsconfig.server.json" }');
+  await writeUnder(dir, 'packages/GeneratedEntities/src/index.ts', 'export const e = 1;');
+  await writeUnder(dir, 'packages/GeneratedActions/package.json', '{ "name": "mj_generatedactions", "scripts": { "build": "tsc" } }');
+  await writeUnder(dir, 'packages/GeneratedActions/tsconfig.json', '{ "extends": "../../tsconfig.server.json" }');
+  await writeUnder(dir, 'packages/GeneratedActions/src/index.ts', 'export const a = 1;');
+
+  // SQL Scripts — keep MJ_Base.sql, drop _all_entities / generated / internal_only
+  await writeUnder(dir, 'SQL Scripts/MJ_Base.sql', 'CREATE TABLE x;');
+  await writeUnder(dir, 'SQL Scripts/_all_entities.sql', 'ALL');
+  await writeUnder(dir, 'SQL Scripts/generated/gen.sql', 'GEN');
+  await writeUnder(dir, 'SQL Scripts/internal_only/secret.sql', 'SECRET');
 }
 
 function dests(ops: readonly WriteOp[]): string[] {
@@ -30,50 +81,13 @@ function byDest(ops: readonly WriteOp[], dest: string): WriteOp | undefined {
 
 beforeAll(async () => {
   sourceDir = await mkdtemp(path.join(tmpdir(), 'mj-asm-src-'));
+  await seedBaseFixture(sourceDir);
 
-  // Root distribution templates + base tsconfigs
-  await writeFixtureFile('tsconfig.server.json', '{ "compilerOptions": { "module": "es2022" } }');
-  await writeFixtureFile('tsconfig.angular.json', '{ "compilerOptions": { "target": "es2022" } }');
-  await writeFixtureFile('distribution.package.json', '{ "name": "memberjunction-distribution" }');
-  await writeFixtureFile('distribution.turbo.json', '{ "tasks": {} }');
-  await writeFixtureFile('distribution.config.cjs', 'module.exports = {};');
-  await writeFixtureFile('distribution.README.md', '# Distribution');
-  await writeFixtureFile('install.config.json', '{}');
-  await writeFixtureFile('packages/Update_MemberJunction_Packages_To_Latest.ps1', '# update script');
-
-  // MJAPI (server) — has tsc-alias and a generated dir + node_modules to exclude
-  await writeFixtureFile('packages/MJAPI/package.json', '{ "name": "mj_api", "scripts": { "build": "tsc && tsc-alias -f" } }');
-  await writeFixtureFile('packages/MJAPI/tsconfig.json', '{ "extends": "../../tsconfig.server.json", "compilerOptions": { "outDir": "dist" }, "exclude": ["../../node_modules", "dist"] }');
-  await writeFixtureFile('packages/MJAPI/src/index.ts', 'export const x = 1;');
-  await writeFixtureFile('packages/MJAPI/src/generated/gen.ts', 'export const g = 1;');
-  await writeFixtureFile('packages/MJAPI/node_modules/dep/index.js', 'module.exports = 1;');
-
-  // MJExplorer (angular) — port flag, ng-bootstrap alias, environments + generated to exclude
-  await writeFixtureFile('packages/MJExplorer/package.json', '{ "name": "mj_explorer", "scripts": { "start": "ng serve --port 4201" } }');
-  await writeFixtureFile('packages/MJExplorer/tsconfig.json', '{ "extends": "../../tsconfig.angular.json", "compilerOptions": { "paths": { "@memberjunction/ng-bootstrap": ["x"] } } }');
-  await writeFixtureFile('packages/MJExplorer/angular.json', '{ "version": 1 }');
-  await writeFixtureFile('packages/MJExplorer/src/main.ts', 'bootstrap();');
-  await writeFixtureFile('packages/MJExplorer/src/environments/environment.ts', 'export const secret = 1;');
-  await writeFixtureFile('packages/MJExplorer/src/app/generated/form.ts', 'export const f = 1;');
-  await writeFixtureFile('packages/MJExplorer/kendo-ui-license.txt', 'LICENSE');
-
-  // Generated packages (server)
-  await writeFixtureFile('packages/GeneratedEntities/package.json', '{ "name": "mj_generatedentities", "scripts": { "build": "tsc && tsc-alias" } }');
-  await writeFixtureFile('packages/GeneratedEntities/tsconfig.json', '{ "extends": "../../tsconfig.server.json" }');
-  await writeFixtureFile('packages/GeneratedEntities/src/index.ts', 'export const e = 1;');
-  await writeFixtureFile('packages/GeneratedActions/package.json', '{ "name": "mj_generatedactions", "scripts": { "build": "tsc" } }');
-  await writeFixtureFile('packages/GeneratedActions/tsconfig.json', '{ "extends": "../../tsconfig.server.json" }');
-  await writeFixtureFile('packages/GeneratedActions/src/index.ts', 'export const a = 1;');
-
-  // SQL Scripts — keep MJ_Base.sql, drop _all_entities / generated / internal_only
-  await writeFixtureFile('SQL Scripts/MJ_Base.sql', 'CREATE TABLE x;');
-  await writeFixtureFile('SQL Scripts/_all_entities.sql', 'ALL');
-  await writeFixtureFile('SQL Scripts/generated/gen.sql', 'GEN');
-  await writeFixtureFile('SQL Scripts/internal_only/secret.sql', 'SECRET');
-
-  // Migrations (only included on demand)
-  await writeFixtureFile('migrations/v5/V202601010000__x.sql', 'MIGRATION');
-  await writeFixtureFile('migrations/CLAUDE.md', '# docs');
+  // Both migration trees (only included on demand) — SQL Server + PostgreSQL
+  await writeUnder(sourceDir, 'migrations/v5/V202601010000__x.sql', 'MIGRATION');
+  await writeUnder(sourceDir, 'migrations/CLAUDE.md', '# docs');
+  await writeUnder(sourceDir, 'migrations-pg/v5/V202601010000__x.sql', 'PG MIGRATION');
+  await writeUnder(sourceDir, 'migrations-pg/CLAUDE.md', '# docs');
 });
 
 afterAll(async () => {
@@ -171,6 +185,78 @@ describe('DistributionAssembler.Plan', () => {
       await expect(new DistributionAssembler().Plan({ SourceDir: empty })).rejects.toThrow(/missing required path/);
     } finally {
       await rm(empty, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('distributionSourcePaths', () => {
+  it('lists no migration dirs by default', () => {
+    const paths = distributionSourcePaths();
+    expect(paths.some((p) => p === 'migrations' || p === 'migrations-pg')).toBe(false);
+  });
+
+  it('includes both migration dirs when migrations are requested with no platform', () => {
+    const paths = distributionSourcePaths(true);
+    expect(paths).toContain('migrations');
+    expect(paths).toContain('migrations-pg');
+  });
+
+  it('includes only the sqlserver dir when narrowed to sqlserver', () => {
+    const paths = distributionSourcePaths(true, 'sqlserver');
+    expect(paths).toContain('migrations');
+    expect(paths).not.toContain('migrations-pg');
+  });
+
+  it('includes only the postgresql dir when narrowed to postgresql', () => {
+    const paths = distributionSourcePaths(true, 'postgresql');
+    expect(paths).toContain('migrations-pg');
+    expect(paths).not.toContain('migrations');
+  });
+});
+
+describe('DistributionAssembler migration platform selection', () => {
+  it('includes both SQL Server and PostgreSQL trees by default', async () => {
+    const d = dests(await new DistributionAssembler().Plan({ SourceDir: sourceDir, IncludeMigrations: true }));
+    expect(d).toContain('migrations/v5/V202601010000__x.sql');
+    expect(d).toContain('migrations-pg/v5/V202601010000__x.sql');
+  });
+
+  it('ships only the SQL Server tree when narrowed to sqlserver', async () => {
+    const d = dests(await new DistributionAssembler().Plan({ SourceDir: sourceDir, IncludeMigrations: true, MigrationPlatform: 'sqlserver' }));
+    expect(d).toContain('migrations/v5/V202601010000__x.sql');
+    expect(d.some((p) => p.startsWith('migrations-pg/'))).toBe(false);
+  });
+
+  it('ships only the PostgreSQL tree when narrowed to postgresql', async () => {
+    const d = dests(await new DistributionAssembler().Plan({ SourceDir: sourceDir, IncludeMigrations: true, MigrationPlatform: 'postgresql' }));
+    expect(d).toContain('migrations-pg/v5/V202601010000__x.sql');
+    // the SQL Server tree (a path under migrations/ that is not migrations-pg/) is absent
+    expect(d.some((p) => p.startsWith('migrations/'))).toBe(false);
+  });
+
+  it('default selection silently skips a tree that is absent at the source', async () => {
+    const sqlOnly = await mkdtemp(path.join(tmpdir(), 'mj-asm-sqlonly-'));
+    try {
+      await seedBaseFixture(sqlOnly);
+      await writeUnder(sqlOnly, 'migrations/v5/V1__x.sql', 'M'); // no migrations-pg/
+      const d = dests(await new DistributionAssembler().Plan({ SourceDir: sqlOnly, IncludeMigrations: true }));
+      expect(d).toContain('migrations/v5/V1__x.sql');
+      expect(d.some((p) => p.startsWith('migrations-pg/'))).toBe(false);
+    } finally {
+      await rm(sqlOnly, { recursive: true, force: true });
+    }
+  });
+
+  it('throws when an explicitly-selected tree is missing at the source', async () => {
+    const sqlOnly = await mkdtemp(path.join(tmpdir(), 'mj-asm-explicit-'));
+    try {
+      await seedBaseFixture(sqlOnly);
+      await writeUnder(sqlOnly, 'migrations/v5/V1__x.sql', 'M'); // no migrations-pg/
+      await expect(new DistributionAssembler().Plan({ SourceDir: sqlOnly, IncludeMigrations: true, MigrationPlatform: 'postgresql' })).rejects.toThrow(
+        /migrations-pg/,
+      );
+    } finally {
+      await rm(sqlOnly, { recursive: true, force: true });
     }
   });
 });

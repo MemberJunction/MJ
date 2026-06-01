@@ -10,7 +10,7 @@
  */
 
 import { RepoFetcher } from '../adapters/RepoFetcher.js';
-import { DistributionAssembler, distributionSourcePaths } from './DistributionAssembler.js';
+import { DistributionAssembler, distributionSourcePaths, type DbPlatform } from './DistributionAssembler.js';
 
 /** Default canonical MemberJunction clone URL used when bundling from a ref. */
 const DEFAULT_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
@@ -25,8 +25,14 @@ export interface CreateBundleOptions {
   RepoUrl?: string;
   /** Local working-tree directory to bundle instead of fetching from a ref. */
   SourceDir?: string;
-  /** Include the full `migrations/` tree so an air-gapped `mj migrate` can run offline. */
+  /** Include the migration tree(s) so an air-gapped `mj migrate` can run offline. */
   IncludeMigrations?: boolean;
+  /**
+   * Narrow the bundled migrations to one platform's tree when `IncludeMigrations`
+   * is set. Omitted = both `migrations/` (SQL Server) and `migrations-pg/`
+   * (PostgreSQL), so the bundle works against either database offline.
+   */
+  MigrationPlatform?: DbPlatform;
 }
 
 /** Result of {@link createDistributionBundle}. */
@@ -52,9 +58,13 @@ export interface CreateBundleResult {
 export async function createDistributionBundle(opts: CreateBundleOptions): Promise<CreateBundleResult> {
   const assembler = new DistributionAssembler();
   const includeMigrations = opts.IncludeMigrations ?? false;
+  const migrationPlatform = opts.MigrationPlatform;
 
   if (opts.SourceDir) {
-    const ops = await assembler.AssembleToZip({ SourceDir: opts.SourceDir, IncludeMigrations: includeMigrations }, opts.Out);
+    const ops = await assembler.AssembleToZip(
+      { SourceDir: opts.SourceDir, IncludeMigrations: includeMigrations, MigrationPlatform: migrationPlatform },
+      opts.Out,
+    );
     return { Out: opts.Out, EntryCount: ops.length, Source: 'local', UsedFallback: false };
   }
 
@@ -65,11 +75,11 @@ export async function createDistributionBundle(opts: CreateBundleOptions): Promi
   const fetched = await new RepoFetcher().FetchPaths({
     RepoUrl: opts.RepoUrl ?? DEFAULT_REPO_URL,
     Ref: opts.Ref,
-    Paths: distributionSourcePaths(includeMigrations),
+    Paths: distributionSourcePaths(includeMigrations, migrationPlatform),
   });
 
   try {
-    const ops = await assembler.AssembleToZip({ SourceDir: fetched.Dir, IncludeMigrations: includeMigrations }, opts.Out);
+    const ops = await assembler.AssembleToZip({ SourceDir: fetched.Dir, IncludeMigrations: includeMigrations, MigrationPlatform: migrationPlatform }, opts.Out);
     return { Out: opts.Out, EntryCount: ops.length, Source: 'fetch', UsedFallback: fetched.UsedFallback };
   } finally {
     await fetched.Cleanup();
