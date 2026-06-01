@@ -15,7 +15,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { MJLeftNavItem, MJLeftNavSection, TabConfig, FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -202,18 +202,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public FilteredTagRows: TagRow[] = [];
     public SelectedDrillDownTag: string | null = null;
     public TagDrillDownItems: { ID: string; Name: string; SourceName: string; Weight: number; UpdatedAt: string; FeedIndex: number }[] = [];
-
-    // ── Run History tab ──
-    public RunHistoryRows: RunHistoryRow[] = [];
-    public HistorySourceFilter = '';
-    public HistoryStatusFilter = '';
-    public FilteredRunRows: RunHistoryRow[] = [];
-    public HistorySourceOptions: string[] = [];
-
-    // D3/D8: Run History Detail slide-in
-    public SelectedRunID: string | null = null;
-    public RunDetailRows: RunDetailRow[] = [];
-    public IsLoadingRunDetail = false;
 
     // D2: Pipeline Monitor — live per-source progress
     public LiveRunDetailRows: RunDetailRow[] = [];
@@ -671,6 +659,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private contentItemsRaw: Record<string, unknown>[] = [];
     private contentTagsRaw: Record<string, unknown>[] = [];
     private contentRunsRaw: Record<string, unknown>[] = [];
+    /** Exposes the raw run rows to the Run History tab component via `[Runs]`. */
+    public get ContentRunsRaw(): Record<string, unknown>[] {
+        return this.contentRunsRaw;
+    }
     private contentSourceTypesRaw: Record<string, unknown>[] = [];
     private contentTypesRaw: Record<string, unknown>[] = [];
     private contentFileTypesRaw: Record<string, unknown>[] = [];
@@ -1362,155 +1354,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 ResultType: 'simple'
             });
             if (result.Success) this.contentRunsRaw = result.Results;
-        }
-        this.buildRunHistoryRows();
-        this.buildHistorySourceOptions();
-        this.FilteredRunRows = this.RunHistoryRows;
-    }
-
-    private buildRunHistoryRows(): void {
-        this.RunHistoryRows = this.contentRunsRaw.map(run => {
-            const status = (run['Status'] as string) ?? 'Unknown';
-            const startTime = run['StartTime'] as string | null;
-            const endTime = run['EndTime'] as string | null;
-            const duration = this.computeDuration(startTime, endTime);
-            const processedItems = run['ProcessedItems'] as number | null;
-            const errorCount = run['ErrorCount'] as number | null;
-            const statusLower = status.toLowerCase();
-            const isFailed = statusLower === 'error' || statusLower === 'failed';
-            const isRunning = statusLower === 'running' || statusLower === 'processing';
-            const hasErrors = (errorCount ?? 0) > 0;
-
-            return {
-                ID: run['ID'] as string,
-                Status: this.displayStatus(status),
-                StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
-                SourceName: (run['Source'] as string) ?? 'Unknown',
-                StartedDisplay: startTime ? this.formatDate(startTime) : '\u2014',
-                Duration: duration,
-                Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
-                Tags: '\u2014',
-                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
-                ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
-            };
-        });
-    }
-
-    private buildHistorySourceOptions(): void {
-        const sources = new Set<string>();
-        for (const run of this.contentRunsRaw) {
-            const s = run['Source'] as string;
-            if (s) sources.add(s);
-        }
-        this.HistorySourceOptions = Array.from(sources).sort();
-    }
-
-    public FilterRunHistory(): void {
-        this.FilteredRunRows = this.RunHistoryRows.filter(row => {
-            if (this.HistorySourceFilter && row.SourceName !== this.HistorySourceFilter) return false;
-            if (this.HistoryStatusFilter && row.StatusClass !== this.HistoryStatusFilter) return false;
-            return true;
-        });
-        this.cdr.detectChanges();
-    }
-
-    /**
-     * Filter fields for the Run History section, rendered inside an
-     * `<mj-filter-popover>` (Section 3 decision tree: many values, single-select
-     * → popover with dropdown).
-     */
-    public get historyFilterFields(): FilterFieldConfig[] {
-        return [
-            {
-                key: 'source',
-                type: 'dropdown',
-                label: 'Source',
-                placeholder: 'All Sources',
-                filterable: this.HistorySourceOptions.length > 10,
-                options: [
-                    { text: 'All Sources', value: '' },
-                    ...this.HistorySourceOptions.map(s => ({ text: s, value: s }))
-                ]
-            },
-            {
-                key: 'status',
-                type: 'dropdown',
-                label: 'Status',
-                placeholder: 'All Status',
-                options: [
-                    { text: 'All Status', value: '' },
-                    { text: 'Complete', value: 'complete' },
-                    { text: 'Failed',   value: 'failed' },
-                    { text: 'Running',  value: 'running' }
-                ]
-            }
-        ];
-    }
-
-    public get historyFilterValues(): Record<string, unknown> {
-        return { source: this.HistorySourceFilter, status: this.HistoryStatusFilter };
-    }
-
-    public get historyActiveFilterCount(): number {
-        return (this.HistorySourceFilter ? 1 : 0) + (this.HistoryStatusFilter ? 1 : 0);
-    }
-
-    public onHistoryFilterChange(values: Record<string, unknown>): void {
-        this.HistorySourceFilter = (values['source'] as string) ?? '';
-        this.HistoryStatusFilter = (values['status'] as string) ?? '';
-        this.FilterRunHistory();
-    }
-
-    public onHistoryFilterReset(): void {
-        this.HistorySourceFilter = '';
-        this.HistoryStatusFilter = '';
-        this.FilterRunHistory();
-    }
-
-    // ════════════════════════════════════════════
-    // D3/D8: RUN HISTORY DETAIL SLIDE-IN
-    // ════════════════════════════════════════════
-
-    /**
-     * D3/D8: Open the detail view for a specific run, loading ContentProcessRunDetail records.
-     */
-    public async OpenRunDetail(runID: string): Promise<void> {
-        if (this.SelectedRunID === runID) {
-            this.CloseRunDetail();
-            return;
-        }
-        this.SelectedRunID = runID;
-        this.IsLoadingRunDetail = true;
-        this.RunDetailRows = [];
-        this.cdr.detectChanges();
-
-        await this.loadRunDetailRows(runID);
-
-        this.IsLoadingRunDetail = false;
-        this.cdr.detectChanges();
-    }
-
-    /** D3/D8: Close the run detail slide-in */
-    public CloseRunDetail(): void {
-        this.SelectedRunID = null;
-        this.RunDetailRows = [];
-        this.IsLoadingRunDetail = false;
-        this.cdr.detectChanges();
-    }
-
-    /**
-     * D2/D3/D8: Load ContentProcessRunDetail records for a given run and map to RunDetailRow[].
-     */
-    private async loadRunDetailRows(runID: string): Promise<void> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView({
-            EntityName: 'MJ: Content Process Run Details',
-            ExtraFilter: `ContentProcessRunID='${runID}'`,
-            OrderBy: 'ContentSource',
-            ResultType: 'simple',
-        });
-        if (result.Success) {
-            this.RunDetailRows = this.mapRunDetailRecords(result.Results);
         }
     }
 
