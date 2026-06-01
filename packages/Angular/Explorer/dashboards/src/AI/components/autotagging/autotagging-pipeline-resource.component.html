@@ -49,6 +49,85 @@
             (OpenItemDetailRequested)="OpenItemDetailByID($event)">
         </classify-tags-tab>
       }
+      @case ('sources') {
+        <classify-sources-tab #sourcesTab
+            [Sources]="ContentSourcesRaw"
+            [Items]="ContentItemsRaw"
+            [Tags]="ContentTagsRaw"
+            [Runs]="ContentRunsRaw"
+            [TotalItemCount]="TotalContentItemCount"
+            [TotalTagCount]="TotalContentTagCount"
+            [ScheduledActions]="ScheduledActionsCache"
+            [EntityRecordDocCache]="EntityRecordDocCacheMap"
+            [Provider]="ProviderToUse"
+            (AddSourceRequested)="OpenAddSourceForm()"
+            (EditSourceRequested)="OpenEditSourceForm($event)"
+            (RunSourceRequested)="RunPipelineForSource($event)"
+            (OpenContentItemRequested)="OpenContentItemDetail($event)"
+            (DataChanged)="OnSourcesDataChanged()">
+        </classify-sources-tab>
+
+        <!-- Content Item Duplicates Section (host-owned; taxonomy/duplicates area) -->
+        <div class="at-page-body">
+          <div class="at-dedup-section">
+            <div class="at-dedup-header">
+              <div>
+                <h3 class="at-dedup-title">
+                  <i class="fa-solid fa-clone"></i>
+                  Content Duplicates
+                </h3>
+                <span class="at-dedup-subtitle">Review detected duplicate content items across sources</span>
+              </div>
+              <button class="at-action-btn at-secondary-btn" (click)="LoadContentDuplicates()" [disabled]="IsLoadingDuplicates">
+                @if (IsLoadingDuplicates) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                } @else {
+                  <i class="fa-solid fa-arrows-rotate"></i> Load Duplicates
+                }
+              </button>
+            </div>
+
+            @if (ContentDuplicates.length > 0) {
+              <div class="at-dedup-list">
+                @for (dup of ContentDuplicates; track dup.ID) {
+                  <div class="at-dedup-card">
+                    <div class="at-dedup-pair">
+                      <div class="at-dedup-item">
+                        <span class="at-dedup-item-name">{{ dup.ItemAName }}</span>
+                        <span class="at-dedup-item-source">{{ dup.ItemASource }}</span>
+                      </div>
+                      <div class="at-dedup-vs">
+                        <i class="fa-solid fa-arrows-left-right"></i>
+                      </div>
+                      <div class="at-dedup-item">
+                        <span class="at-dedup-item-name">{{ dup.ItemBName }}</span>
+                        <span class="at-dedup-item-source">{{ dup.ItemBSource }}</span>
+                      </div>
+                    </div>
+                    <div class="at-dedup-meta">
+                      <span class="at-dedup-score">{{ (dup.SimilarityScore * 100).toFixed(0) }}% match</span>
+                      <span class="at-dedup-method">{{ dup.DetectionMethod }}</span>
+                    </div>
+                    <div class="at-dedup-actions">
+                      <button class="at-action-btn at-primary-btn at-dedup-confirm" (click)="ConfirmContentDuplicate(dup)">
+                        <i class="fa-solid fa-check"></i> Confirm
+                      </button>
+                      <button class="at-action-btn at-secondary-btn at-dedup-dismiss" (click)="DismissContentDuplicate(dup)">
+                        <i class="fa-solid fa-times"></i> Dismiss
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else if (!IsLoadingDuplicates) {
+              <div class="at-dedup-empty">
+                <i class="fa-solid fa-check-circle"></i>
+                <p>No pending duplicates. Click "Load Duplicates" to check.</p>
+              </div>
+            }
+          </div>
+        </div>
+      }
       @default {
 
     <mj-page-header-interior
@@ -68,11 +147,6 @@
           @case ('pipeline') {
             <button mjButton variant="secondary" size="sm" (click)="LoadPipelineData()">
               <i class="fa-solid fa-arrows-rotate"></i> Refresh
-            </button>
-          }
-          @case ('sources') {
-            <button mjButton variant="primary" size="sm" (click)="OpenAddSourceForm()">
-              <i class="fa-solid fa-plus"></i> Add Source
             </button>
           }
           @case ('taxonomy') {
@@ -395,132 +469,9 @@
                 </div>
             }
 
-            <!-- ════════════════════════════════════════════ -->
-            <!-- TAB 2: SOURCES -->
-            <!-- ════════════════════════════════════════════ -->
-            @if (ActiveTab === 'sources') {
-                <div class="at-page-body">
-                    <div class="at-sources-grid">
-                        @for (card of SourceCards; track card.ID) {
-                            <div class="at-source-card-full at-source-card-clickable" (click)="OpenSourceDetail(card)">
-                                <div class="at-source-card-header">
-                                    <div class="at-source-card-icon"><i [class]="card.Icon"></i></div>
-                                    <div>
-                                        <div class="at-source-card-title">{{ card.Name }}</div>
-                                        <div class="at-source-card-type">{{ card.SourceTypeName }}@if (card.RequiresFileType) { · {{ card.FileTypeName }}}</div>
-                                    </div>
-                                    <div class="at-source-card-status" [class]="card.StatusClass">
-                                        <div class="at-source-mini-status" [class]="card.StatusClass"></div>
-                                        {{ card.StatusLabel }}
-                                    </div>
-                                </div>
-                                @if (card.URL) {
-                                    <div class="at-source-card-url">{{ card.URL }}</div>
-                                }
-                                <div class="at-source-card-stats">
-                                    <div class="at-source-stat">
-                                        <div class="at-source-stat-value">{{ formatNumber(card.ItemCount) }}</div>
-                                        <div class="at-source-stat-label">Items</div>
-                                    </div>
-                                    <div class="at-source-stat">
-                                        <div class="at-source-stat-value">{{ formatNumber(card.TagCount) }}</div>
-                                        <div class="at-source-stat-label">Tags</div>
-                                    </div>
-                                    <div class="at-source-stat">
-                                        <div class="at-source-stat-value">{{ card.AvgTags }}</div>
-                                        <div class="at-source-stat-label">Avg Tags</div>
-                                    </div>
-                                    <div class="at-source-stat">
-                                        <div class="at-source-stat-value">{{ card.LastRunAgo }}</div>
-                                        <div class="at-source-stat-label">Last Run</div>
-                                    </div>
-                                </div>
-                                <!-- Schedule indicator -->
-                                @if (card.ScheduledActionID) {
-                                    <div class="at-schedule-indicator" (click)="RemoveSchedule(card); $event.stopPropagation()" title="Click to remove schedule">
-                                        <i class="fa-regular fa-clock"></i>
-                                        <span>{{ GetScheduleLabel(card) }}</span>
-                                    </div>
-                                }
-                                <div class="at-source-card-actions">
-                                    <button class="at-source-action-btn" (click)="OpenEditSourceForm(card); $event.stopPropagation()"><i class="fa-solid fa-pen"></i> Edit</button>
-                                    <button class="at-source-action-btn" (click)="RunPipelineForSource(card.ID); $event.stopPropagation()"><i class="fa-solid fa-play"></i> Run</button>
-                                    @if (!card.ScheduledActionID) {
-                                        <button class="at-source-action-btn at-source-schedule-btn" (click)="OpenScheduleDialog(card); $event.stopPropagation()"><i class="fa-regular fa-clock"></i> Schedule</button>
-                                    }
-                                    <button class="at-source-action-btn at-source-delete-btn" (click)="DeleteSource(card); $event.stopPropagation()"><i class="fa-solid fa-trash"></i> Delete</button>
-                                </div>
-                            </div>
-                        }
-
-                        <!-- Add Source Card -->
-                        <div class="at-add-source-card" (click)="OpenAddSourceForm()">
-                            <i class="fa-solid fa-plus-circle"></i>
-                            <span style="font-size: 0.85rem; font-weight: 600;">Add Content Source</span>
-                            <span style="font-size: 0.72rem;">Web, RSS, Email, Files, API</span>
-                        </div>
-                    </div>
-
-                    <!-- Content Item Duplicates Section -->
-                    <div class="at-dedup-section">
-                        <div class="at-dedup-header">
-                            <div>
-                                <h3 class="at-dedup-title">
-                                    <i class="fa-solid fa-clone"></i>
-                                    Content Duplicates
-                                </h3>
-                                <span class="at-dedup-subtitle">Review detected duplicate content items across sources</span>
-                            </div>
-                            <button class="at-action-btn at-secondary-btn" (click)="LoadContentDuplicates()" [disabled]="IsLoadingDuplicates">
-                                @if (IsLoadingDuplicates) {
-                                    <i class="fa-solid fa-spinner fa-spin"></i> Loading...
-                                } @else {
-                                    <i class="fa-solid fa-arrows-rotate"></i> Load Duplicates
-                                }
-                            </button>
-                        </div>
-
-                        @if (ContentDuplicates.length > 0) {
-                            <div class="at-dedup-list">
-                                @for (dup of ContentDuplicates; track dup.ID) {
-                                    <div class="at-dedup-card">
-                                        <div class="at-dedup-pair">
-                                            <div class="at-dedup-item">
-                                                <span class="at-dedup-item-name">{{ dup.ItemAName }}</span>
-                                                <span class="at-dedup-item-source">{{ dup.ItemASource }}</span>
-                                            </div>
-                                            <div class="at-dedup-vs">
-                                                <i class="fa-solid fa-arrows-left-right"></i>
-                                            </div>
-                                            <div class="at-dedup-item">
-                                                <span class="at-dedup-item-name">{{ dup.ItemBName }}</span>
-                                                <span class="at-dedup-item-source">{{ dup.ItemBSource }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="at-dedup-meta">
-                                            <span class="at-dedup-score">{{ (dup.SimilarityScore * 100).toFixed(0) }}% match</span>
-                                            <span class="at-dedup-method">{{ dup.DetectionMethod }}</span>
-                                        </div>
-                                        <div class="at-dedup-actions">
-                                            <button class="at-action-btn at-primary-btn at-dedup-confirm" (click)="ConfirmContentDuplicate(dup)">
-                                                <i class="fa-solid fa-check"></i> Confirm
-                                            </button>
-                                            <button class="at-action-btn at-secondary-btn at-dedup-dismiss" (click)="DismissContentDuplicate(dup)">
-                                                <i class="fa-solid fa-times"></i> Dismiss
-                                            </button>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        } @else if (!IsLoadingDuplicates) {
-                            <div class="at-dedup-empty">
-                                <i class="fa-solid fa-check-circle"></i>
-                                <p>No pending duplicates. Click "Load Duplicates" to check.</p>
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
+            <!-- TAB 2 (Sources) extracted to ClassifySourcesTabComponent;
+                 rendered via the @case ('sources') above (with the host-owned
+                 Content Duplicates section). -->
 
             <!-- TAB 3 (Content Types) extracted to ClassifyTypesTabComponent;
                  rendered via the @case ('types') above. -->
@@ -1364,228 +1315,6 @@
         </div>
     }
 
-    <!-- ══════ SOURCE DETAIL SLIDE-IN ══════ -->
-    @if (ShowSourceDetail) {
-        <div class="at-slide-overlay" (click)="CloseSourceDetail()"></div>
-        <div class="at-slide-panel at-detail-panel">
-            <div class="at-slide-header">
-                <h3><i class="fa-solid fa-database"></i> Source Detail</h3>
-                <button class="at-slide-close" aria-label="Close source detail" (click)="CloseSourceDetail()"><i class="fa-solid fa-times"></i></button>
-            </div>
-            <div class="at-slide-body">
-                @if (SourceDetailLoading) {
-                    <div class="at-loading-overlay">
-                        <mj-loading text="Loading source details..."></mj-loading>
-                    </div>
-                }
-                @if (!SourceDetailLoading && SelectedSource) {
-                    <!-- Source Header -->
-                    <div class="at-detail-source-header">
-                        <div class="at-source-card-icon"><i [class]="SelectedSource.Icon"></i></div>
-                        <div>
-                            <h4 class="at-detail-item-name">{{ SelectedSource.Name }}</h4>
-                            <div class="at-detail-badges">
-                                <span class="at-detail-badge at-detail-badge-type">{{ SelectedSource.SourceTypeName }}</span>
-                                <span class="at-detail-badge" [class]="'at-detail-badge-status-' + SelectedSource.StatusClass">
-                                    {{ SelectedSource.StatusLabel }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Configuration -->
-                    <div class="at-detail-section">
-                        <div class="at-detail-section-label">Configuration</div>
-                        <div class="at-detail-meta-grid">
-                            @if (SelectedSource.URL) {
-                                <div class="at-detail-meta-row">
-                                    <span class="at-detail-meta-key">URL</span>
-                                    <a [href]="SelectedSource.URL" target="_blank" class="at-detail-link at-detail-meta-value">{{ SelectedSource.URL }}</a>
-                                </div>
-                            }
-                            @if (SelectedSource.RequiresFileType) {
-                                <div class="at-detail-meta-row">
-                                    <span class="at-detail-meta-key">Content Type</span>
-                                    <span class="at-detail-meta-value">{{ SelectedSource.ContentTypeName }}</span>
-                                </div>
-                                <div class="at-detail-meta-row">
-                                    <span class="at-detail-meta-key">File Type</span>
-                                    <span class="at-detail-meta-value">{{ SelectedSource.FileTypeName }}</span>
-                                </div>
-                            }
-                            <div class="at-detail-meta-row">
-                                <span class="at-detail-meta-key">Embedding Model</span>
-                                <span class="at-detail-meta-value">{{ SelectedSource.EmbeddingModelName }}</span>
-                            </div>
-                            <div class="at-detail-meta-row">
-                                <span class="at-detail-meta-key">Vector Index</span>
-                                <span class="at-detail-meta-value">{{ SelectedSource.VectorIndexName }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stats -->
-                    <div class="at-detail-section">
-                        <div class="at-detail-section-label">Statistics</div>
-                        <div class="at-detail-stats-strip">
-                            <div class="at-detail-stat">
-                                <div class="at-detail-stat-value">{{ formatNumber(SelectedSource.ItemCount) }}</div>
-                                <div class="at-detail-stat-label">Items</div>
-                            </div>
-                            <div class="at-detail-stat">
-                                <div class="at-detail-stat-value">{{ formatNumber(SelectedSource.TagCount) }}</div>
-                                <div class="at-detail-stat-label">Tags</div>
-                            </div>
-                            <div class="at-detail-stat">
-                                <div class="at-detail-stat-value">{{ SelectedSource.AvgTags }}</div>
-                                <div class="at-detail-stat-label">Avg Tags</div>
-                            </div>
-                            <div class="at-detail-stat">
-                                <div class="at-detail-stat-value">{{ SelectedSource.LastRunAgo }}</div>
-                                <div class="at-detail-stat-label">Last Run</div>
-                            </div>
-                            <div class="at-detail-stat">
-                                <div class="at-detail-stat-value" [class.at-kpi-error-value]="SelectedSource.ErrorCount > 0">{{ SelectedSource.ErrorCount }}</div>
-                                <div class="at-detail-stat-label">Errors</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content Library (D4 status badges, D7 pagination) -->
-                    <div class="at-detail-section">
-                        <div class="at-detail-section-header-row">
-                            <div class="at-detail-section-label">Content Library ({{ FilteredSourceDetailTotal }} of {{ SelectedSource.ItemCount | number }})</div>
-                            <div class="at-detail-section-controls">
-                                <select class="at-detail-filter-select" [(ngModel)]="SourceDetailStatusFilter" (ngModelChange)="OnSourceDetailStatusFilterChange()">
-                                    @for (opt of SourceDetailStatusOptions; track opt) {
-                                        <option [value]="opt">{{ opt }}</option>
-                                    }
-                                </select>
-                                <button class="at-action-btn at-retry-btn" (click)="RetryFailedItems()" title="Re-queue failed items for processing">
-                                    <i class="fa-solid fa-rotate-right"></i> Retry Failed
-                                </button>
-                            </div>
-                        </div>
-                        <div class="at-detail-content-list">
-                            @if (FilteredSourceDetailItems.length === 0) {
-                                <div class="at-empty-state" style="padding: 16px;">
-                                    <p>{{ SourceDetailStatusFilter === 'All' ? 'No content items yet.' : 'No items match this filter.' }}</p>
-                                </div>
-                            }
-                            @for (ci of FilteredSourceDetailItems; track ci.ID) {
-                                <div class="at-detail-content-item" (click)="OpenContentItemDetail(ci)">
-                                    <div class="at-feed-status-dot" [class]="ci.StatusDot"></div>
-                                    <span class="at-detail-content-item-name">{{ ci.Name }}</span>
-                                    <span class="at-status-badge" [class]="GetStatusBadgeClass(ci.EmbeddingStatus)">E:{{ ci.EmbeddingStatus }}</span>
-                                    <span class="at-status-badge" [class]="GetStatusBadgeClass(ci.TaggingStatus)">T:{{ ci.TaggingStatus }}</span>
-                                    <span class="at-detail-content-item-tags">{{ ci.TagCount }} tags</span>
-                                    <span class="at-detail-content-item-time">{{ ci.UpdatedAt }}</span>
-                                </div>
-                            }
-                        </div>
-                        <!-- Pagination -->
-                        @if (SourceDetailTotalPages > 1) {
-                            <div class="at-detail-pagination">
-                                <button class="at-page-btn" [disabled]="SourceDetailPage === 0" (click)="SourceDetailPrevPage()">
-                                    <i class="fa-solid fa-chevron-left"></i> Prev
-                                </button>
-                                <span class="at-page-info">Page {{ SourceDetailPage + 1 }} of {{ SourceDetailTotalPages }}</span>
-                                <button class="at-page-btn" [disabled]="SourceDetailPage >= SourceDetailTotalPages - 1" (click)="SourceDetailNextPage()">
-                                    Next <i class="fa-solid fa-chevron-right"></i>
-                                </button>
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Run History -->
-                    @if (SelectedSource.RunHistory.length > 0) {
-                        <div class="at-detail-section">
-                            <div class="at-detail-section-label">Recent Runs</div>
-                            <div class="at-detail-run-history">
-                                @for (run of SelectedSource.RunHistory; track run.ID) {
-                                    <div class="at-detail-run-row">
-                                        <span class="at-run-status-badge" [class]="run.StatusClass">{{ run.Status }}</span>
-                                        <span class="at-detail-run-time">{{ run.StartedDisplay }}</span>
-                                        <span class="at-detail-run-duration">{{ run.Duration }}</span>
-                                        <span class="at-detail-run-items">{{ run.Items }} items</span>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
-
-                    <!-- Actions -->
-                    <div class="at-detail-actions">
-                        <button class="at-action-btn at-primary-btn" (click)="OpenEditSourceFromDetail()">
-                            <i class="fa-solid fa-pen"></i> Edit
-                        </button>
-                        <button class="at-action-btn at-secondary-btn" (click)="RunSourceFromDetail()">
-                            <i class="fa-solid fa-play"></i> Run Now
-                        </button>
-                        <button class="at-action-btn at-secondary-btn at-source-delete-btn" (click)="DeleteSourceFromDetail()">
-                            <i class="fa-solid fa-trash"></i> Delete
-                        </button>
-                    </div>
-                }
-            </div>
-        </div>
-    }
-
-    <!-- ══════ SCHEDULE DIALOG ══════ -->
-    @if (ShowScheduleDialog && SchedulingSourceCard) {
-        <div class="at-schedule-overlay" (click)="CloseScheduleDialog()">
-            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
-                <div class="at-schedule-dialog-header">
-                    <h3><i class="fa-regular fa-clock"></i> Schedule Pipeline</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseScheduleDialog()" aria-label="Close">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
-                </div>
-                <div class="at-schedule-dialog-body">
-                    <div class="at-schedule-field">
-                        <label>Source</label>
-                        <div class="at-schedule-source-name">
-                            <i [class]="SchedulingSourceCard.Icon"></i>
-                            {{ SchedulingSourceCard.Name }}
-                        </div>
-                    </div>
-                    <div class="at-schedule-field">
-                        <label>Action</label>
-                        <div class="at-schedule-action-name">Autotag and Vectorize Content</div>
-                    </div>
-                    <div class="at-schedule-field">
-                        <label for="schedule-cron">Cron Expression</label>
-                        <input id="schedule-cron"
-                               type="text"
-                               class="mj-input at-schedule-cron-input"
-                               [(ngModel)]="ScheduleCron"
-                               placeholder="0 2 * * *" />
-                        <div class="at-schedule-cron-preview">
-                            <i class="fa-solid fa-info-circle"></i>
-                            {{ GetCronPreview(ScheduleCron) }}
-                        </div>
-                    </div>
-                    <div class="at-schedule-field at-schedule-toggle-row">
-                        <label for="schedule-enabled">Enabled</label>
-                        <input id="schedule-enabled"
-                               type="checkbox"
-                               class="mj-checkbox"
-                               [(ngModel)]="ScheduleEnabled" />
-                    </div>
-                </div>
-                <div class="at-schedule-dialog-footer">
-                    <button class="at-action-btn at-primary-btn" (click)="SaveSchedule()" [disabled]="ScheduleSaving">
-                        @if (ScheduleSaving) {
-                            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
-                        } @else {
-                            <i class="fa-solid fa-check"></i> Create Schedule
-                        }
-                    </button>
-                    <button class="at-action-btn at-secondary-btn" (click)="CloseScheduleDialog()">Cancel</button>
-                </div>
-            </div>
-        </div>
-    }
 
     <!-- ══════ CONFIRMATION DIALOG ══════ -->
     @if (ShowConfirmDialog) {

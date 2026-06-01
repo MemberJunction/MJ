@@ -108,3 +108,129 @@ export function mapRunDetailRecords(records: Record<string, unknown>[]): RunDeta
         };
     });
 }
+
+// ================================================================
+// Cron-to-Human-Readable Utility
+// ================================================================
+
+/**
+ * Converts a 5-part or 6-part cron expression to a human-readable English string.
+ *
+ * Handles common patterns:
+ *   `0 * * * *`      -> "Every hour"
+ *   `0 2 * * *`      -> "Daily at 2:00 AM"
+ *   `0 2 * * 1`      -> "Weekly on Monday at 2:00 AM"
+ *   `star/15 * * * *` -> "Every 15 minutes"  (where star = asterisk)
+ *   `0 0 1 * *`      -> "Monthly on day 1 at 12:00 AM"
+ *
+ * Falls back to returning the raw cron string for unrecognized patterns.
+ *
+ * @param cron A cron expression string (5 or 6 parts)
+ * @returns A human-readable description or the raw cron if unrecognized
+ */
+export function CronToHumanReadable(cron: string): string {
+    if (!cron) return 'No schedule';
+
+    const parts = cron.trim().split(/\s+/);
+    const p = parseCronParts(parts);
+    if (!p) return cron;
+
+    return formatCronParts(p) ?? cron;
+}
+
+/** Internal cron field tuple */
+interface CronFields {
+    Minute: string;
+    Hour: string;
+    DayOfMonth: string;
+    Month: string;
+    DayOfWeek: string;
+}
+
+/**
+ * Parses 5-part or 6-part cron expressions into normalized fields.
+ * 6-part expressions have a leading seconds field that is discarded.
+ */
+function parseCronParts(parts: string[]): CronFields | null {
+    if (parts.length === 5) {
+        return { Minute: parts[0], Hour: parts[1], DayOfMonth: parts[2], Month: parts[3], DayOfWeek: parts[4] };
+    }
+    if (parts.length === 6) {
+        return { Minute: parts[1], Hour: parts[2], DayOfMonth: parts[3], Month: parts[4], DayOfWeek: parts[5] };
+    }
+    return null;
+}
+
+/**
+ * Attempts to map parsed cron fields to a human-readable string.
+ * Returns null when the pattern is not recognized.
+ */
+function formatCronParts(p: CronFields): string | null {
+    // Every N minutes: */N * * * *
+    if (p.Minute.startsWith('*/') && p.Hour === '*' && p.DayOfMonth === '*' && p.Month === '*' && p.DayOfWeek === '*') {
+        const interval = parseInt(p.Minute.slice(2), 10);
+        if (interval === 1) return 'Every minute';
+        return `Every ${interval} minutes`;
+    }
+
+    // Every hour at minute M: M * * * *
+    if (!p.Minute.includes('*') && !p.Minute.includes('/') && p.Hour === '*' && p.DayOfMonth === '*' && p.Month === '*' && p.DayOfWeek === '*') {
+        return 'Every hour';
+    }
+
+    // Every N hours: 0 */N * * *
+    if (!p.Minute.includes('*') && !p.Minute.includes('/') && p.Hour.startsWith('*/') && p.DayOfMonth === '*') {
+        const interval = parseInt(p.Hour.slice(2), 10);
+        if (interval === 1) return 'Every hour';
+        return `Every ${interval} hours`;
+    }
+
+    // Specific hour + minute with wildcard or specific day fields
+    if (!p.Minute.includes('*') && !p.Minute.includes('/') &&
+        !p.Hour.includes('*') && !p.Hour.includes('/') &&
+        p.Month === '*') {
+
+        const hour = parseInt(p.Hour, 10);
+        const minute = parseInt(p.Minute, 10);
+        const timeStr = formatTimeOfDay(hour, minute);
+
+        // Weekly: specific day of week
+        if (p.DayOfWeek !== '*' && p.DayOfMonth === '*') {
+            const dayName = dayOfWeekToName(p.DayOfWeek);
+            return `Weekly on ${dayName} at ${timeStr}`;
+        }
+
+        // Monthly: specific day of month
+        if (p.DayOfMonth !== '*' && p.DayOfWeek === '*') {
+            return `Monthly on day ${p.DayOfMonth} at ${timeStr}`;
+        }
+
+        // Daily
+        if (p.DayOfMonth === '*' && p.DayOfWeek === '*') {
+            return `Daily at ${timeStr}`;
+        }
+    }
+
+    return null;
+}
+
+/** Formats hour and minute to 12-hour AM/PM time string */
+function formatTimeOfDay(hour: number, minute: number): string {
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const h = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const m = minute.toString().padStart(2, '0');
+    return `${h}:${m} ${ampm}`;
+}
+
+/** Maps day-of-week cron values (0-7 or SUN-SAT) to English names */
+function dayOfWeekToName(dow: string): string {
+    const names: Record<string, string> = {
+        '0': 'Sunday', '1': 'Monday', '2': 'Tuesday',
+        '3': 'Wednesday', '4': 'Thursday', '5': 'Friday',
+        '6': 'Saturday', '7': 'Sunday',
+        'SUN': 'Sunday', 'MON': 'Monday', 'TUE': 'Tuesday',
+        'WED': 'Wednesday', 'THU': 'Thursday', 'FRI': 'Friday',
+        'SAT': 'Saturday',
+    };
+    return names[dow.toUpperCase()] ?? dow;
+}

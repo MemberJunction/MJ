@@ -30,6 +30,7 @@ import { AutotaggingPipelineResourceComponent } from './AI/components/autotaggin
 import { ClassifyHistoryTabComponent } from './AI/components/autotagging/tabs/history-tab.component';
 import { ClassifyTypesTabComponent } from './AI/components/autotagging/tabs/types-tab.component';
 import { ClassifyTagsTabComponent } from './AI/components/autotagging/tabs/tags-tab.component';
+import { ClassifySourcesTabComponent } from './AI/components/autotagging/tabs/sources-tab.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
@@ -90,6 +91,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClassifyHistoryTabComponent,
     ClassifyTypesTabComponent,
     ClassifyTagsTabComponent,
+    ClassifySourcesTabComponent,
     TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,

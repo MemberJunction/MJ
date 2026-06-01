@@ -12,7 +12,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
@@ -23,7 +23,7 @@ import { ClassifyTagsTabComponent } from './tabs/tags-tab.component';
 
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
-import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, RunHistoryRow, DropdownOption, ContentDuplicateRow, RunDetailRow, TaxonomySubTab, TaxTreeNode, TaxDuplicatePair, TaxOrphanCard, TaxTreemapCell, TaxAuditAction, TaxAuditEvent, TaxHealthStat, WeightedTag, ItemPipelineStatus, ContentItemDetail, SourceDetailInfo, FormMode } from './shared/classify.types';
+import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, DropdownOption, ContentDuplicateRow, RunDetailRow, TaxonomySubTab, TaxTreeNode, TaxDuplicatePair, TaxOrphanCard, TaxTreemapCell, TaxAuditAction, TaxAuditEvent, TaxHealthStat, WeightedTag, ItemPipelineStatus, ContentItemDetail, FormMode } from './shared/classify.types';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -189,7 +189,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ── Sources tab ──
-    public SourceCards: SourceCard[] = [];
+    // SourceCards + buildSourceCards() + the source-detail slide-in + the
+    // quick-schedule dialog moved to ClassifySourcesTabComponent. The host still
+    // owns the Content Duplicates section (rendered alongside the sources tab).
     public ContentDuplicates: ContentDuplicateRow[] = [];
     public IsLoadingDuplicates = false;
 
@@ -314,16 +316,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ── Schedule dialog ──
-    /** Whether the schedule creation dialog is visible */
-    public ShowScheduleDialog = false;
-    /** Whether a schedule save operation is in progress */
-    public ScheduleSaving = false;
-    /** Source card currently being scheduled */
-    public SchedulingSourceCard: SourceCard | null = null;
-    /** Cron expression for the schedule form */
-    public ScheduleCron = '0 2 * * *';
-    /** Whether the schedule should be active immediately */
-    public ScheduleEnabled = true;
+    // The quick-schedule dialog (state + save/remove logic) moved to
+    // ClassifySourcesTabComponent.
 
     // ── Confirmation dialog state ──
     /** Whether a generic confirmation overlay is visible */
@@ -496,107 +490,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ── Detail panels ──
+    // The Source Detail slide-in (state, pagination, status filter, retry, badge
+    // class) moved to ClassifySourcesTabComponent. The item-detail slide-in below
+    // stays in the host (shared by the pipeline feed + tag drill-down + sources).
     public SelectedFeedItem: ContentItemDetail | null = null;
     public ShowItemDetail = false;
-    public SelectedSource: SourceDetailInfo | null = null;
-    public ShowSourceDetail = false;
-    public SourceDetailLoading = false;
-
-    // ── D4: Source detail status filter ──
-    /** Filter content items in source detail by pipeline status */
-    public SourceDetailStatusFilter: ItemPipelineStatus | 'All' = 'All';
-    /** Available status options for the filter dropdown */
-    public readonly SourceDetailStatusOptions: (ItemPipelineStatus | 'All')[] = ['All', 'Complete', 'Processing', 'Failed', 'Pending'];
-
-    // ── D7: Source detail pagination ──
-    /** Current page index (0-based) for source detail content list */
-    public SourceDetailPage = 0;
-    /** Number of content items per page in source detail */
-    public readonly SourceDetailPageSize = 10;
-
-    /**
-     * Returns source detail content items filtered by SourceDetailStatusFilter,
-     * then sliced to the current page.
-     */
-    public get FilteredSourceDetailItems(): ContentItemDetail[] {
-        if (!this.SelectedSource) return [];
-        const items = this.SourceDetailStatusFilter === 'All'
-            ? this.SelectedSource.ContentItems
-            : this.SelectedSource.ContentItems.filter(
-                  ci => ci.EmbeddingStatus === this.SourceDetailStatusFilter ||
-                        ci.TaggingStatus === this.SourceDetailStatusFilter
-              );
-        const start = this.SourceDetailPage * this.SourceDetailPageSize;
-        return items.slice(start, start + this.SourceDetailPageSize);
-    }
-
-    /** Total number of filtered items (before pagination) */
-    public get FilteredSourceDetailTotal(): number {
-        if (!this.SelectedSource) return 0;
-        if (this.SourceDetailStatusFilter === 'All') return this.SelectedSource.ContentItems.length;
-        return this.SelectedSource.ContentItems.filter(
-            ci => ci.EmbeddingStatus === this.SourceDetailStatusFilter ||
-                  ci.TaggingStatus === this.SourceDetailStatusFilter
-        ).length;
-    }
-
-    /** Total pages for source detail pagination */
-    public get SourceDetailTotalPages(): number {
-        return Math.max(1, Math.ceil(this.FilteredSourceDetailTotal / this.SourceDetailPageSize));
-    }
-
-    /** Navigate to the previous page in source detail content list */
-    public SourceDetailPrevPage(): void {
-        if (this.SourceDetailPage > 0) {
-            this.SourceDetailPage--;
-            this.cdr.detectChanges();
-        }
-    }
-
-    /** Navigate to the next page in source detail content list */
-    public SourceDetailNextPage(): void {
-        if (this.SourceDetailPage < this.SourceDetailTotalPages - 1) {
-            this.SourceDetailPage++;
-            this.cdr.detectChanges();
-        }
-    }
-
-    /** Handle change of the source detail status filter dropdown */
-    public OnSourceDetailStatusFilterChange(): void {
-        this.SourceDetailPage = 0;
-        this.cdr.detectChanges();
-    }
-
-    /**
-     * D4: Placeholder handler for retrying failed items in source detail.
-     * Re-runs the pipeline for the current source. In the future this could
-     * target only Failed items.
-     */
-    public RetryFailedItems(): void {
-        if (!this.SelectedSource) return;
-        const failedCount = this.SelectedSource.ContentItems.filter(
-            ci => ci.EmbeddingStatus === 'Failed' || ci.TaggingStatus === 'Failed'
-        ).length;
-        if (failedCount === 0) {
-            MJNotificationService.Instance.CreateSimpleNotification('No failed items to retry', 'info', 2500);
-            return;
-        }
-        MJNotificationService.Instance.CreateSimpleNotification(
-            `Retry queued for ${failedCount} failed item${failedCount > 1 ? 's' : ''}. Pipeline will re-process on next run.`,
-            'info',
-            3000
-        );
-    }
-
-    /** Returns the CSS class for a pipeline status badge color */
-    public GetStatusBadgeClass(status: ItemPipelineStatus): string {
-        switch (status) {
-            case 'Complete': return 'at-status-badge-complete';
-            case 'Processing': return 'at-status-badge-processing';
-            case 'Failed': return 'at-status-badge-failed';
-            case 'Pending': return 'at-status-badge-pending';
-        }
-    }
 
     // Dropdown options for forms
     public SourceTypeOptions: DropdownOption[] = [];
@@ -681,9 +579,30 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public get ContentTagsRaw(): Record<string, unknown>[] {
         return this.contentTagsRaw;
     }
-    /** Exposes the accurate total item count to the Content Types tab via `[TotalItemCount]`. */
+    /** Exposes the accurate total item count to the Content Types / Sources tabs via `[TotalItemCount]`. */
     public get TotalContentItemCount(): number {
         return this.totalContentItemCount;
+    }
+    /** Exposes the accurate total tag count to the Sources tab via `[TotalTagCount]`. */
+    public get TotalContentTagCount(): number {
+        return this.totalContentTagCount;
+    }
+    /** Exposes the cached ScheduledAction entities to the Sources tab via `[ScheduledActions]`. */
+    public get ScheduledActionsCache(): Map<string, MJScheduledActionEntity> {
+        return this.scheduledActionsCache;
+    }
+    /** Exposes the EntityRecordDocument ID→RecordID cache to the Sources tab via `[EntityRecordDocCache]`. */
+    public get EntityRecordDocCacheMap(): Map<string, string> {
+        return this.entityRecordDocCache;
+    }
+
+    /**
+     * Reload the shared source list after the Sources tab mutates a source
+     * (delete / schedule change). Rebinding `contentSourcesRaw` flows through the
+     * tab's `[Sources]` input setter, which rebuilds its cards.
+     */
+    public async OnSourcesDataChanged(): Promise<void> {
+        await this.refreshSourcesTab();
     }
 
     // ── Lifecycle ──
@@ -1096,81 +1015,16 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ════════════════════════════════════════════
 
     private async loadSourcesData(): Promise<void> {
+        // Just ensure the shared raw data is loaded; ClassifySourcesTabComponent
+        // rebuilds its source cards from its [Sources]/[Items]/[Tags]/[Runs] inputs.
         await this.ensureBaseDataLoaded();
-        this.buildSourceCards();
     }
 
-    private buildSourceCards(): void {
-        // When there's a single source, use the accurate total counts from TotalRowCount
-        // instead of counting from the capped contentItemsRaw/contentTagsRaw arrays.
-        const singleSource = this.contentSourcesRaw.length === 1;
-        const itemCountBySource = singleSource ? null : this.countItemsBySource();
-        const tagCountBySource = singleSource ? null : this.countTagsBySource();
-        const lastRunBySource = this.getLastRunBySource();
-
-        this.SourceCards = this.contentSourcesRaw.map(source => {
-            const id = source['ID'] as string;
-            const itemCount = singleSource ? this.totalContentItemCount : (itemCountBySource!.get(id) ?? 0);
-            const tagCount = singleSource ? this.totalContentTagCount : (tagCountBySource!.get(id) ?? 0);
-            const avgTags = itemCount > 0 ? (tagCount / itemCount).toFixed(1) : '0';
-            const lastRun = lastRunBySource.get(id);
-            const typeName = (source['ContentSourceType'] as string) ?? 'Unknown';
-            const lastRunStatus = lastRun ? (lastRun['Status'] as string)?.toLowerCase() : null;
-            const hasError = lastRunStatus === 'error' || lastRunStatus === 'failed';
-
-            const scheduledActionID = (source['ScheduledActionID'] as string | null) ?? null;
-            const scheduledActionName = (source['ScheduledAction'] as string | null) ?? null;
-            const cronExpr = scheduledActionID ? this.getScheduledActionCron(scheduledActionID) : null;
-
-            return {
-                ID: id,
-                Name: (source['Name'] as string) ?? 'Unnamed Source',
-                SourceTypeName: typeName,
-                ContentTypeName: (source['ContentType'] as string) ?? 'Unknown',
-                FileTypeName: (source['ContentFileType'] as string) ?? 'Unknown',
-                Icon: this.GetSourceTypeIcon(typeName),
-                StatusClass: hasError ? 'error' as const : 'active' as const,
-                StatusLabel: hasError ? 'Error' : 'Active',
-                URL: (source['URL'] as string) ?? '',
-                ItemCount: itemCount,
-                TagCount: tagCount,
-                AvgTags: avgTags,
-                LastRunAgo: lastRun ? this.formatRelativeTime(lastRun['StartTime'] as string) : 'Never',
-                ContentSourceTypeID: source['ContentSourceTypeID'] as string,
-                ContentTypeID: source['ContentTypeID'] as string,
-                ContentFileTypeID: source['ContentFileTypeID'] as string,
-                EmbeddingModelID: (source['EmbeddingModelID'] as string) ?? '',
-                VectorIndexID: (source['VectorIndexID'] as string) ?? '',
-                EntityID: (source['EntityID'] as string) ?? '',
-                EntityDocumentID: (source['EntityDocumentID'] as string) ?? '',
-                RequiresFileType: this.sourceTypeRequiresFileType(source['ContentSourceTypeID'] as string),
-                ScheduledActionID: scheduledActionID,
-                ScheduledActionName: scheduledActionName,
-                ScheduleDescription: cronExpr ? CronToHumanReadable(cronExpr) : null,
-            };
-        });
-    }
-
-    /** Resolve the entity record ID from the EntityRecordDocument for entity-sourced content items */
-    private resolveEntityRecordID(item: Record<string, unknown>, sourceId: string): string | null {
-        const erdID = item['EntityRecordDocumentID'] as string | null;
-        if (!erdID) return null;
-        return this.entityRecordDocCache.get(NormalizeUUID(erdID)) ?? null;
-    }
-
-    /** Resolve the entity name for an entity-sourced content source */
-    private resolveEntityName(sourceId: string): string | null {
-        try {
-            const engine = KnowledgeHubMetadataEngine.Instance;
-            const source = engine.ContentSources.find(cs => UUIDsEqual(cs.ID, sourceId));
-            if (!source?.EntityID) return null;
-            const md = this.ProviderToUse;
-            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, source.EntityID));
-            return entityInfo?.Name ?? null;
-        } catch {
-            return null;
-        }
-    }
+    // buildSourceCards() + the source-detail/schedule helpers
+    // (resolveEntityRecordID, resolveEntityName, countTagsBySource,
+    // getLastRunBySource, getScheduledActionCron, resolveEmbeddingModelName,
+    // resolveVectorIndexName, loadContentItemsForSource, loadRunHistoryForSource)
+    // moved to ClassifySourcesTabComponent.
 
     /** Check if a source type's Configuration says RequiresFileType !== false */
     private sourceTypeRequiresFileType(sourceTypeID: string): boolean {
@@ -1535,160 +1389,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
     }
 
-    public async DeleteSource(card: SourceCard): Promise<void> {
-        if (!confirm(`Delete source "${card.Name}"? This cannot be undone.`)) return;
-
-        try {
-            const md = this.ProviderToUse;
-            const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Sources');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: card.ID }]));
-            const deleted = await entity.Delete();
-            if (deleted) {
-                MJNotificationService.Instance.CreateSimpleNotification('Source deleted', 'success', 2500);
-                await this.refreshSourcesTab();
-            } else {
-                MJNotificationService.Instance.CreateSimpleNotification('Failed to delete source', 'error', 3000);
-            }
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
-        }
-    }
-
-    // ════════════════════════════════════════════
-    // SCHEDULE DIALOG — Quick Schedule for Source
-    // ════════════════════════════════════════════
-
-    /**
-     * Opens the schedule dialog pre-filled for the given source card.
-     * Defaults to a daily 2 AM cron expression.
-     * @param card The source card to create a schedule for
-     */
-    public OpenScheduleDialog(card: SourceCard): void {
-        this.SchedulingSourceCard = card;
-        this.ScheduleCron = '0 2 * * *';
-        this.ScheduleEnabled = true;
-        this.ShowScheduleDialog = true;
-        this.cdr.detectChanges();
-    }
-
-    /** Closes the schedule dialog without saving */
-    public CloseScheduleDialog(): void {
-        this.ShowScheduleDialog = false;
-        this.SchedulingSourceCard = null;
-        this.cdr.detectChanges();
-    }
-
-    /**
-     * Saves a new ScheduledAction for the current source, links it
-     * via ContentSource.ScheduledActionID, and creates the default
-     * action params for the Autotag and Vectorize action.
-     */
-    public async SaveSchedule(): Promise<void> {
-        if (this.ScheduleSaving || !this.SchedulingSourceCard) return;
-        this.ScheduleSaving = true;
-        this.cdr.detectChanges();
-
-        const card = this.SchedulingSourceCard;
-
-        try {
-            const md = this.ProviderToUse;
-
-            // 1. Find the "Autotag and Vectorize Content" action
-            const actionID = await this.findAutotagActionID();
-            if (!actionID) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Could not find the "Autotag and Vectorize Content" action. Please check action configuration.',
-                    'error', 5000
-                );
-                return;
-            }
-
-            // 2. Create the ScheduledAction
-            const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
-            scheduledAction.NewRecord();
-            scheduledAction.Name = `Autotag: ${card.Name}`;
-            scheduledAction.Description = `Automated classification pipeline for content source "${card.Name}"`;
-            scheduledAction.ActionID = actionID;
-            scheduledAction.Type = 'Custom';
-            scheduledAction.CronExpression = this.ScheduleCron;
-            scheduledAction.CustomCronExpression = this.ScheduleCron;
-            scheduledAction.Status = this.ScheduleEnabled ? 'Active' : 'Disabled';
-            scheduledAction.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-            const saved = await scheduledAction.Save();
-            if (!saved) {
-                const errorDetail = scheduledAction.LatestResult?.Message ?? 'Unknown error';
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to create schedule: ${errorDetail}`, 'error', 5000
-                );
-                return;
-            }
-
-            // 3. Create ScheduledActionParam for sourceIDs
-            await this.createSourceIDParam(scheduledAction.ID, actionID, card.ID);
-
-            // 4. Link ScheduledAction to ContentSource
-            await this.linkScheduleToSource(card.ID, scheduledAction.ID);
-
-            // 5. Cache the new action for cron display
-            this.scheduledActionsCache.set(NormalizeUUID(scheduledAction.ID), scheduledAction);
-
-            MJNotificationService.Instance.CreateSimpleNotification(
-                `Schedule created: ${CronToHumanReadable(this.ScheduleCron)}`, 'success', 3000
-            );
-
-            this.CloseScheduleDialog();
-            await this.refreshSourcesTab();
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[Classify] Schedule creation error:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
-        } finally {
-            this.ScheduleSaving = false;
-            this.cdr.detectChanges();
-        }
-    }
-
-    /**
-     * Removes the schedule from a source card by unlinking the ScheduledActionID.
-     * @param card The source card to remove the schedule from
-     */
-    public async RemoveSchedule(card: SourceCard): Promise<void> {
-        if (!card.ScheduledActionID) return;
-        if (!confirm(`Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`)) return;
-
-        try {
-            await this.linkScheduleToSource(card.ID, null);
-            MJNotificationService.Instance.CreateSimpleNotification('Schedule removed from source', 'success', 2500);
-            await this.refreshSourcesTab();
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
-        }
-    }
-
-    /**
-     * Returns the human-readable schedule description for a source card.
-     * Used in the template to display schedule indicators.
-     */
-    public GetScheduleLabel(card: SourceCard): string {
-        return card.ScheduleDescription ?? 'Scheduled';
-    }
-
-    /**
-     * Returns a human-readable preview of a cron expression for the schedule dialog.
-     * @param cron The cron expression to preview
-     */
-    public GetCronPreview(cron: string): string {
-        return CronToHumanReadable(cron);
-    }
-
-    /** Looks up the cron expression for a cached ScheduledAction by ID */
-    private getScheduledActionCron(scheduledActionID: string): string | null {
-        const cached = this.scheduledActionsCache.get(NormalizeUUID(scheduledActionID));
-        return cached?.CronExpression ?? null;
-    }
+    // DeleteSource(), the quick-schedule dialog (Open/Close/Save/Remove + cron
+    // label/preview helpers + getScheduledActionCron, findAutotagActionID,
+    // createSourceIDParam, linkScheduleToSource) moved to
+    // ClassifySourcesTabComponent. loadScheduledActionsForSources() stays here
+    // because the host's LoadPipelineData / refreshSourcesTab populate the cache
+    // it exposes to the tab via [ScheduledActions].
 
     /**
      * Loads ScheduledAction entities referenced by content sources into the local cache.
@@ -1718,71 +1424,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             for (const action of result.Results) {
                 this.scheduledActionsCache.set(NormalizeUUID(action.ID), action);
             }
-        }
-    }
-
-    /** Finds the Action ID for "Autotag and Vectorize Content" by querying actions */
-    private async findAutotagActionID(): Promise<string | null> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Actions',
-            ExtraFilter: `Name = 'Autotag and Vectorize Content'`,
-            Fields: ['ID'],
-            ResultType: 'simple',
-            MaxRows: 1,
-        });
-        if (result.Success && result.Results.length > 0) {
-            return result.Results[0].ID;
-        }
-        return null;
-    }
-
-    /**
-     * Creates a ScheduledActionParam that passes the source ID to the action.
-     * Looks up the "EntityNames" action param and sets the source ID as its value.
-     */
-    private async createSourceIDParam(scheduledActionID: string, actionID: string, sourceID: string): Promise<void> {
-        // Find the "EntityNames" action param to get its ID
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'Action Params',
-            ExtraFilter: `ActionID = '${actionID}' AND Name = 'EntityNames'`,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-            MaxRows: 1,
-        });
-
-        if (!paramResult.Success || paramResult.Results.length === 0) {
-            console.warn('[Classify] Could not find EntityNames action param for source ID scheduling');
-            return;
-        }
-
-        const md = this.ProviderToUse;
-        const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
-        param.NewRecord();
-        param.ScheduledActionID = scheduledActionID;
-        param.ActionParamID = paramResult.Results[0].ID;
-        param.ValueType = 'Static';
-        param.Value = sourceID;
-
-        const saved = await param.Save();
-        if (!saved) {
-            console.warn('[Classify] Failed to save schedule param:', param.LatestResult?.Message);
-        }
-    }
-
-    /**
-     * Links (or unlinks) a ScheduledAction to a ContentSource by updating
-     * the ContentSource.ScheduledActionID field.
-     */
-    private async linkScheduleToSource(sourceID: string, scheduledActionID: string | null): Promise<void> {
-        const md = this.ProviderToUse;
-        const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
-        entity.ScheduledActionID = scheduledActionID;
-        const saved = await entity.Save();
-        if (!saved) {
-            throw new Error(entity.LatestResult?.Message ?? 'Failed to update content source');
         }
     }
 
@@ -2158,30 +1799,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return counts;
     }
 
-    private countTagsBySource(): Map<string, number> {
-        const itemSourceMap = new Map<string, string>();
-        for (const item of this.contentItemsRaw) {
-            itemSourceMap.set(item['ID'] as string, item['ContentSourceID'] as string);
-        }
-        const counts = new Map<string, number>();
-        for (const tag of this.contentTagsRaw) {
-            const sourceId = itemSourceMap.get(tag['ItemID'] as string);
-            if (sourceId) counts.set(sourceId, (counts.get(sourceId) ?? 0) + 1);
-        }
-        return counts;
-    }
-
-    private getLastRunBySource(): Map<string, Record<string, unknown>> {
-        const map = new Map<string, Record<string, unknown>>();
-        for (const run of this.contentRunsRaw) {
-            const sourceId = run['SourceID'] as string;
-            if (sourceId && !map.has(sourceId)) {
-                map.set(sourceId, run);
-            }
-        }
-        return map;
-    }
-
+    // countTagsBySource() / getLastRunBySource() moved to
+    // ClassifySourcesTabComponent (only the source cards used them).
     // countSourcesByContentType() / countItemsByContentType() moved to
     // ClassifyTypesTabComponent along with buildContentTypeCards().
 
@@ -2344,7 +1963,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const result = await rv.RunView({ EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' });
         if (result.Success) this.contentSourcesRaw = result.Results;
         await this.loadScheduledActionsForSources();
-        this.buildSourceCards();
+        // The new contentSourcesRaw reference flows to ClassifySourcesTabComponent
+        // via [Sources]="ContentSourcesRaw", which rebuilds its cards on input change.
         this.buildNavItems();
         this.cdr.detectChanges();
     }
@@ -2593,187 +2213,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (lower === 'processing' || lower === 'running') return 'Processing';
         if (lower === 'failed' || lower === 'error') return 'Failed';
         return 'Pending';
-    }
-
-    // ════════════════════════════════════════════
-    // DETAIL PANELS — Source Detail
-    // ════════════════════════════════════════════
-
-    public async OpenSourceDetail(card: SourceCard): Promise<void> {
-        this.SourceDetailLoading = true;
-        this.SourceDetailPage = 0;
-        this.SourceDetailStatusFilter = 'All';
-        this.ShowSourceDetail = true;
-        this.cdr.detectChanges();
-
-        try {
-            const sourceItems = await this.loadContentItemsForSource(card.ID);
-            const sourceRuns = await this.loadRunHistoryForSource(card.ID);
-
-            const embeddingModelName = this.resolveEmbeddingModelName(card.EmbeddingModelID);
-            const vectorIndexName = this.resolveVectorIndexName(card.VectorIndexID);
-            const errorCount = sourceRuns.filter(r => r.StatusClass === 'failed').length;
-
-            this.SelectedSource = {
-                ID: card.ID,
-                Name: card.Name,
-                SourceTypeName: card.SourceTypeName,
-                FileTypeName: card.FileTypeName,
-                ContentTypeName: card.ContentTypeName,
-                RequiresFileType: card.RequiresFileType,
-                StatusClass: card.StatusClass,
-                StatusLabel: card.StatusLabel,
-                Icon: card.Icon,
-                URL: card.URL,
-                EmbeddingModelName: embeddingModelName,
-                VectorIndexName: vectorIndexName,
-                ItemCount: card.ItemCount,
-                TagCount: card.TagCount,
-                AvgTags: card.AvgTags,
-                LastRunAgo: card.LastRunAgo,
-                ErrorCount: errorCount,
-                ContentItems: sourceItems,
-                RunHistory: sourceRuns
-            };
-        } catch (error) {
-            console.error('[Autotagging] Error loading source detail:', error);
-        } finally {
-            this.SourceDetailLoading = false;
-            this.cdr.detectChanges();
-        }
-    }
-
-    public CloseSourceDetail(): void {
-        this.ShowSourceDetail = false;
-        this.SelectedSource = null;
-        this.cdr.detectChanges();
-    }
-
-    public OpenRecordFromSource(source: SourceDetailInfo): void {
-        const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: source.ID }];
-        this.navigationService.OpenEntityRecord('MJ: Content Sources', pkey);
-    }
-
-    public OpenEditSourceFromDetail(): void {
-        if (!this.SelectedSource) return;
-        const card = this.SourceCards.find(c => UUIDsEqual(c.ID, this.SelectedSource!.ID));
-        if (card) {
-            this.CloseSourceDetail();
-            this.OpenEditSourceForm(card);
-        }
-    }
-
-    public async RunSourceFromDetail(): Promise<void> {
-        this.CloseSourceDetail();
-        await this.RunPipeline();
-    }
-
-    public async DeleteSourceFromDetail(): Promise<void> {
-        if (!this.SelectedSource) return;
-        const card = this.SourceCards.find(c => UUIDsEqual(c.ID, this.SelectedSource!.ID));
-        if (card) {
-            this.CloseSourceDetail();
-            await this.DeleteSource(card);
-        }
-    }
-
-    private async loadContentItemsForSource(sourceId: string): Promise<ContentItemDetail[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView({
-            EntityName: 'MJ: Content Items',
-            ExtraFilter: `ContentSourceID='${sourceId}'`,
-            OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 100,
-            ResultType: 'simple'
-        });
-
-        if (!result.Success) return [];
-
-        const tagsByItem = this.countTagsByItem();
-        return result.Results.map(item => {
-            const itemId = item['ID'] as string;
-            const allTags = this.getAllWeightedTagsForItem(itemId);
-            const tagCount = tagsByItem.get(itemId) ?? allTags.length;
-            const contentSourceTypeID = (item['ContentSourceTypeID'] as string) ?? '';
-            const itemStatuses = this.inferPipelineStatuses(item, tagCount);
-            return {
-                ID: itemId,
-                Name: (item['Name'] as string) ?? 'Unnamed',
-                SourceName: (item['ContentSource'] as string) ?? '',
-                SourceTypeName: (item['ContentSourceType'] as string) ?? '',
-                ContentTypeName: (item['ContentType'] as string) ?? '',
-                FileTypeName: (item['ContentFileType'] as string) ?? '',
-                URL: (item['URL'] as string) ?? '',
-                TextContent: (item['Text'] as string) ?? '',
-                Checksum: (item['Checksum'] as string) ?? '',
-                Tags: allTags,
-                CreatedAt: this.formatDate((item['__mj_CreatedAt'] as string) ?? ''),
-                UpdatedAt: this.formatDate((item['__mj_UpdatedAt'] as string) ?? ''),
-                ContentSourceID: sourceId,
-                ContentSourceTypeID: contentSourceTypeID,
-                StatusDot: tagCount > 0 ? 'complete' : 'processing',
-                TagCount: tagCount,
-                RequiresContentType: this.sourceTypeRequiresFileType(contentSourceTypeID),
-                EntityRecordID: this.resolveEntityRecordID(item, sourceId),
-                EntityName: this.resolveEntityName(sourceId),
-                EmbeddingStatus: itemStatuses.EmbeddingStatus,
-                TaggingStatus: itemStatuses.TaggingStatus,
-            };
-        });
-    }
-
-    private async loadRunHistoryForSource(sourceId: string): Promise<RunHistoryRow[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView({
-            EntityName: 'MJ: Content Process Runs',
-            ExtraFilter: `SourceID='${sourceId}'`,
-            OrderBy: 'StartTime DESC',
-            MaxRows: 10,
-            ResultType: 'simple'
-        });
-
-        if (!result.Success) return [];
-
-        return result.Results.map(run => {
-            const status = (run['Status'] as string) ?? 'Unknown';
-            const startTime = run['StartTime'] as string | null;
-            const endTime = run['EndTime'] as string | null;
-            const duration = this.computeDuration(startTime, endTime);
-            const processedItems = run['ProcessedItems'] as number | null;
-            const errorCount = run['ErrorCount'] as number | null;
-            const statusLower = status.toLowerCase();
-            const isFailed = statusLower === 'error' || statusLower === 'failed';
-            const isRunning = statusLower === 'running' || statusLower === 'processing';
-            const hasErrors = (errorCount ?? 0) > 0;
-
-            return {
-                ID: run['ID'] as string,
-                Status: this.displayStatus(status),
-                StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
-                SourceName: (run['Source'] as string) ?? 'Unknown',
-                StartedDisplay: startTime ? this.formatDate(startTime) : '\u2014',
-                Duration: duration,
-                Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
-                Tags: '\u2014',
-                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
-                ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
-            };
-        });
-    }
-
-    private resolveEmbeddingModelName(modelId: string): string {
-        if (!modelId) return 'System default';
-        const aiEngine = AIEngineBase.Instance;
-        const model = aiEngine.Models.find(m => UUIDsEqual(m.ID, modelId));
-        return model ? model.Name : 'Unknown';
-    }
-
-    private resolveVectorIndexName(indexId: string): string {
-        if (!indexId) return 'System default';
-        const engine = KnowledgeHubMetadataEngine.Instance;
-        const idx = engine.GetVectorIndexById(indexId);
-        return idx ? idx.Name : 'Unknown';
     }
 
     // ════════════════════════════════════════════
@@ -4376,130 +3815,4 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
 export function LoadAutotaggingPipelineResource(): void {
     // Prevents tree-shaking
-}
-
-// ================================================================
-// Cron-to-Human-Readable Utility
-// ================================================================
-
-/**
- * Converts a 5-part or 6-part cron expression to a human-readable English string.
- *
- * Handles common patterns:
- *   `0 * * * *`      -> "Every hour"
- *   `0 2 * * *`      -> "Daily at 2:00 AM"
- *   `0 2 * * 1`      -> "Weekly on Monday at 2:00 AM"
- *   `star/15 * * * *` -> "Every 15 minutes"  (where star = asterisk)
- *   `0 0 1 * *`      -> "Monthly on day 1 at 12:00 AM"
- *
- * Falls back to returning the raw cron string for unrecognized patterns.
- *
- * @param cron A cron expression string (5 or 6 parts)
- * @returns A human-readable description or the raw cron if unrecognized
- */
-export function CronToHumanReadable(cron: string): string {
-    if (!cron) return 'No schedule';
-
-    const parts = cron.trim().split(/\s+/);
-    const p = parseCronParts(parts);
-    if (!p) return cron;
-
-    return formatCronParts(p) ?? cron;
-}
-
-/** Internal cron field tuple */
-interface CronFields {
-    Minute: string;
-    Hour: string;
-    DayOfMonth: string;
-    Month: string;
-    DayOfWeek: string;
-}
-
-/**
- * Parses 5-part or 6-part cron expressions into normalized fields.
- * 6-part expressions have a leading seconds field that is discarded.
- */
-function parseCronParts(parts: string[]): CronFields | null {
-    if (parts.length === 5) {
-        return { Minute: parts[0], Hour: parts[1], DayOfMonth: parts[2], Month: parts[3], DayOfWeek: parts[4] };
-    }
-    if (parts.length === 6) {
-        return { Minute: parts[1], Hour: parts[2], DayOfMonth: parts[3], Month: parts[4], DayOfWeek: parts[5] };
-    }
-    return null;
-}
-
-/**
- * Attempts to map parsed cron fields to a human-readable string.
- * Returns null when the pattern is not recognized.
- */
-function formatCronParts(p: CronFields): string | null {
-    // Every N minutes: */N * * * *
-    if (p.Minute.startsWith('*/') && p.Hour === '*' && p.DayOfMonth === '*' && p.Month === '*' && p.DayOfWeek === '*') {
-        const interval = parseInt(p.Minute.slice(2), 10);
-        if (interval === 1) return 'Every minute';
-        return `Every ${interval} minutes`;
-    }
-
-    // Every hour at minute M: M * * * *
-    if (!p.Minute.includes('*') && !p.Minute.includes('/') && p.Hour === '*' && p.DayOfMonth === '*' && p.Month === '*' && p.DayOfWeek === '*') {
-        return 'Every hour';
-    }
-
-    // Every N hours: 0 */N * * *
-    if (!p.Minute.includes('*') && !p.Minute.includes('/') && p.Hour.startsWith('*/') && p.DayOfMonth === '*') {
-        const interval = parseInt(p.Hour.slice(2), 10);
-        if (interval === 1) return 'Every hour';
-        return `Every ${interval} hours`;
-    }
-
-    // Specific hour + minute with wildcard or specific day fields
-    if (!p.Minute.includes('*') && !p.Minute.includes('/') &&
-        !p.Hour.includes('*') && !p.Hour.includes('/') &&
-        p.Month === '*') {
-
-        const hour = parseInt(p.Hour, 10);
-        const minute = parseInt(p.Minute, 10);
-        const timeStr = formatTimeOfDay(hour, minute);
-
-        // Weekly: specific day of week
-        if (p.DayOfWeek !== '*' && p.DayOfMonth === '*') {
-            const dayName = dayOfWeekToName(p.DayOfWeek);
-            return `Weekly on ${dayName} at ${timeStr}`;
-        }
-
-        // Monthly: specific day of month
-        if (p.DayOfMonth !== '*' && p.DayOfWeek === '*') {
-            return `Monthly on day ${p.DayOfMonth} at ${timeStr}`;
-        }
-
-        // Daily
-        if (p.DayOfMonth === '*' && p.DayOfWeek === '*') {
-            return `Daily at ${timeStr}`;
-        }
-    }
-
-    return null;
-}
-
-/** Formats hour and minute to 12-hour AM/PM time string */
-function formatTimeOfDay(hour: number, minute: number): string {
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const h = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    const m = minute.toString().padStart(2, '0');
-    return `${h}:${m} ${ampm}`;
-}
-
-/** Maps day-of-week cron values (0-7 or SUN-SAT) to English names */
-function dayOfWeekToName(dow: string): string {
-    const names: Record<string, string> = {
-        '0': 'Sunday', '1': 'Monday', '2': 'Tuesday',
-        '3': 'Wednesday', '4': 'Thursday', '5': 'Friday',
-        '6': 'Saturday', '7': 'Sunday',
-        'SUN': 'Sunday', 'MON': 'Monday', 'TUE': 'Tuesday',
-        'WED': 'Wednesday', 'THU': 'Thursday', 'FRI': 'Friday',
-        'SAT': 'Saturday',
-    };
-    return names[dow.toUpperCase()] ?? dow;
 }
