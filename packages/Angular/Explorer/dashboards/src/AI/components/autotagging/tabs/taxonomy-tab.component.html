@@ -125,6 +125,30 @@
                             }
                         </div>
 
+                        <!-- Editor sub-tab nav: Overview / Governance / Synonyms / Scope -->
+                        <div class="at-tag-editor-subtabs">
+                            <button type="button" class="at-tag-editor-subtab" [class.at-tag-editor-subtab-active]="TagEditorSubTab === 'overview'"
+                                    (click)="SwitchTagEditorSubTab('overview')">
+                                <i class="fa-solid fa-circle-info"></i> Overview
+                            </button>
+                            <button type="button" class="at-tag-editor-subtab" [class.at-tag-editor-subtab-active]="TagEditorSubTab === 'governance'"
+                                    (click)="SwitchTagEditorSubTab('governance')">
+                                <i class="fa-solid fa-shield-halved"></i> Governance
+                            </button>
+                            <button type="button" class="at-tag-editor-subtab" [class.at-tag-editor-subtab-active]="TagEditorSubTab === 'synonyms'"
+                                    (click)="SwitchTagEditorSubTab('synonyms')">
+                                <i class="fa-solid fa-arrows-turn-right"></i> Synonyms
+                                @if (Synonyms.length > 0) {
+                                    <span class="at-tag-editor-subtab-badge">{{ Synonyms.length }}</span>
+                                }
+                            </button>
+                            <button type="button" class="at-tag-editor-subtab" [class.at-tag-editor-subtab-active]="TagEditorSubTab === 'scope'"
+                                    (click)="SwitchTagEditorSubTab('scope')">
+                                <i class="fa-solid fa-users-viewfinder"></i> Scope
+                            </button>
+                        </div>
+
+                        @if (TagEditorSubTab === 'overview') {
                         <!-- Stats row -->
                         <div class="at-tax-stats-row">
                             <div class="at-tax-stat-item">
@@ -190,6 +214,157 @@
                                         </div>
                                     }
                                 </div>
+                            </div>
+                        }
+                        }
+
+                        <!-- ── Governance panel ── -->
+                        @if (TagEditorSubTab === 'governance') {
+                            <div class="at-tag-editor-pane">
+                                @if (GovernanceLoading) {
+                                    <div class="at-tag-editor-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading governance…</div>
+                                } @else if (GovernanceTag) {
+                                    <div class="at-gov-toggle-row">
+                                        <mj-switch [(ngModel)]="GovIsFrozen"></mj-switch>
+                                        <div class="at-gov-toggle-text">
+                                            <div class="at-gov-toggle-label">Frozen subtree</div>
+                                            <div class="at-gov-toggle-sub">Blocks all auto-grow below this node</div>
+                                        </div>
+                                    </div>
+                                    <div class="at-gov-toggle-row">
+                                        <mj-switch [(ngModel)]="GovAllowAutoGrow"></mj-switch>
+                                        <div class="at-gov-toggle-text">
+                                            <div class="at-gov-toggle-label">Allow auto-grow</div>
+                                            <div class="at-gov-toggle-sub">Classifier may create children under this node</div>
+                                        </div>
+                                    </div>
+                                    <div class="at-gov-toggle-row">
+                                        <mj-switch [(ngModel)]="GovRequiresReview"></mj-switch>
+                                        <div class="at-gov-toggle-text">
+                                            <div class="at-gov-toggle-label">Requires review</div>
+                                            <div class="at-gov-toggle-sub">Every classifier hit on this tag routes to review instead of auto-applying</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="at-gov-field-row">
+                                        <div class="at-form-group">
+                                            <label class="at-form-label">Max children</label>
+                                            <input type="number" min="0" class="at-form-input" [(ngModel)]="GovMaxChildren" placeholder="Unlimited">
+                                        </div>
+                                        <div class="at-form-group">
+                                            <label class="at-form-label">Max depth below</label>
+                                            <input type="number" min="0" class="at-form-input" [(ngModel)]="GovMaxDescendantDepth" placeholder="Unlimited">
+                                        </div>
+                                        <div class="at-form-group">
+                                            <label class="at-form-label">Min weight (0–1)</label>
+                                            <input type="number" min="0" max="1" step="0.01" class="at-form-input" [(ngModel)]="GovMinWeight" placeholder="None">
+                                        </div>
+                                    </div>
+
+                                    <div class="at-gov-impact">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span><b>Subtree impact:</b> {{ GovernanceImpactHint }}</span>
+                                    </div>
+
+                                    <div class="at-form-actions">
+                                        <button mjButton variant="primary" size="sm" [disabled]="GovernanceSaving" (click)="SaveGovernance()">
+                                            <i class="fa-solid fa-check"></i> Save governance
+                                        </button>
+                                        <button mjButton variant="secondary" size="sm" [disabled]="GovernanceSaving" (click)="ResetGovernance()">Reset</button>
+                                    </div>
+                                } @else {
+                                    <div class="at-tag-editor-loading">Unable to load governance for this tag.</div>
+                                }
+                            </div>
+                        }
+
+                        <!-- ── Synonyms panel ── -->
+                        @if (TagEditorSubTab === 'synonyms') {
+                            <div class="at-tag-editor-pane">
+                                @if (SynonymsLoading) {
+                                    <div class="at-tag-editor-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading synonyms…</div>
+                                } @else {
+                                    @if (Synonyms.length > 0) {
+                                        <div class="at-syn-list">
+                                            @for (syn of Synonyms; track syn.ID) {
+                                                <div class="at-syn-item">
+                                                    <span class="at-syn-name">{{ syn.Synonym }}</span>
+                                                    <span class="at-syn-pill" [class]="GetSynonymSourceClass(syn.Source)">{{ syn.Source }}</span>
+                                                    <button type="button" class="at-syn-delete" title="Remove synonym"
+                                                            [disabled]="SynonymSaving" (click)="DeleteSynonym(syn)">
+                                                        <i class="fa-solid fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    } @else {
+                                        <div class="at-tag-editor-empty">No synonyms yet for this tag.</div>
+                                    }
+
+                                    <!-- TODO(post-CodeGen): gate pending/active via Status once the column is generated -->
+                                    <div class="at-syn-add">
+                                        <input type="text" class="at-form-input" placeholder="Add a synonym…"
+                                               [(ngModel)]="NewSynonymText" (keyup.enter)="AddSynonym()">
+                                        <button mjButton variant="primary" size="sm" [disabled]="SynonymSaving || !NewSynonymText.trim()" (click)="AddSynonym()">
+                                            <i class="fa-solid fa-plus"></i> Add
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- ── Scope panel ── -->
+                        @if (TagEditorSubTab === 'scope') {
+                            <div class="at-tag-editor-pane">
+                                @if (ScopesLoading || GovernanceLoading) {
+                                    <div class="at-tag-editor-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading scope…</div>
+                                } @else if (GovernanceTag) {
+                                    <div class="at-gov-toggle-row">
+                                        <mj-switch [ngModel]="IsTagGlobal" (ngModelChange)="ToggleTagGlobal($event)" [Disabled]="ScopeSaving"></mj-switch>
+                                        <div class="at-gov-toggle-text">
+                                            <div class="at-gov-toggle-label">Global tag</div>
+                                            <div class="at-gov-toggle-sub">Visible to every tenant/scope when on</div>
+                                        </div>
+                                    </div>
+
+                                    @if (!IsTagGlobal) {
+                                        @if (Scopes.length > 0) {
+                                            <div class="at-scope-list">
+                                                @for (scope of Scopes; track scope.ID) {
+                                                    <div class="at-scope-item">
+                                                        <span class="at-scope-entity">{{ scope.ScopeEntity }}</span>
+                                                        <span class="at-scope-record">{{ scope.ScopeRecordID }}</span>
+                                                        <button type="button" class="at-syn-delete" title="Remove scope"
+                                                                [disabled]="ScopeSaving" (click)="DeleteScope(scope)">
+                                                            <i class="fa-solid fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        } @else {
+                                            <div class="at-tag-editor-empty">No scope restrictions — add one to limit visibility.</div>
+                                        }
+
+                                        <div class="at-scope-add">
+                                            <mj-combobox class="at-scope-entity-picker"
+                                                [Data]="ScopeEntityOptions" TextField="Name" ValueField="ID"
+                                                [ValuePrimitive]="true" Placeholder="Pick an entity…"
+                                                [ngModel]="NewScopeEntityID" (ValueChange)="OnScopeEntitySelected($event)">
+                                            </mj-combobox>
+                                            <input type="text" class="at-form-input" placeholder="Record ID…" [(ngModel)]="NewScopeRecordID">
+                                            <button mjButton variant="primary" size="sm"
+                                                    [disabled]="ScopeSaving || !NewScopeEntityID || !NewScopeRecordID.trim()" (click)="AddScope()">
+                                                <i class="fa-solid fa-plus"></i> Add
+                                            </button>
+                                        </div>
+
+                                        <div class="at-scope-note">
+                                            <i class="fa-solid fa-circle-info"></i> Children inherit their parent's scope.
+                                        </div>
+                                    }
+                                } @else {
+                                    <div class="at-tag-editor-loading">Unable to load scope for this tag.</div>
+                                }
                             </div>
                         }
                     } @else {

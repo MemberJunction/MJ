@@ -14,6 +14,7 @@
  */
 import { Component, ChangeDetectorRef, EventEmitter, Input, Output, OnInit, inject } from '@angular/core';
 import { BaseEntity, CompositeKey, RunQuery, RunView } from '@memberjunction/core';
+import { MJTagEntity, MJTagScopeEntity, MJTagSynonymEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { TabConfig } from '@memberjunction/ng-ui-components';
@@ -91,6 +92,47 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
     }
     public TaxEditName = '';
     public TaxEditDescription = '';
+
+    // ── Selected-node editor sub-tabs (Overview / Governance / Synonyms / Scope) ──
+    /** Active sub-tab in the selected-node editor. Only visible when a node is selected. */
+    public TagEditorSubTab: 'overview' | 'governance' | 'synonyms' | 'scope' = 'overview';
+
+    // ── Governance panel state ──
+    /** The strongly-typed MJ: Tags entity backing the governance editor for the selected node. */
+    public GovernanceTag: MJTagEntity | null = null;
+    /** True while the governance entity is loading. */
+    public GovernanceLoading = false;
+    /** True while a governance save is in flight. */
+    public GovernanceSaving = false;
+    /** Editable copies of the governance flags so we don't mutate the entity until Save(). */
+    public GovIsFrozen = false;
+    public GovAllowAutoGrow = false;
+    public GovRequiresReview = false;
+    public GovMaxChildren: number | null = null;
+    public GovMaxDescendantDepth: number | null = null;
+    public GovMinWeight: number | null = null;
+
+    // ── Synonyms panel state ──
+    /** Synonyms for the selected tag (typed entity objects, loaded lazily per-tag). */
+    public Synonyms: MJTagSynonymEntity[] = [];
+    /** True while synonyms are loading. */
+    public SynonymsLoading = false;
+    /** New synonym text to add. */
+    public NewSynonymText = '';
+    /** True while a synonym add/delete is in flight. */
+    public SynonymSaving = false;
+
+    // ── Scope panel state ──
+    /** Scopes for the selected tag (typed entity objects, loaded lazily per-tag). */
+    public Scopes: MJTagScopeEntity[] = [];
+    /** True while scopes are loading. */
+    public ScopesLoading = false;
+    /** True while a scope/global mutation is in flight. */
+    public ScopeSaving = false;
+    /** Selected entity ID for the "Add scope" affordance. */
+    public NewScopeEntityID: string | null = null;
+    /** RecordID text for the "Add scope" affordance. */
+    public NewScopeRecordID = '';
 
     // Raw taxonomy data cache
     private tagsRaw: Record<string, unknown>[] = [];
@@ -392,8 +434,24 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         node.IsSelected = true;
         this.TaxSelectedNode = node;
         this.TaxIsEditing = false;
+        this.resetEditorPanels();
         this.loadRecentItemsForTag(node);
+        // Lazy-load the data for whichever sub-tab is currently active.
+        void this.ensureEditorSubTabLoaded();
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Clears the lazily-loaded governance/synonyms/scope panel state so a newly
+     * selected node starts fresh. Data is re-fetched on demand when its sub-tab opens.
+     */
+    private resetEditorPanels(): void {
+        this.GovernanceTag = null;
+        this.Synonyms = [];
+        this.Scopes = [];
+        this.NewSynonymText = '';
+        this.NewScopeEntityID = null;
+        this.NewScopeRecordID = '';
     }
 
     public FilterTaxTree(): void {
@@ -450,6 +508,333 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
             Date: formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
             Icon: 'fa-solid fa-file-lines'
         }));
+    }
+
+    // ── Selected-Node Editor Sub-Tabs ──
+
+    /**
+     * Switches the selected-node editor sub-tab and lazy-loads the data for
+     * the newly opened sub-tab if it hasn't been fetched yet for this node.
+     */
+    public SwitchTagEditorSubTab(sub: 'overview' | 'governance' | 'synonyms' | 'scope'): void {
+        this.TagEditorSubTab = sub;
+        void this.ensureEditorSubTabLoaded();
+        this.cdr.detectChanges();
+    }
+
+    /** Loads the data backing the currently active editor sub-tab on demand. */
+    private async ensureEditorSubTabLoaded(): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        switch (this.TagEditorSubTab) {
+            case 'governance':
+                if (!this.GovernanceTag) await this.loadGovernanceTag();
+                break;
+            case 'synonyms':
+                await this.loadSynonyms();
+                break;
+            case 'scope':
+                if (!this.GovernanceTag) await this.loadGovernanceTag();
+                await this.loadScopes();
+                break;
+            default:
+                break;
+        }
+    }
+
+    // ── Governance Panel ──
+
+    /** Lazy-loads the strongly-typed MJ: Tags entity for the selected node. */
+    private async loadGovernanceTag(): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        this.GovernanceLoading = true;
+        this.cdr.detectChanges();
+        try {
+            const p = this.ProviderToUse;
+            const tag = await p.GetEntityObject<MJTagEntity>('MJ: Tags', p.CurrentUser);
+            const loaded = await tag.Load(this.TaxSelectedNode.ID);
+            if (loaded) {
+                this.GovernanceTag = tag;
+                this.syncGovernanceFromEntity(tag);
+            } else {
+                this.GovernanceTag = null;
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error loading governance: ${msg}`, 'error', 4000);
+        }
+        this.GovernanceLoading = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Copies governance flags from the entity into the editable view fields. */
+    private syncGovernanceFromEntity(tag: MJTagEntity): void {
+        this.GovIsFrozen = tag.IsFrozen;
+        this.GovAllowAutoGrow = tag.AllowAutoGrow;
+        this.GovRequiresReview = tag.RequiresReview;
+        this.GovMaxChildren = tag.MaxChildren;
+        this.GovMaxDescendantDepth = tag.MaxDescendantDepth;
+        this.GovMinWeight = tag.MinWeight;
+    }
+
+    /** A one-line subtree-impact hint derived from the selected tree node. */
+    public get GovernanceImpactHint(): string {
+        const node = this.TaxSelectedNode;
+        if (!node) return '';
+        const children = node.Children.length;
+        const items = node.ItemCount;
+        return `Affects ${children} direct child${children === 1 ? '' : 'ren'} and ${items} tagged item${items === 1 ? '' : 's'} in this subtree.`;
+    }
+
+    /** Resets the governance editor fields back to the loaded entity values. */
+    public ResetGovernance(): void {
+        if (this.GovernanceTag) {
+            this.syncGovernanceFromEntity(this.GovernanceTag);
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Persists the edited governance flags to the MJ: Tags entity. */
+    public async SaveGovernance(): Promise<void> {
+        const tag = this.GovernanceTag;
+        if (!tag) return;
+        this.GovernanceSaving = true;
+        this.cdr.detectChanges();
+        try {
+            tag.IsFrozen = this.GovIsFrozen;
+            tag.AllowAutoGrow = this.GovAllowAutoGrow;
+            tag.RequiresReview = this.GovRequiresReview;
+            tag.MaxChildren = this.GovMaxChildren;
+            tag.MaxDescendantDepth = this.GovMaxDescendantDepth;
+            tag.MinWeight = this.GovMinWeight;
+            const saved = await tag.Save();
+            if (saved) {
+                this.syncGovernanceFromEntity(tag);
+                MJNotificationService.Instance.CreateSimpleNotification('Governance saved', 'success', 2500);
+                this.DataChanged.emit();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to save governance: ${tag.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.GovernanceSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    // ── Synonyms Panel ──
+
+    /** Lazy-loads MJ: Tag Synonyms rows for the selected tag. */
+    private async loadSynonyms(): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        this.SynonymsLoading = true;
+        this.cdr.detectChanges();
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<MJTagSynonymEntity>({
+                EntityName: 'MJ: Tag Synonyms',
+                ExtraFilter: `TagID='${this.TaxSelectedNode.ID}'`,
+                OrderBy: 'Synonym',
+                ResultType: 'entity_object'
+            });
+            this.Synonyms = result.Success ? result.Results : [];
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error loading synonyms: ${msg}`, 'error', 4000);
+            this.Synonyms = [];
+        }
+        this.SynonymsLoading = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Returns a colored-pill CSS class for a synonym Source. */
+    public GetSynonymSourceClass(source: string): string {
+        switch (source) {
+            case 'Manual':   return 'at-syn-pill-manual';
+            case 'LLM':      return 'at-syn-pill-llm';
+            case 'Imported': return 'at-syn-pill-imported';
+            case 'Merged':   return 'at-syn-pill-merged';
+            default:         return 'at-syn-pill-manual';
+        }
+    }
+
+    /** Creates a new Manual synonym for the selected tag. */
+    public async AddSynonym(): Promise<void> {
+        const text = this.NewSynonymText.trim();
+        if (!text || !this.TaxSelectedNode) return;
+        this.SynonymSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const p = this.ProviderToUse;
+            const syn = await p.GetEntityObject<MJTagSynonymEntity>('MJ: Tag Synonyms', p.CurrentUser);
+            syn.NewRecord();
+            syn.TagID = this.TaxSelectedNode.ID;
+            syn.Synonym = text;
+            syn.Source = 'Manual';
+            // TODO(post-CodeGen): gate pending/active via Status once the column is generated
+            const saved = await syn.Save();
+            if (saved) {
+                this.NewSynonymText = '';
+                MJNotificationService.Instance.CreateSimpleNotification('Synonym added', 'success', 2500);
+                await this.loadSynonyms();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to add synonym: ${syn.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.SynonymSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Deletes a synonym row. */
+    public async DeleteSynonym(syn: MJTagSynonymEntity): Promise<void> {
+        this.SynonymSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const deleted = await syn.Delete();
+            if (deleted) {
+                this.Synonyms = this.Synonyms.filter(s => !UUIDsEqual(s.ID, syn.ID));
+                MJNotificationService.Instance.CreateSimpleNotification('Synonym removed', 'success', 2500);
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to remove synonym: ${syn.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.SynonymSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    // ── Scope Panel ──
+
+    /** Entity options for the "Add scope" combobox, sorted by name. */
+    public get ScopeEntityOptions(): { ID: string; Name: string }[] {
+        return this.ProviderToUse.Entities
+            .map(e => ({ ID: e.ID, Name: e.Name }))
+            .sort((a, b) => a.Name.localeCompare(b.Name));
+    }
+
+    /** Whether the selected tag is global (read from the governance entity). */
+    public get IsTagGlobal(): boolean {
+        return this.GovernanceTag?.IsGlobal ?? false;
+    }
+
+    /** Lazy-loads MJ: Tag Scopes rows for the selected tag. */
+    private async loadScopes(): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        this.ScopesLoading = true;
+        this.cdr.detectChanges();
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<MJTagScopeEntity>({
+                EntityName: 'MJ: Tag Scopes',
+                ExtraFilter: `TagID='${this.TaxSelectedNode.ID}'`,
+                OrderBy: 'ScopeEntity',
+                ResultType: 'entity_object'
+            });
+            this.Scopes = result.Success ? result.Results : [];
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error loading scopes: ${msg}`, 'error', 4000);
+            this.Scopes = [];
+        }
+        this.ScopesLoading = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Adapter for the entity combobox's string-typed value output. */
+    public OnScopeEntitySelected(value: unknown): void {
+        this.NewScopeEntityID = value != null ? String(value) : null;
+    }
+
+    /** Toggles the tag's IsGlobal flag and persists it. */
+    public async ToggleTagGlobal(value: boolean): Promise<void> {
+        if (!this.GovernanceTag) return;
+        this.ScopeSaving = true;
+        this.cdr.detectChanges();
+        try {
+            this.GovernanceTag.IsGlobal = value;
+            const saved = await this.GovernanceTag.Save();
+            if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    value ? 'Tag is now global' : 'Tag is now scoped', 'success', 2500
+                );
+                this.DataChanged.emit();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to update scope: ${this.GovernanceTag.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.ScopeSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Creates a new MJ: Tag Scopes row for the selected tag. */
+    public async AddScope(): Promise<void> {
+        const entityId = this.NewScopeEntityID;
+        const recordId = this.NewScopeRecordID.trim();
+        if (!entityId || !recordId || !this.TaxSelectedNode) return;
+        this.ScopeSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const p = this.ProviderToUse;
+            const scope = await p.GetEntityObject<MJTagScopeEntity>('MJ: Tag Scopes', p.CurrentUser);
+            scope.NewRecord();
+            scope.TagID = this.TaxSelectedNode.ID;
+            scope.ScopeEntityID = entityId;
+            scope.ScopeRecordID = recordId;
+            const saved = await scope.Save();
+            if (saved) {
+                this.NewScopeEntityID = null;
+                this.NewScopeRecordID = '';
+                MJNotificationService.Instance.CreateSimpleNotification('Scope added', 'success', 2500);
+                await this.loadScopes();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to add scope: ${scope.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.ScopeSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Deletes a scope row. */
+    public async DeleteScope(scope: MJTagScopeEntity): Promise<void> {
+        this.ScopeSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const deleted = await scope.Delete();
+            if (deleted) {
+                this.Scopes = this.Scopes.filter(s => !UUIDsEqual(s.ID, scope.ID));
+                MJNotificationService.Instance.CreateSimpleNotification('Scope removed', 'success', 2500);
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to remove scope: ${scope.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.ScopeSaving = false;
+        this.cdr.detectChanges();
     }
 
     // ── Tag Operations ──
