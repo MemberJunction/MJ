@@ -1,4 +1,5 @@
 ---
+"@memberjunction/global": minor
 "@memberjunction/core": minor
 "@memberjunction/ng-base-forms": minor
 ---
@@ -15,3 +16,7 @@ existing textbox/textarea.
 Widens the `EntityFieldExtendedType` union and the `CK_EntityField_ExtendedType` CHECK
 constraint to include `Markdown` and `HTML` (migration included — run CodeGen after applying
 to regenerate `EntityFieldEntity` types and metadata).
+
+Adds a reusable, dependency-free `detectRichTextFormat(value, maxScanLength?)` text classifier
+to `@memberjunction/global` (defaults to scanning the first 500 characters) so any consumer can
+sniff Markdown/HTML/plain content.

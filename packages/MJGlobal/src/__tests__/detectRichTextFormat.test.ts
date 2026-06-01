@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectRichTextFormat } from '../lib/field/rich-text-detection';
+import { detectRichTextFormat } from '../util';
 
 describe('detectRichTextFormat', () => {
   describe('plain text', () => {
@@ -70,10 +70,24 @@ describe('detectRichTextFormat', () => {
     });
   });
 
-  describe('performance guard', () => {
-    it('still classifies when signals are within the leading scan window', () => {
+  describe('scan length', () => {
+    it('uses a 500-char default window: signals beyond it are not detected', () => {
+      const lateHtml = 'x'.repeat(600) + '<p>late</p><div>html</div>';
+      expect(detectRichTextFormat(lateHtml)).toBe('plain');
+    });
+
+    it('detects signals within the leading window', () => {
       const big = '# Heading\n' + 'x'.repeat(50000);
       expect(detectRichTextFormat(big)).toBe('markdown');
+    });
+
+    it('honors a caller-supplied larger window', () => {
+      const lateHtml = 'x'.repeat(600) + '<p>late</p><div>html</div>';
+      expect(detectRichTextFormat(lateHtml, 2000)).toBe('html');
+    });
+
+    it('falls back to the default when given a non-positive window', () => {
+      expect(detectRichTextFormat('# Heading here', 0)).toBe('markdown');
     });
   });
 });

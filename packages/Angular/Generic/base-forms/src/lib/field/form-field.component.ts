@@ -1,10 +1,9 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
-import { ValidationErrorInfo, HighlightSearchMatches } from '@memberjunction/global';
+import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { detectRichTextFormat, RichTextFormat } from './rich-text-detection';
 
 /**
  * How a field's value should be rendered/edited beyond a plain input.
@@ -785,13 +784,15 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return this.detectFormat();
   }
 
+  /** Backing snapshot for {@link EditRichTextMode}; null until first computed for the session. */
+  private _editRichTextMode: FieldRichTextMode | null = null;
+
   /**
    * Stable rendering mode for EDIT mode. Unlike {@link RichTextMode} (which re-detects on the
    * live value), this is snapshotted when edit mode is entered so that typing markdown/html into
    * a plain textarea doesn't swap the control out from under the user mid-keystroke. Explicit
    * ExtendedType always wins regardless; only the auto-detect branch is frozen for the session.
    */
-  private _editRichTextMode: FieldRichTextMode | null = null;
   get EditRichTextMode(): FieldRichTextMode {
     if (this._editRichTextMode === null) {
       this._editRichTextMode = this.RichTextMode;
