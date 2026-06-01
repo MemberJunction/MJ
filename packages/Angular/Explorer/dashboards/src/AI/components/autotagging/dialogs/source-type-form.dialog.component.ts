@@ -21,9 +21,9 @@
  *     NavigationService through the `(NavigateToRecordRequested)` output.
  */
 import { Component, ChangeDetectorRef, EventEmitter, Output, inject } from '@angular/core';
-import { BaseEntity, CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -314,7 +314,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             const entityMap = new Map<string, string>();
             const md = this.ProviderToUse;
             for (const doc of docs) {
-                const entityName = doc.Get('Entity') as string;
+                const entityName = doc.Entity;
                 if (entityName) {
                     const entityInfo = md.Entities.find(e => e.Name === entityName);
                     if (entityInfo && !entityMap.has(entityInfo.ID)) {
@@ -339,7 +339,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, this.FormSourceEntityID));
             if (!entityInfo) return [];
             return engine.GetActiveEntityDocuments()
-                .filter(d => (d.Get('Entity') as string) === entityInfo.Name)
+                .filter(d => d.Entity === entityInfo.Name)
                 .map(d => ({ ID: d.ID, Name: d.Name }));
         } catch {
             return [];
@@ -385,7 +385,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
                 const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
                 if (!entityInfo) return [];
                 return engine.GetActiveEntityDocuments()
-                    .filter(d => (d.Get('Entity') as string) === entityInfo.Name)
+                    .filter(d => d.Entity === entityInfo.Name)
                     .map(d => ({ ID: d.ID, Name: d.Name }));
             } catch {
                 return [];
@@ -745,7 +745,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
                 this.Saved.emit({ kind: 'source' });
             } else {
                 // CP-4: Show detailed error from LatestResult
-                const errorDetail = entity.LatestResult?.Message ?? 'Unknown error';
+                const errorDetail = entity.LatestResult?.CompleteMessage ?? 'Unknown error';
                 console.error('[Classify] Save source failed:', entity.LatestResult);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to save source: ${errorDetail}`, 'error', 5000
@@ -772,23 +772,23 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
 
         try {
             const md = this.ProviderToUse;
-            const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Types');
+            const contentType = await md.GetEntityObject<MJContentTypeEntity>('MJ: Content Types', md.CurrentUser);
 
             if (this.FormMode === 'edit-type' && this.EditingTypeID) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingTypeID }]));
+                await contentType.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingTypeID }]));
             } else {
-                entity.NewRecord();
+                contentType.NewRecord();
             }
 
-            entity.Set('Name', this.FormTypeName);
-            entity.Set('Description', this.FormTypeDescription);
-            entity.Set('AIModelID', this.FormTypeAIModelID);
-            entity.Set('MinTags', this.FormTypeMinTags);
-            entity.Set('MaxTags', this.FormTypeMaxTags);
-            entity.Set('EmbeddingModelID', this.FormTypeEmbeddingModelID || null);
-            entity.Set('VectorIndexID', this.FormTypeVectorIndexID || null);
+            contentType.Name = this.FormTypeName;
+            contentType.Description = this.FormTypeDescription;
+            contentType.AIModelID = this.FormTypeAIModelID;
+            contentType.MinTags = this.FormTypeMinTags;
+            contentType.MaxTags = this.FormTypeMaxTags;
+            contentType.EmbeddingModelID = this.FormTypeEmbeddingModelID || null;
+            contentType.VectorIndexID = this.FormTypeVectorIndexID || null;
 
-            const saved = await entity.Save();
+            const saved = await contentType.Save();
             if (saved) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     this.FormMode === 'edit-type' ? 'Content type updated' : 'Content type created', 'success', 2500

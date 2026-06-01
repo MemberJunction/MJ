@@ -507,7 +507,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
             const saved = await scheduledAction.Save();
             if (!saved) {
-                const errorDetail = scheduledAction.LatestResult?.Message ?? 'Unknown error';
+                const errorDetail = scheduledAction.LatestResult?.CompleteMessage ?? 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to create schedule: ${errorDetail}`, 'error', 5000
                 );
@@ -611,7 +611,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
         const saved = await param.Save();
         if (!saved) {
-            console.warn('[Classify] Failed to save schedule param:', param.LatestResult?.Message);
+            console.warn('[Classify] Failed to save schedule param:', param.LatestResult?.CompleteMessage);
         }
     }
 
@@ -626,7 +626,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
         entity.ScheduledActionID = scheduledActionID;
         const saved = await entity.Save();
         if (!saved) {
-            throw new Error(entity.LatestResult?.Message ?? 'Failed to update content source');
+            throw new Error(entity.LatestResult?.CompleteMessage ?? 'Failed to update content source');
         }
     }
 

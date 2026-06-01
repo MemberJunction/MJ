@@ -25,6 +25,7 @@ import { ClassifySourceTypeFormDialogComponent } from './dialogs/source-type-for
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
 import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, ContentDuplicateRow, RunDetailRow, WeightedTag, ItemPipelineStatus, ContentItemDetail } from './shared/classify.types';
+import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords } from './shared/classify.format';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -235,7 +236,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
-    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'inbox', 'health', 'history'];
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'inbox', 'health', 'history'];
 
     /** Lightweight count of Pending tag suggestions for the Inbox nav badge. */
     public InboxPendingCount = 0;
@@ -534,6 +535,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             case 'tags':
                 await this.loadTagLibraryData();
                 break;
+            case 'taxonomy':
+                // The Taxonomy tab self-loads its own data in ngOnInit; nothing
+                // host-side to fetch. Case present so the switch covers all tabs.
+                break;
             case 'inbox':
                 // The Inbox tab loads its own (transactional, uncached) data.
                 // Trigger CD so the ViewChild resolves, then ask it to load.
@@ -595,15 +600,16 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildNavItems(): void {
-        // Classify dashboard owns the autotag pipeline run-management surface.
-        // Tag Library + Taxonomy moved to the canonical "Tags" dashboard
-        // (TagsResourceComponent under Knowledge Hub) — this nav intentionally
-        // omits them. The underlying state + methods remain in this file as
-        // dead code for the moment; a follow-up will strip them.
+        // Classify dashboard owns the autotag pipeline run-management surface plus
+        // the Tag Library + Taxonomy Governance curation surfaces (Governance /
+        // Synonyms / Scope editors live on the Taxonomy tab). All curation tabs are
+        // surfaced here so they're directly reachable, not just agent-reachable.
         this.NavItems = [
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
+            { Tab: 'tags', Icon: 'fa-solid fa-tags', Label: 'Tag Library', BadgeText: '', BadgeClass: '' },
+            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: '', BadgeClass: '' },
         ];
     }
 
@@ -660,8 +666,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             return {
                 ID: id,
                 Name: (source['Name'] as string) ?? 'Unnamed',
-                Icon: this.GetSourceTypeIcon(typeName),
-                Meta: `${this.formatNumber(itemCount)} items`,
+                Icon: getSourceTypeIcon(typeName),
+                Meta: `${formatNumber(itemCount)} items`,
                 StatusClass: 'active' as const
             };
         });
@@ -808,39 +814,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             ResultType: 'simple',
         });
         if (result.Success) {
-            this.LiveRunDetailRows = this.mapRunDetailRecords(result.Results);
+            this.LiveRunDetailRows = mapRunDetailRecords(result.Results);
         }
 
         this.IsLoadingLiveDetails = false;
         this.cdr.detectChanges();
-    }
-
-    /** Map raw ContentProcessRunDetail records to RunDetailRow[] */
-    private mapRunDetailRecords(records: Record<string, unknown>[]): RunDetailRow[] {
-        return records.map(d => {
-            const status = String(d['Status'] || 'Pending');
-            const statusLower = status.toLowerCase();
-            const isFailed = statusLower === 'failed' || statusLower === 'error';
-            const isRunning = statusLower === 'running' || statusLower === 'processing';
-            const startTime = d['StartTime'] ? new Date(String(d['StartTime'])) : null;
-            const endTime = d['EndTime'] ? new Date(String(d['EndTime'])) : null;
-            const durationMs = startTime && endTime ? endTime.getTime() - startTime.getTime() : 0;
-            const durationStr = durationMs > 60000 ? `${Math.round(durationMs / 60000)}m` : `${Math.round(durationMs / 1000)}s`;
-
-            return {
-                SourceName: String(d['ContentSource'] || 'Unknown'),
-                SourceType: String(d['ContentSourceType'] || ''),
-                Status: this.displayStatus(status),
-                StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
-                ItemsProcessed: Number(d['ItemsProcessed'] || 0),
-                ItemsTagged: Number(d['ItemsTagged'] || 0),
-                ItemsVectorized: Number(d['ItemsVectorized'] || 0),
-                ErrorCount: Number(d['ErrorCount'] || 0),
-                TotalTokens: Number(d['TotalTokensUsed'] || 0),
-                TotalCost: Number(d['TotalCost'] || 0),
-                Duration: durationStr,
-            };
-        });
     }
 
     // ════════════════════════════════════════════
@@ -1261,70 +1239,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return `${diffDays}d ago`;
     }
 
-    public formatNumber(n: number): string {
-        return n.toLocaleString();
-    }
-
-    /** Returns font size in rem for a tag based on its weight (0.0-1.0). Range: 0.7rem to 1.0rem */
-    public TagFontSize(weight: number): string {
-        const min = 0.7;
-        const max = 1.0;
-        return `${min + (max - min) * Math.min(1, Math.max(0, weight))}rem`;
-    }
-
-    /** Format weight as percentage for display in tag chip */
-    public FormatWeight(weight: number): string {
-        return `${Math.round(weight * 100)}%`;
-    }
-
-    private formatShortDate(dateStr: string): string {
-        try {
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        } catch {
-            return '';
-        }
-    }
-
-    private formatDate(dateStr: string): string {
-        try {
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-        } catch {
-            return dateStr;
-        }
-    }
-
-    private computeDuration(start: string | null, end: string | null): string {
-        if (!start) return '\u2014';
-        const s = new Date(start);
-        const e = end ? new Date(end) : new Date();
-        const ms = e.getTime() - s.getTime();
-        if (ms < 1000) return `${ms}ms`;
-        if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-        const mins = Math.floor(ms / 60000);
-        const secs = Math.round((ms % 60000) / 1000);
-        return `${mins}m ${secs}s`;
-    }
-
-    private displayStatus(status: string): string {
-        const lower = status.toLowerCase();
-        if (lower === 'complete' || lower === 'completed' || lower === 'done') return 'Complete';
-        if (lower === 'error' || lower === 'failed') return 'Failed';
-        if (lower === 'running' || lower === 'processing') return 'Running';
-        return status;
-    }
-
-    public GetSourceTypeIcon(typeName: string): string {
-        const iconMap: Record<string, string> = {
-            'Web': 'fa-solid fa-globe', 'Web Crawler': 'fa-solid fa-globe',
-            'API': 'fa-solid fa-plug', 'Database': 'fa-solid fa-database',
-            'File': 'fa-solid fa-file-alt', 'Email': 'fa-solid fa-envelope',
-            'RSS': 'fa-solid fa-rss', 'RSS Feed': 'fa-solid fa-rss',
-            'CMS': 'fa-solid fa-newspaper', 'PDF': 'fa-solid fa-file-pdf'
-        };
-        return iconMap[typeName] ?? 'fa-solid fa-folder';
-    }
+    // formatNumber / formatDate / getSourceTypeIcon / mapRunDetailRecords are now
+    // imported from shared/classify.format.ts (DRY — single implementation shared
+    // with the tab components). formatShortDate / computeDuration / displayStatus /
+    // tagFontSize / formatWeight also live there; the host no longer keeps copies.
 
     // ════════════════════════════════════════════
     // HELPER — Data loading
@@ -1412,8 +1330,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
-            CreatedAt: this.formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
-            UpdatedAt: this.formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            CreatedAt: formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
             ContentSourceTypeID: contentSourceTypeID,
             StatusDot: feed.Status,
@@ -1475,8 +1393,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
-            CreatedAt: this.formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
-            UpdatedAt: this.formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            CreatedAt: formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
             ContentSourceTypeID: contentSourceTypeID,
             StatusDot: allTags.length > 0 ? 'complete' : 'processing',
