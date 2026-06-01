@@ -8,7 +8,24 @@
 
 **Companion PRD**: [`plans/graphql-context-log-redact-secrets-PRD.md`](./graphql-context-log-redact-secrets-PRD.md)
 
-**Status**: Implementation complete. Tests + smoke verification pending senior review.
+**Status**: Superseded in part by senior review. The structural-shape (value-blind)
+line described below is **deleted**; the value-bearing-but-secret-masked middleware line
+is **kept** as the sole verbose emitter; the "no literal value under any flag" invariant
+is **retracted**. Full resolution in the companion PRD's **Resolution (post-review)**
+section and in [`docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md`](../../docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md).
+The "three-layer logging" / "two complementary log lines" model below is the rejected
+design — retained for history. Where it conflicts with the ADR, the ADR wins.
+
+**Final implemented behavior** (smoke-tested live against MJAPI on SQL Server):
+- Default/prod: boundary line = `{ operationName }` only — no values. ✅
+- Verbose (`MJ_LOG_GRAPHQL_VARIABLES=true`): the per-resolver middleware is the **sole** values
+  emitter; values **fully emitted** except `Encrypt=true` fields (`<redacted>`). The boundary
+  line stays operation-name-only (no second value-blind line). ✅
+- Live `CreateMJCredential` test: `Values: '<redacted>'`, fake secret absent from stdout
+  (`grep -c` = 0). ✅
+- Two bugs fixed during smoke prep: (1) `Delete` added to the audit + redactor regex to stop the
+  boot-audit flood; (2) field-level `@NoLog` now honored on non-entity-bound inputs (was silently
+  ignored — `GetDataInputType.Token` would have leaked). Build clean; 261 MJServer tests pass.
 
 **Revision history**: Initial design framed the new middleware as the primary
 defense. Ultrareview pointed out that the actual leak fix is the **removal of

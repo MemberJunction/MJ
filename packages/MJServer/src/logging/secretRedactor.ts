@@ -22,7 +22,11 @@ export type RedactionContext = {
   noLogFields: ReadonlySet<string>;
 };
 
-const INPUT_TYPE_REGEX = /^(Create|Update)(?<name>.+)Input$/;
+// Delete is included so DeleteMJ*Input resolvers resolve to their entity (yielding an empty
+// or value-free encrypted-field walk) instead of falling to the fail-open shortenForLog path —
+// keeps the boot audit quiet on them. Security is identical either way: Delete inputs carry
+// PK + Options only, no encrypted values. Must stay in sync with bootAudit.ts's INPUT_TYPE_REGEX.
+const INPUT_TYPE_REGEX = /^(Create|Update|Delete)(?<name>.+)Input$/;
 
 // Assumes EntityFieldInfo.Name === GraphQLFieldName for input-type fields.
 // True today for all codegen output (323 Create*Input + 323 Update*Input).
@@ -38,22 +42,32 @@ export function redactArg(ctx: RedactionContext): unknown {
     return '<metadata-not-ready>';
   }
 
+  // Determine the encrypted-field set from entity metadata IF this input maps to a known entity.
+  // Custom / non-CRUD inputs (e.g. GetDataInput) have no entity binding — that's fine; field-level
+  // @NoLog still applies below. The entity path only adds metadata-driven encrypted-field names.
+  let encryptedFieldNames: ReadonlySet<string> = EMPTY_SET;
   const match = INPUT_TYPE_REGEX.exec(ctx.inputTypeName);
-  if (!match || !match.groups?.name) {
+  if (match?.groups?.name) {
+    const entity = ctx.provider.Entities.find((e) => e.ClassName === match.groups!.name);
+    if (entity) {
+      encryptedFieldNames = new Set(entity.EncryptedFields.map((f) => f.Name));
+    }
+  }
+
+  // Walk top-level keys whenever we have BOTH a redaction source (encrypted fields or @NoLog fields)
+  // AND a plain-object value. This honors field-level @NoLog even on non-entity-bound inputs — the
+  // exact case @NoLog exists for (custom resolvers, e.g. GetDataInputType.Token). Without a redaction
+  // source, or for non-object values, fall through to shortenForLog as before.
+  const canWalk =
+    (encryptedFieldNames.size > 0 || ctx.noLogFields.size > 0) &&
+    ctx.rawValue !== null &&
+    typeof ctx.rawValue === 'object' &&
+    !Array.isArray(ctx.rawValue);
+
+  if (!canWalk) {
     return shortenForLog(ctx.rawValue);
   }
 
-  const entityClassName = match.groups.name;
-  const entity = ctx.provider.Entities.find((e) => e.ClassName === entityClassName);
-  if (!entity) {
-    return shortenForLog(ctx.rawValue);
-  }
-
-  if (ctx.rawValue === null || typeof ctx.rawValue !== 'object' || Array.isArray(ctx.rawValue)) {
-    return shortenForLog(ctx.rawValue);
-  }
-
-  const encryptedFieldNames = new Set(entity.EncryptedFields.map((f) => f.Name));
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(ctx.rawValue as Record<string, unknown>)) {
     if (encryptedFieldNames.has(key) || ctx.noLogFields.has(key)) {
@@ -64,3 +78,5 @@ export function redactArg(ctx: RedactionContext): unknown {
   }
   return result;
 }
+
+const EMPTY_SET: ReadonlySet<string> = new Set<string>();

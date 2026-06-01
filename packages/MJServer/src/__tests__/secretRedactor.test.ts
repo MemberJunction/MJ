@@ -108,7 +108,11 @@ describe('redactArg', () => {
     });
   });
 
-  it('Delete<X>Input is intentionally not matched by the regex (passthrough)', () => {
+  it('Delete<X>Input resolves to its entity and walks keys (PK only — no encrypted values to redact)', () => {
+    // Delete is matched by the regex (alongside Create/Update) so the boot audit treats DeleteMJ*
+    // resolvers as metadata-bound instead of flooding with false positives. Security is identical:
+    // delete inputs carry PK + Options only — no encrypted field, so nothing is redacted, the keys
+    // just pass through. See docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md.
     const result = redactArg({
       inputTypeName: 'DeleteMJCredentialInput',
       rawValue: { ID: 'abc-123' },
@@ -116,7 +120,19 @@ describe('redactArg', () => {
       noLogParameter: false,
       noLogFields: new Set(),
     });
-    expect(result).toEqual('{"ID":"abc-123"}');
+    expect(result).toEqual({ ID: 'abc-123' });
+  });
+
+  it('Delete<X>Input never exposes an encrypted value even if one were somehow present', () => {
+    // Defense-in-depth: even if a delete input carried an encrypted field name, it must still mask.
+    const result = redactArg({
+      inputTypeName: 'DeleteMJCredentialInput',
+      rawValue: { ID: 'abc-123', Values: 'FAKE_SECRET_VALUE_DO_NOT_USE' },
+      provider: makeProvider([credentialEntity]),
+      noLogParameter: false,
+      noLogFields: new Set(),
+    });
+    expect(result).toEqual({ ID: 'abc-123', Values: '<redacted>' });
   });
 
   it('only walks TOP-level keys — nested objects with encrypted-field names are not recursed', () => {

@@ -2,7 +2,11 @@ import { getMetadataStorage } from 'type-graphql';
 import { configInfo } from '../config.js';
 import { hasNoLogParameter } from './NoLog.js';
 
-const INPUT_TYPE_REGEX = /^(Create|Update).+Input$/;
+// Delete is included alongside Create/Update so codegen DeleteMJ*Input resolvers count as
+// metadata-bound and don't flood the audit with false positives (their args are PK + Options
+// only — no encrypted values by construction). Must stay in sync with the redactor's
+// INPUT_TYPE_REGEX in secretRedactor.ts. See docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md.
+const INPUT_TYPE_REGEX = /^(Create|Update|Delete).+Input$/;
 
 /**
  * Structural shape of an `@Arg` parameter as seen from outside type-graphql's internals.

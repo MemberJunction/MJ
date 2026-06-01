@@ -8,7 +8,84 @@
 
 **PR**: [#2648](https://github.com/MemberJunction/MJ/pull/2648)
 
-**Status**: Implementation complete. Tests + smoke verification pending senior review.
+**Status**: Superseded in part by senior review. See **Resolution (post-review)** below.
+The double-logging + structural-shape design described in the body was rejected;
+the value-bearing-but-secret-masked line is kept, the shape line is deleted, and
+the "no literal value under any flag" invariant is retracted. Decision recorded in
+[`docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md`](../../docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md).
+
+---
+
+## Resolution (post-review) — supersedes the structural-shape design below
+
+Two senior reviewers surfaced a conflict the body of this PRD did not reconcile:
+
+- **Senior #1**: under `MJ_LOG_GRAPHQL_VARIABLES=true`, every request was **double-logged**
+  (the value-blind shape line from the last commit + the value-bearing middleware line from
+  the earlier commit), and the middleware line re-introduces **plaintext PII and payloads**
+  (everything not `Encrypt=true`) — a much broader surface than the shape line, under the flag
+  documented as the "safe debug path."
+- **Senior #2**: shape-only output (`'<string>'`) is not enough — **fully-emitted real values**
+  are very valuable for debug sessions. Keep them, but gate behind verbose, never in prod.
+
+**Decided behavior** (replaces the three-layer model and the absolute invariant):
+
+| Tier | Output |
+|---|---|
+| **Default / production** | operation name only — no `variables`, no values |
+| **Verbose (`MJ_LOG_GRAPHQL_VARIABLES=true`)** | variables **fully emitted with real values**, *except* `Encrypt=true` fields, which stay `<redacted>` even in verbose |
+
+**Consequences / deletions:**
+- The value-blind **structural-shape line is removed**. `logging/structuralShape.ts` and its
+  two test files (`structuralShape.test.ts`, `buildBoundaryLogPayload.test.ts`, 41 tests) are
+  **deleted**. The `buildBoundaryLogPayload` call + import in `context.ts` are removed; the
+  always-on boundary line becomes `console.dir({ operationName })`.
+- The **value-bearing middleware path survives unchanged**: `variablesLoggingMiddleware.ts`,
+  `secretRedactor.ts`, `NoLog.ts`, `bootAudit.ts`, `shortenForLog.ts`. It is the **sole values
+  emitter** in verbose mode (per-root-resolver granularity).
+- The **"no literal value under any flag" invariant is RETRACTED.** It was only ever true of
+  the deleted shape line. Verbose mode emits real values by design.
+- **PII (non-`Encrypt=true`) IS emitted in verbose** — accepted as opt-in developer debug data
+  (Q3 resolution). No keyword/PII heuristics are added (that principle stays). Mitigation is
+  default-off-in-all-environments + loud "never enable in prod / shared-data dev" docs.
+- **Encrypted-field masking caveats** (documented, out-of-scope): masks **top-level keys only**
+  (a secret nested inside a non-`Encrypt` JSON blob field is emitted whole) and applies only to
+  `Create*Input`/`Update*Input` shapes (custom resolvers rely on `@NoLog`).
+- One new test added: default config → boundary payload has no `variables` key (guards the
+  #2638 prod-line fix against regression).
+
+### Two additional bugs found and fixed during live smoke testing
+
+1. **Boot-audit flood.** With `Delete` excluded from the input-type regex, the verbose-mode
+   boot audit flagged every codegen `DeleteMJ*` resolver as "custom" and dumped **hundreds**
+   of false-positive lines (`ID`, `options___`). **Fixed** by including `Delete` in both the
+   audit regex (`bootAudit.ts`) and the redactor regex (`secretRedactor.ts`):
+   `^(Create|Update|Delete).+Input$`. Security is unchanged — delete inputs carry PK + Options
+   only, no encrypted values, and an encrypted field would still mask if present
+   (defense-in-depth test added). This resolves PRD open-question #2 in favor of *including* `Delete`.
+2. **Field-level `@NoLog` silently ignored on non-entity-bound inputs.** The redactor consulted
+   `noLogFields` only on the entity-bound walk (after matching `Create/Update/Delete*Input` +
+   finding an entity), so a field-level `@NoLog` on a custom input — e.g. `GetDataInputType.Token`,
+   whose GraphQL type `GetDataInput` is not entity-bound — was **silently ignored and the token
+   would leak**. **Fixed**: the redactor now walks top-level keys whenever a redaction source
+   exists (encrypted fields **or** `@NoLog` fields), regardless of entity binding. This is exactly
+   the case `@NoLog` was designed for.
+
+### Smoke-test results (live against running MJAPI, SQL Server)
+
+| Test | Result |
+|---|---|
+| Default config: boundary line = `{ operationName }` only, no values, no second line | ✅ PASS (live) |
+| Verbose: middleware emits real values (`EntityName`, filters) fully | ✅ PASS (live) |
+| Verbose: `CreateMJCredential` → `Values: '<redacted>'`; `grep -c FAKE_SECRET` = **0** | ✅ PASS (live) |
+| `@NoLog` `Token` on `GetData` → `<redacted>` | ✅ PASS (unit; GetData is system-user-only) |
+
+Final: build clean; **261 tests pass, 56 skipped, 0 fail** in MJServer.
+
+Everything below this line is the **pre-resolution** design and is retained for history only.
+Where it conflicts with this section, this section wins.
+
+---
 
 **Revision history**: Initial PRD walked the design tree but framed the new
 middleware as the primary defense. Ultrareview pointed out that the actual leak
