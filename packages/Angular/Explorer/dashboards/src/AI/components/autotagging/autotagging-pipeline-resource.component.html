@@ -429,121 +429,18 @@
     }
 
     <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
-    @if (ShowItemDetail && SelectedFeedItem) {
-        <div class="at-slide-overlay" (click)="CloseItemDetail()"></div>
-        <div class="at-slide-panel at-detail-panel">
-            <div class="at-slide-header">
-                <h3><i class="fa-solid fa-file-lines"></i> Content Item</h3>
-                <button class="at-slide-close" aria-label="Close item detail" (click)="CloseItemDetail()"><i class="fa-solid fa-times"></i></button>
-            </div>
-            <div class="at-slide-body">
-                <!-- Header -->
-                <div class="at-detail-item-header">
-                    <h4 class="at-detail-item-name">{{ SelectedFeedItem.Name }}</h4>
-                    <div class="at-detail-badges">
-                        <span class="at-detail-badge at-detail-badge-source">{{ SelectedFeedItem.SourceName }}</span>
-                        @if (SelectedFeedItem.RequiresContentType) {
-                            <span class="at-detail-badge at-detail-badge-type">{{ SelectedFeedItem.ContentTypeName }}</span>
-                            @if (SelectedFeedItem.FileTypeName) {
-                                <span class="at-detail-badge at-detail-badge-file"><i class="fa-solid fa-file"></i> {{ SelectedFeedItem.FileTypeName }}</span>
-                            }
-                        }
-                    </div>
-                </div>
-
-                <!-- URL -->
-                @if (SelectedFeedItem.URL) {
-                    <div class="at-detail-section">
-                        <div class="at-detail-section-label">URL</div>
-                        <a [href]="SelectedFeedItem.URL" target="_blank" class="at-detail-link">
-                            {{ SelectedFeedItem.URL }}
-                            <i class="fa-solid fa-external-link-alt" style="font-size: 0.65rem; margin-left: 4px;"></i>
-                        </a>
-                    </div>
-                }
-
-                <!-- Text Preview -->
-                @if (SelectedFeedItem.TextContent) {
-                    <div class="at-detail-section">
-                        <div class="at-detail-section-label">Content Preview</div>
-                        <div class="at-detail-text-preview">{{ SelectedFeedItem.TextContent }}</div>
-                    </div>
-                }
-
-                <!-- Tags (weighted) -->
-                @if (SelectedFeedItem.Tags.length > 0) {
-                    <div class="at-detail-section">
-                        <div class="at-detail-section-label">Tags ({{ SelectedFeedItem.Tags.length }})</div>
-                        <div class="at-detail-tags">
-                            @for (wt of SelectedFeedItem.Tags; track wt.Tag) {
-                                <span class="at-tag-pill at-tag-weighted" [style.font-size]="TagFontSize(wt.Weight)">
-                                    {{ wt.Tag }}
-                                    <span class="at-tag-weight">{{ FormatWeight(wt.Weight) }}</span>
-                                </span>
-                            }
-                        </div>
-                    </div>
-                }
-
-                <!-- Metadata -->
-                <div class="at-detail-section">
-                    <div class="at-detail-section-label">Metadata</div>
-                    <div class="at-detail-meta-grid">
-                        @if (SelectedFeedItem.Checksum) {
-                            <div class="at-detail-meta-row">
-                                <span class="at-detail-meta-key">Checksum</span>
-                                <span class="at-detail-meta-value at-detail-meta-mono">{{ SelectedFeedItem.Checksum }}</span>
-                            </div>
-                        }
-                        <div class="at-detail-meta-row">
-                            <span class="at-detail-meta-key">Created</span>
-                            <span class="at-detail-meta-value">{{ SelectedFeedItem.CreatedAt }}</span>
-                        </div>
-                        <div class="at-detail-meta-row">
-                            <span class="at-detail-meta-key">Updated</span>
-                            <span class="at-detail-meta-value">{{ SelectedFeedItem.UpdatedAt }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Actions -->
-                <div class="at-detail-actions">
-                    <button class="at-action-btn at-primary-btn" (click)="OpenRecordFromItem(SelectedFeedItem)">
-                        <i class="fa-solid fa-external-link-alt"></i> Open Record
-                    </button>
-                    <button class="at-action-btn at-secondary-btn" disabled>
-                        <i class="fa-solid fa-magnifying-glass"></i> See Similar Items
-                    </button>
-                </div>
-            </div>
-        </div>
-    }
+    <classify-item-detail-dialog
+        [Item]="SelectedFeedItem"
+        [Show]="ShowItemDetail"
+        (Closed)="CloseItemDetail()"
+        (OpenRecordRequested)="OpenRecordFromItem($event)"
+        [Provider]="ProviderToUse"></classify-item-detail-dialog>
 
     <!-- No Content Types Warning Dialog (z-index above slide-in panel) -->
-    @if (ShowNoContentTypeWarning) {
-        <div class="at-schedule-dialog-overlay" style="z-index: 10001;" (click)="ShowNoContentTypeWarning = false">
-            <div class="at-schedule-dialog" style="max-width: 440px; z-index: 10002;" (click)="$event.stopPropagation()">
-                <div class="at-schedule-dialog-header">
-                    <span><i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-warning); margin-right: 8px;"></i> Content Type Required</span>
-                    <button class="at-close-btn" aria-label="Close warning" (click)="ShowNoContentTypeWarning = false"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <div class="at-schedule-dialog-body" style="text-align: center; padding: 24px;">
-                    <p style="color: var(--mj-text-secondary); margin-bottom: 16px;">
-                        No content types have been configured yet. At least one content type is required before you can create a content source.
-                    </p>
-                    <p style="color: var(--mj-text-muted); font-size: 13px;">
-                        Go to the <strong>Content Types</strong> tab to create one.
-                    </p>
-                </div>
-                <div class="at-schedule-dialog-footer">
-                    <button class="at-action-btn at-primary-btn" (mousedown)="ShowNoContentTypeWarning = false; CloseForm(); SwitchTab('types')">
-                        <i class="fa-solid fa-arrow-right"></i> Go to Content Types
-                    </button>
-                    <button class="at-action-btn at-secondary-btn" (click)="ShowNoContentTypeWarning = false">Close</button>
-                </div>
-            </div>
-        </div>
-    }
+    <classify-no-content-type-warning
+        [Show]="ShowNoContentTypeWarning"
+        (GoToTypes)="ShowNoContentTypeWarning=false; CloseForm(); SwitchTab('types')"
+        (Dismissed)="ShowNoContentTypeWarning=false"></classify-no-content-type-warning>
   </div>
   </mj-page-body>
 </mj-page-layout>
