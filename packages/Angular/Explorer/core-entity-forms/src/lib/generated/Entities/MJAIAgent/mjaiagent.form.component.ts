@@ -18,13 +18,13 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'agentIdentityPresentation', sectionName: 'Agent Identity & Presentation', isExpanded: true },
             { sectionKey: 'hierarchyInvocation', sectionName: 'Hierarchy & Invocation', isExpanded: true },
-            { sectionKey: 'contextCompression', sectionName: 'Context Compression', isExpanded: false },
-            { sectionKey: 'payloadDataFlow', sectionName: 'Payload & Data Flow', isExpanded: false },
-            { sectionKey: 'runtimeLimitsExecutionSettings', sectionName: 'Runtime Limits & Execution Settings', isExpanded: false },
-            { sectionKey: 'attachmentStorage', sectionName: 'Attachment Storage', isExpanded: false },
-            { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: false },
-            { sectionKey: 'retentionArchiving', sectionName: 'Retention & Archiving', isExpanded: false },
-            { sectionKey: 'retrievalRanking', sectionName: 'Retrieval & Ranking', isExpanded: false },
+            { sectionKey: 'contextCompression', sectionName: 'Context Compression', isExpanded: true },
+            { sectionKey: 'payloadDataFlow', sectionName: 'Payload & Data Flow', isExpanded: true },
+            { sectionKey: 'runtimeLimitsExecutionSettings', sectionName: 'Runtime Limits & Execution Settings', isExpanded: true },
+            { sectionKey: 'attachmentStorage', sectionName: 'Attachment Storage', isExpanded: true },
+            { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
+            { sectionKey: 'retentionArchiving', sectionName: 'Retention & Archiving', isExpanded: true },
+            { sectionKey: 'retrievalRanking', sectionName: 'Retrieval & Ranking', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
@@ -51,7 +51,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
-            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false }
+            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);
     }
 }

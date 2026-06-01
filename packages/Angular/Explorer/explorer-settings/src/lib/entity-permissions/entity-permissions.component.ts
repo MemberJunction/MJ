@@ -10,6 +10,7 @@ import {
 } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
 
 interface PermissionsStats {
@@ -76,7 +77,13 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   // UI State
   public expandedEntityId: string | null = null;
   public viewMode: 'grid' | 'list' = 'list';
-  public showMobileFilters = false;
+
+  /** Options for the <mj-view-toggle> in the interior chrome. Icon-only;
+      title drives the tooltip + aria-label. */
+  public readonly viewToggleOptions: ViewToggleOption[] = [
+    { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+    { key: 'grid', icon: 'fa-solid fa-th',   title: 'Grid View' }
+  ];
 
   protected override destroy$ = new Subject<void>();
   private get metadata() { return this.ProviderToUse; }
@@ -264,25 +271,55 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ entitySearch: value });
-  }
-  
   public onAccessLevelChange(level: 'all' | 'public' | 'restricted' | 'custom'): void {
     this.updateFilter({ accessLevel: level });
   }
-  
-  public onRoleFilterChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter({ roleId: value || null });
-  }
-  
+
   public updateFilter(partial: Partial<FilterOptions>): void {
     this.filters$.next({
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips, popover dropdowns) apply immediately. Text search
+    // still goes through the 300ms debounce in setupFilterSubscription.
+    if (!('entitySearch' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
+  }
+
+  // -- Filter panel binding (mj-filter-panel inside the popover) -------------
+  // Role lives in the popover; access level chips track their own state in
+  // the toolbar slot. See Section 10 of explorer-chrome-conventions.
+
+  public get filterFields(): FilterFieldConfig[] {
+    return [{
+      key: 'roleId',
+      type: 'dropdown',
+      label: 'Role',
+      icon: 'fa-solid fa-user-shield',
+      placeholder: 'All Roles',
+      filterable: this.roles.length > 10,
+      options: [
+        { text: 'All Roles', value: '' },
+        ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+      ]
+    }];
+  }
+
+  public get filterValues(): Record<string, unknown> {
+    return { roleId: this.filters$.value.roleId ?? '' };
+  }
+
+  public get popoverActiveFilterCount(): number {
+    return this.filters$.value.roleId ? 1 : 0;
+  }
+
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    const roleId = (values['roleId'] as string) || null;
+    this.filters$.next({ ...this.filters$.value, roleId });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
   
   public toggleEntityExpansion(entityId: string): void {

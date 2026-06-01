@@ -524,9 +524,14 @@ mj update:claude
   },
   "warnings": [
     ".claude/commands/commit.md differs from pack — kept user version"
+  ],
+  "notes": [
+    "Pack is up to date (v5.1.0)."
   ]
 }
 ```
+
+**`warnings` vs `notes`**: `warnings` flags a state the caller may want to act on (no local pack, customized file would be overwritten, malformed managed block). `notes` is purely informational status — `Pack is up to date` and `Update available: v5.1 → v5.2` land here so successful `--check` runs don't masquerade as warnings. Both fields are always present (empty array if none), so downstream consumers can iterate without optional-chaining.
 
 ### 7.6 Doctor integration
 

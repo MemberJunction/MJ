@@ -15,7 +15,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         SearchEntityParams, EntitySearchResult, ScoredCandidate } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -477,7 +478,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
@@ -494,7 +495,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
      * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
      */
-    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number, startRow?: number): Promise<RunQueryResult> {
         const query = gql`
             query ExecuteAdhocQuery($input: AdhocQueryInput!) {
                 ExecuteAdhocQuery(input: $input) {
@@ -503,9 +504,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         `;
 
-        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        const input: { SQL: string; TimeoutSeconds?: number; MaxRows?: number; StartRow?: number } = { SQL: sql };
         if (timeoutSeconds !== undefined) {
             input.TimeoutSeconds = timeoutSeconds;
+        }
+        if (maxRows !== undefined) {
+            input.MaxRows = maxRows;
+        }
+        if (startRow !== undefined) {
+            input.StartRow = startRow;
         }
 
         const result = await this.ExecuteGQL(query, { input });
@@ -1469,6 +1476,112 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if(data && data.GetRecordDuplicates){
             return data.GetRecordDuplicates;
         }
+    }
+
+    /**
+     * Ranked search over many entities in one GraphQL round-trip.
+     *
+     * Both the singular {@link SearchEntity} and the batched `SearchEntities`
+     * forms on the client route through the same plural GQL endpoint — one
+     * request, one response, regardless of how many entities are in `params`.
+     * The full ranking (lexical + semantic + RRF blend + permission filter)
+     * runs server-side against the backing database provider; the client just
+     * unpacks the already-ranked, permission-filtered result groups and
+     * returns them aligned by input order.
+     *
+     * Overrides the inherited `Promise.all`-based fan-out on `ProviderBase`
+     * because the client has no embedder, no vector pool, and no business
+     * doing the work locally — N round-trips to N entities would be silly when
+     * one batched payload returns the same answer.
+     */
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        if (!params || params.length === 0) return [];
+        const valid = params.filter(p => p?.entityName && p?.searchText && p.searchText.trim());
+        if (valid.length === 0) return params.map(() => []);
+
+        const query = gql`query SearchEntitiesQuery($params: [SearchEntityInput!]!) {
+            SearchEntities(params: $params) {
+                Success
+                ErrorMessage
+                Groups {
+                    EntityName
+                    Results {
+                        EntityRecordDocumentID
+                        RecordID
+                        Score
+                        MatchType
+                        LexicalScore
+                        SemanticScore
+                    }
+                }
+            }
+        }`;
+
+        const gqlParams = params.map(p => ({
+            EntityName: p.entityName,
+            SearchText: p.searchText,
+            Mode: p.options?.mode ?? 'hybrid',
+            RrfK: p.options?.rrfK,
+            LexicalWeight: p.options?.weights?.lexical,
+            SemanticWeight: p.options?.weights?.semantic,
+            TopK: p.options?.topK,
+            MinScore: p.options?.minScore,
+            EntityDocumentID: p.options?.entityDocumentId,
+        }));
+
+        const data = await this.ExecuteGQL(query, { params: gqlParams });
+        if (!data?.SearchEntities?.Success) {
+            if (data?.SearchEntities?.ErrorMessage) {
+                LogError(`SearchEntities GraphQL error: ${data.SearchEntities.ErrorMessage}`);
+            }
+            return params.map(() => []);
+        }
+
+        // Groups arrive aligned by input order; we trust the server to preserve that.
+        const groups = data.SearchEntities.Groups as Array<{
+            EntityName: string;
+            Results: Array<{
+                EntityRecordDocumentID: string | null;
+                RecordID: string;
+                Score: number;
+                MatchType: EntitySearchResult['matchType'];
+                LexicalScore: number | null;
+                SemanticScore: number | null;
+            }>;
+        }>;
+
+        return groups.map(group => group.Results.map(r => ({
+            entityRecordDocumentId: r.EntityRecordDocumentID,
+            recordId: r.RecordID,
+            score: r.Score,
+            matchType: r.MatchType,
+            components: {
+                lexical: r.LexicalScore ?? undefined,
+                semantic: r.SemanticScore ?? undefined,
+            },
+        })));
+    }
+
+    /**
+     * Singular form — convenience wrapper that calls the batched
+     * {@link SearchEntities} with a single-element params list. Same one
+     * GraphQL round-trip; same server-side ranking. Returning `results[0]`
+     * is safe even for invalid inputs because `SearchEntities` returns an
+     * empty array per slot in that case.
+     */
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const groups = await this.SearchEntities([params]);
+        return groups[0] ?? [];
+    }
+
+    /**
+     * Unreachable on the client — `SearchEntity` and `SearchEntities` are both
+     * overridden above to proxy through one batched GraphQL round-trip, so the
+     * inherited template-method orchestration never invokes this. Implementing
+     * the abstract method as a no-op is purely a type-system requirement.
+     */
+    protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
+        return [];
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
@@ -2668,9 +2781,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._isDisposingSocketIntentionally = false;
             this._wsClient = createClient({
                 url: this.ConfigData.WSURL,
-                connectionParams: {
+                // Function form: re-evaluated on every connection attempt (including
+                // retries after 4403 "Token expired"). This lets the client pick up a
+                // freshly-refreshed token instead of reusing the stale one.
+                connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
+                }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,
                 shouldRetry: () => true,
@@ -2681,7 +2797,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._wsClient.on('connected', () => {
                 this._socketStateSubject.next('connected');
             });
-            this._wsClient.on('closed', () => {
+            this._wsClient.on('closed', (event: unknown) => {
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -2689,6 +2805,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return;
                 }
                 this._socketStateSubject.next('disconnected');
+
+                // If the server closed with 4403 "Token expired", eagerly refresh
+                // the token so that graphql-ws retries use a fresh one. Without this,
+                // all retry attempts would reuse the stale token and fail.
+                const closeCode = (event as { code?: number })?.code;
+                if (closeCode === 4403 && this._configData.Data.RefreshTokenFunction) {
+                    this.RefreshToken().catch(() => {
+                        // RefreshToken failure is handled via notifyAuthenticationError
+                    });
+                }
             });
 
             // Start cleanup timer if not already running

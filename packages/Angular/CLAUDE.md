@@ -68,7 +68,7 @@ Don't assume children will fall back to the global — they might, but you'd be 
 
 ### Migration Status
 
-There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](/plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
+There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](../../plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
 
 **For new components and any component you touch:** apply the pattern above. Don't add to the migration debt.
 
@@ -212,7 +212,7 @@ your-project@1.0.0
 
 ## 📚 Dashboard Development Guide
 
-**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](/guides/DASHBOARD_BEST_PRACTICES.md)**.
+**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](../../guides/DASHBOARD_BEST_PRACTICES.md)**.
 
 This guide covers:
 - Architecture patterns (no Angular data services - use MJ Engine classes)
@@ -221,7 +221,7 @@ This guide covers:
 - Getter/setter state management pattern
 - User preferences via UserInfoEngine
 - Data loading patterns with RunView and local caching
-- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md).
+- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](../../plans/explorer-chrome-conventions.md).
 - Layout patterns using CSS Flexbox/Grid
 - Permission checking patterns
 - Creating new Engine classes for domain logic
@@ -230,7 +230,7 @@ This guide covers:
 
 ### ⚠️ Page Chrome — exception to be aware of
 
-If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use a local `.sticky-header` action row instead. This is Section 9b of the chrome conventions; the decision on the long-term pattern (Section 10) is deferred to a future branch.
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, the Dev Tools inspectors, SystemDiagnostics, Database Designer, etc.), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use **`<mj-page-header-interior>`** at the top of the body instead: a two-row card with `[Title]` + `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots (same slot conventions as `<mj-page-header>`, different visual shape). The toolbar row collapses entirely when empty. Full contract in Section 10 of [`plans/explorer-chrome-conventions.md`](../../plans/explorer-chrome-conventions.md). Reference implementations cover all four Admin shells (~15 sub-pages).
 
 ---
 
@@ -272,6 +272,40 @@ See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
 ```
 
 The same rule applies to `[Submit] [Cancel]`, `[Update] [Cancel]`, `[Apply] [Discard]`, etc. — the affirmative action is always leftmost (after any far-left destructive actions like Sign Out / Delete).
+
+---
+
+## 🚨 Button Styling: Don't Override `.mj-btn` in Component CSS 🚨
+
+The `mjButton` directive's appearance is owned by **one** stylesheet — `button.scss` in `@memberjunction/ng-ui-components` — and loaded globally by the application. **Don't write component-scoped `.mj-btn` or `.mj-btn-*` rules anywhere else.**
+
+### Why
+
+Angular's emulated encapsulation gives a component-scoped `.mj-btn` rule higher specificity than the global directive's `.mj-btn` rule. The component-scoped override wins inside that component, and the button silently renders differently from how it looks everywhere else in the app — pill instead of rounded, 44px instead of 32px, different padding, whatever the override chose. Two pages with the same `<button mjButton variant="primary" size="sm">` end up looking different. The user-facing symptom is "this button doesn't match the rest of the app."
+
+### How to customize buttons
+
+- **Use the directive's inputs**: `[variant]="..."` (`primary` / `secondary` / `outline` / `flat` / `danger` / `icon` / `success` / `warning`) and `[size]="..."` (`sm` / `md` / `lg`). Together they cover the standard chrome shapes.
+- **Variant not covered?** Extend `button.scss` directly in `ng-ui-components` so the new variant is available app-wide. Don't add a variant by overriding `.mj-btn-secondary` in a component's CSS.
+- **Truly bespoke one-off?** Wrap the button in a wrapper class and target the wrapper, NOT `.mj-btn`. E.g., `.my-special-row > button { ... }` not `.my-special-row .mj-btn { ... }` — the wrapper-scoped descendant selector still leaves directive defaults intact for any other `.mj-btn` in the same component.
+
+### Legacy single-dash classes (`mj-btn-primary`, `mj-btn-icon-mobile`, etc.)
+
+These predate the mjButton directive. They use single-dash naming (`.mj-btn-primary`) where the directive applies BEM-style modifiers (`.mj-btn--primary`). The legacy classes don't match the directive's selectors and never did — they were always a parallel system. When migrating any component, **strip `class="mj-btn-icon-mobile"` / `class="mj-btn-primary"` / etc. from button elements**; the directive's `[variant]` + `[size]` inputs are the canonical way to express what those classes used to mean.
+
+### Anti-pattern (do not do this)
+
+```css
+/* my-component.component.css */
+.mj-btn {                              /* ❌ overrides the directive globally inside this component */
+  border-radius: var(--mj-radius-full);
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
+}
+.mj-btn-secondary {                    /* ❌ legacy class — doesn't match the directive anyway, just dead code */
+  background: var(--mj-bg-page);
+}
+```
 
 ---
 
@@ -518,10 +552,37 @@ export class WorkspaceComponent {
 4. **Framework Alignment**: Works with Angular's change detection naturally
 5. **Multiple Instance Support**: Same component can be used multiple times without conflict
 
-## 🚨 CRITICAL: Creating Custom Entity Forms 🚨
+## 🚨 CRITICAL: Extending Entity Forms — Two Valid Patterns 🚨
 
-### Overview
-MemberJunction uses `@RegisterClass` to allow custom forms to override generated forms. When a user opens an entity record, the system looks for the highest-priority registered form for that entity.
+MemberJunction has **two** patterns for extending generated entity forms. Both are first-class and supported — they exist because they solve different problems. Pick the one that matches your scope.
+
+### Pattern 1: `BaseFormPanel` slots — for adding panels alongside the generated UI
+
+Write a standalone Angular component that extends `BaseFormPanel`, decorate it with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare it in any module. The next time anyone opens that entity's edit form, the panel renders in your chosen slot via `<mj-form-panel-slot>`. No `*Extended` class. No restating every generated panel. No custom HTML for the existing form.
+
+**Use when** the generated form's layout is fine, you just want to add governance widgets, typed-config panels, type-conditional sections, or any standalone UI. The generated form keeps regenerating freely; your panels mount alongside.
+
+**Full authoring guide**: [`packages/Angular/Generic/base-forms/PANELS.md`](Generic/base-forms/PANELS.md) — slot positions, fallback chain, multiple-panels-per-slot ordering, composition (reusing panels outside the form), CodeGen requirement.
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'content-sources:my-extra-panel',
+    skipNullKeyWarning: true,
+    metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 50 },
+})
+@Component({ standalone: false, selector: '...', templateUrl: '...' })
+export class MyExtraPanel extends BaseFormPanel<MJContentSourceEntity> { /* ... */ }
+```
+
+Slot positions (top to bottom): `top-area`, `before-fields`, `after-fields`, `after-related`, `after-everything`. The container always emits `after-everything`, so panels whose preferred slot is missing (downstream consumers running an older CodeGen template) fall through there — no broken state, just a less-ideal position until CodeGen runs against the new template.
+
+### Pattern 2: Full custom form override — for fundamentally different UX
+
+The "extend the generated form" pattern documented below. Use when the generated layout is the wrong shape for what you're building: you need to hide generated panels, restructure the toolbar, embed a non-collapsible-panel UX (a flow editor, a Kanban board, a wizard), or otherwise own the entire form rendering. The canonical example is `AIAgentFormComponentExtended` — its flow editor isn't a "panel alongside fields," it IS the form.
+
+**When in doubt**: if you can describe your extension as "the generated form plus a couple extra sections," use Pattern 1. If your answer is "the generated form is the wrong starting point entirely," use Pattern 2.
+
+### Pattern 2 details (full custom form override)
 
 ### The Pattern: Extend the Generated Form
 

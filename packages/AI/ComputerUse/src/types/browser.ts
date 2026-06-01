@@ -21,7 +21,8 @@ export type BrowserAction =
     | NavigateAction
     | GoBackAction
     | GoForwardAction
-    | RefreshAction;
+    | RefreshAction
+    | DragAction;
 
 export class ClickAction {
     public readonly Type = 'Click' as const;
@@ -93,6 +94,28 @@ export class RefreshAction {
     public readonly Type = 'Refresh' as const;
 }
 
+export class DragAction {
+    public readonly Type = 'Drag' as const;
+    /** Start X coordinate in viewport pixels */
+    public StartX: number = 0;
+    /** Start Y coordinate in viewport pixels */
+    public StartY: number = 0;
+    /** End X coordinate in viewport pixels */
+    public EndX: number = 0;
+    /** End Y coordinate in viewport pixels */
+    public EndY: number = 0;
+    /** Optional bounding box for the drag start (centroid is used) */
+    public StartBoundingBox?: BoundingBox;
+    /** Optional bounding box for the drag end (centroid is used) */
+    public EndBoundingBox?: BoundingBox;
+    /**
+     * Number of intermediate mouse-move steps between start and end.
+     * Higher values produce smoother drags that some HTML5 drag-and-drop
+     * handlers require to register the drag (>= 5 recommended).
+     */
+    public Steps: number = 10;
+}
+
 // ─── Bounding Box ──────────────────────────────────────────
 export class BoundingBox {
     /** Minimum X coordinate (left edge) */
@@ -137,6 +160,8 @@ export class BrowserConfig {
     public ActionTimeoutMs: number = 10000;
     /** Slow down actions by this many milliseconds (useful for debugging) */
     public SlowMo?: number;
+    /** Additional Chromium launch arguments (e.g., --unsafely-treat-insecure-origin-as-secure) */
+    public Args?: string[];
 
     /**
      * Pre-populate localStorage for specific origins before any page loads.

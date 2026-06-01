@@ -64,7 +64,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 
 @NgModule({
   declarations: [
-    AppComponent, 
+    AppComponent,
   ],
   imports: [
     // Angular Core Modules

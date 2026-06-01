@@ -27,7 +27,12 @@ import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import { GitHubReleaseProvider } from '../adapters/GitHubReleaseProvider.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
+import { RepoFetcher, type SparseFetchResult } from '../adapters/RepoFetcher.js';
+import { DistributionAssembler, distributionSourcePaths } from '../distribution/DistributionAssembler.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
+
+/** Default canonical MemberJunction clone URL used for the distribution sparse fetch. */
+const DEFAULT_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
 
 /**
  * Input context for the scaffold phase.
@@ -46,8 +51,14 @@ export interface ScaffoldContext {
   Yes: boolean;
   /** Event emitter for progress, prompt, and log events. */
   Emitter: InstallerEventEmitter;
-  /** Installation mode — controls whether the bootstrap ZIP or full monorepo is downloaded. */
+  /**
+   * Installation mode. `distribution` (default) sparse-checks-out the source at the
+   * resolved tag and assembles the distribution layout; `monorepo` downloads and
+   * extracts the full repository zip.
+   */
   InstallMode?: 'distribution' | 'monorepo';
+  /** Canonical repo clone URL for the distribution sparse fetch (defaults to the MJ repo). */
+  RepoUrl?: string;
 }
 
 /**
@@ -80,6 +91,8 @@ export interface ScaffoldResult {
 export class ScaffoldPhase {
   private github!: GitHubReleaseProvider;
   private fileSystem = new FileSystemAdapter();
+  private repoFetcher = new RepoFetcher();
+  private assembler = new DistributionAssembler();
 
   /**
    * Execute the scaffold phase: resolve version, download ZIP, and extract.
@@ -95,25 +108,136 @@ export class ScaffoldPhase {
   async Run(context: ScaffoldContext): Promise<ScaffoldResult> {
     const { Emitter: emitter } = context;
     const mode = context.InstallMode ?? 'distribution';
-    this.github = new GitHubReleaseProvider(undefined, undefined, mode);
+    this.github = new GitHubReleaseProvider();
 
-    // Step 1: Resolve version
+    // Step 1: Resolve the concrete version (a release tag) to install.
     const version = context.Tag
       ? await this.resolveTag(context.Tag, emitter)
       : await this.selectVersion(context.Yes, emitter);
 
-    // Step 2: Check if target dir is non-empty
+    // Step 2: Confirm the target directory is safe to write into.
     await this.confirmTargetDir(context.Dir, context.Yes, emitter);
 
-    // Step 3: Download ZIP
+    // Step 3: Materialize the code into the target directory. Distribution mode
+    // sparse-checks-out the source and assembles the distribution layout; monorepo
+    // mode downloads and extracts the full repository zip.
+    if (mode === 'monorepo') {
+      await this.downloadAndExtract(version, context);
+    } else {
+      await this.fetchAndAssemble(version, context);
+    }
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'scaffold',
+      Message: `Release ${version.Tag} installed to ${context.Dir}`,
+    });
+
+    return { Version: version, ExtractedDir: context.Dir };
+  }
+
+  /**
+   * Distribution path: blobless sparse-checkout of the source at the resolved tag,
+   * then assemble the distribution layout (apps/ rename, flattened tsconfigs, root
+   * files) into the target dir — the same on-disk shape the bootstrap zip produced,
+   * so all downstream phases are unaffected. The temp clone is always cleaned up.
+   *
+   * Also preserves the user's `install.config.json` across the assembly step:
+   * `DistributionAssembler` writes `install.config.json` from the repo's template
+   * (legacy camelCase, empty values), which would clobber a user-populated config
+   * if one already exists in the target dir. Save the user's copy before the
+   * assemble step and restore it afterwards.
+   */
+  private async fetchAndAssemble(version: VersionInfo, context: ScaffoldContext): Promise<void> {
+    const { Emitter: emitter } = context;
+    const repoUrl = context.RepoUrl ?? DEFAULT_REPO_URL;
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'scaffold',
+      Message: `Fetching ${version.Tag} via sparse checkout...`,
+    });
+
+    let fetched: SparseFetchResult;
+    try {
+      fetched = await this.repoFetcher.FetchPaths({
+        RepoUrl: repoUrl,
+        Ref: version.Tag,
+        Paths: distributionSourcePaths(false),
+      });
+    } catch (err) {
+      throw new InstallerError(
+        'scaffold',
+        'FETCH_FAILED',
+        `Failed to fetch ${version.Tag} from ${repoUrl}: ${err instanceof Error ? err.message : String(err)}`,
+        'Check network access to GitHub. For an air-gapped install, run "mj bundle" on a connected machine and install from the resulting zip.'
+      );
+    }
+
+    // Snapshot a user-populated install.config.json before assembly overwrites it.
+    const userConfigPath = path.join(context.Dir, 'install.config.json');
+    const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
+      ? await this.fileSystem.ReadText(userConfigPath)
+      : null;
+
+    try {
+      if (fetched.UsedFallback) {
+        emitter.Emit('log', {
+          Type: 'log',
+          Level: 'verbose',
+          Message: 'Blobless partial clone unavailable; used the full sparse-checkout fallback.',
+        });
+      }
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'scaffold',
+        Message: 'Assembling distribution layout...',
+      });
+      await this.assembler.AssembleToDir({ SourceDir: fetched.Dir }, context.Dir);
+
+      if (savedUserConfig !== null) {
+        await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'scaffold',
+          Message: 'Preserved existing install.config.json across distribution assembly.',
+        });
+      }
+    } catch (err) {
+      throw new InstallerError(
+        'scaffold',
+        'ASSEMBLE_FAILED',
+        `Failed to assemble the distribution: ${err instanceof Error ? err.message : String(err)}`,
+        'Re-run "mj install", or run "mj bundle" and install from the resulting zip.'
+      );
+    } finally {
+      await fetched.Cleanup();
+    }
+  }
+
+  /**
+   * Monorepo path: download the full repository zip for the resolved tag and
+   * extract it into the target directory. Used by `mj install --monorepo`.
+   *
+   * Also preserves the user's `install.config.json` across `ExtractZip`: the
+   * monorepo zip ships a stub `install.config.json` template that would
+   * otherwise overwrite a user-populated config sitting in the target dir.
+   */
+  private async downloadAndExtract(version: VersionInfo, context: ScaffoldContext): Promise<void> {
+    const { Emitter: emitter } = context;
     const zipPath = await this.downloadRelease(version, emitter);
 
-    // Step 4: Extract
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'scaffold',
       Message: 'Extracting release...',
     });
+
+    // Snapshot a user-populated install.config.json before extraction overwrites it.
+    const userConfigPath = path.join(context.Dir, 'install.config.json');
+    const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
+      ? await this.fileSystem.ReadText(userConfigPath)
+      : null;
 
     try {
       await this.fileSystem.ExtractZip(zipPath, context.Dir);
@@ -126,30 +250,21 @@ export class ScaffoldPhase {
       );
     }
 
-    // Step 5: Clean up temp ZIP
+    if (savedUserConfig !== null) {
+      await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'scaffold',
+        Message: 'Preserved existing install.config.json across release extraction.',
+      });
+    }
+
+    // Clean up temp ZIP (non-critical).
     try {
       await this.fileSystem.RemoveFile(zipPath);
     } catch {
-      // non-critical
+      // ignore — temp dir is reclaimed by the OS
     }
-
-    // Step 6: Surface Claude Code pack presence (info if present, warn if absent).
-    // The pack is contract-shipped with every bootstrap ZIP since Milestone 2 of
-    // plans/claude-install-pack.md; a missing pack means the ZIP was built against
-    // an old MJ release or with a broken build, both of which are recoverable via
-    // `mj install:claude` later.
-    await this.reportClaudePack(context.Dir, emitter);
-
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'scaffold',
-      Message: `Release ${version.Tag} extracted to ${context.Dir}`,
-    });
-
-    return {
-      Version: version,
-      ExtractedDir: context.Dir,
-    };
   }
 
   /**

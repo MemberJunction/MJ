@@ -33,6 +33,9 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Doctor - uses @memberjunction/installer engine (lightweight, no bootstrap)
   'doctor',
 
+  // Bundle - uses @memberjunction/installer distribution assembly (lightweight, no bootstrap)
+  'bundle',
+
   // Topic index commands (just display help text, no heavy imports)
   'ai',
   'ai audit',

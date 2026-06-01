@@ -47,6 +47,14 @@ export interface RegisterForStartupOptions {
      * Default: false.
      */
     deferred?: boolean;
+
+    /**
+     * Optional delay in milliseconds before executing the deferred HandleStartup() method.
+     * Only applies when deferred is true.
+     * If specified, the startup manager will wait this amount of time using a timer (setTimeout)
+     * before initiating the loading sequence for the deferred startup class.
+     */
+    deferredDelay?: number;
 }
 
 /**
@@ -472,22 +480,31 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         console.log(`[StartupManager] Kicking off ${registrations.length} deferred engine(s) in background: [${names}]`);
 
         for (const reg of registrations) {
-            const loadStart = Date.now();
-            // Intentionally no await — consumers will rendezvous via EnsureLoaded()
-            reg.getInstance().HandleStartup(contextUser, provider).then(() => {
-                reg.loadedAt = new Date();
-                reg.loadDurationMs = Date.now() - loadStart;
-                console.log(`[StartupManager] ⏱️  Deferred engine loaded: ${reg.constructor.name} (${reg.loadDurationMs}ms)`);
-            }).catch((error: unknown) => {
-                const durationMs = Date.now() - loadStart;
-                const severity = reg.options.severity || 'error';
-                if (severity === 'error') {
-                    console.error(`[StartupManager] Deferred engine failed: ${reg.constructor.name} (${durationMs}ms)`, error);
-                } else if (severity === 'warn') {
-                    console.warn(`[StartupManager] Deferred engine warning: ${reg.constructor.name} (${durationMs}ms)`, error);
-                }
-                // 'silent' / 'fatal' — fatal is meaningless for deferred since boot already returned
-            });
+            const delay = reg.options.deferredDelay || 0;
+            const run = () => {
+                const loadStart = Date.now();
+                reg.getInstance().HandleStartup(contextUser, provider).then(() => {
+                    reg.loadedAt = new Date();
+                    reg.loadDurationMs = Date.now() - loadStart;
+                    console.log(`[StartupManager] ⏱️  Deferred engine loaded: ${reg.constructor.name} (${reg.loadDurationMs}ms)`);
+                }).catch((error: unknown) => {
+                    const durationMs = Date.now() - loadStart;
+                    const severity = reg.options.severity || 'error';
+                    if (severity === 'error') {
+                        console.error(`[StartupManager] Deferred engine failed: ${reg.constructor.name} (${durationMs}ms)`, error);
+                    } else if (severity === 'warn') {
+                        console.warn(`[StartupManager] Deferred engine warning: ${reg.constructor.name} (${durationMs}ms)`, error);
+                    }
+                    // 'silent' / 'fatal' — fatal is meaningless for deferred since boot already returned
+                });
+            };
+
+            if (delay > 0) {
+                console.log(`[StartupManager] Delaying startup of deferred engine ${reg.constructor.name} by ${delay}ms`);
+                setTimeout(run, delay);
+            } else {
+                run();
+            }
         }
     }
 

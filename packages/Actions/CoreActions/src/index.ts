@@ -2,6 +2,7 @@ export * from './generated/action_subclasses.js';
 
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
+export * from './custom/communication/send-to-audience.action';
 export * from './custom/communication/slack-webhook.action';
 export * from './custom/communication/teams-webhook.action';
 
@@ -31,6 +32,9 @@ export * from './custom/utilities/address-services.action';
 // Geo Actions
 export * from './custom/geo/scheduled-geocoding.action';
 
+// Interactive Forms Actions (Phase C: AI authoring of runtime forms)
+export * from './custom/interactive-forms';
+
 // Web Actions
 export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';
@@ -51,6 +55,7 @@ export * from './custom/data/get-entity-details.action';
 export * from './custom/data/get-entity-list.action';
 export * from './custom/data/run-stored-query.action';
 export * from './custom/data/search-query-catalog.action';
+export * from './custom/data/search-entity.action';
 
 // Code Execution Actions
 export * from './custom/code-execution/execute-code.action';

@@ -72,6 +72,12 @@ export const FULL_QUERY_ALLOWED_KEYWORDS = [
 
   // IIF() uses IF internally, CASE WHEN patterns are common
   'IF',
+
+  // FOR JSON / FOR XML — legitimate trailing clauses on a full SELECT. The
+  // control-flow `FOR` loop this keyword guards against cannot appear in a
+  // standalone SELECT statement, so allowing FOR in full-query context is safe.
+  // (FOR UPDATE remains blocked via the independent UPDATE keyword.)
+  'FOR',
 ] as const;
 
 /**

@@ -1,5 +1,122 @@
 # @memberjunction/ng-conversations
 
+## 5.38.0
+
+### Minor Changes
+
+- 8bd97f3: fix: image display + artifact/attachment unification cleanup
+  - Add ImageArtifactViewerPlugin for raster image artifacts
+  - Remove persist gate so agent-generated media always persists as artifacts
+  - AgentRunner writes media artifacts directly (bypass deprecated ConversationDetailAttachment)
+  - Remove deprecated SuggestedResponses feature (superseded by ResponseForm)
+  - Backfill migration for legacy ConversationDetailAttachment rows
+  - Remove all back-compat reads from deprecated ConversationDetailAttachment
+
+### Patch Changes
+
+- b2e6782: Propagate `inputArtifacts` from a parent agent to its sub-agents so delegates inherit the artifact manifest and tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references). Add `group_aggregate`, `compute` (safe arithmetic expression parser), `filter`, and `percentile` tools to the DataSnapshot artifact tool library. Improve client-side snapshot capture to wait for actual rows (not just registered tables) and bump the capture timeout to 15s so query-backed / server-paged components have time to load.
+- a529993: Keep the message header gear icon right-anchored after agent completion by moving the right-anchor onto the whole right-side cluster, and surface the frozen live-elapsed value as a fallback when neither the agent run nor message timestamps yield a duration.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/interactive-component-types@5.38.0
+  - @memberjunction/ng-artifacts@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/ng-code-editor@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ng-forms@5.38.0
+  - @memberjunction/ng-tasks@5.38.0
+  - @memberjunction/ng-testing@5.38.0
+  - @memberjunction/ai-agent-client@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-container-directives@5.38.0
+  - @memberjunction/ng-notifications@5.38.0
+  - @memberjunction/ng-resource-permissions@5.38.0
+  - @memberjunction/ng-shared-generic@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ng-agent-client@5.38.0
+  - @memberjunction/ng-markdown@5.38.0
+  - @memberjunction/ng-ui-components@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- 86a9d0e: Make the floating chat-agents overlay bubble user-draggable (mouse, touch, or pen) so it can be moved out of the way of underlying app buttons it would otherwise occlude. Position persists per-user; the expanded panel anchors to the bubble's location and clamps so the chat interface always stays visible. MJExplorer passes its shell-header height as a top boundary so the bubble cannot be dragged into the header.
+- 22b775f: Add `client:capture-data-snapshot` actionable command so agents can request the user's live view of an artifact (including client-side filter/sort/selection state) before answering. Wires the command through SkipProxyAgent and adds a chat-UI handler that captures the snapshot, attaches it as a Data Snapshot artifact, and auto-sends the followup question.
+- 4f15f31: Add Feedback Explorer dashboard with 1–10 conversation-rating modal persisting to ConversationDetail, plus a migration granting the UI role Create/Update on MJ: User Settings so user-scoped preferences (e.g. Agent Feedback consent) stop silently failing.
+- Updated dependencies [dadbde9]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ai-agent-client@5.37.0
+  - @memberjunction/ng-testing@5.37.0
+  - @memberjunction/ng-artifacts@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ng-forms@5.37.0
+  - @memberjunction/ng-tasks@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-code-editor@5.37.0
+  - @memberjunction/ng-container-directives@5.37.0
+  - @memberjunction/ng-resource-permissions@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/ng-agent-client@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/ng-markdown@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-client@5.36.0
+  - @memberjunction/ng-testing@5.36.0
+  - @memberjunction/ng-artifacts@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-forms@5.36.0
+  - @memberjunction/ng-resource-permissions@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-code-editor@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-tasks@5.36.0
+  - @memberjunction/ng-container-directives@5.36.0
+  - @memberjunction/ng-agent-client@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/ng-markdown@5.36.0
+  - @memberjunction/global@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

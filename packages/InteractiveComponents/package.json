@@ -1,10 +1,22 @@
 {
   "name": "@memberjunction/interactive-component-types",
   "type": "module",
-  "version": "5.35.0",
+  "version": "5.38.0",
   "description": "MemberJunction: Interactive Component - Type specifications for MJ Interactive UI Componentry",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./forms": {
+      "types": "./dist/forms/index.d.ts",
+      "import": "./dist/forms/index.js",
+      "default": "./dist/forms/index.js"
+    }
+  },
   "files": [
     "/dist"
   ],
@@ -20,8 +32,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "5.35.0",
-    "@memberjunction/ai-vectors-memory": "5.35.0"
+    "@memberjunction/core": "5.38.0",
+    "@memberjunction/ai-vectors-memory": "5.38.0"
   },
   "repository": {
     "type": "git",

@@ -26,6 +26,16 @@ export class ClassRegistration {
     Key: string | null = null; // used to identify a special attribute that we use to determine if this is the right sub-class. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries
                 // in the registration list, so we'll use the key to identify which sub-class to use for a given entity
     Priority: number = 0; // if there are multiple entries for a given combination of baseClass and subClass and key, we will use the priority to determine which one to use. The higher the number, the higher the priority
+    /**
+     * Optional structured metadata. Useful when callers want to attach
+     * filterable/sortable attributes to a registration without polluting the
+     * Key string (e.g. form-panel slots: { entity, slot, sortKey }).
+     *
+     * Pair with `ClassFactory.GetAllRegistrationsByMetadata()` /
+     * `GetAllRegistrationsByKeyPrefix()` / `GetAllRegistrationsByKeyPattern()`
+     * to discover registrations beyond exact-key matching.
+     */
+    Metadata?: Record<string, unknown>;
 }
  
 
@@ -130,7 +140,7 @@ export class ClassFactory {
      * @param skipNullKeyWarning If true, will not print a warning if the key is null or undefined. This is useful for cases where you know that the key is not needed and you don't want to see the warning in the console.
      * @param autoRegisterWithRootClass If true, will automatically register the subclass with the root class of the baseClass hierarchy. This ensures proper priority ordering when multiple subclasses are registered in a hierarchy. Defaults to false to preserve the original registration contract where classes are stored under the baseClass you specify.
      */
-    public Register(baseClass: unknown, subClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = false): void {
+    public Register(baseClass: unknown, subClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = false, metadata?: Record<string, unknown>): void {
         if (baseClass && subClass) {
             const baseClassName = (baseClass as NamedClass).name;
             const subClassName = (subClass as NamedClass).name;
@@ -181,6 +191,7 @@ export class ClassFactory {
             reg.RootClass = rootClass;
             reg.Key = key;
             reg.Priority = priority;
+            if (metadata !== undefined) reg.Metadata = metadata;
 
             this._registrations.push(reg);
         }
@@ -230,6 +241,62 @@ export class ClassFactory {
         }
         else
             return [];
+    }
+
+    /**
+     * Returns all registrations for a given base class whose `Key` STARTS WITH the
+     * provided prefix (case-insensitive, trimmed). Useful when registrations follow
+     * a naming convention with a structured prefix (e.g. `"<EntityName>:..."`).
+     *
+     * Prefer `GetAllRegistrationsByMetadata` when the discriminating data is
+     * structured — putting tuples in the key string is fragile.
+     */
+    public GetAllRegistrationsByKeyPrefix(baseClass: unknown, keyPrefix: string): ClassRegistration[] {
+        if (!baseClass || keyPrefix == null) return [];
+        const baseClassName = (baseClass as { name: string }).name;
+        const needle = keyPrefix.trim().toLowerCase();
+        return this._registrations.filter(r => {
+            const regBaseClassName = (r.BaseClass as { name: string }).name;
+            if (regBaseClassName !== baseClassName) return false;
+            return r.Key != null && r.Key.trim().toLowerCase().startsWith(needle);
+        });
+    }
+
+    /**
+     * Returns all registrations for a given base class whose `Key` matches the
+     * provided regex (tested against the trimmed-but-original-case key). Use for
+     * more nuanced discovery patterns than the prefix helper handles.
+     */
+    public GetAllRegistrationsByKeyPattern(baseClass: unknown, pattern: RegExp): ClassRegistration[] {
+        if (!baseClass || !pattern) return [];
+        const baseClassName = (baseClass as { name: string }).name;
+        return this._registrations.filter(r => {
+            const regBaseClassName = (r.BaseClass as { name: string }).name;
+            if (regBaseClassName !== baseClassName) return false;
+            return r.Key != null && pattern.test(r.Key.trim());
+        });
+    }
+
+    /**
+     * Returns all registrations for a given base class whose attached `Metadata`
+     * bag satisfies the predicate. Registrations with no metadata are passed
+     * `undefined` to the predicate.
+     *
+     * This is the recommended discovery path for structured per-registration
+     * data (e.g. form-panel slots that filter by `{ entity, slot }`). It avoids
+     * the brittleness of encoding tuples into the Key string.
+     */
+    public GetAllRegistrationsByMetadata(
+        baseClass: unknown,
+        predicate: (metadata: Record<string, unknown> | undefined, registration: ClassRegistration) => boolean
+    ): ClassRegistration[] {
+        if (!baseClass || typeof predicate !== 'function') return [];
+        const baseClassName = (baseClass as { name: string }).name;
+        return this._registrations.filter(r => {
+            const regBaseClassName = (r.BaseClass as { name: string }).name;
+            if (regBaseClassName !== baseClassName) return false;
+            return predicate(r.Metadata, r);
+        });
     }
 
     /**

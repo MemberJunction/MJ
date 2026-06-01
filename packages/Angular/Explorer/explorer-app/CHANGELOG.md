@@ -1,5 +1,90 @@
 # @memberjunction/ng-explorer-app
 
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [67d6562]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [6a571d3]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [b2e6782]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [a529993]
+- Updated dependencies [60947be]
+- Updated dependencies [2ee14f1]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/ng-base-application@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/ng-shared@5.38.0
+  - @memberjunction/ng-explorer-core@5.38.0
+  - @memberjunction/ng-conversations@5.38.0
+  - @memberjunction/ng-workspace-initializer@5.38.0
+  - @memberjunction/ng-bootstrap@5.38.0
+  - @memberjunction/ai-agent-client@5.38.0
+  - @memberjunction/ng-auth-services@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-feedback@5.38.0
+  - @memberjunction/ng-notifications@5.38.0
+  - @memberjunction/ng-agent-client@5.38.0
+  - @memberjunction/ng-explorer-service-worker@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- 86a9d0e: Make the floating chat-agents overlay bubble user-draggable (mouse, touch, or pen) so it can be moved out of the way of underlying app buttons it would otherwise occlude. Position persists per-user; the expanded panel anchors to the bubble's location and clamps so the chat interface always stays visible. MJExplorer passes its shell-header height as a top boundary so the bubble cannot be dragged into the header.
+- Updated dependencies [86a9d0e]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ng-conversations@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/ai-agent-client@5.37.0
+  - @memberjunction/ng-bootstrap@5.37.0
+  - @memberjunction/ng-explorer-core@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-workspace-initializer@5.37.0
+  - @memberjunction/ng-feedback@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-auth-services@5.37.0
+  - @memberjunction/ng-base-application@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-agent-client@5.37.0
+  - @memberjunction/ng-explorer-service-worker@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/ng-explorer-core@5.36.0
+  - @memberjunction/ng-bootstrap@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-client@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-workspace-initializer@5.36.0
+  - @memberjunction/ng-conversations@5.36.0
+  - @memberjunction/ng-feedback@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-auth-services@5.36.0
+  - @memberjunction/ng-agent-client@5.36.0
+  - @memberjunction/ng-explorer-service-worker@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

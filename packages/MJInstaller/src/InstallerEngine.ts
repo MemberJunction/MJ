@@ -118,6 +118,13 @@ export class InstallerEngine {
    */
   private resolvedConfig: PartialInstallConfig = {};
 
+  /**
+   * Concrete release tag resolved by the scaffold phase this run. Pinned into
+   * `mj.config.cjs` by the configure phase so later `mj migrate` runs target the
+   * same version as the installed code. Undefined when scaffold was skipped (resume).
+   */
+  private resolvedVersion?: string;
+
   // -------------------------------------------------------------------------
   // Public API
   // -------------------------------------------------------------------------
@@ -602,6 +609,9 @@ export class InstallerEngine {
       InstallMode: installMode,
     });
 
+    // Remember the concrete resolved tag so the configure phase can pin it.
+    this.resolvedVersion = result.Version.Tag;
+
     this.emitter.Emit('log', {
       Type: 'log',
       Level: 'info',
@@ -618,12 +628,17 @@ export class InstallerEngine {
     yes: boolean,
     overwriteConfig: boolean = false
   ): Promise<PhaseExecutionResult> {
+    // Prefer the tag resolved this run; on resume (scaffold skipped) fall back to
+    // the plan's explicit tag, but never pin the placeholder 'latest'.
+    const resolvedVersion = this.resolvedVersion ?? (plan.Tag !== 'latest' ? plan.Tag : undefined);
+
     const result = await this.configure.Run({
       Dir: plan.Dir,
       Config: { ...this.resolvedConfig, ...config },
       Yes: yes,
       Emitter: this.emitter,
       OverwriteConfig: overwriteConfig,
+      ResolvedVersion: resolvedVersion,
     });
 
     // Store resolved config for subsequent phases

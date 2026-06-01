@@ -136,6 +136,12 @@ Abstract base class for all job drivers. Provides:
 
 Utility for parsing and evaluating cron expressions using `cron-parser`.
 
+### `RunImmediatelyIfNeverRun` Flag
+
+Each `MJ: Scheduled Jobs` row now has a `RunImmediatelyIfNeverRun` boolean (v5.38). When `true` AND `LastRunAt IS NULL`, `SchedulingEngine.initializeNextRunTimes()` sets `NextRunAt = now()` instead of the next cron tick, so a freshly-seeded job runs on the next polling cycle rather than waiting up to a full cron interval (e.g., 24h for a daily job) for its first run.
+
+Use this for seed metadata that should run as soon as it's installed (data backfills, initial syncs like Entity Vector Sync, etc.). The flag is a no-op once the job has run at least once — subsequent restarts follow the cron schedule normally.
+
 ### NotificationManager
 
 Manages notification delivery based on job configuration (on success, failure, or both).

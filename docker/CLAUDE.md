@@ -12,6 +12,35 @@ This directory contains Docker configurations for MemberJunction. When working w
 - Configured via environment variables (see `docker.config.cjs`)
 - SSH debugging on port 2222 (password: `Docker!`)
 
+### docker/regression/
+**Purpose**: Full-stack regression test environment that exercises MJ Explorer end-to-end via LLM-driven browser automation (Computer Use engine + headless Chromium).
+
+- Five-container stack: `sqlserver` → `db-setup` (one-shot init) → `mjapi` → `mjexplorer` (nginx) → `test-runner` (Playwright + Chromium). An opt-in `form-generator` service (`profile: gen-forms`) re-runs codegen for Angular entity forms.
+- Project name `mj-regression`, host ports `11433` (SQL) and `14000` (API) to avoid conflicts with workbench
+- Database is **ephemeral** — wiped between runs via `docker compose down -v`
+- Tests are defined as MJ metadata in `metadata/tests/regression/` (25 Computer Use tests)
+- Test runs are persisted as **per-run folders** in `docker/regression/test-results/run-{TIMESTAMP}/` containing `results.json`, `report.md`, `report.html`, `preflight.json`, `diagnostics.json`, and `screenshots/` — runs never overwrite each other
+- A `latest` symlink in `test-results/` always points at the most recent run
+- The `test-metadata/` subdirectory holds Docker-only metadata (e.g., the `computeruse@bluecypress.io` test user with UI + Integration roles) — kept separate from repo-level `metadata/` so it's never pushed to a developer's local DB
+- **All non-trivial JavaScript lives in [`docker/regression/scripts/`](regression/scripts/)** — DB ops, metadata patches, screenshot extraction, report generators. Entrypoint scripts (`db-setup-entrypoint.sh`, `test-runner-entrypoint.sh`, `form-gen-entrypoint.sh`) are thin bash orchestrators that invoke `node scripts/<name>.cjs`. The shared mssql config lives in [`scripts/lib/db.cjs`](regression/scripts/lib/db.cjs).
+
+**Common commands** (run from repo root):
+```bash
+mj test regression build                              # Build all images
+mj test regression up                                 # Run the suite (creates a new run-* folder)
+mj test regression down                               # Tear down stack and wipe DB
+mj test regression compare                            # Compare the two most recent runs
+mj test regression remote --target=<name-or-path>     # Run against a remote URL (Mode B/C/D)
+```
+
+**Comparing runs:**
+- `mj test regression compare` invokes `mj test compare --from-json docker/regression/test-results`
+- Auto-discovers `run-*/results.json` AND legacy `results-*.json` files in the directory and picks the two newest by mtime
+- Exit codes: `0` = no regressions, `1` = regressions detected, `2` = data error
+- Forward extra flags directly: `mj test regression compare --diff-only --format=markdown --output=report.md`
+
+**Why JSON comparison instead of DB:** The Docker SQL Server is wiped on `down -v`, so DB-based `mj test compare` can't see prior runs. The JSON artifacts in `test-results/run-*/` are the portable comparison baseline — they survive teardown, work in CI, and can be archived as build artifacts.
+
 ### docker/workbench/
 **Purpose**: Claude Code workbench with dedicated SQL Server, headless browser, and Auth0 integration for autonomous development and testing.
 

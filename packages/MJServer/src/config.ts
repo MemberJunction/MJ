@@ -205,6 +205,21 @@ const cacheSettingsSchema = z.object({
   verboseLogging: z.boolean().optional().default(false),
 });
 
+const loggingSettingsSchema = z.object({
+  graphql: z.object({
+    /**
+     * When true, emit a redacted variables block per root resolver call via the
+     * type-graphql global middleware. Default: false in all environments regardless
+     * of NODE_ENV. Env override: `MJ_LOG_GRAPHQL_VARIABLES`.
+     *
+     * SECURITY: this is an opt-in verbose-echo path for developers debugging locally.
+     * The always-on request log line in `context.ts` does NOT emit variables — that
+     * is the load-bearing leak fix. This flag is additive on top of the always-on log.
+     */
+    logVariables: z.boolean().optional().default(false),
+  }).optional().default({}),
+});
+
 const feedbackGithubSettingsSchema = z.object({
   owner: z.string().optional(),
   repo: z.string().optional(),
@@ -236,6 +251,7 @@ const configInfoSchema = z.object({
   multiTenancy: multiTenancySchema.optional().default({}),
   serverExtensions: z.array(serverExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),
+  loggingSettings: loggingSettingsSchema.optional().default({}),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
 
   apiKey: z.string().optional(),
@@ -284,6 +300,7 @@ export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
+export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
@@ -419,6 +436,16 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
+  },
+
+  // Logging settings defaults — variables logging is always off unless the operator
+  // sets MJ_LOG_GRAPHQL_VARIABLES=true (or sets logVariables in mj.config.cjs).
+  // NOTE: this only governs the opt-in verbose-echo middleware. The always-on request
+  // log in context.ts already strips variables unconditionally.
+  loggingSettings: {
+    graphql: {
+      logVariables: parseBooleanEnv(process.env.MJ_LOG_GRAPHQL_VARIABLES),
+    },
   },
 
   // Auth providers (environment-driven)

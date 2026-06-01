@@ -40,7 +40,6 @@ import {
     RunQueryWithCacheCheckParams,
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
-    QueryInfo,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -57,7 +56,6 @@ import {
     LogStatus,
     LogStatusEx,
     StripStopWords,
-    QueryCacheManager,
     DatabasePlatform,
     QueryExecutionSpec,
     SaveContext,
@@ -82,13 +80,16 @@ import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
     MJEntityAIActionEntity,
-    MJQueryEntity,
+    MJQueryEntityExtended,
+    MJQueryParameterEntity,
     MJUserViewEntityExtended,
     QueryEngine,
     ViewInfo,
 } from '@memberjunction/core-entities';
 
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
+import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
+import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -1529,13 +1530,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 bHasWhere = true;
             }
 
-            // 5. Row-Level Security
-            if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-                const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-                if (rlsWhereClause && rlsWhereClause.length > 0) {
-                    whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-                    bHasWhere = true;
-                }
+            // 5. Row-Level Security (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
+                bHasWhere = true;
             }
 
             // 6. Keyset (AfterKey) seek predicate — only on the data query, NOT the count query.
@@ -2197,11 +2196,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-            if (rlsWhereClause && rlsWhereClause.length > 0) {
-                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-            }
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
 
         return whereSQL;
@@ -2459,21 +2456,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
-            const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+            const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
-            const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+            const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
-                const queryInfo = this.resolveQueryInfo(item.params);
-                if (!queryInfo) {
+                const query = this.resolveQuery(item.params);
+                if (!query) {
                     errorResults.push({ queryIndex: i, queryId: item.params.QueryID || '', status: 'error', errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}` });
                     continue;
                 }
 
-                if (!queryInfo.UserCanRun(user)) {
-                    errorResults.push({ queryIndex: i, queryId: queryInfo.ID, status: 'error', errorMessage: `User does not have permission to run query: ${queryInfo.Name}` });
+                if (!query.UserCanRun(user)) {
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}` });
                     continue;
                 }
 
@@ -2482,30 +2479,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                if (!queryInfo.CacheValidationSQL) {
-                    itemsWithoutValidationSQL.push({ index: i, item, queryInfo });
+                if (!query.CacheValidationSQL) {
+                    itemsWithoutValidationSQL.push({ index: i, item, query });
                     continue;
                 }
 
-                itemsNeedingCacheCheck.push({ index: i, item, queryInfo });
+                itemsNeedingCacheCheck.push({ index: i, item, query });
             }
 
             const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
 
-            const staleItems: Array<{ index: number; params: RunQueryParams; queryInfo: QueryInfo }> = [];
+            const staleItems: Array<{ index: number; params: RunQueryParams; query: MJQueryEntityExtended }> = [];
             const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
 
-            for (const { index, item, queryInfo } of itemsNeedingCacheCheck) {
+            for (const { index, item, query } of itemsNeedingCacheCheck) {
                 const serverStatus = cacheStatusResults.get(index);
                 if (!serverStatus || !serverStatus.success) {
-                    errorResults.push({ queryIndex: index, queryId: queryInfo.ID, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                    errorResults.push({ queryIndex: index, queryId: query.ID, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
                     continue;
                 }
 
                 if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                    currentResults.push({ queryIndex: index, queryId: queryInfo.ID, status: 'current' });
+                    currentResults.push({ queryIndex: index, queryId: query.ID, status: 'current' });
                 } else {
-                    staleItems.push({ index, params: item.params, queryInfo });
+                    staleItems.push({ index, params: item.params, query });
                 }
             }
 
@@ -2513,11 +2510,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ...itemsWithoutCacheCheck.map(({ index, item }) =>
                     this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser),
                 ),
-                ...itemsWithoutValidationSQL.map(({ index, item, queryInfo }) =>
-                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, queryInfo.ID),
+                ...itemsWithoutValidationSQL.map(({ index, item, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, query.ID),
                 ),
-                ...staleItems.map(({ index, params: queryParams, queryInfo }) =>
-                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, queryInfo.ID),
+                ...staleItems.map(({ index, params: queryParams, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, query.ID),
                 ),
             ];
 
@@ -2533,75 +2530,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
-     * Tries QueryEngine first for fresh data, falls back to ProviderBase cache.
+     * Resolves a query from RunQueryParams (by ID or Name+CategoryPath).
+     * Uses QueryEngine as the single source of truth for query metadata.
      */
-    protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
-        const freshEntity = this.findQueryInEngine(
-            params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath,
-        );
-        if (freshEntity) return this.refreshQueryInfoFromEntity(freshEntity);
+    protected resolveQuery(params: RunQueryParams): MJQueryEntityExtended | undefined {
+        const engineQueries = QueryEngine.Instance?.Queries;
+        if (!engineQueries || engineQueries.length === 0) return undefined;
 
-        if (params.QueryID) return this.Queries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        if (params.QueryID) {
+            return engineQueries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        }
 
         if (params.QueryName) {
-            const matchingQueries = this.Queries.filter(
-                q => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase(),
-            );
-            if (matchingQueries.length === 0) return undefined;
-            if (matchingQueries.length === 1) return matchingQueries[0];
+            const lowerName = params.QueryName.trim().toLowerCase();
+            const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
+            if (matches.length === 0) return undefined;
+            if (matches.length === 1) return matches[0];
 
             if (params.CategoryPath) {
-                const byPath = matchingQueries.find(
+                const byPath = matches.find(
                     q => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase(),
                 );
                 if (byPath) return byPath;
             }
 
             if (params.CategoryID) {
-                const byId = matchingQueries.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
+                const byId = matches.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
                 if (byId) return byId;
-            }
 
-            return matchingQueries[0];
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Searches QueryEngine for a fresh query entity.
-     */
-    protected findQueryInEngine(QueryID: string | undefined, QueryName: string | undefined, CategoryID: string | undefined, CategoryPath: string | undefined): MJQueryEntity | null {
-        const engineQueries = QueryEngine.Instance?.Queries;
-        if (!engineQueries || engineQueries.length === 0) return null;
-
-        if (QueryID) {
-            const lower = QueryID.trim().toLowerCase();
-            return engineQueries.find(q => q.ID.trim().toLowerCase() === lower) ?? null;
-        }
-
-        if (QueryName) {
-            const lowerName = QueryName.trim().toLowerCase();
-            const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
-            if (matches.length === 0) return null;
-            if (matches.length === 1) return matches[0];
-
-            if (CategoryID) {
-                const byId = matches.find(q => q.CategoryID?.trim().toLowerCase() === CategoryID.trim().toLowerCase());
-                if (byId) return byId;
-            }
-            if (CategoryPath) {
-                const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
+                const resolvedCategoryId = this.resolveCategoryPath(params.CategoryPath ?? '');
                 if (resolvedCategoryId) {
-                    const byPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
-                    if (byPath) return byPath;
+                    const byResolvedPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
+                    if (byResolvedPath) return byResolvedPath;
                 }
             }
+
             return matches[0];
         }
 
-        return null;
+        return undefined;
     }
 
     /**
@@ -2610,11 +2577,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * emits a console warning but allows execution to proceed, enabling query testing
      * before formal approval.
      *
-     * @param query - The resolved QueryInfo to validate
+     * @param query - The resolved MJQueryEntityExtended to validate
      * @param contextUser - The user attempting to execute the query
      * @throws Error if the user does not have permission to run the query
      */
-    protected ValidateQueryForExecution(query: QueryInfo, contextUser?: UserInfo): void {
+    protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
         const user = contextUser || this.CurrentUser;
         if (user && !query.UserHasRunPermissions(user)) {
             throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
@@ -2623,20 +2590,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
         }
-    }
-
-    /**
-     * Creates a fresh QueryInfo from a MJQueryEntity and patches the ProviderBase cache.
-     */
-    protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
-        const freshInfo = new QueryInfo(entity.GetAll());
-        const existingIndex = this.Queries.findIndex(q => UUIDsEqual(q.ID, freshInfo.ID));
-        if (existingIndex >= 0) {
-            this.Queries[existingIndex] = freshInfo;
-        } else {
-            this.Queries.push(freshInfo);
-        }
-        return freshInfo;
     }
 
     /**
@@ -2663,15 +2616,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Default: parallel individual queries. SQL Server overrides for batch execution.
      */
     protected async getBatchedQueryCacheStatus(
-        items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+        items: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }>,
         contextUser?: UserInfo,
     ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
         const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
         if (items.length === 0) return results;
 
-        const promises = items.map(async ({ index, queryInfo }) => {
+        const promises = items.map(async ({ index, query }) => {
             try {
-                const rows = await this.ExecuteSQL<Record<string, unknown>>(queryInfo.CacheValidationSQL!, undefined, undefined, contextUser);
+                const rows = await this.ExecuteSQL<Record<string, unknown>>(query.CacheValidationSQL!, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
                     results.set(index, {
@@ -2725,16 +2678,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
 
-    private _queryCacheInitialized: boolean = false;
-
-    private get QueryCacheMgr(): QueryCacheManager {
-        if (!this._queryCacheInitialized) {
-            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
-            this._queryCacheInitialized = true;
-        }
-        return QueryCacheManager.Instance;
-    }
-
     /**
      * Full query execution pipeline: resolve → validate → compose → template → cache check →
      * execute → paginate → audit → cache store. Platform providers inherit this; only
@@ -2755,7 +2698,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
-            const cacheConfig = query.CacheConfig;
             let paginatedResult: Record<string, unknown>[];
             let totalRowCount: number;
             let executionTime: number;
@@ -2775,44 +2717,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     this.PlatformKey as DatabasePlatform,
                 );
 
-                // Check count cache — skip COUNT SQL if we have a cached total
-                const cachedCount = cacheConfig?.enabled
-                    ? await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {})
-                    : null;
-
+                // Execute data + count queries in parallel
                 const start = Date.now();
-                if (cachedCount != null) {
-                    // Only execute data query — count is cached
-                    const dataResult = await this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser);
-                    executionTime = Date.now() - start;
-                    if (!dataResult) throw new Error('Error executing paged query SQL');
-                    paginatedResult = dataResult;
-                    totalRowCount = cachedCount;
-                } else {
-                    // Execute data + count queries in parallel
-                    const [dataResult, countResult] = await Promise.all([
-                        this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
-                        this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
-                    ]);
-                    executionTime = Date.now() - start;
-                    if (!dataResult) throw new Error('Error executing paged query SQL');
+                const [dataResult, countResult] = await Promise.all([
+                    this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
+                    this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
+                ]);
+                executionTime = Date.now() - start;
+                if (!dataResult) throw new Error('Error executing paged query SQL');
 
-                    paginatedResult = dataResult;
-                    totalRowCount = countResult?.[0]?.TotalRowCount != null
-                        ? Number(countResult[0].TotalRowCount)
-                        : paginatedResult.length;
-
-                    // Cache the count for subsequent page requests (fire-and-forget)
-                    if (cacheConfig?.enabled) {
-                        void this.QueryCacheMgr.SetTotalRowCount(query, params.Parameters || {}, totalRowCount);
-                    }
-                }
-
-                // Cache the paged results (fire-and-forget)
-                if (cacheConfig?.enabled) {
-                    void this.QueryCacheMgr.SetPaged(query, params.Parameters || {}, params.StartRow!, params.MaxRows!, paginatedResult);
-                    void this.QueryCacheMgr.InvalidateWithDependents(query);
-                }
+                paginatedResult = dataResult;
+                totalRowCount = countResult?.[0]?.TotalRowCount != null
+                    ? Number(countResult[0].TotalRowCount)
+                    : paginatedResult.length;
             } else {
                 // Check full-result cache before executing
                 const cachedResult = await this.checkQueryCache(query, params, appliedParameters);
@@ -2894,34 +2811,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
-            // Check ad-hoc cache if opt-in TTL is provided
-            const adhocTTL = params.AdhocCacheTTLMinutes;
-            if (adhocTTL != null && adhocTTL > 0) {
-                const cached = await this.QueryCacheMgr.GetAdhoc(params.SQL!, adhocTTL);
-                if (cached) {
-                    const { paginatedResult, totalRowCount } = this.applyQueryPagination(
-                        cached.results as Record<string, unknown>[], params,
-                    );
-                    return {
-                        Success: true,
-                        QueryID: '',
-                        QueryName: 'Ad-Hoc Query',
-                        Results: paginatedResult,
-                        RowCount: paginatedResult.length,
-                        TotalRowCount: totalRowCount,
-                        ExecutionTime: 0,
-                        ErrorMessage: '',
-                        CacheHit: true,
-                    };
-                }
-            }
-
             const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
-
-            // Store in ad-hoc cache if opt-in (fire-and-forget)
-            if (adhocTTL != null && adhocTTL > 0) {
-                void this.QueryCacheMgr.SetAdhoc(params.SQL!, adhocTTL, result);
-            }
 
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
@@ -2953,10 +2843,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Finds a query from RunQueryParams and validates user permissions.
-     * Uses `resolveQueryInfo()` for lookup and `ValidateQueryForExecution()` for permissions.
+     * Uses `resolveQuery()` for lookup and `ValidateQueryForExecution()` for permissions.
      */
-    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): QueryInfo {
-        const query = this.resolveQueryInfo(params);
+    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
+        const query = this.resolveQuery(params);
         if (!query) {
             let errorDetails = 'Query not found';
             if (params.QueryName) {
@@ -2984,7 +2874,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * pipeline. Paging is handled separately by the caller (InternalRunQuery).
      */
     protected processQueryParameters(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
@@ -2994,8 +2884,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: parameters,
-                UsesTemplate: query.UsesTemplate,
-                QueryInfo: query,
+                UsesTemplate: query.UsesTemplate ?? false,
+                QueryInfo: {
+                    SQL: query.SQL ?? '',
+                    UsesTemplate: query.UsesTemplate ?? false,
+                    Parameters: query.QueryParameters,
+                },
             }
         );
 
@@ -3065,13 +2959,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        // QueryExecutionSpec.ParameterDefinitions is QueryParameterInfo[] (MJCore),
+        // while RenderContext expects MJQueryParameterEntity[] (core-entities).
+        // Both share the structural shape the processor needs (Name, DataType, IsRequired).
+        const paramDefs = spec.ParameterDefinitions as MJQueryParameterEntity[] | undefined;
         const result = RenderPipeline.Run(
             spec.SQL,
             {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: spec.Parameters,
-                ParameterDefinitions: spec.ParameterDefinitions,
+                ParameterDefinitions: paramDefs,
                 UsesTemplate: spec.UsesTemplate,
                 Dependencies: spec.Dependencies,
                 OriginalSQL: spec.SQL,
@@ -3090,81 +2988,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Checks the query cache for existing results and returns them if valid.
+     * Currently always returns null (query caching is not active).
      */
     protected async checkQueryCache(
-        query: QueryInfo,
-        params: RunQueryParams,
-        appliedParameters: Record<string, string>,
+        _query: MJQueryEntityExtended,
+        _params: RunQueryParams,
+        _appliedParameters: Record<string, string>,
     ): Promise<RunQueryResult | null> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) {
-            return null;
-        }
-
-        const cached = await this.QueryCacheMgr.Get(query, params.Parameters || {});
-        if (!cached) {
-            return null;
-        }
-
-        LogStatus(`Cache hit for query ${query.Name} (${query.ID})`);
-
-        const { paginatedResult, totalRowCount } = this.applyQueryPagination(
-            cached.results as Record<string, unknown>[], params,
-        );
-
-        return {
-            Success: true,
-            QueryID: query.ID,
-            QueryName: query.Name,
-            Results: paginatedResult,
-            RowCount: paginatedResult.length,
-            TotalRowCount: totalRowCount,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            AppliedParameters: appliedParameters,
-            CacheHit: true,
-            CacheTTLRemaining: cached.ttlRemainingMs,
-        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+        return null;
     }
 
     /**
      * Checks the paged cache for a specific page of query results.
      * Returns a full RunQueryResult on hit, null on miss.
+     * Currently always returns null (query caching is not active).
      */
     protected async checkPagedQueryCache(
-        query: QueryInfo,
-        params: RunQueryParams,
-        appliedParameters: Record<string, string>,
+        _query: MJQueryEntityExtended,
+        _params: RunQueryParams,
+        _appliedParameters: Record<string, string>,
     ): Promise<RunQueryResult | null> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) return null;
-
-        const cached = await this.QueryCacheMgr.GetPaged(
-            query, params.Parameters || {}, params.StartRow!, params.MaxRows!,
-        );
-        if (!cached) return null;
-
-        // Also try to get the cached count
-        const cachedCount = await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {});
-        const totalRowCount = cachedCount ?? cached.results.length;
-
-        LogStatus(`Paged cache hit for query ${query.Name} (${query.ID}) page ${params.StartRow}+${params.MaxRows}`);
-
-        return {
-            Success: true,
-            QueryID: query.ID,
-            QueryName: query.Name,
-            Results: cached.results as Record<string, unknown>[],
-            RowCount: cached.results.length,
-            TotalRowCount: totalRowCount,
-            PageNumber: Math.floor(params.StartRow! / params.MaxRows!) + 1,
-            PageSize: params.MaxRows!,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            AppliedParameters: appliedParameters,
-            CacheHit: true,
-            CacheTTLRemaining: cached.ttlRemainingMs,
-        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+        return null;
     }
 
     /**
@@ -3211,7 +3055,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Only logs if the query has `AuditQueryRuns` enabled or `ForceAuditLog` is set.
      */
     protected auditQueryExecution(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         params: RunQueryParams,
         finalSQL: string,
         rowCount: number,
@@ -3253,17 +3097,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Caches query results if caching is enabled for the query.
-     * Caches the full result set (before pagination).
+     * Currently a no-op (query caching is not active).
      */
-    protected async cacheQueryResults(query: QueryInfo, parameters: Record<string, string>, results: Record<string, unknown>[]): Promise<void> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) {
-            return;
-        }
-
-        await this.QueryCacheMgr.Set(query, parameters, results);
-        await this.QueryCacheMgr.InvalidateWithDependents(query);
-        LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
+    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[]): Promise<void> {
+        // No-op: query caching has been removed
     }
 
     /**************************************************************************/
@@ -3290,9 +3127,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
         }).join(' AND ');
 
-        // Append Read RLS filter if user is not exempt
+        // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
         let fullWhere = where;
-        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+        if (user) {
             const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
@@ -3362,10 +3199,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3391,10 +3224,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3946,5 +3775,87 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return maxDate ? maxDate.toISOString() : new Date().toISOString();
+    }
+
+    /**
+     * Server-side semantic ranking pass for {@link ProviderBase.SearchEntity}
+     * (and, by extension, the batched {@link ProviderBase.SearchEntities}).
+     *
+     * The query embedding MUST be generated with the same model that produced
+     * the indexed vectors — otherwise cosine scores compare apples to oranges
+     * and rankings are garbage. We look up the EntityDocument's `AIModelID` via
+     * `AIEngine.Models` to recover the driver class / APIName and call
+     * `EmbedText(model, text)` directly. If the EntityDocument does not specify
+     * a model (or the model isn't loaded) we fall back to
+     * `EmbedTextLocal` (highest-power local model) only as a last resort.
+     *
+     * Vector ranking runs against the in-process `SimpleVectorServiceProvider`,
+     * which rehydrates the vector pool for `entityDocumentId` from
+     * `MJ: Entity Record Documents.VectorJSON` rows.
+     *
+     * Failures (no embedding model available, vector index miss) degrade to an
+     * empty result set so hybrid mode can still surface lexical matches.
+     */
+    protected override async searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        embeddingAIModelId: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        // Ensure AIEngine is loaded so Models / EmbedText are usable. Config()
+        // is a no-op when already initialized — safe to call on every search.
+        try {
+            await AIEngine.Instance.Config(false, contextUser);
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: AIEngine.Config failed: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+
+        let queryVector: number[] | null = null;
+        try {
+            if (embeddingAIModelId) {
+                const model = AIEngine.Instance.Models.find(m => m.ID === embeddingAIModelId);
+                if (!model) {
+                    LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
+                    return [];
+                }
+                const result = await AIEngine.Instance.EmbedText(model, searchText);
+                queryVector = result?.vector ?? null;
+            } else {
+                // No model on the EntityDocument — last-resort fallback to the
+                // highest-power local embedder. Logged because this path means
+                // indexing-time and query-time models can diverge.
+                LogError(`searchEntitiesSemanticPass: no AIModelID on EntityDocument "${entityDocumentId}"; falling back to highest-power local embedding model. Index/query mismatch possible.`);
+                const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
+                queryVector = embed?.result?.vector ?? null;
+            }
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: embedding generation threw: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+        if (!queryVector) return [];
+
+        const vectorProvider = new SimpleVectorServiceProvider();
+        const result = await vectorProvider.QueryIndex(
+            { id: entityDocumentId, vector: queryVector, topK: overFetch } as never,
+            contextUser
+        );
+        if (!result.success) return [];
+
+        const data = result.data as { matches?: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> } | null;
+        const matches = data?.matches ?? [];
+
+        const out: ScoredCandidate[] = [];
+        for (const m of matches) {
+            const recordId = String(m.metadata?.['RecordID'] ?? '');
+            if (!recordId) continue;
+            out.push({
+                ID: recordId,
+                Score: m.score,
+                Metadata: { entityRecordDocumentId: m.id },
+            });
+        }
+        return out;
     }
 }

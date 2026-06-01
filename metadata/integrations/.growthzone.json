@@ -1,0 +1,4570 @@
+[
+  {
+    "fields": {
+      "Name": "GrowthZone",
+      "Description": "GrowthZone association management platform integration for syncing contacts, organizations, memberships, certifications, groups, events, billing, and store data via the GrowthZone REST API. Uses the /api/contacts/delta endpoint for incremental contact ...",
+      "ClassName": "GrowthZoneConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://growthzone.com",
+      "BatchMaxRequestCount": 30,
+      "BatchRequestWaitTime": 2000,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=GrowthZone API",
+      "Icon": "fa-solid fa-seedling"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contacts",
+            "DisplayName": "Contacts",
+            "Description": "Base contact list with minimal fields from the GrowthZone delta endpoint (/api/contacts/delta). Use for incremental sync — only returns ContactId, DisplayName, ModifiedDate, IsDeleted, and SystemContactTypeId. Follow up with contact-person or contact-org to fetch full detail.",
+            "Category": "Core",
+            "APIPath": "/api/contacts/delta",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "GrowthZone internal contact identifier (integer)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "049DFA37-C753-4F2B-A104-1B1654CC63D9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:04.784Z",
+                  "checksum": "bac4c2efe34399087d761740e43376a9529c0a4d58dff68de913c79384833a1d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DisplayName",
+                  "DisplayName": "Display Name",
+                  "Description": "Formatted display name for the contact (person or organization)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1CEF11CE-5353-4347-A9E4-2C559FD7FA52"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:04.849Z",
+                  "checksum": "44d06166d91333cc1a14347c5a3e4ecee52265555471b7c02ac8c43848b38cc8"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification — used as watermark for delta sync",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "388F7012-8851-4802-811D-485535F2DE79"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:04.915Z",
+                  "checksum": "803a80736d5a739e21667ff11e51c329cc835362200ee13c6d3f3d90939cc0ce"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsDeleted",
+                  "DisplayName": "Is Deleted",
+                  "Description": "Soft-delete flag. True indicates the contact was deleted in GrowthZone since the last sync.",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "375AE6E6-D24A-4B0A-BFC3-27468644B5FB"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:04.981Z",
+                  "checksum": "0fca2b40b45fa91db70304b9f0f3278437851d682911696bbf1f30d9c60507b6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "SystemContactTypeId",
+                  "DisplayName": "System Contact Type ID",
+                  "Description": "Distinguishes contact type. 1 = Individual, 2 = Organization. Determines whether to fetch detail from /api/contacts/person/{id} or /api/contacts/OrgGeneral/{id}.",
+                  "Type": "nvarchar",
+                  "Length": 10,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8ECDFC89-2AF3-4461-98C8-37A8231B2C7F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.048Z",
+                  "checksum": "5595869af461b3190785abf50fa946e88c8c2135d24dc14ca0f30afee2a66c03"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "663A8B1E-CA71-415E-B310-5274830A424E"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.211Z",
+            "checksum": "6ef3192e11f289920d5bd4ced817119b543f5876783511a8f8175cea97179b46"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-person",
+            "DisplayName": "Contact (Person)",
+            "Description": "Full person-contact detail fetched per contact from /api/contacts/person/{ContactId}. Includes name, title, demographic, employer, and primary address fields. Requires parent contact IDs from the contacts object.",
+            "Category": "Core",
+            "APIPath": "/api/contacts/person/{ContactId}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 1,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "GrowthZone internal contact identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1BE5225D-672D-465F-A792-3971821FDED8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.113Z",
+                  "checksum": "36d88b019ed072a0898d977b8e759a9d908fd8ee5683cf77e60d64d903a8629e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "FirstName",
+                  "DisplayName": "First Name",
+                  "Description": "Given name of the person",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9BB79A4E-0ACE-476E-87B7-48BE16CAE74E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.178Z",
+                  "checksum": "4cb4b8c8b242328da8ceaa4423d10459f62f88cdd837a4aaa811970fb7aed7b1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MiddleName",
+                  "DisplayName": "Middle Name",
+                  "Description": "Middle name or initial",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "550A6D6D-A933-4F06-B1E0-4596BD6AFD09"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.241Z",
+                  "checksum": "3dd46ee755e482800b06b7026ca7e3d29a272829cfa71e675d130603da3690f9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastName",
+                  "DisplayName": "Last Name",
+                  "Description": "Family name of the person",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "33AA30F6-F194-4B98-9658-C4F9C985E2C0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.307Z",
+                  "checksum": "52ca7901c8c98f62a49a0c835ba9b04fd33c25704e904ccfccc84dd49de93f2e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PrefixTitle",
+                  "DisplayName": "Prefix Title",
+                  "Description": "Personal prefix title (Mr, Mrs, Dr, etc.)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E6B6C312-587B-461D-8934-DB38259BA43C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.369Z",
+                  "checksum": "9789f2e698cf3a95516009b5c363b0a00296029b9f668be2c9b5c9106d147778"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "SuffixTitle",
+                  "DisplayName": "Suffix Title",
+                  "Description": "Personal suffix title (Jr, Sr, III, etc.)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "69D67E9C-376D-425C-A8D4-267C00685E62"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.464Z",
+                  "checksum": "4e0e07822f59e887960de7a2abf5b3051287698d283dbf0ac2ebcb314bc7f4a5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Nickname",
+                  "DisplayName": "Nickname",
+                  "Description": "Preferred nickname",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BCED6A80-EEDB-4103-AE6F-059787B9560A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.531Z",
+                  "checksum": "39f1060c2ada73843aa365d9279ffb9cc2a3f2c3790cc10ebcd120314479f074"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "JobTitle",
+                  "DisplayName": "Job Title",
+                  "Description": "Professional job title",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7F98EE62-2B0A-43FD-8125-105A28E20EFA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.596Z",
+                  "checksum": "31356ee66d23e06430de59093df6d64261f740c34a7acfc405547730dda08a08"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Department",
+                  "DisplayName": "Department",
+                  "Description": "Department within the employer organization",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4B54072A-8FA3-494B-91F0-084C85C65A1E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.664Z",
+                  "checksum": "27e528c888de5c92246566acbfe631ef32908b652d067a7ec8ff5e61bd302e46"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EmployerContactId",
+                  "DisplayName": "Employer Contact ID",
+                  "Description": "ContactId of the associated employer organization",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7C82050C-CD9E-4320-8796-008D8BC3E496"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.731Z",
+                  "checksum": "daf423b809289a9bf7239efa106d1c9b836ffbc12cfc8eea89cec1460444dc07"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BirthDate",
+                  "DisplayName": "Birth Date",
+                  "Description": "Date of birth. GrowthZone may return 0001-01-01 for null values — normalize these to null.",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D312D2B9-21FB-4D08-8FCA-4318FF7E50AB"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.799Z",
+                  "checksum": "ba33b73bda9cccab8a09825cfaba43392b5a0b3df6177f9a91695e0900f3b690"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Gender",
+                  "DisplayName": "Gender",
+                  "Description": "Gender identification",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C0FC4047-65E9-4781-9329-BDD3815EB19B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.867Z",
+                  "checksum": "a531d4ded53aae27e78d8acf91f31b5c5f757ac4b90da66b26dfc9dff8247af4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DisplayName",
+                  "DisplayName": "Display Name",
+                  "Description": "Formatted full display name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "736B4192-0B44-4DF7-9654-42F2560079C9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.931Z",
+                  "checksum": "d8213ad1f4318fc312a0c5a591dbc5dd625f0aa26367002bda5f38dad43c70bd"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsDeceased",
+                  "DisplayName": "Is Deceased",
+                  "Description": "Whether the person is marked deceased",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "68524310-BAF9-4F2C-8D7B-04AA433B46CC"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:05.999Z",
+                  "checksum": "d35353af5df047edd236565666aa3d878e89f7bf1d872ea8d19a5994713dcd09"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5E0ED4B2-B473-4C8F-B837-8897BC7BCFBE"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.064Z",
+                  "checksum": "2b9c41aab2a00bb4a7d962f647c644687e0641cac7e44925f2497c772b63ac58"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CreatedDate",
+                  "DisplayName": "Created Date",
+                  "Description": "Timestamp when the contact was created",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 16,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7387A5E5-6CEF-4A9C-9E08-0CECCD36B2C4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.164Z",
+                  "checksum": "d0746f5d3eb203afcc618d63704fe40c965ed6446d2d45364def3582e7548c7b"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7C795EB8-7F12-4607-9713-21C0034622A6"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.231Z",
+            "checksum": "8176f4f51264d8f9bf3dd4a5a287a4573f36b7e8e968e656ef5004bdec92d5d2"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-org",
+            "DisplayName": "Contact (Organization)",
+            "Description": "Full organization-contact detail fetched per contact from /api/contacts/OrgGeneral/{ContactId}. The response contains nested arrays (Activities, Categories, Certifications, Communication, Memberships, SalesOpportunities) which are flattened into separate integration objects by the connector.",
+            "Category": "Core",
+            "APIPath": "/api/contacts/OrgGeneral/{ContactId}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 1,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "GrowthZone internal organization contact identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4754627F-8431-4798-8F14-F368A9A6E38F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.229Z",
+                  "checksum": "e2b77549fc1d9956648022cefee92fe2d576d5055430149916446f92e64b20d7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "OrganizationName",
+                  "DisplayName": "Organization Name",
+                  "Description": "Legal organization/company name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6E4FFB1C-78D9-4EAE-8EAE-4869D6702413"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.317Z",
+                  "checksum": "aa26370714fb2a57081f24ace6469a6c1e00c55af08044d3eb2cf7a3c81c8f7c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DisplayName",
+                  "DisplayName": "Display Name",
+                  "Description": "Formatted display name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BB10FFBF-BD94-40C1-976F-0935AFD5D89E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.385Z",
+                  "checksum": "a6326e4e2dff69d59de4d85dd3adee003a055384cd12567037d35ff4eaffc32c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Acronym",
+                  "DisplayName": "Acronym",
+                  "Description": "Organization acronym",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "033BB69B-75CB-4ECC-866C-D32082D7422E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.453Z",
+                  "checksum": "972d9df3cda12a5fc0c6ebf11b7894c18e64c23b94e13a0b3fcc781a92d1cdf9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EstablishedDate",
+                  "DisplayName": "Established Date",
+                  "Description": "Date the organization was founded",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CE3A75A5-BBE6-4F56-89A9-0B331D2B5D0F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.517Z",
+                  "checksum": "7e4c5a9ec3f6b85749172bd51f3b03146864b492b9a6e4f91c50ebcc8ee66ed4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Naics",
+                  "DisplayName": "NAICS Code",
+                  "Description": "North American Industry Classification System code",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "23BD1987-F6B9-421C-8B78-557B3E833577"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.583Z",
+                  "checksum": "b9dc23ffef52e88df95873aa082f647398573aaca812147516c1d52d7efa4ab7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Sic",
+                  "DisplayName": "SIC Code",
+                  "Description": "Standard Industrial Classification code",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "15D3AC20-8C35-48DC-B2F2-0D319FA71371"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.648Z",
+                  "checksum": "24bc616b2eb8e96e14fe9284bb771fb81d7cf51578e2ab2eb97625cf073772a6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Bio",
+                  "DisplayName": "Bio / About",
+                  "Description": "Long-form biography or description of the organization",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "75DA6454-C0BF-44C6-A2BC-D79088371182"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.714Z",
+                  "checksum": "64a45d0680f72a2fc628f2e27cbfbbbb24f96f6d2e6ecbdd97a5867399cd0ec4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Notes",
+                  "DisplayName": "Notes",
+                  "Description": "Internal notes about the organization",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DF53D7CC-43E9-484D-BF18-A782B510B217"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.778Z",
+                  "checksum": "939c65b4546832d5bd994f6ba868c5ee70636634d49ffaabbc3d2d979fafdfe3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ParentContactId",
+                  "DisplayName": "Parent Contact ID",
+                  "Description": "ContactId of the parent organization (for hierarchical relationships)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3949F3E2-977C-4C4C-8CE2-9B8D8D1ADB93"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.875Z",
+                  "checksum": "47a7902f282686bc402c499fe33fea1bf956d9f55d80258dfb31d7016ac6eaf2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "12AD62EF-7AFD-4A13-8C0E-5687C77A7AF6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:06.942Z",
+                  "checksum": "c4a0f3aba738928ce5a06869c0dfc4e86c95dbe22221756e1905edabcf9b38e4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CreatedDate",
+                  "DisplayName": "Created Date",
+                  "Description": "Timestamp when the organization was created",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6BE6B0CE-7B16-4E90-B1A1-9906B40B8488"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.011Z",
+                  "checksum": "27914232db683b584fdd9449ffe403c3a4852965ccdc6e8d13134c29a5d3516e"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "391B3980-2BAD-4D4D-B0E6-58E3F75757CD"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.254Z",
+            "checksum": "66fecb90f84a285fc27955c438fd0fead7a9399f51ce6a42fb6f2cb0bed22744"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-notes-fields",
+            "DisplayName": "Contact Notes & Fields",
+            "Description": "Extended fields and custom field values for a contact, fetched per-contact from /api/contacts/{ContactId}/NotesAndFields. Returns Notes, Bio, EstablishedDate, Naics, Sic, plus a Fields[] array of custom field values.",
+            "Category": "Core",
+            "APIPath": "/api/contacts/{ContactId}/NotesAndFields",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 1,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "ContactId for which these notes and fields apply",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "35F9E281-30D9-420A-8E62-DA787B109852"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.077Z",
+                  "checksum": "7caea5b2c6e63ce8d20ed8d6cf045813b346b941bcfca8f524bc9cc57f091c13"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Notes",
+                  "DisplayName": "Notes",
+                  "Description": "Internal notes about the contact",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7E7CFE94-82C4-4CFA-A4E5-72FD4D7741D7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.144Z",
+                  "checksum": "4ae607dfefdc233dd2e569d23221cff037c4958bf93662cc89e9de63534067bf"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Bio",
+                  "DisplayName": "Bio",
+                  "Description": "Long-form biography",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "44A52B13-9CAB-40B0-88A1-43DD1011C57E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.209Z",
+                  "checksum": "4bbe677c6a23296f2e33bf440672725a7bec798d58735ed7e95b94820eb92101"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EstablishedDate",
+                  "DisplayName": "Established Date",
+                  "Description": "Established/founding date",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E9B1E932-0A65-4113-8417-FCE721DC2BCC"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.278Z",
+                  "checksum": "904636368a81368f5ecd341bda125e4d25403739da497520afb89fc0be59c1bb"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Naics",
+                  "DisplayName": "NAICS Code",
+                  "Description": "NAICS industry code",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B2CBFC0D-2247-4AE2-BF2B-690247917DE2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.344Z",
+                  "checksum": "41b7721362af0a72e75102fe81f96afa06f935ad4d6e4945070ef9577a557289"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Sic",
+                  "DisplayName": "SIC Code",
+                  "Description": "SIC industry code",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "099BE136-B154-4FC8-B43C-36D8C7BA0A70"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.411Z",
+                  "checksum": "f4cfa82a65f852886b9d775561003a04f035ade7d88f17fc5d8b7c906c4331e6"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7916D270-A612-4726-861E-F9327839CF59"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.274Z",
+            "checksum": "e03a7b48a932411eef4f3dd7b996f511b8109350deb5e29405ef629edc14605e"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-custom-field-values",
+            "DisplayName": "Contact Custom Field Values",
+            "Description": "Flattened per-contact custom field values, derived from the Fields[] array on /api/contacts/{ContactId}/NotesAndFields. One row per (ContactId, CustomFieldId) pair.",
+            "Category": "Core",
+            "APIPath": "/api/contacts/{ContactId}/NotesAndFields",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact to which this field value belongs (part of composite key)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6CE92DB4-1589-4355-B080-C21015D4E991"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.474Z",
+                  "checksum": "29ca1e188630d97ca525b4410c7d0b63ea9ffe14a312ddf5e126d1ae75baad68"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CustomFieldId",
+                  "DisplayName": "Custom Field ID",
+                  "Description": "Custom field definition identifier (part of composite key)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B5714519-DBEC-4C06-B979-AACAEBFA2449"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.567Z",
+                  "checksum": "718db9ac4dc9157444d30587b0a2d88592c972d8d492bd8fc1d314b3e3eac13c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Field Name",
+                  "Description": "Internal name of the custom field",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "78EC3219-E6AD-4635-A8F7-DB9EB577177C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.631Z",
+                  "checksum": "54e89b19ee860f54022db460a18fb3ff5701b90902aba562dbf7c2e87ce3103b"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DisplayName",
+                  "DisplayName": "Display Name",
+                  "Description": "User-facing label of the custom field",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B17E62F7-019C-470D-9402-0C398BB82CC6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.698Z",
+                  "checksum": "a56d5634f0f0fab557ffef0b19b52b7981117b0eb20aea68a305565b16279862"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CustomFieldType",
+                  "DisplayName": "Custom Field Type",
+                  "Description": "Type of custom field (Text, Number, Date, SelectList, Scale, ExternalDataSource, File, Table)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1C6E171C-4998-428A-B732-E70C80F06A3E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.763Z",
+                  "checksum": "d76cf6c059062815f5a7fa7a8c0cbcfd5c41934bc111943ac15172dc0ef84de1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Value",
+                  "DisplayName": "Value",
+                  "Description": "Current custom field value for this contact, stringified",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FD939F85-647A-46F5-8F20-5AB33B03C625"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.829Z",
+                  "checksum": "58765c15a636806512148b58cce0458099237756d8f0a6dc44b481a374a455ee"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "FieldGroupName",
+                  "DisplayName": "Field Group Name",
+                  "Description": "Grouping category for the custom field",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8AB736AC-AD1F-4A89-BC09-37712099D6C0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.894Z",
+                  "checksum": "92c338e0195a68dd2f6246a662923ef1061f4f9d8e9d7f43cf14ad22aff12f6d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsPublic",
+                  "DisplayName": "Is Public",
+                  "Description": "Whether the custom field is publicly visible",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0B164242-7C90-4189-8D40-5063AC7404B7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:07.962Z",
+                  "checksum": "add445ca2688a27ea3fb5f8413ba4c4eb3d863488a353e3c0a830880acf6c927"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsArchived",
+                  "DisplayName": "Is Archived",
+                  "Description": "Whether the custom field is archived",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "24BCDB44-E589-412C-BAFA-7CF794A271B2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.026Z",
+                  "checksum": "0880cbfa24ed896261e2e7e5c87cabc2e81712fef87bbacc93874850577a3855"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "DFA9EC83-92DF-4EA1-A087-B896FDFC7650"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.293Z",
+            "checksum": "1a5bb850c7b0a98af5a9b09e8af0781ce49528be0ba7b17302b13e3c36a18fac"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "memberships",
+            "DisplayName": "Memberships",
+            "Description": "Flat list of memberships across all contacts from /api/memberships/all. Supports OData-style pagination ($skip, $top, $orderby). Framework research (2026-05) suggests incremental sync may be possible via ChangeEventTypeId; not flipped here without live verification.",
+            "Category": "Membership",
+            "APIPath": "/api/memberships/all",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MembershipId",
+                  "DisplayName": "Membership ID",
+                  "Description": "GrowthZone internal membership identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D3026ECD-7D4B-4E20-A41E-530D42A2C2C0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.093Z",
+                  "checksum": "313f20cce1255f6e394f6a47eb518c0a8285d260711620d0c18ce7c60a2d24dd"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact that holds this membership",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9C327E37-438A-4973-8314-2FDAF21AA588"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.157Z",
+                  "checksum": "17585fc6ca2e5af32ac599d187e7cff0ca2167d90c76261ac4ee90721478720f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MembershipTypeId",
+                  "DisplayName": "Membership Type ID",
+                  "Description": "Membership type/package",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "23FB8785-84A7-45D4-AD2A-767D24FC282C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.255Z",
+                  "checksum": "3f5d162bd400ff99d00eb91759f5dcde53b47135f12503b3a51da4d7a209d695"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MembershipTypeName",
+                  "DisplayName": "Membership Type Name",
+                  "Description": "Human-readable membership type name",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "38AE50C1-81BF-484C-952A-2A36726784A8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.322Z",
+                  "checksum": "9aa0dcd60065f252a67b843f5ed45718144a93f5fba3a0cb666cc4c068d7b1dc"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MembershipStatusTypeId",
+                  "DisplayName": "Membership Status Type ID",
+                  "Description": "Status code: 0=NonMember, 1=PendingApproval, 2=Active, 3=Trial, 4=Courtesy, 5=Dropped, 6=Expired, 7=Lead, 8=Prospect, 9=Suspended",
+                  "Type": "nvarchar",
+                  "Length": 10,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "483FEA19-FEC2-436E-A5A0-55C8C68DBCBF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.391Z",
+                  "checksum": "3d941fa0cdc72f1b736a7f138f7bc55ef5ccd0dba46a2d43c7108efb1793eda3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StartDate",
+                  "DisplayName": "Start Date",
+                  "Description": "Membership start date",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8F32DC8B-FD89-41DF-9318-B2B85E27AD51"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.458Z",
+                  "checksum": "c7455485adaacce7ae534a305c3fbc80ae6aca425421f757b13b249a43504172"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EndDate",
+                  "DisplayName": "End Date",
+                  "Description": "Membership end/expiration date",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "77954ED4-25EE-4BA4-86F7-6D9383B594FA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.525Z",
+                  "checksum": "361c041dfcf4da0b2318163bea48d846273567b3bb215cafec47fc57dba9a04d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "JoinDate",
+                  "DisplayName": "Join Date",
+                  "Description": "Original join date for this contact's membership",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "584F6FD4-8311-4428-BF04-6D978FC41AE9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.591Z",
+                  "checksum": "2e41d479fb135bf6d08be9429874b3b42421669ca5ac4902b9b260673924692d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "800B0EF8-FF5F-4A27-B401-D06959B3B00D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.659Z",
+                  "checksum": "2b26c38c7b1d27dcb48de58c6f1f803adf5bc87e583e1fb0185d4efeb5ee5687"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "8717A524-C2E7-46F6-AC74-B2F020734BBC"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.313Z",
+            "checksum": "d5289e347b75e268ad708ae5ea0800983521ec5c037a2a3cfcdc3bbf045e85de"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "groups",
+            "DisplayName": "Groups",
+            "Description": "Flat list of groups/committees from /api/groups. Groups represent collaborative or organizational groupings of contacts (boards, committees, chapters, forums).",
+            "Category": "Core",
+            "APIPath": "/api/groups",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "GroupId",
+                  "DisplayName": "Group ID",
+                  "Description": "GrowthZone internal group identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FA092EA1-C83D-42F5-AFCD-4205CA6FB8AD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.725Z",
+                  "checksum": "2648e3a89b114a5e1d308fd58897e8f7cf43eaa59165d5059b7efcd25b5d7d4c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Group name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E31C6F7F-66CC-4190-8064-96DDC8082C74"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.792Z",
+                  "checksum": "b539d81cb75860cc7746e879013f33d0bc5b1f0152953b62e4b40c05219ffef6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Description": "Group description",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BF53FF00-96F3-4F72-B3E2-69804671FC5E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.857Z",
+                  "checksum": "258872af359ac4edd117233ca72ea48529bc5a2c8445ef9dd96c100d6686f1cd"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CategoryId",
+                  "DisplayName": "Category ID",
+                  "Description": "Category this group belongs to",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8E812DE0-5CF8-425E-9326-AFBB75B7D513"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:08.956Z",
+                  "checksum": "c0e2bd7e5ae1d7fcd8fcc9ae696148bb6331a6c3ea4b6717b5ed05ddd590555c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsActive",
+                  "DisplayName": "Is Active",
+                  "Description": "Whether the group is active",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4BF719EF-F33E-4B67-84D6-E64CAE06D3E9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.022Z",
+                  "checksum": "bb364f7169a17660df22e4ba0ece6d7deeec9b41c9a7ffa4a97b0de551475184"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E56AF30D-B174-49F0-9A19-D4253F69F049"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.088Z",
+                  "checksum": "a8ab420c8ede620e1f1f9823f9180fcd04bd4d610562628f47b041e880078dde"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7A2394AE-2A76-4592-A2B2-18D6401C7AA9"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.332Z",
+            "checksum": "ca87585fca5997623dccffa954643b63b4290b2890d1684b3ae62d0ade52fea2"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "certifications",
+            "DisplayName": "Certifications",
+            "Description": "Certification records assigned to contacts. The GrowthZone curated API supports marking certification components complete via POST /api/certifications/{id}/Components/{componentId}/Completed.",
+            "Category": "Certification",
+            "APIPath": "/api/certifications",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CertificationContactId",
+                  "DisplayName": "Certification Contact ID",
+                  "Description": "Unique certification record identifier (composite of certification + contact)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9D1FB4AE-5653-48DB-B84D-001CE1167F59"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.155Z",
+                  "checksum": "4136b5bd79836aa65206fc510c6705a3b62e0a9e29ea9a6c02fac5ed578d3907"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact holding this certification",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "79C7BEA7-26A5-44B5-A98E-222F43C6C4C2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.223Z",
+                  "checksum": "11467e77497d8c69eeb40d316fab399c23a9dc1a363b2e380abcec83b5e13338"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CertificationId",
+                  "DisplayName": "Certification ID",
+                  "Description": "Certification definition identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9F20B062-97DE-4C57-B305-57645C980E0F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.288Z",
+                  "checksum": "a5dba9f828dc6e709e28b89e85b57aad9a9deaab2566146aa95255d3b49fa5b2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Certification name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D6A23660-1930-492F-9DF9-8D3DA6D4DD51"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.354Z",
+                  "checksum": "2a4eda40a8d2aff40c7578ad78b3a8c92bdc48b5dc78bd0f6d52d8e8028d3a4e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Description": "Certification status (InProgress, Completed, Expired)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C7A07038-0D7D-4ECB-86E4-1D6B24A5D0A5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.421Z",
+                  "checksum": "c95a44f401f1540d771160e1121f195907da574d222b030e3c4a687069c72aaf"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CompletionDate",
+                  "DisplayName": "Completion Date",
+                  "Description": "Date when the certification was completed",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2C635FCC-C282-4391-9887-D7F6240BEFF8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.487Z",
+                  "checksum": "d5c91cd584928053680017be4a853e32971f6f4abfb41da07d6c640ea978447b"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ExpirationDate",
+                  "DisplayName": "Expiration Date",
+                  "Description": "Date when the certification expires",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D6A30E30-66A2-4598-8535-CCF81E5B7B0C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.551Z",
+                  "checksum": "3383219de55f54102352993013c3b6bd98afccd166e69f40d1f3cd34e046f6e5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9D834153-E691-4EDD-AC06-32F01BC5B88D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.653Z",
+                  "checksum": "170213daaa35586951fdb098bea16415a9e4d5d70460bb5e0f1cd90c7d4eafa5"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "3969D30D-6E79-40C0-81C4-ED49801ED941"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.351Z",
+            "checksum": "45a37aeced62970ff9d7585daa5c55418fc4d9420bf5c4d8ccb5cd1d31c3807b"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "certification-components",
+            "DisplayName": "Certification Components",
+            "Description": "Individual components/requirements of certifications. Can be marked complete via POST /api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed — this is the only confirmed write endpoint in the curated GrowthZone API.",
+            "Category": "Certification",
+            "APIPath": "/api/certifications/components",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CertificationComponentId",
+                  "DisplayName": "Certification Component ID",
+                  "Description": "Component identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AC5B5EAB-CE10-4AC0-81BF-E7FBEEB15E22"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.719Z",
+                  "checksum": "75c7a4464db6b897dbcf82cafde8d8ed1688a784ee51cb5c7d8cc1baae648904"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CertificationContactId",
+                  "DisplayName": "Certification Contact ID",
+                  "Description": "Parent certification-contact record",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EED7E65B-070D-4951-B9C2-69EBB92146E7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.789Z",
+                  "checksum": "eac92cf23f96396179a5bb0508e12235e57fe83249dfcbb10f256b571059bb36"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Component name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2FFA75DA-3599-419A-8B02-6804A9519D14"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.855Z",
+                  "checksum": "85d337eeeb0c5e38bb44db9a51a2099b3d21804d8455f55d8e2a90e3cfead159"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsCompleted",
+                  "DisplayName": "Is Completed",
+                  "Description": "Whether this component is marked complete",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A6F6F38F-80E9-46FD-B55A-E93BD3E98F02"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.922Z",
+                  "checksum": "118c6ef65c9e61f4be9fb6cc13a83063646bfd19c8f0504c3d86bdc300d2e65e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CompletedDate",
+                  "DisplayName": "Completed Date",
+                  "Description": "Timestamp when the component was marked complete",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C8FF23E1-F7DF-4D1F-817B-65D96822D53F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:09.988Z",
+                  "checksum": "0c06290167573e63a681009386ea79079d17eb3b54227b0f886a19fd703243e7"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "87F94685-AB36-4AB3-8649-036469F5B92F"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.371Z",
+            "checksum": "f08c4d8dbb42701d50cc868428b482a31bca54db9a72fc98d488f8a05a8ca26d"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-activities",
+            "DisplayName": "Contact Activities",
+            "Description": "Flattened activities from the Activities[] nested array inside /api/contacts/OrgGeneral/{ContactId}. Represents logged interactions (calls, emails, meetings) with a contact.",
+            "Category": "Activity",
+            "APIPath": "/api/contacts/OrgGeneral/{ContactId}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ActivityId",
+                  "DisplayName": "Activity ID",
+                  "Description": "Activity identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F332D9C8-CB97-463D-814F-F9F10EA21966"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.057Z",
+                  "checksum": "989e98ff742a2fe4873bdf218f9071151d2ddc2062a3e508467275b5ed70aa45"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact the activity is logged against",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "32803D0C-E0C3-4930-9648-5847A598537E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.124Z",
+                  "checksum": "ffb9759a21bfd0818bfafb4d2d5cae712b429c5b140a2495796f03f99a034721"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ActivityType",
+                  "DisplayName": "Activity Type",
+                  "Description": "Type of activity (Call, Email, Meeting, Note)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D11A8556-FEFC-4DF7-9115-81ACC15D8024"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.191Z",
+                  "checksum": "68ce0ea68804ea22d4e484d44ba2f329b34f322f600bcc66811a9ebe3b810188"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Subject",
+                  "DisplayName": "Subject",
+                  "Description": "Activity subject/title",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "54D96DCA-76F5-46DF-A210-DB038E83A966"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.255Z",
+                  "checksum": "82c8c864cea93db63c952101b022ea6ab68323558aa0e6a4f9743359d2ad3de3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Description": "Activity body/notes",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "70861619-7A3D-47D3-9F06-6B8379FBF2BD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.356Z",
+                  "checksum": "7e01eff7fae841fc4269fc5c3b97212867c5b316ed8e550e0657e341af5df9f6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ActivityDate",
+                  "DisplayName": "Activity Date",
+                  "Description": "When the activity occurred",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5F7FC02A-F69D-45F8-BBC7-26345D9BE2E3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.421Z",
+                  "checksum": "b6bc16d24a52d9054cd8423fce99095d1568b6f7081884d70cd98bcdbe1e0797"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CreatedBy",
+                  "DisplayName": "Created By",
+                  "Description": "User who logged this activity",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "67E5222C-1BF3-4FA9-B200-0AD4AB9B6A3F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.488Z",
+                  "checksum": "22e9d307b49c4c6a2c671a52949901b080ade7420bcfc77797e11c139fe2827e"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "15D561F7-896E-415D-859C-DC44AD6D31CF"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.387Z",
+            "checksum": "8fbc187b7e841bd78fa4181377ec0d281c0b60926d4590ef25cbe98fe8772d98"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-communications",
+            "DisplayName": "Contact Communications",
+            "Description": "Flattened communications from the Communication[] nested array inside /api/contacts/OrgGeneral/{ContactId}. Email, SMS, and other outbound communications.",
+            "Category": "Activity",
+            "APIPath": "/api/contacts/OrgGeneral/{ContactId}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CommunicationId",
+                  "DisplayName": "Communication ID",
+                  "Description": "Communication identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2EF99046-6ADF-458A-8829-9D4A720E4812"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.554Z",
+                  "checksum": "5bb49949581de35261641c75c1b398d78b437a9587deed0f0c3124bc467c4933"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact the communication was sent to",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5001BCD5-53CE-432B-AB13-53F5BAEAD1FE"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.631Z",
+                  "checksum": "36af60bd24eba663b232700c2d6d419ce595f5808e8ecf4f1c9d8b963af2fba2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Channel",
+                  "DisplayName": "Channel",
+                  "Description": "Communication channel (Email, SMS, Print, Phone)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C7F9BB7C-8141-40B8-BF15-0410D545A122"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.694Z",
+                  "checksum": "9952bba093e97edaaa3f9ddb9f353b310e9e2ee8cb28a1faa76bc1108dcfa274"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Subject",
+                  "DisplayName": "Subject",
+                  "Description": "Communication subject",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5D288256-A123-42EF-B1EB-1D8B1593B68E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.761Z",
+                  "checksum": "1c766ad6de2ae9b7673a380e2844a3d517a091f24d51371bdb18572563f631a9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "SentDate",
+                  "DisplayName": "Sent Date",
+                  "Description": "When the communication was sent",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "099029D1-DD93-4EA0-BA4F-853433AA0132"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.825Z",
+                  "checksum": "386c18292f62011be15004abab853369d3621db5347b70d735a6ca5bbe3140f6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Description": "Delivery status (Sent, Delivered, Bounced, Failed)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "07CD773A-BD4B-46C7-96B7-C5A125F4BCAA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.892Z",
+                  "checksum": "e2a4115586ad2a2a53d6934cb541d8ec5f29e71de3fd7fd5f831b9752134a581"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "E0CE9E69-B610-4B20-861E-9B9176B92A1C"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.435Z",
+            "checksum": "b9f314750e1f7451e9c77250c938101e6893aeae9613d1fd4645cacf9b418634"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-categories",
+            "DisplayName": "Contact Categories",
+            "Description": "Flattened categories from the Categories[] nested array in /api/contacts/OrgGeneral/{ContactId}. Category memberships (industry groups, interest areas, etc.) assigned to a contact.",
+            "Category": "Classification",
+            "APIPath": "/api/contacts/OrgGeneral/{ContactId}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact assigned to the category (part of composite key)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F66413C9-9286-45E8-8B9B-47C86394A135"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:10.957Z",
+                  "checksum": "f839857a39fdf799b1e2dfcb7c07ad224508d782656b2f9e8297bc97213be365"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CategoryItemId",
+                  "DisplayName": "Category Item ID",
+                  "Description": "Category assignment identifier (part of composite key)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CEE0961B-6F65-4423-88E9-8732F072464E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.051Z",
+                  "checksum": "578859c66e17c5976de9aff1ed189d80d1bcc0ab707a84effeb0395824503707"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CategoryName",
+                  "DisplayName": "Category Name",
+                  "Description": "Human-readable category name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B3396A7F-097E-4A65-A78E-19151339A48D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.117Z",
+                  "checksum": "5147b6aa003eca69576c71e30f83c5a0a6d9528f839cc6eb3244f900bb424e6d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CategoryTypeId",
+                  "DisplayName": "Category Type ID",
+                  "Description": "Category type code: 1=BusinessContact, 2=IndividualContact, 3=Contact, 4=StoreItem, 5=Membership, 6=SalesOpportunity, 7=Content, 8=Job, 9=HotDeals, 10=Event, 11=Projects, 12=Certifications, 13=Resource, 14=Tickets, 15=SaleableItems, 16=BenefitItems",
+                  "Type": "nvarchar",
+                  "Length": 10,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "82B4FC31-09A2-48DC-952E-922C84E19BFA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.183Z",
+                  "checksum": "1687ef9921c5f2ac0c3e5e121dff181ce1f3d87ac901abdb8294c5abb4594104"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CategoryListId",
+                  "DisplayName": "Category List ID",
+                  "Description": "Parent category list",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7820B5A9-5812-44D4-9182-8F8FE80E8C1D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.250Z",
+                  "checksum": "662e747bb8c2fee4ca5dc002f37a7293a4ff2651463b3daf4d39735f688b3c90"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "D964061D-D82A-4058-8C98-C839C53542AC"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.455Z",
+            "checksum": "c9419d32cecf9b8281b7cf6ceca992915cfe6799eef2e3902dd0bb953244ff5e"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "contact-sales-opportunities",
+            "DisplayName": "Contact Sales Opportunities",
+            "Description": "Flattened sales opportunities from the SalesOpportunities[] nested array in /api/contacts/OrgGeneral/{ContactId}.",
+            "Category": "Sales",
+            "APIPath": "/api/contacts/OrgGeneral/{ContactId}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "SalesOpportunityId",
+                  "DisplayName": "Sales Opportunity ID",
+                  "Description": "Sales opportunity identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5E1AA079-05C8-4C34-94F6-1B53C4BA289C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.317Z",
+                  "checksum": "50f8078c4a6fc211511865e2a4d8dffbd75806ee0c84839c5bd14375ff97495c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact the opportunity belongs to",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "73D248BA-A997-4914-910E-A235D7D05FFC"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.385Z",
+                  "checksum": "194716777012c303fb81ce65df4718aea628ad745a3f50c0e729c7b8f9000451"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Opportunity name/title",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "651DE6FA-DFE3-46F9-AC83-550FB8A85CE5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.451Z",
+                  "checksum": "8ab62c1d76f92b7b7b040dc8651c8a0a51c26511be83f3dc676f59f01c00c589"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Stage",
+                  "DisplayName": "Stage",
+                  "Description": "Pipeline stage",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B357C327-ECAC-4374-ACD9-ADC19FEBD208"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.515Z",
+                  "checksum": "a6bfe583b9d533607924844002b8c9b2dc81947379fe04b20fc20e2b92592c21"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Amount",
+                  "DisplayName": "Amount",
+                  "Description": "Estimated value",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C21545B2-4EE3-407D-A0C1-FCB330ED67DA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.581Z",
+                  "checksum": "7f23f4d569170eea4e03ec730ad88b612a79f9749a3c34d3993447c5052331e4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ExpectedCloseDate",
+                  "DisplayName": "Expected Close Date",
+                  "Description": "Forecast close date",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "182A2D37-67D7-410A-817F-038ED73F9AFA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.644Z",
+                  "checksum": "0bd85331accf5528b518abf42f3b200b8a374266cae36c43b314d4a2b4010117"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "407D359B-E70F-4E3C-B881-E5226A3C42BA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.737Z",
+                  "checksum": "a0b85fd8404992b28cee3fdcad85e2eaeeb4169f28596bc7d78f708175c658ff"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "EE363B15-40BB-42D9-A098-91B6E22B62BC"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.474Z",
+            "checksum": "bd08ca14c672d8d07186a1c36747a7f41f3f4ace9f692c78ec764cbdcecaa990"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "events",
+            "DisplayName": "Events",
+            "Description": "Events hosted in GrowthZone, typically accessed via /api/events. Event registrations are tracked as separate records.",
+            "Category": "Event",
+            "APIPath": "/api/events",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EventId",
+                  "DisplayName": "Event ID",
+                  "Description": "Event identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "902F7CE9-0F67-4799-9EA8-004C1EA1E540"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.803Z",
+                  "checksum": "e4c21df6ea28222f3499becfb7cf66cac07b2e2ab59ffa3cddf4478f1853b765"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Event name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AB00BD9C-EB60-4792-B2CA-6681CC6C67C8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.870Z",
+                  "checksum": "f5978d444fcea63713badaee76dd7a3c1d85e40460134e95b88d580049c837f2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Description": "Event description/body",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FB697040-4016-4757-82EB-84C643B31017"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:11.936Z",
+                  "checksum": "78ce3debc6f3f6cc2efd3fae96ec8fdcbb61e6a8b72060a033b97a7e1d069531"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StartDate",
+                  "DisplayName": "Start Date",
+                  "Description": "Event start datetime",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "56FC245E-7FC8-470F-B8AB-8473457D7C25"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.003Z",
+                  "checksum": "8a2c6e864b3b2be56117dc3e6b499102b1bf5ac7457474ac1b4a7977af8dae61"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EndDate",
+                  "DisplayName": "End Date",
+                  "Description": "Event end datetime",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AE0023ED-E8DC-4B0A-906F-BFA7CB3837B5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.068Z",
+                  "checksum": "f962a75981146a1f75cb684dd04ee5d9461453ac6d9b72e782f54326a21d80a3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Location",
+                  "DisplayName": "Location",
+                  "Description": "Event location",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A76B5789-4151-4D3F-93A9-E8E832221916"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.134Z",
+                  "checksum": "363e43f0beccf9e3a47185f9d351bafaccbb8341b096b5be5f051652c4d68493"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsActive",
+                  "DisplayName": "Is Active",
+                  "Description": "Whether the event is active/published",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C30BFB64-98CD-4EE3-8D7D-D89D6B59CF2A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.198Z",
+                  "checksum": "c5e715cbd0a6363f25bcb66b889ceb755cb053bca8ff98d3db57026a03747159"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B44E1249-E5C5-4644-9F96-18980CBCD09F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.267Z",
+                  "checksum": "170213daaa35586951fdb098bea16415a9e4d5d70460bb5e0f1cd90c7d4eafa5"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "C24F632D-5231-4335-9E47-FEA1C3E3AEF1"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.494Z",
+            "checksum": "b87c008c64dd412d4d883e8f3c5c1f436a850eb7eb9ad72b72ef22c9c1a11bce"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "event-registrations",
+            "DisplayName": "Event Registrations",
+            "Description": "Registrations for events by contacts, accessed via /api/events/registrations.",
+            "Category": "Event",
+            "APIPath": "/api/events/registrations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "RegistrationId",
+                  "DisplayName": "Registration ID",
+                  "Description": "Registration identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C8E0BB89-6F7D-4E17-A6DC-54621CBAB251"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.332Z",
+                  "checksum": "35f77fd1e43be0d890bca3c2fc5da4f79df473ae6d17b1763c32e45bad0747c3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EventId",
+                  "DisplayName": "Event ID",
+                  "Description": "Event being registered for",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F1C79708-8B90-4BA5-999C-881734938869"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.432Z",
+                  "checksum": "078fd856195fd3d1edfb02cde48d0dd96b24abef937da7aa77d74d099ffd26fc"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Contact registering for the event",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1A04932F-85C4-4E55-A19E-6E42D7D79C1C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.498Z",
+                  "checksum": "dde03b7269a9fada254c3708ec799aaede7122fe5aa62db99b608c2a3c8166fb"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AttendeeName",
+                  "DisplayName": "Attendee Name",
+                  "Description": "Name of the attending person",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A1198DB7-7DC6-4F91-BB11-B041E3B35BE4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.564Z",
+                  "checksum": "9ac46b28c44e3fbbf5936a27e9142b7a9854c91ff0cec6a131a71abe5739ed74"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "RegistrationStatus",
+                  "DisplayName": "Registration Status",
+                  "Description": "Registration status (Pending, Confirmed, Cancelled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DB35DB95-4C25-419A-8A3A-0183C116EBFB"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.633Z",
+                  "checksum": "76ac320192fdcf49019eaf90af5e8aea9496b0de1373e73f2b7a8b40bf271aed"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "RegistrationDate",
+                  "DisplayName": "Registration Date",
+                  "Description": "When the registration was submitted",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5089A55B-D62E-4F04-8C3E-E7C0EEC470E2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.700Z",
+                  "checksum": "bd2b577838d7c2781ceb6429204d319d570c21afd9a41a79b12ef88785a4bade"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AmountPaid",
+                  "DisplayName": "Amount Paid",
+                  "Description": "Total amount paid at registration",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CE020935-C558-4BDA-A418-2A48F24C5288"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.766Z",
+                  "checksum": "27f29ddb4eb4ee9a1d44ee1bf9d98cb1e864a3039fd4529bc1d6588035e77e07"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "0ABBE26B-C964-472E-93CF-08F233D357A7"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.512Z",
+            "checksum": "c32d0a6cc6baf339fde4d6e07665cd6af5d97c7cae30ca80f2bb9c918ca7261f"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "invoices",
+            "DisplayName": "Invoices",
+            "Description": "Flat list of invoices via /api/invoices.",
+            "Category": "Billing",
+            "APIPath": "/api/invoices",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "InvoiceId",
+                  "DisplayName": "Invoice ID",
+                  "Description": "Invoice identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "033E6C7E-92B8-446D-9D34-29149BE65290"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.833Z",
+                  "checksum": "e987904c299022dccd812cce2cb70f8ecdf37c961e2e140aa909e7d5d37ae3a9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Billed contact",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4F8686D5-D5D8-47DC-82BC-E012EA7C8F08"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.898Z",
+                  "checksum": "ed12bab067ab2be98a0b72e10a7c1374152b58d1441cc141ab2415614078122a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "InvoiceNumber",
+                  "DisplayName": "Invoice Number",
+                  "Description": "User-visible invoice number",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "722A91A1-D3FB-4340-BEA1-D0F6CB950A67"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:12.964Z",
+                  "checksum": "ada1d8729927361fd4f29d59fb283a59a0677e8b4953b099dce2408675372416"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "InvoiceDate",
+                  "DisplayName": "Invoice Date",
+                  "Description": "Date the invoice was issued",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A8A99BCA-ED63-4966-8BDC-6D8FA309D364"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.028Z",
+                  "checksum": "fb7d5987ad579b74ac5362c83af6eca69d3f316bb245e0dfcd0ca645398c4fc3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DueDate",
+                  "DisplayName": "Due Date",
+                  "Description": "Payment due date",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5E9FF40B-F4F8-409F-A699-6E68D7A37D49"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.123Z",
+                  "checksum": "cceeb9b870367144034bff72989556ce474124c9d28481fbd394e9256e508104"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "TotalAmount",
+                  "DisplayName": "Total Amount",
+                  "Description": "Total invoice amount",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "731E1471-CE3F-47B0-BBCE-9B3918629496"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.189Z",
+                  "checksum": "761aafc3745173b3d17fc2f9a1647bd39ea360c4f86340e66a379e5138faaf1c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BalanceDue",
+                  "DisplayName": "Balance Due",
+                  "Description": "Outstanding balance",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C1DA2BD3-2F3F-40C5-8C88-731B1C6BB630"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.256Z",
+                  "checksum": "75efc6704da884e5a44d8d55bb42ea78aabc069b7d1613a06a34e3851b02ab51"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Description": "Invoice status (Open, Paid, Overdue, Voided)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EFE11449-60A1-4E3E-A0E0-1DF9C61155D2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.322Z",
+                  "checksum": "e1ce6efe259451e592a5c46a1e8d370c2481005dd9ec1e1066c8768c4b5fab15"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "46E2F341-C617-4C51-92E4-B2114F83CBF3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.387Z",
+                  "checksum": "2b26c38c7b1d27dcb48de58c6f1f803adf5bc87e583e1fb0185d4efeb5ee5687"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "34003CC7-2CBD-467A-95FF-373255FE9F58"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.531Z",
+            "checksum": "5c735bc09826b283034787efa19fd278f167fe667ad9b5d184e444fc3912b0e5"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "payments",
+            "DisplayName": "Payments",
+            "Description": "Flat list of payments via /api/payments.",
+            "Category": "Billing",
+            "APIPath": "/api/payments",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PaymentId",
+                  "DisplayName": "Payment ID",
+                  "Description": "Payment identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AD3D407F-3B0D-479C-B378-04AD9F178DEA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.452Z",
+                  "checksum": "20a61512e593b2c119f43c9df6cea17abe9d2ce59cf8660736297a415b6e4a59"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Paying contact",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "87079760-FC84-44A9-ABDD-2ACAE1C3B8C2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.517Z",
+                  "checksum": "58cb45f5d2c6573037652632cd74834ee14b795a2a33f3382c81cd2b835c7aa7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PaymentDate",
+                  "DisplayName": "Payment Date",
+                  "Description": "Date payment was made",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F12B3302-7CCA-48C5-A1F8-B119E454C1F2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.581Z",
+                  "checksum": "de358fcc32a40dfb27089b5ac3c678a6155d2773a525aaf1ab05c97823f20e30"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Amount",
+                  "DisplayName": "Amount",
+                  "Description": "Payment amount",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3B1A196C-143B-4203-A24B-59059877B19D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.646Z",
+                  "checksum": "f7c4b4d10fc1bc59e0a04e6f2ff4e69c30fc6b8a53c320ea52b2138084502372"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PaymentMethod",
+                  "DisplayName": "Payment Method",
+                  "Description": "Payment instrument (Credit Card, ACH, Check, Cash)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9B1B7411-53EF-46DB-810A-BD69BAC163E0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.709Z",
+                  "checksum": "0bd8a614fff24020baecd89a648d99a6ec4675d64c475f45e5c09a256194411f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PaymentStatus",
+                  "DisplayName": "Payment Status",
+                  "Description": "Payment status (Pending, Captured, Refunded, Failed)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7F36BF0C-035B-4507-B704-2A34F1E4ABE9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.806Z",
+                  "checksum": "658bab92133fe6519d0fde8ce62dce78a1fab38c11b4a386e52524d20f213641"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "InvoiceId",
+                  "DisplayName": "Invoice ID",
+                  "Description": "Related invoice, if applicable",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4F275B23-7320-4CD8-93B1-14A8A747D95B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.870Z",
+                  "checksum": "627e4affc0598a561862ba60710d95028125947b09d7dc6e5cb1daa05d34dfb3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F212D2D5-EFE6-4435-A067-E2A31DC9EBD2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:13.938Z",
+                  "checksum": "170213daaa35586951fdb098bea16415a9e4d5d70460bb5e0f1cd90c7d4eafa5"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "5F6D0C94-0731-4EF0-AAE2-D39651B568B6"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.548Z",
+            "checksum": "3c5cfdb81273967a8a0e6af6dc7abbddb5985cdf920066523e8845ce35897cfb"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "store-items",
+            "DisplayName": "Store Items",
+            "Description": "Products/items available in the GrowthZone store, accessed via /api/store/storeitems.",
+            "Category": "Store",
+            "APIPath": "/api/store/storeitems",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StoreItemId",
+                  "DisplayName": "Store Item ID",
+                  "Description": "Store item identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "300BA45B-CEE7-45C5-90DB-E0EE2C9336EA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.005Z",
+                  "checksum": "288be231d9a95c60c9fb01e16ca6dad1f270d6892ae75e769cabc8da1bea910b"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Item name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7BBCA96A-9923-42FC-90ED-831E869184B3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.072Z",
+                  "checksum": "6d91346a89de60d740db012caf398b31cfd42d6eb7810eed28ae9bc7c1c75634"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Description": "Item description",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "00651C64-8487-4491-B60D-A003C9A1E844"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.137Z",
+                  "checksum": "784e9367d0c0db2ea9f5a33a0010eb430893440c99c90c6fc367ec26f611ed5e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Price",
+                  "DisplayName": "Price",
+                  "Description": "Item price",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BE18C494-B061-411A-B6A7-7E36DB46E399"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.205Z",
+                  "checksum": "0bf3d6f6f549cc7c39d6ac4efb5d6b7b736a28d7ed11f38c41573099726ddeb1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsActive",
+                  "DisplayName": "Is Active",
+                  "Description": "Whether the item is available for purchase",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C555515-E741-417B-B5D4-11A84A9D4285"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.268Z",
+                  "checksum": "02ea1fc19121b85c3f3643f62fa10988cc0a34615d6897cc3e03a7348e3cea56"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CategoryId",
+                  "DisplayName": "Category ID",
+                  "Description": "Store category assignment",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5DB6EB71-D8B5-4686-A4A7-14C21C975F3D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.335Z",
+                  "checksum": "606994520936d020ab0ea1f26387f45d1c2020ae251adb26274d7fa125e9ed94"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "E5EB774C-F85D-4760-9C2B-14EC83A02645"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.567Z",
+            "checksum": "4fb4e08567648f8979ba5ca52d6e23a9f82ef5e9811e674a8d4eb54c78edb94b"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "orders",
+            "DisplayName": "Orders",
+            "Description": "Customer orders from the store, accessed via /api/orders.",
+            "Category": "Store",
+            "APIPath": "/api/orders",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "OrderId",
+                  "DisplayName": "Order ID",
+                  "Description": "Order identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3BE36A88-4487-47D6-8A1E-5CDB1D976DBD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.399Z",
+                  "checksum": "6bbd2df348bacae102567aaac70c0601354fffee68403b785d9721b850328772"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Ordering contact",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DD608F1E-5E54-4124-8B4D-0AE177BEC7F7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.499Z",
+                  "checksum": "dfb5bf3df017dcbfd89dd6e193f9c687ca1da95e7b06067e7f2c6957d154d7ca"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "OrderDate",
+                  "DisplayName": "Order Date",
+                  "Description": "Date the order was placed",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "76E4AFC3-8C27-4F92-AAFF-D620BA912853"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.564Z",
+                  "checksum": "2c336d5e7eb7e0be161902d4c016e7457f261a55281aeecb4b73159c3bf63130"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "TotalAmount",
+                  "DisplayName": "Total Amount",
+                  "Description": "Order total",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B9F11646-F26C-4F4B-BAFA-2A093C6E7A0E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.630Z",
+                  "checksum": "c395636f89c2d3550a2db206dd879f77b3337dbfc9644ad817968b3bc77a1d79"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Description": "Order status (Pending, Paid, Shipped, Cancelled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F4A9E572-DAEF-4669-8CFC-D96FE4321A16"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.696Z",
+                  "checksum": "c2a03cad12b9b1013570b90e0e4a66b830ce7622ad270d8d6849ccb199c8b698"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ModifiedDate",
+                  "DisplayName": "Modified Date",
+                  "Description": "Timestamp of the last modification",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "83730371-37C6-45E5-BB0A-101BD27F7C18"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.765Z",
+                  "checksum": "a8ab420c8ede620e1f1f9823f9180fcd04bd4d610562628f47b041e880078dde"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "A04A41FB-5B0C-4A63-8AE5-398118F182D4"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.585Z",
+            "checksum": "5bc68ce2573b34dea085f4ecfa77c3dee7a0a7f13690dcca8deeba01bedde145"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "billings",
+            "DisplayName": "Billings",
+            "Description": "Billing records (scheduled, recurring, and manual), accessed via /api/billings.",
+            "Category": "Billing",
+            "APIPath": "/api/billings",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingId",
+                  "DisplayName": "Billing ID",
+                  "Description": "Billing record identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EB84BB76-3B4F-4878-8D78-F6279A71EF90"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.827Z",
+                  "checksum": "4aac385028096a0be6027719f4ee93fedc20f8aa538b09e9deabe47ed67ea6ea"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ContactId",
+                  "DisplayName": "Contact ID",
+                  "Description": "Billed contact",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F7C482FC-225D-4178-BF85-72AA3FFF2D88"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.892Z",
+                  "checksum": "ed12bab067ab2be98a0b72e10a7c1374152b58d1441cc141ab2415614078122a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingType",
+                  "DisplayName": "Billing Type",
+                  "Description": "Billing type (Scheduled, Recurring, Manual)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7859DEED-CCEC-47FF-8274-B4B4AC53C3E4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:14.954Z",
+                  "checksum": "1dfceff6c90b4145ff26e80369cfb9b893f4f6feb516d6778629ab0c86231ea1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Amount",
+                  "DisplayName": "Amount",
+                  "Description": "Billing amount",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DEDF8545-0D83-4CD3-9F48-AD029D2CF465"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.020Z",
+                  "checksum": "ef3c1b7e85100485f88cd9b7c03466b4eeae0d246a040a857dcd200ef4227193"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NextRunDate",
+                  "DisplayName": "Next Run Date",
+                  "Description": "Next scheduled execution date",
+                  "Type": "datetimeoffset",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A50292DB-4728-46DE-8628-37600D440946"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.084Z",
+                  "checksum": "7f31fcef1594fb99d3aaa130584f7eb21b55cba25c9d46978248aa692d16db3f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsActive",
+                  "DisplayName": "Is Active",
+                  "Description": "Whether the billing schedule is active",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FD3546CF-E1D5-4ABE-8120-0A30CAB8A7B3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.178Z",
+                  "checksum": "823097702730f4543f2341486b0f0c3e2a9f6b50ab7a8670865522b7a89b7471"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "D6D8B31E-C655-4961-8FF8-5996843EF551"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.603Z",
+            "checksum": "de6b6d71e22145097f61c242bb70c38e264860788ecc6cf215cbdc3081bd2daa"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "custom-field-definitions",
+            "DisplayName": "Custom Field Definitions",
+            "Description": "Custom field definitions for contacts, discovered at runtime by calling /api/contacts/{ContactId}/NotesAndFields on a sample contact. New discoveries are marked IsCustom=true in MJ metadata.",
+            "Category": "Custom",
+            "APIPath": "/api/customfields",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CustomFieldId",
+                  "DisplayName": "Custom Field ID",
+                  "Description": "Custom field definition identifier",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F1E6B707-D9A7-4729-B03B-E37409788408"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.244Z",
+                  "checksum": "29acd9c8d2eabfc2fd7948fa7260534ececb236d5fc36a6ce1b5cc0adde5b78d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Description": "Internal name of the custom field",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6524D27D-381A-4A9C-BB2F-0CDD486EEBFF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.312Z",
+                  "checksum": "a2ee9e8b1a1e07596019dd684b85c9d4ccd3e936c2263e802e2fef26db26654e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DisplayName",
+                  "DisplayName": "Display Name",
+                  "Description": "User-facing label of the custom field",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CBF4A03E-70AA-4B4A-8BEC-FA59EF9FB6DE"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.379Z",
+                  "checksum": "8ec155007690c36eba1ff25117b4a5973d8e26a470937207969ba9734a42a523"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Description": "Description of the custom field",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "60DF2BAA-35E5-48DE-AD05-A1D319CC2108"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.446Z",
+                  "checksum": "87640679cff4b13f362698e272ec48a1994216e354fd22fa089ad132919863cf"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CustomFieldType",
+                  "DisplayName": "Custom Field Type",
+                  "Description": "Field type (Text, Number, Date, SelectList, Scale, ExternalDataSource, File, Table)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8AA5E740-8CF8-47FC-9480-FD593692F1A7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.512Z",
+                  "checksum": "79854a118b46ee9ce1c56798002b7548c638e495c376d336aa843cdc68d552f2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CustomFieldDataTypeId",
+                  "DisplayName": "Custom Field Data Type ID",
+                  "Description": "Reference to CustomFieldDataTypes",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7F855E93-28F3-4125-AAA3-F1291DE99648"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.577Z",
+                  "checksum": "dd0ea65f93e76ab25dbe262e8ddddb0c543848ec47ff70debbb4e7a59159e1e3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DataSize",
+                  "DisplayName": "Data Size",
+                  "Description": "Maximum length (for text fields)",
+                  "Type": "nvarchar",
+                  "Length": 10,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B535D042-3663-488C-B1D1-695D56D9B484"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.641Z",
+                  "checksum": "f30818ef41dc54daf6a188590811ae45f547a9d57ae5b64fcc696e06a5521a9d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsPublic",
+                  "DisplayName": "Is Public",
+                  "Description": "Whether the custom field is publicly visible",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6A9D944C-F697-474C-9BFF-E8BCA5243710"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.707Z",
+                  "checksum": "add445ca2688a27ea3fb5f8413ba4c4eb3d863488a353e3c0a830880acf6c927"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsMemberEditable",
+                  "DisplayName": "Is Member Editable",
+                  "Description": "Whether members can edit this field",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FA741A43-2A67-40C2-B445-15946A6767C8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.768Z",
+                  "checksum": "0a7fcd71b58dc11e07cc5d94214cb9c5451e310624f6ca874488cbd12e9cbb06"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsRequired",
+                  "DisplayName": "Is Required",
+                  "Description": "Whether the field is required",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A16D6B56-7EBD-400C-A909-33597A5BA418"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.847Z",
+                  "checksum": "ce05b60592542b4c85fbbbfe326ad53983d196b7dba610f951b96fe2201eb7cd"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsArchived",
+                  "DisplayName": "Is Archived",
+                  "Description": "Whether the field definition is archived",
+                  "Type": "bit",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "62D6054F-C2E9-4618-9921-8F0ACF54ABBD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.914Z",
+                  "checksum": "aa5c913c51bed820e27e459d0efaafcaac45f1e747bac3811de23b97f3c50dbd"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "FieldGroupName",
+                  "DisplayName": "Field Group Name",
+                  "Description": "Grouping category for the custom field",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C5BB3AA-FF0E-401B-96B7-6731559FBC97"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:15.981Z",
+                  "checksum": "58d757f68b99d6d375cb25a4c02ee2d068c8fa50df864bfca894e68176c6ec41"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "SelectOptions",
+                  "DisplayName": "Select Options",
+                  "Description": "Valid values (JSON array) for SelectList custom fields",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CCF291CF-AE37-486C-A9DC-36F238AC17FF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:16.043Z",
+                  "checksum": "f68ef8caa0cd77f082c910836a9b6568d69eb80ab53d9fe9668286524b0634bb"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "1BE9A339-46E9-470D-8D7A-95916E44542F"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.641Z",
+            "checksum": "5fc59c3eed3e8cb66d8810e5e259976289779db56e03b3b783e215134be0feca"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "account-info",
+            "DisplayName": "Account Info",
+            "Description": "GrowthZone tenant account record (single object). Useful for surfacing tenant identity in MJ dashboards. Endpoint per framework research at /api/account/items.",
+            "Category": "Account",
+            "APIPath": "/api/account/items",
+            "Sequence": 22
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          },
+          "primaryKey": {
+            "ID": "DC7D0A8E-F78F-43BD-BF68-B2BB7B15272F"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.661Z",
+            "checksum": "eff4e2239ff71efab7281085837d874345409495c16a2ae3cf695a2c8ba01d2f"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "account-modules",
+            "DisplayName": "Account Modules",
+            "Description": "List of GrowthZone modules enabled for the tenant. Useful for capability detection per tenant.",
+            "Category": "Account",
+            "APIPath": "/api/account/availablemodules",
+            "Sequence": 23
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          },
+          "primaryKey": {
+            "ID": "A77AC7A2-96EC-4626-A072-D826A35D9169"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.680Z",
+            "checksum": "7402541c4f7c444fa4980cfa2c65688257c8e296579b88af1b1adb7f669c7a11"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "benefit-packages",
+            "DisplayName": "Benefit Packages",
+            "Description": "Membership benefit packages defined by the tenant. Useful for cross-referencing memberships → benefits.",
+            "Category": "Membership",
+            "APIPath": "/api/benefitpackages",
+            "Sequence": 24
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          },
+          "primaryKey": {
+            "ID": "646044A3-73B5-4776-85E9-8126AB6C6CA5"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.699Z",
+            "checksum": "f8cf364d38b2110e2e6763054143a93bb40075addaeaeaa2e68f51cfe6710333"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "cms-sites",
+            "DisplayName": "CMS Sites",
+            "Description": "GrowthZone CMS sites configured for the tenant.",
+            "Category": "CMS",
+            "APIPath": "/api/cms/sites",
+            "Sequence": 25
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          },
+          "primaryKey": {
+            "ID": "3803B46C-B075-4E87-90FA-CEEEEC8951C0"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.720Z",
+            "checksum": "333c118b3e16803b032203850b227c7a47cb0e870d845f95a7343f1b2de15a5f"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "customfields-all",
+            "DisplayName": "All Custom Field Definitions",
+            "Description": "Tenant-wide custom field definitions across all object types. Used by the connector at DiscoverAndPersistAuthenticatedSchema time to enumerate tenant-specific custom fields and add them as IOF rows with Source=Discovered.",
+            "Category": "Custom Fields",
+            "APIPath": "/api/customfields/getall",
+            "Sequence": 26
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          },
+          "primaryKey": {
+            "ID": "4684108B-49FC-43B7-B611-2B70CCD93572"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:28:04.736Z",
+            "checksum": "20ed5a06b2cd3d9ea999a04eaf8a82e9f8ebf88033e764cb08c503eafd1bce5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "248E9418-6E27-469B-B7B5-2C4A863A4051"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T22:28:04.168Z",
+      "checksum": "0ffb686985d44d91926f620458e840ecf6fcee9f5a50cb448e11d4eedc210138"
+    }
+  }
+]

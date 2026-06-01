@@ -642,7 +642,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Refresh caches so future lookups see the updated data
         await QueryEngine.Instance.Config(true);
         await ArtifactMetadataEngine.Instance.Config(true);
-        await md.Refresh();
 
         this.savedQuerySql = this.spec.metadata.sql;
         this.EffectiveSavedAtVersion = this.CurrentVersionNumber;

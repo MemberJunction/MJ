@@ -233,7 +233,29 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   get savedUserSettings(): any {
     return this._savedUserSettings;
   }
-  
+
+  /**
+   * Host-supplied props spread into the React component's props alongside the
+   * standard `utilities`, `callbacks`, `components`, `styles`, `libraries`, and
+   * `savedUserSettings`. Used by hosts that need to push data context the React
+   * component can't fetch itself — e.g. `InteractiveFormComponent` passing
+   * `FormHostProps` (the current record snapshot, mode, permissions).
+   *
+   * Standard keys take precedence over caller-supplied keys to keep the
+   * platform contract stable.
+   */
+  private _componentProps: object = {};
+  @Input()
+  set componentProps(value: object | undefined) {
+    this._componentProps = value ?? {};
+    if (this.isInitialized) {
+      this.renderComponent();
+    }
+  }
+  get componentProps(): object {
+    return this._componentProps;
+  }
+
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
@@ -826,9 +848,14 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     const runtimeContext = this.adapter.getRuntimeContext();
     const libraries = runtimeContext.libraries || {};
     
-    // Build props — wrap utilities with data capture for fallback snapshot support
+    // Build props — wrap utilities with data capture for fallback snapshot support.
+    // Host-supplied componentProps spread first so platform-provided keys
+    // (utilities, callbacks, components, styles, libraries, savedUserSettings,
+    // onSaveUserSettings) always win — the contract stays stable regardless of
+    // what a host passes in.
     const wrappedUtilities = this.wrapUtilitiesWithCapture(this.utilities);
     const props = {
+      ...this._componentProps,
       utilities: wrappedUtilities,
       callbacks: this.currentCallbacks,
       components,

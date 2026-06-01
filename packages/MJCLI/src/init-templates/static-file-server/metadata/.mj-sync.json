@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "tests",
+    "test-suites"
+  ]
+}

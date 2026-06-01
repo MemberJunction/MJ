@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T02 - Home Application Load",
+    "Description": "After login, verifies the Home application loads with navigation elements visible including header, app switcher, and at least one navigation item.",
+    "InputDefinition": {
+      "goal": "Verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.8,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Application header with MJ logo is visible",
+        "App switcher or navigation sidebar is present",
+        "No error messages or blank screens"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.8
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "5FF83062-9015-4E5E-8BD7-3C38F22A5356"
+  },
+  "sync": {
+    "lastModified": "2026-05-29T19:49:22.757Z",
+    "checksum": "5459c28c0db51cefbf1f836240bb004b5cad5520e5ab7f81057fa4e31a98b4db"
+  }
+}

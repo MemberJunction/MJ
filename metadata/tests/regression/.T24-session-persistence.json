@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T24 - Session Persistence Reload Page",
+    "Description": "Logs in, navigates to Data Explorer, opens a record, reloads the browser page, and verifies the session is maintained.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open any entity (e.g., Members). Then reload the browser page (press F5 or use the Refresh action). After the page reloads, verify that the user is still logged in (not redirected to the login page) and the application is functional. Note: after reload, the app may show the loading screen again briefly — this is normal, wait for it to finish. You have a limited amount of steps to be sure to wait for a good amount of time.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "User was logged in and navigated to content",
+        "Page was reloaded",
+        "After reload, user is still logged in (not redirected to login)",
+        "Application is functional after reload"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.3,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "step-count": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression"
+  },
+  "primaryKey": {
+    "ID": "C2496941-0035-4B09-9E5C-C4D53822F940"
+  },
+  "sync": {
+    "lastModified": "2026-05-29T19:49:23.273Z",
+    "checksum": "d05df9c1f02a779efc7fa36b1f862f03cfb81318f17936b94d0c1b1a036b9cca"
+  }
+}

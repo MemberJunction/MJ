@@ -64,11 +64,17 @@ export class VectorizeEntityAction extends BaseAction {
             }
         }
 
-        LogStatus(`VectorizeEntityAction: Entities to vectorize: ${entityNames.join(', ')}`);
+        // Optional — defaults to 'Record Duplicate' to preserve the action's
+        // original behavior. Pass 'Search' to drive the search-tier vector
+        // pool used by Provider.SearchEntity (typically from a scheduled job).
+        const entityDocumentTypeParam: ActionParam | undefined = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitydocumenttype');
+        const entityDocumentType: string = (entityDocumentTypeParam?.Value ? String(entityDocumentTypeParam.Value).trim() : '') || 'Record Duplicate';
+
+        LogStatus(`VectorizeEntityAction: Entities to vectorize: ${entityNames.join(', ') || '(all)'} (EntityDocumentType="${entityDocumentType}")`);
         let vectorizer = new EntityVectorSyncer();
         await vectorizer.Config(false, params.ContextUser);
 
-        const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
+        const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames, entityDocumentType);
         let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
             try{
                 await vectorizer.VectorizeEntity({

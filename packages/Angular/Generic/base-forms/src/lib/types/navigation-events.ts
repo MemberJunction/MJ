@@ -24,7 +24,8 @@ export type FormNavigationEvent =
   | EmailLinkNavigationEvent
   | EntityHierarchyNavigationEvent
   | ChildEntityTypeNavigationEvent
-  | NewRecordNavigationEvent;
+  | NewRecordNavigationEvent
+  | DismissFormNavigationEvent;
 
 /**
  * User clicked a foreign key link to view a related record.
@@ -97,4 +98,23 @@ export interface NewRecordNavigationEvent {
   EntityName: string;
   /** Default field values (e.g., foreign key pointing back to current record) */
   DefaultValues: Record<string, unknown>;
+}
+
+/**
+ * Form is asking the host to close/dismiss it.
+ *
+ * Emitted by `BaseFormComponent.CancelEdit` when the discarded record was never
+ * saved (`!record.IsSaved`) — there's no actual record to view, so leaving the
+ * form open in view mode shows blank fields and confuses users. The host
+ * application should close the tab/dialog/route that contained the form and
+ * return the user to whatever surface they came from (typically a list view).
+ *
+ * Hosts that don't have a meaningful "close" semantic (e.g., a form embedded
+ * inline on a dashboard) can safely ignore this — the form has already
+ * reverted state and returned to view mode.
+ */
+export interface DismissFormNavigationEvent {
+  Kind: 'dismiss';
+  /** Reason for the dismiss request — useful for analytics / different host behaviors. */
+  Reason: 'new-record-discarded';
 }

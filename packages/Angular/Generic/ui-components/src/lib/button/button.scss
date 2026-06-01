@@ -84,17 +84,21 @@
 }
 
 .mj-btn--secondary {
-  background: var(--mj-bg-surface);
+  /* Tinted background so the button is visible on white surfaces (cards, page
+     headers, dialogs). Pre-2026-05-19 secondary used `--mj-bg-surface` which
+     blended into any white container; --mj-bg-surface-sunken gives just enough
+     contrast to read as a button on both white and sunken backgrounds. */
+  background: var(--mj-bg-surface-sunken);
   color: var(--mj-text-primary);
   border-color: var(--mj-border-default);
 
   &:hover:not(:disabled) {
-    background: var(--mj-bg-surface-hover);
+    background: var(--mj-bg-surface-active);
     border-color: var(--mj-border-strong);
   }
 
   &:active:not(:disabled) {
-    background: var(--mj-bg-surface-active);
+    background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface-active));
   }
 }
 

@@ -41,6 +41,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
+  @Input() enableMentions: boolean = true; // Whether to enable @-mention autocomplete (agents/users). Hosts addressing a single fixed agent (e.g. Form Builder cockpit) typically set false.
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
   @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
@@ -49,6 +50,55 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
   @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
+
+  /**
+   * Optional default agent ID for the conversation. When set, the FIRST
+   * message routes directly to this agent — skipping Sage's default
+   * delegation — provided the user did not @mention a different agent
+   * and there is no prior agent in the conversation history. After the
+   * first message, the existing "last non-Sage agent" continuity rule
+   * keeps subsequent messages on the same agent.
+   *
+   * Used by embedded chat surfaces (Form Builder cockpit, future
+   * domain-specific chats) that have an obvious specialist agent for the
+   * context and don't need Sage to route. Leave unset to preserve the
+   * standard Sage-fronted UX of the main Chat app.
+   */
+  @Input() defaultAgentId: string | null = null;
+
+  /**
+   * Per-conversation pinned default agent — sourced from the loaded
+   * `MJConversationEntity.DefaultAgentID`. When set, this agent is used in
+   * preference to the embedder-supplied {@link defaultAgentId} so a user
+   * who pins a conversation to e.g. Research Agent gets that routing even
+   * inside an embedded surface whose embedder defaults to a different
+   * specialist. Routing precedence:
+   *   1. @mention
+   *   2. continuity (last responder)
+   *   3. **conversationDefaultAgentId** (this input — user's per-conversation pin)
+   *   4. defaultAgentId (embedder-supplied)
+   *   5. Sage fallback
+   */
+  @Input() conversationDefaultAgentId: string | null = null;
+
+  /**
+   * The `MJ: AI Agent Configurations.ID` selected via the chat header's
+   * mode picker (Draft / Standard / High). Applied to **non-mention**
+   * routes — when the user types without `@mention`, this preset rides
+   * along on the next `invokeSubAgent` call so the server resolves the
+   * agent's Fast / Standard / High Power AI configuration accordingly.
+   *
+   * Mentioned-route turns still use the preset embedded in the mention
+   * (e.g. `@Form Builder /high`) because that's a per-message intent
+   * the user just expressed. Continuity-route turns (last responder
+   * agent) also honor this input as the fallback when the prior
+   * message itself doesn't carry an explicit configuration preset.
+   *
+   * Picker writes are forward-only: changing the mode does NOT re-route
+   * messages already in flight or already in history. Affects "what
+   * happens next."
+   */
+  @Input() agentConfigurationPresetId: string | null = null;
 
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
@@ -471,10 +521,30 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Send a message with custom text WITHOUT modifying the visible messageText input
    * Used for suggested responses and initial messages from empty state.
    * Also saves any pending attachments.
+   *
+   * `extraAttachments` is an escape hatch for callers that programmatically
+   * attached something via `AddArtifactAttachment` and want to send in the same
+   * tick — the `attachmentsChanged` event chain hasn't propagated yet, so
+   * `this.pendingAttachments` may not contain the attachment. Pass it in
+   * explicitly and we merge + dedupe (by `id`) before saving.
    */
-  public async sendMessageWithText(text: string): Promise<void> {
+  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<void> {
+    const merged: PendingAttachment[] = (() => {
+      if (!extraAttachments || extraAttachments.length === 0) {
+        return [...this.pendingAttachments];
+      }
+      const seen = new Set<string>();
+      const out: PendingAttachment[] = [];
+      for (const a of [...this.pendingAttachments, ...extraAttachments]) {
+        if (seen.has(a.id)) continue;
+        seen.add(a.id);
+        out.push(a);
+      }
+      return out;
+    })();
+
     const hasText = text && text.trim().length > 0;
-    const hasAttachments = this.pendingAttachments.length > 0;
+    const hasAttachments = merged.length > 0;
 
     if (!hasText && !hasAttachments) {
       return;
@@ -485,7 +555,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     this.isSending = true;
-    const attachmentsToSave = [...this.pendingAttachments];
+    const attachmentsToSave = merged;
 
     try {
       const detail = await this.dataCache.createConversationDetail(this.currentUser);
@@ -542,6 +612,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
         // Clear pending attachments after successful send
         this.pendingAttachments = [];
+
+        // Also clear the mention editor's content + its own attachments list.
+        // The user-initiated send path (MessageInputBoxComponent.onSendClick)
+        // calls mentionEditor.clear() — we bypass that path here, so the chips
+        // would otherwise stay on screen after the message goes out.
+        this.inputBox?.mentionEditor?.clear();
 
         this.messageSent.emit(detail);
 
@@ -622,8 +698,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Routes the message to the appropriate agent or Sage based on context
-   * Priority: @mention > intent check > Sage
+   * Routes the message to the appropriate agent or Sage based on context.
+   * Priority: explicit @mention > prior-agent continuity > embedder-supplied
+   * default agent > Sage fallback.
    */
   private async routeMessage(
     messageDetail: MJConversationDetailEntity,
@@ -643,7 +720,31 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return;
     }
 
-    // Priority 3: Check if Sage was explicitly @mentioned with a config preset
+    // Priority 3: User's per-conversation pinned default agent — sourced
+    // from MJConversationEntity.DefaultAgentID. Wins over the embedder's
+    // default because it represents an explicit user choice on this
+    // conversation (e.g. "always route to Research Agent for this thread").
+    if (this.conversationDefaultAgentId) {
+      await this.handleAgentContinuity(
+        messageDetail, this.conversationDefaultAgentId, mentionResult, isFirstMessage,
+      );
+      return;
+    }
+
+    // Priority 4: Embedder-supplied default agent. Set by chat surfaces
+    // that have a specialist agent for the context (e.g. Form Builder
+    // cockpit). Only kicks in when nothing more explicit is present —
+    // @mention always wins, conversation continuity always wins. The
+    // intent is to skip Sage's default delegation when the embedder
+    // already knows what agent owns this conversation.
+    if (this.defaultAgentId) {
+      await this.handleAgentContinuity(
+        messageDetail, this.defaultAgentId, mentionResult, isFirstMessage,
+      );
+      return;
+    }
+
+    // Priority 5: Check if Sage was explicitly @mentioned with a config preset
     // If so, treat it like agent continuity so the config preset is preserved
     if (this.converationManagerAgent?.ID) {
       const sageConfigPreset = this.agentService.findConfigurationPresetFromHistory(
@@ -670,7 +771,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
     }
 
-    // Priority 4: No context - use Sage with default config
+    // Priority 6: No context - use Sage with default config
     await this.handleNoAgentContext(messageDetail, mentionResult, isFirstMessage);
   }
 
@@ -1509,7 +1610,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         mergedPayload, // Pass merged payload for continuity
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
-        artifactInfo?.versionId
+        artifactInfo?.versionId,
+        undefined, // configurationPresetId not used in this path
+        this.appContext, // Embedder-supplied app/form context
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1616,7 +1719,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
         artifactInfo?.versionId,
-        configurationPresetId // Pass configuration from previous @mention for continuity
+        configurationPresetId, // Pass configuration from previous @mention for continuity
+        this.appContext, // Embedder-supplied app/form context
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1666,7 +1770,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`),
           artifactInfo?.artifactId,
           artifactInfo?.versionId,
-          configurationPresetId // Pass same config as first attempt
+          configurationPresetId, // Pass same config as first attempt
+          this.appContext, // Embedder-supplied app/form context
         );
 
         if (retryResult && retryResult.success) {
@@ -1806,7 +1911,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         previousPayload,
         this.createProgressCallback(statusMessage, agentName),
         previousArtifactInfo?.artifactId,
-        previousArtifactInfo?.versionId
+        previousArtifactInfo?.versionId,
+        undefined, // configurationPresetId not used in this path
+        this.appContext, // Embedder-supplied app/form context
       );
 
       // Remove from active tasks
@@ -1931,7 +2038,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.createProgressCallback(agentResponseMessage, agentName),
         artifactInfo?.artifactId,
         artifactInfo?.versionId,
-        agentMention.configurationId // Pass configuration preset ID
+        agentMention.configurationId, // Pass configuration preset ID
+        this.appContext, // Embedder-supplied app/form context
       );
 
       // Remove from active tasks
@@ -2080,6 +2188,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Uses the shared helper method in the agent service
     previousConfigurationId = this.agentService.findConfigurationPresetFromHistory(agentId, this.conversationHistory);
 
+    // Fall back to the chat header's mode-picker selection when nothing
+    // in the message history pinned a preset. The picker reflects the
+    // user's persistent per-agent mode preference (Draft / Standard /
+    // High) and applies to all subsequent non-mention routes. A
+    // history-derived preset still wins because it represents an
+    // explicit per-message intent the user expressed earlier.
+    if (!previousConfigurationId && this.agentConfigurationPresetId) {
+      previousConfigurationId = this.agentConfigurationPresetId;
+    }
+
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts
     if (!previousPayload && agentMessages.length > 0) {
@@ -2187,7 +2305,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await agentResponseMessage.Save();
       this.messageSent.emit(agentResponseMessage);
 
-      // Invoke the agent directly (continuation) with previous payload if available
+      // Invoke the agent directly (continuation) with previous payload if available.
+      // `this.appContext` is forwarded so direct-routed sub-agents (e.g. Form
+      // Builder via [defaultAgentId]) see the embedder's ActiveForm/Schema/
+      // OverrideID block in their prompt — same flow Sage gets via
+      // `processMessage`.
       const result = await this.agentService.invokeSubAgent(
         agentName,
         conversationId,
@@ -2199,7 +2321,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.createProgressCallback(agentResponseMessage, agentName),
         previousArtifactInfo?.artifactId,
         previousArtifactInfo?.versionId,
-        configurationId // Pass configuration for continuity
+        configurationId, // Pass configuration for continuity
+        this.appContext, // Embedder-supplied app/form context
       );
 
       // Remove from active tasks

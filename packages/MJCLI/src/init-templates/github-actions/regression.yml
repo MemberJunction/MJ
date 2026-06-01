@@ -1,0 +1,52 @@
+# Copy-paste GitHub Actions workflow to run the MJ regression suite against
+# YOUR app/instance using the published agentic-test-runner image — no MJ
+# monorepo checkout required.
+#
+# Setup:
+#   1. Drop this file in your repo at .github/workflows/regression.yml
+#   2. Add a target.json + metadata/ (tests + test-suites) to your repo (see
+#      `mj test regression init remote-mj` or the examples/ directory).
+#   3. Add repo secrets: AI_VENDOR_API_KEY__GeminiLLM (primary; and/or
+#      __AnthropicLLM), DB_HOST/DB_DATABASE/DB_USERNAME/DB_PASSWORD (a reachable
+#      MJ provider DB), and any auth env: refs your target.json uses
+#      (e.g. STAGING_TEST_USER / STAGING_TEST_PASSWORD).
+#
+# Pin IMAGE to the MJ version your instance runs.
+name: regression
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *'   # nightly
+
+env:
+  IMAGE: memberjunction/agentic-test-runner:latest   # pin to :v<MJ-version>
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run regression suite
+        run: |
+          docker run --rm \
+            -e DB_HOST="${{ secrets.DB_HOST }}" \
+            -e DB_DATABASE="${{ secrets.DB_DATABASE }}" \
+            -e DB_USERNAME="${{ secrets.DB_USERNAME }}" \
+            -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            -e DB_TRUST_SERVER_CERTIFICATE=true \
+            -e AI_VENDOR_API_KEY__GeminiLLM="${{ secrets.AI_VENDOR_API_KEY__GeminiLLM }}" \
+            -e AI_VENDOR_API_KEY__AnthropicLLM="${{ secrets.AI_VENDOR_API_KEY__AnthropicLLM }}" \
+            -e STAGING_TEST_USER="${{ secrets.STAGING_TEST_USER }}" \
+            -e STAGING_TEST_PASSWORD="${{ secrets.STAGING_TEST_PASSWORD }}" \
+            -v "${{ github.workspace }}/my-suite:/work:ro" \
+            -v "${{ github.workspace }}/test-results:/app/test-results" \
+            "$IMAGE" run --target=/work/target.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results
+          path: test-results/
