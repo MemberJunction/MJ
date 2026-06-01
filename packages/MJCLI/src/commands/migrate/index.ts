@@ -5,6 +5,7 @@ import type { MigrateResult, MigrationExecutionResult, ResolvedMigration, Skyway
 import ora from 'ora-classic';
 import { getValidatedConfig, getSkywayConfig, type MJConfig } from '../../config';
 import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
+import { verifyDatabaseConnection } from '../../lib/db-preflight';
 
 export default class Migrate extends Command {
   static description = 'Migrate MemberJunction database to latest version';
@@ -23,11 +24,20 @@ export default class Migrate extends Command {
     tag: Flags.string({ char: 't', description: 'Version tag to use for running remote migrations' }),
     schema: Flags.string({ char: 's', description: 'Target schema (overrides coreSchema from config)' }),
     dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
+    'check-connection': Flags.boolean({
+      description: 'Verify the database connection (including TLS) and exit without migrating',
+    }),
   };
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Migrate);
     const config = getValidatedConfig();
+
+    // Connection preflight: a real connect with the configured TLS/auth settings, so a
+    // self-signed cert or bad credentials fails fast with an actionable hint instead of a
+    // cryptic error mid-migration. `--check-connection` runs only this and exits.
+    await this.preflightConnection(config, flags['check-connection']);
+    if (flags['check-connection']) return;
 
     // For a remote ref we fetch only the slice Skyway will actually run (highest
     // baseline + the versioned tail after it + repeatables) into a temp dir, then
@@ -38,9 +48,7 @@ export default class Migrate extends Command {
     // override (without --tag) keeps using the local filesystem and skips fetching, so
     // monorepo developers are unaffected.
     const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
-    const fetched = ref
-      ? await fetchMigrationSlice({ repoUrl: config.mjRepoUrl, ref: resolveGitRef(ref), dialect: config.dbPlatform })
-      : null;
+    const fetched = ref ? await fetchMigrationSlice({ repoUrl: config.mjRepoUrl, ref: resolveGitRef(ref), dialect: config.dbPlatform }) : null;
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
@@ -49,6 +57,22 @@ export default class Migrate extends Command {
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
       if (fetched) await fetched.cleanup();
+    }
+  }
+
+  /**
+   * Verify the database is reachable with the configured TLS/auth settings before
+   * running migrations. On failure, prints a classified message (and an actionable
+   * suggestion such as DB_TRUST_SERVER_CERTIFICATE for a self-signed cert) and exits.
+   */
+  private async preflightConnection(config: MJConfig, checkOnly: boolean): Promise<void> {
+    const result = await verifyDatabaseConnection(config);
+    if (!result.Ok) {
+      const suggestion = result.Suggestion ? `\n→ ${result.Suggestion}` : '';
+      this.error(`Database connection failed: ${result.Message ?? 'unknown error'}${suggestion}`);
+    }
+    if (checkOnly) {
+      this.log(`Database connection OK (${config.dbHost}:${config.dbPort}, ${config.dbDatabase}).`);
     }
   }
 
