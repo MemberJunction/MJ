@@ -34,6 +34,7 @@ import { ClassifySourcesTabComponent } from './AI/components/autotagging/tabs/so
 import { ClassifyPipelineTabComponent } from './AI/components/autotagging/tabs/pipeline-tab.component';
 import { ClassifyTaxonomyTabComponent } from './AI/components/autotagging/tabs/taxonomy-tab.component';
 import { ClassifyInboxTabComponent } from './AI/components/autotagging/tabs/inbox-tab.component';
+import { ClassifyHealthTabComponent } from './AI/components/autotagging/tabs/health-tab.component';
 import { ClassifyItemDetailDialogComponent } from './AI/components/autotagging/dialogs/item-detail.dialog.component';
 import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
 import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
@@ -101,6 +102,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClassifyPipelineTabComponent,
     ClassifyTaxonomyTabComponent,
     ClassifyInboxTabComponent,
+    ClassifyHealthTabComponent,
     ClassifyItemDetailDialogComponent,
     ClassifyNoContentTypeWarningComponent,
     ClassifySourceTypeFormDialogComponent,

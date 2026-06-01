@@ -160,6 +160,13 @@
             [Provider]="ProviderToUse">
         </classify-inbox-tab>
       }
+      @case ('health') {
+        <classify-health-tab
+            (Resolved)="onHealthResolved()"
+            (OpenInTaxonomyRequested)="onOpenInTaxonomyRequested($event)"
+            [Provider]="ProviderToUse">
+        </classify-health-tab>
+      }
       @case ('taxonomy') {
         <classify-taxonomy-tab
             [ContentTags]="ContentTagsRaw"

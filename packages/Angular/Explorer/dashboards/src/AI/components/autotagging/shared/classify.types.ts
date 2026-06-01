@@ -5,7 +5,7 @@
 
 // ── Tab type ──
 
-export type TabName = 'pipeline' | 'sources' | 'types' | 'tags' | 'taxonomy' | 'inbox' | 'history';
+export type TabName = 'pipeline' | 'sources' | 'types' | 'tags' | 'taxonomy' | 'inbox' | 'health' | 'history';
 
 // ── Interfaces ──
 

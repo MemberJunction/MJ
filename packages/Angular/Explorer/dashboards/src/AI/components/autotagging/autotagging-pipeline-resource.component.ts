@@ -19,6 +19,7 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ClassifyTagsTabComponent } from './tabs/tags-tab.component';
 import { ClassifyInboxTabComponent } from './tabs/inbox-tab.component';
+import { ClassifyHealthTabComponent } from './tabs/health-tab.component';
 import { ClassifySourceTypeFormDialogComponent } from './dialogs/source-type-form.dialog.component';
 
 
@@ -234,13 +235,19 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
-    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'inbox', 'history'];
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'inbox', 'health', 'history'];
 
     /** Lightweight count of Pending tag suggestions for the Inbox nav badge. */
     public InboxPendingCount = 0;
 
+    /** Lightweight count of Pending health-signal suggestions for the Health nav badge. */
+    public HealthPendingCount = 0;
+
     /** Live reference to the Suggestions Inbox tab (for refresh after host actions). */
     @ViewChild(ClassifyInboxTabComponent) private inboxTab?: ClassifyInboxTabComponent;
+
+    /** Live reference to the Tag Health tab (for refresh after host actions). */
+    @ViewChild(ClassifyHealthTabComponent) private healthTab?: ClassifyHealthTabComponent;
 
     async ngAfterViewInit(): Promise<void> {
         await Promise.all([
@@ -249,7 +256,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         ]);
         this.loadClassifyPreferences();
         this.applyIncomingConfiguration();
-        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache(), this.loadInboxPendingCount()]);
+        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache(), this.loadInboxPendingCount(), this.loadHealthPendingCount()]);
         this.tabDataLoaded.add('pipeline');
         this.buildNavItems();
 
@@ -337,7 +344,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 ParameterSchema: {
                     type: 'object',
                     properties: {
-                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'inbox', 'history'], description: 'The tab to switch to' },
+                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'inbox', 'health', 'history'], description: 'The tab to switch to' },
                     },
                     required: ['tab'],
                 },
@@ -417,6 +424,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                         badge: this.InboxPendingCount > 0 ? String(this.InboxPendingCount) : undefined
                     },
                     {
+                        id: 'health',
+                        label: 'Health',
+                        icon: 'fa-solid fa-heart-pulse',
+                        badge: this.HealthPendingCount > 0 ? String(this.HealthPendingCount) : undefined
+                    },
+                    {
                         id: 'history',
                         label: 'Run History',
                         icon: 'fa-solid fa-clock-rotate-left'
@@ -451,6 +464,41 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         await this.loadInboxPendingCount();
         this.emitAgentContext();
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Loads a lightweight count of Pending health-signal suggestions for the
+     * Health nav badge — the 3 reasons the Inbox excludes (MergeCandidate /
+     * LowUsage / WideNode), which the Tag Health tab owns.
+     */
+    private async loadHealthPendingCount(): Promise<void> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Tag Suggestions',
+            ExtraFilter: `Status='Pending' AND Reason IN ('MergeCandidate','LowUsage','WideNode')`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        });
+        this.HealthPendingCount = result.Success ? result.TotalRowCount : 0;
+    }
+
+    /**
+     * Fired by the Health tab after a merge/deprecate/dismiss. Refreshes the
+     * Health nav badge count.
+     */
+    public async onHealthResolved(): Promise<void> {
+        await this.loadHealthPendingCount();
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Fired by the Health tab's "Review in Taxonomy" action with a tag ID. The
+     * Taxonomy tab has no public select-tag input today, so this simply switches
+     * to it; selecting the specific node is a future enhancement.
+     */
+    public onOpenInTaxonomyRequested(_tagID: string): void {
+        void this.SwitchTab('taxonomy');
     }
 
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
@@ -491,6 +539,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 // Trigger CD so the ViewChild resolves, then ask it to load.
                 this.cdr.detectChanges();
                 await this.inboxTab?.EnsureLoaded();
+                break;
+            case 'health':
+                // The Health tab loads its own (transactional, uncached) data.
+                // Trigger CD so the ViewChild resolves, then ask it to load.
+                this.cdr.detectChanges();
+                await this.healthTab?.EnsureLoaded();
                 break;
             case 'history':
                 await this.loadRunHistoryData();
