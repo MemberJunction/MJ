@@ -7,7 +7,7 @@
  * pipeline triggering with real-time GraphQL subscription progress.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewEncapsulation } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
@@ -19,11 +19,11 @@ import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-u
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { WordCloudItem } from '@memberjunction/ng-word-cloud';
+import { ClassifyTagsTabComponent } from './tabs/tags-tab.component';
 
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
-import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagRow, TagCloudItem, TagBySource, RunHistoryRow, DropdownOption, ContentDuplicateRow, RunDetailRow, TaxonomySubTab, TaxTreeNode, TaxDuplicatePair, TaxOrphanCard, TaxTreemapCell, TaxAuditAction, TaxAuditEvent, TaxHealthStat, WeightedTag, ItemPipelineStatus, ContentItemDetail, SourceDetailInfo, FormMode } from './shared/classify.types';
+import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, RunHistoryRow, DropdownOption, ContentDuplicateRow, RunDetailRow, TaxonomySubTab, TaxTreeNode, TaxDuplicatePair, TaxOrphanCard, TaxTreemapCell, TaxAuditAction, TaxAuditEvent, TaxHealthStat, WeightedTag, ItemPipelineStatus, ContentItemDetail, SourceDetailInfo, FormMode } from './shared/classify.types';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -48,6 +48,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Tab state ──
     public ActiveTab: TabName = 'pipeline';
     private tabDataLoaded = new Set<TabName>();
+
+    /** Live reference to the Tag Library tab (for deep-link + agent-tool search). */
+    @ViewChild(ClassifyTagsTabComponent) private tagsTab?: ClassifyTagsTabComponent;
 
     // ── Left nav ──
     public NavItems: NavItem[] = [];
@@ -194,14 +197,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ContentTypeCards + buildContentTypeCards() moved to ClassifyTypesTabComponent.
 
     // ── Tag Library tab ──
-    public TagRows: TagRow[] = [];
-    public TagCloud: TagCloudItem[] = [];
-    public TagCloudWordItems: WordCloudItem[] = [];
-    public TagsBySource: TagBySource[] = [];
-    public TagSearchQuery = '';
-    public FilteredTagRows: TagRow[] = [];
-    public SelectedDrillDownTag: string | null = null;
-    public TagDrillDownItems: { ID: string; Name: string; SourceName: string; Weight: number; UpdatedAt: string; FeedIndex: number }[] = [];
+    // State + view-model building moved to ClassifyTagsTabComponent, which
+    // rebuilds from its [ContentTags]/[ContentItems] inputs.
 
     // D2: Pipeline Monitor — live per-source progress
     public LiveRunDetailRows: RunDetailRow[] = [];
@@ -676,9 +673,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public get ContentSourcesRaw(): Record<string, unknown>[] {
         return this.contentSourcesRaw;
     }
-    /** Exposes raw content items to the Content Types tab via `[Items]`. */
+    /** Exposes raw content items to the Content Types / Tag Library tabs via `[Items]`/`[ContentItems]`. */
     public get ContentItemsRaw(): Record<string, unknown>[] {
         return this.contentItemsRaw;
+    }
+    /** Exposes raw content item tags to the Tag Library tab via `[ContentTags]`. */
+    public get ContentTagsRaw(): Record<string, unknown>[] {
+        return this.contentTagsRaw;
     }
     /** Exposes the accurate total item count to the Content Types tab via `[TotalItemCount]`. */
     public get TotalContentItemCount(): number {
@@ -741,14 +742,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const tagSearch = config?.['tagSearch'] as string | undefined;
         if (!tagSearch) return;
 
-        // Ensure tag data is loaded
+        // Switch to the tags tab so ClassifyTagsTabComponent renders and the
+        // ViewChild resolves, ensuring its data is loaded.
+        if (this.ActiveTab !== 'tags') {
+            this.ActiveTab = 'tags';
+        }
         if (!this.tabDataLoaded.has('tags')) {
             await this.loadTabData('tags');
             this.tabDataLoaded.add('tags');
         }
+        this.cdr.detectChanges();
 
-        this.TagSearchQuery = tagSearch;
-        this.FilterTags();
+        this.tagsTab?.ApplySearch(tagSearch);
     }
 
     ngOnDestroy(): void {
@@ -814,9 +819,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    this.TagSearchQuery = String(params['query'] ?? '');
-                    this.FilterTags();
-                    return { Success: true, Data: { MatchCount: this.FilteredTagRows.length } };
+                    // Ensure the Tag Library tab is active + rendered so its
+                    // ViewChild resolves, then delegate the search to it.
+                    await this.SwitchTab('tags');
+                    this.cdr.detectChanges();
+                    const matchCount = this.tagsTab?.ApplySearch(String(params['query'] ?? '')) ?? 0;
+                    return { Success: true, Data: { MatchCount: matchCount } };
                 },
             },
         ]);
@@ -881,7 +889,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             case 'pipeline': return 'Real-time processing status and recent activity';
             case 'sources':  return 'Configure where content is ingested from';
             case 'types':    return 'Configure AI tagging rules per content category';
-            case 'tags':     return `${this.TagRows.length} unique tags across all content sources`;
+            case 'tags':     return 'Unique tags across all content sources'; // tab owns its own (live count) subtitle now
             case 'taxonomy': return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
             case 'history':  return 'Processing run log across all content sources';
         }
@@ -1195,68 +1203,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ════════════════════════════════════════════
 
     private async loadTagLibraryData(): Promise<void> {
+        // Just ensure the shared raw data is loaded; ClassifyTagsTabComponent
+        // rebuilds its view models from the [ContentTags]/[ContentItems] inputs.
         await this.ensureBaseDataLoaded();
-        this.buildTagRows();
-        this.buildTagCloud();
-        this.buildTagsBySource();
-        this.FilteredTagRows = this.TagRows;
-    }
-
-    private buildTagRows(): void {
-        const tagCounts = this.countAllTags();
-        const avgWeights = this.computeAvgWeights();
-        const tagSourceMap = this.getTopSourcePerTag();
-        const tagFirstSeen = this.getFirstSeenPerTag();
-        const sorted = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]);
-        const maxCount = sorted.length > 0 ? sorted[0][1] : 1;
-
-        this.TagRows = sorted.map(([tag, count]) => ({
-            Tag: tag,
-            UsageCount: count,
-            AvgWeight: avgWeights.get(tag) ?? 1.0,
-            BarWidthPct: Math.round((count / maxCount) * 100),
-            TopSource: tagSourceMap.get(tag) ?? 'Unknown',
-            FirstSeen: tagFirstSeen.get(tag) ?? ''
-        }));
-    }
-
-    private buildTagCloud(): void {
-        const tagCounts = this.countAllTags();
-        const avgWeights = this.computeAvgWeights();
-        // Sort by a combined score: usage count * avg weight (so high-weight, high-count tags bubble up)
-        const scored = Array.from(tagCounts.entries()).map(([tag, count]) => {
-            const weight = avgWeights.get(tag) ?? 1.0;
-            return { tag, count, weight, score: count * weight };
-        }).sort((a, b) => b.score - a.score).slice(0, 20);
-        const maxScore = scored.length > 0 ? scored[0].score : 1;
-
-        this.TagCloud = scored.map(s => ({
-            Tag: s.tag,
-            AvgWeight: s.weight,
-            SizeClass: s.score >= maxScore * 0.7 ? 'large' : s.score >= maxScore * 0.3 ? '' : 'small'
-        }));
-
-        // Build WordCloudItem[] for the mj-word-cloud component
-        this.TagCloudWordItems = scored.map(s => ({
-            Text: s.tag,
-            Weight: maxScore > 0 ? s.score / maxScore : 0,
-            Metadata: { Count: s.count, AvgWeight: s.weight }
-        }));
-    }
-
-    private buildTagsBySource(): void {
-        const sourceTagCounts = new Map<string, number>();
-        const itemSourceMap = new Map<string, string>();
-        for (const item of this.contentItemsRaw) {
-            itemSourceMap.set(item['ID'] as string, (item['ContentSource'] as string) ?? 'Unknown');
-        }
-        for (const tag of this.contentTagsRaw) {
-            const source = itemSourceMap.get(tag['ItemID'] as string) ?? 'Unknown';
-            sourceTagCounts.set(source, (sourceTagCounts.get(source) ?? 0) + 1);
-        }
-        this.TagsBySource = Array.from(sourceTagCounts.entries())
-            .sort((a, b) => b[1] - a[1])
-            .map(([name, count]) => ({ SourceName: name, Count: count }));
     }
 
     /** Convert a string ID to a CompositeKey for tree-dropdown binding */
@@ -1271,61 +1220,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const ck = Array.isArray(key) ? key[0] : key;
         if (!ck?.KeyValuePairs?.length) return '';
         return String(ck.KeyValuePairs[0].Value || '');
-    }
-
-    public FilterTags(): void {
-        const q = this.TagSearchQuery.toLowerCase().trim();
-        this.FilteredTagRows = q
-            ? this.TagRows.filter(r => r.Tag.toLowerCase().includes(q))
-            : this.TagRows;
-        this.cdr.detectChanges();
-    }
-
-    /** Drill down into content items matching a specific tag */
-    public DrillDownTag(tagName: string): void {
-        if (this.SelectedDrillDownTag === tagName) {
-            this.CloseDrillDownTag();
-            return;
-        }
-        this.SelectedDrillDownTag = tagName;
-
-        // Find all content items that have this tag
-        const matchingItemIDs = new Map<string, number>(); // itemID → weight
-        for (const tag of this.contentTagsRaw) {
-            if ((tag['Tag'] as string) === tagName) {
-                matchingItemIDs.set(
-                    NormalizeUUID(tag['ItemID'] as string),
-                    Number(tag['Weight'] ?? 1)
-                );
-            }
-        }
-
-        this.TagDrillDownItems = [];
-        for (let i = 0; i < this.contentItemsRaw.length; i++) {
-            const item = this.contentItemsRaw[i];
-            const normalizedID = NormalizeUUID(item['ID'] as string);
-            const weight = matchingItemIDs.get(normalizedID);
-            if (weight !== undefined) {
-                this.TagDrillDownItems.push({
-                    ID: item['ID'] as string,
-                    Name: (item['Name'] as string) ?? 'Unnamed',
-                    SourceName: (item['ContentSource'] as string) ?? 'Unknown',
-                    Weight: weight,
-                    UpdatedAt: this.formatShortDate((item['__mj_UpdatedAt'] as string) ?? ''),
-                    FeedIndex: i,
-                });
-            }
-        }
-
-        // Sort by weight descending
-        this.TagDrillDownItems.sort((a, b) => b.Weight - a.Weight);
-        this.cdr.detectChanges();
-    }
-
-    public CloseDrillDownTag(): void {
-        this.SelectedDrillDownTag = null;
-        this.TagDrillDownItems = [];
-        this.cdr.detectChanges();
     }
 
     // ════════════════════════════════════════════
@@ -2286,71 +2180,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             }
         }
         return map;
-    }
-
-    private countAllTags(): Map<string, number> {
-        const counts = new Map<string, number>();
-        for (const tag of this.contentTagsRaw) {
-            const t = tag['Tag'] as string;
-            if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
-        }
-        return counts;
-    }
-
-    /** Compute average weight per tag across all occurrences */
-    private computeAvgWeights(): Map<string, number> {
-        const sums = new Map<string, number>();
-        const counts = new Map<string, number>();
-        for (const tag of this.contentTagsRaw) {
-            const t = tag['Tag'] as string;
-            const w = Number(tag['Weight'] ?? 0.5);
-            if (t) {
-                sums.set(t, (sums.get(t) ?? 0) + w);
-                counts.set(t, (counts.get(t) ?? 0) + 1);
-            }
-        }
-        const avgs = new Map<string, number>();
-        for (const [t, sum] of sums) {
-            avgs.set(t, Math.round((sum / (counts.get(t) ?? 1)) * 100) / 100);
-        }
-        return avgs;
-    }
-
-    private getTopSourcePerTag(): Map<string, string> {
-        const tagSourceCounts = new Map<string, Map<string, number>>();
-        const itemSourceMap = new Map<string, string>();
-        for (const item of this.contentItemsRaw) {
-            itemSourceMap.set(item['ID'] as string, (item['ContentSource'] as string) ?? 'Unknown');
-        }
-        for (const tag of this.contentTagsRaw) {
-            const t = tag['Tag'] as string;
-            const source = itemSourceMap.get(tag['ItemID'] as string) ?? 'Unknown';
-            if (!tagSourceCounts.has(t)) tagSourceCounts.set(t, new Map());
-            const inner = tagSourceCounts.get(t)!;
-            inner.set(source, (inner.get(source) ?? 0) + 1);
-        }
-        const result = new Map<string, string>();
-        for (const [tag, sourceCounts] of tagSourceCounts) {
-            let maxSource = 'Unknown';
-            let maxCount = 0;
-            for (const [source, count] of sourceCounts) {
-                if (count > maxCount) { maxSource = source; maxCount = count; }
-            }
-            result.set(tag, maxSource);
-        }
-        return result;
-    }
-
-    private getFirstSeenPerTag(): Map<string, string> {
-        const result = new Map<string, string>();
-        for (const tag of this.contentTagsRaw) {
-            const t = tag['Tag'] as string;
-            if (t && !result.has(t)) {
-                const date = tag['__mj_CreatedAt'] as string;
-                result.set(t, date ? this.formatShortDate(date) : '');
-            }
-        }
-        return result;
     }
 
     // countSourcesByContentType() / countItemsByContentType() moved to
