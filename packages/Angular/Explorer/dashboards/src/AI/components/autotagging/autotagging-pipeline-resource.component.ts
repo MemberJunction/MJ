@@ -1170,7 +1170,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     private formatStageName(stage: string): string {
         const map: Record<string, string> = {
-            'extract': 'Extracting content', 'autotag': 'Running autotaggers',
+            'extract': 'Extracting content', 'autotag': 'Running classifiers',
             'vectorize': 'Vectorizing content', 'complete': 'Complete',
             'error': 'Error', 'ingest': 'Ingesting', 'chunk': 'Chunking',
             'tag': 'Tagging'
