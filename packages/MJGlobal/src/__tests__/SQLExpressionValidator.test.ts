@@ -286,6 +286,16 @@ describe('SQLExpressionValidator', () => {
       const r = validator.validateFullQuery(sql);
       expect(r.valid).toBe(false);
     });
+
+    it('should allow a trailing FOR JSON clause', () => {
+      const r = validator.validateFullQuery('SELECT Name FROM Users FOR JSON AUTO');
+      expect(r.valid).toBe(true);
+    });
+
+    it('should allow a trailing FOR XML clause', () => {
+      const r = validator.validateFullQuery("SELECT Name FROM Users FOR XML PATH('row')");
+      expect(r.valid).toBe(true);
+    });
   });
 
   // ---------------------------------------------------------------

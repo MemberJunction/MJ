@@ -19,7 +19,6 @@ import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand,
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
-import { SuggestedResponse } from '../../models/conversation-state.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
@@ -712,8 +711,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // No agent run — fall back to message entity timestamps
-    return this.formattedGenerationTime;
+    // No agent run — fall back to message entity timestamps.
+    const fromMessage = this.formattedGenerationTime;
+    if (fromMessage) {
+      return fromMessage;
+    }
+
+    // Last resort: the live elapsed-time string is frozen at the value it had
+    // when status flipped to Complete (the interval is cleared in ngDoCheck). If
+    // the same component instance handled the in-progress phase, this is the
+    // accurate duration the user just watched tick. If the message arrived already
+    // complete (no in-progress phase observed), `_elapsedTimeFormatted` is still
+    // its initial '0:00' — return null in that case so the time pill doesn't render
+    // a misleading zero.
+    return this._elapsedTimeFormatted !== '0:00' ? this._elapsedTimeFormatted : null;
   }
 
   public get formattedGenerationTime(): string | null {
@@ -1120,36 +1131,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Parse and return suggested responses from message data
-   * Uses strongly-typed SuggestedResponses property from MJConversationDetailEntity
-   */
-  public get suggestedResponses(): SuggestedResponse[] {
-    try {
-      const rawData = this.message.SuggestedResponses;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of SuggestedResponse objects
-      const responses = JSON.parse(rawData);
-
-      return Array.isArray(responses) ? responses : [];
-    } catch (error) {
-      console.error('Failed to parse suggested responses:', error);
-      return [];
-    }
-  }
-
-  /**
    * Check if current user is the conversation owner
    */
   public get isConversationOwner(): boolean {
     return UUIDsEqual(this.conversation?.UserID, this.currentUser.ID);
-  }
-
-  /**
-   * Handle suggested response selection
-   */
-  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
-    this.suggestedResponseSelected.emit(event);
   }
 
   /**

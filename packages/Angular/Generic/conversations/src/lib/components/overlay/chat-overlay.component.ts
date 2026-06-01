@@ -44,10 +44,14 @@ export interface OverlayConversationSwitchedEvent {
     NewConversationID: string | null;
 }
 
-/** Persisted overlay size preferences */
-interface OverlaySizePrefs {
+/** Persisted overlay size and position preferences */
+interface OverlayPrefs {
     width: number;
     height: number;
+    /** Pixels the bubble has been dragged up from its default bottom position. Optional for back-compat with older saved prefs. */
+    bubbleOffsetY?: number;
+    /** When true, the bubble is hidden and only a thin sliver shows on the right edge. */
+    bubbleHidden?: boolean;
 }
 
 @Component({
@@ -70,6 +74,16 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     private static readonly MIN_HEIGHT = 350;
     private static readonly MAX_WIDTH = 900;
     private static readonly MAX_HEIGHT = 1000;
+
+    // --- Bubble drag constants ---
+    /** Default `bottom` for both bubble and panel (matches CSS 1.5rem). */
+    private static readonly BASE_BOTTOM_PX = 24;
+    /** Floating bubble diameter in pixels (matches CSS 3.5rem). */
+    private static readonly BUBBLE_SIZE_PX = 56;
+    /** Minimum gap to keep between the overlay and the viewport top edge. */
+    private static readonly VIEWPORT_TOP_PADDING_PX = 16;
+    /** Mousedown-to-mousemove distance that promotes a click into a drag. */
+    private static readonly BUBBLE_DRAG_THRESHOLD_PX = 5;
 
     // --- Inputs ---
 
@@ -100,6 +114,14 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
 
     /** Greeting message shown in the empty state when no conversation is active */
     @Input() EmptyStateGreeting: string = 'How can I help you?';
+
+    /**
+     * Pixels reserved at the top of the viewport that the bubble and panel must not
+     * cross. Set this from the host app to the height of any fixed top chrome (e.g.
+     * Explorer's shell-header). Defaults to 0 — generic apps without top chrome
+     * keep the full viewport available.
+     */
+    @Input() TopBoundaryPx: number = 0;
 
     // --- Outputs ---
 
@@ -133,6 +155,30 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     public PanelWidth = ChatAgentsOverlayComponent.DEFAULT_WIDTH;
     public PanelHeight = ChatAgentsOverlayComponent.DEFAULT_HEIGHT;
 
+    /**
+     * Pixels the floating bubble has been dragged up from its default
+     * bottom-right corner position. Always >= 0; clamping at render time
+     * keeps the bubble on-screen even after a viewport resize.
+     */
+    public BubbleOffsetY = 0;
+
+    /** True while the user is actively dragging the bubble; used to swap cursor + suppress click. */
+    public IsBubbleDragging = false;
+
+    /**
+     * True from mousedown until mouseup on the bubble, regardless of whether the
+     * gesture became a drag. Used to give immediate "I'm being held" feedback so
+     * the user can see drag is possible even before crossing the move threshold.
+     */
+    public IsBubblePressed = false;
+
+    /**
+     * When true, the floating bubble is hidden and replaced by a thin sliver
+     * flush with the right edge of the viewport. Persisted across sessions via
+     * OverlayPrefs.bubbleHidden. Clicking the sliver restores the bubble.
+     */
+    public IsHidden = false;
+
     /** Active conversation ID managed locally */
     private _conversationId: string | null = null;
     public get ConversationId(): string | null {
@@ -159,11 +205,21 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     private resizeStartWidth = 0;
     private resizeStartHeight = 0;
 
+    /** Bubble drag state */
+    private bubbleDragStartMouseY = 0;
+    private bubbleDragStartOffset = 0;
+    /** True once the pointer has moved past BUBBLE_DRAG_THRESHOLD_PX; suppresses the implicit click. */
+    private bubbleDragMoved = false;
+    /** ID of the pointer currently driving the drag — guards against multi-touch confusion. */
+    private activeBubblePointerId: number | null = null;
+    /** Element that captured the pointer; needed to release capture on end/cancel. */
+    private bubbleCaptureTarget: HTMLElement | null = null;
+
     // --- Lifecycle ---
 
     ngOnInit(): void {
         this.resolveDefaults();
-        this.loadSizePreferences();
+        this.loadPreferences();
         this.subscribeToBridgeEvents();
         this.subscribeToToolEvents();
     }
@@ -172,6 +228,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.destroy$.next();
         this.destroy$.complete();
         this.removeResizeListeners();
+        this.removeBubbleDragListeners();
     }
 
     // --- Public Methods ---
@@ -187,6 +244,12 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
 
     /** Expand the overlay to show the chat panel */
     public Expand(): void {
+        // Expanding implies the user wants the chat visible — clear any hidden
+        // state so collapse returns to the bubble, not back to the sliver.
+        if (this.IsHidden) {
+            this.IsHidden = false;
+            this.savePreferences();
+        }
         this.State = 'expanded';
         this.UnreadCount = 0;
         this.bridge.NotifyOverlayActive(true);
@@ -280,6 +343,29 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.cdr.detectChanges();
     }
 
+    /**
+     * Hide the floating bubble — leaves a thin sliver on the right edge as the
+     * only affordance to bring it back. Invoked from the small "×" pill that
+     * appears on hover. Stops propagation so the bubble's own click handler
+     * doesn't fire and toggle the panel open.
+     */
+    public Hide(event: Event): void {
+        event.stopPropagation();
+        event.preventDefault();
+        if (this.IsHidden) return;
+        this.IsHidden = true;
+        this.savePreferences();
+        this.cdr.detectChanges();
+    }
+
+    /** Restore the floating bubble after it was hidden. Triggered by clicking the sliver. */
+    public Show(): void {
+        if (!this.IsHidden) return;
+        this.IsHidden = false;
+        this.savePreferences();
+        this.cdr.detectChanges();
+    }
+
     /** Increment unread badge (called externally when messages arrive while collapsed) */
     public IncrementUnread(): void {
         if (this.State === 'collapsed') {
@@ -325,7 +411,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.isResizing = false;
         this.resizeEdge = null;
         this.removeResizeListeners();
-        this.saveSizePreferences();
+        this.savePreferences();
     };
 
     private removeResizeListeners(): void {
@@ -341,6 +427,134 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         return Math.max(ChatAgentsOverlayComponent.MIN_HEIGHT, Math.min(ChatAgentsOverlayComponent.MAX_HEIGHT, value));
     }
 
+    // --- Bubble Drag Methods (Pointer Events — unified mouse / touch / pen) ---
+
+    /**
+     * Start tracking a potential bubble drag. We don't enter drag mode until
+     * the pointer moves past BUBBLE_DRAG_THRESHOLD_PX — releasing before that
+     * threshold is treated as a normal click/tap and opens the chat (via Toggle()).
+     *
+     * Pointer Events (not mousedown) so the same code path serves desktop mouse,
+     * touch on phones/tablets, and pen input. setPointerCapture keeps the gesture
+     * tied to this element even if the finger or cursor strays off the bubble.
+     */
+    public OnBubblePointerDown(event: PointerEvent): void {
+        // Mouse: respect primary-button only. Touch/pen: button is always 0, so this passes naturally.
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        // Don't start a second drag while one is in flight (e.g. second finger on touch).
+        if (this.activeBubblePointerId !== null) return;
+        event.preventDefault();
+
+        const target = event.currentTarget as HTMLElement;
+        target.setPointerCapture(event.pointerId);
+        this.bubbleCaptureTarget = target;
+
+        this.activeBubblePointerId = event.pointerId;
+        this.bubbleDragStartMouseY = event.clientY;
+        this.bubbleDragStartOffset = this.BubbleOffsetY;
+        this.bubbleDragMoved = false;
+        this.IsBubblePressed = true;
+        this.cdr.detectChanges();
+
+        document.addEventListener('pointermove', this.onBubbleDragMove);
+        document.addEventListener('pointerup', this.onBubbleDragEnd);
+        document.addEventListener('pointercancel', this.onBubbleDragEnd);
+    }
+
+    private onBubbleDragMove = (event: PointerEvent): void => {
+        if (event.pointerId !== this.activeBubblePointerId) return;
+        const deltaY = this.bubbleDragStartMouseY - event.clientY; // dragging up = positive
+        if (!this.bubbleDragMoved) {
+            if (Math.abs(deltaY) < ChatAgentsOverlayComponent.BUBBLE_DRAG_THRESHOLD_PX) return;
+            this.bubbleDragMoved = true;
+            this.IsBubbleDragging = true;
+        }
+        this.BubbleOffsetY = this.clampBubbleOffsetY(this.bubbleDragStartOffset + deltaY);
+        this.cdr.detectChanges();
+    };
+
+    private onBubbleDragEnd = (event: PointerEvent): void => {
+        if (event.pointerId !== this.activeBubblePointerId) return;
+        this.removeBubbleDragListeners();
+
+        if (this.bubbleCaptureTarget) {
+            // Browser may have implicitly released capture on pointerup already (per the
+            // Pointer Events spec). releasePointerCapture throws in that race; safe to ignore.
+            try { this.bubbleCaptureTarget.releasePointerCapture(event.pointerId); } catch { /* noop */ }
+        }
+        this.bubbleCaptureTarget = null;
+        this.activeBubblePointerId = null;
+
+        const wasDragged = this.bubbleDragMoved;
+        const wasCancelled = event.type === 'pointercancel';
+        this.bubbleDragMoved = false;
+        this.IsBubbleDragging = false;
+        this.IsBubblePressed = false;
+        if (wasDragged) {
+            this.savePreferences();
+            this.cdr.detectChanges();
+        } else if (!wasCancelled) {
+            this.Toggle();
+        } else {
+            this.cdr.detectChanges();
+        }
+    };
+
+    private removeBubbleDragListeners(): void {
+        document.removeEventListener('pointermove', this.onBubbleDragMove);
+        document.removeEventListener('pointerup', this.onBubbleDragEnd);
+        document.removeEventListener('pointercancel', this.onBubbleDragEnd);
+    }
+
+    /**
+     * Reserved space at the top of the viewport — host-supplied chrome plus
+     * the padding gap we always keep above the bubble/panel.
+     */
+    private get topReservedPx(): number {
+        return Math.max(0, this.TopBoundaryPx) + ChatAgentsOverlayComponent.VIEWPORT_TOP_PADDING_PX;
+    }
+
+    /** Clamp the offset so the bubble stays fully visible below the top boundary. */
+    private clampBubbleOffsetY(value: number): number {
+        const maxOffset = window.innerHeight
+            - ChatAgentsOverlayComponent.BUBBLE_SIZE_PX
+            - ChatAgentsOverlayComponent.BASE_BOTTOM_PX
+            - this.topReservedPx;
+        return Math.max(0, Math.min(Math.max(0, maxOffset), value));
+    }
+
+    // --- Render Position Getters ---
+
+    /** Effective `bottom` (px) for the floating bubble, clamped to the current viewport. */
+    public get BubbleBottomPx(): number {
+        const ideal = ChatAgentsOverlayComponent.BASE_BOTTOM_PX + this.BubbleOffsetY;
+        const max = window.innerHeight
+            - ChatAgentsOverlayComponent.BUBBLE_SIZE_PX
+            - this.topReservedPx;
+        return Math.max(
+            ChatAgentsOverlayComponent.BASE_BOTTOM_PX,
+            Math.min(ideal, Math.max(ChatAgentsOverlayComponent.BASE_BOTTOM_PX, max))
+        );
+    }
+
+    /**
+     * Effective `bottom` (px) for the expanded panel. Anchors to the bubble's
+     * current bottom edge so the panel grows up from where the user parked the
+     * bubble, but clamps downward whenever the panel would otherwise extend
+     * past the viewport's top boundary — that's the "reposition lower so the
+     * chat interface stays visible" behavior.
+     */
+    public get PanelBottomPx(): number {
+        const ideal = ChatAgentsOverlayComponent.BASE_BOTTOM_PX + this.BubbleOffsetY;
+        const maxBottomForVisibility = window.innerHeight
+            - this.PanelHeight
+            - this.topReservedPx;
+        return Math.max(
+            ChatAgentsOverlayComponent.BASE_BOTTOM_PX,
+            Math.min(ideal, maxBottomForVisibility)
+        );
+    }
+
     // --- Private Methods ---
 
     /** Auto-resolve CurrentUser and EnvironmentId from Metadata when not provided as inputs */
@@ -354,26 +568,34 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         }
     }
 
-    /** Load saved panel size from UserInfoEngine */
-    private loadSizePreferences(): void {
+    /** Load saved panel size and bubble position from UserInfoEngine */
+    private loadPreferences(): void {
         try {
             const engine = UserInfoEngine.Instance;
             const raw = engine.GetSetting(ChatAgentsOverlayComponent.SIZE_SETTING_KEY);
             if (raw) {
-                const prefs: OverlaySizePrefs = JSON.parse(raw);
+                const prefs: OverlayPrefs = JSON.parse(raw);
                 this.PanelWidth = this.clampWidth(prefs.width);
                 this.PanelHeight = this.clampHeight(prefs.height);
+                if (typeof prefs.bubbleOffsetY === 'number') {
+                    this.BubbleOffsetY = Math.max(0, prefs.bubbleOffsetY);
+                }
+                if (typeof prefs.bubbleHidden === 'boolean') {
+                    this.IsHidden = prefs.bubbleHidden;
+                }
             }
         } catch {
             // Use defaults on error
         }
     }
 
-    /** Persist panel size to UserInfoEngine (debounced) */
-    private saveSizePreferences(): void {
-        const prefs: OverlaySizePrefs = {
+    /** Persist panel size and bubble position to UserInfoEngine (debounced) */
+    private savePreferences(): void {
+        const prefs: OverlayPrefs = {
             width: this.PanelWidth,
-            height: this.PanelHeight
+            height: this.PanelHeight,
+            bubbleOffsetY: this.BubbleOffsetY,
+            bubbleHidden: this.IsHidden
         };
         UserInfoEngine.Instance.SetSettingDebounced(
             ChatAgentsOverlayComponent.SIZE_SETTING_KEY,
@@ -388,6 +610,17 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
             .subscribe((event: ConversationSwitchEvent) => {
                 if (event.Target === 'overlay') {
                     this.handleSwitchToOverlay(event);
+                }
+            });
+
+        // Allow arbitrary callers (Form Builder cockpit, etc.) to ask the
+        // overlay to expand. Idempotent if we're already expanded —
+        // Expand() is safe to call in any state.
+        this.bridge.ExpandOverlayRequested$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(() => {
+                if (this.State === 'collapsed') {
+                    this.Expand();
                 }
             });
 

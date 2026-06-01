@@ -1,6 +1,7 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem } from "./interfaces";
+import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
+import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -123,6 +124,40 @@ export const AllMetadataArrays = [
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
 ];
 
+
+/**
+ * Raw entity-metadata row shapes flowing into `PostProcessEntityMetadata` from the
+ * dataset loader. These rows are untyped JSON off the wire; we capture only the
+ * properties this code path actually reads or writes, with an `unknown` index
+ * signature for the rest — matching the `Record<string, unknown> & {…}` pattern
+ * already used by `EntityInfo`'s constructor.
+ */
+type BaseMetadataRow = Record<string, unknown>;
+export type EntityMetadataRow = BaseMetadataRow & {
+    ID: string;
+    Name: string;
+    SchemaName?: string;
+    EntityFields?: unknown[];
+    EntityPermissions?: unknown[];
+    EntityRelationships?: unknown[];
+    EntitySettings?: unknown[];
+    EntityOrganicKeys?: unknown[];
+};
+export type EntityFieldMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Sequence: number;
+    EntityFieldValues?: unknown[];
+};
+export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
+export type EntityChildMetadataRow = BaseMetadataRow & { EntityID: string };
+export type OrganicKeyMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Status: string;
+    EntityOrganicKeyRelatedEntities?: unknown[];
+};
+export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
 
 /**
  * Base class for all metadata providers in MemberJunction.
@@ -972,6 +1007,310 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Ranked search over **one** entity's records. See {@link IMetadataProvider.SearchEntity}
+     * for the contract and how this differs from {@link EntityByName} /
+     * {@link FullTextSearch}.
+     *
+     * Implementation overview (concrete on `ProviderBase`, used as-is by every
+     * server-side provider; `GraphQLDataProvider` overrides to proxy via GQL):
+     *   1. Resolve the EntityDocument (by `params.options.entityDocumentId`
+     *      override or by looking up the active Search-category doc for the entity).
+     *   2. In parallel: run the lexical pass (RunView with LIKE filters on the
+     *      name field + any `IncludeInUserSearchAPI` fields) and the semantic
+     *      pass (`searchEntitiesSemanticPass`, the protected template method
+     *      each concrete server provider implements).
+     *   3. Fuse via canonical `ComputeRRF()` with optional per-list weights.
+     *   4. Permission-filter via a second RunView constrained to the matched
+     *      record IDs — that pipeline already enforces row-level read perms
+     *      on this entity, so any rows the user can't read drop out.
+     *   5. Slice to topK, apply minScore cutoff, return.
+     */
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const { entityName, searchText } = params;
+        const options: SearchEntitiesOptions = params.options ?? {};
+
+        const entity = this.EntityByName(entityName);
+        if (!entity) {
+            LogError(`SearchEntity: unknown entity "${entityName}"`);
+            return [];
+        }
+        if (!searchText || !searchText.trim()) {
+            return [];
+        }
+
+        const mode = options.mode ?? 'hybrid';
+        const topK = options.topK ?? 10;
+        const minScore = options.minScore ?? 0;
+        const overFetch = topK * 2;
+        const contextUser = options.contextUser;
+
+        // Resolve EntityDocument when semantic ranking is in play
+        let entityDocumentId: string | null = null;
+        let embeddingAIModelId: string | null = null;
+        if (mode === 'semantic' || mode === 'hybrid') {
+            const resolved = await this.resolveSearchEntityDocument(
+                entity.ID,
+                options.entityDocumentId,
+                contextUser
+            );
+            if (resolved) {
+                entityDocumentId = resolved.id;
+                embeddingAIModelId = resolved.aiModelId;
+            }
+            if (!entityDocumentId && mode === 'semantic') {
+                LogError(`SearchEntity: no active 'Search' EntityDocument for entity "${entityName}"; cannot run semantic-only mode`);
+                return [];
+            }
+        }
+
+        // Dispatch lexical and semantic in parallel. Wrapping the lexical pass
+        // in Promise.resolve adds no real cost today and keeps the shape ready
+        // if the lexical implementation ever goes async (FTS, external index).
+        const [lexicalRanked, semanticRanked] = await Promise.all([
+            mode === 'semantic'
+                ? Promise.resolve<ScoredCandidate[]>([])
+                : this.searchEntitiesLexicalPass(entity, searchText, overFetch, contextUser),
+            mode === 'lexical' || !entityDocumentId
+                ? Promise.resolve<ScoredCandidate[]>([])
+                : this.searchEntitiesSemanticPass(
+                    entityDocumentId,
+                    searchText,
+                    overFetch,
+                    embeddingAIModelId,
+                    contextUser
+                ),
+        ]);
+
+        // Blend
+        const blended = this.searchEntitiesBlend(mode, lexicalRanked, semanticRanked, options);
+
+        // Build component-score lookup for the result-shape step
+        const lexicalScoreById = new Map<string, number>();
+        for (const c of lexicalRanked) lexicalScoreById.set(c.ID, c.Score);
+        const semanticScoreById = new Map<string, number>();
+        const semanticDocByRecord = new Map<string, string>();
+        for (const c of semanticRanked) {
+            semanticScoreById.set(c.ID, c.Score);
+            const erdId = (c.Metadata?.['entityRecordDocumentId'] as string | undefined);
+            if (erdId) semanticDocByRecord.set(c.ID, erdId);
+        }
+
+        // Permission-filter post hoc via RunView constrained to the matched
+        // record IDs — the existing pipeline already enforces row-level read
+        // permissions on this entity, so unauthorized rows simply drop out.
+        const ids = blended.map(c => c.ID);
+        const allowedIds = ids.length > 0
+            ? await this.searchEntitiesFilterByPermission(entity, ids, contextUser)
+            : new Set<string>();
+
+        const results: EntitySearchResult[] = [];
+        for (const cand of blended) {
+            if (!allowedIds.has(cand.ID)) continue;
+            if (cand.Score < minScore) continue;
+            const lex = lexicalScoreById.get(cand.ID);
+            const sem = semanticScoreById.get(cand.ID);
+            const matchType: EntitySearchResult['matchType'] = (lex != null && sem != null)
+                ? 'hybrid'
+                : (lex != null ? 'lexical' : 'semantic');
+            results.push({
+                entityRecordDocumentId: semanticDocByRecord.get(cand.ID) ?? null,
+                recordId: cand.ID,
+                score: cand.Score,
+                matchType,
+                components: { lexical: lex, semantic: sem },
+            });
+            if (results.length >= topK) break;
+        }
+
+        return results;
+    }
+
+    /**
+     * Batch form of {@link SearchEntity}. Fans the input list out to N
+     * independent `SearchEntity` calls via `Promise.all`; result arrays come
+     * back aligned by input order (`result[i]` holds the matches for `params[i]`).
+     *
+     * On the server side, the per-entity passes are independent — running them
+     * concurrently is a real wall-clock win when the caller wants results from
+     * multiple entities. On the client side, `GraphQLDataProvider` overrides
+     * this method to pack the whole batch into a single GraphQL round-trip
+     * instead of issuing N parallel HTTP requests.
+     *
+     * See {@link IMetadataProvider.SearchEntities} for the contract.
+     */
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        if (!params || params.length === 0) return [];
+        return Promise.all(params.map(p => this.SearchEntity(p)));
+    }
+
+    /**
+     * Look up the EntityDocument that backs entity search for `entityID`.
+     * Caller supplies an explicit ID override; otherwise we filter for an
+     * Active EntityDocument joined to the 'Search' type via the denormalized
+     * `Type` column on `vwEntityDocuments` (avoids a SQL subquery and keeps
+     * this metadata-layer code provider-agnostic).
+     *
+     * Returns just the EntityDocument PK and its AIModelID; concrete semantic-pass
+     * implementations look up the model from `AIEngine` to recover the driver
+     * class and API name (the view does not project them). Threading AIModelID
+     * through ensures the query embedding is generated with the *same* model
+     * used to build the index — anything else produces garbage cosine scores.
+     */
+    private async resolveSearchEntityDocument(
+        entityID: string,
+        explicitId: string | undefined,
+        contextUser: UserInfo | undefined
+    ): Promise<{ id: string; aiModelId: string | null } | null> {
+        const filter = explicitId
+            ? `ID='${explicitId.replace(/'/g, "''")}'`
+            : `EntityID='${entityID.replace(/'/g, "''")}' AND Status='Active' AND Type='Search'`;
+        const r = await this.RunView<{
+            ID: string;
+            AIModelID: string | null;
+        }>({
+            EntityName: 'MJ: Entity Documents',
+            ExtraFilter: filter,
+            ResultType: 'simple',
+            MaxRows: 1,
+        }, contextUser);
+
+        if (!r.Success || (r.Results?.length ?? 0) === 0) return null;
+        const row = r.Results![0];
+        return {
+            id: row.ID,
+            aiModelId: row.AIModelID ?? null,
+        };
+    }
+
+    /**
+     * Substring/prefix LIKE search against the entity's name field and any
+     * string-typed fields flagged `IncludeInUserSearchAPI`. Returns lexical
+     * scores in [0,1] blended by best match per row.
+     *
+     * **Wildcard handling.** SQL Server's `LIKE` treats `%`, `_`, and `[`
+     * specially; a user searching for `50%_off` would otherwise match far more
+     * than intended. We escape those three characters and declare an explicit
+     * `ESCAPE '\\'` so user-supplied text is matched literally.
+     *
+     * **Field filtering.** Only string-typed fields are searched. Bit/numeric/
+     * date fields can be flagged `IncludeInUserSearchAPI` via metadata edit;
+     * applying `LIKE` to those would error or implicit-convert in subtle ways.
+     */
+    private async searchEntitiesLexicalPass(
+        entity: EntityInfo,
+        searchText: string,
+        overFetch: number,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        const trimmed = searchText.trim();
+        if (!trimmed) return [];
+
+        // Escape quotes for SQL string literal, then escape LIKE wildcards
+        // (%, _, [) with the explicit ESCAPE character we declare below.
+        const sanitized = trimmed
+            .replace(/'/g, "''")
+            .replace(/\\/g, '\\\\')
+            .replace(/%/g, '\\%')
+            .replace(/_/g, '\\_')
+            .replace(/\[/g, '\\[');
+
+        const searchableFields = entity.Fields
+            .filter(f => (f.IncludeInUserSearchAPI || f.IsNameField) && f.TSType === EntityFieldTSType.String);
+        if (searchableFields.length === 0) return [];
+
+        const likeClauses = searchableFields
+            .map(f => `${f.Name} LIKE '%${sanitized}%' ESCAPE '\\'`)
+            .join(' OR ');
+
+        const r = await this.RunView<Record<string, unknown>>({
+            EntityName: entity.Name,
+            ExtraFilter: likeClauses,
+            ResultType: 'simple',
+            MaxRows: overFetch,
+        }, contextUser);
+
+        if (!r.Success) return [];
+
+        const lower = trimmed.toLowerCase();
+        const nameField = entity.NameField?.Name ?? entity.Fields.find(f => f.IsNameField)?.Name ?? null;
+        const out: ScoredCandidate[] = [];
+        for (const row of (r.Results ?? [])) {
+            const id = String(row['ID'] ?? '');
+            if (!id) continue;
+            const nameVal = nameField ? String(row[nameField] ?? '').toLowerCase() : '';
+            let score = 0.5; // any match (in some searchable field)
+            if (nameVal) {
+                if (nameVal === lower) score = 1.0;
+                else if (nameVal.startsWith(lower)) score = 0.85;
+                else if (nameVal.includes(lower)) score = 0.7;
+            }
+            out.push({ ID: id, Score: score });
+        }
+        // ComputeRRF reads order, not magnitude — sort by score so rank 1 = best lexical match
+        out.sort((a, b) => b.Score - a.Score);
+        return out;
+    }
+
+    /**
+     * Run the semantic ranking pass for {@link SearchEntity}. Each concrete
+     * `ProviderBase` subclass supplies its own implementation: server-side
+     * providers (`GenericDatabaseProvider`) embed the query text and query
+     * an in-process vector pool directly; client-side providers
+     * (`GraphQLDataProvider`) override `SearchEntity` / `SearchEntities`
+     * outright to proxy via GraphQL and never reach this method.
+     *
+     * @returns Ranked array of `ScoredCandidate` whose `ID` is the parent
+     *          entity's record ID and `Metadata.entityRecordDocumentId`
+     *          carries the EntityRecordDocument PK.
+     */
+    protected abstract searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        embeddingAIModelId: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]>;
+
+    /** Blend lexical + semantic via canonical weighted ComputeRRF. */
+    private searchEntitiesBlend(
+        mode: NonNullable<SearchEntitiesOptions['mode']>,
+        lexicalRanked: ScoredCandidate[],
+        semanticRanked: ScoredCandidate[],
+        options: SearchEntitiesOptions
+    ): ScoredCandidate[] {
+        if (mode === 'lexical') return lexicalRanked;
+        if (mode === 'semantic') return semanticRanked;
+        const weights = [
+            options.weights?.lexical ?? 1.0,
+            options.weights?.semantic ?? 1.0,
+        ];
+        return ComputeRRF([lexicalRanked, semanticRanked], options.rrfK ?? 60, weights);
+    }
+
+    /**
+     * Run a permission-aware RunView restricted to the matched IDs. Whatever
+     * comes back is what the user is allowed to see. Used as a post-filter
+     * over the fused result set.
+     */
+    private async searchEntitiesFilterByPermission(
+        entity: EntityInfo,
+        ids: string[],
+        contextUser: UserInfo | undefined
+    ): Promise<Set<string>> {
+        if (ids.length === 0) return new Set();
+        const escaped = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+        const r = await this.RunView<{ ID: string }>({
+            EntityName: entity.Name,
+            ExtraFilter: `ID IN (${escaped})`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: ids.length,
+        }, contextUser);
+        if (!r.Success) return new Set();
+        return new Set((r.Results ?? []).map(row => row.ID));
+    }
+
+    /**
      * Returns true if any param in the batch has SaveViewResults set,
      * which means the call has a side effect (creating UserViewRun records)
      * and must not be deduplicated.
@@ -1609,10 +1948,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
             : new Map<string, CachedRunViewResult | null>();
 
+        // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
+        const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();
+        if (response.results) {
+            for (const r of response.results) {
+                serverResultsByViewIndex.set(r.viewIndex, r);
+            }
+        }
+
         // Process all results in parallel — 'current' entries now read from the
         // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, response.results, preResolvedCache, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -1649,12 +1996,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
-        serverResults: RunViewWithCacheCheckResult<T>[],
+        checkResult: RunViewWithCacheCheckResult<T> | undefined,
         preResolvedCache: Map<string, CachedRunViewResult | null>,
         contextUser?: UserInfo
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
-        const checkResult = serverResults.find(r => r.viewIndex === index);
-
         if (!checkResult) {
             return {
                 result: {
@@ -2730,38 +3075,76 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param settings - Array of entity settings metadata
      * @returns Processed array of EntityInfo instances with all relationships established
      */
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[], organicKeys?: any[], organicKeyRelatedEntities?: any[]): any[] {
-        const result: any[] = [];
+    /**
+     * Groups items into a Map keyed by a NormalizeUUID-transformed value.
+     * Single-pass O(N) helper used to build pre-indexed lookup maps for
+     * metadata post-processing, replacing repeated O(N*M) filter scans.
+     */
+    private groupByNormalizedUUID<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+        const map = new Map<string, T[]>();
+        for (const item of items) {
+            const key = NormalizeUUID(keyFn(item));
+            let list = map.get(key);
+            if (!list) {
+                list = [];
+                map.set(key, list);
+            }
+            list.push(item);
+        }
+        return map;
+    }
+
+    protected PostProcessEntityMetadata(
+        entities: EntityMetadataRow[],
+        fields: EntityFieldMetadataRow[],
+        fieldValues: EntityFieldValueMetadataRow[],
+        permissions: EntityChildMetadataRow[],
+        relationships: EntityChildMetadataRow[],
+        settings: EntityChildMetadataRow[],
+        organicKeys?: OrganicKeyMetadataRow[],
+        organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[]
+    ): EntityInfo[] {
+        const result: EntityInfo[] = [];
 
         // Sort entities alphabetically by name to ensure deterministic ordering
         // This prevents non-deterministic output in CodeGen and other metadata consumers
         const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
-        if (fieldValues && fieldValues.length > 0)
-            for (let f of fields) {
-                // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
-            }
-
-        // Link organic key related entities to their parent organic keys
-        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
-            for (const ok of organicKeys) {
-                ok.EntityOrganicKeyRelatedEntities = organicKeyRelatedEntities.filter(
-                    okre => UUIDsEqual(okre.EntityOrganicKeyID, ok.ID)
-                );
+        if (fieldValues && fieldValues.length > 0) {
+            const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
+            for (const f of fields) {
+                f.EntityFieldValues = fieldValuesByFieldId.get(NormalizeUUID(f.ID)) || [];
             }
         }
 
-        for (let e of sortedEntities) {
-            e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
-            e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
-            e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
+        // Link organic key related entities to their parent organic keys
+        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
+            const okreByOrganicKeyId = this.groupByNormalizedUUID(organicKeyRelatedEntities, okre => okre.EntityOrganicKeyID);
+            for (const ok of organicKeys) {
+                ok.EntityOrganicKeyRelatedEntities = okreByOrganicKeyId.get(NormalizeUUID(ok.ID)) || [];
+            }
+        }
+
+        const fieldsByEntityId = this.groupByNormalizedUUID(fields, f => f.EntityID);
+        const permissionsByEntityId = this.groupByNormalizedUUID(permissions, p => p.EntityID);
+        const relationshipsByEntityId = this.groupByNormalizedUUID(relationships, r => r.EntityID);
+        const settingsByEntityId = this.groupByNormalizedUUID(settings, s => s.EntityID);
+        const activeOrganicKeysByEntityId = organicKeys
+            ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
+            : new Map<string, OrganicKeyMetadataRow[]>();
+
+        for (const e of sortedEntities) {
+            const entityIdKey = NormalizeUUID(e.ID);
+
+            const entityFields = fieldsByEntityId.get(entityIdKey) || [];
+            e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
+            e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
+            e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];
+
             // Link active organic keys to the entity
             if (organicKeys) {
-                e.EntityOrganicKeys = organicKeys.filter(
-                    ok => UUIDsEqual(ok.EntityID, e.ID) && ok.Status === 'Active'
-                );
+                e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e));
         }
@@ -2869,66 +3252,39 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public get AuthorizationRoles(): AuthorizationRoleInfo[] {
         return this._localMetadata.AllAuthorizationRoles;
     }
-    /**
-     * Gets all saved queries in the system.
-     * @returns Array of QueryInfo objects representing stored queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get Queries(): QueryInfo[] {
         return this._localMetadata.AllQueries;
     }
-    /**
-     * Gets all query category definitions.
-     * @returns Array of QueryCategoryInfo objects for query organization
-     */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryCategories(): QueryCategoryInfo[] {
         return this._localMetadata.AllQueryCategories;
     }
-    /**
-     * Gets all query field definitions.
-     * @returns Array of QueryFieldInfo objects defining query result columns
-     */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryFields(): QueryFieldInfo[] {
         return this._localMetadata.AllQueryFields;
     }
-    /**
-     * Gets all query permission assignments.
-     * @returns Array of QueryPermissionInfo objects defining query access
-     */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
     }
-    /**
-     * Gets all query entity associations.
-     * @returns Array of QueryEntityInfo objects linking queries to entities
-     */
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryEntities(): QueryEntityInfo[] {
         return this._localMetadata.AllQueryEntities;
     }
-    /**
-     * Gets all query parameter definitions.
-     * @returns Array of QueryParameterInfo objects for parameterized queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
     }
-    /**
-     * Gets all query dependency records tracking composition references between queries.
-     * @returns Array of QueryDependencyInfo objects representing query-to-query dependencies
-     */
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryDependencies(): QueryDependencyInfo[] {
         return this._localMetadata.AllQueryDependencies;
     }
-    /**
-     * Gets all SQL dialect definitions.
-     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
-     */
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get SQLDialects(): SQLDialectInfo[] {
         return this._localMetadata.AllSQLDialects;
     }
-    /**
-     * Gets all query SQL dialect variants.
-     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QuerySQLs(): QuerySQLInfo[] {
         return this._localMetadata.AllQuerySQLs;
     }

@@ -782,6 +782,47 @@ sequenceDiagram
 
 All MemberJunction engine singletons (AIEngineBase, DashboardEngine, UserInfoEngine, etc.) extend `BaseEngine<T>`, which provides automatic data loading, caching, and real-time refresh.
 
+### Reactive UI consumption — `ObserveProperty` (the API to know about)
+
+Engines expose every array property as a lazy RxJS observable. **This is the canonical way to keep an Angular UI in sync with cached entities** — no manual reload loops, no `loadX()` calls after every mutation, no race conditions with BaseEntity events.
+
+```typescript
+// From inside the engine — declare a Configs entry (BaseEngine wires the events):
+public async Config(forceRefresh = false, contextUser?, provider?) {
+    await this.Load([
+        { Type: 'entity', EntityName: 'MJ: My Things',
+          PropertyName: '_things',
+          CacheLocal: true },
+    ], provider, forceRefresh, contextUser);
+}
+public get Things(): MyThingEntity[] { return this._things ?? []; }
+public get Things$(): Observable<MyThingEntity[]> {
+    return this.ObserveProperty<MyThingEntity>('_things');
+}
+
+// From a consumer (Angular component, service, anywhere):
+await MyEngine.Instance.Config(false, user, provider);  // lazy — no-op if loaded
+MyEngine.Instance.Things$.subscribe(things => {
+    // Fires immediately with the current array (BehaviorSubject semantics),
+    // and again on every save / delete / remote-invalidate.
+    this.things = things;
+    this.cdr.markForCheck();
+});
+```
+
+Behind the scenes:
+
+- `ObserveProperty(propertyName)` is **lazy-created on first call** — engines whose properties are never observed pay zero runtime cost for the observable.
+- `BehaviorSubject` semantics: subscribers receive the current array immediately on subscribe, then re-receive the same array reference on every mutation.
+- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` → `ProcessEntityEvent` → either an in-place array mutation (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice) or a full refresh (when a filter is set so MJ can't determine whether the saved row still belongs). Either way, `emitPropertyChange(propertyName)` fires and the observable re-emits.
+- `DataChange$: Observable<EngineDataChangeEvent>` is the engine-wide complement — emits one event per refresh with the config + new data.
+
+**When to build a new engine vs. reuse an existing service**:
+
+- ✅ **Build an engine** when (a) the entity set is small (a few hundred rows max, or filter-narrowable to that), (b) more than one surface needs the same data, and (c) you want UIs / runtime resolvers to auto-update when the data changes. Examples in the repo: `ConversationEngine`, `InteractiveFormsEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`, `ComponentMetadataEngine`.
+- ❌ **Don't bulk-load** if the entity has a huge column (e.g., NVARCHAR(MAX) JSON, vector embeddings) AND no good filter exists to narrow the set — you'd poison `LocalCacheManager`'s memory budget. See `ComponentMetadataEngine`'s comment about deliberately omitting `MJ: Components` for that reason; `InteractiveFormsEngine` solves it by filtering to `Type='Form'` so only the form-role rows (small dataset) get cached.
+- ❌ **Don't add an engine for one-off ad-hoc queries** — that's what `RunView`/`RunViews` is for. Engines are for entities consumed in many places.
+
 ### Engine Configuration
 
 Each engine declares its data needs as `BaseEnginePropertyConfig` entries:

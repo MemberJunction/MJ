@@ -762,12 +762,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         if (appName) {
           const app = this.appManager.GetAllApps().find(a => a.Name === appName);
           if (app) {
-            this.navigationService.SwitchToApp(app.ID, navItemName).then(() => {
-              // Apply query params after the tab is created/activated
-              if (queryParams && Object.keys(queryParams).length > 0) {
-                this.navigationService.UpdateActiveTabQueryParams(queryParams);
-              }
-            });
+            // Pass query params INTO SwitchToApp so they're applied synchronously when the
+            // target tab activates — before a cached resource component reattaches. The old
+            // post-hoc UpdateActiveTabQueryParams() in a .then() raced the cache reattach and
+            // lost: e.g. two conversation pins both landed on whatever chat was already open.
+            void this.navigationService.SwitchToApp(app.ID, navItemName, queryParams);
           } else {
             console.warn(`[Pin Click] Custom pin: app "${appName}" not found`, config);
           }

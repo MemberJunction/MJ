@@ -37,7 +37,7 @@ import { MJActionEntityExtended, RunActionParams } from "@memberjunction/actions
 import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
-import { MJActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionParamEntity, QueryEngine } from "@memberjunction/core-entities";
 import { AuthProviderFactory } from "@memberjunction/auth-providers";
 // OAuth authentication imports
 import {
@@ -2308,20 +2308,9 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 const sessionUser = sessionContext.user;
 
                 try {
-                    const rv = new RunView();
-                    const result = await rv.RunView({
-                        EntityName: 'MJ: Queries',
-                        ExtraFilter: `Status = 'Active'`,
-                        OrderBy: 'Name',
-                        Fields: ['ID', 'Name', 'Description', 'CategoryID', 'Status'],
-                        ResultType: 'simple'
-                    }, sessionUser);
-
-                    if (!result.Success) {
-                        return JSON.stringify({ error: result.ErrorMessage });
-                    }
-
-                    let queries = result.Results || [];
+                    let queries = QueryEngine.Instance.Queries
+                        .filter(q => q.Status === 'Approved')
+                        .map(q => ({ ID: q.ID, Name: q.Name, Description: q.Description, CategoryID: q.CategoryID, Status: q.Status }));
 
                     // Filter by pattern if provided
                     const pattern = (props.pattern as string) || '*';
@@ -2331,13 +2320,13 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                                 .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
                                 .replace(/\*/g, '.*');
                             const regex = new RegExp(`^${regexPattern}$`, 'i');
-                            queries = queries.filter((q: { Name: string }) => q.Name && regex.test(q.Name));
+                            queries = queries.filter(q => q.Name && regex.test(q.Name));
                         } else {
-                            queries = queries.filter((q: { Name: string }) => q.Name === pattern);
+                            queries = queries.filter(q => q.Name === pattern);
                         }
                     }
 
-                    return JSON.stringify(queries.map((q: { ID: string; Name: string; Description?: string; CategoryID?: string; Status: string }) => ({
+                    return JSON.stringify(queries.map(q => ({
                         id: q.ID,
                         name: q.Name,
                         description: q.Description || '',

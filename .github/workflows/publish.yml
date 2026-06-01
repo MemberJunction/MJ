@@ -156,20 +156,6 @@ jobs:
           echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create distribution zip
-        if: ${{ env.BRANCH == 'main' }}
-        env:
-          MJ_DISTRIBUTION_FILENAME: Distributions/MemberJunction_Code_Bootstrap.zip
-          VERSION: ${{ steps.version.outputs.VERSION }}
-        run: |
-          node CreateMJDistribution.js
-          ARTIFACT=$(cat CreateMJDistribution.log)
-          npm run commitpush
-          SHA=$(git log -n1 --format=format:%H)
-          echo "SHA=$SHA" >> $GITHUB_OUTPUT
-          echo "Distribution zip created at $ARTIFACT" >> $GITHUB_STEP_SUMMARY
-          echo "Distribution commit: \`$SHA\`" >> $GITHUB_STEP_SUMMARY
-
       - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
         run: |

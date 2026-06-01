@@ -1,5 +1,216 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.38.0
+
+### Minor Changes
+
+- 918d663: Interactive Forms — runtime authoring loop is now closed end-to-end.
+
+  **Versioning lifecycle (server-side actions).** The single `Create Interactive Form` action has been split into a versioning-aware family:
+  - `Create Interactive Form` — net-new only; returns `ALREADY_EXISTS` if the user already has an Active override for the entity.
+  - `Modify Interactive Form` — branches on the pointed-to Component's status: Pending → modify the row in place (no version proliferation during chat refinement); Active → insert a new Component v(N+1) with `Status='Pending'` and a sibling Pending Override, leaving the live form untouched.
+  - `Activate Interactive Form Version` — flips a Pending override to Active and atomically demotes the prior Active to Inactive.
+  - `Revert Interactive Form` — re-points an Active override at an older Component in the same Name lineage. Pure UPDATE; old rows preserved.
+  - `Get Active Form For Entity` — read-only; returns the resolved override + the full applicable-variants list.
+  - `Get Default Form Scaffold For Entity` — new read-only action that produces a working `ComponentSpec` mirroring the CodeGen Angular default layout. Replaces "write JSX from scratch" as the agent's baseline.
+
+  **Form-aware artifact viewer.** When a component artifact's spec declares `componentRole: 'form'`, the viewer auto-loads a Top-1 record from the declared entity, mounts via `<mj-interactive-form>` (with `componentSpec` + `record` now `@Input()`s), and exposes a search-as-you-type record picker plus an **Apply to my form** action. Falls back to a synthetic `NewRecord()` when the entity has no rows yet.
+
+  **Variant switcher.** `FormResolverService` now returns the full applicable-variants list alongside the resolved override. `<mj-record-form-container>` renders a compact "Form: \<name\> ▾" picker between the toolbar and the form body when more than one variant applies; selection is persisted per-user per-entity in localStorage.
+
+  **Cockpit reshape.** Form Builder dashboard is no longer canvas-first: 4-pane layout with a forms list + versions rail on the left, a Preview/Code/Layout tabbed center, and a Form Builder AI pane on the right. Both side rails collapse to a strip with state persisted in localStorage.
+
+  **Shared fixture.** `buildFixtureFormHostProps` promoted from Component Studio to `@memberjunction/interactive-component-types/forms` so the artifact viewer and Studio share one implementation.
+
+  **Migration.** `EntityFormOverride.Notes` column (NVARCHAR(MAX), nullable) for human commentary on overrides. Validator audited against the CHECK constraint — no patch required.
+
+  **Agent prompt.** `form-builder.template.md` rewritten around the new action toolbox; teaches the agent to call `Get Active Form For Entity` first and branch between Create / Modify (new-version) / Modify (in-place). Sage's prompt gets a one-line routing rule to delegate form requests to Form Builder.
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [b2ad244]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [b2e6782]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-agents@5.38.0
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/content-autotagging@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/interactive-component-types@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/search-engine@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/core-entities-server@5.38.0
+  - @memberjunction/sqlserver-dataprovider@5.38.0
+  - @memberjunction/ai-agent-manager@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ai-prompts@5.38.0
+  - @memberjunction/ai-vector-sync@5.38.0
+  - @memberjunction/ai-mcp-client@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/code-execution@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/communication-types@5.38.0
+  - @memberjunction/communication-engine@5.38.0
+  - @memberjunction/external-change-detection@5.38.0
+  - @memberjunction/integration-engine@5.38.0
+  - @memberjunction/lists@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/react-linter@5.38.0
+  - @memberjunction/geo-core@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ai-betty-bot@5.38.0
+  - @memberjunction/lists-base@5.38.0
+  - @memberjunction/export-engine@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- e32f21f: Route `RunAdhocQueryAction.ensureRowLimit` through `QueryPagingEngine.WrapWithMaxRows` instead of the regex it had been using. The prior regex produced invalid T-SQL for `SELECT DISTINCT …` inputs (injecting `TOP N` between `SELECT` and `DISTINCT`, but T-SQL requires `SELECT DISTINCT TOP N`), silently dropped the cap on `WITH`/CTE-headed inputs, and only capped the first branch of `UNION`/`INTERSECT`/`EXCEPT` queries. The agent's "Run Ad-hoc Query" tool routinely emits DISTINCT and was getting stuck in retry loops because every SQL it generated got mangled. Delegating to the AST-based path picks up the full DISTINCT / set-op / CTE / TOP-PERCENT / WITH-TIES handling already in place for saved queries via `RenderPipeline`, plus the hard-ceiling enforcement added on this branch.
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-agent-manager@5.37.0
+  - @memberjunction/ai-agents@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/ai-vector-sync@5.37.0
+  - @memberjunction/content-autotagging@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/ai-mcp-client@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/code-execution@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/communication-engine@5.37.0
+  - @memberjunction/external-change-detection@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/lists@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/search-engine@5.37.0
+  - @memberjunction/geo-core@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/ai-betty-bot@5.37.0
+  - @memberjunction/lists-base@5.37.0
+  - @memberjunction/export-engine@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/lists@5.36.0
+  - @memberjunction/lists-base@5.36.0
+  - @memberjunction/communication-engine@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-manager@5.36.0
+  - @memberjunction/ai-agents@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/ai-mcp-client@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/ai-vector-sync@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/content-autotagging@5.36.0
+  - @memberjunction/external-change-detection@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/integration-engine@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/search-engine@5.36.0
+  - @memberjunction/geo-core@5.36.0
+  - @memberjunction/code-execution@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/ai-betty-bot@5.36.0
+  - @memberjunction/export-engine@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- c1f1cad: Add pluggable geocoding provider abstraction with Google, Geocod.io, and HERE implementations (expands GeoCodeSource enum and adds provider registry). Polish the Home dashboard pin empty state with a dismissible "Don't show this again" preference persisted via UserInfoEngine, and speed up the Add Pin panel by reading from cached DashboardEngine, UserViewEngine, QueryEngine, and ActionEngineBase singletons instead of firing fresh RunViews on every open, with background pre-warm on home load.
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [32c4a02]
+- Updated dependencies [7332992]
+- Updated dependencies [9580189]
+- Updated dependencies [e9d4b1c]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/geo-core@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/ai-agents@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ai-prompts@5.35.0
+  - @memberjunction/core-entities-server@5.35.0
+  - @memberjunction/ai-vector-sync@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-agent-manager@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/ai-mcp-client@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/code-execution@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/communication-types@5.35.0
+  - @memberjunction/communication-engine@5.35.0
+  - @memberjunction/content-autotagging@5.35.0
+  - @memberjunction/external-change-detection@5.35.0
+  - @memberjunction/integration-engine@5.35.0
+  - @memberjunction/storage@5.35.0
+  - @memberjunction/search-engine@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/ai-betty-bot@5.35.0
+  - @memberjunction/export-engine@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

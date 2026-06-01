@@ -22,7 +22,7 @@ earlier phase.
 **Symptom:** `syntax error at or near "UPDATE"` (~600 occurrences per run).
 
 **Source:**
-- [packages/CodeGenLib/src/Database/manage-metadata.ts](../packages/CodeGenLib/src/Database/manage-metadata.ts)
+- [packages/CodeGenLib/src/Database/manage-metadata.ts](../../packages/CodeGenLib/src/Database/manage-metadata.ts)
 - Five callsites: `applyLLMIdentifiedPKs` (~line 1688), `applyLLMIdentifiedFKs`
   (~1747), `applyLLMGeneratedDescriptions` (~1798), `applySmartFieldIdentification`
   (~4914), `applyFieldCategories` (~5410).
@@ -45,7 +45,7 @@ hand-writing SQL strings.
 occurrences per run).
 
 **Source:**
-- [packages/AI/Providers/Groq/src/models/groq.ts](../packages/AI/Providers/Groq/src/models/groq.ts)
+- [packages/AI/Providers/Groq/src/models/groq.ts](../../packages/AI/Providers/Groq/src/models/groq.ts)
 - Groq returns timing in seconds (e.g. `0.07161...`); the adapter multiplies
   by 1000 to convert to ms. The result is a float (`71.610...`), but the
   destination columns (`AIPromptRun.QueueTime`/`PromptTime`/`CompletionTime`)
@@ -65,7 +65,7 @@ the platforms behave identically.
 errors).
 
 **Source:**
-- [packages/CodeGenLib/src/Database/manage-metadata.ts](../packages/CodeGenLib/src/Database/manage-metadata.ts)
+- [packages/CodeGenLib/src/Database/manage-metadata.ts](../../packages/CodeGenLib/src/Database/manage-metadata.ts)
 - `applyEntityIcon` (~line 5436), `applyCategoryInfoSettings` (4 SQL templates,
   ~5470, ~5481, ~5506, ~5517), `applyEntityImportance` (~5538).
 - Pattern: hand-written SQL with unquoted column names like `__mj_CreatedAt`,
@@ -87,7 +87,7 @@ as Bug 1.
 as `Error logging and executing SQL for MJ: <Entity> Permissions`).
 
 **Source:**
-- [packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts](../packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts)
+- [packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts](../../packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts)
   lines ~508 and ~520.
 - Pattern: literal SS T-SQL syntax embedded in a hand-written template:
   `UPDATE [${mj_core_schema()}].[GeneratedCode] SET ...`, with bare column

@@ -61,6 +61,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
   public AppContextSnapshot: AppContextSnapshot | null = null;
 
+  /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
+  private static readonly SHELL_HEADER_PX = 60;
+
+  /**
+   * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
+   * shell-header is 60px tall, but if the server-connectivity banner is showing
+   * it sits above the shell-header and pushes everything down. The banner
+   * component publishes its height to `--mj-connectivity-banner-height` on
+   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
+   * Angular's animation events fire CD when the banner show/hides finish.
+   */
+  public get ChatOverlayTopBoundaryPx(): number {
+    const bannerHeight = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
+    ) || 0;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+  }
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -351,6 +369,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
       }
     };
+    // Publish to any embedded chat-area subscribers (Form Builder
+    // cockpit, future domain dashboards). The floating overlay sees
+    // the change directly via its [AppContext] template binding; this
+    // observable channel is for chats mounted outside the overlay.
+    this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
     this.cdr.detectChanges();
 
     // Keep the bridge in sync with workspace visibility.
@@ -380,6 +403,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         ...this.AppContextSnapshot,
         AdditionalContext: update.AgentContext,
       };
+      // Republish so any embedded chat-area subscribers (Form Builder
+      // cockpit, future dashboards with their own AI pane) pick up the
+      // new dashboard slice — the floating overlay sees it via the
+      // [AppContext] template binding regardless.
+      this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
       this.cdr.detectChanges();
     }
 

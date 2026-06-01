@@ -282,6 +282,25 @@ ORDER BY v.FirstName`;
         // ORDER BY should be stripped from count SQL
         expect(result.CountSQL).not.toMatch(/ORDER BY/i);
     });
+
+    it('strips an outer TOP from the count body so the count reflects the full set (SQL Server)', () => {
+        const sql = 'SELECT TOP 500 ID, Name FROM Users WHERE Active = 1 ORDER BY Name';
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
+        // The user's TOP must not survive into the count — COUNT(*) should see the
+        // full result set, consistent with the paged data query (which also drops TOP).
+        expect(result.CountSQL).not.toMatch(/\bTOP\b/i);
+        expect(result.CountSQL).toContain('TotalRowCount');
+    });
+
+    it('strips an outer LIMIT from the count body so the count reflects the full set (PostgreSQL)', () => {
+        // Regression for the dialect inconsistency M1 flagged: the old AST count
+        // path stripped TOP (SQL Server) but left a PostgreSQL LIMIT in place,
+        // producing a count of the limited subset. ClearOuterCap strips both forms.
+        const sql = 'SELECT id, name FROM users WHERE active = true ORDER BY name LIMIT 500';
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'postgresql');
+        expect(result.CountSQL).not.toMatch(/LIMIT\s+500/i);
+        expect(result.CountSQL).toContain('TotalRowCount');
+    });
 });
 
 // ═══════════════════════════════════════════════════

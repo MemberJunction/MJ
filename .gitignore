@@ -9,6 +9,11 @@
 .playwright-mcp/*.png
 .playwright-mcp/*.jpeg
 
+# Regression test environment and results
+docker/regression/.env.test
+docker/regression/test-results/
+docker/regression/.docker-generated/
+
 # Experiment build artifacts (keep source, ignore generated output)
 experiments/**/dist/
 experiments/**/.angular/
@@ -180,3 +185,4 @@ Demos/sample-skip-code-fix-prompt.json
 
 # Per-run artifacts from /audit-memory-leaks
 plans/.memory-leak-snapshots/
+demo/

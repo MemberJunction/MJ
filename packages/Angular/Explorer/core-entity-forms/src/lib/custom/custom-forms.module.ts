@@ -1,6 +1,7 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
@@ -64,7 +65,13 @@ import { MJTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedbac
 import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
-import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
+// ContentSources: the custom-form override was removed once dynamic
+// BaseFormPanel slots landed. Slot-registered panels live in
+// `../panels/content-sources/` and self-mount into the generated form via
+// the `after-fields` slot. Imported here so the @RegisterClassEx decorators
+// run at module load (Angular tree-shaking guard).
+import { TagPipelineConfigurationPanel } from "../panels/content-sources/tag-pipeline-configuration.panel";
+import { WebsiteCrawlerSettingsPanel } from "../panels/content-sources/website-crawler-settings.panel";
 import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
 import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
 import { SearchModule } from "@memberjunction/ng-search";
@@ -110,7 +117,9 @@ import { SearchModule } from "@memberjunction/ng-search";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
-        MJContentSourceFormComponentExtended,
+        // ContentSource-specific BaseFormPanel slot components (no custom form override).
+        TagPipelineConfigurationPanel,
+        WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
     ],
@@ -118,6 +127,7 @@ import { SearchModule } from "@memberjunction/ng-search";
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        DragDropModule,
         AgGridModule,
         MJButtonDirective,
         MJAccordionPanelComponent,
@@ -179,7 +189,8 @@ import { SearchModule } from "@memberjunction/ng-search";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
-        MJContentSourceFormComponentExtended,
+        TagPipelineConfigurationPanel,
+        WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         ActionsModule

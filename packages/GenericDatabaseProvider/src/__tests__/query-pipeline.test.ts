@@ -10,16 +10,14 @@ import {
     SaveSQLResult,
     DeleteSQLResult,
     UserInfo,
-    BaseEntity,
-    QueryInfo,
     RunQueryParams,
     RunQueryResult,
-    Metadata,
 } from '@memberjunction/core';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
 /**
  * Test subclass exposing protected pipeline methods for testing.
- * Overrides resolveQueryInfo to use injected mock queries instead of
+ * Overrides resolveQuery to use injected mock queries instead of
  * requiring full provider Config().
  */
 class TestPipelineProvider extends GenericDatabaseProvider {
@@ -47,13 +45,13 @@ class TestPipelineProvider extends GenericDatabaseProvider {
     async RollbackTransaction(): Promise<void> {}
 
     // ---- Mock query resolution ----
-    private _mockQueries: QueryInfo[] = [];
-    public setMockQueries(queries: QueryInfo[]): void {
+    private _mockQueries: MJQueryEntityExtended[] = [];
+    public setMockQueries(queries: MJQueryEntityExtended[]): void {
         this._mockQueries = queries;
     }
 
     /** Override to use injected mock queries instead of requiring Config() */
-    protected override resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+    protected override resolveQuery(params: RunQueryParams): MJQueryEntityExtended | undefined {
         if (params.QueryID) {
             return this._mockQueries.find(q => q.ID === params.QueryID);
         }
@@ -92,12 +90,12 @@ class TestPipelineProvider extends GenericDatabaseProvider {
         return this.InternalRunQueries(params, contextUser);
     }
 
-    public testFindAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): QueryInfo {
+    public testFindAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
         return this.findAndValidateQuery(params, contextUser);
     }
 
     public testProcessQueryParameters(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
@@ -112,7 +110,7 @@ class TestPipelineProvider extends GenericDatabaseProvider {
     }
 
     public testAuditQueryExecution(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         params: RunQueryParams,
         finalSQL: string,
         rowCount: number,
@@ -136,27 +134,43 @@ function makeQueryInfo(overrides: Partial<{
     UsesTemplate: boolean;
     CacheEnabled: boolean;
     AuditQueryRuns: boolean;
-}>): QueryInfo {
-    const q = new QueryInfo();
-    q.ID = overrides.ID ?? 'q-1';
-    q.Name = overrides.Name ?? 'Test Query';
-    q.SQL = overrides.SQL ?? 'SELECT 1';
-    q.Status = (overrides.Status ?? 'Approved') as QueryInfo['Status'];
-    q.Reusable = overrides.Reusable ?? false;
-    q.UsesTemplate = overrides.UsesTemplate ?? false;
-    q.CacheEnabled = overrides.CacheEnabled ?? false;
-    q.AuditQueryRuns = overrides.AuditQueryRuns ?? false;
+}>): MJQueryEntityExtended {
+    const status = overrides.Status ?? 'Approved';
 
+    const q: Record<string, unknown> = {
+        ID: overrides.ID ?? 'q-1',
+        Name: overrides.Name ?? 'Test Query',
+        SQL: overrides.SQL ?? 'SELECT 1',
+        Status: status,
+        Reusable: overrides.Reusable ?? false,
+        UsesTemplate: overrides.UsesTemplate ?? false,
+        CacheEnabled: overrides.CacheEnabled ?? false,
+        AuditQueryRuns: overrides.AuditQueryRuns ?? false,
+        UserCanRun: vi.fn().mockReturnValue(true),
+        UserHasRunPermissions: vi.fn().mockReturnValue(true),
+        GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
+        QueryParameters: [],
+    };
+
+    const rawPath = overrides.CategoryPath ?? '/Test/';
+    const normalizedPath = rawPath.replace(/^\/|\/$/g, '');
     Object.defineProperty(q, 'CategoryPath', {
-        get: () => overrides.CategoryPath ?? '/Test/',
+        get: () => normalizedPath,
         configurable: true
     });
 
-    q.UserCanRun = vi.fn().mockReturnValue(true);
-    q.UserHasRunPermissions = vi.fn().mockReturnValue(true);
-    q.GetPlatformSQL = vi.fn().mockReturnValue(q.SQL);
+    Object.defineProperty(q, 'IsApproved', {
+        get: () => status === 'Approved',
+        configurable: true,
+    });
 
-    return q;
+    return q as unknown as MJQueryEntityExtended;
+}
+
+function mockQueryEngineQueries(queries: MJQueryEntityExtended[]): void {
+    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
+        Queries: queries,
+    } as unknown as QueryEngine);
 }
 
 const mockUser: UserInfo = {
@@ -173,18 +187,9 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
 
     beforeEach(() => {
         provider = new TestPipelineProvider();
-        // Mock Metadata.Provider to prevent undefined access in pipeline methods
-        // (e.g., CacheConfig accesses QueryCategories, composition accesses Queries)
-        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-            Queries: [],
-            QueryDependencies: [],
-            QueryCategories: [],
-            QueryFields: [],
-            QueryParameters: [],
-            QueryPermissions: [],
-            SQLDialects: [],
-            QuerySQLs: [],
-        } as ReturnType<typeof Metadata.Provider>);
+        // Mock QueryEngine.Instance to prevent undefined access in pipeline methods
+        // (e.g., composition accesses QueryEngine.Instance.Queries)
+        mockQueryEngineQueries([]);
     });
 
     afterEach(() => {
@@ -334,17 +339,8 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
             });
             composingQuery.GetPlatformSQL = vi.fn().mockReturnValue(composingQuery.SQL);
 
-            // Composition resolution uses Metadata.Provider.Queries
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [baseQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            // Composition resolution uses QueryEngine.Instance.Queries
+            mockQueryEngineQueries([baseQuery]);
 
             const { finalSQL } = provider.testProcessQueryParameters(composingQuery, undefined, mockUser);
 
@@ -380,16 +376,7 @@ ORDER BY JoinYear`,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [depQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([depQuery]);
 
             // Pass StartDate parameter — should be resolved in the dependency's Nunjucks templates
             const { finalSQL } = provider.testProcessQueryParameters(
@@ -425,16 +412,7 @@ ORDER BY JoinYear`,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [depQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([depQuery]);
 
             const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
 
@@ -462,16 +440,7 @@ ORDER BY JoinYear`,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [depQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([depQuery]);
 
             const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
 
@@ -502,16 +471,7 @@ WHERE m.Region = '{{ Region }}'
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [depQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([depQuery]);
 
             const { finalSQL } = provider.testProcessQueryParameters(
                 outerQuery,
@@ -548,16 +508,7 @@ WHERE m.Region = '{{ Region }}'
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [depQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([depQuery]);
 
             // No parameters provided — {% if Region %} should evaluate to false
             const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
@@ -587,19 +538,7 @@ AND ti.RecordID = {{ recordID | sqlString }}`,
                 UsesTemplate: true,
             });
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [
-                    { QueryID: queryID, Name: 'entityName', Type: 'string', IsRequired: true },
-                    { QueryID: queryID, Name: 'recordID', Type: 'string', IsRequired: true },
-                ],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([]);
 
             const { finalSQL } = provider.testProcessQueryParameters(
                 query,
@@ -627,18 +566,7 @@ SELECT * FROM Users WHERE Name = {{ userName | sqlString }}`,
                 UsesTemplate: true,
             });
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [
-                    { QueryID: queryID, Name: 'userName', Type: 'string', IsRequired: true },
-                ],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([]);
 
             const { finalSQL } = provider.testProcessQueryParameters(
                 query,
@@ -662,19 +590,7 @@ SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name |
                 UsesTemplate: true,
             });
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [
-                    { QueryID: queryID, Name: 'status', Type: 'string', IsRequired: true },
-                    { QueryID: queryID, Name: 'name', Type: 'string', IsRequired: true },
-                ],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([]);
 
             const { finalSQL } = provider.testProcessQueryParameters(
                 query,
@@ -804,16 +720,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: [bridgeQuery],
-                QueryDependencies: [],
-                QueryCategories: [],
-                QueryFields: [],
-                QueryParameters: [],
-                QueryPermissions: [],
-                SQLDialects: [],
-                QuerySQLs: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries([bridgeQuery]);
 
             provider.setMockQueries([outerQuery]);
 

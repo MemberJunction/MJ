@@ -1,0 +1,1249 @@
+[
+  {
+    "fields": {
+      "Name": "Reach360",
+      "Description": "Reach 360 is Articulate's lightweight cloud LMS. This integration syncs users, groups, courses, learning paths, reports (sessions/activity), and supports invitations and completion imports via a Bearer token REST API (https://api.reach360.com).",
+      "ClassName": "Reach360Connector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://reach.articulate.com",
+      "BatchMaxRequestCount": 60,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "Icon": "fa-solid fa-graduation-cap"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Courses",
+            "DisplayName": "Courses",
+            "Description": "Courses authored in Articulate Rise/Storyline/Microlearning or imported SCORM/xAPI content. Read-only over the API — authoring happens in Articulate apps.",
+            "Category": "Content",
+            "APIPath": "/courses",
+            "ResponseDataKey": "courses",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Description": "Unique identifier of the course.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9FA901BF-0446-420D-B74D-21B02FBF77B5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:54.926Z",
+                  "checksum": "01e4c4c99c028f2ffd7df7efe9bf0ce935d7daf90d766c23eaead49a9c48d78e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "title",
+                  "DisplayName": "Title",
+                  "Description": "Course title.",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6F5F7CC0-E539-469F-BAC8-B692EE86D740"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:54.998Z",
+                  "checksum": "e710f5cb287bdce0898cc2f048cf9d75f5937a0eecca60225499084cb46e0469"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contentType",
+                  "DisplayName": "Content Type",
+                  "Description": "Content source — rise, storyline, microlearning, or imported.",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DF86ACED-30CC-44B7-8F77-EFB32C77A14C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.073Z",
+                  "checksum": "33ac182bf3835178f0b5ae2ab4bf790cf4ee9407674c9542ed760f244331000a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "coverImageUrl",
+                  "DisplayName": "Cover Image URL",
+                  "Description": "URL for the course cover image when one is attached.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D68E6B08-771C-43C0-8685-04794070E46A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.151Z",
+                  "checksum": "93e14f850e81edf651759af42189d614ca295cf2aeaf877279ed0e024eed55f3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "authorUrl",
+                  "DisplayName": "Author URL",
+                  "Description": "HATEOAS URL to fetch the course author user record.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "73384F6A-44BC-46F7-9CE9-9C18A0B41BBA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.226Z",
+                  "checksum": "74b581e03c456bac808f63774d7becb09d5a6d8c1798b68998d4202b7afce655"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "courseReportUrl",
+                  "DisplayName": "Course Report URL",
+                  "Description": "HATEOAS URL to fetch the course learner report.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F1D1727E-F22C-4033-89E9-BE027119BE87"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.304Z",
+                  "checksum": "fcad6ab6ee419200e1b102f9dc0b6c1816c770b7b4cbd01dcc4e17e4ba775822"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Description": "Canonical URL for this course resource.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E39D2FCF-F4B3-41FA-8A83-322EC3109A74"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.380Z",
+                  "checksum": "be4f6d20305c734789050de305fa2f2b59c0a92b3d7e85b90f3a9787981b2edf"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "277DF668-AE77-405E-8B6B-82E2CD9C7EB4"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:32:54.786Z",
+            "checksum": "cef473f9fd91161e1221b38d611cebd59f6069d8e7e785772979aa231220d50b"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Users",
+            "DisplayName": "Users",
+            "Description": "Reach 360 users with email, role, and activity timestamps. Created via invitation or SSO provisioning (no direct POST).",
+            "Category": "People",
+            "APIPath": "/users",
+            "ResponseDataKey": "users",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Description": "Unique identifier of the user.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7DC954A2-D15C-4407-9717-F0361BF48394"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.463Z",
+                  "checksum": "9671291383e28e03ba0447af7789a6627c453b59345b719c0d3f18c389d6e4df"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Description": "User email address — natural key for matching across systems.",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1C1A2919-507C-4E0D-8110-8BA88235E7F6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.541Z",
+                  "checksum": "ef043af5234babdea9b773ae60aacd671c7195548384f397783bfd3357274642"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "role",
+                  "DisplayName": "Role",
+                  "Description": "User role — learner, author, or admin.",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3B05B2E4-67E4-433E-8C74-A7B09EA9C6FF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.623Z",
+                  "checksum": "50cac297d143f6ffda86659bb171f888774e0f5a0276dfc162fbb21899145866"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "firstName",
+                  "DisplayName": "First Name",
+                  "Description": "User first name.",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8F488186-C34D-41D0-A442-1162ADC3B78D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.734Z",
+                  "checksum": "fdab099a7347492d5498b1ff3fce8d512c36d783b92973c698ec8d17eb424fe8"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastName",
+                  "DisplayName": "Last Name",
+                  "Description": "User last name.",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "79BFFD93-6015-4D6D-970A-CD11F9B78FD5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.813Z",
+                  "checksum": "0757b57110eef9277089b118cd47c357bf475b2ed79f0dc9f632120c5c880dec"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastActiveAt",
+                  "DisplayName": "Last Active At",
+                  "Description": "Timestamp of the user's last activity in Reach 360 — usable as an incremental watermark.",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F56168FD-F779-49FB-8B17-EBE9358310A6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.889Z",
+                  "checksum": "f847a2e0216a90990f15fdf10d9ec0c636dcf6fd2012a96836025cafd72045e1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "articulate360User",
+                  "DisplayName": "Articulate 360 User",
+                  "Description": "Whether the user is managed via the parent Articulate 360 Teams subscription.",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9F695893-B69B-4331-9FE5-5C25858A8328"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:55.971Z",
+                  "checksum": "eac8dfe164bd7002ffb7384074ada5111a54832452535b894cef0878a3aad3de"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "groupsUrl",
+                  "DisplayName": "Groups URL",
+                  "Description": "HATEOAS URL to list the user's group memberships.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A4AA37AF-BF1E-49DF-ADA8-9FA4AC35EA04"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.047Z",
+                  "checksum": "f7abf78543b40f4f9b7359a0a38aa23a1b12f07304edd985e262c4c1918b7fe2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "learnerReportUrl",
+                  "DisplayName": "Learner Report URL",
+                  "Description": "HATEOAS URL for this user's learner report.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FCB8343E-0E18-4844-B0E6-1F34D282D597"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.123Z",
+                  "checksum": "1967760a6fa46e73fc447f20e8acdbc2ea5491f9fc0c37f10e40d2849a7aab28"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "favoritesUrl",
+                  "DisplayName": "Favorites URL",
+                  "Description": "HATEOAS URL for the user's favorites list.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "23191DD8-8D96-402C-8E84-555D12C32721"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.203Z",
+                  "checksum": "dbcc0d454b94ac92845d13a26525d2f01a62767c2fa951bb1d71dab085c31c5a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Description": "Canonical URL for this user resource.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "246D2864-B4EA-4861-9F13-18E43A55544D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.284Z",
+                  "checksum": "1c20e9f1080bf211f504ae425ca39644bfe2425aa34ae62744285a0e0f52c0b0"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "9EE86F34-6C7F-4B29-93D5-5A41F6AEA1D7"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:32:54.808Z",
+            "checksum": "61c7ed1d17757d18a9b9928a3aae811a0771ec6753578edb0d783680c679b03e"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Groups",
+            "DisplayName": "Groups",
+            "Description": "Reach 360 groups used as the de-facto tagging/categorization mechanism for users and course assignments. Groups are created in the Reach 360 UI — API supports reading and membership mutations only.",
+            "Category": "People",
+            "APIPath": "/groups",
+            "ResponseDataKey": "groups",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Description": "Unique identifier of the group.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9235BDDE-3399-4A4E-9A8E-0B770B79EDED"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.360Z",
+                  "checksum": "58b4796d4e76abe58f6f9ae680433dc27df1dc6544d6a0ffca49589a69e3b6ef"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Group name.",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DDEA0A0D-E296-499B-8650-1C66B6C017E9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.457Z",
+                  "checksum": "8840e1348c3ef82ff5e3616e7c2a1ab062f68fed32a5e12db098bebcdab782ea"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Description": "Group description text.",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "35A717FC-5851-4108-8EA2-084857E63844"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.565Z",
+                  "checksum": "1b839efcc5979856d45c3a0aa0bd5889fe0a0d7ab5a0af97142e1256a12a7809"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "usersUrl",
+                  "DisplayName": "Users URL",
+                  "Description": "HATEOAS URL to list the group's member users.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1607DF27-8C76-42BE-BCC6-56FBAADD3BA9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.639Z",
+                  "checksum": "393cc9573026bd03ec69f5c4e97333bbac6b128be638e333f50ce4eda6916daa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "coursesUrl",
+                  "DisplayName": "Courses URL",
+                  "Description": "HATEOAS URL to list courses assigned to the group.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "34AF26F1-49E8-4FC6-B438-0D349FBCF46B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.713Z",
+                  "checksum": "3abcd341b647555c3ba1e279b1c99fe124b61085610aa2423146b96a94201ef9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Description": "Canonical URL for this group resource.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A4CD1BC4-7BDB-48E7-AF03-020E50C4E7AA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.789Z",
+                  "checksum": "d62253e4eebd373782444966fbdc669cae16d0018d0213218cf52b9bb9f161b2"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "1BDF5727-923C-4BC3-B69D-56C3B4883DA5"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:32:54.829Z",
+            "checksum": "2c0d44e2e926f09801263f4579afc02df2e6b21390913ce1174a8269fd253aed"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "LearningPaths",
+            "DisplayName": "Learning Paths",
+            "Description": "Ordered sequences of courses. Created in the Reach 360 UI; enrollment (users and groups) is managed via the API.",
+            "Category": "Content",
+            "APIPath": "/learning-paths",
+            "ResponseDataKey": "learningPaths",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Description": "Unique identifier of the learning path.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E383ADD3-9054-4BDF-A114-F11F500597D8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.865Z",
+                  "checksum": "6a6a67215c3a3c31fd4d219fbcbe86e2df07694e427d8d9263c998291ec4a70f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "title",
+                  "DisplayName": "Title",
+                  "Description": "Learning path title.",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A2BD1D7D-8D1A-4C12-A186-B07E44660C72"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:56.942Z",
+                  "checksum": "8fbfb73002f4347f9e01d74461bf64b83f961f5438872ee723f7adde629438cf"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Description": "Learning path description text.",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DBF9CC37-C1D9-4800-932C-6C2943E66B6B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.019Z",
+                  "checksum": "e857b4afa6bc4b63b5a00422105b4eb5a82830f4eb2096cdb64cdde604f71052"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "coverImageUrl",
+                  "DisplayName": "Cover Image URL",
+                  "Description": "URL for the learning path cover image.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F9137D1E-C1D0-40AD-A4D9-AAF089D3F04E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.101Z",
+                  "checksum": "3b6422224f509517f17ce9cbc0ac55fbddb3b054fe82841817b5efe90729f3f5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "coursesUrl",
+                  "DisplayName": "Courses URL",
+                  "Description": "HATEOAS URL to list courses in this learning path.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2BFD99C1-D995-4ECA-A39B-89D975A59E1E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.175Z",
+                  "checksum": "351dbb5e2a72ad487d5c203805aec9343886a32e136ffe3953a5bfaf2c363d7f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "coursesReportUrl",
+                  "DisplayName": "Courses Report URL",
+                  "Description": "HATEOAS URL for the learning path courses report.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FBDFACC9-7EF8-42EA-9C23-D49022F4AD61"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.256Z",
+                  "checksum": "b2a9a1eba5736ddf3e154ab2393a320f80e4611b2cac9980d2ee3b93bbfa9c15"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "learnersReportUrl",
+                  "DisplayName": "Learners Report URL",
+                  "Description": "HATEOAS URL for the learning path learners report.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4ED7B2D6-CFFB-4DBE-9106-9924F614C9B0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.368Z",
+                  "checksum": "e7e0ce5d063c16d7e5be800885fbbb00ba8a5fb78717a5f44c706ac1b6fcb65b"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Description": "Canonical URL for this learning path resource.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "39587363-C632-475B-9507-0ED4E05D5600"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.445Z",
+                  "checksum": "9841ffc308bfe1a8e4776fc1d0c8e42610c6ecd5c18650364b77e47cf5cb34d1"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "38127179-6F8B-4BC2-AB20-7FF22A182D34"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:32:54.850Z",
+            "checksum": "6acd19c29a59321b01eb23b53f3bdedb0e7614984140f1d7f06a5edbb2984078"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ActivityReport",
+            "DisplayName": "Activity Report",
+            "Description": "Account-wide session activity report acting as a CDC-style feed. Each row represents one user's interaction with one course, with started/completed timestamps and duration. Primary source for incremental sync — filter client-side by completedAt.",
+            "Category": "Reports",
+            "APIPath": "/reports/activity",
+            "ResponseDataKey": "sessions",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "courseId",
+                  "DisplayName": "Course ID",
+                  "Description": "Course identifier — composite primary key component.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "60E32479-90BA-4823-9409-004E7BB8A17F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.527Z",
+                  "checksum": "0bbf76206586cf3202bfd1c7a2519664edda8b0ca4260cab6a5e44c2a9ba70c4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "userId",
+                  "DisplayName": "User ID",
+                  "Description": "User identifier — composite primary key component.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "36434090-7268-4AC4-B07B-94D931857C61"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.604Z",
+                  "checksum": "c11d7dded95c735c0a22deef3cec88bb00eb69c41f1414f3cd484041ad8da61f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "courseTitle",
+                  "DisplayName": "Course Title",
+                  "Description": "Denormalized course title at time of session.",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "63B99C98-EEE5-4265-AF68-D28A01D98E6E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.680Z",
+                  "checksum": "b0b6c92bf06b538a607a3f62b8773ba4e42521f7469156dae7c1fb37875ec1f6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "courseDeleted",
+                  "DisplayName": "Course Deleted",
+                  "Description": "Whether the originating course has since been deleted.",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1102FD0C-6836-474D-8F50-36DD31AC97CB"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.757Z",
+                  "checksum": "8f68f4879c6884951c7cc7f75c83d149efc635982c59c095fa3f39da417ec801"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "firstName",
+                  "DisplayName": "First Name",
+                  "Description": "Denormalized learner first name.",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B53B1CE4-A3EE-44B2-8D19-14367DE0A3A5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.833Z",
+                  "checksum": "58cbee6148975d0cadc1d68f094227d6a40296d3d80c05d9ad92bcf1a787d429"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastName",
+                  "DisplayName": "Last Name",
+                  "Description": "Denormalized learner last name.",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A717A37B-EC2E-4C9F-B721-267D25BEA0C5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.916Z",
+                  "checksum": "2b92016f23d4eee65f4a2674f6256852eace20e1cdf7b7ed03896cc64edad62b"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "userDeleted",
+                  "DisplayName": "User Deleted",
+                  "Description": "Whether the learner has since been removed from the account.",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0213BB53-4A61-4EE3-BFE4-6BB2E92656B6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:57.993Z",
+                  "checksum": "7bd342971fa5e1cf48071a59b27ad512b441e99282d07577d576cc86b6461551"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "status",
+                  "DisplayName": "Status",
+                  "Description": "Session status — Not Started, In Progress, or Complete.",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8A6F56E3-87F8-426E-9293-F06A655844FA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.066Z",
+                  "checksum": "30a4a1edd619ed5e01be10e525b12d058d964321443aa10ec500c33286e125de"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "startedAt",
+                  "DisplayName": "Started At",
+                  "Description": "Session start timestamp (ISO 8601).",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A76D8118-F75C-487F-83C2-5DA836DCA381"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.168Z",
+                  "checksum": "d6816008ab6aff818f5f448b98500ed5d8a72bdf24770c4bafd3a65ecc8d6a10"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "completedAt",
+                  "DisplayName": "Completed At",
+                  "Description": "Session completion timestamp — primary watermark field for incremental sync.",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6C2FA35-C465-4C4D-A970-BB536603C76E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.247Z",
+                  "checksum": "85e423d833fd7499958a1f07cef2b0c725f4d4b7b4b4eb0ec70dcf97b3c4e139"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "durationSeconds",
+                  "DisplayName": "Duration (sec)",
+                  "Description": "Session active duration in seconds.",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C080C32B-8E0E-4D62-BA4E-ABB3408D9AF7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.330Z",
+                  "checksum": "4eaf5668e38232a0c7d9e48e0146757eea18064ae5b8b5a301a31e074a18dd21"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "quizScore",
+                  "DisplayName": "Quiz Score",
+                  "Description": "Quiz/assessment score when the session includes one.",
+                  "Type": "decimal",
+                  "Precision": 10,
+                  "Scale": 2,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DF22D3CB-0AE5-48F5-AC6E-CA053F29930A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.413Z",
+                  "checksum": "98ef89a3b3e75b50e3f5e8f0a9a0464c6632402690e97399df25936b059cc4db"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "dueAt",
+                  "DisplayName": "Due At",
+                  "Description": "Due date when the session is associated with a learning path enrollment.",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "440390F7-EB1C-404E-A148-14AEA598B78D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.490Z",
+                  "checksum": "a301e9155010f3d6ef70a9955231775e884cedff1d6089439664ee31cf790caa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "courseUrl",
+                  "DisplayName": "Course URL",
+                  "Description": "HATEOAS URL for the originating course resource.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A59EE35F-CC20-4E5D-8B79-7685A5172DD9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.567Z",
+                  "checksum": "63c99216b74197165eba959dd63ca6aaa8c3d917395a1ab2428ebaec35a7f213"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "userUrl",
+                  "DisplayName": "User URL",
+                  "Description": "HATEOAS URL for the learner user resource.",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C25A7B0D-DC94-4CE6-B7D8-E03E4F4A89D9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:32:58.638Z",
+                  "checksum": "fdfdcc2e973c1292045f2ab3db3d186a1775be9bc347c79467b78bcf56bc5ea2"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "F7ED2C4F-DC71-4EE7-A545-A219588AEBA3"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:32:54.871Z",
+            "checksum": "f152a837cb29e2a186ff1b3869f19811726f496cc84ac3a339ea727b8119cf71"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "466D50CC-A70F-4D4C-8075-BBEE800F45DE"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T22:32:54.754Z",
+      "checksum": "082f5383909af48774ab73facb5889d4d9e019fd71483c53e0cec8c1e1045a06"
+    }
+  }
+]

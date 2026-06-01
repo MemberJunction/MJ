@@ -5,10 +5,14 @@ import { Component, Input } from '@angular/core';
  *
  * Renders the standard icon · title · subtitle layout with three named projection
  * slots for additional content:
- *   - `[meta]`    — inline content immediately after the title text (result counts,
- *                   status badges) — wraps onto the title's row so it stays
- *                   horizontally adjacent to the title regardless of subtitle.
- *   - `[actions]` — right-aligned action buttons or sub-navigation
+ *   - `[meta]`    — supporting info that lives **below the subtitle** in the
+ *                   identity column (result counts, status badges, stat-pills).
+ *                   Reads as data attached to the identity, not as a peer of
+ *                   the title — keeps the title the dominant visual anchor.
+ *                   Wraps when there are many badges.
+ *   - `[actions]` — right-aligned action buttons or sub-navigation, top-aligned
+ *                   with the title row so they stay anchored regardless of how
+ *                   tall the identity column grows.
  *   - `[toolbar]` — optional secondary row beneath the title for dense controls
  *                   (filters, time-range pickers, breadcrumbs)
  *
@@ -25,6 +29,10 @@ import { Component, Input } from '@angular/core';
  *   </div>
  * </mj-page-header>
  * ```
+ *
+ * For the body-level interior chrome variant used by left-nav sub-pages, use
+ * `<mj-page-header-interior>` instead — same slot conventions, different
+ * visual shape (single-row card, no titlebar).
  */
 @Component({
   selector: 'mj-page-header',
@@ -40,15 +48,13 @@ import { Component, Input } from '@angular/core';
             </div>
           }
           <div class="mj-page-header-text">
-            <div class="mj-page-header-title-row">
-              <h1 class="mj-page-header-title">{{ Title }}</h1>
-              <div class="mj-page-header-meta">
-                <ng-content select="[meta]"></ng-content>
-              </div>
-            </div>
+            <h1 class="mj-page-header-title">{{ Title }}</h1>
             @if (Subtitle) {
               <p class="mj-page-header-subtitle">{{ Subtitle }}</p>
             }
+            <div class="mj-page-header-meta">
+              <ng-content select="[meta]"></ng-content>
+            </div>
           </div>
         </div>
         <div class="mj-page-header-actions">

@@ -7,12 +7,13 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
-import { ResolveDependencies } from '../dependency/dependency-resolver.js';
-import type { InstalledAppMap, DependencyNode, DependencyValue } from '../dependency/dependency-resolver.js';
+import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
+import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
+import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -81,8 +82,10 @@ export interface OrchestratorContext {
  * 1.  Fetch manifest from GitHub
  * 2.  Validate manifest (Zod)
  * 3.  Validate MJ version compatibility
- * 4.  Resolve dependencies (topological sort + version validation)
- * 5.  Install dependencies (recursive, depth-first)
+ * 4.  Resolve the FULL transitive dependency graph (fetch every dependency's
+ *     manifest, detect cross-repo cycles, topologically sort) — skipped when
+ *     this call is itself a pre-resolved member of a parent's graph
+ * 5.  Install dependencies in leaf-first order (each via _skipDependencyResolution)
  * 6.  Check schema (no collision)
  * 7.  Create schema
  * 8.  Run migrations (Skyway - DDL + metadata DML)
@@ -132,24 +135,29 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     const effectivePackageVersion = explicitVersion ? explicitVersion.replace(/^v/, '') : manifest.version;
     const effectiveVersionStrategy: VersionStrategy | undefined = explicitVersion ? 'exact' : context.VersionStrategy;
 
-    // Steps 3-4: Validate MJ compatibility and resolve dependencies (parallel)
-    Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility and resolving dependencies...');
-    const [compatResult, depResult] = await Promise.all([
-      Promise.resolve(CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange)),
-      ResolveDependencyChain(manifest, context),
-    ]);
+    // Step 3: Validate MJ compatibility
+    Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility...');
+    const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
     if (!compatResult.Compatible) {
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
     }
-    if (!depResult.Success) {
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
-    }
 
-    // Step 5: Install dependencies (recursive)
-    if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-      const depsResult = await InstallDependencies(depResult.DepsToInstall, context);
-      if (!depsResult.Success) {
-        return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
+    // Steps 4-5: Resolve the full transitive dependency graph and install members
+    // in leaf-first order. Skipped when this call is itself a pre-resolved member
+    // of a parent's graph (the parent already resolved and installed our deps).
+    if (!options._skipDependencyResolution) {
+      const depResult = await ResolveDependencyChain(manifest, context);
+      if (!depResult.Success) {
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
+      }
+      if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
+        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
+        if (!depsResult.Success) {
+          return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
+        }
       }
     }
 
@@ -382,6 +390,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     if (!upgradeCheck.Compatible) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, upgradeCheck.Message ?? 'Invalid upgrade version');
     }
+    if (upgradeCheck.AlreadyAtTarget) {
+      return {
+        Success: true,
+        Action: 'Upgrade',
+        AppName: options.AppName,
+        Version: targetVersion,
+        DurationSeconds: GetDurationSeconds(startTime),
+        Summary: upgradeCheck.Message ?? `Already at version ${targetVersion}`,
+      };
+    }
 
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
     const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions);
@@ -416,7 +434,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
       // Install any new dependencies required by the upgraded version
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context);
+        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
         if (!installResult.Success) {
           return BuildFailureResult(
             'Upgrade',
@@ -731,15 +752,20 @@ interface InternalResult {
 }
 
 /**
- * Resolves the dependency chain for a manifest, returning any uninstalled
- * dependencies that need to be installed first.
+ * Resolves the FULL transitive dependency graph for a manifest, returning any
+ * uninstalled dependencies that need to be installed first, in leaf-first order.
+ *
+ * Unlike a single-level resolve, this fetches every reachable dependency's
+ * manifest from its repository so the complete graph is known up front — which
+ * is what makes genuine cross-repo cycle detection (A -> B -> A) possible before
+ * any install work begins.
  */
 async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
   if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
     return { Success: true };
   }
 
-  context.Callbacks?.OnProgress?.('Dependencies', 'Resolving dependencies...');
+  context.Callbacks?.OnProgress?.('Dependencies', 'Resolving dependency graph...');
 
   const installedApps = await ListInstalledApps(context.ContextUser);
   const installedMap: InstalledAppMap = {};
@@ -750,13 +776,13 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
   // Zod infers object variant fields as optional; DependencyValue requires them.
   // The runtime schema validates they're present, so this narrowing is safe.
   const dependencies = (manifest.dependencies ?? {}) as Record<string, DependencyValue>;
-  const rootNode: DependencyNode = {
+  const root: RootApp = {
     AppName: manifest.name,
     Repository: manifest.repository,
     Dependencies: dependencies,
   };
 
-  const result = ResolveDependencies(rootNode, installedMap);
+  const result = await ResolveDependencyGraph(root, installedMap, BuildManifestFetcher(context));
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
@@ -769,11 +795,50 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 }
 
 /**
- * Installs unresolved dependencies sequentially via recursive {@link InstallApp} calls.
+ * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
+ * manifest from GitHub. Used by the graph builder to walk transitive deps.
+ */
+function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
+  return async (repoUrl: string) => {
+    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions);
+    if (!fetched.Success || !fetched.ManifestJSON) {
+      return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
+    }
+    const parsed = ParseAndValidateManifest(fetched.ManifestJSON);
+    if (!parsed.Success || !parsed.Manifest) {
+      return { Success: false, ErrorMessage: `Invalid manifest: ${parsed.Errors?.join(', ')}` };
+    }
+    return {
+      Success: true,
+      Manifest: {
+        name: parsed.Manifest.name,
+        repository: parsed.Manifest.repository,
+        dependencies: (parsed.Manifest.dependencies ?? {}) as Record<string, DependencyValue>,
+      },
+    };
+  };
+}
+
+/**
+ * Installs the resolved dependencies sequentially in the leaf-first order
+ * produced by the graph resolution. Each dependency is installed via
+ * {@link InstallApp} with `_skipDependencyResolution` set — its own transitive
+ * dependencies appear earlier in the order and are therefore already installed,
+ * so re-resolving here would be redundant (and, for any cycle that slipped the
+ * up-front check, unbounded).
+ *
+ * Inherited options that affect install BEHAVIOR (verbosity, the schema-name
+ * override) are forwarded from the parent so a flag set on the top-level call
+ * also governs the dependency installs. App-identity options (Source, Version)
+ * are NOT forwarded — each dependency has its own source and installs its own
+ * latest release rather than inheriting the parent's pin. The forwarded set is
+ * explicit so new flags require a deliberate decision about whether they apply
+ * to dependencies.
  */
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
   context: OrchestratorContext,
+  inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {
@@ -783,7 +848,22 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    const result = await InstallApp({ Source: dep.Repository }, context);
+    // NOTE (known limitation, tracked in #2713): we install from the dependency's
+    // repository with no Version, so it resolves to whatever its default-branch
+    // manifest reports — `dep.VersionRange` is NOT enforced for fresh installs.
+    // Declared ranges are only checked against ALREADY-installed deps (see
+    // ProcessEdge in dependency-graph-builder.ts). So a `>=1.0 <2.0` requirement
+    // can silently install 3.0 if that's the latest. Pre-existing behavior, not a
+    // regression; range-gated fresh installs are deferred follow-on work.
+    const result = await InstallApp(
+      {
+        Source: dep.Repository,
+        _skipDependencyResolution: true,
+        AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
+        Verbose: inherited.Verbose,
+      },
+      context,
+    );
     if (!result.Success) {
       return { Success: false, ErrorMessage: `Failed to install dependency: ${result.ErrorMessage}` };
     }

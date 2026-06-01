@@ -1,5 +1,114 @@
 # Change Log - @memberjunction/cli
 
+## 5.38.0
+
+### Patch Changes
+
+- 67d6562: Add full-stack MJ Explorer regression test suite — Docker-based runner with Computer Use engine, parallel workers via HeadlessBrowserEngine, bacpac mode, standalone compose for external use, and `mj test regression init` templates (remote-mj, generic-web, bring-your-own-app, static-file-server). Includes ephemeral workspace guard for cross-test isolation and stabilizes the suite at 25/25.
+- 748b2e7: Add deterministic baseline migration toolchain (`mj baseline build` / `compare` / `roundtrip`): introspects + emits the full MSSQL schema (tables, views, procedures, functions, triggers, UDTs, extended properties, database principals, role memberships, and object/schema/type/database permissions) with proven byte-equivalence via the row-by-row comparator. AUTO within-major rebaseline mode derives `Major.Minor` and a `latestV+1m` timestamp from the source migrations directory. Ships with workbench end-to-end script and a `/create-new-baseline-migration` slash-command driver.
+- 48dc77a: Add full-stack regression test suite for MJ Explorer driven by the Computer Use engine. New `Drag` browser action with smooth multi-step mouse motion, parallel browser worker contexts shared across tests with auto-rotation after 20 uses, JSON-on-disk run comparison via `mj test compare --from-json`, and `--dry-run` / `--parallel` / `--flaky-check` flags on the testing CLI.
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [67d6562]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [21d967f]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [48dc77a]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/metadata-sync@5.38.0
+  - @memberjunction/testing-cli@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/db-auto-doc@5.38.0
+  - @memberjunction/codegen-lib@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/open-app-engine@5.38.0
+  - @memberjunction/sqlserver-dataprovider@5.38.0
+  - @memberjunction/query-gen@5.38.0
+  - @memberjunction/server-bootstrap-lite@5.38.0
+  - @memberjunction/ai-cli@5.38.0
+  - @memberjunction/sql-converter@5.38.0
+  - @memberjunction/config@5.38.0
+  - @memberjunction/installer@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [baf3032]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/codegen-lib@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-cli@5.37.0
+  - @memberjunction/db-auto-doc@5.37.0
+  - @memberjunction/metadata-sync@5.37.0
+  - @memberjunction/query-gen@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/open-app-engine@5.37.0
+  - @memberjunction/testing-cli@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/installer@5.37.0
+  - @memberjunction/sql-converter@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/server-bootstrap-lite@5.36.0
+  - @memberjunction/codegen-lib@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/metadata-sync@5.36.0
+  - @memberjunction/db-auto-doc@5.36.0
+  - @memberjunction/ai-cli@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/query-gen@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/testing-cli@5.36.0
+  - @memberjunction/open-app-engine@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/installer@5.36.0
+  - @memberjunction/sql-converter@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [39710b1]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/open-app-engine@5.35.0
+  - @memberjunction/codegen-lib@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/ai-cli@5.35.0
+  - @memberjunction/db-auto-doc@5.35.0
+  - @memberjunction/metadata-sync@5.35.0
+  - @memberjunction/query-gen@5.35.0
+  - @memberjunction/testing-cli@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/installer@5.35.0
+  - @memberjunction/sql-converter@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

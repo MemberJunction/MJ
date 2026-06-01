@@ -26,8 +26,12 @@ import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
+import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
@@ -81,6 +85,7 @@ export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
 export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
+export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
@@ -148,6 +153,7 @@ export * from './resolvers/FileResolver.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
 export * from './resolvers/RunTestResolver.js';
+export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
@@ -650,10 +656,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,
         pubSub,
+        globalMiddlewares: [variablesLoggingMiddleware],
       }),
     ],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
   });
+
+  // Verbose-mode-only diagnostic: name custom-resolver args that aren't metadata-bound
+  // and aren't @NoLog-marked. No-op in default config (logVariables=false).
+  auditResolversForUndecoratedArgs();
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
@@ -667,27 +678,70 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const httpServer = createServer(app);
 
   const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });
-  const serverCleanup = useServer(
+
+  // Track per-connection expiry timers so we can clean them up on close
+  const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
+
+  const serverCleanup = useServer<Record<string, unknown>, { userPayload: UserPayload }>(
     {
       schema,
-      context: async ({ connectionParams }) => {
-        const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSources);
-        return { userPayload };
-      },
-      onError: (ctx, message, errors) => {
-        // Check if error is token expiration (expected behavior)
-        const isTokenExpired = errors.some(err =>
-          err.extensions?.code === 'JWT_EXPIRED' ||
-          err.message?.includes('token has expired')
-        );
+      // RAII: validate the token once at connection time and cache the result.
+      // This prevents re-validating (and re-logging) on every subscription message.
+      onConnect: async (ctx) => {
+        try {
+          const token = String(ctx.connectionParams?.Authorization);
+          const userPayload = await getUserPayload(token, undefined, dataSources);
 
-        if (isTokenExpired) {
-          // Log at warn level - this is expected from long-lived browser sessions
-          console.warn('WebSocket connection token expired - client should reconnect with refreshed token');
-        } else {
-          // Log actual errors at error level
-          console.error('WebSocket error:', errors);
+          // Store validated payload on the connection for use in context()
+          ctx.extra.userPayload = userPayload;
+
+          // Schedule proactive socket close at token expiry so the client
+          // reconnects with a fresh token instead of spamming errors.
+          const decoded = jwt.decode(token.replace('Bearer ', ''));
+          if (decoded && typeof decoded !== 'string' && decoded.exp) {
+            const msUntilExpiry = decoded.exp * 1000 - Date.now();
+            if (msUntilExpiry > 0) {
+              const timer = setTimeout(() => {
+                console.log(`WebSocket token expiring — closing connection for ${userPayload.email}`);
+                // 4403 = Forbidden — retriable in graphql-ws, signals "get a new token"
+                // (4401 is reserved as fatal/"Unauthorized" in the graphql-ws protocol)
+                try {
+                  ctx.extra.socket.close(4403, 'Token expired');
+                } catch {
+                  // Socket may already be closed; benign
+                }
+              }, msUntilExpiry);
+              // Prevent the timer from keeping the process alive during shutdown
+              timer.unref();
+              expiryTimers.set(ctx, timer);
+            }
+          }
+
+          return true;
+        } catch (error: unknown) {
+          // Return false instead of throwing — graphql-ws sends 4403 Forbidden
+          // (retriable) rather than letting the throw produce 1011 (fatal).
+          const msg = error instanceof Error ? error.message : 'Authentication failed';
+          console.warn(`WebSocket connection rejected: ${msg}`);
+          return false;
         }
+      },
+      // context() now just reads the already-validated payload — no I/O, no logging
+      context: async (ctx) => {
+        return { userPayload: ctx.extra.userPayload as UserPayload };
+      },
+      onClose: (ctx) => {
+        // Clear the expiry timer if the connection closes before the token expires
+        const timer = expiryTimers.get(ctx);
+        if (timer) {
+          clearTimeout(timer);
+          expiryTimers.delete(ctx);
+        }
+      },
+      onError: (_ctx, _message, errors) => {
+        // Token expiry errors can't happen anymore (handled in onConnect + timer),
+        // so all errors here are genuine and worth logging.
+        console.error('WebSocket error:', errors);
       },
     },
     webSocketServer

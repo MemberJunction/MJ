@@ -15,6 +15,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { MJLeftNavItem, MJLeftNavSection, TabConfig, FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -455,7 +456,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (raw) {
             try {
                 const prefs = JSON.parse(raw);
-                if (prefs.ActiveTab) this.ActiveTab = prefs.ActiveTab;
+                // Guard against stale persisted state that doesn't match the
+                // current Classify rail (e.g. 'tags'/'taxonomy' from when those
+                // surfaces lived here, or a value seeded by a sibling dashboard).
+                if (prefs.ActiveTab && AutotaggingPipelineResourceComponent.VALID_TABS.includes(prefs.ActiveTab)) {
+                    this.ActiveTab = prefs.ActiveTab;
+                }
                 if (prefs.ShowPipelineConfig != null) this.ShowPipelineConfig = prefs.ShowPipelineConfig;
             } catch { /* ignore */ }
         }
@@ -587,6 +593,28 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // Embedding model + vector index form fields (Content Source overrides)
     public FormSourceEmbeddingModelID = '';
     public FormSourceVectorIndexID = '';
+
+    // Slide-in is the QUICK-EDIT surface for content sources. We only expose the
+    // most-useful subset of the new knobs here; the full surface (other budgets,
+    // URL pattern, root URL, taxonomy mode, thresholds, …) lives on the entity
+    // form opened via the "Open Advanced settings →" link below.
+    //
+    // Decisions:
+    //   - MaxItemsPerRun: the single most-asked-for cap → always shown
+    //   - MaxDepth + the two crawl toggles: Website-only, the symptom that
+    //     started this whole work
+    //   - Everything else: too niche for the quick-edit surface
+    public FormMaxItemsPerRun: number | null = null;
+    public FormMaxDepth: number | null = null;
+    public FormCrawlSitesInLowerLevelDomain: boolean = true;
+    public FormCrawlOtherSitesInTopLevelDomain: boolean = false;
+
+    /** True when the form's selected source type is Website — gates the crawler knobs. */
+    public get IsWebsiteSourceTypeSelected(): boolean {
+        if (!this.FormSourceTypeID) return false;
+        const t = this.SourceTypeOptions.find(o => UUIDsEqual(o.ID, this.FormSourceTypeID));
+        return t != null && t.Name?.trim().toLowerCase() === 'website';
+    }
 
     // ── Schedule dialog ──
     /** Whether the schedule creation dialog is visible */
@@ -939,6 +967,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'history'];
 
     async ngAfterViewInit(): Promise<void> {
         await Promise.all([
@@ -1081,6 +1110,62 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ── Tab switching ──
+
+    /**
+     * Wraps `NavItems` for `<mj-left-nav>`. Hardcoded "Run History" item goes
+     * into a second `MJLeftNavSection` — the rail's natural section break
+     * replaces the bespoke `.at-nav-divider` line.
+     */
+    public get navSections(): MJLeftNavSection[] {
+        return [
+            {
+                items: this.NavItems.map(n => ({
+                    id: n.Tab,
+                    label: n.Label,
+                    icon: n.Icon,
+                    badge: n.BadgeText || undefined
+                }))
+            },
+            {
+                items: [{
+                    id: 'history',
+                    label: 'Run History',
+                    icon: 'fa-solid fa-clock-rotate-left'
+                }]
+            }
+        ];
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        void this.SwitchTab(item.id as TabName);
+    }
+
+    /** Title rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabTitle(): string {
+        switch (this.ActiveTab) {
+            case 'pipeline': return 'Pipeline Monitor';
+            case 'sources':  return 'Content Sources';
+            case 'types':    return 'Content Types';
+            case 'tags':     return 'Tag Library';
+            case 'taxonomy': return 'Taxonomy Governance';
+            case 'history':  return 'Run History';
+        }
+        return '';
+    }
+
+    /** Subtitle rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabSubtitle(): string {
+        switch (this.ActiveTab) {
+            case 'pipeline': return 'Real-time processing status and recent activity';
+            case 'sources':  return 'Configure where content is ingested from';
+            case 'types':    return 'Configure AI tagging rules per content category';
+            case 'tags':     return `${this.TagRows.length} unique tags across all content sources`;
+            case 'taxonomy': return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
+            case 'history':  return 'Processing run log across all content sources';
+        }
+        return '';
+    }
 
     public async SwitchTab(tab: TabName): Promise<void> {
         if (tab === this.ActiveTab) return;
@@ -1617,6 +1702,59 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
+    /**
+     * Filter fields for the Run History section, rendered inside an
+     * `<mj-filter-popover>` (Section 3 decision tree: many values, single-select
+     * → popover with dropdown).
+     */
+    public get historyFilterFields(): FilterFieldConfig[] {
+        return [
+            {
+                key: 'source',
+                type: 'dropdown',
+                label: 'Source',
+                placeholder: 'All Sources',
+                filterable: this.HistorySourceOptions.length > 10,
+                options: [
+                    { text: 'All Sources', value: '' },
+                    ...this.HistorySourceOptions.map(s => ({ text: s, value: s }))
+                ]
+            },
+            {
+                key: 'status',
+                type: 'dropdown',
+                label: 'Status',
+                placeholder: 'All Status',
+                options: [
+                    { text: 'All Status', value: '' },
+                    { text: 'Complete', value: 'complete' },
+                    { text: 'Failed',   value: 'failed' },
+                    { text: 'Running',  value: 'running' }
+                ]
+            }
+        ];
+    }
+
+    public get historyFilterValues(): Record<string, unknown> {
+        return { source: this.HistorySourceFilter, status: this.HistoryStatusFilter };
+    }
+
+    public get historyActiveFilterCount(): number {
+        return (this.HistorySourceFilter ? 1 : 0) + (this.HistoryStatusFilter ? 1 : 0);
+    }
+
+    public onHistoryFilterChange(values: Record<string, unknown>): void {
+        this.HistorySourceFilter = (values['source'] as string) ?? '';
+        this.HistoryStatusFilter = (values['status'] as string) ?? '';
+        this.FilterRunHistory();
+    }
+
+    public onHistoryFilterReset(): void {
+        this.HistorySourceFilter = '';
+        this.HistoryStatusFilter = '';
+        this.FilterRunHistory();
+    }
+
     // ════════════════════════════════════════════
     // D3/D8: RUN HISTORY DETAIL SLIDE-IN
     // ════════════════════════════════════════════
@@ -1749,17 +1887,42 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormSourceVectorIndexID = card.VectorIndexID ?? '';
         this.EditingSourceID = card.ID;
 
-        // Populate FormSourceSpecificConfig from existing Configuration JSON
+        // Populate quick-edit knobs + FormSourceSpecificConfig from Configuration JSON.
+        // Reset to defaults first so a previously-edited source's values don't leak in.
         this.FormSourceSpecificConfig = {};
+        this.FormMaxItemsPerRun = null;
+        this.FormMaxDepth = null;
+        this.FormCrawlSitesInLowerLevelDomain = true;
+        this.FormCrawlOtherSitesInTopLevelDomain = false;
         const rawSource = this.contentSourcesRaw.find(s => UUIDsEqual(s['ID'] as string, card.ID));
         if (rawSource) {
             const configStr = rawSource['Configuration'] as string | null;
             if (configStr) {
                 try {
-                    const parsed = JSON.parse(configStr);
-                    const specific = parsed?.SourceSpecificConfiguration as Record<string, string> | undefined;
+                    const parsed = JSON.parse(configStr) as Record<string, unknown> | null;
+                    const specific = parsed?.['SourceSpecificConfiguration'] as Record<string, string> | undefined;
                     if (specific) {
                         this.FormSourceSpecificConfig = { ...specific };
+                    }
+                    // Run-budget knob — pulled directly off the typed Configuration.
+                    const items = parsed?.['MaxItemsPerRun'];
+                    if (typeof items === 'number' && Number.isFinite(items)) {
+                        this.FormMaxItemsPerRun = items;
+                    }
+                    // Website sub-object — only populates the inputs when present
+                    // (matches the autotagger's "unset = default" semantics).
+                    const website = parsed?.['Website'] as Record<string, unknown> | undefined;
+                    if (website) {
+                        const depth = website['MaxDepth'];
+                        if (typeof depth === 'number' && Number.isFinite(depth)) {
+                            this.FormMaxDepth = depth;
+                        }
+                        if (typeof website['CrawlSitesInLowerLevelDomain'] === 'boolean') {
+                            this.FormCrawlSitesInLowerLevelDomain = website['CrawlSitesInLowerLevelDomain'] as boolean;
+                        }
+                        if (typeof website['CrawlOtherSitesInTopLevelDomain'] === 'boolean') {
+                            this.FormCrawlOtherSitesInTopLevelDomain = website['CrawlOtherSitesInTopLevelDomain'] as boolean;
+                        }
                     }
                 } catch {
                     // Configuration not valid JSON, ignore
@@ -1769,6 +1932,22 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         this.FormMode = 'edit-source';
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Open the full entity form for the source currently being edited in the
+     * slide-in. Quick-edit covers the most-used knobs; the entity form (with
+     * the dynamically-mounted BaseFormPanel slots) exposes everything else
+     * — taxonomy mode, thresholds, all five run-budget caps, URL pattern,
+     * root URL, etc.
+     */
+    public async OpenAdvancedSourceSettings(): Promise<void> {
+        if (!this.EditingSourceID) return;
+        this.CloseForm();
+        await this.navigationService.OpenEntityRecord(
+            'MJ: Content Sources',
+            CompositeKey.FromID(this.EditingSourceID),
+        );
     }
 
     public async SaveSource(): Promise<void> {
@@ -1863,6 +2042,32 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             // Store the full SourceSpecificConfiguration in the Configuration JSON
             const currentConfig = entity.ConfigurationObject ?? {};
             currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
+
+            // Persist the quick-edit knobs that don't have their own DB columns
+            // (the rest live on the typed Configuration JSON sub-objects). The
+            // advanced settings flow on the entity form can override more fields
+            // — we only touch the keys the slide-in exposes so we don't clobber
+            // unrelated values an operator set there earlier.
+            if (this.FormMaxItemsPerRun != null && Number.isFinite(this.FormMaxItemsPerRun)) {
+                currentConfig.MaxItemsPerRun = this.FormMaxItemsPerRun;
+            } else {
+                // Empty input = "unlimited" — strip the key so the autotagger
+                // sees no cap (rather than 0 = "process zero items").
+                delete currentConfig.MaxItemsPerRun;
+            }
+
+            if (this.IsWebsiteSourceTypeSelected) {
+                const website = { ...(currentConfig.Website ?? {}) };
+                if (this.FormMaxDepth != null && Number.isFinite(this.FormMaxDepth)) {
+                    website.MaxDepth = this.FormMaxDepth;
+                } else {
+                    delete website.MaxDepth;
+                }
+                website.CrawlSitesInLowerLevelDomain = this.FormCrawlSitesInLowerLevelDomain;
+                website.CrawlOtherSitesInTopLevelDomain = this.FormCrawlOtherSitesInTopLevelDomain;
+                currentConfig.Website = website;
+            }
+
             entity.ConfigurationObject = currentConfig;
 
             entity.EmbeddingModelID = this.FormSourceEmbeddingModelID || null;
@@ -2757,6 +2962,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormSourceVectorIndexID = '';
         this.EditingSourceID = '';
         this.FormSourceSpecificConfig = {};
+        // Quick-edit knobs — defaults match the autotagger's runtime defaults.
+        this.FormMaxItemsPerRun = null;
+        this.FormMaxDepth = null;
+        this.FormCrawlSitesInLowerLevelDomain = true;
+        this.FormCrawlOtherSitesInTopLevelDomain = false;
     }
 
     private resetTypeForm(): void {
@@ -3211,6 +3421,28 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ════════════════════════════════════════════
     // TAXONOMY GOVERNANCE TAB
     // ════════════════════════════════════════════
+
+    /** Taxonomy sub-tabs as `TabConfig[]` for `<mj-tab-nav>`. */
+    public get taxSubTabsConfig(): TabConfig[] {
+        return [
+            { key: 'tree',       label: 'Tree View',  icon: 'fa-solid fa-sitemap' },
+            { key: 'duplicates', label: 'Duplicates', icon: 'fa-solid fa-link',
+              badge: this.TaxDuplicates.length > 0 ? this.TaxDuplicates.length : null,
+              badgeVariant: 'warning' },
+            { key: 'orphans',    label: 'Orphans',    icon: 'fa-solid fa-ban',
+              badge: this.TaxOrphans.length > 0 ? this.TaxOrphans.length : null,
+              badgeVariant: 'error' },
+            { key: 'treemap',    label: 'Treemap',    icon: 'fa-solid fa-chart-tree-map' },
+            { key: 'audit',      label: 'Audit Log',  icon: 'fa-solid fa-scroll' }
+        ];
+    }
+
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTaxSubTabChange(key: string): void {
+        if (key === 'tree' || key === 'duplicates' || key === 'orphans' || key === 'treemap' || key === 'audit') {
+            this.SwitchTaxSubTab(key);
+        }
+    }
 
     public SwitchTaxSubTab(sub: TaxonomySubTab): void {
         this.TaxSubTab = sub;

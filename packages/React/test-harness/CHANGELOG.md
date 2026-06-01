@@ -1,5 +1,102 @@
 # @memberjunction/react-test-harness
 
+## 5.38.0
+
+### Minor Changes
+
+- 6f1e483: Allow the React test harness to attach to an already-running browser instead of always launching a throwaway Chromium. Pass `connect` (or set `MJ_REACT_TEST_HARNESS_CONNECT`) with an `http(s)://` endpoint to attach over CDP (`connectOverCDP`) — e.g. a real Chrome started with `--remote-debugging-port` — or a `ws(s)://` endpoint to attach to a Playwright server (`connect`); the method is auto-detected from the scheme, with a `connectType` override for raw CDP websockets. By default a fresh isolated context is created inside the attached browser; opt into `reuseExistingContext` (or `MJ_REACT_TEST_HARNESS_REUSE_CONTEXT=true`) to share the running browser's cookies/auth/session. `BrowserManager.close()` is now ownership-aware: it only closes pages and contexts the harness created and never tears down a browser it merely attached to. Fully backward compatible — with no endpoint the harness still launches its own browser exactly as before.
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/interactive-component-types@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/sql-parser@5.38.0
+  - @memberjunction/core-entities-server@5.38.0
+  - @memberjunction/ai-vectors-memory@5.38.0
+  - @memberjunction/react-linter@5.38.0
+  - @memberjunction/react-runtime@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/react-runtime@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/ai-vectors-memory@5.37.0
+  - @memberjunction/interactive-component-types@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/react-runtime@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/ai-vectors-memory@5.36.0
+  - @memberjunction/interactive-component-types@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/sql-parser@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/core-entities-server@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/ai-vectors-memory@5.35.0
+  - @memberjunction/interactive-component-types@5.35.0
+  - @memberjunction/react-runtime@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+  - @memberjunction/sql-parser@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

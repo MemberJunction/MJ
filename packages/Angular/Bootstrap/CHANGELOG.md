@@ -1,5 +1,143 @@
 # @memberjunction/ng-bootstrap
 
+## 5.38.0
+
+### Patch Changes
+
+- 60947be: Fix several entity-record save flow issues in MJ Explorer: re-key the tab and component cache when a "Create New Record" form transitions to a saved record so subsequent new-record clicks open a blank form; correct the URL-segment format used by ResourceRecordSaved so the form no longer fails to reload after save with a doubled-prefix key; wire up the previously no-op tab title refresh after save (including refreshing the Home app's dynamic nav-item label) so the user sees the latest entity name without navigating away.
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [4d2881d]
+- Updated dependencies [6a571d3]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [60947be]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/ng-core-entity-forms@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/ng-dashboards@5.38.0
+  - @memberjunction/ng-shared@5.38.0
+  - @memberjunction/ng-explorer-core@5.38.0
+  - @memberjunction/ng-artifacts@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ng-explorer-settings@5.38.0
+  - @memberjunction/ai-vectors-memory@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/ng-auth-services@5.38.0
+  - @memberjunction/ng-dashboard-viewer@5.38.0
+  - @memberjunction/ng-file-storage@5.38.0
+  - @memberjunction/communication-types@5.38.0
+  - @memberjunction/entity-communications-base@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-core-entity-forms@5.37.0
+  - @memberjunction/ng-dashboards@5.37.0
+  - @memberjunction/ng-explorer-core@5.37.0
+  - @memberjunction/ng-explorer-settings@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-artifacts@5.37.0
+  - @memberjunction/ng-file-storage@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ai-vectors-memory@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/ng-auth-services@5.37.0
+  - @memberjunction/ng-dashboard-viewer@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/entity-communications-base@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-dashboards@5.36.0
+  - @memberjunction/ng-explorer-settings@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/ng-explorer-core@5.36.0
+  - @memberjunction/ng-core-entity-forms@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-artifacts@5.36.0
+  - @memberjunction/ng-file-storage@5.36.0
+  - @memberjunction/ng-dashboard-viewer@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/entity-communications-base@5.36.0
+  - @memberjunction/ai-vectors-memory@5.36.0
+  - @memberjunction/ng-auth-services@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [ee380f7]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [eb54def]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-dashboards@5.35.0
+  - @memberjunction/ng-file-storage@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ng-core-entity-forms@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/ng-explorer-core@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/ai-vectors-memory@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/ng-auth-services@5.35.0
+  - @memberjunction/ng-explorer-settings@5.35.0
+  - @memberjunction/ng-artifacts@5.35.0
+  - @memberjunction/ng-dashboard-viewer@5.35.0
+  - @memberjunction/communication-types@5.35.0
+  - @memberjunction/entity-communications-base@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

@@ -4,6 +4,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIScopeEntity, MJAPIKeyUsageLogEntity, MJAPIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
@@ -60,7 +61,6 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public CurrentView: ViewType = 'overview';
     public ListFilter: APIKeyFilter = 'all';
     public MainTab: MainTab = 'keys';
-    public NavOpen = false;
 
     // Application and scope counts for tab badges
     public ApplicationCount = 0;
@@ -563,28 +563,54 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     /**
-     * Switch to a main tab
+     * Switch to a main tab. Resets to the overview view when returning to the
+     * Keys tab so the user always lands on the dashboard, not a stale list view.
      */
     public switchTab(tab: MainTab): void {
         this.MainTab = tab;
-        // Reset to overview when switching back to keys
         if (tab === 'keys') {
             this.CurrentView = 'overview';
         }
     }
 
     /**
-     * Toggle mobile navigation
+     * L2 tabs rendered as `<mj-tab-nav>` in the interior chrome's [toolbar] slot.
+     * Badges reflect live counts; Usage Analytics has no badge by design.
      */
-    public toggleNav(): void {
-        this.NavOpen = !this.NavOpen;
+    public get tabsConfig(): TabConfig[] {
+        return [
+            { key: 'keys',         icon: 'fa-solid fa-key',           label: 'API Keys',         badge: this.TotalKeys },
+            { key: 'applications', icon: 'fa-solid fa-cube',          label: 'Applications',     badge: this.ApplicationCount },
+            { key: 'scopes',       icon: 'fa-solid fa-shield-halved', label: 'Scopes',           badge: this.ScopeCount },
+            { key: 'usage',        icon: 'fa-solid fa-chart-line',    label: 'Usage Analytics' }
+        ];
     }
 
-    /**
-     * Close mobile navigation
-     */
-    public closeNav(): void {
-        this.NavOpen = false;
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTabChange(key: string): void {
+        if (key === 'keys' || key === 'applications' || key === 'scopes' || key === 'usage') {
+            this.switchTab(key);
+        }
+    }
+
+    /** Title rendered in the interior chrome — varies per tab. */
+    public get currentTabTitle(): string {
+        switch (this.MainTab) {
+            case 'keys':         return 'API Keys';
+            case 'applications': return 'API Applications';
+            case 'scopes':       return 'API Scopes';
+            case 'usage':        return 'Usage Analytics';
+        }
+    }
+
+    /** Subtitle rendered in the interior chrome — varies per tab to give context. */
+    public get currentTabSubtitle(): string {
+        switch (this.MainTab) {
+            case 'keys':         return 'Manage API keys for external integrations and services';
+            case 'applications': return 'Register and manage API applications';
+            case 'scopes':       return 'Permission scopes that can be granted to API keys';
+            case 'usage':        return 'Track usage patterns and analytics across all API keys';
+        }
     }
 
     /**

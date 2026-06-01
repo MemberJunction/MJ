@@ -1,5 +1,40 @@
 # @memberjunction/ng-forms
 
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [8bd97f3]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/ng-ui-components@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ee380f7]
+- Updated dependencies [32c4a02]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

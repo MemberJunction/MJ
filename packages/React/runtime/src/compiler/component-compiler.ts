@@ -352,20 +352,14 @@ export class ComponentCompiler {
         // Create a fresh method registry for each factory call
         const methodRegistry = new Map();
         
-        // Create a wrapper component that provides RegisterMethod in callbacks
+        // Create a wrapper component that provides RegisterMethod in callbacks.
+        // NOTE: Do NOT clear methodRegistry inside an effect here. React runs
+        // child effects before parent effects, so the user component's mount
+        // effect (which calls RegisterMethod) fires before this wrapper effect.
+        // A clear() here would wipe out the just-registered methods and break
+        // hasMethod()/invokeMethod(). Cleanup is handled by the component's own
+        // re-renders and by garbage collection when the factory closure is freed.
         const ComponentWithMethodRegistry = (props) => {
-          // Register methods on mount
-          React.useEffect(() => {
-            // Clear previous methods
-            methodRegistry.clear();
-            
-            // Provide RegisterMethod callback if callbacks exist
-            if (props.callbacks && typeof props.callbacks.RegisterMethod === 'function') {
-              // Component can now register its methods
-              // This will be called from within the component
-            }
-          }, [props.callbacks]);
-          
           // Create enhanced callbacks with RegisterMethod
           const enhancedCallbacks = React.useMemo(() => {
             if (!props.callbacks) return {};

@@ -251,6 +251,12 @@ export class PostgreSQLDialect extends SQLDialect {
 
     private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
     private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    /**
+     * PG fixed-width / space-padded char types. `character` (without `varying`)
+     * and `bpchar` are the formal/internal names; `char` is the short alias.
+     * Note: `character varying` is NOT included — it's variable-width.
+     */
+    private static readonly _FixedWidthStringTypeNames = ['char', 'character', 'bpchar'] as const;
     private static readonly _DateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
     private static readonly _IntegerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
     private static readonly _FloatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
@@ -263,6 +269,7 @@ export class PostgreSQLDialect extends SQLDialect {
 
     get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._BooleanTypeNames; }
     get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._StringTypeNames; }
+    get FixedWidthStringTypeNames(): readonly string[] { return PostgreSQLDialect._FixedWidthStringTypeNames; }
     get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._DateTypeNames; }
     get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._IntegerTypeNames; }
     get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._FloatTypeNames; }

@@ -11903,12 +11903,13 @@ export const MJConversationSchema = z.object({
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`),
     LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
         * * Display Name: Linked Record ID
         * * SQL Data Type: nvarchar(500)
-        * * Description: ID of a related record this conversation is about (support ticket, order, etc.).`),
+        * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
         * * Display Name: Data Context
@@ -11957,13 +11958,41 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
+    ApplicationScope: z.union([z.literal('Application'), z.literal('Both'), z.literal('Global')]).describe(`
+        * * Field Name: ApplicationScope
+        * * Display Name: Application Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Application
+    *   * Both
+    *   * Global
+        * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`),
+    DefaultAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentID
+        * * Display Name: Default Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
+    AdditionalData: z.string().nullable().describe(`
+        * * Field Name: AdditionalData
+        * * Display Name: Additional Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity Type
+        * * Display Name: Linked Entity Name
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
@@ -11980,6 +12009,14 @@ export const MJConversationSchema = z.object({
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    Application: z.string().nullable().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+    DefaultAgent: z.string().nullable().describe(`
+        * * Field Name: DefaultAgent
+        * * Display Name: Default Agent Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -15476,6 +15513,112 @@ export const MJEntityFieldSchema = z.object({
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Form Overrides
+ */
+export const MJEntityFormOverrideSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity — which entity this override is for.`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: Foreign key to Component — the component that renders the form. Must declare componentRole='form' and implement the FormHostProps contract.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for this override (e.g., "CSR Customer Form", "Compact Mobile Variant").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of what this override is for and when it applies.`),
+    Scope: z.union([z.literal('Global'), z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+        * * Description: Resolution tier: User (requires UserID), Role (requires RoleID), or Global. The resolver evaluates in that order — a User row beats a Role row beats a Global row.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Required when Scope='User'. The single user this override applies to.`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Required when Scope='Role'. The role whose members see this override.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Higher value wins within a scope tier. Ties broken by __mj_CreatedAt DESC. No IsDefault — Priority is the only mechanism.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+        * * Description: Active = eligible for resolution. Inactive = ignored. Pending = AI-authored, awaiting human activation (resolver treats as Inactive).`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional free-form commentary about this override — e.g. who authored it, why it exists, what should change before it goes Global, links to related discussions. Does not affect resolution.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component Name
+        * * SQL Data Type: nvarchar(500)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFormOverrideEntityType = z.infer<typeof MJEntityFormOverrideSchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Organic Key Related Entities
  */
 export const MJEntityOrganicKeyRelatedEntitySchema = z.object({
@@ -17799,27 +17942,30 @@ export type MJListShareEntityType = z.infer<typeof MJListShareSchema>;
 export const MJListSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)`),
     ExternalSystemRecordID: z.string().nullable().describe(`
@@ -17829,7 +17975,7 @@ export const MJListSchema = z.object({
         * * Description: Identifier for this list in an external system, used for synchronization.`),
     CompanyIntegrationID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationID
-        * * Display Name: Company Integration ID
+        * * Display Name: Company Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -17842,22 +17988,68 @@ export const MJListSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SourceViewID: z.string().nullable().describe(`
+        * * Field Name: SourceViewID
+        * * Display Name: Source View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+        * * Description: Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.`),
+    SourceFilterSnapshot: z.string().nullable().describe(`
+        * * Field Name: SourceFilterSnapshot
+        * * Display Name: Source Filter Snapshot
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.`),
+    LastRefreshedAt: z.date().nullable().describe(`
+        * * Field Name: LastRefreshedAt
+        * * Display Name: Last Refreshed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
+    LastRefreshedByUserID: z.string().nullable().describe(`
+        * * Field Name: LastRefreshedByUserID
+        * * Display Name: Last Refreshed By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
+    RefreshMode: z.union([z.literal('Additive'), z.literal('Sync')]).describe(`
+        * * Field Name: RefreshMode
+        * * Display Name: Refresh Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Additive
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Additive
+    *   * Sync
+        * * Description: Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).`),
+    UseSnapshot: z.boolean().describe(`
+        * * Field Name: UseSnapshot
+        * * Display Name: Use Snapshot
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
-        * * Display Name: Company Integration
+        * * Display Name: Company Integration Name
         * * SQL Data Type: nvarchar(255)`),
+    SourceView: z.string().nullable().describe(`
+        * * Field Name: SourceView
+        * * Display Name: Source View Name
+        * * SQL Data Type: nvarchar(100)`),
+    LastRefreshedByUser: z.string().nullable().describe(`
+        * * Field Name: LastRefreshedByUser
+        * * Display Name: Last Refreshed By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJListEntityType = z.infer<typeof MJListSchema>;
@@ -22175,7 +22367,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`),
     NotifyViaInApp: z.boolean().describe(`
         * * Field Name: NotifyViaInApp
-        * * Display Name: Notify Via In App
+        * * Display Name: Notify Via In-App
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`),
@@ -22220,6 +22412,12 @@ export const MJScheduledJobSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RunImmediatelyIfNeverRun: z.boolean().describe(`
+        * * Field Name: RunImmediatelyIfNeverRun
+        * * Display Name: Run Immediately If Never Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`),
     JobType: z.string().describe(`
         * * Field Name: JobType
         * * Display Name: Job Type
@@ -55989,6 +56187,19 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      */
     SuggestThreshold?: number;
     /**
+     * Maximum number of content items the autotagger may PROCESS (hand to the LLM) per run
+     * before the run is paused via the existing CancellationRequested machinery. Does not
+     * include items skipped by change-detection — those are free. NULL/unset = unlimited.
+     *
+     * Most intuitive "do at most N this run, do the rest next time" knob. When checking
+     * budgets after a batch, this is evaluated FIRST (before tag / token / cost caps) because
+     * it is the most user-facing and not tied to a specific model's pricing or tokenization.
+     *
+     * Pause is graceful — the next invocation re-crawls, change-detection skips the items
+     * already tagged in DB, and the remaining items get processed.
+     */
+    MaxItemsPerRun?: number;
+    /**
      * Maximum number of new tags the autotagger may auto-create across an entire run before
      * the run is paused via the existing CancellationRequested machinery. NULL/unset = unlimited.
      * Pause is graceful — the run resumes from `LastProcessedOffset` when restarted.
@@ -56018,9 +56229,55 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * - RSS Feed: { URL: "https://example.com/feed.xml" }
      * - Cloud Storage: { FileStorageProviderKey: "Azure Blob Storage", PathPrefix: "/documents" }
      * - Local File System: { Path: "/var/data/documents" }
-     * - Website: { URL: "https://example.com", CrawlDepth: 2 }
+     * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+    /**
+     * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
+     * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
+     * this sub-object first and falls back to ContentSourceParam rows for sources configured
+     * before this field existed.
+     *
+     * In the future, source-type-specific knobs like these may move to a pluggable per-source-type
+     * sub-interface scheme (one named property per source type). This is the first opt-in
+     * implementation; other source types will follow the same pattern as their knobs grow.
+     */
+    Website?: MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+}
+
+/**
+ * Per-source crawl/discovery settings specific to AutotagWebsite. All optional with
+ * runtime defaults; an empty object is valid and produces the standard behavior
+ * (MaxDepth=2, recursive crawl on, sibling-domain fan-out off, no URL filter).
+ */
+export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
+    /**
+     * Recursion ceiling for in-domain links. `0` = just the start URL; `2` (the default) =
+     * root + section pages + their child content pages. Higher values combine multiplicatively
+     * with the per-page 1-second crawl delay.
+     */
+    MaxDepth?: number;
+    /**
+     * When true (default), the recursive depth-aware crawler runs. Setting false disables it
+     * (single-page behavior, retrieved-as-discovered-from-the-seed-URL only).
+     */
+    CrawlSitesInLowerLevelDomain?: boolean;
+    /**
+     * When true, also adds sibling-path URLs found on the seed page (single-pass, no recursion).
+     * Off by default to avoid accidental fan-out across paths the operator didn't intend.
+     */
+    CrawlOtherSitesInTopLevelDomain?: boolean;
+    /**
+     * Regex string. Only URLs matching this pattern are added to the visited set. Use to scope
+     * to e.g. `^https://example\.com/blog/.*`. Unset = match everything.
+     */
+    URLPattern?: string;
+    /**
+     * URL prefix used for the in-domain check. When unset, derived as the parent directory of
+     * the seed URL. Override to expand or constrain the crawl boundary (e.g., set to the bare
+     * origin to crawl the whole site).
+     */
+    RootURL?: string;
 }
 
 /**
@@ -57339,11 +57596,12 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Detail Attachments')
 export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversationDetailAttachmentEntityType> {
@@ -58419,6 +58677,69 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * * Table-Level: Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateApplicationScopeAndIDConsistency(result);
+        this.ValidateLinkedEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateApplicationScopeAndIDConsistency(result: ValidationResult) {
+    	// If the scope is Global, ApplicationID must be null
+    	if (this.ApplicationScope === 'Global' && this.ApplicationID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"Application ID must be empty when the application scope is set to Global.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	// If the scope is Application or Both, ApplicationID must be provided
+    	if ((this.ApplicationScope === 'Application' || this.ApplicationScope === 'Both') && this.ApplicationID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"An Application ID is required when the application scope is set to Application or Both.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
+    	// The constraint ensures that LinkedEntityID and LinkedRecordID are either both null or both populated
+    	if ((this.LinkedEntityID == null && this.LinkedRecordID != null) || (this.LinkedEntityID != null && this.LinkedRecordID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LinkedEntityID",
+    			"Both Linked Entity and Linked Record must be provided together, or both must be empty.",
+    			this.LinkedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -58514,6 +58835,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.
     */
     get LinkedEntityID(): string | null {
         return this.Get('LinkedEntityID');
@@ -58526,7 +58848,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * * Field Name: LinkedRecordID
     * * Display Name: Linked Record ID
     * * SQL Data Type: nvarchar(500)
-    * * Description: ID of a related record this conversation is about (support ticket, order, etc.).
+    * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).
     */
     get LinkedRecordID(): string | null {
         return this.Get('LinkedRecordID');
@@ -58642,6 +58964,66 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: ApplicationScope
+    * * Display Name: Application Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Application
+    *   * Both
+    *   * Global
+    * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.
+    */
+    get ApplicationScope(): 'Application' | 'Both' | 'Global' {
+        return this.Get('ApplicationScope');
+    }
+    set ApplicationScope(value: 'Application' | 'Both' | 'Global') {
+        this.Set('ApplicationScope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: DefaultAgentID
+    * * Display Name: Default Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.
+    */
+    get DefaultAgentID(): string | null {
+        return this.Get('DefaultAgentID');
+    }
+    set DefaultAgentID(value: string | null) {
+        this.Set('DefaultAgentID', value);
+    }
+
+    /**
+    * * Field Name: AdditionalData
+    * * Display Name: Additional Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.
+    */
+    get AdditionalData(): string | null {
+        return this.Get('AdditionalData');
+    }
+    set AdditionalData(value: string | null) {
+        this.Set('AdditionalData', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -58652,7 +59034,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity Type
+    * * Display Name: Linked Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -58693,6 +59075,24 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: DefaultAgent
+    * * Display Name: Default Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultAgent(): string | null {
+        return this.Get('DefaultAgent');
     }
 }
 
@@ -67420,6 +67820,306 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
 
 /**
+ * MJ: Entity Form Overrides - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFormOverride
+ * * Base View: vwEntityFormOverrides
+ * * @description Points an Entity at a Component to serve as its form at runtime. Scoped to User > Role > Global with priority-based resolution. When present and Active, takes precedence over the entity's @RegisterClass-registered or CodeGen-generated Angular form.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Form Overrides')
+export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideEntityType> {
+    /**
+    * Loads the MJ: Entity Form Overrides record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Form Overrides record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFormOverrideEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Form Overrides entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeAndIdentifierConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAndIdentifierConsistency(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"When the scope is set to 'User', a User must be specified and the Role must be left empty.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null || this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"When the scope is set to 'Role', a Role must be specified and the User must be left empty.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Scope",
+    				"When the scope is set to 'Global', both the User and Role fields must be empty.",
+    				this.Scope,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity — which entity this override is for.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Foreign key to Component — the component that renders the form. Must declare componentRole='form' and implement the FormHostProps contract.
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this override (e.g., "CSR Customer Form", "Compact Mobile Variant").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of what this override is for and when it applies.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+    * * Description: Resolution tier: User (requires UserID), Role (requires RoleID), or Global. The resolver evaluates in that order — a User row beats a Role row beats a Global row.
+    */
+    get Scope(): 'Global' | 'Role' | 'User' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Global' | 'Role' | 'User') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Required when Scope='User'. The single user this override applies to.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Required when Scope='Role'. The role whose members see this override.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Higher value wins within a scope tier. Ties broken by __mj_CreatedAt DESC. No IsDefault — Priority is the only mechanism.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+    * * Description: Active = eligible for resolution. Inactive = ignored. Pending = AI-authored, awaiting human activation (resolver treats as Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional free-form commentary about this override — e.g. who authored it, why it exists, what should change before it goes Global, links to related discussions. Does not affect resolution.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+}
+
+
+/**
  * MJ: Entity Organic Key Related Entities - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityOrganicKeyRelatedEntity
@@ -73376,6 +74076,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -73388,6 +74089,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -73399,6 +74101,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -73410,7 +74113,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -73423,7 +74126,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -73436,7 +74139,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)
     */
@@ -73462,7 +74165,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationID
-    * * Display Name: Company Integration ID
+    * * Display Name: Company Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)
     */
@@ -73494,8 +74197,94 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     }
 
     /**
+    * * Field Name: SourceViewID
+    * * Display Name: Source View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+    * * Description: Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.
+    */
+    get SourceViewID(): string | null {
+        return this.Get('SourceViewID');
+    }
+    set SourceViewID(value: string | null) {
+        this.Set('SourceViewID', value);
+    }
+
+    /**
+    * * Field Name: SourceFilterSnapshot
+    * * Display Name: Source Filter Snapshot
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.
+    */
+    get SourceFilterSnapshot(): string | null {
+        return this.Get('SourceFilterSnapshot');
+    }
+    set SourceFilterSnapshot(value: string | null) {
+        this.Set('SourceFilterSnapshot', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedAt
+    * * Display Name: Last Refreshed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.
+    */
+    get LastRefreshedAt(): Date | null {
+        return this.Get('LastRefreshedAt');
+    }
+    set LastRefreshedAt(value: Date | null) {
+        this.Set('LastRefreshedAt', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedByUserID
+    * * Display Name: Last Refreshed By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.
+    */
+    get LastRefreshedByUserID(): string | null {
+        return this.Get('LastRefreshedByUserID');
+    }
+    set LastRefreshedByUserID(value: string | null) {
+        this.Set('LastRefreshedByUserID', value);
+    }
+
+    /**
+    * * Field Name: RefreshMode
+    * * Display Name: Refresh Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Additive
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Additive
+    *   * Sync
+    * * Description: Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).
+    */
+    get RefreshMode(): 'Additive' | 'Sync' {
+        return this.Get('RefreshMode');
+    }
+    set RefreshMode(value: 'Additive' | 'Sync') {
+        this.Set('RefreshMode', value);
+    }
+
+    /**
+    * * Field Name: UseSnapshot
+    * * Display Name: Use Snapshot
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.
+    */
+    get UseSnapshot(): boolean {
+        return this.Get('UseSnapshot');
+    }
+    set UseSnapshot(value: boolean) {
+        this.Set('UseSnapshot', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -73504,7 +74293,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -73513,7 +74302,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(100)
     */
     get Category(): string | null {
@@ -73522,11 +74311,29 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegration
-    * * Display Name: Company Integration
+    * * Display Name: Company Integration Name
     * * SQL Data Type: nvarchar(255)
     */
     get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
+    }
+
+    /**
+    * * Field Name: SourceView
+    * * Display Name: Source View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SourceView(): string | null {
+        return this.Get('SourceView');
+    }
+
+    /**
+    * * Field Name: LastRefreshedByUser
+    * * Display Name: Last Refreshed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastRefreshedByUser(): string | null {
+        return this.Get('LastRefreshedByUser');
     }
 }
 
@@ -84825,7 +85632,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyViaInApp
-    * * Display Name: Notify Via In App
+    * * Display Name: Notify Via In-App
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.
@@ -84926,6 +85733,20 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RunImmediatelyIfNeverRun
+    * * Display Name: Run Immediately If Never Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.
+    */
+    get RunImmediatelyIfNeverRun(): boolean {
+        return this.Get('RunImmediatelyIfNeverRun');
+    }
+    set RunImmediatelyIfNeverRun(value: boolean) {
+        this.Set('RunImmediatelyIfNeverRun', value);
     }
 
     /**
