@@ -749,7 +749,7 @@ ${versionSection}${newUserSection}  output: [],
   AUTH0_CLIENTID: '${clientId}',
   NODE_ENV: '${production ? 'production' : 'development'}',
   AUTOSAVE_DEBOUNCE_MS: 2000,
-};
+} as const;
 `;
   }
 
