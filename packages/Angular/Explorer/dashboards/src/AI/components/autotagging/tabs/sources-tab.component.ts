@@ -136,6 +136,10 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
     public SourceDetailPage = 0;
     public readonly SourceDetailPageSize = 10;
 
+    // Dry-run preview dialog (hosted here, like the schedule + detail dialogs)
+    public ShowDryRunPreview = false;
+    public DryRunSourceCard: SourceCard | null = null;
+
     // Schedule dialog
     public ShowScheduleDialog = false;
     public ScheduleSaving = false;
@@ -169,6 +173,21 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
     public onRunSource(sourceID: string): void {
         this.RunSourceRequested.emit(sourceID);
+    }
+
+    // ── Dry-run preview (in-memory, nothing persisted) ──
+
+    /** Opens the dry-run disposition preview for a source. */
+    public OpenDryRunPreview(card: SourceCard): void {
+        this.DryRunSourceCard = card;
+        this.ShowDryRunPreview = true;
+        this.cdr.detectChanges();
+    }
+
+    public CloseDryRunPreview(): void {
+        this.ShowDryRunPreview = false;
+        this.DryRunSourceCard = null;
+        this.cdr.detectChanges();
     }
 
     // ════════════════════════════════════════════

@@ -56,6 +56,7 @@
             <div class="at-source-card-actions">
               <button class="at-source-action-btn" (click)="onEditSource(card); $event.stopPropagation()"><i class="fa-solid fa-pen"></i> Edit</button>
               <button class="at-source-action-btn" (click)="onRunSource(card.ID); $event.stopPropagation()"><i class="fa-solid fa-play"></i> Run</button>
+              <button class="at-source-action-btn" (click)="OpenDryRunPreview(card); $event.stopPropagation()"><i class="fa-solid fa-flask"></i> Preview</button>
               @if (!card.ScheduledActionID) {
                 <button class="at-source-action-btn at-source-schedule-btn" (click)="OpenScheduleDialog(card); $event.stopPropagation()"><i class="fa-regular fa-clock"></i> Schedule</button>
               }
@@ -297,3 +298,11 @@
     </div>
   </div>
 }
+
+<!-- ══════ DRY-RUN DISPOSITION PREVIEW (in-memory, nothing persisted) ══════ -->
+<classify-dry-run-preview
+  [Provider]="Provider"
+  [Show]="ShowDryRunPreview"
+  [SourceCard]="DryRunSourceCard"
+  (Closed)="CloseDryRunPreview()">
+</classify-dry-run-preview>

@@ -38,6 +38,7 @@ import { ClassifyHealthTabComponent } from './AI/components/autotagging/tabs/hea
 import { ClassifyItemDetailDialogComponent } from './AI/components/autotagging/dialogs/item-detail.dialog.component';
 import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
 import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
+import { ClassifyDryRunPreviewDialogComponent } from './AI/components/autotagging/dialogs/dry-run-preview.dialog.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
@@ -106,6 +107,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClassifyItemDetailDialogComponent,
     ClassifyNoContentTypeWarningComponent,
     ClassifySourceTypeFormDialogComponent,
+    ClassifyDryRunPreviewDialogComponent,
     TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,

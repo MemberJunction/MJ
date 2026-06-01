@@ -294,3 +294,22 @@ export interface SourceDetailInfo {
 // ── Slide-in form mode ──
 
 export type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type';
+
+// ── Dry-run preview ──
+
+/** Per-disposition tally for the dry-run summary line. */
+export interface DryRunDispositionCount {
+    AutoApply: number;
+    RouteToInbox: number;
+    CreateNew: number;
+    Reject: number;
+}
+
+/** Illustrative token/cost estimate shown on the dry-run preview banner. */
+export interface DryRunEstimate {
+    ItemsSampled: number;
+    /** Rough total token estimate (clearly marked illustrative in the UI). */
+    EstimatedTokens: number;
+    /** Rough dollar cost estimate derived from EstimatedTokens. */
+    EstimatedCost: number;
+}
