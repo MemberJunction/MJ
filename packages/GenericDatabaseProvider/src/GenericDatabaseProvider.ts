@@ -122,6 +122,28 @@ const GEO_EXTENDED_TYPES = new Set([
     'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
 ]);
 
+/**
+ * Detects infrastructure-level connection errors that indicate the database is
+ * unreachable (timeout, refused, pool closed, etc.) as opposed to query-level
+ * errors (bad SQL, constraint violation). These should propagate as exceptions
+ * so callers can distinguish "DB is down" from "query returned no results."
+ *
+ * Uses the mssql driver's structured error types: ConnectionError for connectivity
+ * failures, RequestError for query-level errors. Falls back to error code checks
+ * for non-mssql errors (e.g., POOL_CLOSED thrown by our own code).
+ */
+function isConnectionError(e: unknown): boolean {
+    if (!(e instanceof Error)) return false;
+
+    // mssql driver sets error.name to 'ConnectionError' for all connectivity failures
+    // (timeout, refused, reset, TLS handshake, etc.)
+    if (e.name === 'ConnectionError') return true;
+
+    // Our own pool-closed errors and other non-mssql infra errors
+    const code = (e as { code?: string }).code ?? '';
+    return code === 'POOL_CLOSED';
+}
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // Composition engine is now owned by RenderPipeline
 
@@ -1700,6 +1722,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 AggregateExecutionTime: aggregateExecutionTime,
             } as RunViewResult<T>;
         } catch (e) {
+            // Re-throw infrastructure errors (connection timeout, pool closed, etc.)
+            // so callers can distinguish "database is unreachable" from "query returned
+            // no results." Only query-level errors are safe to return as { Success: false }.
+            if (isConnectionError(e)) {
+                throw e;
+            }
+
             const exceptionStopTime = new Date();
             LogError(e);
             return {
@@ -2768,6 +2797,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 CacheHit: false
             };
         } catch (e) {
+            if (isConnectionError(e)) {
+                throw e;
+            }
+
             LogError(e);
             const errorMessage = e instanceof Error ? e.message : String(e);
             return {
