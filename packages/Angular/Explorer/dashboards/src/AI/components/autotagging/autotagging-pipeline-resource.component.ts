@@ -191,7 +191,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public IsLoadingDuplicates = false;
 
     // ── Content Types tab ──
-    public ContentTypeCards: ContentTypeCard[] = [];
+    // ContentTypeCards + buildContentTypeCards() moved to ClassifyTypesTabComponent.
 
     // ── Tag Library tab ──
     public TagRows: TagRow[] = [];
@@ -667,6 +667,23 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private contentTypesRaw: Record<string, unknown>[] = [];
     private contentFileTypesRaw: Record<string, unknown>[] = [];
     private aiModelsRaw: Record<string, unknown>[] = [];
+
+    /** Exposes raw content types to the Content Types tab via `[ContentTypes]`. */
+    public get ContentTypesRaw(): Record<string, unknown>[] {
+        return this.contentTypesRaw;
+    }
+    /** Exposes raw content sources to the Content Types tab via `[Sources]`. */
+    public get ContentSourcesRaw(): Record<string, unknown>[] {
+        return this.contentSourcesRaw;
+    }
+    /** Exposes raw content items to the Content Types tab via `[Items]`. */
+    public get ContentItemsRaw(): Record<string, unknown>[] {
+        return this.contentItemsRaw;
+    }
+    /** Exposes the accurate total item count to the Content Types tab via `[TotalItemCount]`. */
+    public get TotalContentItemCount(): number {
+        return this.totalContentItemCount;
+    }
 
     // ── Lifecycle ──
 
@@ -1169,37 +1186,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             if (result.Success) this.contentTypesRaw = result.Results;
         }
         await this.ensureBaseDataLoaded();
-        this.buildContentTypeCards();
-    }
-
-    private buildContentTypeCards(): void {
-        const sourcesUsingByType = this.countSourcesByContentType();
-        // When items are capped by MaxRows, countItemsByContentType undercounts.
-        // For a single content type, use the accurate totalContentItemCount.
-        const singleType = this.contentTypesRaw.length === 1;
-        const itemsByType = singleType ? null : this.countItemsByContentType();
-
-        this.ContentTypeCards = this.contentTypesRaw.map(ct => {
-            const id = ct['ID'] as string;
-            const minTags = (ct['MinTags'] as number) ?? 1;
-            const maxTags = (ct['MaxTags'] as number) ?? 10;
-            const range = 15; // max possible
-            return {
-                ID: id,
-                Name: (ct['Name'] as string) ?? 'Unnamed',
-                Description: (ct['Description'] as string) ?? '',
-                AIModelName: (ct['AIModel'] as string) ?? 'Default Model',
-                AIModelID: (ct['AIModelID'] as string) ?? '',
-                MinTags: minTags,
-                MaxTags: maxTags,
-                SourcesUsing: sourcesUsingByType.get(id) ?? 0,
-                ItemsTagged: singleType ? this.totalContentItemCount : (itemsByType!.get(id) ?? 0),
-                RangeLeftPct: Math.round((minTags / range) * 100),
-                RangeRightPct: Math.round(100 - (maxTags / range) * 100),
-                EmbeddingModelID: (ct['EmbeddingModelID'] as string) ?? '',
-                VectorIndexID: (ct['VectorIndexID'] as string) ?? ''
-            };
-        });
+        // Card building lives in ClassifyTypesTabComponent, which rebuilds from
+        // its [ContentTypes]/[Sources]/[Items]/[TotalItemCount] inputs.
     }
 
     // ════════════════════════════════════════════
@@ -2365,23 +2353,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return result;
     }
 
-    private countSourcesByContentType(): Map<string, number> {
-        const counts = new Map<string, number>();
-        for (const source of this.contentSourcesRaw) {
-            const typeId = source['ContentTypeID'] as string;
-            if (typeId) counts.set(typeId, (counts.get(typeId) ?? 0) + 1);
-        }
-        return counts;
-    }
-
-    private countItemsByContentType(): Map<string, number> {
-        const counts = new Map<string, number>();
-        for (const item of this.contentItemsRaw) {
-            const typeId = item['ContentTypeID'] as string;
-            if (typeId) counts.set(typeId, (counts.get(typeId) ?? 0) + 1);
-        }
-        return counts;
-    }
+    // countSourcesByContentType() / countItemsByContentType() moved to
+    // ClassifyTypesTabComponent along with buildContentTypeCards().
 
     private inferItemStatus(tagCount: number): 'complete' | 'processing' | 'error' {
         return tagCount > 0 ? 'complete' : 'processing';
@@ -2552,7 +2525,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({ EntityName: 'MJ: Content Types', ResultType: 'simple' });
         if (result.Success) this.contentTypesRaw = result.Results;
-        this.buildContentTypeCards();
+        // The new contentTypesRaw reference flows to ClassifyTypesTabComponent via
+        // [ContentTypes]="ContentTypesRaw", which rebuilds its cards on input change.
         this.cdr.detectChanges();
     }
 
