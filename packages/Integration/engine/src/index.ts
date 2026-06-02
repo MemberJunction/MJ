@@ -111,6 +111,10 @@ export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 export { mostRecentWinner, parseTimestamp } from './ConflictRecency.js';
 export type { RecencyWinner } from './ConflictRecency.js';
 
+// Lightweight post-discovery constraint enrichment (deterministic FK inference + AI-optional descriptions)
+export { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
+export type { EnrichOptions, EnrichResult, DescribeFn } from './EnrichSchemaConstraints.js';
+
 // Retry
 export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
 export type { RetryConfig } from './RetryRunner.js';

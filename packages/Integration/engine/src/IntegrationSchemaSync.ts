@@ -24,6 +24,7 @@ import type {
     MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
+import { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
@@ -171,6 +172,12 @@ export class IntegrationSchemaSync {
             ObjectMergeLog: [],
             FieldMergeLog: [],
         };
+
+        // Lightweight constraint discovery: deterministically infer the FKs the source
+        // did NOT declare (naming-based, provable-only) so discovered objects gain proper
+        // relationships before the Declared/Discovered merge below resolves them. No AI
+        // dependency — safe on AI-less BI instances.
+        EnrichSchemaConstraints.InferForeignKeys(SourceSchema.Objects);
 
         // Load existing objects for this integration from cache
         const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);
