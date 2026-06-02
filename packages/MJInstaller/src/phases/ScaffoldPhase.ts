@@ -59,6 +59,14 @@ export interface ScaffoldContext {
   InstallMode?: 'distribution' | 'monorepo';
   /** Canonical repo clone URL for the distribution sparse fetch (defaults to the MJ repo). */
   RepoUrl?: string;
+  /**
+   * Whether to include the Claude Code pack in the scaffold output. Defaults to
+   * `true` so new installs get the pack out of the box (design doc Goal #1).
+   * Pass `false` to honor `--no-claude-pack`. Applies only to `distribution` mode;
+   * `monorepo` mode always extracts the full repo, which already contains the pack
+   * source tree under `templates/claude-pack/`.
+   */
+  IncludeClaudePack?: boolean;
 }
 
 /**
@@ -151,6 +159,7 @@ export class ScaffoldPhase {
   private async fetchAndAssemble(version: VersionInfo, context: ScaffoldContext): Promise<void> {
     const { Emitter: emitter } = context;
     const repoUrl = context.RepoUrl ?? DEFAULT_REPO_URL;
+    const includeClaudePack = context.IncludeClaudePack !== false;
 
     emitter.Emit('step:progress', {
       Type: 'step:progress',
@@ -163,7 +172,7 @@ export class ScaffoldPhase {
       fetched = await this.repoFetcher.FetchPaths({
         RepoUrl: repoUrl,
         Ref: version.Tag,
-        Paths: distributionSourcePaths(false),
+        Paths: distributionSourcePaths(false, undefined, includeClaudePack),
       });
     } catch (err) {
       throw new InstallerError(
@@ -193,7 +202,7 @@ export class ScaffoldPhase {
         Phase: 'scaffold',
         Message: 'Assembling distribution layout...',
       });
-      await this.assembler.AssembleToDir({ SourceDir: fetched.Dir }, context.Dir);
+      await this.assembler.AssembleToDir({ SourceDir: fetched.Dir, IncludeClaudePack: includeClaudePack }, context.Dir);
 
       if (savedUserConfig !== null) {
         await this.fileSystem.WriteText(userConfigPath, savedUserConfig);

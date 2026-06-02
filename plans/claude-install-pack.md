@@ -334,36 +334,52 @@ We do *not* gitignore `dist/` — it's intentionally committed. The CI gate ensu
 
 ## 6. Distribution Mechanics
 
-### 6.1 Path A — bootstrap ZIP injection (primary path for new installs)
+### 6.1 Path A — Pack delivery via DistributionAssembler (post-#2725)
 
-Modify `CreateMJDistribution.js` to copy `templates/claude-pack/dist/v{MAJOR}/` into the archive root. Insertion point: just before `await archive.finalize()` at line 417, around the cluster of `archive.append(...)` calls at 384–402.
+> **Note (M11 — Realignment to Goal #1).** The original plan injected the pack
+> into `CreateMJDistribution.js`. PR #2725 (`worktree-remote-distribution-fetch`)
+> retired the committed bootstrap ZIP entirely, replacing it with `RepoFetcher`
+> + `DistributionAssembler` (sparse-checkout + on-demand assembly). The pack
+> delivery moved with it. The architecturally equivalent injection point is
+> `DistributionAssembler.BASE_MAPPINGS` / `mappingsFor()`. The previous Path A
+> pseudocode that referenced `CreateMJDistribution.js` is preserved below for
+> historical context; the implementation lives in
+> `packages/MJInstaller/src/distribution/DistributionAssembler.ts` now.
 
-**Pseudocode (as implemented):**
+**Current implementation:** `DistributionAssembler.mappingsFor()` calls
+`discoverClaudePackDir(sourceDir)`, which scans
+`templates/claude-pack/dist/` for `v{N}/` subdirectories and picks the highest
+available major — matching the discovery convention designed for the legacy
+`CreateMJDistribution.js` path. If found, a `'claudePack'`-kind mapping is added
+with `DestRel: ''` (target root). The mapping has its own empty ignore set
+(`CLAUDE_PACK_IGNORE = []`) so the `.claude/` dotfile tree isn't filtered out
+by `COMMON_IGNORE`'s `.*` pattern.
+
+`AssembleOptions.IncludeClaudePack: boolean = true` (default) controls whether
+the mapping is added. `--no-claude-pack` on `mj install` and `mj bundle` flips
+it to `false`. Missing pack source is **silently skipped** so installing an
+older MJ tag that predates the pack doesn't fail.
+
+`distributionSourcePaths(includeMigrations, migrationPlatform, includeClaudePack=true)`
+includes `templates/claude-pack/dist` in the sparse-fetch paths so over-the-wire
+installs pick up the pack from the resolved ref.
+
+**Legacy pseudocode (historical — Path A pre-#2725):**
+
 ```js
-// Discover available dist/v{N}/ folders and pick the highest available major.
-// This sidesteps the "where does the MJ major version live?" question — root
-// package.json's `version` is the workspace semver (1.x), not user-facing MJ
-// (5.x). Discovery from the pack source itself avoids the coupling.
+// Originally in CreateMJDistribution.js, just before archive.finalize() ~L417:
 const packDistRoot = path.join(__dirname, 'templates', 'claude-pack', 'dist');
-if (!fs.existsSync(packDistRoot)) {
-  throw new Error(`Claude pack dist not found at ${packDistRoot}. Run 'npm run claude-pack:build' first.`);
-}
 const majorDirs = fs.readdirSync(packDistRoot, { withFileTypes: true })
   .filter(e => e.isDirectory() && /^v\d+$/.test(e.name))
   .map(e => e.name)
   .sort((a, b) => parseInt(b.slice(1), 10) - parseInt(a.slice(1), 10));
-if (majorDirs.length === 0) {
-  throw new Error(`Claude pack dist at ${packDistRoot} contains no v{N}/ subdirectories.`);
-}
-const selectedMajor = majorDirs[0];
-const packDir = path.join(packDistRoot, selectedMajor);
-console.log(`Adding Claude Code pack (${selectedMajor}) to zip file...`);
-// `dot: true` is required so the `.claude/` directory (dotfile-prefixed) is included.
-// `prefix: ''` lands contents at archive root alongside other root files.
+const packDir = path.join(packDistRoot, majorDirs[0]);
 archive.glob('**/*', { cwd: packDir, dot: true }, { prefix: '' });
 ```
 
-`archive.glob('**/*', ...)` matches the existing glob-based pattern used elsewhere in `CreateMJDistribution.js` (line 370) — `archive.directory()` was originally considered but glob is the convention here.
+The new TypeScript path mirrors this logic verbatim — same discovery, same
+"highest v{N}/ wins", same root-anchored layout — just through the assembler's
+mapping system instead of `archiver`'s glob.
 
 ### 6.2 Path B — `ScaffoldPhase` post-extract guard
 
@@ -418,6 +434,15 @@ The command:
 | `.claude/skills/**` | Same rule as commands. |
 
 This **never destroys user content** by default. The `--force` flag is opt-in for cases where the user knowingly wants to reset.
+
+### 6.4a `mj bundle` — pack inclusion in offline distributions
+
+`mj bundle` (the air-gapped/offline install command introduced by PR #2725)
+includes the pack by default. `CreateBundleOptions.IncludeClaudePack` defaults
+to `true`; `--no-claude-pack` on the CLI flips it. This honors Goal #1 for
+the air-gapped path: a bundle produced on a connected machine, transferred to
+an isolated target, and extracted via `mj install --source <extracted>` lands
+the same Claude-Code-ready environment as an online install.
 
 ### 6.5 `mj update:claude` (refresh existing install)
 
@@ -849,9 +874,22 @@ The original scenarios as drafted in the plan, now mapped via §11.2 above:
 | `--offline --from <path>` | Pack source on disk | Works without network |
 | `--dry-run` | Any | No file writes, prints planned changes |
 
-### 11.3 End-to-end test
+### 11.3 End-to-end test (post-#2725: bundle smoke)
 
-A new step in `.github/workflows/publish.yml` (or a separate workflow):
+> **Status: rewritten.** Originally tested `CreateMJDistribution.js` → ZIP →
+> extract → pack-assertions. After PR #2725 retired that script, the E2E job
+> is `e2e-bundle-smoke` in `.github/workflows/claude-pack.yml` which builds
+> via `mj bundle` and checks the distribution layout (per
+> `scripts/verify-bundle-smoke.mjs`). The pack-specific assertions previously
+> in `scripts/verify-pack-in-zip.mjs` (now deleted) are covered at the unit
+> level in `DistributionAssembler.test.ts` and `createBundle.test.ts` — the
+> mapping plus the discovery + multi-major + include/exclude scenarios.
+
+Current E2E coverage (in `.github/workflows/claude-pack.yml`):
+1. **`verify-dist-fresh`** — `npm run claude-pack:build` + `git diff --exit-code templates/claude-pack/dist/`. Catches stale pack content.
+2. **`e2e-bundle-smoke`** — builds MJInstaller + MJCLI, runs `mj bundle --source . --out ...`, then `scripts/verify-bundle-smoke.mjs` asserts the resulting zip has the expected distribution layout (root files, `apps/MJAPI`, `apps/MJExplorer`, `SQL Scripts/`).
+
+Original (pre-#2725) pseudocode kept for context:
 1. Run `npm run claude-pack:build`
 2. Build the bootstrap ZIP via `CreateMJDistribution.js`
 3. Extract the ZIP into a temp directory
@@ -896,9 +934,15 @@ Goal: prove the pipeline end to end with a tiny pack.
 
 **Exit criterion:** `npm run claude-pack:build` succeeds and produces a usable `dist/v5/` directory.
 
-### 12.2 Milestone 2 — Bootstrap ZIP injection (0.5 day)
+### 12.2 Milestone 2 — Bootstrap ZIP injection (SUPERSEDED by M11)
 
-Goal: new installs get the pack automatically.
+> **Status: superseded.** This milestone shipped as designed, then was
+> implicitly retired by PR #2725 which deleted `CreateMJDistribution.js` and
+> replaced the bootstrap ZIP with `RepoFetcher` + `DistributionAssembler`.
+> M11 (§12.10) re-delivers the same Goal #1 ("pack ships with `mj install`")
+> via the new architecture.
+
+Original goal: new installs get the pack automatically.
 
 | # | Task | File(s) | Validation |
 |---|---|---|---|
@@ -907,7 +951,12 @@ Goal: new installs get the pack automatically.
 | 12 | Manual test: `node CreateMJDistribution.js`, unzip output, verify pack present | n/a | Files present at extracted root |
 | 13 | Modify `ScaffoldPhase.ts` to log pack-version on success / warn on absence | `packages/MJInstaller/src/phases/ScaffoldPhase.ts` | Log line appears in installer output |
 
-**Exit criterion:** A fresh `mj install` against a custom-built ZIP produces a working pack in the user's directory.
+**Original exit criterion:** A fresh `mj install` against a custom-built ZIP produces a working pack in the user's directory.
+
+Task 13 still applies — `ScaffoldPhase.reportClaudePack` is unchanged and now
+emits a success log on every install (since the pack lands automatically) and
+falls back to the warn path only for `--no-claude-pack` runs or when the source
+fetch genuinely lacked a pack (e.g., installing an older tag pre-pack).
 
 ### 12.3 Milestone 3 — `mj install:claude` and `mj update:claude` (3–4 days)
 
@@ -1000,6 +1049,32 @@ Two additional milestones were added during the PR after M8, driven by issues th
   - **Bug #8** — `CodeGenLib/db-connection.ts` destructured `configInfo` at module load, capturing empty defaults; CodeGen crashed with "config.server is required". Fixed by lazy `buildSqlConfig()` inside `MSSQLConnection()`.
   - **Boundary-validation pass** — try/catch + descriptive error on user-supplied pack manifest JSON parsing; `assertWithinTarget()` path-traversal guard on `PackMerger.writeFile()` to reject hostile `--from` manifests; `console.warn` for unrecognized keys in `install.config.json` (the same failure mode that bit Bug #7).
 
+### 12.10 Milestone 11 — Realignment to Goal #1 after PR #2725 (0.5 day)
+
+Goal: restore the original design intent — `mj install` lays down the pack
+automatically — after PR #2725 (`worktree-remote-distribution-fetch`) retired
+the bootstrap ZIP path that M2 had used. PR #2725 left the pack as a separate
+post-install command (`mj install:claude`), implicitly breaking Goal #1's
+"out of the box" promise. M11 re-couples pack delivery to `mj install` via
+the new sparse-checkout/assembler architecture.
+
+| # | Task | File(s) | Validation |
+|---|---|---|---|
+| 46 | Add `'claudePack'` to `MappingKind` + `CLAUDE_PACK_IGNORE`/`CLAUDE_PACK_DIST_ROOT` constants | `packages/MJInstaller/src/distribution/DistributionAssembler.ts` | New kind compiles; `.*` ignore does not filter out `.claude/` |
+| 47 | Add `IncludeClaudePack` to `AssembleOptions`; default-include behavior in `mappingsFor()`; `discoverClaudePackDir()` picks highest `v{N}/` | same | Unit tests in `DistributionAssembler.test.ts` |
+| 48 | Update `distributionSourcePaths()` to optionally include `templates/claude-pack/dist` | same | Sparse fetch includes pack source when not opted out |
+| 49 | Add `IncludeClaudePack` to `CreateBundleOptions`; thread to assembler | `packages/MJInstaller/src/distribution/createBundle.ts` | Unit tests in `createBundle.test.ts` |
+| 50 | Add `--no-claude-pack` flag to `mj bundle` CLI | `packages/MJCLI/src/commands/bundle/index.ts` | `mj bundle --no-claude-pack` strips pack from zip |
+| 51 | Add `NoClaudePack` to `CreatePlanInput` + `InstallPlan` constructor + `ScaffoldContext`; thread through `executeScaffold` → `scaffold.Run({ IncludeClaudePack })` → `fetchAndAssemble` → `AssembleToDir` | `packages/MJInstaller/src/{models/InstallPlan.ts,InstallerEngine.ts,phases/ScaffoldPhase.ts}` | `mj install` lands pack by default |
+| 52 | Add `--no-claude-pack` flag to `mj install` CLI | `packages/MJCLI/src/commands/install/index.ts` | `mj install --no-claude-pack` omits pack |
+| 53 | Update plan doc §6.1 to mark legacy Path A as superseded; add §6.1a and §6.4a documenting the new architecture | `plans/claude-install-pack.md` | This document |
+
+**Exit criterion:** Fresh `mj install` without `--no-claude-pack` produces a
+target dir with `CLAUDE.md` + `.claude/` at root (matching the bootstrap-ZIP
+era behavior); `mj bundle` includes the pack in the offline zip; both have
+opt-out via `--no-claude-pack`; unit tests in `DistributionAssembler.test.ts`
+and `createBundle.test.ts` cover include/exclude/multi-major/missing-source paths.
+
 ---
 
 ## 13. Open Questions / Decisions Needed
@@ -1040,12 +1115,14 @@ These need explicit answers before we can finalize the build:
 ## 15. References
 
 - This proposal grew from the conversation in branch `claude/add-claude-md-installer-WJ2OZ`.
-- Source code seams referenced:
-  - `packages/MJInstaller/src/phases/ScaffoldPhase.ts`
-  - `packages/MJInstaller/src/adapters/GitHubReleaseProvider.ts` (line 45 — `BOOTSTRAP_ZIP_PATH`)
-  - `CreateMJDistribution.js` (lines 384–402 — root-file additions)
-  - `.github/workflows/publish.yml` (line 162 — distribution build)
-  - `packages/MJCLI/src/commands/install/index.ts`
+- Source code seams referenced (current paths post-#2725):
+  - `packages/MJInstaller/src/phases/ScaffoldPhase.ts` — `reportClaudePack` + `fetchAndAssemble` (the new `IncludeClaudePack` plumbing)
+  - `packages/MJInstaller/src/distribution/DistributionAssembler.ts` — `'claudePack'` mapping kind, `discoverClaudePackDir`, the auto-include logic
+  - `packages/MJInstaller/src/distribution/createBundle.ts` — `IncludeClaudePack` option for `mj bundle`
+  - `packages/MJCLI/src/commands/install/index.ts` — `--no-claude-pack` flag
+  - `packages/MJCLI/src/commands/bundle/index.ts` — `--no-claude-pack` flag
+  - `.github/workflows/claude-pack.yml` — dist-freshness + `e2e-bundle-smoke` job
+  - **(Historical, deleted by #2725)** `CreateMJDistribution.js` — original bootstrap-ZIP build; replaced by `DistributionAssembler`. `BOOTSTRAP_ZIP_PATH` no longer exists; `GitHubReleaseProvider` is still around but used only for tag resolution, not ZIP download in the default path.
 - Existing CLAUDE.md inventory: 11 files, 4,238 lines (per inventory in §2.1).
 - Existing slash commands: 23, of which 19 ship and 8 are excluded (per §9).
 

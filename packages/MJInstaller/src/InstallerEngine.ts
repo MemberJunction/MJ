@@ -199,7 +199,7 @@ export class InstallerEngine {
     }
 
     const tag = input.Tag ?? 'latest';
-    return new InstallPlan(tag, input.Dir, config, skipPhases);
+    return new InstallPlan(tag, input.Dir, config, skipPhases, input.NoClaudePack ?? false);
   }
 
   /**
@@ -607,6 +607,7 @@ export class InstallerEngine {
       Yes: yes,
       Emitter: this.emitter,
       InstallMode: installMode,
+      IncludeClaudePack: !plan.NoClaudePack,
     });
 
     // Remember the concrete resolved tag so the configure phase can pin it.
