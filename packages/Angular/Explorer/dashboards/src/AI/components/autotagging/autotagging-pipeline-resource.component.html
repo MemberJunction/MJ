@@ -6,9 +6,9 @@
     <div actions>
       <button mjButton variant="primary" size="sm" (click)="RunPipeline()" [disabled]="IsRunning">
         @if (IsRunning) {
-          <i class="fa-solid fa-spinner fa-spin"></i> Running…
+          <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Running…</span>
         } @else {
-          <i class="fa-solid fa-play"></i> Run Pipeline
+          <i class="fa-solid fa-play"></i> <span class="action-btn-label">Run Pipeline</span>
         }
       </button>
     </div>

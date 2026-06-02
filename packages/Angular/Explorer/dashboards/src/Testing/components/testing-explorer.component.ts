@@ -119,10 +119,10 @@ interface TestRunStatRow {
           </div>
           <div actions>
             <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
-              <i class="fa-solid fa-folder-plus"></i> <span class="te-btn-label">New Suite</span>
+              <i class="fa-solid fa-folder-plus"></i> <span class="action-btn-label">New Suite</span>
             </button>
             <button mjButton variant="primary" size="sm" (click)="OnNewTest()">
-              <i class="fa-solid fa-plus"></i> <span class="te-btn-label">New Test</span>
+              <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Test</span>
             </button>
           </div>
           <div toolbar>
@@ -585,19 +585,8 @@ interface TestRunStatRow {
        (it reflows to a column on mobile) and the scroller is the shared
        <mj-page-body-interior> — no bespoke .explorer-layout / .content-area. */
 
-    @media (max-width: 700px) {
-      /* On mobile search grows to fill the row so the icon-only Filter + view
-         toggle sit on the same line. On desktop search keeps its natural width
-         and Filter/view sit beside it (not stretched full-width). */
-      mj-page-search {
-        flex: 1;
-      }
-      /* Collapse the New Suite / New Test buttons to icon-only so the actions
-         row (+Suite, +Test) stays compact. */
-      .te-btn-label {
-        display: none;
-      }
-    }
+    /* Mobile search-grow + icon-only action buttons are handled by the shared
+       <mj-page-header> rules (action-btn-label + toolbar search-grow). */
 
     /* ==========================================
        Main Content

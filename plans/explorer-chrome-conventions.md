@@ -174,7 +174,9 @@ ship new inline `<mj-filter-chip>` quick-filter groups, and do not add an
 - **Search is persistent**, living in the control bar via `<mj-page-search>` —
   it's wayfinding, never a filter field.
 - **The control bar reads `search · Filter · view`** and sits in `[toolbar]`.
-  The page's one primary CTA stays in `[actions]`.
+  The page's one primary CTA stays in `[actions]`. The bar is **right-aligned on
+  desktop, left-aligned on mobile** (where search grows to fill) — handled by the
+  shared header primitives, no per-page CSS.
 
 Field types inside the panel (`FilterFieldConfig.type`):
 
@@ -184,6 +186,13 @@ Field types inside the panel (`FilterFieldConfig.type`):
 | multi-select set | `'chips'` with `multi: true` (value is an array) |
 | dropdown (use `filterable: true` for long lists) | `'dropdown'` |
 | free text | `'text'` |
+
+**Period / time-range selectors fold in too.** A 24h / 7d / 30d (or date-range)
+selector goes inside the Filter popover as a `type: 'chips'` field — NOT a
+visible inline chip group. (Scheduling Activity & Integration Activity do this.)
+The only current holdout is **AI Analytics**, whose bespoke per-section
+`analytics-filter-bar` keeps its time-range chips — flagged for standardization,
+not a pattern to copy.
 
 ### Two archetypes
 - **Top-level page** (no left-nav): `<mj-page-header>` IS the chrome — identity +

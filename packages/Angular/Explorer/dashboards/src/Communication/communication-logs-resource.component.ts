@@ -3,6 +3,7 @@ import { ResourceData, MJCommunicationLogEntity } from '@memberjunction/core-ent
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 @RegisterClass(BaseResourceComponent, 'CommunicationLogsResource')
 @Component({
   standalone: false,
@@ -18,10 +19,17 @@ import { RunView } from '@memberjunction/core';
             Placeholder="Search messages, providers, recipients..."
             (ValueChange)="onSearchValue($event)">
           </mj-page-search>
-          <mj-filter-chip Label="All"     Icon="fa-solid fa-filter"        [Active]="statusFilter === ''"         (Clicked)="onStatusFilter('')"></mj-filter-chip>
-          <mj-filter-chip Label="Sent"    Icon="fa-solid fa-check-circle"  [Active]="statusFilter === 'Complete'" (Clicked)="onStatusFilter('Complete')"></mj-filter-chip>
-          <mj-filter-chip Label="Failed"  Icon="fa-solid fa-times-circle"  [Active]="statusFilter === 'Failed'"   (Clicked)="onStatusFilter('Failed')"></mj-filter-chip>
-          <mj-filter-chip Label="Pending" Icon="fa-solid fa-clock"         [Active]="statusFilter === 'Pending'"  (Clicked)="onStatusFilter('Pending')"></mj-filter-chip>
+          <mj-filter-popover
+            [ActiveCount]="ActiveFilterCount"
+            [ShowClearAll]="ActiveFilterCount > 0"
+            (ClearAllRequested)="resetFilters()">
+            <mj-filter-panel
+              [Fields]="filterFields"
+              [Values]="filterValues"
+              (ValuesChange)="onFilterValuesChange($event)"
+              (Reset)="resetFilters()">
+            </mj-filter-panel>
+          </mj-filter-popover>
         </div>
       </mj-page-header>
       <mj-page-body [Flex]="true">
@@ -246,6 +254,38 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
     public onStatusFilter(status: string): void {
         this.statusFilter = status;
         this.applyFilter();
+    }
+
+    // -- Concise chrome: Status lives behind the one Filter popover -----------
+
+    public get filterFields(): FilterFieldConfig[] {
+        return [{
+            key: 'status',
+            type: 'chips',
+            label: 'Status',
+            chipOptions: [
+                { text: 'All', value: '' },
+                { text: 'Sent', value: 'Complete', icon: 'fa-solid fa-check-circle' },
+                { text: 'Failed', value: 'Failed', icon: 'fa-solid fa-times-circle' },
+                { text: 'Pending', value: 'Pending', icon: 'fa-solid fa-clock' },
+            ],
+        }];
+    }
+
+    public get filterValues(): Record<string, unknown> {
+        return { status: this.statusFilter };
+    }
+
+    public get ActiveFilterCount(): number {
+        return this.statusFilter ? 1 : 0;
+    }
+
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        this.onStatusFilter((values['status'] as string) ?? '');
+    }
+
+    public resetFilters(): void {
+        this.onStatusFilter('');
     }
 
     public getStatusClass(status: string): string {

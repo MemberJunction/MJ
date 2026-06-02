@@ -163,6 +163,8 @@ import { Component, Input } from '@angular/core';
       display: flex;
       flex-wrap: wrap;
       align-items: center;
+      /* Right-aligned control bar on desktop; mobile block resets to flex-start. */
+      justify-content: flex-end;
       gap: var(--mj-space-3);
       padding: var(--mj-space-3) var(--mj-space-4);
       border-top: 1px solid var(--mj-border-subtle);
@@ -259,6 +261,13 @@ import { Component, Input } from '@angular/core';
       :host ::ng-deep .mj-page-header-interior__row--toolbar:has(> [toolbar] > *) {
         flex-wrap: nowrap;
         overflow-x: auto;
+        /* Left-aligned on mobile (search grows to fill). */
+        justify-content: flex-start;
+      }
+      /* Search grows so Filter + view sit at the trailing edge of the bar. */
+      :host ::ng-deep .mj-page-header-interior__row--toolbar mj-page-search {
+        flex: 1;
+        min-width: 0;
       }
     }
   `]

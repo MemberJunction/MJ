@@ -64,6 +64,9 @@
 
 .mj-page-header-row--toolbar {
   flex-wrap: wrap;
+  /* Control bar (search · Filter · view) is right-aligned on desktop; the
+     mobile block below resets it to flex-start. */
+  justify-content: flex-end;
   padding-top: 0;
   padding-bottom: var(--mj-space-4);
   border-top: 1px solid var(--mj-border-subtle);
@@ -184,8 +187,21 @@
     justify-content: flex-start;
     gap: var(--mj-space-2);
   }
+  /* Action buttons go icon-only on mobile — consumers wrap the text in
+     <span class="action-btn-label"> so it can hide without touching mjButton. */
+  .mj-page-header-actions ::ng-deep .action-btn-label {
+    display: none;
+  }
   .mj-page-header-row--toolbar {
+    /* Left-aligned on mobile (search grows to fill the row). */
+    justify-content: flex-start;
     padding-top: var(--mj-space-2);
     padding-bottom: var(--mj-space-3);
+  }
+  /* In the control bar (search · Filter · view), let search grow so the Filter
+     button + view-toggle sit at the trailing edge on one line. */
+  .mj-page-header-row--toolbar ::ng-deep mj-page-search {
+    flex: 1;
+    min-width: 0;
   }
 }

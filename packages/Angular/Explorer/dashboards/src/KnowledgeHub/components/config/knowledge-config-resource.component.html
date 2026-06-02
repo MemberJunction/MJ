@@ -15,10 +15,10 @@
     <div actions>
       @if (HasUnsavedChanges) {
         <button mjButton variant="secondary" size="sm" (click)="ResetConfiguration()" [disabled]="IsSaving" title="Discard unsaved changes">
-          <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+          <i class="fa-solid fa-arrow-rotate-left"></i> <span class="action-btn-label">Reset</span>
         </button>
         <button mjButton variant="primary" size="sm" (click)="SaveConfiguration()" [disabled]="IsSaving" title="Save all settings">
-          <i class="fa-solid fa-floppy-disk"></i> {{IsSaving ? 'Saving…' : 'Save'}}
+          <i class="fa-solid fa-floppy-disk"></i> <span class="action-btn-label">{{IsSaving ? 'Saving…' : 'Save'}}</span>
         </button>
       }
     </div>

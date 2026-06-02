@@ -658,6 +658,10 @@ as-split {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+  /* Collapse the New Agent action button to icon-only to keep the header compact. */
+  .action-btn-label {
+    display: none;
+  }
   .dashboard-header {
     flex-direction: column;
     gap: 16px;

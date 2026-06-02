@@ -48,7 +48,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           <!-- Single primary CTA; all filters live behind the Filter button in
                the control bar below (concise chrome). -->
           <button mjButton variant="primary" size="sm" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i> New List
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
           </button>
         </div>
         <div toolbar>
@@ -629,7 +629,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
 
     /* Control bar: on mobile search grows so the icon-only Filter + view toggle
        stay on one line. On desktop search keeps its natural width. */
-    @media (max-width: 700px) {
+    @media (max-width: 768px) {
       mj-page-search {
         flex: 1;
       }

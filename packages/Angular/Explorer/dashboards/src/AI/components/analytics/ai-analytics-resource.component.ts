@@ -82,12 +82,12 @@ interface NavItem {
                     }
                     @if (FilterBarConfig.ShowCompareToggle) {
                         <button mjButton variant="secondary" size="sm" [toggleable]="true" [(selected)]="compareActive" (selectedChange)="toggleCompare()">
-                            <i class="fa-solid fa-code-compare"></i> Compare
+                            <i class="fa-solid fa-code-compare"></i> <span class="mj-action-label">Compare</span>
                         </button>
                     }
                     @if (FilterBarConfig.ShowExportButton) {
                         <button mjButton variant="secondary" size="sm" (click)="OnExportClicked()">
-                            <i class="fa-solid fa-download"></i> Export
+                            <i class="fa-solid fa-download"></i> <span class="mj-action-label">Export</span>
                         </button>
                     }
                 </div>

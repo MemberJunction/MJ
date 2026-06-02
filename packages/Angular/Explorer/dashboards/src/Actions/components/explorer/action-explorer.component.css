@@ -109,37 +109,6 @@
   font-size: 11px;
 }
 
-/* ──── Active filter chips (in [toolbar] next to search) ──── */
-.active-filters {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-  color: var(--mj-text-primary);
-  border-radius: 14px;
-}
-.status-chip.removable {
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.status-chip.removable:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
-}
-.status-chip i {
-  font-size: 10px;
-  color: var(--mj-text-muted);
-}
-
 .action-explorer {
   display: flex;
   flex: 1;
@@ -283,6 +252,15 @@
 }
 
 @media (max-width: 768px) {
+  /* Search grows so the icon-only Filter · sort · view controls share one line;
+     collapse the New Action / sort button labels to icon-only to keep it compact. */
+  mj-page-search {
+    flex: 1;
+  }
+  .action-btn-label {
+    display: none;
+  }
+
   .explorer-content {
     padding: 12px;
   }

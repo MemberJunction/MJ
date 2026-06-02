@@ -6,9 +6,9 @@
     <div actions>
       <button mjButton variant="secondary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
         @if (HealthRunning) {
-          <i class="fa-solid fa-spinner fa-spin"></i> Running…
+          <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Running…</span>
         } @else {
-          <i class="fa-solid fa-heart-pulse"></i> Run Tag Health
+          <i class="fa-solid fa-heart-pulse"></i> <span class="action-btn-label">Run Tag Health</span>
         }
       </button>
     </div>
@@ -51,26 +51,26 @@
         @switch (ActiveTab) {
           @case ('taxonomy') {
             <button mjButton variant="secondary" size="sm" (click)="RefreshTaxonomyData()">
-              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+              <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
             </button>
           }
           @case ('suggestions') {
             <button mjButton variant="secondary" size="sm" (click)="loadSuggestions()">
-              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+              <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
             </button>
             <button mjButton variant="primary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
-              @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
-              @else { <i class="fa-solid fa-heart-pulse"></i> Run Tag Health }
+              @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Running…</span> }
+              @else { <i class="fa-solid fa-heart-pulse"></i> <span class="mj-action-label">Run Tag Health</span> }
             </button>
           }
           @case ('health') {
             <button mjButton variant="secondary" size="sm" (click)="RebuildEmbeddings()" [disabled]="RebuildEmbeddingsRunning">
-              @if (RebuildEmbeddingsRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Rebuilding… }
-              @else { <i class="fa-solid fa-rotate"></i> Rebuild stale embeddings }
+              @if (RebuildEmbeddingsRunning) { <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Rebuilding…</span> }
+              @else { <i class="fa-solid fa-rotate"></i> <span class="mj-action-label">Rebuild stale embeddings</span> }
             </button>
             <button mjButton variant="primary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
-              @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
-              @else { <i class="fa-solid fa-play"></i> Run now }
+              @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Running…</span> }
+              @else { <i class="fa-solid fa-play"></i> <span class="mj-action-label">Run now</span> }
             </button>
           }
         }
