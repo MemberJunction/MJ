@@ -28,6 +28,7 @@ import { BaseSingleton } from '@memberjunction/global';
 import type { Browser, BrowserContext } from 'playwright';
 import { BrowserConfig } from '../types/browser.js';
 import { SharedContextBrowserAdapter } from './SharedContextBrowserAdapter.js';
+import { classifyConnectEndpoint } from './connect-endpoint.js';
 
 interface RecycledEntry {
     Context: BrowserContext;
@@ -60,6 +61,8 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     // ─── State ─────────────────────────────────────────────
 
     private _browser: Browser | null = null;
+    /** True when we attached to an external browser rather than launching one. */
+    private _connected: boolean = false;
     private _recycled: Map<string, RecycledEntry> = new Map();
     private _fresh: SharedContextBrowserAdapter[] = [];
     private _cleanupRegistered: boolean = false;
@@ -86,10 +89,32 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     // ─── Lifecycle ─────────────────────────────────────────
 
     /**
-     * Launch the shared Chromium browser. Safe to call multiple times —
-     * subsequent calls are no-ops if the browser is already running.
+     * Launch or attach to the shared Chromium browser. Safe to call multiple
+     * times — subsequent calls are no-ops if the browser is already running.
+     *
+     * @param headless  Run launched browser without a visible window.
+     *                  Ignored when `connect` is set (the external browser
+     *                  already decided).
+     * @param connect   Optional. Endpoint of an already-running browser to
+     *                  attach to instead of launching one. `http(s)://…` uses
+     *                  Chrome DevTools Protocol; `ws(s)://…` uses a Playwright
+     *                  browser server. When set, `Shutdown()` will NOT close
+     *                  the browser — the caller owns its lifecycle.
+     * @param connectType Force the connect method. Defaults to `'auto'`
+     *                  (scheme-based detection). Ignored when `connect` is unset.
+     *
+     * Note: this is a process-wide singleton. When the test driver runs
+     * parallel workers and one of them passes `connect`, every worker that
+     * subsequently calls `Initialize` (or hits `ensureBrowser` via `GetNew` /
+     * `GetRecycled` / `GetIsolated`) will share the same attached browser —
+     * the first call wins. Callers should ensure all workers agree on the
+     * connect endpoint.
      */
-    public async Initialize(headless: boolean = true): Promise<void> {
+    public async Initialize(
+        headless: boolean = true,
+        connect?: string,
+        connectType?: 'cdp' | 'server' | 'auto'
+    ): Promise<void> {
         if (this._browser) return;
 
         let chromium: Awaited<typeof import('playwright')>['chromium'];
@@ -102,10 +127,19 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
             );
         }
 
-        this._browser = await chromium.launch({
-            headless,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
+        if (connect) {
+            const method = classifyConnectEndpoint(connect, connectType);
+            this._browser = method === 'server'
+                ? await chromium.connect(connect)
+                : await chromium.connectOverCDP(connect);
+            this._connected = true;
+        } else {
+            this._browser = await chromium.launch({
+                headless,
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            });
+            this._connected = false;
+        }
 
         this.registerProcessCleanup();
     }
@@ -274,6 +308,10 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     /**
      * Full shutdown: close all fresh adapters, release all recycled contexts,
      * close the browser. Safe to call multiple times.
+     *
+     * When attached to an external browser (`_connected === true`), the
+     * browser itself is NOT closed — the caller owns its lifecycle. All
+     * contexts WE created (recycled, fresh, isolated) ARE closed.
      */
     public async Shutdown(): Promise<void> {
         // Close all fresh adapters
@@ -289,11 +327,17 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         // lifetime and the auth tokens may have expired anyway.
         this._workerStorageState.clear();
 
-        // Close browser
+        // Close browser only if we launched it ourselves. When attached, the
+        // external browser/server stays running — that's the whole point of
+        // attach mode. Our Playwright client connection is released on
+        // process exit.
         if (this._browser) {
-            try { await this._browser.close(); } catch { /* swallow */ }
+            if (!this._connected) {
+                try { await this._browser.close(); } catch { /* swallow */ }
+            }
             this._browser = null;
         }
+        this._connected = false;
     }
 
     // ─── Queries ───────────────────────────────────────────
@@ -333,8 +377,11 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         this._cleanupRegistered = true;
 
         const cleanup = () => {
-            // Synchronous best-effort — process is exiting
-            this._browser?.close().catch(() => {});
+            // Synchronous best-effort — process is exiting.
+            // Don't close attached browsers — caller owns their lifecycle.
+            if (this._browser && !this._connected) {
+                this._browser.close().catch(() => {});
+            }
         };
         process.on('exit', cleanup);
         process.on('SIGTERM', cleanup);
