@@ -29,7 +29,7 @@ vi.mock('../adapters/FileSystemAdapter.js', () => ({
 // Import the phase under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
 
-import { DependencyPhase, type DependencyContext } from '../phases/DependencyPhase.js';
+import { DependencyPhase, tagToNpmVersion, type DependencyContext } from '../phases/DependencyPhase.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -360,5 +360,44 @@ describe('DependencyPhase', () => {
       expect(buildWarns[0].Message).toContain('ng-core-entity-forms');
       expect(buildWarns[0].Message).toContain('ng-bootstrap');
     });
+  });
+});
+
+describe('tagToNpmVersion', () => {
+  it('strips leading v from semver tags', () => {
+    expect(tagToNpmVersion('v5.38.0')).toBe('5.38.0');
+    expect(tagToNpmVersion('v0.0.1')).toBe('0.0.1');
+    expect(tagToNpmVersion('v12.34.567')).toBe('12.34.567');
+  });
+
+  it('accepts semver tags without leading v', () => {
+    expect(tagToNpmVersion('5.38.0')).toBe('5.38.0');
+    expect(tagToNpmVersion('1.0.0')).toBe('1.0.0');
+  });
+
+  it('preserves prerelease and build-metadata suffixes', () => {
+    expect(tagToNpmVersion('v5.38.0-beta.1')).toBe('5.38.0-beta.1');
+    expect(tagToNpmVersion('5.38.0-rc.2')).toBe('5.38.0-rc.2');
+    expect(tagToNpmVersion('v5.38.0+meta')).toBe('5.38.0+meta');
+    expect(tagToNpmVersion('5.38.0-alpha.3+build.7')).toBe('5.38.0-alpha.3+build.7');
+  });
+
+  it('falls back to "latest" for branch refs (the real-world bug)', () => {
+    expect(tagToNpmVersion('claude/add-claude-md-installer-WJ2OZ')).toBe('latest');
+    expect(tagToNpmVersion('main')).toBe('latest');
+    expect(tagToNpmVersion('next')).toBe('latest');
+    expect(tagToNpmVersion('feature/some-thing')).toBe('latest');
+  });
+
+  it('falls back to "latest" for commit SHAs', () => {
+    expect(tagToNpmVersion('abc1234')).toBe('latest');
+    expect(tagToNpmVersion('316b0a34eb7ab6e8045c879970537023b2f012c0')).toBe('latest');
+  });
+
+  it('falls back to "latest" for empty / garbage strings', () => {
+    expect(tagToNpmVersion('')).toBe('latest');
+    expect(tagToNpmVersion('not-a-version')).toBe('latest');
+    expect(tagToNpmVersion('5.38')).toBe('latest'); // not full major.minor.patch
+    expect(tagToNpmVersion('v5')).toBe('latest');
   });
 });
