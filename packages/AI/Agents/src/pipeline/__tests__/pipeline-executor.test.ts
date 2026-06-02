@@ -150,6 +150,18 @@ describe('PipelineExecutor (value model)', () => {
         expect(r.diagnostic).toBeUndefined();
     });
 
+    it('flags the map-clobber (all-null result) with a hint, but still SUCCEEDS (no nerf)', async () => {
+        const r = await exec.Execute([
+            { tool: 'Run View', with: {} },
+            { jsonpath: '$.Records' },
+            { map: { as: 'row', do: [{ select: 'NoSuchField' }] } }, // each iteration → null
+        ] as PipelineStage[]);
+        expect(r.success).toBe(true); // informational only — never fails the pipeline
+        expect(r.finalOutput).toEqual([null, null, null]);
+        expect(r.diagnostic).toMatch(/all-null/);
+        expect(r.diagnostic).toMatch(/map.*REPLACES/i);
+    });
+
     it('reports a tool failure fast', async () => {
         const bad = new FakeTool('Run View', null, true);
         const e = new PipelineExecutor(registryWith(bad));

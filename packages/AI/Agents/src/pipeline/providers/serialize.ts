@@ -41,7 +41,34 @@ export function structureArtifactData(data: unknown): PipeValue {
         }
         return env.content as PipeValue; // base64/binary — leave as-is
     }
+    const rows = unwrapRowsEnvelope(data);
+    if (rows !== undefined) {
+        return rows;
+    }
     return coerceMaybeJson(data);
+}
+
+/**
+ * Tabular artifact tools (`get_rows` on CSV / Excel / Data Snapshot / Search Result Set) wrap their
+ * rows in an envelope — `{ rows: [...], total, ... }`. Object-aware operators (`where`/`select`/
+ * `distinct`/`sort`) need a bare array, so unwrap to the rows array directly: the agent shouldn't
+ * have to know the envelope shape and lead every tabular pipeline with `{ "jsonpath": "$.rows[*]" }`.
+ *
+ * Pagination metadata (`total`/`totalRows`/`truncated`) is intentionally dropped from the pipe — the
+ * agent controls paging via the tool's own `start`/`count` params, not by reading it back mid-flow.
+ *
+ * Returns `undefined` (not unwrapped) when `data` isn't a rows-envelope, so the caller falls through.
+ */
+function unwrapRowsEnvelope(data: unknown): PipeValue | undefined {
+    if (
+        data !== null &&
+        typeof data === 'object' &&
+        !Array.isArray(data) &&
+        Array.isArray((data as Record<string, unknown>).rows)
+    ) {
+        return (data as Record<string, PipeValue>).rows;
+    }
+    return undefined;
 }
 
 function isGetFullEnvelope(d: unknown): boolean {

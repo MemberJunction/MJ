@@ -45,8 +45,10 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         '- **Operators** (pure, applied to the upstream value):',
         operators,
         '- **`map`:** `{ "map": { "as": "row", "do": [ ...sub-stages ] } }` — run the sub-pipeline once per ' +
-            'array element (`{{row.field}}` available inside), collecting results. Use this for batch work over ' +
-            'many records in ONE turn.',
+            'array element (`{{row.field}}` available inside). **`map` REPLACES the array with each element\'s ' +
+            'FINAL sub-stage value** — it does NOT add a field to existing rows. Use it for per-element *actions/' +
+            'transforms* (e.g. send an email per row), NOT to compute a column. To filter/sort/aggregate or keep ' +
+            'fields, use the operators directly (`where`/`select`/`sort`/`groupBy`) — no `map` needed.',
         '- **`let`:** `{ "let": { "name": "x", "value": [ ...sub-stages ] } }` — capture a result as `{{x}}` ' +
             'for later stages; the main stream passes through unchanged (use for joins/correlation).',
         '',
@@ -54,6 +56,13 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         'Used by `where`/`select`/`sort`/templates: `Status`, `Customer.Email`, `Results[0].Name`, `Items[*].SKU`. ' +
             '`where` predicates support `== != < > <= >= contains startsWith endsWith matches in` and `and/or/not`, ' +
             'e.g. `Balance > 0 and Status == \'Open\'`.',
+        '',
+        '### Input shapes — operators need an ARRAY',
+        '`where`/`select`/`sort`/`distinct`/`first`/`last` operate on an **array of objects**. Tabular tools ' +
+            '(`get_rows`) already hand you that array of row objects — pipe them straight into `where`/`select`, ' +
+            'no unwrapping needed. If a source instead returns a wrapper object (e.g. `{ "Results": [...] }`), ' +
+            'extract the array first with a `{ "jsonpath": "$.Results[*]" }` stage. When an operator reports ' +
+            '"expects an array but received an object", read the listed keys and add exactly that `jsonpath` stage.',
         '',
         '### Sources available now',
         sourceToolNames.slice(0, MAX_SOURCES_LISTED).map((n) => `\`${n}\``).join(', ') +
@@ -87,6 +96,41 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
                         { where: 'Balance > 0' },
                         { map: { as: 'row', do: [{ tool: sourceToolNames[0], with: { Note: '{{row.ID}}' } }] } },
                         { count: true },
+                    ],
+                },
+            },
+            null,
+            2,
+        ),
+        '```',
+        'Tabular artifact tool — `get_rows` yields the row objects directly; filter and shape them with no unwrapping:',
+        '```json',
+        JSON.stringify(
+            {
+                pipeline: {
+                    steps: [
+                        { tool: 'get_rows', with: { artifactId: 'A', start: 0, count: 500 } },
+                        { where: "Department == 'Engineering' and Status == 'Active'" },
+                        { select: ['EmployeeID', 'Name', 'Region'] },
+                        { distinct: 'Region' },
+                    ],
+                },
+            },
+            null,
+            2,
+        ),
+        '```',
+        'Analytical question over a LARGE file — aggregate server-side, return a tiny summary (the raw ' +
+            'rows never enter your context, so this works even when the file is too big to read whole):',
+        '```json',
+        JSON.stringify(
+            {
+                pipeline: {
+                    steps: [
+                        { tool: 'get_full', with: { artifactId: 'A' } },
+                        { groupBy: { by: 'Category', sum: 'Amount', avg: 'Amount' } },
+                        { sort: '-sum_Amount' },
+                        { first: 10 },
                     ],
                 },
             },

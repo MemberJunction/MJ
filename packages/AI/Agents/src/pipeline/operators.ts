@@ -14,7 +14,7 @@ import { valueToText } from './coerce';
 
 function requireArray(input: PipeValue, op: string): PipeValue[] {
     if (!Array.isArray(input)) {
-        throw new Error(`"${op}" expects an array but received ${describe(input)}.`);
+        throw new Error(`"${op}" expects an array but received ${describe(input)}.${nonArrayHint(input)}`);
     }
     return input;
 }
@@ -23,6 +23,25 @@ function describe(v: PipeValue): string {
     if (Array.isArray(v)) return 'an array';
     if (v === null) return 'null';
     return `a ${typeof v}`;
+}
+
+/**
+ * When an array operator gets a non-array OBJECT, it's almost always because the upstream value is an
+ * envelope wrapping the real collection (e.g. `{ Results: [...] }`). List the keys and, if one holds
+ * an array, suggest the exact `jsonpath` to extract it — so the agent self-corrects next turn from
+ * the message alone (the data isn't in its context). Returns '' for non-objects.
+ */
+function nonArrayHint(input: PipeValue): string {
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+        return '';
+    }
+    const keys = Object.keys(input);
+    const arrayKey = keys.find((k) => Array.isArray((input as Record<string, PipeValue>)[k]));
+    const path = arrayKey ? `$.${arrayKey}[*]` : '$.<field>[*]';
+    return (
+        ` Got an object with keys [${keys.join(', ')}].` +
+        ` If the array is nested under a field, extract it first with a {"jsonpath":"${path}"} stage.`
+    );
 }
 
 function asString(args: unknown, op: string): string {
@@ -60,6 +79,17 @@ function toLines(input: PipeValue): string[] {
     return valueToText(input).split('\n');
 }
 
+type AggOp = 'sum' | 'avg' | 'min' | 'max';
+
+/** Reduce a list of numbers by an aggregation op. Empty → null (no numeric values in the group). */
+function applyAggregate(op: AggOp, nums: number[]): PipeValue {
+    if (nums.length === 0) return null;
+    if (op === 'sum') return nums.reduce((a, b) => a + b, 0);
+    if (op === 'avg') return nums.reduce((a, b) => a + b, 0) / nums.length;
+    if (op === 'min') return Math.min(...nums);
+    return Math.max(...nums);
+}
+
 // ─── object operators ───
 
 const Where: PipelineOperator = {
@@ -88,7 +118,18 @@ const Select: PipelineOperator = {
                 return o;
             }, {});
         };
-        return Array.isArray(input) ? input.map(project) : project(input);
+        if (Array.isArray(input)) {
+            return input.map(project);
+        }
+        // Projecting off a non-array object that has a nested array, where none of the requested
+        // fields exist on the outer object, is the classic "forgot to extract the collection"
+        // mistake — fail loudly with the extraction hint instead of silently returning null (which
+        // would only surface as a confusing error one stage later).
+        const allMissing = fields.every((f) => getValue(input, f) === undefined);
+        if (allMissing && input !== null && typeof input === 'object' && Object.values(input).some(Array.isArray)) {
+            throw new Error(`"select" found none of [${fields.join(', ')}] on this value.${nonArrayHint(input)}`);
+        }
+        return project(input);
     },
 };
 
@@ -148,12 +189,15 @@ const Count: PipelineOperator = {
 const Distinct: PipelineOperator = {
     name: 'distinct',
     description: 'Remove duplicate array elements, optionally by a field path.',
-    argsHint: 'optional field path to dedupe by',
+    argsHint: 'optional field path to dedupe by; omit (or pass true) to dedupe whole elements',
     apply(input, args) {
         const arr = requireArray(input, 'distinct');
+        // A non-empty string arg dedupes by that field path; anything else (omitted, `true`, `{}`)
+        // dedupes by the whole element — so `{ "distinct": true }` after a `select` works as expected.
+        const field = typeof args === 'string' && args.trim() !== '' ? args : null;
         const seen = new Set<string>();
         const keyOf = (el: PipeValue): string =>
-            args ? valueToText(getValue(el, asString(args, 'distinct')) ?? null) : valueToText(el);
+            field ? valueToText(getValue(el, field) ?? null) : valueToText(el);
         return arr.filter((el) => {
             const k = keyOf(el);
             if (seen.has(k)) return false;
@@ -169,6 +213,58 @@ const Flatten: PipelineOperator = {
     argsHint: 'no arguments',
     apply(input) {
         return requireArray(input, 'flatten').flatMap((el) => (Array.isArray(el) ? el : [el]));
+    },
+};
+
+const GroupBy: PipelineOperator = {
+    name: 'groupBy',
+    description:
+        'Group array elements by field(s) and aggregate. Each group gets a "count"; optionally add ' +
+        'sum/avg/min/max of a numeric field (output keys like "sum_Amount"). This is how you answer ' +
+        'analytical questions over large data without returning the rows.',
+    argsHint:
+        'a field path (count per group), or { "by": <field | [fields]>, "sum"?: field, "avg"?: field, "min"?: field, "max"?: field }',
+    apply(input, args) {
+        const arr = requireArray(input, 'groupBy');
+        const cfg: Record<string, unknown> = typeof args === 'string' ? { by: args } : (args as Record<string, unknown>) ?? {};
+        const byList = Array.isArray(cfg.by) ? cfg.by : [cfg.by];
+        if (cfg.by == null || byList.some((f) => typeof f !== 'string' || f.trim() === '')) {
+            throw new Error('groupBy needs a "by" field — the field to group on, e.g. { "by": "Category", "sum": "Amount" }.');
+        }
+        const byFields = byList as string[];
+        const aggSpecs = (['sum', 'avg', 'min', 'max'] as const)
+            .filter((op) => cfg[op] != null)
+            .map((op) => {
+                const field = cfg[op];
+                if (typeof field !== 'string' || field.trim() === '') {
+                    throw new Error(`groupBy "${op}" needs a numeric field name, e.g. { "by": "Category", "${op}": "Amount" }.`);
+                }
+                return { op, field };
+            });
+
+        const groups = new Map<string, { key: { [k: string]: PipeValue }; rows: PipeValue[] }>();
+        for (const el of arr) {
+            const key: { [k: string]: PipeValue } = {};
+            for (const f of byFields) {
+                key[lastSegment(f)] = getValue(el, f) ?? null;
+            }
+            const mapKey = valueToText(byFields.map((f) => getValue(el, f) ?? null));
+            const existing = groups.get(mapKey);
+            if (existing) {
+                existing.rows.push(el);
+            } else {
+                groups.set(mapKey, { key, rows: [el] });
+            }
+        }
+
+        return [...groups.values()].map(({ key, rows }) => {
+            const out: { [k: string]: PipeValue } = { ...key, count: rows.length };
+            for (const { op, field } of aggSpecs) {
+                const nums = rows.map((r) => Number(getValue(r, field))).filter((n) => Number.isFinite(n));
+                out[`${op}_${lastSegment(field)}`] = applyAggregate(op, nums);
+            }
+            return out;
+        });
     },
 };
 
@@ -241,7 +337,7 @@ const Tail: PipelineOperator = {
 };
 
 const ALL: readonly PipelineOperator[] = [
-    Where, Select, Sort, First, Last, Count, Distinct, Flatten, JsonPath, Lines, Grep, Head, Tail,
+    Where, Select, Sort, First, Last, Count, Distinct, Flatten, GroupBy, JsonPath, Lines, Grep, Head, Tail,
 ];
 
 const BY_NAME: ReadonlyMap<string, PipelineOperator> = new Map(ALL.map((o) => [o.name, o]));

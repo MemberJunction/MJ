@@ -60,7 +60,7 @@ export class PipelineExecutor {
         const scope: TemplateScope = {};
         let current: PipeValue = null;
         this.producedBytes = 0;
-        let firstZeroMatch: string | undefined;
+        let firstDiagnostic: string | undefined;
 
         for (let i = 0; i < stages.length; i++) {
             const inputValue = current;
@@ -68,15 +68,16 @@ export class PipelineExecutor {
             const startedAt = Date.now();
             const outcome = await this.runStage(stages[i], current, scope);
             const durationMs = Date.now() - startedAt;
-            // A stage that turns a non-empty array into an empty one usually means a wrong
-            // field name / value casing — capture a self-correction hint so the agent doesn't
-            // blindly retry the same predicate.
-            const zeroMatch =
-                outcome.success && Array.isArray(inputValue) && inputValue.length > 0 && isEmpty(outcome.output)
-                    ? `Stage ${i + 1} ("${outcome.toolName}") ${describeEmptyMatch(inputValue)}`
-                    : undefined;
-            if (zeroMatch && !firstZeroMatch) {
-                firstZeroMatch = zeroMatch;
+            // A stage that turns a non-empty array into nothing useful — empty, or all-null
+            // elements (the classic `map` clobber: `map` REPLACES the stream with each iteration's
+            // final value, so a throwaway last sub-stage nulls every row) — is almost always a logic
+            // error. Capture a self-correction hint so the agent fixes it next turn instead of
+            // blindly retrying. Purely informational: it NEVER fails or alters the pipeline.
+            const diagnostic = outcome.success
+                ? stageDegenerationHint(stages[i], inputValue, outcome.output, outcome.toolName, i + 1)
+                : undefined;
+            if (diagnostic && !firstDiagnostic) {
+                firstDiagnostic = diagnostic;
             }
             records.push({
                 index: i,
@@ -87,7 +88,7 @@ export class PipelineExecutor {
                 durationMs,
                 success: outcome.success,
                 error: outcome.error,
-                diagnostic: zeroMatch,
+                diagnostic,
                 logRef: {
                     providerKind: outcome.providerKind,
                     actionExecutionLogId: outcome.actionExecutionLogId,
@@ -107,10 +108,9 @@ export class PipelineExecutor {
             finalOutput: current,
             steps: records,
             contextBytesSaved: this.computeSaved(current),
-            // Only surface the hint when the final result is actually empty (the agent likely
-            // expected matches); a deliberate empty result mid-pipeline that's later repopulated
-            // shouldn't nag.
-            diagnostic: isEmpty(current) ? firstZeroMatch : undefined,
+            // Surface the hint only when the FINAL result is itself degenerate (empty, or all-null
+            // elements); a deliberate empty result mid-pipeline that's later repopulated shouldn't nag.
+            diagnostic: looksDegenerate(current) ? firstDiagnostic : undefined,
         };
     }
 
@@ -300,6 +300,55 @@ function isEmpty(v: PipeValue): boolean {
     if (Array.isArray(v)) return v.length === 0;
     if (typeof v === 'string') return v.length === 0;
     return false;
+}
+
+/** An object with keys whose values are ALL null — a hollow row (e.g. `select`-ing absent fields). */
+function isAllNullObject(v: PipeValue): boolean {
+    return (
+        v !== null &&
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        Object.keys(v).length > 0 &&
+        Object.values(v).every((x) => x == null)
+    );
+}
+
+/** Degenerate = empty, OR a non-empty array whose every element is null / a hollow all-null object. */
+function looksDegenerate(v: PipeValue): boolean {
+    if (isEmpty(v)) return true;
+    if (Array.isArray(v) && v.length > 0) {
+        return v.every((el) => el == null || isAllNullObject(el));
+    }
+    return false;
+}
+
+/**
+ * Self-correction hint for a stage that took a non-empty array and produced nothing useful — purely
+ * informational, never alters execution. Two cases: (1) filtered down to empty (likely a wrong field
+ * name / value casing → list the values present); (2) turned every element into null, the classic
+ * `map` misuse (map REPLACES the stream with each iteration's final value — it does not add a field).
+ */
+function stageDegenerationHint(
+    stage: PipelineStage,
+    inputValue: PipeValue,
+    output: PipeValue,
+    toolName: string,
+    oneBasedIndex: number,
+): string | undefined {
+    if (!Array.isArray(inputValue) || inputValue.length === 0) {
+        return undefined;
+    }
+    if (isEmpty(output)) {
+        return `Stage ${oneBasedIndex} ("${toolName}") ${describeEmptyMatch(inputValue)}`;
+    }
+    if (Array.isArray(output) && output.length > 0 && output.every((el) => el == null || isAllNullObject(el))) {
+        const why =
+            'map' in stage
+                ? ' "map" REPLACES the array with each iteration\'s FINAL sub-stage value — it does NOT add a field to existing rows. Its last sub-stage returned null for every element. To add/keep fields, use select/groupBy directly; use map only for per-element actions.'
+                : ' Check the field name/path — it resolved to null for every element (case-sensitive).';
+        return `Stage ${oneBasedIndex} ("${toolName}") turned ${inputValue.length} item(s) into all-null.${why}`;
+    }
+    return undefined;
 }
 
 /** Best-effort verb label for a stage (for error messages). */

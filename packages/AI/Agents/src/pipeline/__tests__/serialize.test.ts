@@ -21,3 +21,18 @@ describe('structureArtifactData (get_full envelope unwrap)', () => {
         expect(structureArtifactData({ matches: [1, 2] })).toEqual({ matches: [1, 2] });
     });
 });
+
+describe('structureArtifactData (get_rows envelope unwrap)', () => {
+    it('unwraps a {rows} tabular envelope to the bare rows array', () => {
+        const envelope = { start: 0, count: 2, total: 2, rows: [{ ID: '1' }, { ID: '2' }] };
+        expect(structureArtifactData(envelope)).toEqual([{ ID: '1' }, { ID: '2' }]);
+    });
+    it('unwraps regardless of the surrounding pagination keys (rows is the signal)', () => {
+        const envelope = { rows: [{ x: 1 }], totalRows: 1, truncated: false };
+        expect(structureArtifactData(envelope)).toEqual([{ x: 1 }]);
+    });
+    it('does not unwrap when rows is absent or not an array', () => {
+        expect(structureArtifactData({ rows: 'nope', total: 1 })).toEqual({ rows: 'nope', total: 1 });
+        expect(structureArtifactData({ data: [1, 2] })).toEqual({ data: [1, 2] });
+    });
+});

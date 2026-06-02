@@ -39,6 +39,34 @@ describe('object operators', () => {
         expect(apply('distinct', [1, 1, 2, 3, 3])).toEqual([1, 2, 3]);
         expect((apply('distinct', rows, 'Status') as unknown[]).length).toBe(2);
     });
+    it('distinct with true / no-arg dedupes whole elements (not treated as a field path)', () => {
+        // `select` then `{ "distinct": true }` is a common LLM shape — must not throw
+        expect(apply('distinct', ['Netflix', 'Steam', 'Netflix', 'Nike'], true)).toEqual(['Netflix', 'Steam', 'Nike']);
+        expect(apply('distinct', ['a', 'a', 'b'])).toEqual(['a', 'b']);
+        expect(apply('distinct', [{ x: 1 }, { x: 1 }, { x: 2 }], true)).toEqual([{ x: 1 }, { x: 2 }]);
+    });
+    it('groupBy counts per group (bare field) and aggregates sum/avg', () => {
+        const txns = [
+            { Category: 'Dining', Amount: 10 },
+            { Category: 'Dining', Amount: 20 },
+            { Category: 'Travel', Amount: 100 },
+        ];
+        expect(apply('groupBy', txns, 'Category')).toEqual([
+            { Category: 'Dining', count: 2 },
+            { Category: 'Travel', count: 1 },
+        ]);
+        expect(apply('groupBy', txns, { by: 'Category', sum: 'Amount', avg: 'Amount' })).toEqual([
+            { Category: 'Dining', count: 2, sum_Amount: 30, avg_Amount: 15 },
+            { Category: 'Travel', count: 1, sum_Amount: 100, avg_Amount: 100 },
+        ]);
+    });
+    it('groupBy requires an array', () => {
+        expect(() => apply('groupBy', { Category: 'x' }, 'Category')).toThrow(/expects an array/);
+    });
+    it('groupBy gives a friendly error when "by" is missing or an agg field is bad', () => {
+        expect(() => apply('groupBy', [{ a: 1 }], { sum: 'a' })).toThrow(/needs a "by" field/);
+        expect(() => apply('groupBy', [{ a: 1 }], { by: 'a', sum: 123 })).toThrow(/groupBy "sum" needs a numeric field name/);
+    });
     it('flatten one level', () => {
         expect(apply('flatten', [[1, 2], [3], 4])).toEqual([1, 2, 3, 4]);
     });
@@ -48,6 +76,20 @@ describe('object operators', () => {
     });
     it('where throws a clear error on non-array', () => {
         expect(() => apply('where', { x: 1 }, 'x == 1')).toThrow(/expects an array/);
+    });
+    it('array-op error on an envelope object lists keys + suggests the jsonpath to extract', () => {
+        const envelope = { start: 0, total: 2, rows: [{ ID: '1' }] };
+        expect(() => apply('where', envelope, "ID == '1'")).toThrow(/keys \[start, total, rows\]/);
+        expect(() => apply('where', envelope, "ID == '1'")).toThrow(/jsonpath":"\$\.rows\[\*\]"/);
+    });
+    it('select fails loudly (not silent null) when given an envelope whose fields are all absent', () => {
+        const envelope = { start: 0, total: 2, rows: [{ Region: 'North' }] };
+        // "Region" lives inside rows[*], not on the envelope — must error, not return null
+        expect(() => apply('select', envelope, 'Region')).toThrow(/found none of \[Region\]/);
+        expect(() => apply('select', envelope, 'Region')).toThrow(/\$\.rows\[\*\]/);
+    });
+    it('select still projects from a legit single object', () => {
+        expect(apply('select', { ID: '1', Name: 'x' }, ['ID', 'Name'])).toEqual({ ID: '1', Name: 'x' });
     });
 });
 

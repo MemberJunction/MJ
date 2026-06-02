@@ -4078,9 +4078,10 @@ The context is now within limits. Please retry your request with the recovered c
         const body = toolResults.map((r, i) => {
             const heading = `### ${i + 1}. ${r.artifactId}.${r.tool}(${JSON.stringify(r.input)})`;
             if (r.result.success) {
-                const data = typeof r.result.data === 'string'
+                const raw = typeof r.result.data === 'string'
                     ? r.result.data
                     : JSON.stringify(r.result.data, null, 2);
+                const data = this.capStandaloneToolResultText(raw);
                 return `${heading}\n\`\`\`json\n${data}\n\`\`\``;
             }
             return `${heading}\n**Error:** ${r.result.errorMessage}`;
@@ -4104,6 +4105,41 @@ The context is now within limits. Please retry your request with the recovered c
             },
         };
         params.conversationMessages.push(message);
+    }
+
+    /**
+     * Character budget (~4 chars/token) for a SINGLE standalone artifact-tool result injected into
+     * the conversation. A `get_full` on a large artifact can otherwise dump the whole thing into
+     * context and overflow the model's window — the exact failure pipelines exist to avoid. Override
+     * in a subclass to tune. Pipelines are unaffected: their intermediate results never flow through
+     * here, and the executor already caps a pipeline's final output.
+     *
+     * @protected
+     */
+    protected get maxStandaloneToolResultChars(): number {
+        return 100_000; // ~25k tokens
+    }
+
+    /**
+     * Bound a standalone tool result to {@link maxStandaloneToolResultChars}: return a head slice
+     * plus a redirect that teaches the agent to page (`get_rows`) or reduce (`pipeline`) instead of
+     * reading a whole large artifact. Mirrors how read/search tools cap output at the tool boundary.
+     *
+     * @protected
+     */
+    protected capStandaloneToolResultText(text: string): string {
+        const budget = this.maxStandaloneToolResultChars;
+        if (text.length <= budget) {
+            return text;
+        }
+        const omitted = text.length - budget;
+        return (
+            text.slice(0, budget) +
+            `\n\n…[truncated ${omitted.toLocaleString()} chars. This artifact is too large to read whole ` +
+            `(~${Math.round(text.length / 4000)}k tokens) — reading it in full overflows the context window. ` +
+            `Instead: page it with get_rows(start, count), or run a pipeline that filters/aggregates it ` +
+            `server-side (where / select / groupBy → only the small final result returns to you).]`
+        );
     }
 
     /**
@@ -4177,14 +4213,10 @@ The context is now within limits. Please retry your request with the recovered c
         const registry = this.buildPipelineRegistry(params);
         const result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
 
-        // Surface each pipeline step as a native child run-step nested under the Pipeline parent,
-        // so the run tree shows the individual source/transform invocations (action steps link to
-        // their ActionExecutionLog).
-        const stages = pipeline.steps as PipelineStage[];
-        for (const record of result.steps) {
-            await this.createPipelineChildStep(stepEntity.ID, stages[record.index], record, params);
-        }
-
+        // A pipeline is ONE run-step — not a parent + a child step per stage. It runs server-side in
+        // a single fast pass, so the per-stage breakdown lives in this step's OutputData (and the
+        // first-class `MJ: Pipeline Run Steps` rows) for a future UI to visualize, rather than as N
+        // extra AIAgentRunStep rows that multiply DB writes for no tree-navigation benefit.
         await this.finalizeStepEntity(stepEntity, result.success, result.success ? undefined : result.error, {
             success: result.success,
             steps: result.steps,
@@ -4194,31 +4226,6 @@ The context is now within limits. Please retry your request with the recovered c
 
         await this.persistPipelineRun(pipeline, result, params);
         return result;
-    }
-
-    /** Emits one pipeline step as a child `Tool` run-step under the Pipeline parent for run-tree visibility. */
-    protected async createPipelineChildStep(
-        parentId: string,
-        stage: PipelineStage | undefined,
-        record: PipelineExecutionResult['steps'][number],
-        params: ExecuteAgentParams,
-    ): Promise<void> {
-        const childStep = await this.createStepEntity({
-            stepType: 'Tool',
-            stepName: `Pipeline Stage ${record.index + 1}: ${record.toolName} (${record.providerKind})`,
-            contextUser: params.contextUser,
-            parentId,
-            targetLogId: record.logRef.actionExecutionLogId,
-            inputData: { stage, providerKind: record.providerKind },
-        });
-        await this.finalizeStepEntity(childStep, record.success, record.error, {
-            providerKind: record.providerKind,
-            inputSize: record.inputSize,
-            outputSize: record.outputSize,
-            durationMs: record.durationMs,
-            preview: record.logRef.preview,
-            actionExecutionLogID: record.logRef.actionExecutionLogId,
-        });
     }
 
     /**
