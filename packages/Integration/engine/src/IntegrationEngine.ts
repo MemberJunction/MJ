@@ -89,17 +89,22 @@ export class SchemaNotGeneratedError extends Error {
 }
 
 /**
- * Returns a SchemaNotGeneratedError if the given Save() failure message
- * matches the SP-not-found pattern. Otherwise returns null. The pattern
- * comes from SQL Server's `Could not find stored procedure '<schema>.<name>'`
- * — when CodeGen hasn't created the spCreate/spUpdate/spDelete for an
- * entity, BaseEntity.Save() returns false and the SP-not-found error
- * lands in entity.LatestResult.CompleteMessage.
+ * Returns a SchemaNotGeneratedError if the given Save() failure message matches the
+ * "CRUD routine doesn't exist yet" pattern for either dialect, otherwise null. When
+ * CodeGen hasn't created the spCreate/spUpdate/spDelete for an entity, BaseEntity.Save()
+ * returns false and the routine-not-found error lands in LatestResult.CompleteMessage:
+ *   - SQL Server: `Could not find stored procedure '<schema>.<name>'`
+ *   - PostgreSQL: `function <schema>.<name>(<args>) does not exist` (SQLSTATE 42883)
+ * The PG form is what a connector entity in a custom schema hits before its CRUD
+ * functions are generated, so it must be classified too (else the run produces
+ * per-record errors instead of one fail-fast SchemaNotGeneratedError).
  */
 function detectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
-    const match = errorMessage.match(/Could not find stored procedure '([^']+)'/i);
-    if (!match) return null;
-    return new SchemaNotGeneratedError(entityName, match[1]);
+    const sqlServer = errorMessage.match(/Could not find stored procedure '([^']+)'/i);
+    if (sqlServer) return new SchemaNotGeneratedError(entityName, sqlServer[1]);
+    const postgres = errorMessage.match(/function\s+([^(\s]+)\s*\([^)]*\)\s+does not exist/i);
+    if (postgres) return new SchemaNotGeneratedError(entityName, postgres[1]);
+    return null;
 }
 
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
