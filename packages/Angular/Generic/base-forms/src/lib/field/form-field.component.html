@@ -96,8 +96,10 @@
       <div class="mj-forms-field-control">
         <!-- Foreign Key fields get custom search autocomplete -->
         @if (HasRelatedEntity) {
-          <div class="mj-fk-search" [class.mj-fk-search--matched]="FKHasLinkedValue">
-            @if (FKHasLinkedValue) {
+          <div class="mj-fk-search"
+              [class.mj-fk-search--matched]="FKHasLinkedValue"
+              [class.mj-fk-search--scoped]="FKFocused && FKSearchableFields.length > 1">
+            @if (FKHasLinkedValue && !(FKFocused && FKSearchableFields.length > 1)) {
               <i class="fa-solid fa-link mj-fk-link-icon" title="Linked record"></i>
             }
             <input type="text"
@@ -109,6 +111,21 @@
               (blur)="OnFKBlur()"
               (keydown)="OnFKKeydown($event)"
               placeholder="Search...">
+
+            <!-- Scope pill: only while focused, only when there's more than one searchable field.
+                 The menu itself lives INSIDE the results dropdown (below) so it overlays the
+                 list and rides the same above/below flip. -->
+            @if (FKFocused && FKSearchableFields.length > 1) {
+              <button class="mj-fk-scope-pill"
+                  [class.mj-fk-scope-pill--open]="FKShowScopeMenu"
+                  (mousedown)="OnFKScopeToggle($event)"
+                  [title]="'Searching ' + FKSearchFieldLabel + ' — click to change'">
+                <i class="fa-solid fa-magnifying-glass mj-fk-scope-pill-icon"></i>
+                <span class="mj-fk-scope-pill-label">{{ FKSearchFieldLabel }}</span>
+                <i class="fa-solid mj-fk-scope-pill-caret" [class.fa-chevron-up]="FKShowScopeMenu" [class.fa-chevron-down]="!FKShowScopeMenu"></i>
+              </button>
+            }
+
             @if (FKSearchText) {
               <button class="mj-fk-clear" (mousedown)="OnFKClearClick($event)" title="Clear">
                 <i class="fa-solid fa-xmark"></i>
@@ -117,7 +134,50 @@
               <i class="fa-solid fa-magnifying-glass mj-fk-search-icon"></i>
             }
             @if (ShowFKDropdown) {
-              <div class="mj-fk-dropdown mj-fk-dropdown--multi" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
+              <div class="mj-fk-dropdown mj-fk-dropdown--multi"
+                  [ngStyle]="DropdownPositionStyle"
+                  [class.mj-fk-dropdown--above]="OpenAbove"
+                  [class.mj-fk-dropdown--scope-open]="FKShowScopeMenu">
+
+                <!-- Scope (search-field) picker + column toggles — overlays the list, anchored to the pill edge.
+                     Click a row to SEARCH that field; click the eye to SHOW/HIDE it as a column. -->
+                @if (FKShowScopeMenu) {
+                  <div class="mj-fk-scope-menu" [class.mj-fk-scope-menu--bottom]="OpenAbove">
+                    <div class="mj-fk-scope-grp">Columns shown</div>
+                    @for (f of FKSearchableFields; track f.FieldName) {
+                      @if (f.Group === 'shown') {
+                        <ng-container *ngTemplateOutlet="scopeRow; context: { $implicit: f }"></ng-container>
+                      }
+                    }
+                    @if (FKHasOtherSearchableFields) {
+                      <div class="mj-fk-scope-divider"></div>
+                      <div class="mj-fk-scope-grp">Other fields</div>
+                      @for (f of FKSearchableFields; track f.FieldName) {
+                        @if (f.Group === 'other') {
+                          <ng-container *ngTemplateOutlet="scopeRow; context: { $implicit: f }"></ng-container>
+                        }
+                      }
+                    }
+                  </div>
+                }
+
+                <!-- Shared scope-menu row: click = search this field; eye = show/hide as a column. -->
+                <ng-template #scopeRow let-f>
+                  <div class="mj-fk-scope-mi" [class.mj-fk-scope-mi--on]="IsFKScopeActive(f)" (mousedown)="OnFKScopeSelect($event, f)">
+                    <i [class]="f.Icon"></i>
+                    <span class="mj-fk-scope-mi-label">{{ f.Label }}</span>
+                    @if (IsFKScopeActive(f)) { <i class="fa-solid fa-check mj-fk-scope-mi-check" title="Searching this field"></i> }
+                    @if (CanToggleFKColumn(f)) {
+                      <button type="button" class="mj-fk-col-toggle"
+                          [class.mj-fk-col-toggle--on]="IsFKColumnVisible(f)"
+                          (mousedown)="OnFKColumnToggle($event, f)"
+                          [title]="IsFKColumnVisible(f) ? 'Hide this column' : 'Show as a column'">
+                        <i class="fa-solid" [class.fa-eye]="IsFKColumnVisible(f)" [class.fa-eye-slash]="!IsFKColumnVisible(f)"></i>
+                      </button>
+                    }
+                  </div>
+                </ng-template>
+
                 @if (FKLoading) {
                   <div class="mj-fk-status">
                     <i class="fa-solid fa-circle-notch fa-spin"></i>
@@ -141,11 +201,13 @@
                         <div class="mj-fk-hcell" (mousedown)="OnFKHeaderClick($event, FKNameField)" title="Sort by Name">
                           <span class="mj-fk-hcell-label">Name</span>
                           <i [class]="FKSortIcon(FKNameField)"></i>
+                          <span class="mj-fk-resizer" (mousedown)="OnFKColResizeStart($event, FKNameField)" title="Drag to resize"></span>
                         </div>
                         @for (header of FKColumnHeaders; track header; let i = $index) {
                           <div class="mj-fk-hcell" (mousedown)="OnFKHeaderClick($event, FKColumnFields[i])" [title]="'Sort by ' + header">
                             <span class="mj-fk-hcell-label">{{ header }}</span>
                             <i [class]="FKSortIcon(FKColumnFields[i])"></i>
+                            <span class="mj-fk-resizer" (mousedown)="OnFKColResizeStart($event, FKColumnFields[i])" title="Drag to resize"></span>
                           </div>
                         }
                       </div>
@@ -168,7 +230,7 @@
                             <span [innerHTML]="suggestion.HighlightedName"></span>
                           </div>
                           @for (col of suggestion.ExtraColumns; track col.FieldName) {
-                            <div class="mj-fk-cell" [title]="col.Value">{{ col.Value }}</div>
+                            <div class="mj-fk-cell" [title]="col.Value"><span [innerHTML]="col.HighlightedValue"></span></div>
                           }
                         </div>
                       }

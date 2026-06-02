@@ -392,6 +392,186 @@
 }
 
 /* ============================================
+   SCOPE PILL + FIELD-PICKER MENU (search-field scope)
+   ============================================ */
+/* When the pill is showing, reserve room on the right of the input for it. */
+.mj-fk-search--scoped .mj-forms-field-input {
+  padding-right: 150px;
+}
+
+.mj-fk-scope-pill {
+  position: absolute;
+  right: 30px;
+  /* Vertically centered in the input so it clears the focus underline below. */
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 120px;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  color: var(--mj-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  /* Kept short so it clears the input's focus underline without making the row taller. */
+  padding: 1px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.35;
+  transition: background var(--mj-transition-base), border-color var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-scope-pill:hover,
+.mj-fk-scope-pill--open {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-primary);
+}
+
+.mj-fk-scope-pill-icon {
+  font-size: 9px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.mj-fk-scope-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-fk-scope-pill-caret {
+  font-size: 8px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* The menu is rendered INSIDE the results dropdown panel so it overlays the list
+   (correct z-order, no extra real estate) and rides the dropdown's above/below
+   flip. Anchored to the dropdown's top-right — right under the pill. */
+.mj-fk-scope-menu {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 5;
+  min-width: 180px;
+  max-width: calc(100vw - 24px);
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-shadow-lg);
+  padding: 5px;
+  animation: mj-dropdown-in 120ms ease;
+}
+
+/* When the dropdown opens ABOVE the input, anchor the menu to its bottom edge so it
+   stays next to the pill (which is at the input/dropdown boundary). */
+.mj-fk-scope-menu--bottom {
+  top: auto;
+  bottom: 4px;
+}
+
+.mj-fk-scope-grp {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  padding: 7px 10px 4px;
+  font-weight: 700;
+}
+
+.mj-fk-scope-mi {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border-radius: 5px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.mj-fk-scope-mi:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-fk-scope-mi--on {
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+
+.mj-fk-scope-mi > i:first-child {
+  width: 14px;
+  font-size: 11px;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.mj-fk-scope-mi-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-fk-scope-mi-check {
+  font-size: 10px;
+  opacity: 1 !important;
+}
+
+/* Eye toggle: show/hide a field as a grid column (independent of search scope). */
+.mj-fk-col-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-col-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
+}
+
+.mj-fk-col-toggle--on {
+  color: var(--mj-brand-primary);
+}
+
+.mj-fk-scope-divider {
+  height: 1px;
+  background: var(--mj-border-subtle);
+  margin: 4px 6px;
+}
+
+/* Narrow / mobile screens: shrink the pill + its reserved space, give menu rows a
+   larger touch target, and keep the menu within the viewport. */
+@media (max-width: 560px) {
+  .mj-fk-search--scoped .mj-forms-field-input {
+    padding-right: 116px;
+  }
+  .mj-fk-scope-pill {
+    max-width: 88px;
+  }
+  .mj-fk-scope-menu {
+    min-width: 160px;
+  }
+  .mj-fk-scope-mi {
+    padding: 10px 10px;
+  }
+}
+
+/* ============================================
    FLOATING DROPDOWN PANEL (position: fixed via ngStyle)
    ============================================ */
 .mj-fk-dropdown {
@@ -450,6 +630,12 @@
 .mj-fk-dropdown--multi .mj-fk-options {
   overflow: auto;
   max-height: 260px;
+}
+
+/* While the scope menu is open it must escape the panel's clip (the inner
+   .mj-fk-options keeps its own scroll, so the grid still behaves). */
+.mj-fk-dropdown--scope-open {
+  overflow: visible;
 }
 
 /* One CSS grid spans the header + all data rows so every column lines up.
@@ -532,6 +718,15 @@
   cursor: pointer;
 }
 
+/* Wrapping span keeps the highlighted text+<mark> as one inline run (so flex
+   doesn't strip the space next to the mark) while still truncating with ellipsis. */
+.mj-fk-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .mj-fk-cell--icon {
   justify-content: center;
   padding: 8px;
@@ -571,11 +766,43 @@
 }
 
 /* Matched-substring highlight inside the name column */
-.mj-fk-cell--name :global(.mj-forms-search-highlight) {
-  background-color: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
-  color: var(--mj-text-primary);
+/* ::ng-deep (not :global, which Angular's emulated encapsulation ignores) so the
+   style reaches the <mark> injected via [innerHTML]. Color comes from the shared
+   theme token so light/dark/white-label all control it centrally. */
+.mj-fk-cell--name ::ng-deep .mj-forms-search-highlight,
+.mj-fk-cell ::ng-deep .mj-forms-search-highlight {
+  background-color: var(--mj-search-highlight-bg);
+  color: var(--mj-search-highlight-text);
   border-radius: 2px;
-  font-weight: 700;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
+/* Column resize handle — thin grab strip on the right edge of each header cell. */
+.mj-fk-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.mj-fk-resizer::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: 2px;
+  width: 2px;
+  height: 60%;
+  background: transparent;
+  transition: background var(--mj-transition-base);
+}
+
+.mj-fk-hcell:hover .mj-fk-resizer::after,
+.mj-fk-resizer:hover::after {
+  background: var(--mj-border-strong);
 }
 
 /* Loading / empty status rows */
@@ -609,13 +836,14 @@
 /* ============================================
    SEARCH HIGHLIGHTING
    ============================================ */
-.mj-forms-field-label :global(.mj-forms-search-highlight) {
-  background-color: var(--mj-color-warning-200, #fef08a);
-  color: var(--mj-color-warning-800, #854d0e);
-  padding: 0;
+.mj-forms-field-label ::ng-deep .mj-forms-search-highlight {
+  /* Shared search-highlight theme token. ::ng-deep (not :global) so it reaches
+     innerHTML content. */
+  background-color: var(--mj-search-highlight-bg);
+  color: var(--mj-search-highlight-text);
   border-radius: 2px;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px var(--mj-color-warning-200, #fef08a);
+  padding: 0 1px;
+  font-weight: 600;
 }
 
 /* ============================================
@@ -721,7 +949,7 @@
 
 /* Warning message colors */
 .mj-forms-field-validation--warning .mj-forms-field-validation-item {
-  color: var(--mj-color-warning-700);
+  color: var(--mj-status-warning-text);
 }
 
 .mj-forms-field-validation--warning .mj-forms-field-validation-item i {

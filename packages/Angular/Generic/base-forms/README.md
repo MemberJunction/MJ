@@ -9,6 +9,12 @@ per-surface code and no regeneration.
 > — the big picture, how generated/custom/interactive forms coexist, and how to
 > use every surface. This README is a quick map of the package.
 
+> **Using these as general-purpose database controls (outside a form)?**
+> See **[STANDALONE_USAGE.md](./STANDALONE_USAGE.md)** — `<mj-form-field>`,
+> `<mj-entity-form-host>`, the overlay shells, `<mj-explorer-entity-data-grid>`, and
+> `<mj-collapsible-panel>` are all data-bindable controls you can drop into any
+> Angular component with just a `BaseEntity` and an import of `BaseFormsModule`.
+
 ## What's in here
 
 | Area | Key exports | Notes |

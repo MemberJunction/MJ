@@ -12,6 +12,13 @@ slide-in panels — from **one** set of forms, with **no per-surface code** and
 > **`EntityFormConfig`** — which the form container reads through the form
 > reference, so generated templates never change.
 
+> **Just want the controls, not the form?** `<mj-form-field>`,
+> `<mj-entity-form-host>`, `<mj-explorer-entity-data-grid>`, `<mj-collapsible-panel>`,
+> and the overlay shells are **general-purpose, data-bindable database controls** —
+> drop them into any Angular component with a `BaseEntity` and an import of
+> `BaseFormsModule`. See
+> [packages/Angular/Generic/base-forms/STANDALONE_USAGE.md](../packages/Angular/Generic/base-forms/STANDALONE_USAGE.md).
+
 ---
 
 ## 1. The big picture

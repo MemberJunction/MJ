@@ -6,6 +6,7 @@ import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, Rich
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormatFKCell, FilterCachedFKRows } from './fk-search-utils';
+import { LinkedFieldOptionsStore } from './linked-field-options';
 
 /**
  * How a field's value should be rendered/edited beyond a plain input.
@@ -26,6 +27,27 @@ export interface FKSuggestionColumn {
   Header: string;
   /** Pre-formatted display value for this row+column. */
   Value: string;
+  /**
+   * {@link Value} with the query substring highlighted when this column is the one
+   * being searched (else plain, still HTML-escaped). Bound to `[innerHTML]`.
+   */
+  HighlightedValue: string;
+}
+
+/**
+ * A field the user can scope the FK search to, shown in the scope-picker menu.
+ * `Group` separates the columns visible in the grid ('shown') from other
+ * searchable fields like ID/Status ('other').
+ */
+export interface FKSearchableField {
+  /** Related-entity field code name to search against. */
+  FieldName: string;
+  /** Friendly label (DisplayNameOrName) shown in the menu + scope pill. */
+  Label: string;
+  /** FontAwesome icon class for the menu row. */
+  Icon: string;
+  /** Which menu group this field belongs to. */
+  Group: 'shown' | 'other';
 }
 
 /**
@@ -464,10 +486,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /**
    * Whether to highlight the typed query substring within each suggestion's name
-   * in the FK dropdown. Off by default (plain names); set true to enable the
-   * `<mark>` highlight.
+   * in the FK dropdown. On by default — uses the muted, theme-aware
+   * `--mj-status-warning` highlight (not the old bright yellow). Set false for
+   * plain, un-marked names.
    */
-  @Input() FKHighlightMatches = false;
+  @Input() FKHighlightMatches = true;
 
   /** Cleanup function for scroll/resize listeners */
   private _scrollCleanup: (() => void) | null = null;
@@ -678,6 +701,36 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Cached column plan for the current related entity (rebuilt on demand). */
   private _fkColumnPlan: FKColumnPlan | null = null;
 
+  // ---- Scope / search-field picker (Option B) ----
+
+  /** Related-entity field code name currently searched against (defaults to the name field). */
+  FKSearchField = '';
+
+  /** Friendly label of {@link FKSearchField}, shown on the scope pill. */
+  FKSearchFieldLabel = '';
+
+  /** Whether the scope-picker menu is open. */
+  FKShowScopeMenu = false;
+
+  /** Whether the FK input is focused — the scope pill only appears while focused. */
+  FKFocused = false;
+
+  /** Fields the user can scope the search to (name + shown columns + other fields). */
+  FKSearchableFields: FKSearchableField[] = [];
+
+  // ---- Per-user persisted prefs (scope / sort / column widths) ----
+
+  /** User-resized column widths in px, keyed by related-entity field code name. */
+  private _fkColWidths: Record<string, number> = {};
+
+  /** The (host entity|field) pref key currently loaded; reload when it changes. */
+  private _fkPrefKey: string | null = null;
+
+  /** Active column-resize drag, or null when not resizing. */
+  private _fkResize: { field: string; startX: number; startWidth: number } | null = null;
+  private _fkResizeMove: ((e: MouseEvent) => void) | null = null;
+  private _fkResizeUp: (() => void) | null = null;
+
   /** The display text shown in the FK search input */
   get FKSearchText(): string {
     if (this._fkInputText !== null) return this._fkInputText;
@@ -733,7 +786,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * or has no usable name/PK.
    */
   private buildColumnPlan(): FKColumnPlan | null {
-    if (this._fkColumnPlan) return this._fkColumnPlan;
+    if (this._fkColumnPlan) {
+      this.ensureLinkedFieldPrefsLoaded(this._fkColumnPlan);
+      return this._fkColumnPlan;
+    }
 
     const relatedEntity = this.getRelatedEntityInfo();
     if (!relatedEntity) return null;
@@ -750,13 +806,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const iconField = relatedEntity.Fields.find(f => f.ExtendedType === 'Icon');
     const iconFieldName = iconField?.Name ?? null;
 
-    const extra = relatedEntity.Fields.filter(f =>
-      f.DefaultInView &&
-      f.Name !== nameFieldName &&
-      f.Name !== pkFieldName &&
-      f.Name !== iconFieldName &&
-      this.isUsefulExtraColumn(f)
-    );
+    const extra = this.computeExtraColumns(relatedEntity, nameFieldName, pkFieldName, iconFieldName);
 
     this._fkColumnPlan = {
       NameFieldName: nameFieldName,
@@ -766,6 +816,8 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       IconFieldName: iconFieldName,
       EntityIcon: relatedEntity.Icon || null
     };
+    this.FKSearchableFields = this.buildSearchableFields(this._fkColumnPlan);
+    this.ensureLinkedFieldPrefsLoaded(this._fkColumnPlan);
     return this._fkColumnPlan;
   }
 
@@ -783,6 +835,123 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return true;
   }
 
+  /**
+   * The extra (non-name) columns to render. Honors a user `visibleFields` override
+   * (exact set + order, letting them add fields like ID or drop defaults); otherwise
+   * falls back to the entity's `DefaultInView` columns (minus FK/PK noise).
+   */
+  private computeExtraColumns(
+    relatedEntity: EntityInfo, nameFieldName: string, pkFieldName: string, iconFieldName: string | null
+  ): EntityFieldInfo[] {
+    const notReserved = (f: EntityFieldInfo) =>
+      f.Name !== nameFieldName && f.Name !== pkFieldName && f.Name !== iconFieldName;
+
+    const saved = this.fkHostEntityName && this.fkFieldCodeName
+      ? LinkedFieldOptionsStore.Instance.Get(this.fkHostEntityName, this.fkFieldCodeName) : undefined;
+
+    if (saved?.visibleFields) {
+      // User override: map saved code names → fields, in saved order, keep only valid/non-reserved.
+      return saved.visibleFields
+        .map(n => relatedEntity.Fields.find(f => f.Name === n))
+        .filter((f): f is EntityFieldInfo => !!f && notReserved(f));
+    }
+    return relatedEntity.Fields.filter(f => f.DefaultInView && notReserved(f) && this.isUsefulExtraColumn(f));
+  }
+
+  // ============================================
+  // SCOPE PICKER + PER-USER PREFS
+  // ============================================
+
+  /** Host entity name (the entity whose form this field belongs to), or null. */
+  private get fkHostEntityName(): string | null {
+    return this.Record?.EntityInfo?.Name ?? null;
+  }
+
+  /** This FK field's code name on the host entity, or null. */
+  private get fkFieldCodeName(): string | null {
+    return this.FieldInfo?.Name ?? null;
+  }
+
+  /** Whether the active search column is the name field (drives where we highlight). */
+  private isSearchingNameField(plan: FKColumnPlan): boolean {
+    return !this.FKSearchField || this.FKSearchField === plan.NameFieldName;
+  }
+
+  /** A field is scope-searchable if it's a string column (LIKE-able) and not a system column. */
+  private isScopeSearchableField(f: EntityFieldInfo): boolean {
+    if (f.TSType !== EntityFieldTSType.String) return false;
+    if (f.Name.startsWith('__mj_')) return false;
+    return true;
+  }
+
+  /** Friendly label for a related-entity field code name. */
+  private labelForRelatedField(name: string): string {
+    return this.getRelatedEntityInfo()?.Fields.find(x => x.Name === name)?.DisplayNameOrName ?? name;
+  }
+
+  /** Whether a field code name exists on the related entity (guards stale saved prefs). */
+  private isValidRelatedField(name: string): boolean {
+    return !!this.getRelatedEntityInfo()?.Fields.find(x => x.Name === name);
+  }
+
+  /**
+   * Build the scope-picker field list: the name + shown columns ('shown' group),
+   * then any other searchable string fields like ID/Status ('other' group).
+   */
+  private buildSearchableFields(plan: FKColumnPlan): FKSearchableField[] {
+    const re = this.getRelatedEntityInfo();
+    if (!re) return [];
+    const shown = new Set([plan.NameFieldName, ...plan.ExtraFieldNames]);
+    const list: FKSearchableField[] = [
+      { FieldName: plan.NameFieldName, Label: this.labelForRelatedField(plan.NameFieldName), Icon: 'fa-solid fa-font', Group: 'shown' },
+      ...plan.ExtraFieldNames.map((fn, i) => ({
+        FieldName: fn, Label: plan.ExtraHeaders[i], Icon: 'fa-solid fa-tag', Group: 'shown' as const
+      }))
+    ];
+    for (const f of re.Fields) {
+      if (shown.has(f.Name) || f.Name === plan.IconFieldName) continue;
+      if (!this.isScopeSearchableField(f)) continue;
+      list.push({
+        FieldName: f.Name,
+        Label: f.DisplayNameOrName,
+        Icon: f.IsPrimaryKey ? 'fa-solid fa-hashtag' : 'fa-solid fa-font',
+        Group: 'other'
+      });
+    }
+    return list;
+  }
+
+  /**
+   * Load this (host entity, FK field)'s saved prefs — search scope, sort, column
+   * widths — once per field. No-ops when the field hasn't changed. Falls back to
+   * defaults (search the name field, natural sort, content-sized columns) and only
+   * applies a saved value when it still resolves to a real field.
+   */
+  private ensureLinkedFieldPrefsLoaded(plan: FKColumnPlan): void {
+    const key = this.fkHostEntityName && this.fkFieldCodeName
+      ? `${this.fkHostEntityName}|${this.fkFieldCodeName}` : null;
+    if (key === this._fkPrefKey) return;
+    this._fkPrefKey = key;
+
+    // Defaults
+    this.FKSearchField = plan.NameFieldName;
+    this._fkColWidths = {};
+
+    const saved = this.fkHostEntityName && this.fkFieldCodeName
+      ? LinkedFieldOptionsStore.Instance.Get(this.fkHostEntityName, this.fkFieldCodeName) : undefined;
+    if (saved) {
+      if (saved.searchField && this.isValidRelatedField(saved.searchField)) {
+        this.FKSearchField = saved.searchField;
+      }
+      if (saved.sortField !== undefined && (saved.sortField === null || this.isValidRelatedField(saved.sortField))) {
+        this.FKSortField = saved.sortField;
+        this.FKSortDir = saved.sortDir ?? 'asc';
+      }
+      if (saved.colWidths) this._fkColWidths = { ...saved.colWidths };
+    }
+    this.FKSearchFieldLabel = this.labelForRelatedField(this.FKSearchField);
+  }
+
   /** Format a raw cell value for display in the dropdown (delegates to the pure helper). */
   private formatCell(val: unknown): string {
     return FormatFKCell(val);
@@ -798,6 +967,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     plan: FKColumnPlan,
     query: string
   ): FKSuggestion[] {
+    const searchField = this.FKSearchField || plan.NameFieldName;
+    // Only highlight the column actually being searched, and only when enabled.
+    const nameQuery = (this.FKHighlightMatches && this.isSearchingNameField(plan)) ? query : '';
     return rows.map(row => {
       const name = this.formatCell(row.get(plan.NameFieldName));
       // Per-row icon from the entity's ExtendedType='Icon' field; else the
@@ -806,13 +978,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       return {
         PrimaryKeyValue: row.get(plan.PkFieldName),
         DisplayName: name,
-        // Passing an empty query yields the (still HTML-escaped) plain name — no marks.
-        HighlightedName: HighlightSearchMatches(name, this.FKHighlightMatches ? query : '', 'mj-forms-search-highlight'),
-        ExtraColumns: plan.ExtraFieldNames.map((fieldName, i) => ({
-          FieldName: fieldName,
-          Header: plan.ExtraHeaders[i],
-          Value: this.formatCell(row.get(fieldName))
-        })),
+        // Empty query yields the (still HTML-escaped) plain name — no marks.
+        HighlightedName: HighlightSearchMatches(name, nameQuery, 'mj-forms-search-highlight'),
+        ExtraColumns: plan.ExtraFieldNames.map((fieldName, i) => {
+          const value = this.formatCell(row.get(fieldName));
+          const colQuery = (this.FKHighlightMatches && fieldName === searchField) ? query : '';
+          return {
+            FieldName: fieldName,
+            Header: plan.ExtraHeaders[i],
+            Value: value,
+            HighlightedValue: HighlightSearchMatches(value, colQuery, 'mj-forms-search-highlight')
+          };
+        }),
         Icon: (rowIcon || plan.EntityIcon) || null
       };
     });
@@ -872,7 +1049,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
     this.FKSuggestions = this.sortSuggestions(this._fkSuggestionsNatural);
     this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
+    this.persistLinkedFieldSort();
     this.cdr.markForCheck();
+  }
+
+  /** Persist the active sort for this (host entity, FK field) pair. */
+  private persistLinkedFieldSort(): void {
+    if (this.fkHostEntityName && this.fkFieldCodeName) {
+      LinkedFieldOptionsStore.Instance.SetSort(
+        this.fkHostEntityName, this.fkFieldCodeName, this.FKSortField, this.FKSortDir
+      );
+    }
   }
 
   /**
@@ -892,13 +1079,141 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       : 'fa-solid fa-sort-down mj-fk-sort-icon';
   }
 
-  /** CSS `grid-template-columns` for the dropdown grid: icon? + name + extra columns. */
+  // ---- Scope pill (search-field picker) ----
+
+  /** Toggle the scope-picker menu. mousedown+preventDefault keeps the input focused. */
+  OnFKScopeToggle(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.FKShowScopeMenu = !this.FKShowScopeMenu;
+    this.cdr.markForCheck();
+  }
+
+  /** Whether a scope-menu row is the active search field. */
+  IsFKScopeActive(field: FKSearchableField): boolean {
+    return field.FieldName === (this.FKSearchField || this.FKNameField);
+  }
+
+  /** Whether there are non-visible searchable fields (drives the "Other fields" group). */
+  get FKHasOtherSearchableFields(): boolean {
+    return this.FKSearchableFields.some(f => f.Group === 'other');
+  }
+
+  /** User picked a field to search by — persist the override and re-run the search. */
+  OnFKScopeSelect(event: MouseEvent, field: FKSearchableField): void {
+    event.preventDefault();
+    this.FKSearchField = field.FieldName;
+    this.FKSearchFieldLabel = field.Label;
+    this.FKShowScopeMenu = false;
+    if (this.fkHostEntityName && this.fkFieldCodeName) {
+      LinkedFieldOptionsStore.Instance.SetSearchField(this.fkHostEntityName, this.fkFieldCodeName, field.FieldName);
+    }
+    this.rerunCurrentFKSearch();
+    this.cdr.markForCheck();
+  }
+
+  /** Re-run the current query against the (possibly newly-chosen) search field. */
+  private rerunCurrentFKSearch(): void {
+    const query = this._fkInputText ?? '';
+    const cached = this.getCachedRecordsForRelatedEntity();
+    if (cached) this.searchCachedEntity(cached, query);
+    else void this.searchRelatedEntity(query);
+  }
+
+  // ---- Column visibility (show/hide a field as a column) ----
+
+  /** Whether a field is currently rendered as a column (the Name column is always shown). */
+  IsFKColumnVisible(field: FKSearchableField): boolean {
+    return field.FieldName === this.FKNameField || this.FKColumnFields.includes(field.FieldName);
+  }
+
+  /** Whether this field's column visibility can be toggled (Name is always shown). */
+  CanToggleFKColumn(field: FKSearchableField): boolean {
+    return field.FieldName !== this.FKNameField;
+  }
+
+  /**
+   * Toggle whether a field shows as a column. Persists the full visible set, then
+   * rebuilds the column plan + re-runs the search so the grid reflects it live.
+   * stopPropagation so the row's search-scope click doesn't also fire.
+   */
+  OnFKColumnToggle(event: MouseEvent, field: FKSearchableField): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.CanToggleFKColumn(field)) return;
+
+    const next = [...this.FKColumnFields];
+    const idx = next.indexOf(field.FieldName);
+    if (idx >= 0) next.splice(idx, 1);
+    else next.push(field.FieldName);
+
+    if (this.fkHostEntityName && this.fkFieldCodeName) {
+      LinkedFieldOptionsStore.Instance.SetVisibleFields(this.fkHostEntityName, this.fkFieldCodeName, next);
+    }
+    this._fkColumnPlan = null; // force rebuild with the new column set
+    this.rerunCurrentFKSearch();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * CSS `grid-template-columns` for the dropdown grid: icon? + name + extra columns.
+   * A user-resized column uses its saved pixel width; otherwise it sizes to content.
+   */
   get FKGridTemplateColumns(): string {
     const cols: string[] = [];
     if (this.FKHasIconColumn) cols.push('min-content');
-    cols.push('minmax(120px, max-content)');       // name
-    for (let i = 0; i < this.FKColumnHeaders.length; i++) cols.push('minmax(80px, max-content)');
+    cols.push(this.fkColumnTrack(this.FKNameField, 'minmax(120px, max-content)'));
+    for (const field of this.FKColumnFields) cols.push(this.fkColumnTrack(field, 'minmax(80px, max-content)'));
     return cols.join(' ');
+  }
+
+  /** Track sizing for one column: fixed px when the user resized it, else the default. */
+  private fkColumnTrack(field: string, dflt: string): string {
+    const w = this._fkColWidths[field];
+    return w ? `${w}px` : dflt;
+  }
+
+  // ---- Column resize (drag a header's right edge) ----
+
+  /** Begin resizing a column. stopPropagation so the header's sort handler doesn't fire. */
+  OnFKColResizeStart(event: MouseEvent, field: string): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const headerCell = (event.target as HTMLElement).closest('.mj-fk-hcell') as HTMLElement | null;
+    const startWidth = headerCell ? headerCell.offsetWidth : 120;
+    this._fkResize = { field, startX: event.clientX, startWidth };
+    this._fkResizeMove = (e: MouseEvent) => this.onFKColResizeMove(e);
+    this._fkResizeUp = () => this.onFKColResizeEnd();
+    document.addEventListener('mousemove', this._fkResizeMove);
+    document.addEventListener('mouseup', this._fkResizeUp);
+  }
+
+  private onFKColResizeMove(e: MouseEvent): void {
+    if (!this._fkResize) return;
+    const width = Math.max(60, Math.round(this._fkResize.startWidth + (e.clientX - this._fkResize.startX)));
+    this._fkColWidths = { ...this._fkColWidths, [this._fkResize.field]: width };
+    this.cdr.markForCheck();
+  }
+
+  private onFKColResizeEnd(): void {
+    if (this._fkResize) {
+      const width = this._fkColWidths[this._fkResize.field];
+      if (width && this.fkHostEntityName && this.fkFieldCodeName) {
+        LinkedFieldOptionsStore.Instance.SetColWidth(
+          this.fkHostEntityName, this.fkFieldCodeName, this._fkResize.field, width
+        );
+      }
+    }
+    this.teardownFKResizeListeners();
+    this.cdr.markForCheck();
+  }
+
+  private teardownFKResizeListeners(): void {
+    if (this._fkResizeMove) document.removeEventListener('mousemove', this._fkResizeMove);
+    if (this._fkResizeUp) document.removeEventListener('mouseup', this._fkResizeUp);
+    this._fkResize = null;
+    this._fkResizeMove = null;
+    this._fkResizeUp = null;
   }
 
   /** Handle typing in the FK search input */
@@ -934,6 +1249,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   OnFKFocus(event: FocusEvent): void {
     const input = event.target as HTMLInputElement;
     this._lastFKInputEl = input;
+    this.FKFocused = true; // reveal the scope pill while focused
     // Select any pre-filled (linked) text so the first keystroke replaces it instead
     // of appending — matches how a searchable dropdown behaves.
     if (input.value) input.select();
@@ -968,11 +1284,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!plan) { this.closeFKDropdown(); this.cdr.markForCheck(); return; }
 
     const accessor = (r: BaseEntity) => ({ get: (field: string) => r.Get(field) });
+    const searchField = this.FKSearchField || plan.NameFieldName;
     const matches = FilterCachedFKRows(
       records,
       query,
       MjFormFieldComponent.FK_FOCUS_SHOW_LIMIT,
-      r => r.Get(plan.NameFieldName)
+      r => r.Get(searchField)
     );
 
     this.FKLoading = false;
@@ -981,9 +1298,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Hide dropdown on blur, revert to matched name if user didn't select */
   OnFKBlur(): void {
-    // Small delay so mousedown on dropdown items fires first
+    // Small delay so mousedown on dropdown items / scope menu fires first
     setTimeout(() => {
       this.closeFKDropdown();
+      this.FKShowScopeMenu = false;
+      this.FKFocused = false; // hide the scope pill
       // If user was typing but didn't select, revert to display name
       if (!this.FKIsMatched && this._fkInputText !== null) {
         this._fkInputText = null;
@@ -1113,10 +1432,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
     this.cdr.markForCheck();
 
-    // Build Fields: PK + name + extra DefaultInView columns + the per-row icon
-    // field (when present), deduped via Set.
+    // Build Fields: PK + name + extra DefaultInView columns + the searched field +
+    // the per-row icon field (when present), deduped via Set.
+    const searchField = this.FKSearchField || plan.NameFieldName;
     const fields = Array.from(new Set([
-      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames,
+      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames, searchField,
       ...(plan.IconFieldName ? [plan.IconFieldName] : [])
     ]));
     const escapedQuery = query.replace(/'/g, "''").trim();
@@ -1125,7 +1445,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const result = await rv.RunView<Record<string, unknown>>({
       EntityName: fieldInfo.RelatedEntity,
       // Empty query (focus / cleared field) → no filter → first N rows.
-      ExtraFilter: escapedQuery ? `[${plan.NameFieldName}] LIKE '%${escapedQuery}%'` : '',
+      ExtraFilter: escapedQuery ? `[${searchField}] LIKE '%${escapedQuery}%'` : '',
       MaxRows: MjFormFieldComponent.FK_DB_SEARCH_LIMIT,
       ResultType: 'simple',
       Fields: fields
@@ -1377,6 +1697,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this.FKSortField = null;
         this.FKSortDir = 'asc';
         this._fkSuggestionsNatural = [];
+        this.FKSearchableFields = [];
+        this.FKShowScopeMenu = false;
+        this.FKFocused = false;
+        this._fkColWidths = {};
+        this._fkPrefKey = null; // force prefs reload for the new field
         this._portaledDropdownEl = null;
         this._fkColumnPlan = null;
         this._resolvedFKName = undefined;
@@ -1407,6 +1732,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (this._fkSearchTimeout) {
       clearTimeout(this._fkSearchTimeout);
     }
+    this.teardownFKResizeListeners();
     this.stopScrollListener();
     // If we relocated the dropdown to <body> and Angular tears us down while it's
     // still open, remove the orphaned node ourselves (Angular removes by reference,
