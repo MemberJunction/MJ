@@ -850,10 +850,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       ? LinkedFieldOptionsStore.Instance.Get(this.fkHostEntityName, this.fkFieldCodeName) : undefined;
 
     if (saved?.visibleFields) {
-      // User override: map saved code names → fields, in saved order, keep only valid/non-reserved.
+      // User override: honor the exact set/order. Exclude only the name + icon fields
+      // (rendered specially elsewhere) — the PK (e.g. ID) IS allowed here, since the
+      // user explicitly asked to see it even though it's hidden by default.
       return saved.visibleFields
         .map(n => relatedEntity.Fields.find(f => f.Name === n))
-        .filter((f): f is EntityFieldInfo => !!f && notReserved(f));
+        .filter((f): f is EntityFieldInfo => !!f && f.Name !== nameFieldName && f.Name !== iconFieldName);
     }
     return relatedEntity.Fields.filter(f => f.DefaultInView && notReserved(f) && this.isUsefulExtraColumn(f));
   }
