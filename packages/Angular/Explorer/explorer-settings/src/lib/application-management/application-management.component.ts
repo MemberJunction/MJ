@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
 
 interface AppStats {
@@ -213,6 +214,43 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
       this.applyFilters();
       this.cdr.markForCheck();
     }
+  }
+
+  // -- Concise chrome: one Filter popover (Status) + applied-filter chips -----
+
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'Active', value: 'active' },
+          { text: 'Inactive', value: 'inactive' },
+        ],
+      },
+    ];
+  }
+
+  public get filterValues(): Record<string, unknown> {
+    return { status: this.filters$.value.status };
+  }
+
+  /** Total active filters (Status) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.filters$.value.status !== 'all' ? 1 : 0;
+  }
+
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    if ('status' in values) {
+      this.updateFilter({ status: (values['status'] as FilterOptions['status']) || 'all' });
+    }
+  }
+
+  /** Clear all filters (Status); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ status: 'all' });
   }
   
   public toggleAppExpansion(appId: string): void {

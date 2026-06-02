@@ -50,6 +50,7 @@ interface NavItem {
         </mj-page-header>
         <mj-page-body [Padding]="false" class="analytics-shell">
             <mj-left-nav
+                MobileTitle="Analytics"
                 [Sections]="navSections"
                 [ActiveId]="ActiveSection"
                 (ItemClicked)="onNavItemClicked($event)">
@@ -224,6 +225,15 @@ interface NavItem {
         @media (max-width: 768px) {
             .analytics-content {
                 padding: 16px;
+            }
+        }
+
+        /* <mj-left-nav> collapses to a full-width top bar at ≤700px; stack the
+           shell vertically so the content pane sits below it instead of being
+           squeezed to zero width in the flex row. */
+        @media (max-width: 700px) {
+            .analytics-shell {
+                flex-direction: column;
             }
         }
     `]

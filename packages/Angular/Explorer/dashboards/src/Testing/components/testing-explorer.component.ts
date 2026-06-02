@@ -118,22 +118,35 @@ interface TestRunStatRow {
             </mj-stat-badge>
           </div>
           <div actions>
-            <!-- Sort + Direction live in a popover instead of a chrome
-                 toggle button so both dimensions surface together (was just
-                 a direction toggle before; the field selection was buried
-                 in code). Pattern matches AI Analytics → Model Performance
-                 where SortBy lives alongside other filter dropdowns. -->
+            <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
+              <i class="fa-solid fa-folder-plus"></i> <span class="te-btn-label">New Suite</span>
+            </button>
+            <button mjButton variant="primary" size="sm" (click)="OnNewTest()">
+              <i class="fa-solid fa-plus"></i> <span class="te-btn-label">New Test</span>
+            </button>
+          </div>
+          <div toolbar>
+            <!-- Concise-chrome control bar: search · Filter · view, together.
+                 Search is persistent wayfinding (never a filter field); all
+                 filters live behind the one Filter button (docks as a bottom
+                 sheet on mobile); applied filters render as removable chips
+                 below the bar (see <mj-applied-filters>). -->
+            <mj-page-search
+              Placeholder="Search tests and suites..."
+              [Value]="SearchTerm"
+              (ValueChange)="OnSearchInputValue($event)">
+            </mj-page-search>
             <mj-filter-popover
-              Label="Sort"
-              Icon="fa-solid fa-arrow-down-wide-short"
-              [ActiveCount]="ActiveSortFilterCount"
-              [ShowClearAll]="ActiveSortFilterCount > 0"
-              (ClearAllRequested)="resetSortFilters()">
+              Label="Filters"
+              Icon="fa-solid fa-filter"
+              [ActiveCount]="TotalActiveFilterCount"
+              [ShowClearAll]="TotalActiveFilterCount > 0"
+              (ClearAllRequested)="resetAllFilters()">
               <mj-filter-panel
-                [Fields]="sortFilterFields"
-                [Values]="sortFilterValues"
-                (ValuesChange)="onSortFilterChange($event)"
-                (Reset)="resetSortFilters()">
+                [Fields]="filterFields"
+                [Values]="filterValues"
+                (ValuesChange)="onFilterValuesChange($event)"
+                (Reset)="resetAllFilters()">
               </mj-filter-panel>
             </mj-filter-popover>
             <mj-view-toggle
@@ -141,48 +154,24 @@ interface TestRunStatRow {
               [ActiveKey]="ViewMode"
               (KeyChange)="SetViewMode($any($event))">
             </mj-view-toggle>
-            <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
-              <i class="fa-solid fa-folder-plus"></i> New Suite
-            </button>
-            <button mjButton variant="primary" size="sm" (click)="OnNewTest()">
-              <i class="fa-solid fa-plus"></i> New Test
-            </button>
-          </div>
-          <div toolbar>
-            <mj-page-search
-              Placeholder="Search tests and suites..."
-              [Value]="SearchTerm"
-              (ValueChange)="OnSearchInputValue($event)">
-            </mj-page-search>
-            @for (status of StatusOptions; track status) {
-              <mj-filter-chip
-                [Label]="status"
-                [Active]="IsStatusActive(status)"
-                (Clicked)="ToggleStatus(status)">
-              </mj-filter-chip>
-            }
-            <mj-view-toggle
-              [Options]="DisplayModeOptions"
-              [ActiveKey]="DisplayMode"
-              (KeyChange)="SetDisplayMode($any($event))">
-            </mj-view-toggle>
           </div>
         </mj-page-header>
-        <mj-page-body [Flex]="true" [Padding]="false">
-          <ng-container *ngTemplateOutlet="content"></ng-container>
-        </mj-page-body>
+        <ng-container *ngTemplateOutlet="content"></ng-container>
       </mj-page-layout>
     }
 
     <ng-template #content>
-    @if (IsLoading) {
-      <div class="explorer-loading">
-        <mj-loading text="Loading test explorer..."></mj-loading>
-      </div>
-    } @else {
-      <div class="explorer-layout">
-        <!-- Left rail -->
+      <!-- Shared chrome primitives instead of bespoke wrappers: mj-page-body
+           (row) is the rail+content layout, mj-page-body-interior is the
+           scroller. Both reflow / scroll correctly on mobile. -->
+      <mj-page-body [Flex]="true" [Padding]="false" Direction="row">
+      @if (IsLoading) {
+        <div class="explorer-loading">
+          <mj-loading text="Loading test explorer..."></mj-loading>
+        </div>
+      } @else {
         <mj-left-nav
+          MobileTitle="Browse Tests"
           [Sections]="NavSections"
           [ActiveId]="ActiveNavId"
           [ExpandedIds]="ExpandedNavIds"
@@ -190,10 +179,8 @@ interface TestRunStatRow {
           (ItemToggled)="OnNavItemToggled($event)">
         </mj-left-nav>
 
-        <!-- Main Content -->
         <mj-left-nav-content>
-          <!-- Content Area -->
-          <div class="content-area">
+          <mj-page-body-interior>
             <!-- Suites Section -->
             @if (DisplayMode === 'all' || DisplayMode === 'suites') {
               @if (FilteredSuites.length > 0) {
@@ -381,10 +368,9 @@ interface TestRunStatRow {
                 <span class="empty-hint">Try adjusting your search or filters.</span>
               </div>
             }
-          </div>
+          </mj-page-body-interior>
         </mj-left-nav-content>
-      </div>
-    }
+      }
 
     <!-- Slideout Backdrop -->
     @if (SlideoutOpen) {
@@ -570,6 +556,7 @@ interface TestRunStatRow {
         </app-test-run-dialog>
       </mj-slide-panel>
     }
+      </mj-page-body>
     </ng-template>
   `,
   styles: [`
@@ -585,6 +572,7 @@ interface TestRunStatRow {
 
     /* Loading */
     .explorer-loading {
+      flex: 1;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -593,12 +581,22 @@ interface TestRunStatRow {
       background: var(--mj-bg-surface-sunken);
     }
 
-    /* Layout */
-    .explorer-layout {
-      display: flex;
-      height: 100%;
-      background: var(--mj-bg-surface-sunken);
-      overflow: hidden;
+    /* The rail + content layout is the shared <mj-page-body Direction="row">
+       (it reflows to a column on mobile) and the scroller is the shared
+       <mj-page-body-interior> — no bespoke .explorer-layout / .content-area. */
+
+    @media (max-width: 700px) {
+      /* On mobile search grows to fill the row so the icon-only Filter + view
+         toggle sit on the same line. On desktop search keeps its natural width
+         and Filter/view sit beside it (not stretched full-width). */
+      mj-page-search {
+        flex: 1;
+      }
+      /* Collapse the New Suite / New Test buttons to icon-only so the actions
+         row (+Suite, +Test) stays compact. */
+      .te-btn-label {
+        display: none;
+      }
     }
 
     /* ==========================================
@@ -645,13 +643,6 @@ interface TestRunStatRow {
     .btn-sm {
       padding: 6px 12px;
       font-size: 12px;
-    }
-
-    /* Content Area */
-    .content-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
     }
 
     .content-section {
@@ -1290,10 +1281,6 @@ interface TestRunStatRow {
     }
 
     @media (max-width: 600px) {
-      .content-area {
-        padding: 16px;
-      }
-
       .card-stats {
         grid-template-columns: repeat(2, 1fr);
       }
@@ -1637,8 +1624,24 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     { text: 'Descending', value: 'desc' },
   ];
 
-  public get sortFilterFields(): FilterFieldConfig[] {
+  /**
+   * Concise-chrome model: every filter (View · Status · Sort) lives behind a
+   * single "Filter" button via this one mj-filter-panel field set. The applied
+   * state is surfaced separately as removable chips (see AppliedFilters), so
+   * input (the button) and state (the chips) are cleanly separated.
+   */
+  public get filterFields(): FilterFieldConfig[] {
     return [
+      { key: 'displayMode', type: 'chips', label: 'View', chipOptions: [
+        { text: 'All', value: 'all' },
+        { text: 'Suites', value: 'suites' },
+        { text: 'Tests', value: 'tests' },
+      ] },
+      { key: 'status', type: 'chips', label: 'Status', multi: true, chipOptions: [
+        { text: 'Active', value: 'Active' },
+        { text: 'Pending', value: 'Pending' },
+        { text: 'Disabled', value: 'Disabled' },
+      ] },
       { key: 'SortField', type: 'dropdown', label: 'Sort by',
         icon: 'fa-solid fa-arrow-down-wide-short', options: this.sortFieldOptions },
       { key: 'SortDirection', type: 'dropdown', label: 'Direction',
@@ -1646,11 +1649,23 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     ];
   }
 
-  public get sortFilterValues(): Record<string, unknown> {
-    return { SortField: this.SortField, SortDirection: this.SortDirection };
+  public get filterValues(): Record<string, unknown> {
+    return {
+      displayMode: this.DisplayMode,
+      status: Array.from(this.StatusFilters),
+      SortField: this.SortField,
+      SortDirection: this.SortDirection,
+    };
   }
 
-  public onSortFilterChange(values: Record<string, unknown>): void {
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    if ('displayMode' in values) {
+      this._displayMode$.next(values['displayMode'] as DisplayMode);
+    }
+    if ('status' in values) {
+      const arr = Array.isArray(values['status']) ? (values['status'] as string[]) : [];
+      this._statusFilters$.next(new Set(arr));
+    }
     if ('SortField' in values) {
       this._sortField$.next(values['SortField'] as SortField);
     }
@@ -1664,13 +1679,27 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     this._sortDirection$.next('asc');
   }
 
-  /** Non-zero when the user has changed SortField or SortDirection from defaults — drives the popover badge. */
+  /** Clears every filter (View · Status · Sort) back to defaults. */
+  public resetAllFilters(): void {
+    this._displayMode$.next('all');
+    this._statusFilters$.next(new Set<string>());
+    this.resetSortFilters();
+  }
+
+  /** Active sort changes from defaults — contributes to the filter badge + chips. */
   public get ActiveSortFilterCount(): number {
     let count = 0;
     if (this.SortField !== 'name') count++;
     if (this.SortDirection !== 'asc') count++;
     return count;
   }
+
+  /** Total active filters (View + Status + Sort) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    const displayModeActive = this.DisplayMode !== 'all' ? 1 : 0;
+    return this.ActiveSortFilterCount + this.StatusFilters.size + displayModeActive;
+  }
+
 
   RunTest(testId: string): void {
     this.testingDialogService.OpenTestPanel(testId);
