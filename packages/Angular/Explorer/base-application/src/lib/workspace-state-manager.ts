@@ -224,6 +224,16 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Reset workspace to a clean default configuration and persist immediately.
+   * Used for recovery when stale or corrupted workspace data prevents startup.
+   */
+  async ResetConfiguration(): Promise<void> {
+    const defaultConfig = createDefaultWorkspaceConfiguration();
+    this.configuration$.next(defaultConfig);
+    await this.persistConfiguration();
+  }
+
+  /**
    * Force creation of a new tab, never replacing temporary tabs
    * Used for Shift+Click behavior - checks for existing tab first, only creates new if none exists
    */

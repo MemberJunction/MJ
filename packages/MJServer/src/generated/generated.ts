@@ -44228,7 +44228,7 @@ export class MJEntityField_ {
     @MaxLength(20)
     ValueListType: string;
         
-    @Field({nullable: true, description: `Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`}) 
+    @Field({nullable: true, description: `Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`}) 
     @MaxLength(50)
     ExtendedType?: string;
         
@@ -69630,6 +69630,10 @@ export class MJTagSynonym_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`}) 
+    @MaxLength(20)
+    Status: string;
+        
     @Field() 
     @MaxLength(255)
     Tag: string;
@@ -69653,6 +69657,9 @@ export class CreateMJTagSynonymInput {
     @Field({ nullable: true })
     Source?: string;
 
+    @Field({ nullable: true })
+    Status?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69674,6 +69681,9 @@ export class UpdateMJTagSynonymInput {
 
     @Field({ nullable: true })
     Source?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

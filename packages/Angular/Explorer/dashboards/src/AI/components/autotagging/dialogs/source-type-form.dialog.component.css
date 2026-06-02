@@ -1,0 +1,232 @@
+/*
+ * Source + Content Type CRUD slide-in form dialog styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-slide-*` / `.at-form-*` rules are global and already style this
+ * dialog's markup while it renders inside the host shell.
+ *
+ * The `.cls-*` (Classification) rules below are NEW to the in-dashboard config
+ * parity feature. All colors use semantic design tokens (no hardcoded hex), and
+ * the threshold band gradient is built from color-mix() of semantic tokens so it
+ * adapts to dark mode and white-labeling.
+ */
+
+/* ── Left-edge resize handle ──
+ * The slide-in panel slides in from the right, so its resizable edge is the LEFT.
+ * A thin full-height grab strip; tokenized hover color so it adapts to themes. */
+.cls-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 1002;
+    background: transparent;
+    transition: background 0.12s;
+}
+.cls-resize-handle:hover,
+.cls-resize-handle:active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+}
+
+/* ── Section shells (Source / Embedding / Classification / Run budgets / Crawl) ── */
+.cls-section {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--mj-border-subtle);
+}
+/* The first section needs no separator above it. */
+.cls-section--first {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+.cls-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.cls-section-title i { color: var(--mj-brand-primary); }
+
+/* "Show / hide effective values" toggle, pushed to the right of the section title. */
+.cls-eff-toggle {
+    margin-left: auto;
+    font-weight: 600;
+}
+
+/* Single-column control stack. The effective-values panel now renders inline
+ * below (full width within the section), not as a floating grid column. */
+.cls-config {
+    display: block;
+}
+
+/* ── Taxonomy mode cards ── */
+.cls-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.cls-mode-card {
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    border-radius: 8px;
+    padding: 10px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    user-select: none;
+}
+.cls-mode-card:hover { background: var(--mj-bg-surface-hover); }
+.cls-mode-card.selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    border-color: var(--mj-brand-primary);
+    box-shadow: inset 0 0 0 1px var(--mj-brand-primary);
+}
+.cls-mode-ic { font-size: 16px; color: var(--mj-text-secondary); }
+.cls-mode-card.selected .cls-mode-ic { color: var(--mj-brand-primary); }
+.cls-mode-nm { font-size: 12px; font-weight: 700; color: var(--mj-text-primary); margin: 4px 0 2px; }
+.cls-mode-best { font-size: 10.5px; color: var(--mj-text-muted); line-height: 1.3; }
+
+/* ── Thresholds + gradient band ── */
+.cls-threshold-pair {
+    background: var(--mj-bg-surface-card);
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--mj-border-default);
+}
+.cls-slider-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+}
+@media (max-width: 560px) {
+    .cls-slider-grid { grid-template-columns: 1fr; }
+}
+.cls-slider-field { display: flex; flex-direction: column; gap: 4px; }
+.cls-slider-cap { font-size: 11px; color: var(--mj-text-secondary); }
+.cls-slider-cap strong {
+    font-family: ui-monospace, monospace;
+    color: var(--mj-text-primary);
+    margin-left: 2px;
+}
+.cls-slider {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 3px;
+    margin: 2px 0;
+}
+.cls-slider::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--mj-brand-primary);
+    cursor: pointer;
+    border: 2px solid var(--mj-bg-surface);
+}
+.cls-slider::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--mj-brand-primary);
+    cursor: pointer;
+    border: 2px solid var(--mj-bg-surface);
+}
+
+/* The reject | review | auto-apply gradient band — all stops from semantic tokens. */
+.cls-band {
+    height: 8px;
+    border-radius: 4px;
+    margin: 10px 0 6px;
+    background: linear-gradient(
+        to right,
+        color-mix(in srgb, var(--mj-status-error) 55%, transparent) 0%,
+        color-mix(in srgb, var(--mj-status-warning) 55%, transparent) 50%,
+        color-mix(in srgb, var(--mj-status-success) 55%, transparent) 100%
+    );
+}
+.cls-band-legend {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+}
+.cls-band-key.reject { color: var(--mj-status-error-text, var(--mj-status-error)); }
+.cls-band-key.review { color: var(--mj-status-warning-text, var(--mj-status-warning)); }
+.cls-band-key.apply { color: var(--mj-status-success-text, var(--mj-status-success)); }
+.cls-validation {
+    font-size: 12px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    background: color-mix(in srgb, var(--mj-status-error) 12%, transparent);
+    color: var(--mj-status-error-text, var(--mj-status-error));
+    border-radius: 4px;
+}
+
+/* ── Toggles ── */
+.cls-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px dashed var(--mj-border-subtle);
+}
+.cls-toggle-label .t { display: block; font-size: 13px; font-weight: 600; color: var(--mj-text-primary); }
+.cls-toggle-label .d { display: block; font-size: 11px; color: var(--mj-text-muted); margin-top: 2px; }
+
+/* ── Effective-values panel (inline + conditional) ──
+ * Repurposed from the old floating aside: renders inline at the end of the
+ * Classification section, full width within the section — never overlaps. */
+.cls-aside {
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+}
+.cls-aside-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mj-text-muted);
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+.cls-eff-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 0;
+    border-top: 1px solid var(--mj-border-subtle);
+    font-size: 12px;
+}
+.cls-eff-row:first-of-type { border-top: 0; }
+.cls-eff-label { color: var(--mj-text-secondary); }
+.cls-eff-value { color: var(--mj-text-primary); font-weight: 600; text-align: right; }
+.cls-eff-origin {
+    display: block;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-top: 1px;
+}
+.cls-eff-origin.override { color: var(--mj-brand-primary); }
+
+/* ── Budget grid ── */
+.cls-budget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 16px;
+    margin-top: 8px;
+}
+@media (max-width: 480px) {
+    .cls-budget-grid { grid-template-columns: 1fr; }
+}
