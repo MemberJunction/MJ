@@ -498,6 +498,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   @Input() FKHighlightMatches = true;
 
+  /**
+   * Whether to offer inline "create new" for the related record when the one you need
+   * isn't found. The affordance only renders when this is true AND the current user can
+   * create records of the related entity (entity allows creation + role permits it).
+   */
+  @Input() AllowFKCreate = true;
+
+  /** Surface used for the inline create form: a modal dialog (default) or a slide-in. */
+  @Input() FKCreatePresentation: 'dialog' | 'slide-in' = 'dialog';
+
   /** Cleanup function for scroll/resize listeners */
   private _scrollCleanup: (() => void) | null = null;
 
@@ -656,6 +666,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Suggestions returned from the FK entity search */
   FKSuggestions: FKSuggestion[] = [];
 
+  /**
+   * The currently-linked record, pinned as a sticky "Currently selected" section at the
+   * top of the dropdown (browse mode only). Null when there's no selection or the user is
+   * actively filtering. Removed from {@link FKSuggestions} so it isn't listed twice.
+   */
+  FKSelectedSuggestion: FKSuggestion | null = null;
+
   /** Whether the current FK value is a confirmed match (user selected from dropdown) */
   FKIsMatched = false;
 
@@ -694,6 +711,14 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Text the user is currently typing in the FK search input. null = use display name. */
   private _fkInputText: string | null = null;
+
+  /**
+   * The active search query that produced the current results — `''` on a focus/clear
+   * browse (full list), the typed text when filtering. Distinct from {@link _fkInputText},
+   * which holds the *displayed* text (the selected record's name when not typing). This is
+   * the correct signal for "browse mode" and for the create-footer label.
+   */
+  private _fkQuery = '';
 
   /** Debounce timer for FK search */
   private _fkSearchTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1024,25 +1049,59 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Apply a freshly-built suggestion list to the dropdown state + reposition + portal. */
   private applySuggestions(suggestions: FKSuggestion[], plan: FKColumnPlan): void {
+    // Pinned "currently selected" row: in browse mode (empty query) with a valid linked
+    // value, lift the selected record into a sticky section and remove it from the list so
+    // the user can keep it or pick another without clearing first.
+    this.FKSelectedSuggestion = null;
+    const browseMode = this._fkQuery.trim().length === 0;
+    if (browseMode && this.FKHasLinkedValue) {
+      const idx = suggestions.findIndex(s => this.IsFKRowSelected(s));
+      if (idx >= 0) {
+        this.FKSelectedSuggestion = suggestions[idx];
+        suggestions = suggestions.filter((_, i) => i !== idx);
+      } else {
+        // Selected record isn't in the (first-N) result — show a lightweight pinned row.
+        this.FKSelectedSuggestion = this.buildSelectedFallbackSuggestion(plan);
+      }
+    }
+
     this._fkSuggestionsNatural = suggestions;
     this.FKNameField = plan.NameFieldName;
     // Full ordered column list (incl. the name field) + matching headers.
     this.FKColumnFields = plan.ColumnFields;
     this.FKColumnHeaders = plan.ColumnFields.map(c => c === plan.NameFieldName ? 'Name' : this.labelForRelatedField(c));
-    this.FKHasIconColumn = suggestions.some(s => s.Icon != null);
-    this.FKHasIconColumn = suggestions.some(s => s.Icon != null);
+    this.FKHasIconColumn = (this.FKSelectedSuggestion?.Icon != null) || suggestions.some(s => s.Icon != null);
     this.FKSuggestions = this.sortSuggestions(suggestions);
     this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
-    this.FKNoMatches = suggestions.length === 0;
+    this.FKNoMatches = suggestions.length === 0 && !this.FKSelectedSuggestion;
 
-    // Show the dropdown whenever we have rows OR a "no matches" state to surface.
-    this.ShowFKDropdown = suggestions.length > 0 || this.FKNoMatches;
+    // Show the dropdown for rows, a "no matches" state, or just the pinned selection.
+    this.ShowFKDropdown = suggestions.length > 0 || this.FKNoMatches || !!this.FKSelectedSuggestion;
     if (this.ShowFKDropdown && this._lastFKInputEl) {
       this.updateDropdownPosition(this._lastFKInputEl);
       this.startScrollListener();
       this.portalDropdownToBody();
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Build a lightweight pinned row for the selected record when it isn't present in the
+   * current result set (DB beyond first-N, or cached beyond the focus-show limit). We have
+   * its display name from the FK name resolution; extra-column values are left blank.
+   */
+  private buildSelectedFallbackSuggestion(plan: FKColumnPlan): FKSuggestion | null {
+    const name = this.FKDisplayName;
+    if (this.Value == null || this.Value === '' || !name) return null;
+    return {
+      PrimaryKeyValue: this.Value,
+      DisplayName: name,
+      HighlightedName: HighlightSearchMatches(name, '', 'mj-forms-search-highlight'),
+      ExtraColumns: plan.ExtraFieldNames.map((fn, i) => ({
+        FieldName: fn, Header: plan.ExtraHeaders[i], Value: '', HighlightedValue: ''
+      })),
+      Icon: plan.EntityIcon ?? null
+    };
   }
 
   /**
@@ -1137,9 +1196,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.cdr.markForCheck();
   }
 
-  /** Re-run the current query against the (possibly newly-chosen) search field. */
+  /** Re-run the active query against the (possibly newly-chosen) search field. */
   private rerunCurrentFKSearch(): void {
-    const query = this._fkInputText ?? '';
+    const query = this._fkQuery;
     const cached = this.getCachedRecordsForRelatedEntity();
     if (cached) this.searchCachedEntity(cached, query);
     else void this.searchRelatedEntity(query);
@@ -1364,6 +1423,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const plan = this.buildColumnPlan();
     if (!plan) { this.closeFKDropdown(); this.cdr.markForCheck(); return; }
 
+    this._fkQuery = query;
     const accessor = (r: BaseEntity) => ({ get: (field: string) => r.Get(field) });
     const searchField = this.FKSearchField || plan.NameFieldName;
     const matches = FilterCachedFKRows(
@@ -1461,6 +1521,73 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.cdr.markForCheck();
   }
 
+  // ---- Inline "create new related record" ----
+
+  /**
+   * Whether to show the inline-create affordance: the field opts in (`AllowFKCreate`),
+   * the related entity resolves, and the current user can create records of it (entity
+   * allows creation + role permits — `GetUserPermisions().CanCreate` folds in `AllowCreateAPI`).
+   */
+  get CanCreateFK(): boolean {
+    if (!this.AllowFKCreate) return false;
+    const re = this.getRelatedEntityInfo();
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!re || !user) return false;
+    return re.GetUserPermisions(user)?.CanCreate === true;
+  }
+
+  /** Footer label: prefilled with the typed text when present, else generic "create new". */
+  get FKCreateLabel(): string {
+    const entityLabel = this.getRelatedEntityInfo()?.DisplayName || this.FieldInfo?.RelatedEntity || 'record';
+    const query = this._fkQuery.trim();
+    return query ? `Create "${query}"` : `Create new ${entityLabel}`;
+  }
+
+  /**
+   * Ask the host (app layer) to create a new related record, prefilled with the typed
+   * text as the name. We only EMIT the request — opening the form is the app's job (the
+   * generic forms layer must not depend on the app-level form presenter). The host calls
+   * `Complete(record)` when saved and we select it.
+   */
+  OnFKCreateNew(event: MouseEvent): void {
+    event.preventDefault(); // don't blur the input before we capture the query
+    const plan = this.buildColumnPlan();
+    const relatedEntity = this.FieldInfo?.RelatedEntity;
+    if (!plan || !relatedEntity) return;
+
+    const query = this._fkQuery.trim();
+    this.FKShowScopeMenu = false;
+    this.FKFocused = false;
+    this.closeFKDropdown();
+    this.cdr.markForCheck();
+
+    const newRecordValues: Record<string, unknown> = {};
+    if (query) newRecordValues[plan.NameFieldName] = query;
+
+    this.Navigate.emit({
+      Kind: 'create-related',
+      EntityName: relatedEntity,
+      NewRecordValues: Object.keys(newRecordValues).length ? newRecordValues : undefined,
+      Presentation: this.FKCreatePresentation,
+      Provider: this.Provider ?? undefined,
+      Complete: (created: BaseEntity | null) => { if (created) this.selectCreatedFKRecord(created, plan); },
+    });
+  }
+
+  /** Select a freshly-created related record as this field's value. */
+  private selectCreatedFKRecord(created: BaseEntity, plan: FKColumnPlan): void {
+    const pk = created.Get(plan.PkFieldName);
+    if (pk == null) return;
+    const name = this.formatCell(created.Get(plan.NameFieldName));
+    this._fkInputText = name;
+    this.Value = pk;
+    this.FKIsMatched = true;
+    const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
+    if (nameFieldMap) this.Record.Set(nameFieldMap, name);
+    this.closeFKDropdown();
+    this.cdr.markForCheck();
+  }
+
   /** Clear FK value via the X button */
   OnFKClearClick(event: MouseEvent): void {
     // preventDefault keeps focus on the input (the button never steals it), so the
@@ -1488,6 +1615,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKLoading = false;
     this.FKNoMatches = false;
     this.FKActiveIndex = -1;
+    this.FKSelectedSuggestion = null;
     this._portaledDropdownEl = null;
     this.stopScrollListener();
   }
@@ -1502,6 +1630,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const fieldInfo = this.FieldInfo;
     if (!plan || !fieldInfo?.RelatedEntity) return;
 
+    this._fkQuery = query;
     const seq = ++this._fkSearchSeq;
     this.FKLoading = true;
     this.FKNoMatches = false;
@@ -1768,7 +1897,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       if (changes['Record']) {
         this._fkInputText = null;
         this.FKIsMatched = false;
+        this._fkQuery = '';
         this.FKSuggestions = [];
+        this.FKSelectedSuggestion = null;
         this.ShowFKDropdown = false;
         this.FKActiveIndex = -1;
         this.FKLoading = false;

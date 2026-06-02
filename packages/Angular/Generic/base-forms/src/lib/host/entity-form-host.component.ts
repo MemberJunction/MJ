@@ -276,7 +276,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       const instance = componentRef.instance as BaseFormComponent & { userPermissions?: unknown };
       instance.record = record;
       instance.userPermissions = permissions;
-      instance.Config = this.Config;
+      instance.Config = this.effectiveConfigFor(record);
       instance.EditMode = this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
 
       this.applyVariants(instance, resolution, entityName);
@@ -293,6 +293,21 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this.loading = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * The config to bind for a given record. For brand-new (unsaved) records we hide the
+   * `systemMetadata` section by default — its fields (audit timestamps, IDs, etc.) are
+   * empty and irrelevant until the record exists. Doesn't mutate the consumer's config,
+   * and defers entirely to a consumer that uses an explicit `VisibleSectionKeys` allowlist.
+   */
+  private effectiveConfigFor(record: BaseEntity): EntityFormConfig | null {
+    if (record.IsSaved) return this.Config;
+    if (this.Config?.VisibleSectionKeys?.length) return this.Config; // consumer owns visibility
+    const SYSTEM_METADATA_KEY = 'systemMetadata';
+    const hidden = this.Config?.HiddenSectionKeys ?? [];
+    if (hidden.includes(SYSTEM_METADATA_KEY)) return this.Config;
+    return { ...(this.Config ?? {}), HiddenSectionKeys: [...hidden, SYSTEM_METADATA_KEY] };
   }
 
   /**
