@@ -1,6 +1,6 @@
 import { Component, EventEmitter, inject, Input, Output } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent } from '@memberjunction/ng-base-forms';
+import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -36,6 +36,7 @@ export class SingleRecordComponent extends BaseAngularComponent {
 
   private navigationService = inject(NavigationService);
   private sharedService = inject(SharedService);
+  private formPresenter = inject(MJFormPresenterService);
   private recentAccessService = new RecentAccessService();
 
   /** Unblock the shell's first-resource-load gate (success or error). */
@@ -84,6 +85,19 @@ export class SingleRecordComponent extends BaseAngularComponent {
       case 'dismiss':
         this.recordDismissed.emit();
         break;
+      case 'create-related': {
+        // A FK field wants a new related record created. Open the related entity's form
+        // as a dialog/slide-in (prefilled), then hand the saved record back so the field
+        // can select it.
+        const ref = this.formPresenter.Open({
+          EntityName: event.EntityName,
+          Presentation: event.Presentation ?? 'dialog',
+          NewRecordValues: event.NewRecordValues,
+          Provider: event.Provider,
+        });
+        ref.AfterSaved().then(created => event.Complete(created));
+        break;
+      }
     }
   }
 }
