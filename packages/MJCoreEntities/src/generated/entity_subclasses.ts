@@ -15144,7 +15144,7 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('HTML'), z.literal('MSTeams'), z.literal('Markdown'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -15161,7 +15161,9 @@ export const MJEntityFieldSchema = z.object({
     *   * GeoLongitude
     *   * GeoPostalCode
     *   * GeoStateProvince
+    *   * HTML
     *   * MSTeams
+    *   * Markdown
     *   * Other
     *   * SIP
     *   * SMS
@@ -67092,7 +67094,9 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * GeoLongitude
     *   * GeoPostalCode
     *   * GeoStateProvince
+    *   * HTML
     *   * MSTeams
+    *   * Markdown
     *   * Other
     *   * SIP
     *   * SMS
@@ -67103,10 +67107,10 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * ZoomMtg
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
