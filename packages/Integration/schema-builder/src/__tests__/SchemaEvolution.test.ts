@@ -44,6 +44,7 @@ function MakeExistingTable(columns: Array<{ Name: string; SqlType: string; IsNul
         { Name: '__mj_integration_LastSyncedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
         { Name: '__mj_integration_LastSyncedSnapshot', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
         { Name: '__mj_integration_SyncMessage', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
+        { Name: '__mj_integration_ContentHash', SqlType: 'NVARCHAR(64)', IsNullable: true },
     ];
     return {
         SchemaName: 'hubspot',

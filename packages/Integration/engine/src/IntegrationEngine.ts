@@ -38,6 +38,7 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
+import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 
@@ -1714,11 +1715,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const batchStartUpdated = result.RecordsUpdated;
             const batchStartDeleted = result.RecordsDeleted;
 
+            // One cheap read per batch fetches the stored content hashes for the rows we'd
+            // otherwise load one-by-one. For a watermark-less re-sync where nothing changed,
+            // this lets UpdateRecord skip every per-record load. Best-effort: undefined → the
+            // existing dirty-flag path runs unchanged.
+            const precheckHashes = await this.PrefetchContentHashes(batch, contextUser);
+
             await provider.BeginTransaction();
             try {
                 for (const record of batch) {
                     result.RecordsProcessed++;
-                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger);
+                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes);
                 }
                 await provider.CommitTransaction();
             } catch (err) {
@@ -1765,7 +1772,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo,
-        logger?: SyncLogger
+        logger?: SyncLogger,
+        precheckHashes?: Map<string, string>
     ): Promise<void> {
         logger?.emit('sync.record.decision', {
             externalId: record.ExternalRecord.ExternalID,
@@ -1787,7 +1795,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 result.RecordsCreated++;
                 break;
             case 'Update':
-                await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser);
+                await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes);
                 break;
             case 'Delete': {
                 const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
@@ -1868,13 +1876,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        precheckHashes?: Map<string, string>
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — treat as a new record
             await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
             result.RecordsCreated++;
             return;
+        }
+
+        // Content-hash fast path (watermark-less change detection): if the batch
+        // prefetch produced a stored hash for this record and it equals the freshly
+        // computed hash of the incoming mapped fields, the record is provably
+        // unchanged — skip the per-record DB load AND the write. The dirty-flag check
+        // below is the fallback for entities without the hash column.
+        if (precheckHashes) {
+            const stored = precheckHashes.get(record.MatchedMJRecordID);
+            if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
+                result.RecordsSkipped++;
+                return;
+            }
         }
 
         const md = this.ProviderToUse;
@@ -1912,6 +1934,57 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}: ${errMsg}`);
         }
         result.RecordsUpdated++;
+    }
+
+    /**
+     * Batch-loads the stored `__mj_integration_ContentHash` for the Update records in a
+     * batch, keyed by matched MJ record ID. Returns undefined (→ no fast-path skip; the
+     * dirty-flag path runs) when the optimization doesn't apply or can't be performed:
+     *   - the target entity has no ContentHash column (predates the feature), or
+     *   - the entity has a composite PK (we keep the '|'-split out of the fast path), or
+     *   - nothing in the batch is an Update with a matched ID, or
+     *   - the read fails (best-effort — a logging/optimization read must never break a sync).
+     */
+    private async PrefetchContentHashes(
+        batch: MappedRecord[],
+        contextUser: UserInfo
+    ): Promise<Map<string, string> | undefined> {
+        const ids = Array.from(new Set(
+            batch.filter(r => r.ChangeType === 'Update' && r.MatchedMJRecordID)
+                 .map(r => r.MatchedMJRecordID as string)
+        ));
+        if (ids.length === 0) return undefined;
+
+        const entityName = batch[0].MJEntityName;
+        const entityInfo = this.ProviderToUse.EntityByName(entityName);
+        if (!entityInfo) return undefined;
+        if (!entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN)) return undefined;
+        const pkFields = entityInfo.PrimaryKeys ?? [];
+        if (pkFields.length !== 1) return undefined; // single-PK fast path only
+        const pk = pkFields[0].Name;
+
+        try {
+            const escaped = ids.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
+            const rv = new RunView();
+            const res = await rv.RunView<Record<string, string>>({
+                EntityName: entityName,
+                Fields: [pk, CONTENT_HASH_COLUMN],
+                ExtraFilter: `${pk} IN (${escaped})`,
+                ResultType: 'simple',
+            }, contextUser);
+            if (!res.Success) return undefined;
+            const map = new Map<string, string>();
+            for (const row of res.Results) {
+                const id = row[pk];
+                const hash = row[CONTENT_HASH_COLUMN];
+                if (id != null && typeof hash === 'string' && hash.length > 0) {
+                    map.set(String(id), hash);
+                }
+            }
+            return map;
+        } catch {
+            return undefined; // best-effort — never break a sync over a prefetch failure
+        }
     }
 
     /**
@@ -2147,6 +2220,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // A clean sync clears any prior conflict/error note.
         if (hasField('__mj_integration_SyncMessage')) {
             entity.Set('__mj_integration_SyncMessage', null);
+        }
+        // Content hash of the mapped values — the cheap change-detection key for
+        // watermark-less sources. On the next sync, a record whose freshly-computed
+        // hash equals the stored hash can be skipped without loading it (see
+        // PrefetchContentHashes / UpdateRecord). No-op on tables predating the column.
+        if (hasField(CONTENT_HASH_COLUMN)) {
+            entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
         }
     }
 

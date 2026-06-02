@@ -123,6 +123,7 @@ export class DDLGenerator {
             '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
             '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
             '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
+            '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
         };
 
         for (const [colName, desc] of Object.entries(standardDescriptions)) {
@@ -233,6 +234,7 @@ export class DDLGenerator {
                 `    ${q('__mj_integration_LastSyncedAt')} DATETIMEOFFSET NULL`,
                 `    ${q('__mj_integration_LastSyncedSnapshot')} NVARCHAR(MAX) NULL`,
                 `    ${q('__mj_integration_SyncMessage')} NVARCHAR(MAX) NULL`,
+                `    ${q('__mj_integration_ContentHash')} NVARCHAR(64) NULL`,
             ];
         }
         return [
@@ -240,6 +242,7 @@ export class DDLGenerator {
             `    ${q('__mj_integration_LastSyncedAt')} TIMESTAMPTZ NULL`,
             `    ${q('__mj_integration_LastSyncedSnapshot')} TEXT NULL`,
             `    ${q('__mj_integration_SyncMessage')} TEXT NULL`,
+            `    ${q('__mj_integration_ContentHash')} VARCHAR(64) NULL`,
         ];
     }
 }

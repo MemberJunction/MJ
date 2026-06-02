@@ -323,6 +323,13 @@ export class SchemaBuilder {
                 IsNullable: true,
                 Description: 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
             },
+            {
+                Name: '__mj_integration_ContentHash',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(64)' : 'VARCHAR(64)',
+                IsNullable: true,
+                Description: 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark (e.g. YourMembership, which re-fetches every record each sync).',
+            },
         ];
     }
 

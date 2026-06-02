@@ -104,6 +104,9 @@ export { MatchEngine } from './MatchEngine.js';
 // Services
 export { WatermarkService } from './WatermarkService.js';
 
+// Content hashing — watermark-less change detection key
+export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
+
 // Retry
 export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
 export type { RetryConfig } from './RetryRunner.js';

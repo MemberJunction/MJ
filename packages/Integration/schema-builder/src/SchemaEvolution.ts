@@ -39,7 +39,8 @@ export class SchemaEvolution {
         const standardCols = new Set(['id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
                                        '__mj_createdat', '__mj_updatedat',
                                        '__mj_integration_syncstatus', '__mj_integration_lastsyncedat',
-                                       '__mj_integration_lastsyncedsnapshot', '__mj_integration_syncmessage']);
+                                       '__mj_integration_lastsyncedsnapshot', '__mj_integration_syncmessage',
+                                       '__mj_integration_contenthash']);
 
         const added: TargetColumnConfig[] = [];
         const modified: ColumnModification[] = [];
@@ -114,6 +115,7 @@ export class SchemaEvolution {
             { SourceFieldName: '__mj_integration_LastSyncedAt', TargetColumnName: '__mj_integration_LastSyncedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
             { SourceFieldName: '__mj_integration_LastSyncedSnapshot', TargetColumnName: '__mj_integration_LastSyncedSnapshot', TargetSqlType: isSql ? 'NVARCHAR(MAX)' : 'TEXT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
             { SourceFieldName: '__mj_integration_SyncMessage', TargetColumnName: '__mj_integration_SyncMessage', TargetSqlType: isSql ? 'NVARCHAR(MAX)' : 'TEXT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_ContentHash', TargetColumnName: '__mj_integration_ContentHash', TargetSqlType: isSql ? 'NVARCHAR(64)' : 'VARCHAR(64)', IsNullable: true, MaxLength: 64, Precision: null, Scale: null, DefaultValue: null },
         ];
         return std.filter(c => !have.has(c.TargetColumnName.toLowerCase()));
     }
