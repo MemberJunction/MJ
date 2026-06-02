@@ -195,6 +195,27 @@
                   </div>
                 </ng-template>
 
+                <!-- Pinned "currently selected" — sticky at the top while browsing, so you can
+                     keep it or pick another without clearing first. -->
+                @if (FKSelectedSuggestion && !FKLoading) {
+                  <div class="mj-fk-current">
+                    <div class="mj-fk-current-head">
+                      <i class="fa-solid fa-circle-check"></i>
+                      <span>Currently selected</span>
+                    </div>
+                    <div class="mj-fk-current-row" (mousedown)="OnFKSelectItem(FKSelectedSuggestion, $event)" title="Keep this selection">
+                      @if (FKSelectedSuggestion.Icon) { <i class="mj-fk-current-icon" [class]="FKSelectedSuggestion.Icon"></i> }
+                      <span class="mj-fk-current-name" [innerHTML]="FKSelectedSuggestion.HighlightedName"></span>
+                      @if (FKSelectedSuggestion.ExtraColumns.length && FKSelectedSuggestion.ExtraColumns[0].Value) {
+                        <span class="mj-fk-current-detail">{{ FKSelectedSuggestion.ExtraColumns[0].Value }}</span>
+                      }
+                      <button type="button" class="mj-fk-current-clear" (mousedown)="OnFKClearClick($event)" title="Clear selection">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                  </div>
+                }
+
                 @if (FKLoading) {
                   <div class="mj-fk-status">
                     <i class="fa-solid fa-circle-notch fa-spin"></i>

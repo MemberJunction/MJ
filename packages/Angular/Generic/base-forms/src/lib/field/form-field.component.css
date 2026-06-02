@@ -914,6 +914,107 @@
   white-space: nowrap;
 }
 
+/* ============================================
+   PINNED "CURRENTLY SELECTED" SECTION
+   ============================================ */
+.mj-fk-current {
+  border-bottom: 1px solid var(--mj-border-default);
+  background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card));
+  animation: mj-fk-current-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes mj-fk-current-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mj-fk-current-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-brand-primary);
+}
+
+.mj-fk-current-head i {
+  font-size: 10px;
+}
+
+.mj-fk-current-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 12px 10px;
+  cursor: pointer;
+  transition: background var(--mj-transition-base);
+}
+
+/* Accent bar on the left for a bit of sizzle. */
+.mj-fk-current-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--mj-brand-primary);
+}
+
+.mj-fk-current-row:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.mj-fk-current-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+}
+
+.mj-fk-current-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-fk-current-detail {
+  font-size: 13px;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-fk-current-clear {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-current-clear:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-status-error);
+}
+
 @keyframes mj-dropdown-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
