@@ -43,5 +43,5 @@ export class MjFormDialogComponent extends BaseFormOverlay {
    * (Declared here so the dialog gets the dialog-appropriate default while the
    * shared base stays presentation-neutral.)
    */
-  @Input() override Config = DIALOG_FORM_CONFIG;
+  protected override get PresetConfig() { return DIALOG_FORM_CONFIG; }
 }

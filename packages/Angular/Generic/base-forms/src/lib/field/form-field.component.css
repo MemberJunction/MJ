@@ -415,6 +415,87 @@
   background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
+/* ============================================
+   MULTI-COLUMN FK DROPDOWN (icon + name + extra cols, hscroll)
+   ============================================ */
+.mj-fk-dropdown--multi {
+  padding: 4px;
+}
+
+/* Horizontal scroll region: rows can be wider than the dropdown when there are
+   many DefaultInView columns. The options list scrolls horizontally as a unit. */
+.mj-fk-options {
+  overflow-x: auto;
+}
+
+.mj-fk-option--row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Keyboard / hover active row */
+.mj-fk-option--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
+.mj-fk-option-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+  width: 16px;
+  text-align: center;
+}
+
+/* Primary clickable label — the entity NameField */
+.mj-fk-option-name {
+  flex: 0 0 auto;
+  min-width: 140px;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+}
+
+/* Secondary DefaultInView columns */
+.mj-fk-option-col {
+  flex: 0 0 auto;
+  min-width: 80px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+/* Matched-substring highlight inside the name column */
+.mj-fk-option-name :global(.mj-forms-search-highlight) {
+  background-color: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+  color: var(--mj-text-primary);
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+/* Loading / empty status rows */
+.mj-fk-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+}
+
+.mj-fk-status i {
+  font-size: 12px;
+}
+
+.mj-fk-status--empty {
+  font-style: italic;
+}
+
 @keyframes mj-dropdown-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }

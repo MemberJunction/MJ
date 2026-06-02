@@ -541,6 +541,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         const ref = this.formPresenter.Open({
             EntityName: 'MJ: Query Categories',
             Presentation: 'slide-in',
+            // Quick-create: drop the system-metadata (timestamps) section — empty
+            // for a new record. Merges over the slide-in preset (toolbar still off).
+            Config: { HiddenSectionKeys: ['systemMetadata'] },
             Provider: this.ProviderToUse,
         });
         const saved = await ref.AfterSaved();
@@ -560,7 +563,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             EntityName: 'MJ: Query Categories',
             RecordId: this.record.CategoryID,
             Presentation: 'slide-in',
-            Config: { StartInEditMode: true },
+            // Open editable + drop the system-metadata section. Partial config
+            // merges over the slide-in preset, so the toolbar stays suppressed.
+            Config: { StartInEditMode: true, HiddenSectionKeys: ['systemMetadata'] },
             Provider: this.ProviderToUse,
         });
         const saved = await ref.AfterSaved();

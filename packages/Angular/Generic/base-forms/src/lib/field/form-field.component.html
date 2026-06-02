@@ -103,6 +103,7 @@
               (input)="OnFKInput($event)"
               (focus)="OnFKFocus($event)"
               (blur)="OnFKBlur()"
+              (keydown)="OnFKKeydown($event)"
               placeholder="Search...">
             @if (FKSearchText) {
               <button class="mj-fk-clear" (mousedown)="OnFKClearClick($event)" title="Clear">
@@ -111,11 +112,36 @@
             } @else {
               <i class="fa-solid fa-magnifying-glass mj-fk-search-icon"></i>
             }
-            @if (ShowFKDropdown && FKSuggestions.length > 0) {
-              <div class="mj-fk-dropdown" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
-                @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue) {
-                  <div class="mj-fk-option" (mousedown)="OnFKSelectItem(suggestion, $event)">
-                    {{ suggestion.DisplayName }}
+            @if (ShowFKDropdown) {
+              <div class="mj-fk-dropdown mj-fk-dropdown--multi" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
+                @if (FKLoading) {
+                  <div class="mj-fk-status">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Searching…</span>
+                  </div>
+                }
+                @if (!FKLoading && FKNoMatches) {
+                  <div class="mj-fk-status mj-fk-status--empty">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>No matches</span>
+                  </div>
+                }
+                @if (!FKLoading && FKSuggestions.length > 0) {
+                  <div class="mj-fk-options">
+                    @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue; let i = $index) {
+                      <div class="mj-fk-option mj-fk-option--row"
+                          [class.mj-fk-option--active]="i === FKActiveIndex"
+                          (mousedown)="OnFKSelectItem(suggestion, $event)"
+                          (mouseenter)="FKActiveIndex = i">
+                        @if (FKRowIcon) {
+                          <i class="mj-fk-option-icon" [class]="FKRowIcon"></i>
+                        }
+                        <span class="mj-fk-option-name" [innerHTML]="suggestion.HighlightedName"></span>
+                        @for (col of suggestion.ExtraColumns; track col.FieldName) {
+                          <span class="mj-fk-option-col" [title]="col.Header">{{ col.Value }}</span>
+                        }
+                      </div>
+                    }
                   </div>
                 }
               </div>

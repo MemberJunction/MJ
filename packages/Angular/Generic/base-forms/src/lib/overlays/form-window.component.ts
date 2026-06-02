@@ -38,5 +38,5 @@ export class MjFormWindowComponent extends BaseFormOverlay {
   @Input() Resizable = true;
 
   /** Form config. Defaults to the dialog preset (no in-form toolbar). */
-  @Input() override Config = DIALOG_FORM_CONFIG;
+  protected override get PresetConfig() { return DIALOG_FORM_CONFIG; }
 }

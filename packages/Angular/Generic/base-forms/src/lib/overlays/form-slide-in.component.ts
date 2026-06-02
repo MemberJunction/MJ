@@ -39,7 +39,7 @@ export class MjFormSlideInComponent extends BaseFormOverlay implements OnInit {
   @Input() Resizable = true;
 
   /** Form config. Defaults to the slide-in preset; consumers can override. */
-  @Input() override Config = SLIDEIN_FORM_CONFIG;
+  protected override get PresetConfig() { return SLIDEIN_FORM_CONFIG; }
 
   /** Entity used to scope the persisted width (resolved on init). */
   private widthEntity: string | null = null;

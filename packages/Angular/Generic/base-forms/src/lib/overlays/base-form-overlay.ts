@@ -46,8 +46,28 @@ export abstract class BaseFormOverlay extends BaseAngularComponent {
   @Input() SectionName: string | null = null;
   /** Force edit mode (default: new → edit, existing → read). */
   @Input() EditMode: boolean | null = null;
-  /** Per-instance form config (toolbar/sections/width/links). */
+  /**
+   * Per-instance config OVERRIDE. Treated as a partial set of overrides that is
+   * merged **over** the surface's {@link PresetConfig} — so passing
+   * `{ StartInEditMode: true }` keeps the preset's `Toolbar: null` etc. instead
+   * of replacing the whole preset. Bind the merged result via {@link EffectiveConfig}.
+   */
   @Input() Config: EntityFormConfig | null = null;
+
+  /**
+   * The surface's default config preset (TAB/DIALOG/SLIDEIN). Subclasses override
+   * this getter; the base returns an empty object (no defaults).
+   */
+  protected get PresetConfig(): EntityFormConfig { return {}; }
+
+  /**
+   * The config actually handed to the form host: the surface {@link PresetConfig}
+   * with any consumer {@link Config} overrides merged on top. This is what makes
+   * partial configs work — you only specify what differs from the preset.
+   */
+  get EffectiveConfig(): EntityFormConfig {
+    return { ...this.PresetConfig, ...(this.Config ?? {}) };
+  }
 
   // ── Chrome ────────────────────────────────────────────────────────────────
 
