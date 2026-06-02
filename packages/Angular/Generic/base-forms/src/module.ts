@@ -19,6 +19,7 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { MJSafeRichHtmlPipe } from '@memberjunction/ng-shared-generic';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 
 /**
@@ -63,7 +64,8 @@ import { InteractiveFormComponent } from './lib/interactive-form/interactive-for
     RecordTagsModule,
     MJReactModule,
     MarkdownModule,
-    CodeEditorModule
+    CodeEditorModule,
+    MJSafeRichHtmlPipe
   ],
   exports: [
     MjFormToolbarComponent,

@@ -54,11 +54,12 @@
                 </div>
               }
               @else if (RichTextMode === 'html') {
-                <!-- XSS: Angular's [innerHTML] binding auto-sanitizes in HTML SecurityContext,
-                     stripping <script>, on* event handlers, and javascript:/data: URLs before
-                     injection. We bind the raw string (no bypassSecurityTrustHtml) so this
-                     protection always applies. -->
-                <div class="mj-forms-field-value mj-forms-field-value--rich" [innerHTML]="FormatValue()"></div>
+                <!-- XSS: the mjSafeRichHtml pipe sanitizes with DOMPurify (HTML + SVG profiles)
+                     and then bypasses Angular's redundant re-sanitize. DOMPurify strips <script>,
+                     on* handlers, javascript:/data: URLs and <foreignObject> while KEEPING safe
+                     inline SVG + styles — richer than Angular's built-in sanitizer, still safe for
+                     untrusted content. -->
+                <div class="mj-forms-field-value mj-forms-field-value--rich" [innerHTML]="FormatValue() | mjSafeRichHtml"></div>
               }
               @else if (RichTextMode === 'code') {
                 <div class="mj-forms-field-value mj-forms-field-value--code">
