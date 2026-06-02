@@ -144,13 +144,25 @@ export function resolveFormToolbarConfig(
 }
 
 /**
- * Whether a section should be hidden given the config's visibility rules:
+ * Minimal structural shape of the section-visibility rules. Both
+ * {@link EntityFormConfig} and `FormContext` satisfy this, so the same helper
+ * works whether driven by config directly or via the form context that reaches
+ * every panel (including slot-injected `BaseFormPanel`s).
+ */
+export interface SectionVisibilityRules {
+  showRelatedEntities?: boolean;
+  hiddenSectionKeys?: string[];
+  visibleSectionKeys?: string[];
+}
+
+/**
+ * Whether a section should be hidden given the visibility rules:
  * - `visibleSectionKeys` (allow-list) hides anything not listed;
  * - else `hiddenSectionKeys` hides the listed keys;
  * - `showRelatedEntities === false` additionally hides related-entity panels.
  */
 export function isFormSectionHidden(
-  config: EntityFormConfig | null | undefined,
+  config: SectionVisibilityRules | null | undefined,
   sectionKey: string,
   variant: string | undefined,
 ): boolean {

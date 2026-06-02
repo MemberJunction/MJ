@@ -8,6 +8,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '../types/form-types';
+import { isFormSectionHidden } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
@@ -430,8 +431,11 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   private UpdateVisibilityAndHighlighting(): void {
-    // Container-driven hard hide takes precedence over search state.
-    if (this._hidden) {
+    // Hard hide takes precedence over search state. Driven by an explicit
+    // `Hidden` input OR the form config's section-visibility rules carried on
+    // FormContext (which also reach slot-injected BaseFormPanels, since every
+    // panel receives FormContext).
+    if (this._hidden || isFormSectionHidden(this.FormContext, this.SectionKey, this.Variant)) {
       this.IsVisible = false;
       this.DisplayName = EscapeHTML(this.SectionName);
       this.cdr.markForCheck();

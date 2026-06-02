@@ -4,7 +4,7 @@ import { EntityFormConfig } from '../types/entity-form-config';
 import { FormOverlayCloseReason } from './base-form-overlay';
 
 /** How a form should be presented by {@link MJFormPresenterService}. */
-export type MJFormPresentation = 'dialog' | 'slide-in';
+export type MJFormPresentation = 'dialog' | 'slide-in' | 'window';
 
 /**
  * Options for {@link MJFormPresenterService.open}. Supply EITHER a pre-loaded
@@ -12,7 +12,7 @@ export type MJFormPresentation = 'dialog' | 'slide-in';
  * keys for a new record).
  */
 export interface MJFormPresenterOptions {
-  /** Dialog (default) or slide-in. */
+  /** Dialog (default), slide-in, or floating non-modal window. */
   presentation?: MJFormPresentation;
 
   // ── Record selection ──
@@ -26,6 +26,8 @@ export interface MJFormPresenterOptions {
   record?: BaseEntity;
   /** New-record default values (URL-segment string or object). */
   newRecordValues?: string | Record<string, unknown>;
+  /** Render a single registered form section instead of the full form. */
+  sectionName?: string;
   /** Force edit mode (default: new → edit, existing → read). */
   editMode?: boolean;
 

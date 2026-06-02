@@ -130,7 +130,16 @@ all mechanics are Generic.
 
 <!-- Bind a record you already have -->
 <mj-form-dialog [Record]="myEntity" [(Visible)]="show"></mj-form-dialog>
+
+<!-- Floating, non-modal, draggable window (compare/reference while editing) -->
+<mj-form-window [EntityName]="'Accounts'" [RecordID]="id" [(Visible)]="show"></mj-form-window>
 ```
+
+Three shells ship: **`<mj-form-dialog>`** (modal), **`<mj-form-slide-in>`**
+(right-edge, resizable, width persisted per-entity), and **`<mj-form-window>`**
+(floating, non-modal, draggable + resizable — good for keeping a record open
+while you work elsewhere). All three share the same inputs/outputs (they extend
+`BaseFormOverlay`) and the same `MJFormPresenterService` imperative path.
 
 Both shells are **standalone** components — import them directly:
 `import { MjFormDialogComponent, MjFormSlideInComponent } from '@memberjunction/ng-base-forms';`
@@ -146,10 +155,10 @@ constructor(private forms: MJFormPresenterService) {}
 async edit(id: string) {
   const ref = this.forms.open({
     entityName: 'MJ: AI Agents',
-    recordId: id,                  // omit for a new record
-    presentation: 'slide-in',      // 'dialog' | 'slide-in'
+    recordId: id,                     // omit for a new record
+    presentation: 'slide-in',         // 'dialog' | 'slide-in' | 'window'
     config: { showRelatedEntities: false },
-    provider: this.ProviderToUse,  // multi-provider apps
+    provider: this.ProviderToUse,     // multi-provider apps
   });
   const saved = await ref.afterSaved();   // BaseEntity | null
   if (saved) { /* refresh */ }
@@ -194,37 +203,126 @@ config: { ...DIALOG_FORM_CONFIG, collapsibleSections: false, toolbar: { ShowDele
 Generated templates hardcode `<mj-record-form-container [FormComponent]="this">`.
 The container already derives state from that `this` reference (width mode,
 variants, dirty state…). Config rides the same channel: the host sets
-`form.Config`, and the container's `EffectiveToolbarConfig` / `EffectiveShowToolbar`
-/ section-visibility logic consult it. The pure resolution helpers
-(`resolveFormShowToolbar`, `resolveFormToolbarConfig`, `isFormSectionHidden` in
-`entity-form-config.ts`) are unit-tested.
+`form.Config`; the container reads toolbar config from it
+(`EffectiveToolbarConfig` / `EffectiveShowToolbar`), and section-visibility +
+collapsibility + link rules flow onto `form.formContext`, which **every** panel
+receives — including slot-injected `BaseFormPanel`s — so they apply uniformly.
+The pure resolution helpers (`resolveFormShowToolbar`, `resolveFormToolbarConfig`,
+`isFormSectionHidden` in `entity-form-config.ts`) are unit-tested.
 
 ---
 
-## 7. Navigation from inside a dialog / slide-in
+## 7. Custom sections — injected into a form, or rendered standalone
+
+There are two complementary ways to work with **sections** (units smaller than a
+whole form):
+
+### 7a. Inject a custom section into a generated form (`BaseFormPanel` slot)
+
+Add a panel to an existing generated form **without replacing it** — register a
+`BaseFormPanel` against a slot and it mounts at runtime. The canonical real
+example is **`MJ: Content Sources`**, which has two injected sections in
+`packages/Angular/Explorer/core-entity-forms/src/lib/panels/content-sources/`:
+
+```typescript
+// website-crawler-settings.panel.ts — a typed-config section injected into the
+// generated MJ: Content Sources form, self-gating on ContentSourceType.
+@RegisterClassEx(BaseFormPanel, {
+  key: 'content-sources:website-crawler-settings',
+  skipNullKeyWarning: true,
+  metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 80 },
+})
+@Component({ standalone: false, selector: 'mj-website-crawler-settings-panel', templateUrl: './website-crawler-settings.panel.html' })
+export class WebsiteCrawlerSettingsPanel extends BaseFormPanel<MJContentSourceEntity> {
+  public get IsWebsiteSourceType(): boolean { /* gate in template */ }
+}
+```
+
+It renders alongside the broadly-applicable `TagPipelineConfigurationPanel`
+(`sortKey: 100`) in the same `after-fields` slot — higher sortKey first. Neither
+required touching the generated form. Full authoring contract:
+[base-forms/PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
+
+> **These injected sections are controllable from the stack.** Because every
+> panel — generated, custom, OR slot-injected — receives `FormContext`, the
+> `EntityFormConfig` visibility rules (`hiddenSectionKeys` / `visibleSectionKeys`
+> / `showRelatedEntities`) apply uniformly. So a dialog can open the Content
+> Sources form and hide the crawler section with
+> `config: { hiddenSectionKeys: ['websiteCrawlerSettings'] }` — no per-panel code.
+
+### 7b. Render a single section standalone (`SectionName`)
+
+To render just **one** registered `BaseFormSectionComponent` (`@RegisterClass(BaseFormSectionComponent, '<Entity>.<Section>')`) — e.g. a compact quick-edit — pass `SectionName`:
+
+```html
+<mj-form-dialog [EntityName]="'My Entity'" [RecordID]="id"
+  SectionName="QuickEdit" Title="Quick edit" [(Visible)]="show"></mj-form-dialog>
+```
+
+```typescript
+this.forms.open({ entityName: 'My Entity', recordId: id, sectionName: 'QuickEdit', presentation: 'slide-in' });
+```
+
+Section mode bypasses the full-form resolver/toolbar/container — the section
+renders its own fields and the host saves the record directly. (This is the
+capability the legacy `EntityFormDialogComponent` exposed; the new host now
+supports it on every surface.)
+
+---
+
+## 8. Navigation from inside a dialog / slide-in
 
 In a modal context, in-form record links are **inert by default**
 (`enableRecordLinks: false`) so clicking one doesn't teleport the user out of the
-overlay. The host still emits `Navigate` for any consumer that wants to act on it
-(open a nested overlay, or route in the host app). **Generic code never routes** —
-only Explorer-layer code touches `NavigationService`.
+overlay. **Generic code never routes** — only Explorer-layer code touches
+`NavigationService`.
+
+To make links live and decide what happens, set `enableRecordLinks: true` and
+handle the bubbled `Navigate` event yourself — e.g. open the target in a **nested
+overlay**:
+
+```typescript
+const ref = this.forms.open({ entityName: 'Accounts', recordId: id, presentation: 'dialog' });
+// ...but with config.enableRecordLinks = true, or via the declarative shell:
+```
+
+```html
+<mj-form-dialog [EntityName]="'Accounts'" [RecordID]="id" [(Visible)]="show"
+  [Config]="{ enableRecordLinks: true }"
+  (Navigate)="onNavigate($event)"></mj-form-dialog>
+```
+
+```typescript
+onNavigate(e: FormNavigationEvent) {
+  if (e.Kind === 'record') {
+    // open the related record in a nested dialog (overlay stays open)
+    this.forms.open({ entityName: e.EntityName, primaryKey: e.PrimaryKey, presentation: 'dialog' });
+  }
+  // or, in an Explorer-layer component, route via NavigationService instead
+}
+```
+
+The host never decides — it emits, you choose (nested overlay, route, ignore).
+That keeps the Generic stack routing-free and lets each consumer pick the UX.
 
 ---
 
-## 8. Decision guide
+## 9. Decision guide
 
 | You want to… | Use |
 |--------------|-----|
 | Show/edit a record in the main tab area | `SingleRecordComponent` (Explorer) — already host-backed |
 | Quick-create/edit a record in a modal | `<mj-form-dialog>` or `forms.open({presentation:'dialog'})` |
 | Edit a record in a side panel without leaving the page | `<mj-form-slide-in>` or `forms.open({presentation:'slide-in'})` |
-| Add a panel to an existing form | `BaseFormPanel` + slot — [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md) |
+| Keep a record open (non-modal) while working elsewhere | `<mj-form-window>` or `forms.open({presentation:'window'})` |
+| Edit just one section of a record in an overlay | `SectionName` on any shell / `forms.open({sectionName})` |
+| Add a custom section into a generated form | `BaseFormPanel` + slot — [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md) (Content Sources is the example) |
 | Replace a form's whole layout | Custom `*Extended` form — [Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) |
 | Build a brand-new bespoke editor dialog | **Stop** — first check if a `<mj-form-dialog>` covers it |
 
 ---
 
-## 9. Reference
+## 10. Reference
 
 - **Package:** `@memberjunction/ng-base-forms` (`packages/Angular/Generic/base-forms`)
 - **Host:** `host/entity-form-host.component.ts`

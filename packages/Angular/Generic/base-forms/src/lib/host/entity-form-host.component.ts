@@ -1,14 +1,16 @@
 import {
   Component, Input, Output, EventEmitter, ViewChild, ViewContainerRef,
-  ComponentRef, ChangeDetectorRef, inject, AfterViewInit, OnDestroy
+  ComponentRef, ChangeDetectorRef, inject, AfterViewInit, OnDestroy, Type
 } from '@angular/core';
 import {
   CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType
 } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { BaseFormComponent } from '../base-form-component';
+import { BaseFormSectionComponent } from '../base-form-section-component';
 import { InteractiveFormComponent } from '../interactive-form/interactive-form.component';
 import { FormResolverService } from '../resolver/form-resolver.service';
 import { EntityFormConfig } from '../types/entity-form-config';
@@ -102,6 +104,16 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   /** New-record default values: URL-segment string or a plain object. */
   @Input() NewRecordValues: string | Record<string, unknown> | null = null;
 
+  /**
+   * Render a single registered form **section** (a `BaseFormSectionComponent`
+   * registered as `'<EntityName>.<SectionName>'`) instead of the full form.
+   * When set, the full-form resolver / variant picker / toolbar container are
+   * bypassed — the section component renders its own fields and the host saves
+   * the record directly. Used for compact, focused editors (e.g. a quick-edit
+   * grid row). Leave null for the normal full-form behavior.
+   */
+  @Input() SectionName: string | null = null;
+
   private _editMode: boolean | null = null;
   /** Force edit mode. When omitted, new records start in edit, existing in read. */
   @Input()
@@ -145,6 +157,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   public errorDetail: string | null = null;
 
   private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
+  private _sectionRef: ComponentRef<BaseFormSectionComponent> | null = null;
+  private _isSection = false;
   private _currentRecord: BaseEntity | null = null;
   private _saveHandlerSub: Subscription | null = null;
   private _formEventSubs: Subscription[] = [];
@@ -173,15 +187,27 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   // ── Public API (driven by dialog/slide-in chrome) ─────────────────────────
 
-  /** Save the bound record through the form's save pipeline. Returns success. */
+  /**
+   * Save the bound record. In full-form mode this runs the form's save
+   * pipeline (validation, pending records, notifications); in section mode the
+   * section component has no pipeline, so we save the record directly (the
+   * record's own save event still drives the `Saved` output).
+   */
   async Save(): Promise<boolean> {
+    if (this._isSection) {
+      return this._currentRecord ? this._currentRecord.Save() : false;
+    }
     const f = this.form;
     if (!f) return false;
     return f.SaveRecord(true);
   }
 
-  /** Cancel edits (revert) through the form's cancel pipeline. */
+  /** Cancel edits (revert). Full-form mode uses the form's cancel pipeline. */
   Cancel(): void {
+    if (this._isSection) {
+      if (this._currentRecord?.Dirty) this._currentRecord.Revert();
+      return;
+    }
     this.form?.CancelEdit();
   }
 
@@ -213,6 +239,12 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
         return;
       }
       const permissions = entity.GetUserPermisions(md.CurrentUser);
+
+      // Section mode short-circuits the full-form resolver / container.
+      if (this.SectionName) {
+        await this.mountSection(entityName, permissions);
+        return;
+      }
 
       const resolution = await this.formResolver.ResolveFormForEntity(entity, md.CurrentUser, md);
       if (resolution.kind === 'none') {
@@ -261,6 +293,43 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this.loading = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Section mode: resolve a `BaseFormSectionComponent` registered as
+   * `'<entity>.<section>'`, mount it, and bind the record. No resolver,
+   * variants, container, or form-event surface — section components are bare
+   * field editors; the host saves the record directly (see {@link Save}).
+   */
+  private async mountSection(entityName: string, permissions: unknown): Promise<void> {
+    const key = `${entityName}.${this.SectionName}`;
+    const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, key);
+    if (!reg?.SubClass) {
+      this.fail(`No form section "${this.SectionName}" is registered for "${entityName}".`,
+        `Expected a @RegisterClass(BaseFormSectionComponent, '${key}'). Check the section name.`);
+      return;
+    }
+
+    const record = await this.obtainRecord(entityName);
+    if (!record) return;
+
+    this._saveHandlerSub = record.RegisterEventHandler((e: BaseEntityEvent) => {
+      if (e.type === 'save') this.Saved.emit(record);
+    });
+
+    this.anchor.clear();
+    const ref = this.anchor.createComponent(reg.SubClass as Type<BaseFormSectionComponent>);
+    this._sectionRef = ref;
+    this._currentRecord = record;
+    this._isSection = true;
+
+    const instance = ref.instance as BaseFormSectionComponent & { userPermissions?: unknown };
+    instance.record = record;
+    instance.userPermissions = permissions;
+    instance.EditMode = this._editMode ?? !record.IsSaved;
+
+    this.RecordReady.emit(record);
+    this.LoadComplete.emit();
   }
 
   /** Resolve the BaseEntity to bind: the supplied instance, or a freshly loaded/new one. */
@@ -416,6 +485,11 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       try { this._formComponentRef.destroy(); } catch { /* noop */ }
       this._formComponentRef = null;
     }
+    if (this._sectionRef) {
+      try { this._sectionRef.destroy(); } catch { /* noop */ }
+      this._sectionRef = null;
+    }
+    this._isSection = false;
     this._currentRecord = null;
     this.anchor?.clear();
   }

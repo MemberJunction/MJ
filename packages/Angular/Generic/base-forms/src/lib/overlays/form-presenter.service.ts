@@ -1,13 +1,14 @@
 import {
-  Injectable, ApplicationRef, EnvironmentInjector, createComponent, inject, ComponentRef
+  Injectable, ApplicationRef, EnvironmentInjector, createComponent, inject, ComponentRef, Type
 } from '@angular/core';
 import { BaseEntity } from '@memberjunction/core';
 import { Subscription } from 'rxjs';
 
 import { MjFormDialogComponent } from './form-dialog.component';
 import { MjFormSlideInComponent } from './form-slide-in.component';
+import { MjFormWindowComponent } from './form-window.component';
 import { BaseFormOverlay, FormOverlayCloseReason } from './base-form-overlay';
-import { MJFormPresenterOptions, MJFormRef } from './form-presenter.types';
+import { MJFormPresenterOptions, MJFormRef, MJFormPresentation } from './form-presenter.types';
 
 /**
  * Imperatively opens any MemberJunction entity form as a dialog or slide-in
@@ -32,15 +33,16 @@ export class MJFormPresenterService {
   private readonly envInjector = inject(EnvironmentInjector);
 
   open(options: MJFormPresenterOptions): MJFormRef {
-    const useSlideIn = options.presentation === 'slide-in';
+    const presentation: MJFormPresentation = options.presentation ?? 'dialog';
     const hostEl = document.createElement('div');
     document.body.appendChild(hostEl);
 
-    const ref: ComponentRef<BaseFormOverlay> = useSlideIn
-      ? createComponent(MjFormSlideInComponent, { environmentInjector: this.envInjector, hostElement: hostEl })
-      : createComponent(MjFormDialogComponent, { environmentInjector: this.envInjector, hostElement: hostEl });
+    const ref: ComponentRef<BaseFormOverlay> = createComponent(
+      this.shellFor(presentation),
+      { environmentInjector: this.envInjector, hostElement: hostEl },
+    );
 
-    this.applyInputs(ref.instance, options, useSlideIn);
+    this.applyInputs(ref.instance, options, presentation);
     this.appRef.attachView(ref.hostView);
 
     // ── Promises wired to the overlay outputs ──
@@ -82,13 +84,23 @@ export class MJFormPresenterService {
     );
   }
 
+  /** Maps a presentation to its (standalone) overlay shell component. */
+  private shellFor(p: MJFormPresentation): Type<BaseFormOverlay> {
+    switch (p) {
+      case 'slide-in': return MjFormSlideInComponent;
+      case 'window': return MjFormWindowComponent;
+      default: return MjFormDialogComponent;
+    }
+  }
+
   /** Copies presenter options onto the overlay instance. */
-  private applyInputs(inst: BaseFormOverlay, o: MJFormPresenterOptions, useSlideIn: boolean): void {
+  private applyInputs(inst: BaseFormOverlay, o: MJFormPresenterOptions, presentation: MJFormPresentation): void {
     inst.EntityName = o.entityName ?? null;
     if (o.primaryKey) inst.PrimaryKey = o.primaryKey;
     if (o.recordId) inst.RecordID = o.recordId;
     inst.Record = o.record ?? null;
     inst.NewRecordValues = o.newRecordValues ?? null;
+    inst.SectionName = o.sectionName ?? null;
     inst.EditMode = o.editMode ?? null;
     if (o.config) inst.Config = o.config;
     if (o.title) inst.Title = o.title;
@@ -97,10 +109,10 @@ export class MJFormPresenterService {
     if (o.saveButtonText) inst.SaveButtonText = o.saveButtonText;
     if (o.cancelButtonText) inst.CancelButtonText = o.cancelButtonText;
 
-    if (useSlideIn) {
+    if (presentation === 'slide-in') {
       if (o.widthPx != null) (inst as MjFormSlideInComponent).WidthPx = o.widthPx;
     } else if (o.width != null) {
-      (inst as MjFormDialogComponent).Width = o.width;
+      (inst as MjFormDialogComponent | MjFormWindowComponent).Width = o.width;
     }
   }
 }

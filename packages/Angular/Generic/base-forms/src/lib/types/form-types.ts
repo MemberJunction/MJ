@@ -97,6 +97,17 @@ export interface FormContext {
    * true means links are live (the default).
    */
   enableRecordLinks?: boolean;
+  /**
+   * Section-visibility rules, propagated from {@link EntityFormConfig}. Read by
+   * every collapsible panel — including slot-injected `BaseFormPanel`s — so
+   * per-instance show/hide applies uniformly across generated, custom, and
+   * injected sections. `showRelatedEntities === false` hides related-entity
+   * panels; `hiddenSectionKeys` / `visibleSectionKeys` (allow-list) target
+   * specific section keys.
+   */
+  showRelatedEntities?: boolean;
+  hiddenSectionKeys?: string[];
+  visibleSectionKeys?: string[];
 }
 
 /**

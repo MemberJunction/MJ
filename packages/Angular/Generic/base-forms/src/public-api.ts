@@ -29,6 +29,7 @@ export * from './lib/host/entity-form-host.component';
 export * from './lib/overlays/base-form-overlay';
 export * from './lib/overlays/form-dialog.component';
 export * from './lib/overlays/form-slide-in.component';
+export * from './lib/overlays/form-window.component';
 export * from './lib/overlays/form-presenter.types';
 export * from './lib/overlays/form-presenter.service';
 

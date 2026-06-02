@@ -179,7 +179,7 @@ Net effect: **every existing generated form honors `Config` with zero regenerati
 ### 6.6 Explorer — thin wrapper
 - `single-record.component.ts`: delete the inline resolve/load/create/wire/teardown; render `<mj-entity-form-host>` and subscribe to its outputs, mapping `Navigate`→`NavigationService`, `Notification`→`SharedService`, `Dismissed`→close, plus `recentAccessService.logAccess`. Import `FormResolverService` from `@memberjunction/ng-base-forms`.
 - Update `explorer-core` `form-resolver.service.test.ts` import path; update `dashboards/ComponentStudio/services/entity-form-override.service.ts` import.
-- **`entity-form-dialog` retirement — DEFERRED.** It exposes a **section-mode** (rendering a single `BaseFormSectionComponent`) that the new stack doesn't cover, and its consumer `simple-record-list` relies on it. Retiring it requires section-mode support in the new host first. For now its README points new code at `<mj-form-dialog>` / `MJFormPresenterService`; full retirement is a follow-up.
+- **`entity-form-dialog` retirement — capability gap CLOSED; migration deferred.** The new host now supports **section mode** (`SectionName`), which was the only capability keeping `entity-form-dialog` around. What remains is purely a migration of its sole consumer (`simple-record-list`) onto `<mj-form-dialog [SectionName]>`. Its README is now marked deprecated-for-new-code; the consumer migration is a small follow-up (kept out of this PR to bound the diff).
 
 ### 6.7 Audit
 - `packages/Actions/CoreActions/.../get-active-form-for-entity.action.ts` references resolution — verify it's an independent server-side path (it can't import the Angular service). No change expected; confirm.
@@ -230,7 +230,11 @@ const saved = await ref.afterSaved(); // BaseEntity on save, null on cancel
 - ✅ `enableRecordLinks` now renders FK/record links inert (plain text) in dialog/slide-in via `FormContext.enableRecordLinks` → `MjFormFieldComponent.RecordLinksEnabled`.
 - ✅ Slide-in width persisted per-entity via `UserInfoEngine` (`mj.formSlideIn.width.<entity>`), restored on init.
 - ✅ Loading + error states owned by `MjEntityFormHostComponent`.
-- **Deferred** (intentionally, not needed for the core vision): `window` presentation (dialog + slide-in cover the ask; presenter is `'dialog' | 'slide-in'`); nested-dialog auto-open on in-form navigation (links are inert by default; the `Navigate` event still bubbles for consumers who want it); deep focus-trapping a11y beyond what `mj-dialog`/`mj-slide-panel` already provide (backdrop + Escape).
+- ✅ `window` presentation — `MjFormWindowComponent` (`<mj-form-window>`, non-modal floating, draggable/resizable) + presenter `'window'`.
+- ✅ Section mode — `SectionName` on the host + all shells + presenter renders a single registered `BaseFormSectionComponent` standalone (closes the gap that blocked `entity-form-dialog` retirement).
+- ✅ Config-driven section visibility now flows through `FormContext` to **every** panel, including slot-injected `BaseFormPanel`s (e.g. Content Sources) — not just `@ContentChildren`.
+- ✅ Nested-navigation wiring documented (enable links + handle `Navigate` to open a nested overlay).
+- **Deferred** (not needed for the core vision): deep focus-trapping a11y beyond what `mj-dialog` / `mj-window` / `mj-slide-panel` already provide (backdrop + Escape + drag).
 
 ### Phase 3 — Replacement waves (see §9)
 - Wave A: thin Generic wrappers (`scheduling`, `agent-requests`, `credentials` full, `agents` create dialog/slide-in).

@@ -11,7 +11,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
-import { resolveFormShowToolbar, resolveFormToolbarConfig, isFormSectionHidden } from '../types/entity-form-config';
+import { resolveFormShowToolbar, resolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
@@ -401,13 +401,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Subscribe to panel Navigate events and relay them
     this.SubscribeToPanelNavigateEvents();
 
-    // Apply Config-driven section visibility (related-entity hide / allow-list).
-    this.ApplySectionVisibility();
-
     // Watch for panel changes to update counts and re-subscribe
     this.Panels.changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.SubscribeToPanelNavigateEvents();
-      this.ApplySectionVisibility();
       this.cdr.markForCheck();
     });
 
@@ -441,33 +437,6 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       panel.Navigate.pipe(takeUntil(this.panelNavReset$)).subscribe((event: FormNavigationEvent) => {
         this.Navigate.emit(event);
       });
-    });
-  }
-
-  /**
-   * Applies the form's `EntityFormConfig` section-visibility rules to the
-   * projected collapsible panels:
-   * - `visibleSectionKeys` (allow-list) hides every section not listed.
-   * - otherwise `hiddenSectionKeys` hides the listed sections.
-   * - `showRelatedEntities === false` hides all related-entity-variant panels.
-   *
-   * Deferred to a microtask to avoid ExpressionChangedAfterItHasBeenChecked
-   * when toggling panel inputs during/after content init.
-   */
-  private ApplySectionVisibility(): void {
-    const cfg = this.fc?.Config;
-    if (!this.Panels) return;
-    const allow = cfg?.visibleSectionKeys;
-    const hide = cfg?.hiddenSectionKeys;
-    const hideRelated = cfg?.showRelatedEntities === false;
-    // Nothing to do when no rules are configured — leave panels untouched.
-    if (!allow?.length && !hide?.length && !hideRelated) return;
-
-    Promise.resolve().then(() => {
-      this.Panels.forEach(p => {
-        p.Hidden = isFormSectionHidden(cfg, p.SectionKey, p.Variant);
-      });
-      this.cdr.markForCheck();
     });
   }
 

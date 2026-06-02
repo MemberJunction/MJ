@@ -1,9 +1,11 @@
 @if (Visible) {
-  <mj-dialog
+  <mj-window
     [Visible]="true"
     [Title]="effectiveTitle"
     [Width]="Width"
     [Height]="Height"
+    [Draggable]="Draggable"
+    [Resizable]="Resizable"
     (Close)="onCancel()">
 
     <mj-entity-form-host #host
@@ -27,10 +29,10 @@
     </mj-entity-form-host>
 
     @if (ShowFooter) {
-      <mj-dialog-actions>
+      <mj-window-actions>
         <button mjButton variant="primary" [disabled]="saving" (click)="onSaveClick()">{{ SaveButtonText }}</button>
         <button mjButton [disabled]="saving" (click)="onCancel()">{{ CancelButtonText }}</button>
-      </mj-dialog-actions>
+      </mj-window-actions>
     }
-  </mj-dialog>
+  </mj-window>
 }

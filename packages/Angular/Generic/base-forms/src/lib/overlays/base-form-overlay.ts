@@ -38,6 +38,12 @@ export abstract class BaseFormOverlay extends BaseAngularComponent {
   @Input() Record: BaseEntity | null = null;
   /** New-record default values: URL-segment string or plain object. */
   @Input() NewRecordValues: string | Record<string, unknown> | null = null;
+  /**
+   * Render a single registered form section (`BaseFormSectionComponent`
+   * registered as `'<EntityName>.<SectionName>'`) instead of the full form.
+   * See {@link MjEntityFormHostComponent.SectionName}.
+   */
+  @Input() SectionName: string | null = null;
   /** Force edit mode (default: new → edit, existing → read). */
   @Input() EditMode: boolean | null = null;
   /** Per-instance form config (toolbar/sections/width/links). */
@@ -61,7 +67,10 @@ export abstract class BaseFormOverlay extends BaseAngularComponent {
   set Visible(value: boolean) {
     if (value !== this._visible) {
       this._visible = value;
-      if (value) this._closed = false; // re-arm for the next close
+      if (value) {
+        this._closed = false;          // re-arm for the next close
+        this.effectiveTitle = this.Title; // section mode has no FormCreated; full mode refines this
+      }
       this.VisibleChange.emit(value);
     }
   }

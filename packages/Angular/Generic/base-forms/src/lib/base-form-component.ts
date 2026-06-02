@@ -732,6 +732,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       validationErrors: this._validationErrors,
       collapsibleSections: this.Config?.collapsibleSections,
       enableRecordLinks: this.Config?.enableRecordLinks,
+      showRelatedEntities: this.Config?.showRelatedEntities,
+      hiddenSectionKeys: this.Config?.hiddenSectionKeys,
+      visibleSectionKeys: this.Config?.visibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
   }
