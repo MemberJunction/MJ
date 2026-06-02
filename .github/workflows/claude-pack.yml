@@ -14,15 +14,17 @@ on:
     branches: [next]
     paths:
       - 'templates/claude-pack/**'
-      - 'CreateMJDistribution.js'
-      - 'scripts/verify-pack-in-zip.mjs'
+      - 'packages/MJInstaller/src/distribution/**'
+      - 'packages/MJCLI/src/commands/bundle/**'
+      - 'scripts/verify-bundle-smoke.mjs'
       - '.github/workflows/claude-pack.yml'
   push:
     branches: [next]
     paths:
       - 'templates/claude-pack/**'
-      - 'CreateMJDistribution.js'
-      - 'scripts/verify-pack-in-zip.mjs'
+      - 'packages/MJInstaller/src/distribution/**'
+      - 'packages/MJCLI/src/commands/bundle/**'
+      - 'scripts/verify-bundle-smoke.mjs'
       - '.github/workflows/claude-pack.yml'
 
 jobs:
@@ -63,24 +65,29 @@ jobs:
           fi
 
   # ───────────────────────────────────────────────────────────────────────
-  # End-to-end test of the pack-in-ZIP path (plan §11.3).
+  # End-to-end smoke test for `mj bundle` — the offline/air-gapped install
+  # ZIP path introduced by PR #2725 (RepoFetcher + DistributionAssembler),
+  # which replaced the legacy committed bootstrap ZIP.
   #
-  # The dist-freshness gate above only checks that the source → dist build
-  # is deterministic. This job catches a different class of bug: corruption
-  # during the bootstrap ZIP packaging that ships the pack to end users.
+  # The old `e2e-bootstrap-zip` job in this workflow built a ZIP via the
+  # deleted `CreateMJDistribution.js` and asserted the Claude pack landed
+  # inside it. Post-#2725 there is no longer a pack-in-ZIP path — `mj install`
+  # fetches the repo via sparse-checkout and `mj install:claude` is a
+  # separate command that installs the pack independently. So the new
+  # equivalent of "make sure the offline-install zip round-trips correctly"
+  # is to exercise `mj bundle --source .` end-to-end and verify the produced
+  # zip has the expected distribution layout (apps/MJAPI, apps/MJExplorer,
+  # SQL Scripts, root package.json/mj.config.cjs/install.config.json).
   #
-  # The chain is:
-  #   templates/claude-pack/dist/v{N}/  →  archive.glob('**/*')
-  #     in CreateMJDistribution.js      →  zip stream → ZIP file → user unzips
-  #
-  # Any byte-level corruption between archiver and unzip would surface as
-  # a sha256 mismatch on the user's first `mj doctor` run. Catching it here
-  # prevents shipping a broken pack.
+  # MJInstaller has unit tests for the assembler (createBundle.test.ts), so
+  # the value this CI job adds beyond those is: it builds and runs the real
+  # compiled `mj` CLI against the working tree, catching breakage in the
+  # CLI ↔ installer integration that unit tests don't see.
   # ───────────────────────────────────────────────────────────────────────
-  e2e-bootstrap-zip:
-    name: E2E bootstrap ZIP round-trip
+  e2e-bundle-smoke:
+    name: E2E mj bundle round-trip
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repo
@@ -91,21 +98,20 @@ jobs:
         with:
           node-version: 24
 
-      # CreateMJDistribution.js needs `archiver`; verify-pack-in-zip needs
-      # `unzipper`. Both live in root deps.
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci
 
-      - name: Build pack
-        run: npm run claude-pack:build
+      # Build only what `mj bundle` needs: MJInstaller (assembler + RepoFetcher)
+      # and MJCLI (the command entry point). Turbo picks up their transitive
+      # dependencies. This is faster than a full repo build but still gives us
+      # real compiled binaries.
+      - name: Build MJInstaller + MJCLI
+        run: npx turbo run build --filter=@memberjunction/installer --filter=@memberjunction/cli
 
-      - name: Build bootstrap ZIP
-        env:
-          MJ_DISTRIBUTION_FILENAME: Distributions/MemberJunction_Code_Bootstrap_CI.zip
-          # CreateMJDistribution reads $VERSION; supply a placeholder so it
-          # doesn't bail. Pack-in-zip verification is independent of MJ version.
-          VERSION: ci-test
-        run: node CreateMJDistribution.js
+      - name: Build mj bundle from local source
+        run: |
+          mkdir -p Distributions
+          node packages/MJCLI/bin/run.js bundle --source . --out Distributions/MJ_Bundle_CI.zip
 
-      - name: Verify pack contents inside ZIP
-        run: node scripts/verify-pack-in-zip.mjs Distributions/MemberJunction_Code_Bootstrap_CI.zip
+      - name: Verify bundle structure
+        run: node scripts/verify-bundle-smoke.mjs Distributions/MJ_Bundle_CI.zip
