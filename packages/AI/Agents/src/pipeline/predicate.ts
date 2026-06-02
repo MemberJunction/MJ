@@ -34,8 +34,8 @@ const STOP_CHARS = new Set([' ', '\t', '\n', '=', '!', '<', '>', '(', ')', ','])
 /** Parse a predicate string into an AST. Throws with a clear message on malformed input. */
 export function parsePredicate(src: string): PredicateNode {
     const parser = new PredicateParser(src);
-    const ast = parser.parseExpr();
-    parser.expectEnd();
+    const ast = parser.ParseExpr();
+    parser.ExpectEnd();
     return ast;
 }
 
@@ -57,11 +57,11 @@ class PredicateParser {
     private pos = 0;
     constructor(private readonly s: string) {}
 
-    public parseExpr(): PredicateNode {
+    public ParseExpr(): PredicateNode {
         return this.parseOr();
     }
 
-    public expectEnd(): void {
+    public ExpectEnd(): void {
         this.ws();
         if (this.pos < this.s.length) {
             throw new Error(`Unexpected "${this.s.slice(this.pos)}" in predicate`);
@@ -95,7 +95,7 @@ class PredicateParser {
         this.ws();
         if (this.s[this.pos] === '(') {
             this.pos++;
-            const e = this.parseExpr();
+            const e = this.ParseExpr();
             this.ws();
             if (this.s[this.pos] !== ')') {
                 throw new Error('Unbalanced parentheses in predicate');
