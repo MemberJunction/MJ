@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJPipelineRunEntity, MJPipelineRunStepEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -56,13 +56,25 @@ import {
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
-    InputArtifact
+    InputArtifact,
+    AgentPipelineRequest
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
+import {
+    PipelineExecutor,
+    PipelineToolRegistry,
+    PipelineInvocable,
+    PipelineExecutionResult,
+    PipelineStage,
+    ActionInvocable,
+    ArtifactToolInvocable,
+    BuildPipelineToolDocs,
+    formatFinalOutput,
+} from './pipeline';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
@@ -2209,6 +2221,22 @@ export class BaseAgent {
                 this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
             }
 
+            // Inject pipeline tool docs when pipelines are enabled and at least one source exists.
+            // A pipeline's first step must be a source (Action or artifact tool); with none
+            // available pipelines are impossible, so BuildPipelineToolDocs returns '' and the
+            // template's `{{ _PIPELINE_TOOLS }}` block stays empty.
+            const pipelineDocsEnabled = agentTypePromptParams?.includePipelineDocs !== false;
+            if (pipelineDocsEnabled) {
+                const sourceNames = [
+                    ...this.getEffectiveActionsForValidation(params.agent.ID).map((a) => a.Name),
+                    ...this._artifactToolManager.GetAvailableToolNames(),
+                ];
+                const pipelineDocs = BuildPipelineToolDocs(sourceNames);
+                if (pipelineDocs) {
+                    promptParams.data['_PIPELINE_TOOLS'] = pipelineDocs;
+                }
+            }
+
             // Pass file artifacts as candidate native file inputs.
             // The AIPromptRunner will check these against the resolved driver's
             // FileCapabilities and attach qualifying files as native content blocks.
@@ -4079,6 +4107,217 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds a per-run {@link PipelineToolRegistry} that unifies the three pipeline-able
+     * substrates behind one namespace: built-in transforms, the agent's effective Actions, and
+     * the run's artifact tools. Transforms register first so their reserved names win; a source
+     * whose name collides with a transform is skipped for pipeline use (still callable normally)
+     * and logged, rather than aborting the whole pipeline.
+     *
+     * @protected
+     */
+    protected buildPipelineRegistry(params: ExecuteAgentParams): PipelineToolRegistry {
+        const registry = new PipelineToolRegistry();
+        const register = (invocable: PipelineInvocable): void => {
+            try {
+                registry.Register(invocable);
+            } catch (e) {
+                this.logStatus(`[Pipeline] Skipped tool "${invocable.toolName}": ${(e as Error).message}`, true, params);
+            }
+        };
+
+        // Operators (where/select/map/…) are pure code-defined verbs, not registry tools — only
+        // capabilities (Actions + artifact tools) live here as pipeline sources/stages.
+
+        // Actions — each wrapped to run via the existing single-action execution path.
+        this.getEffectiveActionsForValidation(params.agent.ID).forEach((actionEntity) =>
+            register(
+                new ActionInvocable(actionEntity.Name, (p) =>
+                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser),
+                ),
+            ),
+        );
+
+        // Artifact tools — one invocable per distinct tool name; `artifactId` is supplied as a
+        // call-time param so the same `{ tool, params }` step shape works across all substrates.
+        this._artifactToolManager.GetAvailableToolNames().forEach((toolName) =>
+            register(
+                new ArtifactToolInvocable(toolName, async (tool, p) => {
+                    const stored = await this._artifactToolManager.ExecuteSingleToolCall({
+                        artifactId: String(p.artifactId ?? ''),
+                        tool,
+                        input: p,
+                    });
+                    return stored.result;
+                }),
+            ),
+        );
+
+        return registry;
+    }
+
+    /**
+     * Runs a tool pipeline as a single `Tool` step in the run tree (sibling of the prompt step
+     * that requested it, matching artifact-tool steps). The step's OutputData captures the
+     * per-step records + bytes-saved for observability. Persistence into the first-class
+     * `MJ: Pipeline Runs` / `MJ: Pipeline Run Steps` entities is layered on separately.
+     *
+     * @protected
+     */
+    protected async executePipelineAsStep(
+        pipeline: AgentPipelineRequest,
+        params: ExecuteAgentParams,
+    ): Promise<PipelineExecutionResult> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Tool',
+            stepName: `Pipeline: ${pipeline.steps.length} step(s)`,
+            contextUser: params.contextUser,
+            inputData: { steps: pipeline.steps },
+        });
+
+        const registry = this.buildPipelineRegistry(params);
+        const result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
+
+        // Surface each pipeline step as a native child run-step nested under the Pipeline parent,
+        // so the run tree shows the individual source/transform invocations (action steps link to
+        // their ActionExecutionLog).
+        const stages = pipeline.steps as PipelineStage[];
+        for (const record of result.steps) {
+            await this.createPipelineChildStep(stepEntity.ID, stages[record.index], record, params);
+        }
+
+        await this.finalizeStepEntity(stepEntity, result.success, result.success ? undefined : result.error, {
+            success: result.success,
+            steps: result.steps,
+            contextBytesSaved: result.contextBytesSaved,
+            failedStepIndex: result.failedStepIndex,
+        });
+
+        await this.persistPipelineRun(pipeline, result, params);
+        return result;
+    }
+
+    /** Emits one pipeline step as a child `Tool` run-step under the Pipeline parent for run-tree visibility. */
+    protected async createPipelineChildStep(
+        parentId: string,
+        stage: PipelineStage | undefined,
+        record: PipelineExecutionResult['steps'][number],
+        params: ExecuteAgentParams,
+    ): Promise<void> {
+        const childStep = await this.createStepEntity({
+            stepType: 'Tool',
+            stepName: `Pipeline Stage ${record.index + 1}: ${record.toolName} (${record.providerKind})`,
+            contextUser: params.contextUser,
+            parentId,
+            targetLogId: record.logRef.actionExecutionLogId,
+            inputData: { stage, providerKind: record.providerKind },
+        });
+        await this.finalizeStepEntity(childStep, record.success, record.error, {
+            providerKind: record.providerKind,
+            inputSize: record.inputSize,
+            outputSize: record.outputSize,
+            durationMs: record.durationMs,
+            preview: record.logRef.preview,
+            actionExecutionLogID: record.logRef.actionExecutionLogId,
+        });
+    }
+
+    /**
+     * Persists a pipeline run + its steps to the first-class `MJ: Pipeline Runs` /
+     * `MJ: Pipeline Run Steps` entities for cross-substrate debug visibility. Wired once CodeGen
+     * has generated those entity classes; until then the run tree's `Tool` step (see
+     * {@link executePipelineAsStep}) carries observability, so this is intentionally a no-op.
+     *
+     * @protected
+     */
+    protected async persistPipelineRun(
+        pipeline: AgentPipelineRequest,
+        result: PipelineExecutionResult,
+        params: ExecuteAgentParams,
+    ): Promise<void> {
+        try {
+            const runEntity = await this._activeProvider.GetEntityObject<MJPipelineRunEntity>(
+                'MJ: Pipeline Runs',
+                params.contextUser,
+            );
+            runEntity.AgentRunID = this._agentRun?.ID ?? null;
+            runEntity.StepCount = pipeline.steps.length;
+            runEntity.Success = result.success;
+            runEntity.TotalDurationMS = result.steps.reduce((sum, s) => sum + s.durationMs, 0);
+            runEntity.ContextBytesSaved = result.contextBytesSaved;
+            runEntity.TotalBytesStreamed = result.steps.reduce((sum, s) => sum + s.outputSize, 0);
+            runEntity.FailedStepIndex = result.failedStepIndex ?? null;
+            runEntity.ErrorMessage = result.error ?? null;
+            if (!(await runEntity.Save())) {
+                this.logStatus(`[Pipeline] Failed to persist pipeline run: ${runEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`, true, params);
+                return;
+            }
+            for (const step of result.steps) {
+                await this.persistPipelineRunStep(runEntity.ID, step, params);
+            }
+        } catch (e) {
+            // Persistence is observability, not core function — never let it break the agent turn.
+            this.logStatus(`[Pipeline] Error persisting pipeline run: ${(e as Error).message}`, true, params);
+        }
+    }
+
+    /** Persists one pipeline step row. Failures are logged, not thrown (observability only). */
+    protected async persistPipelineRunStep(
+        pipelineRunID: string,
+        step: PipelineExecutionResult['steps'][number],
+        params: ExecuteAgentParams,
+    ): Promise<void> {
+        const stepEntity = await this._activeProvider.GetEntityObject<MJPipelineRunStepEntity>(
+            'MJ: Pipeline Run Steps',
+            params.contextUser,
+        );
+        stepEntity.PipelineRunID = pipelineRunID;
+        stepEntity.StepIndex = step.index;
+        stepEntity.ToolName = step.toolName;
+        stepEntity.ProviderKind = step.providerKind;
+        stepEntity.InputSize = step.inputSize;
+        stepEntity.OutputSize = step.outputSize;
+        stepEntity.DurationMS = step.durationMs;
+        stepEntity.Success = step.success;
+        stepEntity.ErrorMessage = step.error ?? null;
+        stepEntity.ActionExecutionLogID = step.logRef.actionExecutionLogId ?? null;
+        stepEntity.Preview = step.logRef.preview ?? null;
+        if (!(await stepEntity.Save())) {
+            this.logStatus(`[Pipeline] Failed to persist pipeline step ${step.index}: ${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`, true, params);
+        }
+    }
+
+    /**
+     * Pushes the pipeline's final output (or its failure message) into the conversation for the
+     * LLM's next turn, mirroring the artifact-tool "inject once, then expire" pattern. Only the
+     * final output is surfaced — intermediate step outputs never enter the context window.
+     *
+     * @protected
+     */
+    protected injectPipelineResultMessage(params: ExecuteAgentParams, result: PipelineExecutionResult): void {
+        const diagnostic = result.success && result.diagnostic
+            ? `\n⚠ Empty result — ${result.diagnostic}`
+            : '';
+        const content = result.success
+            ? `Pipeline result (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n\`\`\`\n${formatFinalOutput(result.finalOutput)}\n\`\`\`${diagnostic}`
+            : `Pipeline failed.\n${result.error}`;
+
+        const message: AgentChatMessage = {
+            role: 'user',
+            content,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
+    }
+
+    /**
      * Creates a chat message containing sub-agent execution results.
      *
      * @param {AgentSubAgentRequest} subAgent - The sub-agent that was executed
@@ -4304,7 +4543,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
             { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
-            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' }
+            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' },
+            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -6250,6 +6490,15 @@ The context is now within limits. Please retry your request with the recovered c
                 this.injectArtifactToolResultsMessage(params, toolResults);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
+            // Execute a tool pipeline if provided (zero turn cost — processed inline). Each step's
+            // output is threaded into the next server-side; only the final step's output returns to
+            // the LLM, so intermediate payloads never enter the context window.
+            if (initialNextStep.pipeline?.steps?.length) {
+                this.logStatus(`[Pipeline] LLM requested a ${initialNextStep.pipeline.steps.length}-stage pipeline: ${(initialNextStep.pipeline.steps as PipelineStage[]).map(s => (s.tool as string) ?? Object.keys(s)[0]).join(' | ')}`, true, params);
+                const pipelineResult = await this.executePipelineAsStep(initialNextStep.pipeline, params);
+                this.injectPipelineResultMessage(params, pipelineResult);
             }
 
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if

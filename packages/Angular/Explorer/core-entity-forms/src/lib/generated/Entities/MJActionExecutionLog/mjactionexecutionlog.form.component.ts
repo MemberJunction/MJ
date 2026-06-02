@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJActionExecutionLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Action Execution Logs') // Tell MemberJunction about this class
 @Component({
@@ -18,7 +19,8 @@ export class MJActionExecutionLogFormComponent extends BaseFormComponent {
             { sectionKey: 'retentionAudit', sectionName: 'Retention & Audit', isExpanded: true },
             { sectionKey: 'associatedEntities', sectionName: 'Associated Entities', isExpanded: true },
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJPipelineRunSteps', sectionName: 'Pipeline Run Steps', isExpanded: false }
         ]);
     }
 }

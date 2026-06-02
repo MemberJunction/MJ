@@ -100,6 +100,23 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createRetryStep(validationResult.message);
             }
 
+            // A tool pipeline is a yield/await action (like client tools): the agent can't know
+            // its result until it runs. Handle it BEFORE Chat/taskComplete/nextStep checks —
+            // the loop executes the pipeline inline, injects the final output, and we force one
+            // more turn (Retry, non-terminal) so the LLM can use the result. The model emits the
+            // pipeline as a top-level field, often with no nextStep, so this must win first.
+            if (response.pipeline?.steps?.length) {
+                return this.createNextStep('Retry', {
+                    pipeline: response.pipeline,
+                    terminate: false,
+                    scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence
+                });
+            }
+
             // Check for Chat nextStep BEFORE checking taskComplete
             // This allows agents to ask for user clarification even when taskComplete=true
             if (response.nextStep?.type === 'Chat') {

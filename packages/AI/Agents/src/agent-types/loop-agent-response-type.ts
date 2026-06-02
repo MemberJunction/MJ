@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 
 // Re-export universal types for backward compatibility
@@ -59,6 +59,14 @@ export interface LoopAgentResponse<P = any> {
      * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
      */
     artifactToolCalls?: ArtifactToolCall[];
+
+    /**
+     * A tool pipeline to run server-side this turn. Like artifact tools / client tools, it is a
+     * yield/await action: the agent cannot know the result until it executes, so the loop runs
+     * the pipeline inline, injects the final output, and forces one more turn. Only the final
+     * step's output enters the context window.
+     */
+    pipeline?: AgentPipelineRequest;
 
     /**
      * Internal reasoning for debugging

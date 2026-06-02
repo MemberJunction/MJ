@@ -283,6 +283,13 @@ export class ArtifactToolManager {
       const mimeNote = entry.mimeType ? ` [${entry.mimeType}]` : '';
       lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${mimeNote}${sizeSuffix}`);
 
+      // Surface the content SHAPE so the agent paths correctly (e.g. knows it's a top-level JSON
+      // array, not a `content`-wrapped object) instead of guessing and failing on the first tool call.
+      const shape = this.describeContentShape(entry.content);
+      if (shape) {
+        lines.push(`    > Shape: ${shape}`);
+      }
+
       // Modality-mismatch warning: when the driver can't process the
       // artifact's media type, tell the agent explicitly so it doesn't
       // hallucinate a description from few-shot examples or pretend the
@@ -299,9 +306,65 @@ export class ArtifactToolManager {
       }
     }
     lines.push('');
-    lines.push('Use the artifact tools below to explore content.');
+    lines.push('These artifacts are ALREADY available to you server-side. Read them directly with the');
+    lines.push('artifact tools below (e.g. `get_full`), or use one as a pipeline source (e.g. `get_full`');
+    lines.push('then `where`/`select`/`distinct`). NEVER ask the user to paste, provide, upload, or "send"');
+    lines.push('an artifact\'s content, and do NOT request a data snapshot to obtain it — you already have it.');
     lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` value — NOT the artifact name.');
     return lines.join('\n');
+  }
+
+  /**
+   * Distinct artifact tool names available across all input artifacts. Used to register
+   * artifact tools into a pipeline's tool registry (one invocable per name; the target
+   * artifact is selected at call time via an `artifactId` param).
+   */
+  public GetAvailableToolNames(): string[] {
+    const names = new Set<string>();
+    for (const entry of this.artifacts.values()) {
+      for (const tool of entry.library.GetToolList()) {
+        names.add(tool.name);
+      }
+    }
+    return [...names];
+  }
+
+  /**
+   * Compact, agent-facing description of an artifact's content structure for the manifest.
+   * For JSON: whether it's an array (+ length + item fields) or an object (+ keys) — so the agent
+   * paths against the REAL shape rather than guessing a `content` wrapper. For text: line count +
+   * a short start preview. Returns null for binary / empty content.
+   */
+  private describeContentShape(content: string | Buffer): string | null {
+    if (Buffer.isBuffer(content)) {
+      return null;
+    }
+    const s = content.trim();
+    if (s.length === 0) {
+      return null;
+    }
+    if ((s.startsWith('{') || s.startsWith('[')) && s.length < 2_000_000) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const firstObj = parsed.find((x) => x !== null && typeof x === 'object' && !Array.isArray(x));
+          const keys = firstObj ? Object.keys(firstObj).slice(0, 12).join(', ') : '';
+          return (
+            `JSON array of ${parsed.length} item(s)${keys ? `; item fields: ${keys}` : ''}. ` +
+            `The artifact IS this array. Easiest: read it with get_full and pipe through the operators ` +
+            `(get_full → where → select → distinct). There is no "content" wrapper to path into.`
+          );
+        }
+        if (parsed !== null && typeof parsed === 'object') {
+          return `JSON object; keys: ${Object.keys(parsed).slice(0, 20).join(', ')}.`;
+        }
+        return `JSON ${typeof parsed} value.`;
+      } catch {
+        /* not valid JSON — fall through to text preview */
+      }
+    }
+    const preview = s.replace(/\s+/g, ' ').slice(0, 120);
+    return `text, ${s.split('\n').length} line(s); starts: "${preview}${s.length > 120 ? '…' : ''}"`;
   }
 
   /** Markdown tool documentation grouped by artifact type */

@@ -32,6 +32,10 @@ interface LoopAgentResponse {
     /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
+    /** Run a server-side dataflow; only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
+    pipeline?: { steps: Array<Record<string, unknown>> };
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -625,4 +629,8 @@ your visible history; just read it.
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}
+{{ _PIPELINE_TOOLS | safe }}
 {% endif %}
