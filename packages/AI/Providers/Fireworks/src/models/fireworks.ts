@@ -93,10 +93,12 @@ export class FireworksLLM extends BaseLLM {
 
         // Create ModelUsage with token information. Fireworks is OpenAI-compatible: if prompt
         // caching is active it reports the cache-read count nested at prompt_tokens_details.cached_tokens
-        // (prompt_tokens INCLUDES cached, so promptTokens stays native and the cache count is recorded
-        // separately). Fireworks does not bill cache writes, so cacheWriteTokens stays 0.
-        const usage = new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens);
+        // (prompt_tokens INCLUDES cached). Normalize to the uniform ModelUsage contract: promptTokens
+        // must be UNCACHED/net-new only, so subtract the cache-read count (clamped at 0) and record it
+        // disjointly. Fireworks does not bill cache writes, so cacheWriteTokens stays 0.
         const fwCached = (result.usage as { prompt_tokens_details?: { cached_tokens?: number } }).prompt_tokens_details?.cached_tokens ?? 0;
+        const fwNetPromptTokens = Math.max(0, (result.usage.prompt_tokens ?? 0) - fwCached);
+        const usage = new ModelUsage(fwNetPromptTokens, result.usage.completion_tokens);
         usage.cacheReadTokens = fwCached;
 
         const chatResult: ChatResult = {

@@ -325,9 +325,15 @@ export class AIModelRunner {
 
             // Store token/cost from ModelUsage
             if (embedResult.ModelUsage) {
+                // TokensPrompt = UNCACHED ("net-new") input; cache reads/writes tracked separately.
+                // TokensUsed = totalTokens = promptTokens + completionTokens (EXCLUDES cache), to
+                // satisfy the AIPromptRun invariant TokensUsed === TokensPrompt + TokensCompletion.
+                // (Embeddings don't cache, so cache buckets are 0 here regardless.)
                 promptRun.TokensPrompt = embedResult.ModelUsage.promptTokens ?? 0;
                 promptRun.TokensCompletion = embedResult.ModelUsage.completionTokens ?? 0;
                 promptRun.TokensUsed = embedResult.ModelUsage.totalTokens ?? 0;
+                promptRun.TokensCacheRead = embedResult.ModelUsage.cacheReadTokens ?? 0;
+                promptRun.TokensCacheWrite = embedResult.ModelUsage.cacheWriteTokens ?? 0;
                 promptRun.Cost = embedResult.ModelUsage.cost ?? 0;
                 promptRun.CostCurrency = embedResult.ModelUsage.costCurrency ?? 'USD';
                 promptRun.QueueTime = embedResult.ModelUsage.queueTime ?? 0;

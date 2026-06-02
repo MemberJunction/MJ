@@ -186,16 +186,17 @@ export class OpenAILLM extends BaseLLM {
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
-        // Create ModelUsage with any available timing data.
-        // NOTE on OpenAI's cache convention: `prompt_tokens` INCLUDES cached tokens, and the cached
-        // count is nested at `prompt_tokens_details.cached_tokens`. We keep promptTokens at OpenAI's
-        // native value (so persisted token/cost figures are unchanged) and record the raw cache-read
-        // count separately. Per the ModelUsage contract, uncached input = promptTokens - cacheReadTokens
-        // for OpenAI. OpenAI does not bill or report cache WRITES, so cacheWriteTokens stays 0.
-        const usage = new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens);
-
+        // Create ModelUsage normalized to the uniform ModelUsage contract.
+        // OpenAI's cache convention: `prompt_tokens` INCLUDES cached tokens, and the cached count is
+        // nested at `prompt_tokens_details.cached_tokens`. The contract requires promptTokens to be
+        // UNCACHED/net-new input ONLY, with cache reads tracked separately and DISJOINT. So we record
+        // cacheReadTokens first, then subtract it from the native prompt count (clamped at 0).
+        // OpenAI does not bill or report cache WRITES, so cacheWriteTokens stays 0. The full native
+        // prompt count is recoverable via usage.totalInputTokens (promptTokens + cacheReadTokens).
         const extendedUsage = result.usage as any;
         const openAICachedTokens = extendedUsage.prompt_tokens_details?.cached_tokens ?? 0;
+        const openAINetPromptTokens = Math.max(0, (result.usage.prompt_tokens ?? 0) - openAICachedTokens);
+        const usage = new ModelUsage(openAINetPromptTokens, result.usage.completion_tokens);
         usage.cacheReadTokens = openAICachedTokens;
         // cacheWriteTokens intentionally left at 0 (OpenAI implicit caching has no separate write charge).
         if (extendedUsage.completion_tokens_details) {
@@ -402,15 +403,18 @@ export class OpenAILLM extends BaseLLM {
         let content = '';
         const usage = chunk?.usage || null;
 
-        // Normalize the streaming usage once. OpenAI's `prompt_tokens` INCLUDES cached tokens; the
-        // cache-read count is nested at prompt_tokens_details.cached_tokens (present on the final
-        // usage chunk when stream_options.include_usage is set). promptTokens stays native; the raw
-        // cache-read count is carried alongside.
+        // Normalize the streaming usage once, to the uniform ModelUsage contract. OpenAI's
+        // `prompt_tokens` INCLUDES cached tokens; the cache-read count is nested at
+        // prompt_tokens_details.cached_tokens (present on the final usage chunk when
+        // stream_options.include_usage is set). promptTokens must be UNCACHED/net-new only, so we
+        // subtract the cache-read count (clamped at 0) and carry the cache-read count alongside.
+        const streamCacheReadTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        const streamNetPromptTokens = Math.max(0, (usage?.prompt_tokens || 0) - streamCacheReadTokens);
         const streamUsage = usage ? {
-            promptTokens: usage.prompt_tokens || 0,
+            promptTokens: streamNetPromptTokens,
             completionTokens: usage.completion_tokens || 0,
             totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-            cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? 0
+            cacheReadTokens: streamCacheReadTokens
         } : null;
 
         // Check if chunk contains reasoning content (for o1 models)
@@ -557,8 +561,9 @@ export class OpenAILLM extends BaseLLM {
         // Get thinking content from streaming state
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
 
-        // promptTokens stays at OpenAI's native value (includes cached); cacheReadTokens is the raw
-        // cache-read subset (OpenAI does not report cache writes, so cacheWriteTokens stays 0).
+        // promptTokens here is already normalized to UNCACHED/net-new (processStreamingChunk
+        // subtracted the cache-read count); cacheReadTokens is the disjoint cache-read subset.
+        // OpenAI does not report cache writes, so cacheWriteTokens stays 0.
         const modelUsage = new ModelUsage(promptTokens, completionTokens);
         modelUsage.cacheReadTokens = cacheReadTokens;
 
