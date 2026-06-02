@@ -7,7 +7,7 @@
 "@memberjunction/ng-entity-viewer": patch
 "@memberjunction/ng-explorer-core": patch
 "@memberjunction/ng-core-entity-forms": patch
-"@memberjunction/ng-explorer-dashboards": patch
+"@memberjunction/ng-dashboards": patch
 ---
 
 feat: render any entity form as a tab, dialog, or slide-in (Generic, no regeneration)
