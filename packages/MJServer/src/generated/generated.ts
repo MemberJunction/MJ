@@ -15236,6 +15236,12 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`}) 
     AssistantPrefill?: string;
         
+    @Field(() => Int, {nullable: true, description: `Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.`}) 
+    TokensCacheRead?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`}) 
+    TokensCacheWrite?: number;
+        
     @Field() 
     @MaxLength(255)
     Prompt: string;
@@ -15563,6 +15569,12 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     AssistantPrefill: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TokensCacheRead: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWrite: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -15821,6 +15833,12 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     AssistantPrefill?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheRead?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWrite?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

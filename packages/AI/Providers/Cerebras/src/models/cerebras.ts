@@ -161,15 +161,25 @@ export class CerebrasLLM extends BaseLLM {
          
          
         const usage = chatResponse.usage as ChatCompletion.ChatCompletionResponse.Usage
+        // OpenAI-compatible cache reporting (if Cerebras enables prompt caching for the model): the
+        // cache-read count is nested at prompt_tokens_details.cached_tokens and is INCLUDED in
+        // prompt_tokens, so promptTokens stays native and the cached count is recorded separately.
+        const modelUsage = new ModelUsage(usage.prompt_tokens, usage.completion_tokens);
+        const cerebrasCached = (usage as { prompt_tokens_details?: { cached_tokens?: number } }).prompt_tokens_details?.cached_tokens ?? 0;
+        modelUsage.cacheReadTokens = cerebrasCached;
         return {
             success: true,
             statusText: "OK",
             startTime: startTime,
             endTime: endTime,
             timeElapsed: endTime.getTime() - startTime.getTime(),
+            cacheInfo: {
+                cacheHit: cerebrasCached > 0,
+                cachedTokenCount: cerebrasCached
+            },
             data: {
                 choices: choices,
-                usage: new ModelUsage(usage.prompt_tokens, usage.completion_tokens)
+                usage: modelUsage
             },
             errorMessage: "",
             exception: null,

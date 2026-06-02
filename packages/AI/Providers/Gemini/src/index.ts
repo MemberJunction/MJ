@@ -357,12 +357,29 @@ export class GeminiLLM extends BaseLLM {
             }
 
             const endTime = new Date();
+
+            // Gemini's cache convention: `promptTokenCount` INCLUDES cached tokens, reported
+            // separately as `cachedContentTokenCount`. Keep promptTokens at the native value (so
+            // persisted token/cost figures are unchanged) and record the raw cache-read count.
+            // Per the ModelUsage contract, uncached input = promptTokens - cacheReadTokens for Gemini.
+            // Gemini does not report a separate cache-write charge, so cacheWriteTokens stays 0.
+            const geminiCachedTokens = result.usageMetadata?.cachedContentTokenCount ?? 0;
+            const geminiUsage = new ModelUsage(
+                result.usageMetadata?.promptTokenCount || 0,
+                result.usageMetadata?.candidatesTokenCount || 0
+            );
+            geminiUsage.cacheReadTokens = geminiCachedTokens;
+
             return {
                 success: true,
                 statusText: "OK",
                 startTime: startTime,
                 endTime: endTime,
                 timeElapsed: endTime.getTime() - startTime.getTime(),
+                cacheInfo: {
+                    cacheHit: geminiCachedTokens > 0,
+                    cachedTokenCount: geminiCachedTokens
+                },
                 data: {
                     choices: [{
                         message: {
@@ -373,10 +390,7 @@ export class GeminiLLM extends BaseLLM {
                         finish_reason: finishReason || "completed",
                         index: 0
                     }],
-                    usage: new ModelUsage(
-                        result.usageMetadata?.promptTokenCount || 0,
-                        result.usageMetadata?.candidatesTokenCount || 0
-                    )
+                    usage: geminiUsage
                 },
                 errorMessage: "",
                 exception: null,
@@ -601,13 +615,15 @@ export class GeminiLLM extends BaseLLM {
             finishReason = chunk.candidates[0].finishReason;
         }
 
-        // Extract usage from chunk if available (appears on final chunk)
+        // Extract usage from chunk if available (appears on final chunk). promptTokens stays native
+        // (includes cached); cachedContentTokenCount is the raw cache-read subset.
         let usage = null;
         if (chunk.usageMetadata) {
             usage = new ModelUsage(
                 chunk.usageMetadata.promptTokenCount || 0,
                 chunk.usageMetadata.candidatesTokenCount || 0
             );
+            usage.cacheReadTokens = chunk.usageMetadata.cachedContentTokenCount ?? 0;
         }
 
         return {
@@ -777,6 +793,11 @@ export class GeminiLLM extends BaseLLM {
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
+        const streamCachedTokens = usage?.cacheReadTokens || 0;
+        result.cacheInfo = {
+            cacheHit: streamCachedTokens > 0,
+            cachedTokenCount: streamCachedTokens
+        };
 
         return result;
     }

@@ -139,11 +139,49 @@ export class ModelUsage {
      * This is a provider-specific timing metric that may not be available from all providers.
      */
     completionTime?: number
-    
+
+    /**
+     * Number of input tokens served from the provider's prompt cache (a cache READ / hit).
+     * These are billed at a steep discount versus normal input tokens (e.g. Anthropic ~0.1x,
+     * OpenAI ~0.5x, Gemini ~0.1x) and are the primary source of prompt-caching savings.
+     *
+     * This is the RAW count reported by the provider. Whether it OVERLAPS with {@link promptTokens}
+     * depends on the provider's convention — and the two conventions genuinely differ:
+     *  - Anthropic: `input_tokens` EXCLUDES cached tokens, so cacheReadTokens is ADDITIONAL to
+     *    promptTokens (disjoint). Total input processed = promptTokens + cacheReadTokens + cacheWriteTokens.
+     *  - OpenAI / Gemini: their prompt count INCLUDES cached tokens, so cacheReadTokens is a
+     *    SUBSET of promptTokens. Uncached input = promptTokens - cacheReadTokens.
+     *
+     * promptTokens is deliberately left at each provider's native value (no rewriting) so persisted
+     * token/cost figures are unchanged. Consumers that need a provider-agnostic uncached count must
+     * apply the rule above using the originating provider. A future cache-aware cost pass may
+     * normalize this centrally.
+     *
+     * Optional/additive: declared optional so existing object-literal `ModelUsage` construction
+     * sites across providers keep compiling. `new ModelUsage(...)` instances default it to 0;
+     * treat `undefined` as 0 when reading.
+     */
+    cacheReadTokens?: number = 0
+
+    /**
+     * Number of input tokens written to the provider's prompt cache (a cache WRITE / creation).
+     * Some providers charge a premium for cache writes (e.g. Anthropic ~1.25x normal input);
+     * others (OpenAI, Gemini) do not bill or report writes separately, in which case this stays 0.
+     *
+     * As with {@link cacheReadTokens}, this is the raw provider count. For Anthropic it is
+     * additional to {@link promptTokens}; OpenAI/Gemini do not report it. Declared optional for the
+     * same backward-compat reason; `new ModelUsage(...)` defaults it to 0, treat undefined as 0.
+     */
+    cacheWriteTokens?: number = 0
+
     /**
      * Calculated total number of tokens (prompt + completion).
      * This is useful for tracking overall token usage against limits.
-     * 
+     *
+     * NOTE: unchanged from historical behavior — it does NOT add the cache buckets (which would be
+     * wrong for OpenAI/Gemini, where cached tokens already live inside promptTokens). The cache
+     * buckets are additive/informational; persisted TokensUsed values are unaffected.
+     *
      * @returns {number} The sum of promptTokens and completionTokens
      */
     get totalTokens(): number {

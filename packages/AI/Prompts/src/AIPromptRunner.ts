@@ -5083,7 +5083,16 @@ export class AIPromptRunner {
           promptRun.CompletionTime = modelResult.data.usage.completionTime;
         }
       }
-      
+
+      // Provider prompt-cache token counts (informational; no cost is derived here). Taken from the
+      // final model result in both the single-attempt and retry paths — cache reads are best
+      // represented by the final call rather than summed across retries (which would over-count the
+      // re-sent prefix). 0 means "no cache activity reported", consistent with ModelUsage defaults.
+      if (modelResult.data?.usage) {
+        promptRun.TokensCacheRead = modelResult.data.usage.cacheReadTokens ?? 0;
+        promptRun.TokensCacheWrite = modelResult.data.usage.cacheWriteTokens ?? 0;
+      }
+
       // Save model-specific response details if available
       if (modelResult.modelSpecificResponseDetails) {
         promptRun.ModelSpecificResponseDetails = JSON.stringify(modelResult.modelSpecificResponseDetails);

@@ -229,9 +229,13 @@ export class GroqLLM extends BaseLLM {
         
         // Create ModelUsage with timing data if available
         const usage = new ModelUsage(chatResponse.usage.prompt_tokens, chatResponse.usage.completion_tokens);
-        
-        // Groq provides detailed timing in the usage object
-        const groqUsage = chatResponse.usage;
+
+        // Groq supports automatic prompt caching (OpenAI-compatible usage shape): the cache-read
+        // count is nested at prompt_tokens_details.cached_tokens and is INCLUDED in prompt_tokens,
+        // so promptTokens stays native and the cached count is recorded separately. Groq does not
+        // bill cache writes separately, so cacheWriteTokens stays 0.
+        const groqUsage = chatResponse.usage as typeof chatResponse.usage & { prompt_tokens_details?: { cached_tokens?: number } };
+        usage.cacheReadTokens = groqUsage.prompt_tokens_details?.cached_tokens ?? 0;
         // Convert from seconds to milliseconds and truncate to integer.
         // Groq returns sub-second precision (e.g. 0.07161... s) which becomes
         // 71.610... ms after the multiply — those fractional ms reach
@@ -262,7 +266,12 @@ export class GroqLLM extends BaseLLM {
             errorMessage: "",
             exception: null,
         } as ChatResult;
-        
+
+        result.cacheInfo = {
+            cacheHit: (usage.cacheReadTokens ?? 0) > 0,
+            cachedTokenCount: usage.cacheReadTokens ?? 0
+        };
+
         // Add model-specific response details
         result.modelSpecificResponseDetails = {
             provider: 'groq',
