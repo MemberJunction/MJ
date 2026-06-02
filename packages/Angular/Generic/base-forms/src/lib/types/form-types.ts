@@ -90,6 +90,13 @@ export interface FormContext {
    * Undefined / true means collapsible (the default).
    */
   collapsibleSections?: boolean;
+  /**
+   * Whether in-form record (FK) links are interactive. When false, FK values
+   * render as plain text instead of clickable links — used by dialog/slide-in
+   * surfaces so a modal context doesn't navigate the user away. Undefined /
+   * true means links are live (the default).
+   */
+  enableRecordLinks?: boolean;
 }
 
 /**

@@ -9,9 +9,13 @@
         <!-- FK fields with a mapped name field: show the name as a hyperlink -->
         @if (IsFKWithNameField) {
           <span class="mj-forms-field-value">
-            <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+            @if (RecordLinksEnabled) {
+              <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+                {{ FKDisplayName }}
+              </a>
+            } @else {
               {{ FKDisplayName }}
-            </a>
+            }
           </span>
         }
         @else {
@@ -34,10 +38,14 @@
             }
             @case ('Record') {
               <span class="mj-forms-field-value">
-                <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                @if (RecordLinksEnabled) {
+                  <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                    {{ FormatValue() }}
+                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                  </a>
+                } @else {
                   {{ FormatValue() }}
-                  <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
-                </a>
+                }
               </span>
             }
             @default {

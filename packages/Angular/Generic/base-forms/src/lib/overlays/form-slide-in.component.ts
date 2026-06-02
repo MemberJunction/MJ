@@ -1,6 +1,7 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MjSlidePanelComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 
 import { BaseFormsModule } from '../../module';
 import { BaseFormOverlay } from './base-form-overlay';
@@ -31,12 +32,38 @@ import { SLIDEIN_FORM_CONFIG } from '../types/entity-form-config';
   templateUrl: './form-slide-in.component.html',
   styleUrls: ['./form-slide-in.component.css'],
 })
-export class MjFormSlideInComponent extends BaseFormOverlay {
-  /** Initial panel width in px (resizable by the user). */
+export class MjFormSlideInComponent extends BaseFormOverlay implements OnInit {
+  /** Initial panel width in px (resizable by the user; persisted per-entity). */
   @Input() WidthPx = 720;
   /** Whether the panel is user-resizable. */
   @Input() Resizable = true;
 
   /** Form config. Defaults to the slide-in preset; consumers can override. */
   @Input() override Config = SLIDEIN_FORM_CONFIG;
+
+  /** Entity used to scope the persisted width (resolved on init). */
+  private widthEntity: string | null = null;
+
+  ngOnInit(): void {
+    // Resolve the entity up-front so we can restore the user's saved width
+    // before the panel animates in (avoids a mid-render resize).
+    this.widthEntity = this.EntityName ?? this.Record?.EntityInfo?.Name ?? null;
+    if (this.widthEntity) {
+      const saved = UserInfoEngine.Instance.GetSetting(this.widthKey(this.widthEntity));
+      const px = saved ? parseInt(saved, 10) : 0;
+      if (px > 0) this.WidthPx = px;
+    }
+  }
+
+  /** Persist the user's resize, scoped per-entity (cross-device via User Settings). */
+  onWidthChanged(width: number): void {
+    this.WidthPx = width;
+    if (this.widthEntity) {
+      UserInfoEngine.Instance.SetSettingDebounced(this.widthKey(this.widthEntity), String(width));
+    }
+  }
+
+  private widthKey(entity: string): string {
+    return `mj.formSlideIn.width.${entity.toLowerCase()}`;
+  }
 }

@@ -104,6 +104,15 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Form-level context (search filter, showEmptyFields) */
   @Input() FormContext?: FormContext;
 
+  /**
+   * Whether FK / record links are interactive. Driven by
+   * `FormContext.enableRecordLinks`; false renders FK values as plain text
+   * (dialog/slide-in surfaces). Undefined / true means links are live.
+   */
+  get RecordLinksEnabled(): boolean {
+    return this.FormContext?.enableRecordLinks !== false;
+  }
+
   // ---- Deprecated camelCase aliases (backward compat) ----
 
   /** @deprecated Use [Record] instead */

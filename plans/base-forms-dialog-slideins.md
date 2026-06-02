@@ -214,7 +214,7 @@ const saved = await ref.afterSaved(); // BaseEntity on save, null on cancel
 
 ## 8. Phasing
 
-### Phase 1 — Prove the full stack (tab + 1 dialog + 1 slide-in)
+### Phase 1 — Prove the full stack (tab + 1 dialog + 1 slide-in)  ✅ DONE
 1. `EntityFormConfig` + presets; `Config` on `BaseFormComponent`; container/panel bridge; `collapsibleSections`.
 2. Move `FormResolverService` → `base-forms`; fix imports + tests.
 3. Build `MjEntityFormHostComponent`.
@@ -226,8 +226,11 @@ const saved = await ref.afterSaved(); // BaseEntity on save, null on cancel
    - *(Both candidates are swappable; chosen for low custom-logic so the test exercises the stack, not bespoke flows.)*
 9. Build all touched packages; run unit tests; Playwright smoke of tab + dialog + slide-in (create, edit, validate, save, cancel-revert, variant switch).
 
-### Phase 2 — Hardening & ergonomics
-- `window` presentation; `enableRecordLinks` inert-link rendering; nested-dialog option for navigation; loading/error states; focus management & a11y; persistence of slide-in width via `UserInfoEngine`.
+### Phase 2 — Hardening & ergonomics  ✅ (core items done)
+- ✅ `enableRecordLinks` now renders FK/record links inert (plain text) in dialog/slide-in via `FormContext.enableRecordLinks` → `MjFormFieldComponent.RecordLinksEnabled`.
+- ✅ Slide-in width persisted per-entity via `UserInfoEngine` (`mj.formSlideIn.width.<entity>`), restored on init.
+- ✅ Loading + error states owned by `MjEntityFormHostComponent`.
+- **Deferred** (intentionally, not needed for the core vision): `window` presentation (dialog + slide-in cover the ask; presenter is `'dialog' | 'slide-in'`); nested-dialog auto-open on in-form navigation (links are inert by default; the `Navigate` event still bubbles for consumers who want it); deep focus-trapping a11y beyond what `mj-dialog`/`mj-slide-panel` already provide (backdrop + Escape).
 
 ### Phase 3 — Replacement waves (see §9)
 - Wave A: thin Generic wrappers (`scheduling`, `agent-requests`, `credentials` full, `agents` create dialog/slide-in).

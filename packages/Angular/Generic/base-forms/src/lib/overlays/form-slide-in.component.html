@@ -4,6 +4,7 @@
   [Title]="effectiveTitle"
   [Resizable]="Resizable"
   [WidthPx]="WidthPx"
+  (WidthChanged)="onWidthChanged($event)"
   (Closed)="onCancel()">
 
   <div class="mj-form-slide-in-layout">
