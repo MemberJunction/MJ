@@ -104,6 +104,33 @@
   overflow: auto;
 }
 
+/* Rich (markdown / html) read-only rendering — let content flow as a block, not a flex row */
+.mj-forms-field-value--rich {
+  display: block;
+  align-items: initial;
+  max-height: 480px;
+  overflow: auto;
+  width: 100%;
+}
+
+/* Code read-only / edit rendering — the embedded code editor needs an explicit height */
+.mj-forms-field-value--code {
+  display: block;
+  align-items: initial;
+  width: 100%;
+}
+
+.mj-forms-field-value--code mj-code-editor,
+.mj-forms-field-input--code {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  max-height: 480px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius, 4px);
+  overflow: auto;
+}
+
 /* Read-only fields in edit mode */
 .mj-forms-field--readonly {
   opacity: 0.7;

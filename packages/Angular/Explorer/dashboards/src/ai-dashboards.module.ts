@@ -11,7 +11,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -27,6 +27,18 @@ import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execu
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { AutotaggingPipelineResourceComponent } from './AI/components/autotagging/autotagging-pipeline-resource.component';
+import { ClassifyHistoryTabComponent } from './AI/components/autotagging/tabs/history-tab.component';
+import { ClassifyTypesTabComponent } from './AI/components/autotagging/tabs/types-tab.component';
+import { ClassifyTagsTabComponent } from './AI/components/autotagging/tabs/tags-tab.component';
+import { ClassifySourcesTabComponent } from './AI/components/autotagging/tabs/sources-tab.component';
+import { ClassifyPipelineTabComponent } from './AI/components/autotagging/tabs/pipeline-tab.component';
+import { ClassifyTaxonomyTabComponent } from './AI/components/autotagging/tabs/taxonomy-tab.component';
+import { ClassifyInboxTabComponent } from './AI/components/autotagging/tabs/inbox-tab.component';
+import { ClassifyHealthTabComponent } from './AI/components/autotagging/tabs/health-tab.component';
+import { ClassifyItemDetailDialogComponent } from './AI/components/autotagging/dialogs/item-detail.dialog.component';
+import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
+import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
+import { ClassifyDryRunPreviewDialogComponent } from './AI/components/autotagging/dialogs/dry-run-preview.dialog.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
@@ -84,6 +96,18 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ClassifyHistoryTabComponent,
+    ClassifyTypesTabComponent,
+    ClassifyTagsTabComponent,
+    ClassifySourcesTabComponent,
+    ClassifyPipelineTabComponent,
+    ClassifyTaxonomyTabComponent,
+    ClassifyInboxTabComponent,
+    ClassifyHealthTabComponent,
+    ClassifyItemDetailDialogComponent,
+    ClassifyNoContentTypeWarningComponent,
+    ClassifySourceTypeFormDialogComponent,
+    ClassifyDryRunPreviewDialogComponent,
     TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
@@ -120,6 +144,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJButtonDirective,
     MJComboboxComponent,
     MJDropdownComponent,
+    MJSwitchComponent,
     MJPageHeaderComponent,
     MJPageLayoutComponent,
     MJPageBodyComponent,

@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run",
     "build": "npm run clean && ngc && npm run copy-assets",
     "copy-assets": "cpy 'src/lib/_tokens.scss' dist/lib --flat",
     "clean": "rimraf dist",
@@ -36,6 +36,7 @@
     "@memberjunction/ng-base-types": "5.38.0",
     "@memberjunction/core-entities": "5.38.0",
     "@memberjunction/global": "5.38.0",
+    "dompurify": "^3.3.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

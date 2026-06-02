@@ -48,6 +48,24 @@
                   </div>
                 </span>
               }
+              @else if (RichTextMode === 'markdown') {
+                <div class="mj-forms-field-value mj-forms-field-value--rich">
+                  <mj-markdown [data]="FormatValue()"></mj-markdown>
+                </div>
+              }
+              @else if (RichTextMode === 'html') {
+                <!-- XSS: the mjSafeRichHtml pipe sanitizes with DOMPurify (HTML + SVG profiles)
+                     and then bypasses Angular's redundant re-sanitize. DOMPurify strips <script>,
+                     on* handlers, javascript:/data: URLs and <foreignObject> while KEEPING safe
+                     inline SVG + styles — richer than Angular's built-in sanitizer, still safe for
+                     untrusted content. -->
+                <div class="mj-forms-field-value mj-forms-field-value--rich" [innerHTML]="FormatValue() | mjSafeRichHtml"></div>
+              }
+              @else if (RichTextMode === 'code') {
+                <div class="mj-forms-field-value mj-forms-field-value--code">
+                  <mj-code-editor [value]="FormatValue()" [language]="CodeEditorLanguage" [readonly]="true"></mj-code-editor>
+                </div>
+              }
               @else if (IsLongText) {
                 <span class="mj-forms-field-value mj-forms-field-value--long">{{ FormatValue() }}</span>
               }
@@ -95,6 +113,14 @@
               </div>
             }
           </div>
+        }
+        @else if (EditRichTextMode !== 'plain') {
+          <!-- Markdown / HTML / Code long-text: edit raw with a syntax-highlighted code editor -->
+          <mj-code-editor
+            class="mj-forms-field-input--code"
+            [value]="FormatValue()"
+            [language]="CodeEditorLanguage"
+            (change)="OnCodeEditorChange($event)"></mj-code-editor>
         }
         @else {
           @switch (Type) {

@@ -6,6 +6,10 @@ import ora from 'ora-classic';
 import { getValidatedConfig, getSkywayConfig, type MJConfig } from '../../config';
 import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
 import { verifyDatabaseConnection } from '../../lib/db-preflight';
+import { readCurrentDbVersion } from '../../lib/db-version';
+
+/** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
+const HISTORY_TABLE = 'flyway_schema_history';
 
 export default class Migrate extends Command {
   static description = 'Migrate MemberJunction database to latest version';
@@ -39,16 +43,17 @@ export default class Migrate extends Command {
     await this.preflightConnection(config, flags['check-connection']);
     if (flags['check-connection']) return;
 
-    // For a remote ref we fetch only the slice Skyway will actually run (highest
-    // baseline + the versioned tail after it + repeatables) into a temp dir, then
-    // hand that dir to Skyway. cleanup() runs on every exit path.
+    // For a remote ref we read the DB's current migration version, then fetch only the
+    // slice needed to reach the target — versioned migrations after the current version
+    // for an existing DB, or baseline + tail for a fresh one — into a temp dir handed to
+    // Skyway. cleanup() runs on every exit path.
     //
     // Explicit --tag wins; otherwise the install-pinned version (mjRepoVersion) drives
     // the fetch so migrate stays consistent with the installed code. An explicit --dir
     // override (without --tag) keeps using the local filesystem and skips fetching, so
     // monorepo developers are unaffected.
     const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
-    const fetched = ref ? await fetchMigrationSlice({ repoUrl: config.mjRepoUrl, ref: resolveGitRef(ref), dialect: config.dbPlatform }) : null;
+    const fetched = ref ? await this.fetchSliceForRef(config, ref, flags.schema) : null;
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
@@ -57,6 +62,41 @@ export default class Migrate extends Command {
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
       if (fetched) await fetched.cleanup();
+    }
+  }
+
+  /**
+   * Reads the database's current migration version, logs it, then fetches the minimal
+   * slice to reach `ref`: versioned migrations after the current version for an existing
+   * database, or baseline + tail for a fresh one.
+   */
+  private async fetchSliceForRef(config: MJConfig, ref: string, schema: string | undefined): Promise<MigrationFetchResult> {
+    const currentVersion = await this.readInstalledVersion(config, schema);
+    this.logInstalledVersion(currentVersion);
+    return fetchMigrationSlice({
+      repoUrl: config.mjRepoUrl,
+      ref: resolveGitRef(ref),
+      dialect: config.dbPlatform,
+      currentVersion,
+    });
+  }
+
+  /**
+   * Connects to read the highest migration version already applied (from Skyway's
+   * history table). Returns null for a fresh database (no history table yet).
+   */
+  private async readInstalledVersion(config: MJConfig, schema: string | undefined): Promise<string | null> {
+    // A throwaway config just to obtain a provider — the migration location is irrelevant here.
+    const probe = await getSkywayConfig(config, undefined, schema, undefined);
+    return readCurrentDbVersion(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
+  }
+
+  /** Surfaces the detected installed version so the user sees what's being upgraded from. */
+  private logInstalledVersion(currentVersion: string | null): void {
+    if (currentVersion === null) {
+      this.log('No prior migration history detected — treating as a fresh install (baseline + later migrations).');
+    } else {
+      this.log(`Detected installed migration version: ${currentVersion} — fetching only migrations newer than it.`);
     }
   }
 

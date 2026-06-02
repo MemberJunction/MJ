@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub · Classify — Redesign: Current vs Future</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root{
+  --brand:#7c3aed; --brand-hover:#6d28d9; --brand-soft:#f3effe;
+  --text:#1e1b2e; --text-2:#544f6b; --muted:#857f9c; --disabled:#a9a3c0;
+  --page:#f6f5fb; --surface:#ffffff; --card:#faf9fe; --sunken:#f1eefb;
+  --border:#e6e2f2; --border-strong:#d3cce8;
+  --ok:#16a34a; --ok-bg:#eafaf0; --warn:#d97706; --warn-bg:#fdf4e7; --err:#dc2626; --err-bg:#fdecec; --info:#2563eb; --info-bg:#eaf1fe;
+  --new:#7c3aed; --new-bg:#f3effe;
+  --radius:12px; --radius-sm:8px; --shadow:0 1px 3px rgba(30,27,46,.08),0 4px 16px rgba(30,27,46,.06);
+  --mono:'SF Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--page);color:var(--text);font-size:14px;line-height:1.45}
+h1,h2,h3,h4{margin:0;font-weight:650}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)} .t2{color:var(--text-2)}
+button{font-family:inherit;cursor:pointer}
+
+/* ---- top app bar ---- */
+.appbar{position:sticky;top:0;z-index:50;background:linear-gradient(120deg,#241a3d,#3a2a63);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:18px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.appbar .logo{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.14);display:grid;place-items:center;font-size:16px}
+.appbar h1{font-size:16px;letter-spacing:.2px}
+.appbar .sub{font-size:12px;opacity:.7;margin-top:1px}
+.spacer{flex:1}
+.legend{display:flex;gap:14px;font-size:12px;opacity:.92}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.dot.new{background:#c4b5fd} .dot.old{background:#9ca3af}
+
+/* ---- segmented option switcher ---- */
+.switch{display:flex;gap:0;background:#f1eefb;border:1px solid var(--border);border-radius:999px;padding:4px;margin:20px auto 0;width:max-content}
+.switch button{border:0;background:transparent;color:var(--text-2);padding:9px 22px;border-radius:999px;font-weight:600;font-size:13px;transition:.15s}
+.switch button.active{background:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(124,58,237,.35)}
+.switch button .tag{font-size:10px;opacity:.7;display:block;font-weight:500}
+
+.wrap{max-width:1320px;margin:0 auto;padding:24px}
+.viewintro{text-align:center;max-width:760px;margin:18px auto 26px}
+.viewintro h2{font-size:20px} .viewintro p{color:var(--text-2);margin:8px 0 0}
+
+.view{display:none} .view.active{display:block}
+
+/* ---- generic app frame (browser chrome) ---- */
+.frame{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:28px}
+.frame-bar{background:var(--card);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:8px}
+.frame-bar .dots{display:flex;gap:6px}.frame-bar .dots i{width:11px;height:11px;border-radius:50%}
+.frame-bar .url{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.frame-cap{padding:6px 14px;font-size:12px;color:var(--muted);background:var(--card);border-bottom:1px solid var(--border)}
+
+/* page header interior */
+.ph{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:14px}
+.ph .ico{width:40px;height:40px;border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-size:17px}
+.ph h3{font-size:16px} .ph .desc{color:var(--muted);font-size:12.5px;margin-top:2px}
+.ph .acts{margin-left:auto;display:flex;gap:8px}
+
+.btn{border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--brand)}
+.btn.danger{background:var(--surface);border-color:#f0c9c9;color:var(--err)}
+
+/* left nav */
+.shell{display:grid;grid-template-columns:208px 1fr;min-height:520px}
+.nav{background:var(--card);border-right:1px solid var(--border);padding:12px 10px}
+.nav .sec{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:14px 8px 6px;font-weight:700}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;color:var(--text-2);font-weight:600;font-size:13px;text-decoration:none;margin-bottom:2px;position:relative}
+.nav a .fa-fw{width:18px;text-align:center;color:var(--muted)}
+.nav a.active{background:var(--brand-soft);color:var(--brand)} .nav a.active .fa-fw{color:var(--brand)}
+.nav a.new::after{content:'NEW';position:absolute;right:9px;font-size:8.5px;font-weight:800;background:var(--new);color:#fff;padding:2px 5px;border-radius:5px;letter-spacing:.4px}
+.nav a .badge{margin-left:auto;background:var(--err);color:#fff;font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px}
+.nav a.new .badge{margin-right:34px}
+.body{padding:20px;overflow:auto;background:var(--surface)}
+
+/* pills / chips */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+.pill.purple{background:var(--new-bg);color:var(--brand)} .pill.green{background:var(--ok-bg);color:var(--ok)}
+.pill.amber{background:var(--warn-bg);color:var(--warn)} .pill.red{background:var(--err-bg);color:var(--err)}
+.pill.blue{background:var(--info-bg);color:var(--info)} .pill.gray{background:#eceaf3;color:var(--text-2)}
+
+/* gap callouts (current state) */
+.gapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.gapcard{border:1px solid var(--border);border-radius:12px;padding:16px;background:var(--surface);position:relative}
+.gapcard h4{font-size:14px;display:flex;align-items:center;gap:8px}
+.gapcard p{color:var(--text-2);font-size:12.5px;margin:8px 0 0}
+.gapcard .state{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+.gapcard .where{margin-top:10px;font-size:11.5px;color:var(--muted)}
+.stamp{position:absolute;top:14px;right:14px;font-size:10px;font-weight:800;letter-spacing:.5px;padding:3px 8px;border-radius:6px}
+.stamp.missing{background:var(--err-bg);color:var(--err)} .stamp.weak{background:var(--warn-bg);color:var(--warn)} .stamp.split{background:var(--info-bg);color:var(--info)}
+
+/* ===== Suggestions Inbox (3-pane) ===== */
+.inbox{display:grid;grid-template-columns:172px 320px 1fr;border:1px solid var(--border);border-radius:12px;overflow:hidden;min-height:430px}
+.inbox .col{border-right:1px solid var(--border)}
+.inbox .col:last-child{border-right:0}
+.ifilter{padding:12px;background:var(--card)}
+.ifilter h5{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px}
+.ifilter a{display:flex;justify-content:space-between;align-items:center;padding:7px 9px;border-radius:7px;color:var(--text-2);font-size:12.5px;font-weight:600;text-decoration:none;margin-bottom:2px}
+.ifilter a.active{background:var(--surface);box-shadow:inset 0 0 0 1px var(--border);color:var(--text)}
+.ifilter a .n{font-size:11px;color:var(--muted)}
+.ilist{overflow:auto;background:var(--surface)}
+.irow{padding:11px 13px;border-bottom:1px solid var(--border);cursor:pointer}
+.irow.sel{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+.irow .top{display:flex;justify-content:space-between;gap:8px}
+.irow .nm{font-weight:700;font-size:13px}
+.irow .rsn{font-size:11px;color:var(--text-2);margin-top:3px}
+.irow .ago{font-size:10.5px;color:var(--muted);white-space:nowrap}
+.iread{padding:18px 20px;overflow:auto}
+.iread .hd{display:flex;justify-content:space-between;align-items:flex-start}
+.iread h4{font-size:17px}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:7px 12px;margin:16px 0;font-size:13px}
+.kv .k{color:var(--muted)} .kv .v{font-weight:600}
+.band{margin:18px 0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+.band h5{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:12px}
+.bandbar{position:relative;height:10px;border-radius:6px;background:linear-gradient(90deg,#fde2e2 0%,#fdeccb 55%,#d8f5e2 78%,#b9f0cf 100%)}
+.bandbar .mk{position:absolute;top:-6px;width:2px;height:22px;background:var(--text)}
+.bandbar .score{position:absolute;top:-30px;transform:translateX(-50%);font-size:11px;font-weight:800;background:var(--text);color:#fff;padding:2px 7px;border-radius:6px}
+.bandbar .score::after{content:'';position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--text)}
+.bandlabels{display:flex;justify-content:space-between;margin-top:9px;font-size:10.5px;color:var(--muted)}
+.actbar{display:flex;gap:9px;margin-top:8px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ===== tag editor panels ===== */
+.editor{display:grid;grid-template-columns:240px 1fr;border:1px solid var(--border);border-radius:12px;overflow:hidden;min-height:430px}
+.tree{background:var(--card);border-right:1px solid var(--border);padding:10px;overflow:auto;font-size:13px}
+.tnode{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;color:var(--text-2);cursor:pointer}
+.tnode.sel{background:var(--brand-soft);color:var(--brand);font-weight:700}
+.tnode .ic{width:13px;text-align:center;font-size:10px;color:var(--muted)}
+.tnode .gov{margin-left:auto;display:flex;gap:3px;font-size:9px;color:var(--muted)}
+.epanel{padding:0}
+.etabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 14px;background:var(--card)}
+.etabs button{border:0;background:transparent;padding:12px 14px;font-weight:600;font-size:13px;color:var(--text-2);border-bottom:2px solid transparent}
+.etabs button.active{color:var(--brand);border-bottom-color:var(--brand)}
+.etabs button .nb{font-size:9px;background:var(--brand);color:#fff;padding:1px 5px;border-radius:5px;margin-left:5px;vertical-align:1px}
+.epane{padding:18px 20px;display:none} .epane.active{display:block}
+.field{margin-bottom:15px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:6px}
+.field .hint{font-size:11px;color:var(--muted);margin-top:5px}
+.inp{width:100%;border:1px solid var(--border-strong);border-radius:8px;padding:8px 11px;font-size:13px;background:var(--surface);color:var(--text)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.toggle{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:9px}
+.toggle .sw{width:36px;height:21px;border-radius:999px;background:#d6d0e8;position:relative;flex:0 0 auto}
+.toggle.on .sw{background:var(--brand)}
+.toggle .sw::after{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.15s}
+.toggle.on .sw::after{left:17px}
+.toggle .lab{font-weight:600;font-size:13px} .toggle .sub{font-size:11px;color:var(--muted)}
+.impact{margin-top:8px;background:var(--info-bg);border:1px solid #cfe0fb;border-radius:8px;padding:9px 11px;font-size:11.5px;color:#1e40af}
+
+/* synonyms */
+.synrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px}
+.synrow .txt{font-weight:600}
+.synrow .x{margin-left:auto;color:var(--muted);cursor:pointer}
+.pending-bar{background:var(--warn-bg);border:1px solid #f1dcae;border-radius:9px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#92600c;display:flex;align-items:center;gap:9px}
+
+/* scope transfer */
+.scope{display:grid;grid-template-columns:1fr 44px 1fr;gap:10px;align-items:center}
+.scopebox{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.scopebox h6{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:9px 11px;background:var(--card);border-bottom:1px solid var(--border);margin:0}
+.scopebox .it{padding:8px 11px;font-size:12.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.scopebox .it.dis{color:var(--disabled)} .scopebox .it.dis .why{font-size:10px;margin-left:auto;color:var(--warn)}
+.scopearrows{display:flex;flex-direction:column;gap:8px}
+.scopearrows button{border:1px solid var(--border-strong);background:var(--surface);border-radius:8px;padding:8px 0;color:var(--text-2)}
+
+/* ===== Tag Health ===== */
+.health{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.hcard{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface)}
+.hcard .htop{padding:15px 16px;border-bottom:1px solid var(--border)}
+.hcard .big{font-size:30px;font-weight:750;line-height:1}
+.hcard .big small{font-size:12px;font-weight:600;color:var(--muted)}
+.hcard h5{font-size:13px;margin-top:6px}
+.hcard .htop p{font-size:11.5px;color:var(--muted);margin:5px 0 0}
+.hcard .hlist{padding:8px 10px}
+.hitem{display:flex;align-items:center;gap:8px;padding:8px 8px;border-radius:8px;font-size:12px}
+.hitem:hover{background:var(--card)}
+.hitem .sc{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-2)}
+.hcard .hfoot{padding:10px 14px;border-top:1px solid var(--border);background:var(--card)}
+.delta{font-size:11px;font-weight:700} .delta.up{color:var(--err)} .delta.down{color:var(--ok)}
+
+/* ===== Source config (taxonomy mode + band + budgets) ===== */
+.cfg{display:grid;grid-template-columns:1fr 300px;gap:18px}
+.modecards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+.modecard{border:1.5px solid var(--border);border-radius:11px;padding:13px;cursor:pointer;background:var(--surface)}
+.modecard.sel{border-color:var(--brand);background:var(--brand-soft)}
+.modecard .mi{font-size:18px} .modecard h5{font-size:13.5px;margin:7px 0 4px}
+.modecard p{font-size:11px;color:var(--muted);margin:0} .modecard .best{font-size:10.5px;color:var(--brand);font-weight:700;margin-top:7px}
+.aside{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:16px;align-self:start}
+.aside h5{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:12px}
+.effrow{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:1px dashed var(--border)}
+.effrow .v{font-weight:700}
+.effrow .src{font-size:10px;color:var(--muted);display:block;text-align:right;font-weight:500}
+.slider{height:6px;border-radius:4px;background:#e6e2f2;position:relative;margin:22px 6px 8px}
+.slider .h{position:absolute;top:-6px;width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--brand);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.slider .lbl{position:absolute;top:-26px;transform:translateX(-50%);font-size:10.5px;font-weight:800;color:var(--brand)}
+
+/* dry run */
+.dry{border:1px dashed var(--brand);border-radius:12px;padding:16px;background:var(--brand-soft)}
+.dryhead{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.drytable{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.drytable th{text-align:left;background:var(--card);padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.drytable td{padding:9px 12px;border-top:1px solid var(--border)}
+.disp{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:5px}
+.disp.apply{background:var(--ok-bg);color:var(--ok)} .disp.inbox{background:var(--warn-bg);color:var(--warn)} .disp.create{background:var(--info-bg);color:var(--info)}
+
+/* curate cockpit (Option B) */
+.cockpit{display:grid;grid-template-columns:260px 1fr 300px;border:1px solid var(--border);border-radius:12px;overflow:hidden;min-height:480px}
+.ck-col{border-right:1px solid var(--border);overflow:auto}
+.ck-col:last-child{border-right:0;background:var(--card)}
+.ck-h{padding:11px 14px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;background:var(--card)}
+.ck-mid{padding:0}
+.ck-modes{display:flex;gap:2px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ck-modes button{border:0;background:var(--sunken);color:var(--text-2);font-weight:600;font-size:11.5px;padding:6px 11px;border-radius:7px}
+.ck-modes button.active{background:var(--brand);color:#fff}
+.ck-modes button .n{font-size:9px;background:rgba(255,255,255,.3);padding:0 5px;border-radius:5px;margin-left:4px}
+.ck-modes button.active .n{background:rgba(255,255,255,.25)}
+.ck-pane{padding:16px}
+.statline{display:flex;gap:18px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.statline .s .v{font-size:18px;font-weight:750} .statline .s .l{font-size:11px;color:var(--muted)}
+
+.note{background:#fffbeb;border:1px solid #f3e3b3;border-radius:10px;padding:12px 15px;font-size:12.5px;color:#7a5b09;margin:18px 0}
+.foot{ text-align:center;color:var(--muted);font-size:12px;padding:30px 0 50px}
+.sectitle{font-size:13px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--brand);margin:30px 0 12px;display:flex;align-items:center;gap:9px}
+.sectitle::after{content:'';flex:1;height:1px;background:var(--border)}
+</style>
+</head>
+<body>
+
+<div class="appbar">
+  <div class="logo"><i class="fa-solid fa-brain"></i></div>
+  <div>
+    <h1>Knowledge Hub · Classify — Redesign</h1>
+    <div class="sub">Current state vs. proposed future · surfacing backend capabilities that have no UI today</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="legend">
+    <span><span class="dot new"></span>New surface</span>
+    <span><span class="dot old"></span>Exists today</span>
+  </div>
+</div>
+
+<div class="switch">
+  <button data-v="current" class="active">Current State<span class="tag">what ships today</span></button>
+  <button data-v="optA">Option A — New Tabs<span class="tag">extend the 6-tab shell</span></button>
+  <button data-v="optB">Option B — Curate Cockpit<span class="tag">unified governance workspace</span></button>
+</div>
+
+<div class="wrap">
+
+<!-- ============================================================ CURRENT ============================================================ -->
+<div class="view active" id="v-current">
+  <div class="viewintro">
+    <h2>What Classify exposes today</h2>
+    <p>The engine supports a full human-in-the-loop governance model. The cockpit exposes a fraction of it. Six capabilities are either <b>missing</b>, <b>weak</b>, or <b>stranded on a different screen</b>.</p>
+  </div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">app/knowledge-hub/Classify</div></div>
+    <div class="frame-cap">The current shell — 6 tabs, one 5,147-line component</div>
+    <div class="shell">
+      <div class="nav">
+        <div class="sec">Pipeline</div>
+        <a class="active"><i class="fa-solid fa-gauge-high fa-fw"></i> Pipeline</a>
+        <a><i class="fa-solid fa-database fa-fw"></i> Sources</a>
+        <a><i class="fa-solid fa-shapes fa-fw"></i> Types</a>
+        <div class="sec">Taxonomy</div>
+        <a><i class="fa-solid fa-tag fa-fw"></i> Tags</a>
+        <a><i class="fa-solid fa-sitemap fa-fw"></i> Taxonomy</a>
+        <a><i class="fa-solid fa-clock-rotate-left fa-fw"></i> History</a>
+      </div>
+      <div class="body">
+        <div class="gapgrid">
+
+          <div class="gapcard">
+            <span class="stamp missing">No UI</span>
+            <h4><i class="fa-solid fa-inbox" style="color:var(--brand)"></i> Tag Suggestions</h4>
+            <p>The config panel literally has a field <span class="mono">"SuggestThreshold (route to inbox)"</span> — but there is no inbox. Ambiguous classifications pile up in <span class="mono">MJ: Tag Suggestions</span> with nowhere to be reviewed. <b>"Hybrid" mode is a dead end today.</b></p>
+            <div class="state"><span class="pill green"><i class="fa-solid fa-check"></i> table exists, fully populated</span><span class="pill red">0% surfaced</span></div>
+          </div>
+
+          <div class="gapcard">
+            <span class="stamp missing">No UI</span>
+            <h4><i class="fa-solid fa-arrows-turn-right" style="color:var(--brand)"></i> Synonyms</h4>
+            <p>The classifier can propose synonyms (<span class="mono">Source = 'LLM'</span>), and resolution uses them as tier-0 of the match pipeline. There is no screen to add, review, or approve them.</p>
+            <div class="state"><span class="pill green"><i class="fa-solid fa-check"></i> MJ: Tag Synonyms</span><span class="pill red">0% surfaced</span><span class="pill amber">needs approval Status col</span></div>
+          </div>
+
+          <div class="gapcard">
+            <span class="stamp missing">No UI</span>
+            <h4><i class="fa-solid fa-shield-halved" style="color:var(--brand)"></i> Per-tag Governance</h4>
+            <p>The engine gates auto-grow on <span class="mono">IsFrozen · AllowAutoGrow · MinWeight · MaxChildren · MaxDescendantDepth · RequiresReview</span>. The tag editor only edits <b>Name + Description</b>. The flags are invisible.</p>
+            <div class="state"><span class="pill green"><i class="fa-solid fa-check"></i> all 6 flags on MJ: Tags</span><span class="pill red">not editable</span></div>
+          </div>
+
+          <div class="gapcard">
+            <span class="stamp missing">No UI</span>
+            <h4><i class="fa-solid fa-users-viewfinder" style="color:var(--brand)"></i> Tag Scope (multi-tenant)</h4>
+            <p>Tags can be Global or scoped to <span class="mono">(Entity, Record)</span> tuples so taxonomies don't leak across tenants. No editor exists to set or inspect scope.</p>
+            <div class="state"><span class="pill green"><i class="fa-solid fa-check"></i> MJ: Tag Scopes + IsGlobal</span><span class="pill red">0% surfaced</span></div>
+          </div>
+
+          <div class="gapcard">
+            <span class="stamp weak">Heuristic</span>
+            <h4><i class="fa-solid fa-heart-pulse" style="color:var(--brand)"></i> Tag Health</h4>
+            <p>Today's green/yellow/red is a naive <span class="mono">itemCount + avgWeight</span> guess. The real signals — merge candidates, low-usage, wide-node — sit unused in <span class="mono">MJ: Tag Co Occurrences</span> + tag embeddings.</p>
+            <div class="state"><span class="pill amber">fake heuristic</span><span class="pill green"><i class="fa-solid fa-check"></i> co-occurrence data exists</span></div>
+          </div>
+
+          <div class="gapcard">
+            <span class="stamp split">Off-screen</span>
+            <h4><i class="fa-solid fa-sliders" style="color:var(--brand)"></i> Source Configuration</h4>
+            <p>Taxonomy mode, thresholds, tag root, budgets — the knobs that <i>define</i> a classifier — aren't in the dashboard. They live on the <b>Content Sources entity form</b>, reached by "Open advanced settings →" which navigates you out of the app.</p>
+            <div class="state"><span class="pill blue">split-brain config</span><span class="pill amber">+ no dry-run preview</span></div>
+            <div class="where"><i class="fa-solid fa-arrow-up-right-from-square"></i> Lives in tag-pipeline-configuration.panel, not here</div>
+          </div>
+
+        </div>
+        <div class="note"><i class="fa-solid fa-circle-info"></i> &nbsp;<b>Also structural:</b> all six tabs and ~12 dialogs are one 5,147-line component with no data engine. Both options below assume the Phase-1 decomposition (host shell + per-tab components + <span class="mono">KnowledgeClassifyEngine</span>) lands first.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ OPTION A ============================================================ -->
+<div class="view" id="v-optA">
+  <div class="viewintro">
+    <h2>Option A — Extend the existing 6-tab shell</h2>
+    <p>Add two top-level tabs (<b>Inbox</b>, <b>Health</b>) and enrich the tag editor with <b>Governance · Synonyms · Scope</b> panels. Lowest adoption cost — keeps the mental model people already have, drops new surfaces beside the old ones.</p>
+  </div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">app/knowledge-hub/Classify/Inbox</div></div>
+    <div class="shell">
+      <div class="nav">
+        <div class="sec">Pipeline</div>
+        <a><i class="fa-solid fa-gauge-high fa-fw"></i> Pipeline</a>
+        <a><i class="fa-solid fa-database fa-fw"></i> Sources</a>
+        <a><i class="fa-solid fa-shapes fa-fw"></i> Types</a>
+        <div class="sec">Curate</div>
+        <a class="new active"><i class="fa-solid fa-inbox fa-fw"></i> Inbox <span class="badge">23</span></a>
+        <a><i class="fa-solid fa-tag fa-fw"></i> Tags</a>
+        <a><i class="fa-solid fa-sitemap fa-fw"></i> Taxonomy</a>
+        <a class="new"><i class="fa-solid fa-heart-pulse fa-fw"></i> Health</a>
+        <a><i class="fa-solid fa-clock-rotate-left fa-fw"></i> History</a>
+      </div>
+      <div class="body">
+        <div class="ph">
+          <div class="ico"><i class="fa-solid fa-inbox"></i></div>
+          <div><h3>Suggestions Inbox <span class="pill purple">NEW</span></h3><div class="desc">Human-in-the-loop review for classifications that landed in the ambiguous band</div></div>
+          <div class="acts"><span class="pill gray">23 pending</span><button class="btn sm"><i class="fa-solid fa-filter"></i> Reason</button></div>
+        </div>
+
+        <div class="inbox">
+          <div class="col ifilter">
+            <h5>By reason</h5>
+            <a class="active">All <span class="n">23</span></a>
+            <a>Below threshold <span class="n">9</span></a>
+            <a>Merge candidate <span class="n">6</span></a>
+            <a>Constrained mode <span class="n">3</span></a>
+            <a>Parent frozen <span class="n">2</span></a>
+            <a>Requires review <span class="n">2</span></a>
+            <a>Wide node <span class="n">1</span></a>
+            <h5 style="margin-top:14px">Status</h5>
+            <a class="active">Pending <span class="n">23</span></a>
+            <a>Resolved today <span class="n">41</span></a>
+          </div>
+          <div class="col ilist">
+            <div class="irow sel">
+              <div class="top"><span class="nm">"Retrieval-Augmented Generation"</span><span class="ago">4m</span></div>
+              <div class="rsn"><span class="pill amber" style="font-size:10px">Below threshold</span> best match: <b>RAG</b> · 0.82</div>
+            </div>
+            <div class="irow">
+              <div class="top"><span class="nm">"LLMOps"</span><span class="ago">18m</span></div>
+              <div class="rsn"><span class="pill blue" style="font-size:10px">Merge candidate</span> ≈ <b>MLOps</b> · 0.91</div>
+            </div>
+            <div class="irow">
+              <div class="top"><span class="nm">"Agentic Workflows"</span><span class="ago">26m</span></div>
+              <div class="rsn"><span class="pill red" style="font-size:10px">Parent frozen</span> under <b>AI Agents</b> ❄</div>
+            </div>
+            <div class="irow">
+              <div class="top"><span class="nm">"Vector Quantization"</span><span class="ago">1h</span></div>
+              <div class="rsn"><span class="pill gray" style="font-size:10px">Constrained</span> no match ≥ 0.70</div>
+            </div>
+            <div class="irow">
+              <div class="top"><span class="nm">"Prompt Caching"</span><span class="ago">2h</span></div>
+              <div class="rsn"><span class="pill amber" style="font-size:10px">Below threshold</span> best match: <b>Prompt Engineering</b> · 0.78</div>
+            </div>
+          </div>
+          <div class="col iread">
+            <div class="hd">
+              <div><div class="muted mono" style="font-size:11px">Source · MJ Blog (Website)</div><h4>"Retrieval-Augmented Generation"</h4></div>
+              <span class="pill amber"><i class="fa-solid fa-triangle-exclamation"></i> Below threshold</span>
+            </div>
+            <div class="kv">
+              <div class="k">Proposed parent</div><div class="v">AI Techniques</div>
+              <div class="k">Best match</div><div class="v">RAG <span class="muted">(existing tag)</span></div>
+              <div class="k">From content item</div><div class="v" style="color:var(--brand)">Building a RAG pipeline with MJ ↗</div>
+              <div class="k">Weight in source</div><div class="v">0.88</div>
+            </div>
+            <div class="band">
+              <h5>Match confidence vs thresholds</h5>
+              <div class="bandbar" style="margin-top:26px">
+                <div class="mk" style="left:70%"></div><div style="position:absolute;top:-18px;left:70%;transform:translateX(-50%);font-size:9px;color:var(--muted)">Suggest 0.70</div>
+                <div class="mk" style="left:87%"></div><div style="position:absolute;top:-18px;left:87%;transform:translateX(-50%);font-size:9px;color:var(--muted)">Match 0.87</div>
+                <div class="score" style="left:82%">0.82</div>
+              </div>
+              <div class="bandlabels"><span>reject / new</span><span>review band</span><span>auto-apply</span></div>
+            </div>
+            <div class="actbar">
+              <button class="btn ok"><i class="fa-solid fa-code-merge"></i> Merge into "RAG"</button>
+              <button class="btn primary"><i class="fa-solid fa-plus"></i> Approve as new tag</button>
+              <button class="btn danger"><i class="fa-solid fa-xmark"></i> Reject</button>
+              <span style="flex:1"></span>
+              <button class="btn"><i class="fa-regular fa-note-sticky"></i> Note</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tag editor with new panels -->
+        <div class="sectitle"><i class="fa-solid fa-tag"></i> Tags tab — editor gains Governance · Synonyms · Scope</div>
+        <div class="editor">
+          <div class="tree">
+            <div class="tnode"><i class="fa-solid fa-caret-down ic"></i> AI / ML <span class="gov">🌐</span></div>
+            <div class="tnode sel" style="padding-left:22px"><i class="fa-solid fa-tag ic"></i> AI Agents <span class="gov">❄ 🔒</span></div>
+            <div class="tnode" style="padding-left:34px"><i class="fa-solid fa-tag ic"></i> Conductor</div>
+            <div class="tnode" style="padding-left:34px"><i class="fa-solid fa-tag ic"></i> Sub-agents</div>
+            <div class="tnode" style="padding-left:22px"><i class="fa-solid fa-tag ic"></i> RAG <span class="gov">!</span></div>
+            <div class="tnode" style="padding-left:22px"><i class="fa-solid fa-tag ic"></i> Prompt Engineering</div>
+          </div>
+          <div class="epanel">
+            <div class="etabs">
+              <button>Overview</button>
+              <button class="active">Governance</button>
+              <button>Synonyms <span class="nb">2</span></button>
+              <button>Scope</button>
+            </div>
+            <div class="epane active">
+              <div class="row2">
+                <div class="toggle on"><div class="sw"></div><div><div class="lab">Frozen subtree</div><div class="sub">Blocks all auto-grow below this node</div></div></div>
+                <div class="toggle"><div class="sw"></div><div><div class="lab">Allow auto-grow</div><div class="sub">Classifier may create children</div></div></div>
+              </div>
+              <div class="row3">
+                <div class="field"><label>Max children</label><input class="inp" value="10"><div class="hint">3 of 10 used</div></div>
+                <div class="field"><label>Max depth below</label><input class="inp" value="2"></div>
+                <div class="field"><label>Min weight</label><input class="inp" value="0.40"></div>
+              </div>
+              <div class="toggle on" style="margin-top:4px"><div class="sw"></div><div><div class="lab">Requires review</div><div class="sub">Every classifier hit on this tag routes to the inbox instead of auto-applying</div></div></div>
+              <div class="impact"><i class="fa-solid fa-circle-info"></i> <b>Subtree impact:</b> freezing affects 2 children &amp; 412 tagged items. New tags under "AI Agents" will route to the inbox.</div>
+              <div class="actbar" style="border-top:0;padding-top:12px"><button class="btn primary"><i class="fa-solid fa-check"></i> Save governance</button><button class="btn">Reset</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health -->
+        <div class="sectitle"><i class="fa-solid fa-heart-pulse"></i> Health tab — real signals, not a heuristic</div>
+        <div class="health">
+          <div class="hcard">
+            <div class="htop"><div class="big">68 <small>pairs</small></div><h5><i class="fa-solid fa-code-merge" style="color:var(--info)"></i> Merge candidates</h5><p>High embedding cosine + co-occurrence ≥ 12</p></div>
+            <div class="hlist">
+              <div class="hitem">LLMOps → MLOps <span class="sc">0.91</span></div>
+              <div class="hitem">Embeddings → Vector Embeddings <span class="sc">0.94</span></div>
+              <div class="hitem">Fine-tuning → Finetuning <span class="sc">0.97</span></div>
+            </div>
+            <div class="hfoot"><span class="delta up">▲ 11 since last run</span> · <a href="#" style="color:var(--brand);font-weight:700;text-decoration:none">Review all →</a></div>
+          </div>
+          <div class="hcard">
+            <div class="htop"><div class="big">34 <small>tags</small></div><h5><i class="fa-solid fa-arrow-trend-down" style="color:var(--warn)"></i> Low usage</h5><p>Used &lt; 3× in the last 90 days</p></div>
+            <div class="hlist">
+              <div class="hitem">Quantum NLP <span class="sc">1 use</span></div>
+              <div class="hitem">Neuromorphic <span class="sc">2 uses</span></div>
+              <div class="hitem">Capsule Networks <span class="sc">1 use</span></div>
+            </div>
+            <div class="hfoot"><span class="delta down">▼ 4 since last run</span> · <a href="#" style="color:var(--brand);font-weight:700;text-decoration:none">Deprecate →</a></div>
+          </div>
+          <div class="hcard">
+            <div class="htop"><div class="big">3 <small>nodes</small></div><h5><i class="fa-solid fa-arrows-left-right-to-line" style="color:var(--err)"></i> Wide nodes</h5><p>&gt; 30 direct children — likely needs splitting</p></div>
+            <div class="hlist">
+              <div class="hitem">Industries <span class="sc">47 kids</span></div>
+              <div class="hitem">Technologies <span class="sc">39 kids</span></div>
+              <div class="hitem">Use Cases <span class="sc">33 kids</span></div>
+            </div>
+            <div class="hfoot"><span class="delta up">▲ 1 since last run</span> · <a href="#" style="color:var(--brand);font-weight:700;text-decoration:none">Split →</a></div>
+          </div>
+        </div>
+
+        <!-- Source config parity + dry run -->
+        <div class="sectitle"><i class="fa-solid fa-sliders"></i> Sources tab — full config parity, in-app (no more "open advanced settings →")</div>
+        <div class="cfg">
+          <div>
+            <div class="field"><label>Taxonomy mode</label>
+              <div class="modecards">
+                <div class="modecard"><div class="mi">🔒</div><h5>Constrained</h5><p>Only existing tags. Novel → inbox.</p><div class="best">Best for regulated taxonomies</div></div>
+                <div class="modecard sel"><div class="mi">⚖️</div><h5>Hybrid</h5><p>Auto-match, never auto-create. Novel → inbox.</p><div class="best">Recommended default</div></div>
+                <div class="modecard"><div class="mi">🌱</div><h5>Auto-grow</h5><p>Creates tags under root, governance gated.</p><div class="best">Best for fast-moving domains</div></div>
+                <div class="modecard"><div class="mi">🌊</div><h5>Free-flow</h5><p>No governance. Anything goes.</p><div class="best">Sandbox only</div></div>
+              </div>
+            </div>
+            <div class="field"><label>Confidence thresholds</label>
+              <div class="slider"><div class="h" style="left:64%"></div><div class="lbl" style="left:64%">Suggest 0.70</div><div class="h" style="left:84%"></div><div class="lbl" style="left:84%">Match 0.87</div></div>
+              <div class="hint">≥ Match auto-applies · between → inbox · below → reject/new</div>
+            </div>
+            <div class="row3">
+              <div class="field"><label>Max new tags / run</label><input class="inp" value="25"></div>
+              <div class="field"><label>Max tokens / run</label><input class="inp" value="500,000"></div>
+              <div class="field"><label>Max cost / run</label><input class="inp" value="$5.00"></div>
+            </div>
+            <button class="btn primary" style="margin-top:4px"><i class="fa-solid fa-flask"></i> Dry-run on 5 items</button>
+          </div>
+          <div class="aside">
+            <h5>Effective values</h5>
+            <div class="effrow"><span>Tag root</span><span class="v">AI / ML <span class="src">source override</span></span></div>
+            <div class="effrow"><span>Match threshold</span><span class="v">0.87 <span class="src">source override</span></span></div>
+            <div class="effrow"><span>Embedding model</span><span class="v">text-embed-3 <span class="src">from content type</span></span></div>
+            <div class="effrow"><span>Share taxonomy w/ LLM</span><span class="v">On <span class="src">global default</span></span></div>
+            <div class="effrow" style="border:0"><span>Vectorization</span><span class="v">On <span class="src">global default</span></span></div>
+          </div>
+        </div>
+
+        <div class="sectitle"><i class="fa-solid fa-flask"></i> Dry-run preview (in-memory, nothing persisted)</div>
+        <div class="dry">
+          <div class="dryhead"><span class="pill purple"><i class="fa-solid fa-flask"></i> PREVIEW</span><span class="muted" style="font-size:12.5px">5 sample items · est. 4,200 tokens · ~$0.04 · <b>nothing written to the database</b></span></div>
+          <table class="drytable">
+            <thead><tr><th>Item</th><th>Proposed tag</th><th>Score</th><th>What would happen</th></tr></thead>
+            <tbody>
+              <tr><td>Intro to Agents</td><td>AI Agents</td><td class="mono">0.93</td><td><span class="disp apply">AUTO-APPLY</span></td></tr>
+              <tr><td>Intro to Agents</td><td>Orchestration</td><td class="mono">0.79</td><td><span class="disp inbox">→ INBOX</span></td></tr>
+              <tr><td>RAG deep dive</td><td>RAG</td><td class="mono">0.96</td><td><span class="disp apply">AUTO-APPLY</span></td></tr>
+              <tr><td>RAG deep dive</td><td>"Chunking Strategies"</td><td class="mono">—</td><td><span class="disp create">CREATE (auto-grow)</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>Option A trade-off:</b> fastest to build &amp; learn — reuses the existing tree/tab components, each new surface is independent. The cost is the left-nav grows to 8 items and governance work is spread across Inbox + Tags + Health rather than one place.</div>
+</div>
+
+<!-- ============================================================ OPTION B ============================================================ -->
+<div class="view" id="v-optB">
+  <div class="viewintro">
+    <h2>Option B — Unified "Curate" cockpit</h2>
+    <p>Collapse Tags + Taxonomy + Inbox + Health + Synonyms + Scope into <b>one governance workspace</b>. Pick a node in the tree; the right rail shows everything about it. Pipeline / Sources / Types / History stay as-is. Fewer tabs, one place to curate.</p>
+  </div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><div class="url">app/knowledge-hub/Classify/Curate</div></div>
+    <div class="shell">
+      <div class="nav">
+        <div class="sec">Run</div>
+        <a><i class="fa-solid fa-gauge-high fa-fw"></i> Pipeline</a>
+        <a><i class="fa-solid fa-database fa-fw"></i> Sources</a>
+        <a><i class="fa-solid fa-shapes fa-fw"></i> Types</a>
+        <div class="sec">Knowledge</div>
+        <a class="new active"><i class="fa-solid fa-seedling fa-fw"></i> Curate <span class="badge">23</span></a>
+        <a><i class="fa-solid fa-clock-rotate-left fa-fw"></i> History</a>
+      </div>
+      <div class="body" style="padding:0">
+        <div class="statline">
+          <div class="s"><div class="v">1,247</div><div class="l">tags</div></div>
+          <div class="s"><div class="v" style="color:var(--warn)">23</div><div class="l">pending suggestions</div></div>
+          <div class="s"><div class="v" style="color:var(--info)">68</div><div class="l">merge candidates</div></div>
+          <div class="s"><div class="v" style="color:var(--err)">34</div><div class="l">low-usage</div></div>
+          <div class="s"><div class="v">0.89</div><div class="l">avg confidence</div></div>
+          <span style="flex:1"></span>
+          <div style="align-self:center;padding-right:16px"><button class="btn sm"><i class="fa-solid fa-inbox"></i> Open inbox (23)</button></div>
+        </div>
+
+        <div class="cockpit">
+          <!-- tree -->
+          <div class="ck-col">
+            <div class="ck-h"><i class="fa-solid fa-sitemap"></i> Taxonomy · 1,247 tags</div>
+            <div style="padding:8px 6px">
+              <div class="tnode"><i class="fa-solid fa-caret-down ic"></i> AI / ML <span class="gov">🌐</span></div>
+              <div class="tnode sel" style="padding-left:22px"><i class="fa-solid fa-tag ic"></i> AI Agents <span class="gov">❄ ! 7</span></div>
+              <div class="tnode" style="padding-left:34px"><i class="fa-solid fa-tag ic"></i> Conductor</div>
+              <div class="tnode" style="padding-left:34px"><i class="fa-solid fa-tag ic"></i> Sub-agents</div>
+              <div class="tnode" style="padding-left:22px"><i class="fa-solid fa-tag ic"></i> RAG <span class="gov">⚠</span></div>
+              <div class="tnode" style="padding-left:22px"><i class="fa-solid fa-tag ic"></i> Prompt Engineering</div>
+              <div class="tnode"><i class="fa-solid fa-caret-right ic"></i> Industries <span class="gov">⚠ 47</span></div>
+              <div class="tnode"><i class="fa-solid fa-caret-right ic"></i> Use Cases</div>
+              <div style="font-size:10.5px;color:var(--muted);padding:10px 10px 4px">❄ frozen · ! requires review · ⚠ wide node · 🌐 global · # children</div>
+            </div>
+          </div>
+          <!-- node detail with mode switcher -->
+          <div class="ck-col ck-mid">
+            <div class="ck-h" style="display:flex;align-items:center;gap:9px"><i class="fa-solid fa-tag" style="color:var(--brand)"></i> AI Agents <span class="pill amber" style="margin-left:auto">7 pending</span></div>
+            <div class="ck-modes">
+              <button class="active">Overview</button>
+              <button>Suggestions <span class="n">7</span></button>
+              <button>Governance</button>
+              <button>Synonyms <span class="n">2</span></button>
+              <button>Scope</button>
+              <button>Health</button>
+            </div>
+            <div class="ck-pane">
+              <div class="statline" style="border:0;padding:0 0 14px">
+                <div class="s"><div class="v">412</div><div class="l">tagged items</div></div>
+                <div class="s"><div class="v">3 / 10</div><div class="l">children</div></div>
+                <div class="s"><div class="v">0.91</div><div class="l">avg confidence</div></div>
+                <div class="s"><div class="v" style="color:var(--warn)">7</div><div class="l">suggestions</div></div>
+              </div>
+              <div class="field"><label>Display name</label><input class="inp" value="AI Agents"></div>
+              <div class="field"><label>Description</label><input class="inp" value="Autonomous & semi-autonomous AI agent systems"></div>
+
+              <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:6px">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:10px">Governance summary <span style="float:right;color:var(--brand);cursor:pointer">edit →</span></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <span class="pill blue">❄ Frozen</span><span class="pill amber">! Requires review</span><span class="pill gray">Max children 10</span><span class="pill gray">Min weight 0.40</span><span class="pill green">🌐 Global</span>
+                </div>
+              </div>
+
+              <div class="pending-bar" style="margin-top:14px"><i class="fa-solid fa-inbox"></i> <b>7 suggestions</b> waiting on this subtree — "Agentic Workflows", "Tool Use", "ReAct"… <span style="margin-left:auto;color:var(--brand);font-weight:700;cursor:pointer">Review →</span></div>
+            </div>
+          </div>
+          <!-- context rail: inbox preview / health for node -->
+          <div class="ck-col">
+            <div class="ck-h"><i class="fa-solid fa-bolt"></i> For this node</div>
+            <div style="padding:12px">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:8px">Top suggestions</div>
+              <div class="irow" style="border:1px solid var(--border);border-radius:9px;margin-bottom:8px">
+                <div class="top"><span class="nm" style="font-size:12.5px">"Agentic Workflows"</span></div>
+                <div class="rsn"><span class="pill red" style="font-size:10px">Parent frozen ❄</span></div>
+                <div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm ok">Approve</button><button class="btn sm danger">Reject</button></div>
+              </div>
+              <div class="irow" style="border:1px solid var(--border);border-radius:9px;margin-bottom:14px">
+                <div class="top"><span class="nm" style="font-size:12.5px">"Tool Use"</span></div>
+                <div class="rsn"><span class="pill amber" style="font-size:10px">Below threshold</span> ≈ Function Calling · 0.81</div>
+                <div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm ok">Merge</button><button class="btn sm primary">New</button></div>
+              </div>
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin:4px 0 8px">Health</div>
+              <div class="hitem" style="font-size:11.5px"><i class="fa-solid fa-code-merge" style="color:var(--info)"></i> Merge "Agents"→ here <span class="sc">0.88</span></div>
+              <div class="hitem" style="font-size:11.5px"><i class="fa-solid fa-arrows-left-right-to-line" style="color:var(--ok)"></i> Width OK (3/10)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>Option B trade-off:</b> one coherent place to govern — node-centric, less tab-hopping, suggestions/health always shown in the context of the tag they touch. The cost is a larger net-new component (the cockpit isn't just the old tree with tabs bolted on) and a bigger behavior change for existing users.</div>
+</div>
+
+<div class="foot">
+  Mockup · Knowledge Hub Classify redesign · plan: <span class="mono">plans/knowledge-hub-classify-redesign.md</span> · branch: <span class="mono">knowledge-hub-classify-redesign</span><br>
+  Both options share the same widgets (inbox, governance panel, health cards, dry-run) — they differ only in <b>information architecture</b>. Schema is ready today except one additive column (<span class="mono">MJTagSynonym.Status</span>).
+</div>
+
+</div>
+
+<script>
+const btns=document.querySelectorAll('.switch button');
+const views={current:'v-current',optA:'v-optA',optB:'v-optB'};
+btns.forEach(b=>b.addEventListener('click',()=>{
+  btns.forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  Object.values(views).forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById(views[b.dataset.v]).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
+// editor sub-tabs (Option A)
+document.querySelectorAll('.etabs').forEach(g=>{
+  g.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+    g.querySelectorAll('button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+  }));
+});
+// cockpit mode switcher (Option B)
+document.querySelectorAll('.ck-modes').forEach(g=>{
+  g.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+    g.querySelectorAll('button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+  }));
+});
+// mode cards
+document.querySelectorAll('.modecards').forEach(g=>{
+  g.querySelectorAll('.modecard').forEach(c=>c.addEventListener('click',()=>{
+    g.querySelectorAll('.modecard').forEach(x=>x.classList.remove('sel'));c.classList.add('sel');
+  }));
+});
+</script>
+</body>
+</html>

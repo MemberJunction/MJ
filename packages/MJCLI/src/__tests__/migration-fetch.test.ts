@@ -61,6 +61,36 @@ describe('selectMigrationSlice', () => {
   });
 });
 
+describe('selectMigrationSlice — existing-DB upgrade (currentVersion)', () => {
+  const ALL = [B_V3, B_V4, B_V5_0, B_V5_37, V_SUBSUMED, V_TAIL_1, V_TAIL_2, REPEATABLE, NON_MIGRATION_1];
+
+  it('upgrades from below a baseline by including the intermediate versioned migrations (no baseline)', () => {
+    // DB at a version BEFORE V_SUBSUMED (e.g. v5.35), with a v5.37 baseline present.
+    // The v5.36 file (V_SUBSUMED) MUST be fetched — it would be wrongly skipped by the
+    // baseline floor. No B file is fetched; Skyway never applies one to an existing DB.
+    const result = selectMigrationSlice(ALL, '202605150000');
+    expect(sorted(result)).toEqual(sorted([V_SUBSUMED, V_TAIL_1, V_TAIL_2, REPEATABLE]));
+    expect(result).not.toContain(B_V5_37);
+  });
+
+  it('selects only versioned migrations strictly after the current version', () => {
+    // DB already at V_TAIL_1's version → only V_TAIL_2 (and repeatables) are newer.
+    const result = selectMigrationSlice(ALL, '202605250000');
+    expect(sorted(result)).toEqual(sorted([V_TAIL_2, REPEATABLE]));
+    expect(result).not.toContain(V_TAIL_1);
+  });
+
+  it('returns only repeatables when the DB is already at or beyond the target', () => {
+    const result = selectMigrationSlice(ALL, '202701010000');
+    expect(result).toEqual([REPEATABLE]);
+  });
+
+  it('never includes baseline files for an existing DB, even below the baseline', () => {
+    const result = selectMigrationSlice(ALL, '202600000000');
+    expect(result.some((p) => p.includes('/B'))).toBe(false);
+  });
+});
+
 describe('resolveGitRef', () => {
   it('maps a bare semantic version to a v-prefixed release tag', () => {
     expect(resolveGitRef('2.123.0')).toBe('v2.123.0');
