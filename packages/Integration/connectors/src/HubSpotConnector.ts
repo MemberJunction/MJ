@@ -1400,11 +1400,16 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 IsReadOnly: p.modificationMetadata?.readOnlyValue === true || p.calculated,
             }));
 
-        // Ensure hs_object_id is the unique key — HubSpot's Properties API sets
+        // Ensure hs_object_id is the record PK — HubSpot's Properties API sets
         // hasUniqueValue=false for hs_object_id even though it IS the record identifier,
-        // so we must override it regardless of what the API reports.
+        // AND the API never returns an IsPrimaryKey signal at all (PK lives in the
+        // response envelope, not in property metadata).  We must therefore stamp
+        // IsPrimaryKey + IsUniqueKey + IsReadOnly on this field explicitly.  Without
+        // the IsPrimaryKey stamp, UpsertField's new-field path persists it without a
+        // PK flag and the downstream SoftPKClassifier becomes our only safety net.
         const pkField = fields.find(f => f.Name === 'hs_object_id');
         if (pkField) {
+            pkField.IsPrimaryKey = true;
             pkField.IsUniqueKey = true;
             pkField.IsReadOnly = true;
         } else {
@@ -1414,6 +1419,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 Description: 'HubSpot internal object ID',
                 DataType: 'string',
                 IsRequired: true,
+                IsPrimaryKey: true,
                 IsUniqueKey: true,
                 IsReadOnly: true,
             });

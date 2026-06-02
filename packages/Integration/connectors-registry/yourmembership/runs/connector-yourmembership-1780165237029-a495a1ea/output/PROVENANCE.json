@@ -1,0 +1,235 @@
+{
+  "$schema": "connector-provenance-conventions.md",
+  "vendor": "YourMembership",
+  "runID": "connector-yourmembership-1780165237029-a495a1ea",
+  "generatedBy": "metadata-writer",
+  "generatedAt": "2026-05-30T18:38:00Z",
+  "entries": [
+    {
+      "target": "Integration.Name",
+      "value": "YourMembership",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-developer-landing", "url": "https://www.yourmembership.com/api/", "quote": "YourMembership API Documentation landing page (vendor-owned)" },
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "info.title: 'YM REST Services'" }
+      ]
+    },
+    {
+      "target": "Integration.Description",
+      "value": "YourMembership (Community Brands AMS) REST integration. Base URL https://ws.yourmembership.com, ServiceStack 5.0.2 backend. Supports two auth flows...",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "host=ws.yourmembership.com; info.version='1.0, ServiceStack: 5.0.2.0'" },
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "POST /Ams/Authenticate returns SessionId used as x-ss-id header; session TTL 15 minutes" },
+        { "sourceID": "ym-oauth-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf", "quote": "OAuth /OAuth/GetAccessToken with AppId/AppSecret/GrantType (Code or RefreshToken)" }
+      ]
+    },
+    {
+      "target": "Integration.ClassName",
+      "value": "YourMembershipConnector",
+      "evidenceStrength": "InferredFromContext",
+      "sources": [
+        { "sourceID": "existing-metadata-ym-record", "url": "metadata/integrations/.your-membership.json", "quote": "Existing YM integration record uses ClassName='YourMembershipConnector' — value retained for compatibility with downstream consumers." }
+      ],
+      "rationale": "ClassName is an integration-row identifier slot used by ConnectorFactory; it must match a registered @RegisterClass key. Retaining the existing value avoids a re-registration cascade. Not a hard-constraint vendor-fact; safely InferredFromContext."
+    },
+    {
+      "target": "Integration.ImportPath",
+      "value": "@memberjunction/integration-connectors",
+      "evidenceStrength": "InferredFromContext",
+      "sources": [
+        { "sourceID": "existing-metadata-ym-record", "url": "metadata/integrations/.your-membership.json", "quote": "Existing YM record sets ImportPath='@memberjunction/integration-connectors'" }
+      ],
+      "rationale": "MJ-internal packaging fact, not a vendor fact. The value is the canonical home for shipped connectors in this repo."
+    },
+    {
+      "target": "Integration.NavigationBaseURL",
+      "value": "https://ws.yourmembership.com",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "host: 'ws.yourmembership.com', schemes: ['https'], basePath: '/'" },
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "Base URL https://ws.yourmembership.com per the 'Base URL' section" }
+      ]
+    },
+    {
+      "target": "Integration.BatchMaxRequestCount",
+      "value": -1,
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "Spec contains no x-rate-limit-* extensions; no batch endpoint declared at vendor level (Informz bulk endpoints are resource-specific)." },
+        { "sourceID": "live-header-probe", "url": "https://ws.yourmembership.com/openapi (HEAD)", "quote": "Cloudflare + ServiceStack response headers carry no X-RateLimit-*, no Retry-After, no quota indicator. Probed 2026-05-30 18:36 UTC." },
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "PDF documents auth flow, pagination, and resource CRUD shape — does NOT publish a rate-limit policy." }
+      ],
+      "rationale": "Vendor publishes no documented per-app request quota. The MJ convention for 'no documented limit' is -1 (same as FileFeed). Recorded as ExplicitStatement-of-absence: I checked all four authoritative tier-1 sources and the live API headers, and none document a quota."
+    },
+    {
+      "target": "Integration.BatchRequestWaitTime",
+      "value": -1,
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "No throttling or batch-window documentation in the spec." },
+        { "sourceID": "live-header-probe", "url": "https://ws.yourmembership.com/openapi (HEAD)", "quote": "No Retry-After, no documented backoff policy." }
+      ],
+      "rationale": "Mirrors BatchMaxRequestCount=-1 — no documented throttle window means -1 (disabled). Adopting the same -1/-1 pair as FileFeed."
+    },
+    {
+      "target": "Integration.CredentialTypeID",
+      "value": "@lookup:MJ: Credential Types.Name=YourMembership API",
+      "evidenceStrength": "InferredFromContext",
+      "sources": [
+        { "sourceID": "existing-credential-type", "url": "metadata/credential-types/.credential-types.json", "quote": "Credential type 'YourMembership API' already exists with FieldSchema referencing clientId+apiKey+apiPassword." }
+      ],
+      "rationale": "Existing credential type matches the auth shape this connector requires (clientId, apiKey, apiPassword for session auth). OAuth Client App credentials would need a separate credential type if the OAuth flow is implemented; that is out-of-scope for the metadata row here and is captured in Configuration.AuthFlow."
+    },
+    {
+      "target": "Integration.Icon",
+      "value": "fa-solid fa-id-card",
+      "evidenceStrength": "InferredFromContext",
+      "sources": [
+        { "sourceID": "existing-metadata-ym-record", "url": "metadata/integrations/.your-membership.json", "quote": "Existing YM record uses fa-solid fa-id-card; AMS = member-card icon convention." }
+      ],
+      "rationale": "Cosmetic field; reuse of existing value avoids icon-shift in the UI."
+    },
+    {
+      "target": "Configuration.universalPK",
+      "value": null,
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "Path templates vary across families: /Ams/{ClientID}/Member/{MemberID}/... uses MemberID; /Ams/{ClientID}/Event/{EventId}/... uses EventId; CampaignEmailLists uses ListId; MemberProfile uses ProfileID (int). No single PK field name holds for all 160 Ams resource families." }
+      ],
+      "rationale": "YM has no vendor-wide PK convention — explicit null is the correct value, not omission. Runtime D4 SoftPKClassifier should classify per-IO. Recording explicit null prevents downstream agents from inventing a default."
+    },
+    {
+      "target": "Configuration.AuthFlow",
+      "value": "session+oauth2-authcode",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "POST /Ams/Authenticate with ClientID/UserType/Username/Password returns SessionId used as x-ss-id header on subsequent calls; session expires after 15 minutes" },
+        { "sourceID": "ym-oauth-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf", "quote": "OAuth flow with /OAuth/GetAccessToken parameters AppId+AppSecret+GrantType (values 'Code' or 'RefreshToken')" },
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "/OAuth/GetToken parameter list: [grant_type, scope, code, refresh_token, redirect_uri, client_id, client_secret]. No client_credentials grant declared." }
+      ],
+      "rationale": "Both flows are first-class. Session is the primary path (per the REST API PDF); OAuth2 authcode + refresh-token is the standards-conformant alternative (per OAuth PDF and OpenAPI). client_credentials is explicitly absent from the parameter list."
+    },
+    {
+      "target": "Configuration.AuthHeaderPattern",
+      "value": "Session: 'x-ss-id: <SessionId>'; OAuth2: 'Authorization: Bearer <access_token>'",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "Use SessionId as x-ss-id HTTP header" },
+        { "sourceID": "live-header-probe", "url": "https://ws.yourmembership.com/openapi (OPTIONS-equivalent)", "quote": "Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-ss-id, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Authorization — both X-ss-id and Authorization headers are first-class" }
+      ]
+    },
+    {
+      "target": "Configuration.PaginationDefaults",
+      "value": "{ Type: 'PageNumber', PageSizeParam: 'PageSize', PageNumberParam: 'PageNumber', PageNumberStartsAt: 1, TotalRecordsField: 'ListCount' }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "Pagination example: ?PageSize=5&PageNumber=1 with ListCount returned for the total." },
+        { "sourceID": "ym-openapi-swagger2-extract", "url": "https://ws.yourmembership.com/openapi", "quote": "112 of 297 paths declare both PageSize and PageNumber as parameters; ListCount appears in 656 schema definitions as the response total field" }
+      ]
+    },
+    {
+      "target": "Configuration.IncrementalSyncCapability",
+      "value": "{ VendorWideSupported: false }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "No /sync endpoint, no global Last-Modified-Since query semantic. Per-resource modifiedSince-style params exist on a minority of paths." },
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "PDF does not describe any vendor-wide incremental sync mechanism" }
+      ]
+    },
+    {
+      "target": "Configuration.WebhooksAvailable",
+      "value": "{ Vendor: false }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-source-study", "url": "packages/Integration/connectors-registry/yourmembership/runs/connector-yourmembership-1780165237029-a495a1ea/output/SOURCE_STUDY.md", "quote": "§5 Gaps: 'Webhook / push event subscription: ZoomEventListener paths exist in the OpenAPI but there is no narrative documentation of YM's own webhook model.'" },
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "ZoomEventListener / ZoomEventListenerOAuth paths exist but their schema is OAuth-callback shape from Zoom INTO YM, not outbound YM-to-customer webhooks." }
+      ]
+    },
+    {
+      "target": "Configuration.BulkOperationsAvailable",
+      "value": "{ Vendor: true (Informz family only); pattern: per-resource not generic }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "InformzBulkUploadBySearchGuid, InformzBulkUploadEventRegistrants, InformzBulkUploadForDues, InformzBulkUploadForDuesBySearchId, InformzBulkUploadForOrders, InformzBulkUploadForOrdersBySearchId, InformzBulkUploadForReports — 7 paths with Bulk in the name; plus StoreProductBulkStatus and PeopleBulkDetach (per-resource)" }
+      ]
+    },
+    {
+      "target": "Configuration.APIVersioningStrategy",
+      "value": "{ Strategy: 'none-documented' }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "info.version='1.0, ServiceStack: 5.0.2.0' — single advertised version; no /v1/, /v2/, no version header in any operation parameter list" },
+        { "sourceID": "ym-source-study", "url": "packages/Integration/connectors-registry/yourmembership/runs/connector-yourmembership-1780165237029-a495a1ea/output/SOURCE_STUDY.md", "quote": "§5 Gaps: 'No published version history for the REST API.'" }
+      ]
+    },
+    {
+      "target": "Configuration.TokenRefreshStrategy",
+      "value": "{ Session: re-authenticate (no refresh, 15-min TTL); OAuth2: refresh_token grant via /OAuth/GetToken }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-rest-api-getting-started-pdf", "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf", "quote": "Session expires after 15 minutes — re-authenticate when expired (no refresh-token mechanism for session)" },
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "/OAuth/GetToken accepts grant_type=refresh_token with a refresh_token parameter" }
+      ]
+    },
+    {
+      "target": "Configuration.ErrorResponseShape",
+      "value": "{ Envelope: 'ResponseStatus' with { ErrorCode, Message, StackTrace, Errors[{ErrorCode, FieldName, Message, Meta}], Meta } }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "definitions.ResponseStatus.properties = [ErrorCode, Message, StackTrace, Errors, Meta]; definitions.ResponseError.properties = [ErrorCode, FieldName, Message, Meta]" },
+        { "sourceID": "live-error-probe", "url": "POST https://ws.yourmembership.com/Ams/Authenticate (empty body)", "quote": "Response: {\"ClientID\":0,\"MemberID\":0,\"FailedLoginReason\":\"None\",\"ResponseStatus\":{\"ErrorCode\":\"NotNull\",\"Message\":\"...\",\"Errors\":[{\"ErrorCode\":\"NotNull\",\"FieldName\":\"Username\",\"Message\":\"The Username is missing.\",\"Meta\":{\"PropertyName\":\"Username\"}}, ...]}} — observed 2026-05-30 18:37 UTC" }
+      ]
+    },
+    {
+      "target": "Configuration.CustomObjectMarkerPattern",
+      "value": null,
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "No custom-object discovery endpoint. The 160 Ams resource families are all vendor-defined; customer-extensibility surfaces are limited to CustomField (per-member custom field values) and CustomForms/CustomPages (content). There is NO customer-creatable arbitrary object type with a marker pattern such as HubSpot's p_<accountID>_<name>." }
+      ],
+      "rationale": "Explicit null: YM does not allow customers to define new top-level object types via the API."
+    },
+    {
+      "target": "Configuration.CustomFieldMarkerPattern",
+      "value": "{ Pattern: 'CustomField endpoint family'; Endpoints: ['/Ams/{ClientID}/Member/{MemberID}/CustomField', '/Ams/{ClientID}/CustomField']; field names carry NO marker prefix — discriminant is the endpoint }",
+      "evidenceStrength": "ExplicitStatement",
+      "sources": [
+        { "sourceID": "ym-openapi-swagger2", "url": "https://ws.yourmembership.com/openapi", "quote": "definitions.CustomFieldResponse.properties = [FieldCode, Fields, Visibility, VisibilityInt, Values, ValuesProxy, MetaValue, ClientID]" },
+        { "sourceID": "ym-source-study", "url": "packages/Integration/connectors-registry/yourmembership/runs/connector-yourmembership-1780165237029-a495a1ea/output/SOURCE_STUDY.md", "quote": "§3.1 — CustomField is a discrete endpoint family separate from member profile data" }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "facet": "RateLimitPolicy",
+      "fact": "BatchMaxRequestCount and BatchRequestWaitTime",
+      "status": "Set to -1 (no documented limit) per absence-of-evidence rule",
+      "evidenceOfAbsence": "Checked all four tier-1 sources + live HEAD probe; no rate-limit headers and no documentation."
+    },
+    {
+      "facet": "ErrorCatalog",
+      "fact": "Closed list of ErrorCode values",
+      "status": "Not populated — vendor publishes no closed catalog. Observed values: NotNull, Predicate.",
+      "evidenceOfAbsence": "SOURCE_STUDY §5 explicit gap."
+    },
+    {
+      "facet": "Changelog",
+      "fact": "API version history",
+      "status": "Not populated.",
+      "evidenceOfAbsence": "info.version='1.0' is the only published version stamp."
+    },
+    {
+      "facet": "WebhookSignatureAlgorithm",
+      "fact": "WebhooksAvailable.SignatureAlgorithm",
+      "status": "Not populated — vendor does not publish webhooks.",
+      "evidenceOfAbsence": "SOURCE_STUDY §5 explicit gap."
+    },
+    {
+      "facet": "RefreshTokenTTL",
+      "fact": "Configuration.TokenRefreshStrategy.OAuth2.RefreshTokenTTL",
+      "status": "Not populated — vendor does not document refresh-token expiry.",
+      "evidenceOfAbsence": "OAuth PDF describes flow but not token lifetimes."
+    }
+  ]
+}

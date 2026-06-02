@@ -1,0 +1,9 @@
+{
+  "concept": "sales_revenue_metrics",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "These columns represent financial aggregate metrics (revenue) rather than identifiers. Users do not link records based on matching floating-point currency values, as these are measures rather than keys.",
+  "outliers": [],
+  "subClusters": []
+}

@@ -1,0 +1,9 @@
+{
+  "concept": "row_guid",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "These are system-generated GUIDs used for database replication and synchronization; they are unique to each row and do not represent a shared business identifier that would link records across different entities.",
+  "outliers": [],
+  "subClusters": []
+}

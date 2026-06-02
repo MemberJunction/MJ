@@ -1,0 +1,9 @@
+{
+  "concept": "rejected_quantity",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "These columns represent numeric quantities of failed items rather than business identifiers. Matching records based on shared quantity values (e.g., where both equal 10) does not represent a meaningful relationship between entities.",
+  "outliers": [],
+  "subClusters": []
+}

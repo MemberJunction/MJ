@@ -1,0 +1,11 @@
+{
+  "concept": "territory_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "The cluster identifies a shared territory identifier used to link customers, sales personnel, and geographic regions. This is a high-value organic key for cross-entity navigation.",
+  "outliers": [
+    "Sales.SalesTerritoryHistory.BusinessEntityID"
+  ],
+  "subClusters": []
+}

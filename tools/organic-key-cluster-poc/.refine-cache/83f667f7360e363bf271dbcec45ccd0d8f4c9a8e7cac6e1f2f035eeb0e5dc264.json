@@ -1,0 +1,9 @@
+{
+  "concept": "log_primary_keys",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "These are distinct primary keys for separate logging tables. While they share a naming pattern and data type, they represent different entities and matching them would produce meaningless results.",
+  "outliers": [],
+  "subClusters": []
+}

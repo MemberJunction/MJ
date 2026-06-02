@@ -1720,13 +1720,20 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * fields on both standard and custom SObjects.
      */
     private MapSFFieldToSchema(f: SFieldDescribe): ExternalFieldSchema {
+        // Salesforce's `Id` is the universal PK on every SObject (standard + custom).
+        // The /describe response sets type='id' on the PK field but doesn't carry
+        // an explicit IsPrimaryKey signal, so we have to stamp it here.  Without
+        // this, UpsertField's new-field path would persist `Id` with no PK flag
+        // and the downstream SoftPKClassifier becomes the only safety net.
+        const isPK = f.name === 'Id' || f.type === 'id';
         return {
             Name: f.name,
             Label: f.label,
             Description: f.inlineHelpText ?? undefined,
             DataType: this.MapSalesforceType(f.type),
             IsRequired: !f.nillable && !f.defaultedOnCreate,
-            IsUniqueKey: f.externalId || f.name === 'Id',
+            IsPrimaryKey: isPK,
+            IsUniqueKey: isPK || f.externalId,
             IsReadOnly: f.calculated || !f.updateable || SYSTEM_READ_ONLY_FIELDS.has(f.name),
             IsForeignKey: f.type === 'reference' && f.referenceTo.length > 0,
             ForeignKeyTarget: f.referenceTo.length > 0 ? f.referenceTo[0] : null,

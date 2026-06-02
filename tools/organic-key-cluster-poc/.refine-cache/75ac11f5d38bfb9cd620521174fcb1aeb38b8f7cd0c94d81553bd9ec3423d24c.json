@@ -1,0 +1,9 @@
+{
+  "concept": "transaction_quantity",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While these columns share the same semantic meaning, numeric quantities are measures rather than identifiers. Matching records across tables based on identical quantities is not a reliable or useful way to establish entity relationships.",
+  "outliers": [],
+  "subClusters": []
+}

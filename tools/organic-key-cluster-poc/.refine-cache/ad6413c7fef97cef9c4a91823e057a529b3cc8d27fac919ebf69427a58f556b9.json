@@ -1,0 +1,9 @@
+{
+  "concept": "product_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "All columns represent the same business identifier (ProductID) used to link various product-related tables including cost history, price history, and inventory levels.",
+  "outliers": [],
+  "subClusters": []
+}

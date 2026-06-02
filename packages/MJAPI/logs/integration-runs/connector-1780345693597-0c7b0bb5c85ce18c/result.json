@@ -1,0 +1,14 @@
+{
+  "runID": "connector-1780345693597-0c7b0bb5c85ce18c",
+  "completedAt": "2026-06-01T20:28:26.945Z",
+  "success": true,
+  "exitReason": "completed",
+  "durationMs": 13348,
+  "aggregateCounts": {
+    "processed": 131,
+    "succeeded": 131,
+    "failed": 0,
+    "skipped": 0
+  },
+  "resumableFromSeq": 2893
+}

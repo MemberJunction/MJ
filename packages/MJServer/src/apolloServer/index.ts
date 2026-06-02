@@ -15,6 +15,59 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
  * @param servers - HTTP server and WebSocket cleanup disposable
  * @param additionalPlugins - Optional additional plugins to merge with built-in plugins
  */
+/**
+ * Apollo plugin: log every Integration* GraphQL operation to stdout as
+ * structured JSON.  Lets operators tailing the MJAPI log see exactly which
+ * resolver the wizard / Explorer hit on each press, with arg names (values
+ * redacted for credentials).  Diagnostic-only — no behavior change.
+ *
+ * Emits two events per operation:
+ *   {"event":"gql.integration.request","method":"...","fieldName":"...","argNames":[...]}
+ *   {"event":"gql.integration.response","method":"...","fieldName":"...","durationMs":N,"hasErrors":bool}
+ *
+ * Filter from the log:
+ *   tail -f /tmp/mjapi.log | grep '"event":"gql\.integration\.'
+ */
+const integrationOperationTracer: ApolloServerPlugin = {
+  async requestDidStart(requestCtx) {
+    const opName = requestCtx.request.operationName ?? 'anonymous';
+    const query = requestCtx.request.query ?? '';
+    // Lightweight match — fire only for operations that touch an Integration
+    // resolver field.  Avoid logging every Color / User / Task query.
+    if (!query.includes('Integration')) return undefined;
+    const startedAt = Date.now();
+    return {
+      async willSendResponse(rc) {
+        // Walk the fields the operation queried; only those starting with
+        // "Integration" matter.  Variables surfaced as keys only.
+        const op = rc.operation;
+        if (!op) return;
+        const integrationFields: string[] = [];
+        for (const sel of op.selectionSet.selections) {
+          if (sel.kind === 'Field' && sel.name.value.startsWith('Integration')) {
+            integrationFields.push(sel.name.value);
+          }
+        }
+        if (integrationFields.length === 0) return;
+        const argNames = Object.keys(rc.request.variables ?? {});
+        const durationMs = Date.now() - startedAt;
+        const hasErrors = !!(rc.response.body.kind === 'single' && rc.response.body.singleResult.errors?.length);
+        for (const field of integrationFields) {
+          console.log(JSON.stringify({
+            ts: new Date().toISOString(),
+            event: 'gql.integration.response',
+            operationName: opName,
+            method: field,
+            argNames,
+            durationMs,
+            hasErrors,
+          }));
+        }
+      },
+    };
+  },
+};
+
 const buildApolloServer = (
   configOverride: ApolloServerOptions<AppContext>,
   { httpServer, serverCleanup }: { httpServer: Server; serverCleanup: Disposable },
@@ -22,6 +75,7 @@ const buildApolloServer = (
 ) => {
   const builtInPlugins: ApolloServerPlugin[] = [
     ApolloServerPluginDrainHttpServer({ httpServer }),
+    integrationOperationTracer,
     {
       async serverWillStart() {
         return {

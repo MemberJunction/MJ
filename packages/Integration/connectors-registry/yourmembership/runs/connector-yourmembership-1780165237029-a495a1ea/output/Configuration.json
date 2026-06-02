@@ -1,0 +1,165 @@
+{
+  "$comment": "Vendor-wide Configuration blob for the YourMembership Integration row. Targets the `upsert_integration_configuration` MCP tool documented in .claude/agents/metadata-writer.md. Each top-level key is named to match the workflow contract in that agent doc. NOTE: as of v5.39.x-phase0, the MJ: Integrations schema does NOT have a Configuration column — these facts are emitted here as a sidecar so the code-builder downstream has them, and so the runtime D4 SoftPKClassifier has the universalPK hint. When the Integration table gains a Configuration nvarchar(MAX) column (per plans/integration-framework-redesign.md), this file's contents copy verbatim into the Integration row's Configuration field.",
+
+  "universalPK": null,
+
+  "universalPKNote": "YourMembership has NO vendor-wide PK convention. Different resource families use different PK shapes — ProfileID (int) for Members, MemberID + ClientID composite paths for Member sub-resources, EventID for Events, and per-resource integer IDs elsewhere. The runtime SoftPKClassifier must per-IO classify; there is no single fieldName that holds for all 160 Ams families. Source: walking the OpenAPI spec's path templates for `/Ams/{ClientID}/Member/{MemberID}/...` vs `/Ams/{ClientID}/Event/{EventId}/...` vs `/Ams/{ClientID}/CampaignEmailLists` parameter sets confirms the PK heterogeneity. Recorded explicitly so downstream agents do not invent a default.",
+
+  "AuthFlow": "session+oauth2-authcode",
+  "AuthFlowDetail": {
+    "Primary": {
+      "Kind": "session",
+      "TokenEndpoint": "/Ams/Authenticate",
+      "TokenEndpointMethod": "POST",
+      "ContentType": "application/x-www-form-urlencoded",
+      "RequestParams": ["ClientID", "UserType", "Username", "Password"],
+      "ResponseTokenField": "SessionId",
+      "SessionTTLSeconds": 900,
+      "SessionTTLSource": "Getting Started with the REST API PDF (2021), §Authentication: 'Session expires after 15 minutes of inactivity'"
+    },
+    "Secondary": {
+      "Kind": "oauth2-authcode",
+      "TokenEndpoint": "/OAuth/GetToken",
+      "TokenEndpointMethod": "POST",
+      "ContentType": "application/x-www-form-urlencoded",
+      "GrantTypesSupported": ["authorization_code", "refresh_token"],
+      "RequestParamsRFC6749Shape": ["grant_type", "code", "refresh_token", "client_id", "client_secret", "redirect_uri", "scope"],
+      "OIDCVariant": "/OAuth/OIDC/GetAccessToken"
+    },
+    "Legacy": {
+      "Kind": "oauth2-authcode-legacy",
+      "TokenEndpoint": "/OAuth/GetAccessToken",
+      "TokenEndpointMethod": "POST",
+      "RequestParams": ["GrantType", "AppId", "AppSecret", "Code", "RefreshToken", "Scope"],
+      "Note": "Legacy YM-specific shape (capitalised, AppSecret/AppSecert dual-spelling — vendor's typo deprecation banner). Prefer /OAuth/GetToken for new integrations."
+    },
+    "ClientCredentialsSupported": false,
+    "ClientCredentialsEvidence": "/OAuth/GetToken parameter list per OpenAPI: [grant_type, scope, code, refresh_token, redirect_uri, client_id, client_secret]. No client_credentials grant is documented or available; only authorization_code and refresh_token grants are present."
+  },
+
+  "AuthHeaderPattern": {
+    "Session": "x-ss-id: <SessionId>",
+    "OAuth2": "Authorization: Bearer <access_token>",
+    "Note": "CORS preflight reply at every endpoint lists both `X-ss-id` and `Authorization` in Access-Control-Allow-Headers. Either header is accepted depending on which auth flow issued the credential."
+  },
+
+  "PaginationDefaults": {
+    "Type": "PageNumber",
+    "PageSizeParam": "PageSize",
+    "PageNumberParam": "PageNumber",
+    "PageNumberStartsAt": 1,
+    "TotalRecordsField": "ListCount",
+    "Note": "112 of 297 paths declare both PageSize and PageNumber query parameters. A minority of paths also accept OffSet/Offset/limit (5 distinct pagination parameter names observed across the spec) — per-operation pagination is captured in MJ: Integration Objects.PaginationType. The default for IOs that declare both PageSize+PageNumber is PageNumber pagination, 1-indexed. Default page size is per-operation (no global default published)."
+  },
+
+  "IncrementalSyncCapability": {
+    "VendorWideSupported": false,
+    "Note": "No vendor-wide incremental-sync mechanism (no /sync endpoint, no Last-Modified-Since query semantic across all resources). Per-resource incremental support, where present, is via per-operation modifiedSince-style query parameters declared on individual paths. Therefore the vendor-level capability is FALSE; per-IO IncrementalSync flags live on MJ: Integration Objects."
+  },
+
+  "WebhooksAvailable": {
+    "Vendor": false,
+    "Note": "No first-party webhook documentation exists for YM. The OpenAPI surface includes ZoomEventListener and ZoomEventListenerOAuth endpoints (Zoom integration callbacks YM consumes from Zoom), but those are inbound from a third party into YM, not outbound YM-to-customer webhooks. SOURCE_STUDY §5 explicitly records this as a gap. No signature algorithm is documented."
+  },
+
+  "BulkOperationsAvailable": {
+    "Vendor": true,
+    "Pattern": "Informz bulk-upload family (cross-product, Informz email-marketing sibling product)",
+    "BasePaths": [
+      "/Ams/{ClientID}/InformzBulkUploadBySearchGuid",
+      "/Ams/{ClientID}/InformzBulkUploadEventRegistrants",
+      "/Ams/{ClientID}/InformzBulkUploadForDues",
+      "/Ams/{ClientID}/InformzBulkUploadForDuesBySearchId",
+      "/Ams/{ClientID}/InformzBulkUploadForOrders",
+      "/Ams/{ClientID}/InformzBulkUploadForOrdersBySearchId",
+      "/Ams/{ClientID}/InformzBulkUploadForReports"
+    ],
+    "Note": "These are bulk PUSH endpoints to a sibling Community Brands product (Informz). There is no general-purpose bulk read or batch import API for arbitrary YM resources. Other bulk-shaped endpoints: StoreProductBulkStatus, StoreProductBulkStatusAll, PeopleBulkDetach — each is resource-specific, not a generic batching surface."
+  },
+
+  "APIVersioningStrategy": {
+    "Strategy": "none-documented",
+    "EvidenceFromOpenAPI": "info.version='1.0, ServiceStack: 5.0.2.0' — only one published version; no /v1/, /v2/, no Accept-Version or X-Version header documented in any operation",
+    "Note": "No changelog or version history is published. The base path is `/` and resources sit directly under /Ams/{ClientID}/. ServiceStack runtime version (5.0.2) is exposed via the X-Powered-By response header but is the server framework, not the API contract version."
+  },
+
+  "TokenRefreshStrategy": {
+    "Session": {
+      "Mechanism": "re-authenticate",
+      "TTL": "15 minutes of inactivity",
+      "Note": "Session cookies do NOT have a refresh mechanism — when the SessionId expires, the client must call /Ams/Authenticate again with stored credentials."
+    },
+    "OAuth2": {
+      "Mechanism": "refresh_token grant",
+      "TokenEndpoint": "/OAuth/GetToken",
+      "RefreshGrantTypeValue": "refresh_token",
+      "Note": "Refresh-token expiry not documented. Initial token issuance happens via grant_type=authorization_code after the user is redirected through Admin → API Configuration → OAuth Management → Add Client App's configured Client App."
+    }
+  },
+
+  "ErrorResponseShape": {
+    "Envelope": "ResponseStatus",
+    "TopLevelFields": ["ErrorCode", "Message", "StackTrace", "Errors", "Meta"],
+    "PerErrorFields": ["ErrorCode", "FieldName", "Message", "Meta"],
+    "Example": {
+      "ClientID": 0,
+      "MemberID": 0,
+      "FailedLoginReason": "None",
+      "ResponseStatus": {
+        "ErrorCode": "NotNull",
+        "Message": "The Username is missing.",
+        "Errors": [
+          { "ErrorCode": "NotNull", "FieldName": "Username", "Message": "The Username is missing.", "Meta": { "PropertyName": "Username" } }
+        ]
+      }
+    },
+    "Note": "Captured live from POST /Ams/Authenticate with empty body. ResponseStatus is present on EVERY response — success responses carry an empty ResponseStatus (no ErrorCode), error responses carry a populated one. Connector error-detection should test `body.ResponseStatus?.ErrorCode != null` rather than HTTP status code, because some validation errors return 200 with a populated ResponseStatus.",
+    "ErrorCatalog": "Vendor does not publish a closed list of ErrorCode values. Observed values include NotNull, Predicate. The catalog must be built empirically — recorded as a gap."
+  },
+
+  "CustomObjectMarkerPattern": null,
+  "CustomFieldMarkerPattern": {
+    "Pattern": "CustomField endpoint family",
+    "Endpoints": ["/Ams/{ClientID}/Member/{MemberID}/CustomField", "/Ams/{ClientID}/CustomField"],
+    "ResponseShape": "CustomFieldResponse { FieldCode, Fields, Visibility, VisibilityInt, Values, ValuesProxy, MetaValue, ClientID }",
+    "Note": "YM exposes per-member custom fields via a separate CustomField endpoint family rather than inlining custom fields in the MemberProfile response. The CustomField response uses FieldCode (vendor-assigned) plus Values/ValuesProxy for the field's value list. There is NO marker pattern in field names (no `cf_`, no `custom_`) — the discriminant is the endpoint itself."
+  },
+
+  "ResponseEnvelopeShape": {
+    "Note": "Every /Ams response carries a ServiceStack envelope. Confirmed by inspection of multiple definitions (CampaignEmailListsResponse, DuesRulesResponse, ConnectionCategoryListResponse, EventRegistrantsResponse, MemberGroupsResponse).",
+    "CanonicalFields": ["ListCount", "PageSize", "PageNumber", "OrderBy", "OrderByDirection", "Origin", "UsingRedis", "AppInitTime", "ServerID", "ClientID", "ResponseStatus", "BypassCache", "DateCached", "Device", "IsForceReload"],
+    "ListPayloadKeyConvention": "Per-operation key matches the resource (e.g., CampaignEmailLists, Rules, ConnectionCategories, EventRegistrantsList, GroupTypeList). The ResponseDataKey is per-IO, not vendor-wide."
+  },
+
+  "ContentType": {
+    "Consumes": ["application/json"],
+    "Produces": ["application/json"],
+    "Note": "From OpenAPI top-level. Note that auth endpoints accept formData (application/x-www-form-urlencoded) for session and OAuth flows — this is form-encoded post, not JSON. The /Ams data CRUD surface is JSON-only."
+  },
+
+  "RoleGating": {
+    "ObservedRoles": ["admin", "oauthadmin"],
+    "Note": "Per-operation `Requires any of the roles:` declarations on /metadata pages indicate role-gated operations. Connector callers must use credentials provisioned with the correct role for each operation. Per-IO role requirements should be captured on MJ: Integration Objects when known."
+  },
+
+  "RateLimitPolicy": {
+    "Documented": false,
+    "Evidence": "Live HEAD requests to ws.yourmembership.com return no X-RateLimit-* headers, no Retry-After, no quota headers. SOURCE_STUDY §5 confirms vendor publishes no rate-limit documentation. Cloudflare front may apply edge-level protection but does not surface predictable quota info.",
+    "RecommendedClientBehaviour": "Honour 429 responses if/when observed; back off on 503; no proactive throttling required by documentation but vendor-side throttling is plausible at high volume."
+  },
+
+  "ClientIDHandling": {
+    "Where": "URL path segment after /Ams/",
+    "Type": "integer",
+    "Source": "Site-level identifier issued by YM admin console",
+    "Note": "ClientID is REQUIRED in essentially every /Ams path. Connector code must inject it from the credential at request-build time. The integer Client ID is also echoed in every response's ResponseStatus envelope, so it round-trips."
+  },
+
+  "AdditionalNotes": {
+    "ServerVersion": "ServiceStack/5.02 NET45 — visible in X-Powered-By header",
+    "CloudflareFronted": true,
+    "CORSAllowedHeaders": "Content-Type, X-Requested-With, X-ss-id, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Authorization",
+    "PathParamCasing": "PascalCase (e.g., /Ams/{ClientID}/Member/{MemberID}/MemberProfile) — NOT snake_case or camelCase",
+    "BodyParamCasing": "PascalCase in /Ams; snake_case in /OAuth/GetToken (RFC 6749 conformance); PascalCase in /OAuth/GetAccessToken (legacy YM shape)"
+  }
+}

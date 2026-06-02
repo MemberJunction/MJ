@@ -1,0 +1,9 @@
+{
+  "concept": "effective_start_date",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "These columns represent temporal markers for historical validity periods. While they share the same semantic meaning, specific timestamps are not used as organic keys to link records across entities; users typically join on business identifiers and filter by date ranges instead.",
+  "outliers": [],
+  "subClusters": []
+}

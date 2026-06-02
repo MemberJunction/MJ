@@ -1,0 +1,9 @@
+{
+  "concept": "hierarchy_level",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent a hierarchical depth, they belong to entirely different domains (manufacturing vs. documentation). Matching records based on a shared integer level does not represent a logical relationship between the entities.",
+  "outliers": [],
+  "subClusters": []
+}

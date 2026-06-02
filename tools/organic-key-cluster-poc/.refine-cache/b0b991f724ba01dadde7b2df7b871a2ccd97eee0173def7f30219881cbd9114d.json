@@ -1,0 +1,9 @@
+{
+  "concept": "geographic_entity_name",
+  "isUsefulOrganicKey": false,
+  "normalization": "Trim",
+  "confidence": 0.95,
+  "reasoning": "The columns represent different levels of a geographic hierarchy (Country, State, and Sales Territory). Values are not interchangeable for matching purposes across these distinct entities.",
+  "outliers": [],
+  "subClusters": []
+}

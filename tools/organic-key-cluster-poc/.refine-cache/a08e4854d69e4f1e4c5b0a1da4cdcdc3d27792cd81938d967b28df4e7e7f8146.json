@@ -1,0 +1,12 @@
+{
+  "concept": "entity_descriptive_names",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "The columns represent names for entirely different domains (Culture vs. Unit of Measure) that do not share a common value space or serve as cross-entity identifiers.",
+  "outliers": [
+    "Production.Culture.Name",
+    "Production.UnitMeasure.Name"
+  ],
+  "subClusters": []
+}

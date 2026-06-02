@@ -1,0 +1,9 @@
+{
+  "concept": "transaction_type",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "Both columns represent the exact same categorical codes ('P', 'S', 'W') used to classify transactions across live and archived history tables.",
+  "outliers": [],
+  "subClusters": []
+}

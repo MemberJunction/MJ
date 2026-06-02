@@ -1,0 +1,9 @@
+{
+  "concept": "phone_number_type_metadata",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "The cluster mixes a surrogate identifier (ID) with a descriptive string (Name), which are not value-compatible for direct matching. Additionally, phone type categorization is low-cardinality metadata rather than a unique business identifier used to link entities.",
+  "outliers": [],
+  "subClusters": []
+}

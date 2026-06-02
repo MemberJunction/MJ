@@ -1,0 +1,18 @@
+{
+  "runID": "connector-1780419074105-6aba10f62500a6e8",
+  "runKind": "ConnectorCreation",
+  "integrationID": "3DD4C246-8E89-4483-9B42-58B59BB3BCEF",
+  "companyIntegrationID": "0034589D-E0C0-4B1D-8C1A-DBEFACAE0F0C",
+  "triggerType": "Manual",
+  "startedAt": "2026-06-02T16:51:14.105Z",
+  "expectedStages": [
+    "ConnectionTest",
+    "Introspect",
+    "Persist",
+    "PKClassify"
+  ],
+  "context": {
+    "connectorClass": "HubSpotConnector",
+    "integrationName": "HubSpot"
+  }
+}

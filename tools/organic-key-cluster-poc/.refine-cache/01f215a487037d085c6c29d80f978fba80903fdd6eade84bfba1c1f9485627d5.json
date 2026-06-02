@@ -1,0 +1,9 @@
+{
+  "concept": "culture_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "LowerCaseTrim",
+  "confidence": 1,
+  "reasoning": "Both columns represent ISO-standard language and culture identifiers used to link localized product descriptions to their respective culture definitions.",
+  "outliers": [],
+  "subClusters": []
+}

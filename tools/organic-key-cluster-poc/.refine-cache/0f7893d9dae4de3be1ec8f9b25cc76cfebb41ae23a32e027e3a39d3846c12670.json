@@ -1,0 +1,9 @@
+{
+  "concept": "item_quantity",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "These columns represent numeric quantities of items rather than business identifiers. Matching records based on shared quantity values (e.g., finding all records where quantity is 1) does not establish a meaningful semantic relationship between entities.",
+  "outliers": [],
+  "subClusters": []
+}

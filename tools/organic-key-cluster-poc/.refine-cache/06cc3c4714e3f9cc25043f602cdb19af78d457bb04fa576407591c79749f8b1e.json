@@ -1,0 +1,9 @@
+{
+  "concept": "order_date",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent the same semantic concept of an event timestamp, dates are temporal attributes rather than business identifiers. Matching disparate entities like Purchase Orders and Sales Orders based on a shared date is coincidental and does not represent a meaningful business relationship.",
+  "outliers": [],
+  "subClusters": []
+}

@@ -1,0 +1,9 @@
+{
+  "concept": "business_entity_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "All columns represent a shared identifier for entities within the system (Persons, Vendors, Stores), allowing cross-entity lookups based on the same ID value even when direct foreign keys are not present between the specific tables.",
+  "outliers": [],
+  "subClusters": []
+}

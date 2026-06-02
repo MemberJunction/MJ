@@ -21,6 +21,7 @@ import type {
 import type {
     SyncResult,
     MappedRecord,
+    ExternalRecord,
     SyncTriggerType,
     SyncProgress,
     OnProgressCallback,
@@ -36,6 +37,7 @@ import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
+import { SyncLogger } from './SyncLogger.js';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 
 /** Default batch size for fetching records from external systems */
@@ -322,11 +324,37 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         abortSignal?: AbortSignal
     ): Promise<SyncResult> {
         const startTime = Date.now();
+        const logger = new SyncLogger({ ciId: companyIntegrationID, integration: null });
+        logger.emit('sync.run.start', {
+            triggerType,
+            fullSync: options?.FullSync ?? false,
+            scheduledJobRunID: options?.ScheduledJobRunID ?? null,
+            entityMapIDsFilter: options?.EntityMapIDs ?? null,
+            syncDirectionOverride: options?.SyncDirection ?? null,
+        });
         const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
+        logger.attachIntegrationName(config.companyIntegration.Integration);
+        logger.emit('sync.config.loaded', {
+            integration: config.companyIntegration.Integration,
+            integrationID: config.companyIntegration.IntegrationID,
+            entityMapsCount: config.entityMaps.length,
+            entityMaps: config.entityMaps.map(em => ({
+                ExternalObjectName: em.ExternalObjectName,
+                Entity: em.Entity,
+                SyncDirection: em.SyncDirection,
+                IsActive: em.SyncEnabled === true,
+                Priority: em.Priority ?? null,
+            })),
+            maxBatchSize: this.MaxBatchSize,
+        });
+        logger.emit('sync.connector.built', {
+            connectorClass: config.connector?.constructor?.name ?? null,
+        });
         const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
+        logger.attachRunId(run.ID);
 
         try {
-            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal);
+            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal, logger);
             result.RunID = run.ID;
             result.Duration = Date.now() - startTime;
             if (result.RecordsErrored > 0) {
@@ -334,9 +362,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             await this.FinalizeRun(run, result, contextUser, onNotification);
             const summary = this.buildSyncResultBody(config.companyIntegration.Integration, result);
+            logger.emit('sync.run.complete', {
+                success: result.Success && result.RecordsErrored === 0,
+                durationMs: result.Duration,
+                recordsProcessed: result.RecordsProcessed,
+                recordsCreated: result.RecordsCreated,
+                recordsUpdated: result.RecordsUpdated,
+                recordsDeleted: result.RecordsDeleted,
+                recordsSkipped: result.RecordsSkipped,
+                recordsErrored: result.RecordsErrored,
+                errorCount: result.Errors?.length ?? 0,
+            });
             console.log(`[IntegrationEngine] Sync complete:\n${summary}`);
             return result;
         } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            logger.emit('sync.run.fail', { error: errMsg, durationMs: Date.now() - startTime });
             await this.FailRun(run, err, contextUser, onNotification);
             throw err;
         }
@@ -447,7 +488,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         run: MJCompanyIntegrationRunEntity,
         contextUser: UserInfo,
         onProgress?: OnProgressCallback,
-        abortSignal?: AbortSignal
+        abortSignal?: AbortSignal,
+        logger?: SyncLogger
     ): Promise<SyncResult> {
         const aggregate: SyncResult = {
             Success: true,
@@ -462,26 +504,55 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         };
 
         const totalMaps = config.entityMaps.length;
+        let globalIndex = 0;
 
-        for (let i = 0; i < totalMaps; i++) {
-            if (abortSignal?.aborted) {
-                console.log(`[IntegrationEngine] Sync cancelled before entity map ${i + 1}/${totalMaps}`);
-                aggregate.Success = false;
-                aggregate.ErrorMessage = 'Sync cancelled by user';
-                break;
-            }
-            const entityMap = config.entityMaps[i];
+        // Per-map processing. Extracted so it can run sequentially OR concurrently within a
+        // dependency layer. Aggregate mutations run when each promise resolves — atomic under
+        // single-threaded async, so concurrent maps in a layer are safe.
+        const processOne = async (entityMap: ICompanyIntegrationEntityMap): Promise<void> => {
+            if (abortSignal?.aborted) return;
+            const i = globalIndex++;
             const mapStartTime = Date.now();
+            const direction = config.syncDirection ?? entityMap.SyncDirection ?? 'Pull';
+            logger?.emit('sync.entity-map.start', {
+                index: i,
+                total: totalMaps,
+                externalObjectName: entityMap.ExternalObjectName,
+                mjEntity: entityMap.Entity,
+                direction,
+                priority: entityMap.Priority ?? null,
+            });
             try {
                 const mapResult = await this.ProcessSingleEntityMap(
-                    config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal
+                    config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
                 this.MergeResult(aggregate, mapResult);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
+                logger?.emit('sync.entity-map.complete', {
+                    externalObjectName: entityMap.ExternalObjectName,
+                    mjEntity: entityMap.Entity,
+                    direction,
+                    success: mapResult.Success,
+                    durationMs: Date.now() - mapStartTime,
+                    recordsProcessed: mapResult.RecordsProcessed,
+                    recordsCreated: mapResult.RecordsCreated,
+                    recordsUpdated: mapResult.RecordsUpdated,
+                    recordsDeleted: mapResult.RecordsDeleted,
+                    recordsSkipped: mapResult.RecordsSkipped,
+                    recordsErrored: mapResult.RecordsErrored,
+                });
             } catch (err) {
                 const objName = entityMap.ExternalObjectName ?? entityMap.ID;
                 const errMsg = err instanceof Error ? err.message : String(err);
                 console.error(`[IntegrationEngine] Entity map '${objName}' failed: ${errMsg}`);
+                logger?.emit('sync.entity-map.complete', {
+                    externalObjectName: objName,
+                    mjEntity: entityMap.Entity,
+                    direction,
+                    success: false,
+                    durationMs: Date.now() - mapStartTime,
+                    error: errMsg,
+                });
                 aggregate.RecordsErrored++;
                 aggregate.Errors.push({
                     ExternalID: objName,
@@ -505,9 +576,159 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     Duration: Date.now() - mapStartTime,
                 });
             }
+        };
+
+        // Group maps into dependency layers (parents before children) via the IntegrationObject FK
+        // graph, then process layers in order. Layers run sequentially — a child never syncs before
+        // its parent. Within a layer the maps are mutually independent and run up to `concurrency`
+        // at a time. Default concurrency is 1 (sequential — unchanged behavior); opt in to
+        // parallelism via CompanyIntegration.Configuration {"syncConcurrency": N}.
+        const layers = this.buildEntityMapDependencyLayers(config);
+        const concurrency = this.getSyncConcurrency(config);
+        for (const layer of layers) {
+            if (abortSignal?.aborted) {
+                console.log(`[IntegrationEngine] Sync cancelled (${globalIndex}/${totalMaps} maps processed)`);
+                aggregate.Success = false;
+                aggregate.ErrorMessage = 'Sync cancelled by user';
+                break;
+            }
+            await this.runBounded(layer, concurrency, processOne);
         }
 
         return aggregate;
+    }
+
+    /**
+     * Groups the run's entity maps into dependency layers (parents before children) using the
+     * IntegrationObject FK graph (RelatedIntegrationObjectID). Layer 0 = roots (no FK dependency on
+     * another selected object); layer N depends only on layers &lt; N. Maps within a layer are
+     * mutually independent and safe to run concurrently. Falls back to a single layer (all maps,
+     * original order) if the graph can't be resolved — preserving current behavior. Stable: the
+     * original config order is preserved within each layer.
+     */
+    private buildEntityMapDependencyLayers(config: RunConfiguration): ICompanyIntegrationEntityMap[][] {
+        const maps = config.entityMaps;
+        if (maps.length <= 1) return [maps];
+        try {
+            const ios = this.GetIntegrationObjectsByIntegrationID(config.companyIntegration.IntegrationID);
+            if (!ios || ios.length === 0) return [maps];
+
+            const ioByName = new Map<string, string>();   // lower(IO.Name) → IO.ID (upper)
+            for (const io of ios) ioByName.set(io.Name.toLowerCase(), io.ID.toUpperCase());
+
+            const mapToIoId = new Map<string, string>();   // entityMap.ID → IO.ID
+            const selectedIoIds = new Set<string>();
+            for (const m of maps) {
+                const ioId = m.ExternalObjectName ? ioByName.get(m.ExternalObjectName.toLowerCase()) : undefined;
+                if (ioId) { mapToIoId.set(m.ID, ioId); selectedIoIds.add(ioId); }
+            }
+            if (selectedIoIds.size === 0) return [maps];
+
+            // deps: IO.ID → set of selected parent IO.IDs
+            const deps = new Map<string, Set<string>>();
+            for (const ioId of selectedIoIds) {
+                const set = new Set<string>();
+                for (const f of this.GetIntegrationObjectFields(ioId)) {
+                    const parent = f.RelatedIntegrationObjectID?.toUpperCase();
+                    if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
+                }
+                deps.set(ioId, set);
+            }
+
+            // Kahn layering: an IO is ready when all its (selected) parents are already placed.
+            const ioLayer = new Map<string, number>();
+            const remaining = new Set(selectedIoIds);
+            let layerNum = 0;
+            while (remaining.size > 0) {
+                const ready = [...remaining].filter(id => [...deps.get(id)!].every(p => !remaining.has(p)));
+                if (ready.length === 0) {
+                    // cycle (or unresolved) — place the rest in the current layer so they still run
+                    for (const id of remaining) ioLayer.set(id, layerNum);
+                    break;
+                }
+                for (const id of ready) { ioLayer.set(id, layerNum); remaining.delete(id); }
+                layerNum++;
+            }
+
+            const byLayer = new Map<number, ICompanyIntegrationEntityMap[]>();
+            for (const m of maps) {
+                const ioId = mapToIoId.get(m.ID);
+                const l = ioId !== undefined ? (ioLayer.get(ioId) ?? 0) : 0;   // maps with no IO → treated as roots
+                if (!byLayer.has(l)) byLayer.set(l, []);
+                byLayer.get(l)!.push(m);
+            }
+            return [...byLayer.keys()].sort((a, b) => a - b).map(k => byLayer.get(k)!);
+        } catch {
+            return [maps];   // any failure → single layer, original order
+        }
+    }
+
+    /** Opt-in sync concurrency from CompanyIntegration.Configuration; default 1 (sequential), clamped [1,16]. */
+    private getSyncConcurrency(config: RunConfiguration): number {
+        try {
+            const raw = config.companyIntegration.Configuration;
+            if (raw) {
+                const parsed = JSON.parse(raw) as { syncConcurrency?: number };
+                const n = Number(parsed.syncConcurrency);
+                if (Number.isFinite(n) && n >= 1) return Math.min(Math.floor(n), 16);
+            }
+        } catch { /* fall through */ }
+        return 1;
+    }
+
+    /** Runs `fn` over items with at most `cap` concurrent executions. cap&lt;=1 → strictly sequential. */
+    private async runBounded<T>(items: T[], cap: number, fn: (item: T) => Promise<void>): Promise<void> {
+        if (cap <= 1) {
+            for (const it of items) await fn(it);
+            return;
+        }
+        let next = 0;
+        const workers = Array.from({ length: Math.min(cap, items.length) }, async () => {
+            while (true) {
+                const i = next++;
+                if (i >= items.length) return;
+                await fn(items[i]);
+            }
+        });
+        await Promise.all(workers);
+    }
+
+    /** Per-integration request-spacing chain for the rate limiter (keyed by IntegrationID → last scheduled time). */
+    private readonly _requestChains = new Map<string, Promise<number>>();
+
+    /** Minimum ms between outbound requests for this integration (Integration.BatchRequestWaitTime; 0 = disabled). */
+    private getRequestSpacingMs(config: RunConfiguration): number {
+        try {
+            const integ = this.Base.GetIntegrationByID(config.companyIntegration.IntegrationID);
+            const ms = integ?.BatchRequestWaitTime ?? -1;
+            return ms > 0 ? ms : 0;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Rate-limits outbound connector requests per integration, honoring
+     * Integration.BatchRequestWaitTime. No-op when the limit is unset/-1 (the default → zero
+     * behavior change). Requests are chained per integration so concurrent callers (opt-in
+     * parallel sync) are spaced apart too — the safety net that keeps parallelism within the
+     * vendor's rate limit.
+     */
+    private async rateLimit(config: RunConfiguration): Promise<void> {
+        const minMs = this.getRequestSpacingMs(config);
+        if (minMs <= 0) return;
+        const key = config.companyIntegration.IntegrationID;
+        const prev = this._requestChains.get(key) ?? Promise.resolve(0);
+        const nextP = prev.then(async (lastAt) => {
+            const now = Date.now();
+            const scheduled = Math.max(now, lastAt + minMs);
+            const wait = scheduled - now;
+            if (wait > 0) await new Promise<void>(r => setTimeout(r, wait));
+            return scheduled;
+        });
+        // Keep the chain alive even if a turn rejects (it won't here, but be defensive).
+        this._requestChains.set(key, nextP.catch(() => Date.now()));
+        await nextP;
     }
 
     /**
@@ -524,21 +745,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMapIndex: number,
         totalEntityMaps: number,
         onProgress?: OnProgressCallback,
-        abortSignal?: AbortSignal
+        abortSignal?: AbortSignal,
+        logger?: SyncLogger
     ): Promise<SyncResult> {
         const direction = config.syncDirection ?? entityMap.SyncDirection ?? 'Pull';
 
         if (direction === 'Pull') {
-            return this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+            return this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
         }
 
         if (direction === 'Push') {
-            return this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+            return this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
         }
 
         // Bidirectional: pull first, then push
-        const pullResult = await this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
-        const pushResult = await this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+        const pullResult = await this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
+        const pushResult = await this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
         this.MergeResult(pullResult, pushResult);
         return pullResult;
     }
@@ -554,11 +776,26 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMapIndex: number,
         totalEntityMaps: number,
         onProgress?: OnProgressCallback,
-        abortSignal?: AbortSignal
+        abortSignal?: AbortSignal,
+        logger?: SyncLogger
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         const watermark = await this.watermarkService.Load(entityMapID, contextUser, 'Pull');
+        logger?.emit('sync.entity-map.start', {
+            phase: 'pull-detail',
+            externalObjectName: entityMap.ExternalObjectName,
+            fieldMapsCount: fieldMaps.length,
+            fieldMaps: fieldMaps.map(fm => ({
+                SourceField: fm.SourceFieldName,
+                DestField: fm.DestinationFieldName,
+                Direction: fm.Direction,
+                IsKey: fm.IsKeyField,
+            })),
+            initialWatermark: watermark?.WatermarkValue ?? null,
+            watermarkType: watermark?.WatermarkType ?? null,
+            fullSync: config.fullSync,
+        });
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
@@ -621,15 +858,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 CurrentCursor: currentCursor,
             };
 
+            logger?.emit('sync.fetch.batch.start', {
+                externalObjectName: entityMap.ExternalObjectName,
+                batchIndex: batchCount,
+                watermarkValue: currentWatermark,
+                page: currentPage ?? null,
+                offset: currentOffset ?? null,
+                cursor: currentCursor ?? null,
+                batchSize: this.MaxBatchSize,
+            });
             let batch: FetchBatchResult;
+            const fetchStart = Date.now();
             try {
+                await this.rateLimit(config);
                 batch = await config.connector.FetchChanges(ctx);
             } catch (fetchErr) {
                 const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
                 console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
+                logger?.emit('sync.record.error', {
+                    phase: 'fetch',
+                    externalObjectName: entityMap.ExternalObjectName,
+                    batchIndex: batchCount,
+                    error: errMsg,
+                });
                 fetchCompletedCleanly = false;
                 break;
             }
+            logger?.emit('sync.fetch.batch.complete', {
+                externalObjectName: entityMap.ExternalObjectName,
+                batchIndex: batchCount,
+                durationMs: Date.now() - fetchStart,
+                recordCount: batch.Records.length,
+                hasMore: batch.HasMore,
+                newWatermark: batch.NewWatermarkValue ?? null,
+                nextPage: batch.NextPage ?? null,
+                nextOffset: batch.NextOffset ?? null,
+                nextCursor: batch.NextCursor ?? null,
+            });
 
             // If the connector returned more records than MaxBatchSize, log it but never truncate —
             // all records are written, just in sub-batches to keep DB transactions manageable.
@@ -666,7 +931,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             try {
-                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger);
             } catch (applyErr) {
                 if (applyErr instanceof SchemaNotGeneratedError) {
                     // The destination spCreate/Update/Delete doesn't exist
@@ -783,7 +1048,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         _entityMapIndex: number,
         _totalEntityMaps: number,
         _onProgress?: OnProgressCallback,
-        _abortSignal?: AbortSignal
+        _abortSignal?: AbortSignal,
+        logger?: SyncLogger
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
@@ -793,6 +1059,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Check connector write capability
         if (!config.connector.SupportsCreate && !config.connector.SupportsUpdate) {
             console.log(`[IntegrationEngine] Push skipped for ${entityMap.ExternalObjectName}: connector does not support writes`);
+            logger?.emit('sync.push.candidates', {
+                externalObjectName: entityMap.ExternalObjectName,
+                skipped: true,
+                reason: 'connector-does-not-support-writes',
+                supportsCreate: config.connector.SupportsCreate,
+                supportsUpdate: config.connector.SupportsUpdate,
+            });
             return this.EmptyResult();
         }
 
@@ -803,11 +1076,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         if (changedRecords.length === 0) {
             console.log(`[IntegrationEngine] Push: no changes for ${entityMap.ExternalObjectName} since ${lastPushAt ?? 'beginning'}`);
+            logger?.emit('sync.push.candidates', {
+                externalObjectName: entityMap.ExternalObjectName,
+                changedCount: 0,
+                fullSync: config.fullSync,
+                sinceLastPushAt: lastPushAt,
+            });
             await this.CreateRunDetail(run, entityMap, this.EmptyResult(), contextUser);
             return this.EmptyResult();
         }
 
         console.log(`[IntegrationEngine] Push: ${changedRecords.length} changed records for ${entityMap.ExternalObjectName}`);
+        logger?.emit('sync.push.candidates', {
+            externalObjectName: entityMap.ExternalObjectName,
+            changedCount: changedRecords.length,
+            fullSync: config.fullSync,
+            sinceLastPushAt: lastPushAt,
+            firstFew: changedRecords.slice(0, 5).map(c => ({ recordID: c.RecordID, changeType: c.Type, changedAt: c.ChangedAt ?? null })),
+        });
 
         const result: SyncResult = {
             Success: true, RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0,
@@ -830,7 +1116,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         for (const change of changedRecords) {
             result.RecordsProcessed++;
             try {
-                await this.PushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser);
+                await this.PushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser, logger);
                 if (change.ChangedAt && (!latestChangeAt || change.ChangedAt > latestChangeAt)) {
                     latestChangeAt = change.ChangedAt;
                 }
@@ -979,7 +1265,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         pushFieldMaps: ICompanyIntegrationFieldMap[],
         result: SyncResult,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        logger?: SyncLogger
     ): Promise<void> {
         // Reverse-map MJ fields to external fields
         const externalAttributes: Record<string, unknown> = {};
@@ -1017,6 +1304,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         };
 
         if (change.Type === 'Delete' && externalID && config.connector.SupportsDelete) {
+            await this.rateLimit(config);
             const delResult = await config.connector.DeleteRecord({ ...crudBase, ExternalID: externalID });
             if (!delResult.Success) {
                 if (delResult.StatusCode === 403) {
@@ -1028,9 +1316,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             result.RecordsDeleted++;
         } else if (externalID) {
-            // Update existing external record
+            // Pull-first 3-way combine: snapshot = common ancestor, MJ = ours, external = theirs.
+            // Merge non-overlapping field changes; a same-field-both-sides change is a true conflict
+            // resolved per the entity map's ConflictResolution policy. Safe fallbacks throughout:
+            // no snapshot / no GetRecord / fetch failure → push the full attribute set (prior
+            // last-write-wins behavior). Never throws, never blocks the push on infrastructure.
+            const combine = await this.computePushCombine(
+                change, config, entityMap, pushFieldMaps, externalAttributes, externalID, contextUser, logger
+            );
+            if (combine.action === 'skip') {
+                result.RecordsSkipped++;
+                return;
+            }
+            if (Object.keys(combine.attributes).length === 0) {
+                // After the merge there is nothing for MJ to push (external already had our change,
+                // or external-wins took every conflicting field). Not an error.
+                result.RecordsSkipped++;
+                return;
+            }
+            await this.rateLimit(config);
             const updResult = await config.connector.UpdateRecord({
-                ...crudBase, ExternalID: externalID, Attributes: externalAttributes,
+                ...crudBase, ExternalID: externalID, Attributes: combine.attributes,
             });
             if (!updResult.Success) {
                 if (updResult.StatusCode === 403) {
@@ -1043,6 +1349,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             result.RecordsUpdated++;
         } else if (config.connector.SupportsCreate) {
             // Create new external record
+            await this.rateLimit(config);
             const createResult = await config.connector.CreateRecord({
                 ...crudBase, Attributes: externalAttributes,
             });
@@ -1067,6 +1374,124 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             result.RecordsCreated++;
         } else {
             result.RecordsSkipped++;
+        }
+    }
+
+    /**
+     * Pull-first 3-way combine for bidirectional push. Snapshot (last-synced external state) is
+     * the common ancestor; MJ-current is "ours"; the re-fetched external record is "theirs".
+     *  - field only WE changed   → push our value
+     *  - field only THEY changed → leave it (don't push; next pull brings it into MJ)
+     *  - both changed, same value → converged, skip
+     *  - both changed, different  → true conflict → ConflictResolution policy
+     * Returns the attribute subset MJ should actually push. Safe fallbacks: no snapshot / no
+     * GetRecord support / fetch failure → push the full attribute set (prior behavior). Never throws.
+     */
+    private async computePushCombine(
+        change: { RecordID: string; Fields: Record<string, unknown> },
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        pushFieldMaps: ICompanyIntegrationFieldMap[],
+        fullAttributes: Record<string, unknown>,
+        externalID: string,
+        contextUser: UserInfo,
+        logger?: SyncLogger
+    ): Promise<{ action: 'proceed' | 'skip'; attributes: Record<string, unknown> }> {
+        const snapRaw = change.Fields['__mj_integration_LastSyncedSnapshot'];
+        if (typeof snapRaw !== 'string' || snapRaw.length === 0) return { action: 'proceed', attributes: fullAttributes };
+        let base: Record<string, unknown>;
+        try { base = JSON.parse(snapRaw) as Record<string, unknown>; } catch { return { action: 'proceed', attributes: fullAttributes }; }
+        if (!config.connector.SupportsGet) return { action: 'proceed', attributes: fullAttributes };
+
+        let ext: ExternalRecord | null;
+        try {
+            await this.rateLimit(config);
+            ext = await config.connector.GetRecord({
+                CompanyIntegration: config.companyIntegration,
+                ObjectName: entityMap.ExternalObjectName,
+                ExternalID: externalID,
+                ContextUser: contextUser,
+            });
+        } catch {
+            return { action: 'proceed', attributes: fullAttributes }; // re-fetch failed → don't block push
+        }
+        if (!ext) return { action: 'proceed', attributes: fullAttributes };
+
+        const policy = (entityMap.ConflictResolution as string) || 'DestWins';
+        const toPush: Record<string, unknown> = {};
+        const conflictFields: string[] = [];
+        let manualConflict = false;
+
+        for (const fm of pushFieldMaps) {
+            const baseVal = base[fm.DestinationFieldName];
+            const mjVal = change.Fields[fm.DestinationFieldName];
+            const extVal = ext.Fields[fm.SourceFieldName];
+            const mjChanged = !this.valuesEqual(mjVal, baseVal);
+            const extChanged = !this.valuesEqual(extVal, baseVal);
+
+            if (mjChanged && !extChanged) {
+                toPush[fm.SourceFieldName] = mjVal;                       // only we changed → push ours
+            } else if (mjChanged && extChanged && !this.valuesEqual(mjVal, extVal)) {
+                conflictFields.push(fm.DestinationFieldName);            // both changed, different → conflict
+                if (policy === 'DestWins' || policy === 'MostRecent') {
+                    // MJ wins. (Full timestamp-compare for MostRecent is the deferred enhancement.)
+                    toPush[fm.SourceFieldName] = mjVal;
+                } else if (policy === 'Manual') {
+                    manualConflict = true;                               // quarantine for a human
+                }
+                // SourceWins → leave external as-is (don't push this field)
+            }
+            // !mjChanged → nothing to push; both-changed-same → converged.
+        }
+
+        if (conflictFields.length > 0) {
+            logger?.emit('sync.record.conflict', {
+                entity: entityMap.Entity,
+                externalId: externalID,
+                mjRecordId: change.RecordID,
+                conflictFields,
+                policy,
+                resolution: policy === 'Manual' ? 'quarantined' : (policy === 'SourceWins' ? 'external-wins' : 'mj-wins'),
+            });
+            if (manualConflict) {
+                await this.markConflictOnMJRecord(change.RecordID, entityMap, conflictFields, contextUser);
+                return { action: 'skip', attributes: {} };
+            }
+        }
+        return { action: 'proceed', attributes: toPush };
+    }
+
+    /** Loose value equality for conflict comparison across JSON/string/number/bool/null shapes. */
+    private valuesEqual(a: unknown, b: unknown): boolean {
+        if (a === b) return true;
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return String(a) === String(b);
+    }
+
+    /** Marks an MJ mirror record in-conflict (Manual resolution) via its standard sync columns. Best-effort. */
+    private async markConflictOnMJRecord(
+        mjRecordID: string,
+        entityMap: ICompanyIntegrationEntityMap,
+        conflictFields: string[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
+            const entityInfo = md.EntityByName(entityMap.Entity);
+            const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+            const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(mjRecordID, pkFields));
+            if (!loaded) return;
+            const fields = entity.Fields ?? [];
+            const hasField = (n: string) => fields.some(f => f.Name === n);
+            if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Conflict');
+            if (hasField('__mj_integration_SyncMessage')) {
+                entity.Set('__mj_integration_SyncMessage', `Bidirectional conflict: external changed ${conflictFields.join(', ')} since last sync; awaiting manual resolution.`);
+            }
+            await entity.Save();
+        } catch {
+            // best-effort
         }
     }
 
@@ -1197,7 +1622,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        logger?: SyncLogger
     ): Promise<void> {
         // Batched atomicity per plans/transaction-group-migration.md: each batch of up to
         // APPLY_BATCH_SIZE records commits or rolls back as a unit. This keeps transactions
@@ -1218,7 +1644,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             try {
                 for (const record of batch) {
                     result.RecordsProcessed++;
-                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser);
+                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger);
                 }
                 await provider.CommitTransaction();
             } catch (err) {
@@ -1264,8 +1690,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        logger?: SyncLogger
     ): Promise<void> {
+        logger?.emit('sync.record.decision', {
+            externalId: record.ExternalRecord.ExternalID,
+            objectType: record.ExternalRecord.ObjectType,
+            entity: record.MJEntityName,
+            changeType: record.ChangeType,
+            matchedMJRecordID: record.MatchedMJRecordID ?? null,
+        });
+
+        // Capture counters so we can report the concrete per-record outcome in the log.
+        const before = {
+            c: result.RecordsCreated, u: result.RecordsUpdated,
+            d: result.RecordsDeleted, s: result.RecordsSkipped,
+        };
+
         switch (record.ChangeType) {
             case 'Create':
                 await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
@@ -1283,6 +1724,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             case 'Skip':
                 result.RecordsSkipped++;
                 break;
+        }
+
+        if (logger) {
+            const outcome =
+                result.RecordsCreated > before.c ? 'created' :
+                result.RecordsUpdated > before.u ? 'updated' :
+                result.RecordsDeleted > before.d ? (entityMap.DeleteBehavior === 'SoftDelete' ? 'archived' : 'deleted') :
+                result.RecordsSkipped > before.s ? 'skipped' : 'errored';
+            logger.emit(outcome === 'archived' ? 'sync.record.archived' : 'sync.record.saved', {
+                externalId: record.ExternalRecord.ExternalID,
+                entity: record.MJEntityName,
+                outcome,
+                // The mirror row's __mj_integration_LastSyncedSnapshot is refreshed on create/update.
+                snapshotWritten: outcome === 'created' || outcome === 'updated',
+                matchedMJRecordID: record.MatchedMJRecordID ?? null,
+            });
         }
     }
 
@@ -1423,6 +1880,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
             return false;
+        }
+
+        // SoftDelete = mark the mirror row Archived (the standard sync-status for records
+        // removed upstream) and keep it; HardDelete physically removes it. (DoNothing
+        // already returned above.) Previously both behaviors hit entity.Delete() — so
+        // SoftDelete was indistinguishable from HardDelete.
+        if (entityMap.DeleteBehavior === 'SoftDelete') {
+            const fields = entity.Fields ?? [];
+            const hasField = (n: string) => fields.some(f => f.Name === n);
+            if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+            if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
+            const archived = await entity.Save();
+            if (!archived) {
+                const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
+                console.warn(`[IntegrationEngine] Soft-delete (archive) failed for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
+            }
+            return archived;
         }
 
         const deleted = await entity.Delete();
@@ -1578,7 +2052,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private SetStandardIntegrationFields(
         entity: { Set(fieldName: string, value: unknown): void; Fields?: Array<{ Name: string }> },
-        _record: MappedRecord
+        record: MappedRecord
     ): void {
         const fieldNames = entity.Fields?.map(f => f.Name) ?? [];
         const hasField = (name: string) => fieldNames.includes(name);
@@ -1588,6 +2062,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
         if (hasField('__mj_integration_SyncStatus')) {
             entity.Set('__mj_integration_SyncStatus', 'Active');
+        }
+        // Snapshot the external values we just synced — the last-known external state,
+        // kept independent of any later local edits to the mirror row. Powers
+        // watermark-less change detection and the 3-way field-level merge (combine)
+        // on bidirectional push (snapshot = common ancestor).
+        if (hasField('__mj_integration_LastSyncedSnapshot')) {
+            entity.Set('__mj_integration_LastSyncedSnapshot', JSON.stringify(record.MappedFields ?? {}));
+        }
+        // A clean sync clears any prior conflict/error note.
+        if (hasField('__mj_integration_SyncMessage')) {
+            entity.Set('__mj_integration_SyncMessage', null);
         }
     }
 
@@ -1606,7 +2091,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             'MJ: Company Integration Record Maps',
             contextUser
         );
-        recordMap.NewRecord();
+
+        // Upsert by identity: one row per (CompanyIntegration, Entity, external record).
+        // The prior always-NewRecord() behavior created a duplicate map row whenever a
+        // record fell through to this path again (e.g. matching missed), which then made
+        // every by-external-ID lookup ambiguous. Look up an existing mapping first.
+        const rv = new RunView();
+        const existing = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Company Integration Record Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID='${externalID.replace(/'/g, "''")}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (existing.Success && existing.Results.length > 0) {
+            const loaded = await recordMap.Load(existing.Results[0].ID);
+            if (!loaded) recordMap.NewRecord();
+        } else {
+            recordMap.NewRecord();
+        }
+
         recordMap.CompanyIntegrationID = companyIntegrationID;
         recordMap.ExternalSystemRecordID = externalID;
         recordMap.EntityID = entityID;
@@ -1614,7 +2119,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const saved = await recordMap.Save();
         if (!saved) {
-            throw new Error(`Failed to save record map for external ID: ${externalID}`);
+            throw new Error(`Failed to save record map for external ID ${externalID}: ${recordMap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 

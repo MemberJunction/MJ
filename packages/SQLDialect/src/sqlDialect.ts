@@ -710,6 +710,46 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract CommentOnObject(objectType: string, schema: string, name: string, comment: string): string;
 
+    // ─── DDL Generation (Idempotent, single-statement) ──────────────
+    //
+    // "Create only if absent" variants that are SAFE for callers which split a migration
+    // into statements on ';' boundaries (e.g. the RSU migration executor chunks oversized
+    // batches that way). Unlike CreateTableIfNotExistsDDL — which wraps the CREATE in a
+    // BEGIN...END block that such chunking would tear apart — each method below returns a
+    // SINGLE statement. Defaults are idempotent-friendly; SQL Server overrides where its
+    // syntax differs. External dialects inherit working defaults (non-breaking).
+
+    /**
+     * A full CREATE TABLE that runs only if the table is absent, as a SINGLE statement.
+     * Default (PostgreSQL et al.): `CREATE TABLE IF NOT EXISTS <fullTable> (...);`
+     * SQL Server overrides with an `IF OBJECT_ID(...) IS NULL` guard (it has no native
+     * CREATE TABLE IF NOT EXISTS).
+     * @param fullTable - Already-quoted `schema.table` identifier
+     * @param columnsBody - The column/constraint lines that go between the parentheses
+     */
+    CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
+        return `CREATE TABLE IF NOT EXISTS ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    /**
+     * CommentOnObject that is safe to re-run (no error if the description already exists).
+     * Default returns the standard statement terminated with ';' — adequate where the
+     * comment statement is inherently idempotent (PostgreSQL COMMENT ON replaces in place).
+     * SQL Server overrides to guard sp_addextendedproperty with a fn_listextendedproperty check.
+     */
+    CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
+        return this.CommentOnObject(objectType, schema, name, comment) + ';';
+    }
+
+    /**
+     * CommentOnColumn that is safe to re-run. Default returns the standard statement
+     * (PostgreSQL COMMENT ON COLUMN already includes its terminator and is idempotent).
+     * SQL Server overrides to guard sp_addextendedproperty.
+     */
+    CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
+        return this.CommentOnColumn(schema, table, column, comment);
+    }
+
     // ─── Schema Introspection ────────────────────────────────────────
 
     /**

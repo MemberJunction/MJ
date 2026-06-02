@@ -17177,6 +17177,17 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
         * * Display Name: Integration Object Name
@@ -17201,7 +17212,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration ID
+        * * Display Name: Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -17331,9 +17342,113 @@ export const MJIntegrationObjectSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    CreateAPIPath: z.string().nullable().describe(`
+        * * Field Name: CreateAPIPath
+        * * Display Name: Create API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.`),
+    CreateMethod: z.string().nullable().describe(`
+        * * Field Name: CreateMethod
+        * * Display Name: Create Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.`),
+    CreateBodyShape: z.union([z.literal('flat'), z.literal('literal'), z.literal('wrapped')]).nullable().describe(`
+        * * Field Name: CreateBodyShape
+        * * Display Name: Create Body Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+        * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).`),
+    CreateBodyKey: z.string().nullable().describe(`
+        * * Field Name: CreateBodyKey
+        * * Display Name: Create Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`),
+    CreateIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: CreateIDLocation
+        * * Display Name: Create ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).`),
+    UpdateAPIPath: z.string().nullable().describe(`
+        * * Field Name: UpdateAPIPath
+        * * Display Name: Update API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.`),
+    UpdateMethod: z.string().nullable().describe(`
+        * * Field Name: UpdateMethod
+        * * Display Name: Update Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for update (typically PATCH or PUT).`),
+    UpdateBodyShape: z.union([z.literal('flat'), z.literal('literal'), z.literal('wrapped')]).nullable().describe(`
+        * * Field Name: UpdateBodyShape
+        * * Display Name: Update Body Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+        * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.`),
+    UpdateBodyKey: z.string().nullable().describe(`
+        * * Field Name: UpdateBodyKey
+        * * Display Name: Update Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.`),
+    UpdateIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: UpdateIDLocation
+        * * Display Name: Update ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`),
+    DeleteAPIPath: z.string().nullable().describe(`
+        * * Field Name: DeleteAPIPath
+        * * Display Name: Delete API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`),
+    DeleteIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: DeleteIDLocation
+        * * Display Name: Delete ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: For delete: where the target record ID is located — typically 'path'.`),
+    IncrementalWatermarkField: z.string().nullable().describe(`
+        * * Field Name: IncrementalWatermarkField
+        * * Display Name: Incremental Watermark Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -57590,7 +57705,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
+ * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -72151,6 +72266,25 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     }
 
     /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
     * * Field Name: IntegrationObject
     * * Display Name: Integration Object Name
     * * SQL Data Type: nvarchar(255)
@@ -72216,7 +72350,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration ID
+    * * Display Name: Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -72517,8 +72651,224 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
 
     /**
+    * * Field Name: CreateAPIPath
+    * * Display Name: Create API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.
+    */
+    get CreateAPIPath(): string | null {
+        return this.Get('CreateAPIPath');
+    }
+    set CreateAPIPath(value: string | null) {
+        this.Set('CreateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: CreateMethod
+    * * Display Name: Create Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.
+    */
+    get CreateMethod(): string | null {
+        return this.Get('CreateMethod');
+    }
+    set CreateMethod(value: string | null) {
+        this.Set('CreateMethod', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyShape
+    * * Display Name: Create Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+    * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).
+    */
+    get CreateBodyShape(): 'flat' | 'literal' | 'wrapped' | null {
+        return this.Get('CreateBodyShape');
+    }
+    set CreateBodyShape(value: 'flat' | 'literal' | 'wrapped' | null) {
+        this.Set('CreateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyKey
+    * * Display Name: Create Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.
+    */
+    get CreateBodyKey(): string | null {
+        return this.Get('CreateBodyKey');
+    }
+    set CreateBodyKey(value: string | null) {
+        this.Set('CreateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: CreateIDLocation
+    * * Display Name: Create ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).
+    */
+    get CreateIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('CreateIDLocation');
+    }
+    set CreateIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('CreateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: UpdateAPIPath
+    * * Display Name: Update API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.
+    */
+    get UpdateAPIPath(): string | null {
+        return this.Get('UpdateAPIPath');
+    }
+    set UpdateAPIPath(value: string | null) {
+        this.Set('UpdateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: UpdateMethod
+    * * Display Name: Update Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for update (typically PATCH or PUT).
+    */
+    get UpdateMethod(): string | null {
+        return this.Get('UpdateMethod');
+    }
+    set UpdateMethod(value: string | null) {
+        this.Set('UpdateMethod', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyShape
+    * * Display Name: Update Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+    * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.
+    */
+    get UpdateBodyShape(): 'flat' | 'literal' | 'wrapped' | null {
+        return this.Get('UpdateBodyShape');
+    }
+    set UpdateBodyShape(value: 'flat' | 'literal' | 'wrapped' | null) {
+        this.Set('UpdateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyKey
+    * * Display Name: Update Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.
+    */
+    get UpdateBodyKey(): string | null {
+        return this.Get('UpdateBodyKey');
+    }
+    set UpdateBodyKey(value: string | null) {
+        this.Set('UpdateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: UpdateIDLocation
+    * * Display Name: Update ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).
+    */
+    get UpdateIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('UpdateIDLocation');
+    }
+    set UpdateIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('UpdateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: DeleteAPIPath
+    * * Display Name: Delete API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)
+    */
+    get DeleteAPIPath(): string | null {
+        return this.Get('DeleteAPIPath');
+    }
+    set DeleteAPIPath(value: string | null) {
+        this.Set('DeleteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: DeleteIDLocation
+    * * Display Name: Delete ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: For delete: where the target record ID is located — typically 'path'.
+    */
+    get DeleteIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('DeleteIDLocation');
+    }
+    set DeleteIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('DeleteIDLocation', value);
+    }
+
+    /**
+    * * Field Name: IncrementalWatermarkField
+    * * Display Name: Incremental Watermark Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.
+    */
+    get IncrementalWatermarkField(): string | null {
+        return this.Get('IncrementalWatermarkField');
+    }
+    set IncrementalWatermarkField(value: string | null) {
+        this.Set('IncrementalWatermarkField', value);
+    }
+
+    /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {

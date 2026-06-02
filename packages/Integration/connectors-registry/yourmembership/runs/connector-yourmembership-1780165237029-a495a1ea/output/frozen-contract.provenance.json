@@ -1,0 +1,925 @@
+{
+  "$schema": "frozen-contract.provenance.v1",
+  "canonicalizationRule": "Recursive object-key sort, ascending lexicographic. Arrays preserve insertion order (semantically ordered: IO sequence and IOF sequence are content). Serialized via JSON.stringify(value, null, 2), UTF-8, LF line endings, trailing LF on file.",
+  "configurationSummary": {
+    "$comment": "Vendor-wide Configuration blob for the YourMembership Integration row. Targets the `upsert_integration_configuration` MCP tool documented in .claude/agents/metadata-writer.md. Each top-level key is named to match the workflow contract in that agent doc. NOTE: as of v5.39.x-phase0, the MJ: Integrations schema does NOT have a Configuration column — these facts are emitted here as a sidecar so the code-builder downstream has them, and so the runtime D4 SoftPKClassifier has the universalPK hint. When the Integration table gains a Configuration nvarchar(MAX) column (per plans/integration-framework-redesign.md), this file's contents copy verbatim into the Integration row's Configuration field.",
+    "APIVersioningStrategy": {
+      "EvidenceFromOpenAPI": "info.version='1.0, ServiceStack: 5.0.2.0' — only one published version; no /v1/, /v2/, no Accept-Version or X-Version header documented in any operation",
+      "Note": "No changelog or version history is published. The base path is `/` and resources sit directly under /Ams/{ClientID}/. ServiceStack runtime version (5.0.2) is exposed via the X-Powered-By response header but is the server framework, not the API contract version.",
+      "Strategy": "none-documented"
+    },
+    "AdditionalNotes": {
+      "BodyParamCasing": "PascalCase in /Ams; snake_case in /OAuth/GetToken (RFC 6749 conformance); PascalCase in /OAuth/GetAccessToken (legacy YM shape)",
+      "CORSAllowedHeaders": "Content-Type, X-Requested-With, X-ss-id, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Authorization",
+      "CloudflareFronted": true,
+      "PathParamCasing": "PascalCase (e.g., /Ams/{ClientID}/Member/{MemberID}/MemberProfile) — NOT snake_case or camelCase",
+      "ServerVersion": "ServiceStack/5.02 NET45 — visible in X-Powered-By header"
+    },
+    "AuthFlow": "session+oauth2-authcode",
+    "AuthFlowDetail": {
+      "ClientCredentialsEvidence": "/OAuth/GetToken parameter list per OpenAPI: [grant_type, scope, code, refresh_token, redirect_uri, client_id, client_secret]. No client_credentials grant is documented or available; only authorization_code and refresh_token grants are present.",
+      "ClientCredentialsSupported": false,
+      "Legacy": {
+        "Kind": "oauth2-authcode-legacy",
+        "Note": "Legacy YM-specific shape (capitalised, AppSecret/AppSecert dual-spelling — vendor's typo deprecation banner). Prefer /OAuth/GetToken for new integrations.",
+        "RequestParams": [
+          "GrantType",
+          "AppId",
+          "AppSecret",
+          "Code",
+          "RefreshToken",
+          "Scope"
+        ],
+        "TokenEndpoint": "/OAuth/GetAccessToken",
+        "TokenEndpointMethod": "POST"
+      },
+      "Primary": {
+        "ContentType": "application/x-www-form-urlencoded",
+        "Kind": "session",
+        "RequestParams": [
+          "ClientID",
+          "UserType",
+          "Username",
+          "Password"
+        ],
+        "ResponseTokenField": "SessionId",
+        "SessionTTLSeconds": 900,
+        "SessionTTLSource": "Getting Started with the REST API PDF (2021), §Authentication: 'Session expires after 15 minutes of inactivity'",
+        "TokenEndpoint": "/Ams/Authenticate",
+        "TokenEndpointMethod": "POST"
+      },
+      "Secondary": {
+        "ContentType": "application/x-www-form-urlencoded",
+        "GrantTypesSupported": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "Kind": "oauth2-authcode",
+        "OIDCVariant": "/OAuth/OIDC/GetAccessToken",
+        "RequestParamsRFC6749Shape": [
+          "grant_type",
+          "code",
+          "refresh_token",
+          "client_id",
+          "client_secret",
+          "redirect_uri",
+          "scope"
+        ],
+        "TokenEndpoint": "/OAuth/GetToken",
+        "TokenEndpointMethod": "POST"
+      }
+    },
+    "AuthHeaderPattern": {
+      "Note": "CORS preflight reply at every endpoint lists both `X-ss-id` and `Authorization` in Access-Control-Allow-Headers. Either header is accepted depending on which auth flow issued the credential.",
+      "OAuth2": "Authorization: Bearer <access_token>",
+      "Session": "x-ss-id: <SessionId>"
+    },
+    "BulkOperationsAvailable": {
+      "BasePaths": [
+        "/Ams/{ClientID}/InformzBulkUploadBySearchGuid",
+        "/Ams/{ClientID}/InformzBulkUploadEventRegistrants",
+        "/Ams/{ClientID}/InformzBulkUploadForDues",
+        "/Ams/{ClientID}/InformzBulkUploadForDuesBySearchId",
+        "/Ams/{ClientID}/InformzBulkUploadForOrders",
+        "/Ams/{ClientID}/InformzBulkUploadForOrdersBySearchId",
+        "/Ams/{ClientID}/InformzBulkUploadForReports"
+      ],
+      "Note": "These are bulk PUSH endpoints to a sibling Community Brands product (Informz). There is no general-purpose bulk read or batch import API for arbitrary YM resources. Other bulk-shaped endpoints: StoreProductBulkStatus, StoreProductBulkStatusAll, PeopleBulkDetach — each is resource-specific, not a generic batching surface.",
+      "Pattern": "Informz bulk-upload family (cross-product, Informz email-marketing sibling product)",
+      "Vendor": true
+    },
+    "ClientIDHandling": {
+      "Note": "ClientID is REQUIRED in essentially every /Ams path. Connector code must inject it from the credential at request-build time. The integer Client ID is also echoed in every response's ResponseStatus envelope, so it round-trips.",
+      "Source": "Site-level identifier issued by YM admin console",
+      "Type": "integer",
+      "Where": "URL path segment after /Ams/"
+    },
+    "ContentType": {
+      "Consumes": [
+        "application/json"
+      ],
+      "Note": "From OpenAPI top-level. Note that auth endpoints accept formData (application/x-www-form-urlencoded) for session and OAuth flows — this is form-encoded post, not JSON. The /Ams data CRUD surface is JSON-only.",
+      "Produces": [
+        "application/json"
+      ]
+    },
+    "CustomFieldMarkerPattern": {
+      "Endpoints": [
+        "/Ams/{ClientID}/Member/{MemberID}/CustomField",
+        "/Ams/{ClientID}/CustomField"
+      ],
+      "Note": "YM exposes per-member custom fields via a separate CustomField endpoint family rather than inlining custom fields in the MemberProfile response. The CustomField response uses FieldCode (vendor-assigned) plus Values/ValuesProxy for the field's value list. There is NO marker pattern in field names (no `cf_`, no `custom_`) — the discriminant is the endpoint itself.",
+      "Pattern": "CustomField endpoint family",
+      "ResponseShape": "CustomFieldResponse { FieldCode, Fields, Visibility, VisibilityInt, Values, ValuesProxy, MetaValue, ClientID }"
+    },
+    "CustomObjectMarkerPattern": null,
+    "ErrorResponseShape": {
+      "Envelope": "ResponseStatus",
+      "ErrorCatalog": "Vendor does not publish a closed list of ErrorCode values. Observed values include NotNull, Predicate. The catalog must be built empirically — recorded as a gap.",
+      "Example": {
+        "ClientID": 0,
+        "FailedLoginReason": "None",
+        "MemberID": 0,
+        "ResponseStatus": {
+          "ErrorCode": "NotNull",
+          "Errors": [
+            {
+              "ErrorCode": "NotNull",
+              "FieldName": "Username",
+              "Message": "The Username is missing.",
+              "Meta": {
+                "PropertyName": "Username"
+              }
+            }
+          ],
+          "Message": "The Username is missing."
+        }
+      },
+      "Note": "Captured live from POST /Ams/Authenticate with empty body. ResponseStatus is present on EVERY response — success responses carry an empty ResponseStatus (no ErrorCode), error responses carry a populated one. Connector error-detection should test `body.ResponseStatus?.ErrorCode != null` rather than HTTP status code, because some validation errors return 200 with a populated ResponseStatus.",
+      "PerErrorFields": [
+        "ErrorCode",
+        "FieldName",
+        "Message",
+        "Meta"
+      ],
+      "TopLevelFields": [
+        "ErrorCode",
+        "Message",
+        "StackTrace",
+        "Errors",
+        "Meta"
+      ]
+    },
+    "IncrementalSyncCapability": {
+      "Note": "No vendor-wide incremental-sync mechanism (no /sync endpoint, no Last-Modified-Since query semantic across all resources). Per-resource incremental support, where present, is via per-operation modifiedSince-style query parameters declared on individual paths. Therefore the vendor-level capability is FALSE; per-IO IncrementalSync flags live on MJ: Integration Objects.",
+      "VendorWideSupported": false
+    },
+    "PaginationDefaults": {
+      "Note": "112 of 297 paths declare both PageSize and PageNumber query parameters. A minority of paths also accept OffSet/Offset/limit (5 distinct pagination parameter names observed across the spec) — per-operation pagination is captured in MJ: Integration Objects.PaginationType. The default for IOs that declare both PageSize+PageNumber is PageNumber pagination, 1-indexed. Default page size is per-operation (no global default published).",
+      "PageNumberParam": "PageNumber",
+      "PageNumberStartsAt": 1,
+      "PageSizeParam": "PageSize",
+      "TotalRecordsField": "ListCount",
+      "Type": "PageNumber"
+    },
+    "RateLimitPolicy": {
+      "Documented": false,
+      "Evidence": "Live HEAD requests to ws.yourmembership.com return no X-RateLimit-* headers, no Retry-After, no quota headers. SOURCE_STUDY §5 confirms vendor publishes no rate-limit documentation. Cloudflare front may apply edge-level protection but does not surface predictable quota info.",
+      "RecommendedClientBehaviour": "Honour 429 responses if/when observed; back off on 503; no proactive throttling required by documentation but vendor-side throttling is plausible at high volume."
+    },
+    "ResponseEnvelopeShape": {
+      "CanonicalFields": [
+        "ListCount",
+        "PageSize",
+        "PageNumber",
+        "OrderBy",
+        "OrderByDirection",
+        "Origin",
+        "UsingRedis",
+        "AppInitTime",
+        "ServerID",
+        "ClientID",
+        "ResponseStatus",
+        "BypassCache",
+        "DateCached",
+        "Device",
+        "IsForceReload"
+      ],
+      "ListPayloadKeyConvention": "Per-operation key matches the resource (e.g., CampaignEmailLists, Rules, ConnectionCategories, EventRegistrantsList, GroupTypeList). The ResponseDataKey is per-IO, not vendor-wide.",
+      "Note": "Every /Ams response carries a ServiceStack envelope. Confirmed by inspection of multiple definitions (CampaignEmailListsResponse, DuesRulesResponse, ConnectionCategoryListResponse, EventRegistrantsResponse, MemberGroupsResponse)."
+    },
+    "RoleGating": {
+      "Note": "Per-operation `Requires any of the roles:` declarations on /metadata pages indicate role-gated operations. Connector callers must use credentials provisioned with the correct role for each operation. Per-IO role requirements should be captured on MJ: Integration Objects when known.",
+      "ObservedRoles": [
+        "admin",
+        "oauthadmin"
+      ]
+    },
+    "TokenRefreshStrategy": {
+      "OAuth2": {
+        "Mechanism": "refresh_token grant",
+        "Note": "Refresh-token expiry not documented. Initial token issuance happens via grant_type=authorization_code after the user is redirected through Admin → API Configuration → OAuth Management → Add Client App's configured Client App.",
+        "RefreshGrantTypeValue": "refresh_token",
+        "TokenEndpoint": "/OAuth/GetToken"
+      },
+      "Session": {
+        "Mechanism": "re-authenticate",
+        "Note": "Session cookies do NOT have a refresh mechanism — when the SessionId expires, the client must call /Ams/Authenticate again with stored credentials.",
+        "TTL": "15 minutes of inactivity"
+      }
+    },
+    "WebhooksAvailable": {
+      "Note": "No first-party webhook documentation exists for YM. The OpenAPI surface includes ZoomEventListener and ZoomEventListenerOAuth endpoints (Zoom integration callbacks YM consumes from Zoom), but those are inbound from a third party into YM, not outbound YM-to-customer webhooks. SOURCE_STUDY §5 explicitly records this as a gap. No signature algorithm is documented.",
+      "Vendor": false
+    },
+    "universalPK": null,
+    "universalPKNote": "YourMembership has NO vendor-wide PK convention. Different resource families use different PK shapes — ProfileID (int) for Members, MemberID + ClientID composite paths for Member sub-resources, EventID for Events, and per-resource integer IDs elsewhere. The runtime SoftPKClassifier must per-IO classify; there is no single fieldName that holds for all 160 Ams families. Source: walking the OpenAPI spec's path templates for `/Ams/{ClientID}/Member/{MemberID}/...` vs `/Ams/{ClientID}/Event/{EventId}/...` vs `/Ams/{ClientID}/CampaignEmailLists` parameter sets confirms the PK heterogeneity. Recorded explicitly so downstream agents do not invent a default."
+  },
+  "frozenAt": "2026-05-30T19:05:27.767Z",
+  "frozenContractPath": "frozen-contract.json",
+  "frozenContractSHA256": "c01b24d4e49f07a699a887d9ec286f6a657ed9f616c8b0e7c2dd05b9a0b71996",
+  "knownIssues": {
+    "fkTargetsMissing": {
+      "brokenReferences": [
+        {
+          "field": "EventId",
+          "io": "AmsEvent_Alias",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_AttendeeTypeSessions",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_AttendeeTypeTickets",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventID",
+          "io": "AmsEvent_EventRegistrationSessions",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventID",
+          "io": "AmsEvent_EventRegistrations",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_EventSessionGroups",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_Sessions",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_Tickets",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_VirtualMeetings",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_VirtualUsers",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_VirtualWebinars",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "MemberID",
+          "io": "Pinpoint",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "LocationCoordinates",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "JobAlertsCriteria",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "JobAlerts",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "JobSearch",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "SavedJobs",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "Templates",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        }
+      ],
+      "details": "Two distinct patterns observed: (1) 11 AmsEvent_* IOs reference target IO name \"AmsEvent\" — the AmsEvent base IO is absent from the contract while its 11 sub-IOs (Alias, AttendeeTypeSessions, ...) are present; (2) 7 IOs (Pinpoint, LocationCoordinates, JobAlertsCriteria, JobAlerts, JobSearch, SavedJobs, Templates) reference target name \"YourMembership\" which is the Integration row Name, not an IO. These broken refs were emitted upstream by ioiof-extractor and were NOT corrected by metadata-writer (whose scope is the Integration row + Configuration sidecar, not the IO graph). Documented here so downstream reviewer/code-builder agents see them at freeze-read time.",
+      "remediationOwner": "ioiof-extractor (rerun) OR independent-reviewer (correction stage)",
+      "severity": "BLOCKER",
+      "summary": "18 of 18 RelatedIntegrationObjectID references point to IO names that do not exist as IOs in this contract."
+    },
+    "provenanceCoverage": {
+      "severity": "none",
+      "summary": "All 9 root Integration slots have provenance entries."
+    },
+    "typeMismatches": {
+      "observedDistribution": {
+        "array": 10,
+        "bigint": 3,
+        "bit": 326,
+        "boolean": 26,
+        "datetime": 149,
+        "float": 78,
+        "int": 470,
+        "integer": 83,
+        "json": 1,
+        "number": 7,
+        "nvarchar": 1339,
+        "nvarchar(max)": 2,
+        "object": 7,
+        "string": 75
+      },
+      "severity": "none",
+      "summary": "Zero type mismatches. IntegrationObjectField.Type column is nvarchar(100) free-form per MJIntegrationObjectFieldSchema in entity_subclasses.ts — no enum constraint to violate. All 2576 Type values are <=100 chars."
+    }
+  },
+  "provenanceSummary": {
+    "entries": [
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "YourMembership API Documentation landing page (vendor-owned)",
+            "sourceID": "ym-developer-landing",
+            "url": "https://www.yourmembership.com/api/"
+          },
+          {
+            "quote": "info.title: 'YM REST Services'",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Integration.Name",
+        "value": "YourMembership"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "host=ws.yourmembership.com; info.version='1.0, ServiceStack: 5.0.2.0'",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "POST /Ams/Authenticate returns SessionId used as x-ss-id header; session TTL 15 minutes",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          },
+          {
+            "quote": "OAuth /OAuth/GetAccessToken with AppId/AppSecret/GrantType (Code or RefreshToken)",
+            "sourceID": "ym-oauth-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf"
+          }
+        ],
+        "target": "Integration.Description",
+        "value": "YourMembership (Community Brands AMS) REST integration. Base URL https://ws.yourmembership.com, ServiceStack 5.0.2 backend. Supports two auth flows..."
+      },
+      {
+        "evidenceStrength": "InferredFromContext",
+        "rationale": "ClassName is an integration-row identifier slot used by ConnectorFactory; it must match a registered @RegisterClass key. Retaining the existing value avoids a re-registration cascade. Not a hard-constraint vendor-fact; safely InferredFromContext.",
+        "sources": [
+          {
+            "quote": "Existing YM integration record uses ClassName='YourMembershipConnector' — value retained for compatibility with downstream consumers.",
+            "sourceID": "existing-metadata-ym-record",
+            "url": "metadata/integrations/.your-membership.json"
+          }
+        ],
+        "target": "Integration.ClassName",
+        "value": "YourMembershipConnector"
+      },
+      {
+        "evidenceStrength": "InferredFromContext",
+        "rationale": "MJ-internal packaging fact, not a vendor fact. The value is the canonical home for shipped connectors in this repo.",
+        "sources": [
+          {
+            "quote": "Existing YM record sets ImportPath='@memberjunction/integration-connectors'",
+            "sourceID": "existing-metadata-ym-record",
+            "url": "metadata/integrations/.your-membership.json"
+          }
+        ],
+        "target": "Integration.ImportPath",
+        "value": "@memberjunction/integration-connectors"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "host: 'ws.yourmembership.com', schemes: ['https'], basePath: '/'",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "Base URL https://ws.yourmembership.com per the 'Base URL' section",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          }
+        ],
+        "target": "Integration.NavigationBaseURL",
+        "value": "https://ws.yourmembership.com"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "rationale": "Vendor publishes no documented per-app request quota. The MJ convention for 'no documented limit' is -1 (same as FileFeed). Recorded as ExplicitStatement-of-absence: I checked all four authoritative tier-1 sources and the live API headers, and none document a quota.",
+        "sources": [
+          {
+            "quote": "Spec contains no x-rate-limit-* extensions; no batch endpoint declared at vendor level (Informz bulk endpoints are resource-specific).",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "Cloudflare + ServiceStack response headers carry no X-RateLimit-*, no Retry-After, no quota indicator. Probed 2026-05-30 18:36 UTC.",
+            "sourceID": "live-header-probe",
+            "url": "https://ws.yourmembership.com/openapi (HEAD)"
+          },
+          {
+            "quote": "PDF documents auth flow, pagination, and resource CRUD shape — does NOT publish a rate-limit policy.",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          }
+        ],
+        "target": "Integration.BatchMaxRequestCount",
+        "value": -1
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "rationale": "Mirrors BatchMaxRequestCount=-1 — no documented throttle window means -1 (disabled). Adopting the same -1/-1 pair as FileFeed.",
+        "sources": [
+          {
+            "quote": "No throttling or batch-window documentation in the spec.",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "No Retry-After, no documented backoff policy.",
+            "sourceID": "live-header-probe",
+            "url": "https://ws.yourmembership.com/openapi (HEAD)"
+          }
+        ],
+        "target": "Integration.BatchRequestWaitTime",
+        "value": -1
+      },
+      {
+        "evidenceStrength": "InferredFromContext",
+        "rationale": "Existing credential type matches the auth shape this connector requires (clientId, apiKey, apiPassword for session auth). OAuth Client App credentials would need a separate credential type if the OAuth flow is implemented; that is out-of-scope for the metadata row here and is captured in Configuration.AuthFlow.",
+        "sources": [
+          {
+            "quote": "Credential type 'YourMembership API' already exists with FieldSchema referencing clientId+apiKey+apiPassword.",
+            "sourceID": "existing-credential-type",
+            "url": "metadata/credential-types/.credential-types.json"
+          }
+        ],
+        "target": "Integration.CredentialTypeID",
+        "value": "@lookup:MJ: Credential Types.Name=YourMembership API"
+      },
+      {
+        "evidenceStrength": "InferredFromContext",
+        "rationale": "Cosmetic field; reuse of existing value avoids icon-shift in the UI.",
+        "sources": [
+          {
+            "quote": "Existing YM record uses fa-solid fa-id-card; AMS = member-card icon convention.",
+            "sourceID": "existing-metadata-ym-record",
+            "url": "metadata/integrations/.your-membership.json"
+          }
+        ],
+        "target": "Integration.Icon",
+        "value": "fa-solid fa-id-card"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "rationale": "YM has no vendor-wide PK convention — explicit null is the correct value, not omission. Runtime D4 SoftPKClassifier should classify per-IO. Recording explicit null prevents downstream agents from inventing a default.",
+        "sources": [
+          {
+            "quote": "Path templates vary across families: /Ams/{ClientID}/Member/{MemberID}/... uses MemberID; /Ams/{ClientID}/Event/{EventId}/... uses EventId; CampaignEmailLists uses ListId; MemberProfile uses ProfileID (int). No single PK field name holds for all 160 Ams resource families.",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.universalPK",
+        "value": null
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "rationale": "Both flows are first-class. Session is the primary path (per the REST API PDF); OAuth2 authcode + refresh-token is the standards-conformant alternative (per OAuth PDF and OpenAPI). client_credentials is explicitly absent from the parameter list.",
+        "sources": [
+          {
+            "quote": "POST /Ams/Authenticate with ClientID/UserType/Username/Password returns SessionId used as x-ss-id header on subsequent calls; session expires after 15 minutes",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          },
+          {
+            "quote": "OAuth flow with /OAuth/GetAccessToken parameters AppId+AppSecret+GrantType (values 'Code' or 'RefreshToken')",
+            "sourceID": "ym-oauth-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf"
+          },
+          {
+            "quote": "/OAuth/GetToken parameter list: [grant_type, scope, code, refresh_token, redirect_uri, client_id, client_secret]. No client_credentials grant declared.",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.AuthFlow",
+        "value": "session+oauth2-authcode"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "Use SessionId as x-ss-id HTTP header",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          },
+          {
+            "quote": "Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-ss-id, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Authorization — both X-ss-id and Authorization headers are first-class",
+            "sourceID": "live-header-probe",
+            "url": "https://ws.yourmembership.com/openapi (OPTIONS-equivalent)"
+          }
+        ],
+        "target": "Configuration.AuthHeaderPattern",
+        "value": "Session: 'x-ss-id: <SessionId>'; OAuth2: 'Authorization: Bearer <access_token>'"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "Pagination example: ?PageSize=5&PageNumber=1 with ListCount returned for the total.",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          },
+          {
+            "quote": "112 of 297 paths declare both PageSize and PageNumber as parameters; ListCount appears in 656 schema definitions as the response total field",
+            "sourceID": "ym-openapi-swagger2-extract",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.PaginationDefaults",
+        "value": "{ Type: 'PageNumber', PageSizeParam: 'PageSize', PageNumberParam: 'PageNumber', PageNumberStartsAt: 1, TotalRecordsField: 'ListCount' }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "No /sync endpoint, no global Last-Modified-Since query semantic. Per-resource modifiedSince-style params exist on a minority of paths.",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "PDF does not describe any vendor-wide incremental sync mechanism",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          }
+        ],
+        "target": "Configuration.IncrementalSyncCapability",
+        "value": "{ VendorWideSupported: false }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "§5 Gaps: 'Webhook / push event subscription: ZoomEventListener paths exist in the OpenAPI but there is no narrative documentation of YM's own webhook model.'",
+            "sourceID": "ym-source-study",
+            "url": "packages/Integration/connectors-registry/yourmembership/runs/connector-yourmembership-1780165237029-a495a1ea/output/SOURCE_STUDY.md"
+          },
+          {
+            "quote": "ZoomEventListener / ZoomEventListenerOAuth paths exist but their schema is OAuth-callback shape from Zoom INTO YM, not outbound YM-to-customer webhooks.",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.WebhooksAvailable",
+        "value": "{ Vendor: false }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "InformzBulkUploadBySearchGuid, InformzBulkUploadEventRegistrants, InformzBulkUploadForDues, InformzBulkUploadForDuesBySearchId, InformzBulkUploadForOrders, InformzBulkUploadForOrdersBySearchId, InformzBulkUploadForReports — 7 paths with Bulk in the name; plus StoreProductBulkStatus and PeopleBulkDetach (per-resource)",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.BulkOperationsAvailable",
+        "value": "{ Vendor: true (Informz family only); pattern: per-resource not generic }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "info.version='1.0, ServiceStack: 5.0.2.0' — single advertised version; no /v1/, /v2/, no version header in any operation parameter list",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "§5 Gaps: 'No published version history for the REST API.'",
+            "sourceID": "ym-source-study",
+            "url": "packages/Integration/connectors-registry/yourmembership/runs/connector-yourmembership-1780165237029-a495a1ea/output/SOURCE_STUDY.md"
+          }
+        ],
+        "target": "Configuration.APIVersioningStrategy",
+        "value": "{ Strategy: 'none-documented' }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "Session expires after 15 minutes — re-authenticate when expired (no refresh-token mechanism for session)",
+            "sourceID": "ym-rest-api-getting-started-pdf",
+            "url": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf"
+          },
+          {
+            "quote": "/OAuth/GetToken accepts grant_type=refresh_token with a refresh_token parameter",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.TokenRefreshStrategy",
+        "value": "{ Session: re-authenticate (no refresh, 15-min TTL); OAuth2: refresh_token grant via /OAuth/GetToken }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "definitions.ResponseStatus.properties = [ErrorCode, Message, StackTrace, Errors, Meta]; definitions.ResponseError.properties = [ErrorCode, FieldName, Message, Meta]",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "Response: {\"ClientID\":0,\"MemberID\":0,\"FailedLoginReason\":\"None\",\"ResponseStatus\":{\"ErrorCode\":\"NotNull\",\"Message\":\"...\",\"Errors\":[{\"ErrorCode\":\"NotNull\",\"FieldName\":\"Username\",\"Message\":\"The Username is missing.\",\"Meta\":{\"PropertyName\":\"Username\"}}, ...]}} — observed 2026-05-30 18:37 UTC",
+            "sourceID": "live-error-probe",
+            "url": "POST https://ws.yourmembership.com/Ams/Authenticate (empty body)"
+          }
+        ],
+        "target": "Configuration.ErrorResponseShape",
+        "value": "{ Envelope: 'ResponseStatus' with { ErrorCode, Message, StackTrace, Errors[{ErrorCode, FieldName, Message, Meta}], Meta } }"
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "rationale": "Explicit null: YM does not allow customers to define new top-level object types via the API.",
+        "sources": [
+          {
+            "quote": "No custom-object discovery endpoint. The 160 Ams resource families are all vendor-defined; customer-extensibility surfaces are limited to CustomField (per-member custom field values) and CustomForms/CustomPages (content). There is NO customer-creatable arbitrary object type with a marker pattern such as HubSpot's p_<accountID>_<name>.",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          }
+        ],
+        "target": "Configuration.CustomObjectMarkerPattern",
+        "value": null
+      },
+      {
+        "evidenceStrength": "ExplicitStatement",
+        "sources": [
+          {
+            "quote": "definitions.CustomFieldResponse.properties = [FieldCode, Fields, Visibility, VisibilityInt, Values, ValuesProxy, MetaValue, ClientID]",
+            "sourceID": "ym-openapi-swagger2",
+            "url": "https://ws.yourmembership.com/openapi"
+          },
+          {
+            "quote": "§3.1 — CustomField is a discrete endpoint family separate from member profile data",
+            "sourceID": "ym-source-study",
+            "url": "packages/Integration/connectors-registry/yourmembership/runs/connector-yourmembership-1780165237029-a495a1ea/output/SOURCE_STUDY.md"
+          }
+        ],
+        "target": "Configuration.CustomFieldMarkerPattern",
+        "value": "{ Pattern: 'CustomField endpoint family'; Endpoints: ['/Ams/{ClientID}/Member/{MemberID}/CustomField', '/Ams/{ClientID}/CustomField']; field names carry NO marker prefix — discriminant is the endpoint }"
+      }
+    ],
+    "gaps": [
+      {
+        "evidenceOfAbsence": "Checked all four tier-1 sources + live HEAD probe; no rate-limit headers and no documentation.",
+        "facet": "RateLimitPolicy",
+        "fact": "BatchMaxRequestCount and BatchRequestWaitTime",
+        "status": "Set to -1 (no documented limit) per absence-of-evidence rule"
+      },
+      {
+        "evidenceOfAbsence": "SOURCE_STUDY §5 explicit gap.",
+        "facet": "ErrorCatalog",
+        "fact": "Closed list of ErrorCode values",
+        "status": "Not populated — vendor publishes no closed catalog. Observed values: NotNull, Predicate."
+      },
+      {
+        "evidenceOfAbsence": "info.version='1.0' is the only published version stamp.",
+        "facet": "Changelog",
+        "fact": "API version history",
+        "status": "Not populated."
+      },
+      {
+        "evidenceOfAbsence": "SOURCE_STUDY §5 explicit gap.",
+        "facet": "WebhookSignatureAlgorithm",
+        "fact": "WebhooksAvailable.SignatureAlgorithm",
+        "status": "Not populated — vendor does not publish webhooks."
+      },
+      {
+        "evidenceOfAbsence": "OAuth PDF describes flow but not token lifetimes.",
+        "facet": "RefreshTokenTTL",
+        "fact": "Configuration.TokenRefreshStrategy.OAuth2.RefreshTokenTTL",
+        "status": "Not populated — vendor does not document refresh-token expiry."
+      }
+    ]
+  },
+  "runID": "connector-yourmembership-1780165237029-a495a1ea",
+  "selfConsistencyCheck": {
+    "counts": {
+      "foreignKeyReferences": 18,
+      "integrationObjectFields": 2576,
+      "integrationObjects": 217,
+      "provenanceEntries": 21,
+      "provenanceGaps": 5,
+      "rootSlots": 9
+    },
+    "foreignKeyIntegrity": {
+      "allTargetsExist": false,
+      "brokenReferences": [
+        {
+          "field": "EventId",
+          "io": "AmsEvent_Alias",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_AttendeeTypeSessions",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_AttendeeTypeTickets",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventID",
+          "io": "AmsEvent_EventRegistrationSessions",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventID",
+          "io": "AmsEvent_EventRegistrations",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_EventSessionGroups",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_Sessions",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_Tickets",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_VirtualMeetings",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_VirtualUsers",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "EventId",
+          "io": "AmsEvent_VirtualWebinars",
+          "rawReference": "@lookup:MJ: Integration Objects.Name=AmsEvent&IntegrationID=@lookup:MJ: Integrations.Name=YourMembership",
+          "target": "AmsEvent"
+        },
+        {
+          "field": "MemberID",
+          "io": "Pinpoint",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "LocationCoordinates",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "JobAlertsCriteria",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "JobAlerts",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "JobSearch",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "SavedJobs",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        },
+        {
+          "field": "MemberID",
+          "io": "Templates",
+          "rawReference": "@lookup:MJ: Integration Objects.IntegrationID=@lookup:MJ: Integrations.Name=YourMembership&Name=Member",
+          "target": "YourMembership"
+        }
+      ],
+      "totalReferences": 18
+    },
+    "provenanceCoverage": {
+      "everySlotHasProvenance": true,
+      "rootSlots": [
+        "Name",
+        "Description",
+        "ClassName",
+        "ImportPath",
+        "NavigationBaseURL",
+        "BatchMaxRequestCount",
+        "BatchRequestWaitTime",
+        "CredentialTypeID",
+        "Icon"
+      ],
+      "slotsWithProvenance": [
+        "Name",
+        "Description",
+        "ClassName",
+        "ImportPath",
+        "NavigationBaseURL",
+        "BatchMaxRequestCount",
+        "BatchRequestWaitTime",
+        "CredentialTypeID",
+        "Icon"
+      ],
+      "slotsWithoutProvenance": []
+    },
+    "typeFieldIntegrity": {
+      "lengthViolationCount": 0,
+      "lengthViolations": [],
+      "observedTypeDistribution": {
+        "array": 10,
+        "bigint": 3,
+        "bit": 326,
+        "boolean": 26,
+        "datetime": 149,
+        "float": 78,
+        "int": 470,
+        "integer": 83,
+        "json": 1,
+        "number": 7,
+        "nvarchar": 1339,
+        "nvarchar(max)": 2,
+        "object": 7,
+        "string": 75
+      },
+      "schemaConstraint": "nvarchar(100) — free-form string, no enum",
+      "totalFields": 2576,
+      "typeMismatches": 0
+    }
+  },
+  "sourceFiles": {
+    "configuration": "Configuration.json",
+    "integration": "metadata/integrations/yourmembership/.yourmembership.integration.json",
+    "provenance": "PROVENANCE.json"
+  },
+  "vendor": "YourMembership"
+}

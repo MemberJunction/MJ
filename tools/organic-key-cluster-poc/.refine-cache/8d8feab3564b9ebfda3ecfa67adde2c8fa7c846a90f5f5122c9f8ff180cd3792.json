@@ -1,0 +1,11 @@
+{
+  "concept": "product_model_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "The cluster identifies a Product Model, which is a central business entity used to link products, illustrations, and descriptions. IllustrationID is a distinct identifier for a different entity and does not belong in this cluster.",
+  "outliers": [
+    "Production.ProductModelIllustration.IllustrationID"
+  ],
+  "subClusters": []
+}

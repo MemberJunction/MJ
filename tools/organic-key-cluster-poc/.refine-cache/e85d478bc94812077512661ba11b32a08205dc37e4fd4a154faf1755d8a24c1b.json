@@ -1,0 +1,9 @@
+{
+  "concept": "product_descriptive_names",
+  "isUsefulOrganicKey": false,
+  "normalization": "Trim",
+  "confidence": 0.95,
+  "reasoning": "Product names and product model names represent different levels of the product hierarchy; they are distinct identifiers that rarely share identical string values for matching.",
+  "outliers": [],
+  "subClusters": []
+}

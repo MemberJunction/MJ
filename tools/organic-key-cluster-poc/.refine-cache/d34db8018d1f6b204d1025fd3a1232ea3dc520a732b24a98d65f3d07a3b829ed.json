@@ -1,0 +1,9 @@
+{
+  "concept": "order_status",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "Status fields are categorical attributes used for state tracking rather than unique identifiers. Matching disparate records across tables based on a shared status value (e.g., both being 'Pending') does not establish a meaningful business relationship between those specific entities.",
+  "outliers": [],
+  "subClusters": []
+}

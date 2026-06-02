@@ -1,0 +1,29 @@
+{
+  "concept": "manufacturing_identifiers",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "The cluster incorrectly groups two distinct business identifiers: ProductID and WorkOrderID. While they are related in the manufacturing process, they represent different entities and cannot be used to match records against each other.",
+  "outliers": [],
+  "subClusters": [
+    {
+      "concept": "product_id",
+      "members": [
+        "Production.WorkOrder.ProductID",
+        "Production.WorkOrderRouting.ProductID"
+      ],
+      "normalization": "ExactMatch",
+      "isUsefulOrganicKey": true,
+      "reasoning": "This is a valid organic key that allows users to see all work orders and routing steps associated with a specific product."
+    },
+    {
+      "concept": "work_order_id",
+      "members": [
+        "Production.WorkOrderRouting.WorkOrderID"
+      ],
+      "normalization": "ExactMatch",
+      "isUsefulOrganicKey": true,
+      "reasoning": "This is a valid identifier for a specific manufacturing task, though only one instance was included in this candidate cluster."
+    }
+  ]
+}
