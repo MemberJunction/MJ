@@ -1,3 +1,4 @@
+import { MJLruCache } from '@memberjunction/global';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
 import type {
@@ -19,8 +20,17 @@ import type {
  * from external records to MJ entity fields.
  */
 export class FieldMappingEngine {
-    /** Cache for compiled custom JS functions to avoid parsing/compiling them inside mapping loops */
-    private readonly customFunctionCache = new Map<string, Function>();
+    /**
+     * Cache of compiled custom-expression functions, keyed by the expression string, so an
+     * identical expression is compiled once instead of once per record in a mapping batch.
+     *
+     * A failed compile is cached as the `Error` it threw — a malformed expression is therefore
+     * compiled a single time (then re-thrown from cache on every record) rather than recompiled
+     * on the per-record error path. Bounded via {@link MJLruCache} because the owning
+     * `IntegrationEngine` is a process-lifetime singleton; expression cardinality is normally
+     * tiny (it tracks configured field maps), so the 1000-entry default is comfortably ample.
+     */
+    private readonly customFunctionCache = new MJLruCache<string, CompiledExpression | Error>();
 
     /**
      * Applies field mappings to a batch of external records, producing mapped records
@@ -298,19 +308,47 @@ export class FieldMappingEngine {
         config: CustomConfig
     ): unknown {
         try {
-            let fn = this.customFunctionCache.get(config.Expression);
-            if (!fn) {
-                // eslint-disable-next-line @typescript-eslint/no-implied-eval
-                fn = new Function('value', 'fields', `return (${config.Expression});`);
-                this.customFunctionCache.set(config.Expression, fn);
-            }
-            return fn(value, allFields) as unknown;
+            const fn = this.GetCompiledExpression(config.Expression);
+            return fn(value, allFields);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             throw new Error(`Custom transform expression failed: ${message}`);
         }
     }
+
+    /**
+     * Returns the compiled function for an expression, compiling and caching on first use.
+     * If the expression failed to compile previously, the cached error is re-thrown — a
+     * malformed expression is compiled exactly once across an entire batch.
+     */
+    private GetCompiledExpression(expression: string): CompiledExpression {
+        let cached = this.customFunctionCache.Get(expression);
+        if (cached === undefined) {
+            cached = this.compileExpression(expression);
+            this.customFunctionCache.Set(expression, cached);
+        }
+        if (cached instanceof Error) {
+            throw cached;
+        }
+        return cached;
+    }
+
+    /**
+     * Compiles a custom expression into a callable, returning the thrown `Error` instead of
+     * propagating it so the caller can cache compile failures alongside successes.
+     */
+    private compileExpression(expression: string): CompiledExpression | Error {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-implied-eval
+            return new Function('value', 'fields', `return (${expression});`) as CompiledExpression;
+        } catch (err) {
+            return err instanceof Error ? err : new Error(String(err));
+        }
+    }
 }
+
+/** Signature of a compiled custom-transform expression: `(value, fields) => result`. */
+type CompiledExpression = (value: unknown, fields: Record<string, unknown>) => unknown;
 
 /** Internal result of executing a single transform step */
 interface TransformStepResult {
