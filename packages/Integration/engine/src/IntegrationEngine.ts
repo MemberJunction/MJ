@@ -38,6 +38,7 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
+import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 
 /** Default batch size for fetching records from external systems */
@@ -353,6 +354,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
         logger.attachRunId(run.ID);
 
+        // Durable, queryable, restart-surviving artifact stream for this sync. runID is
+        // the CompanyIntegrationRun.ID so the JSONL artifact cross-correlates with the run
+        // row. Exposed over GraphQL (IntegrationListRuns / IntegrationGetRun /
+        // IntegrationTailRunEvents). Construction is best-effort — a logging-dir problem
+        // must never block a sync.
+        const progress = this.createSyncProgressEmitter(run.ID, companyIntegrationID, config, triggerType, options, startTime);
+        if (progress) {
+            logger.attachEmitter(progress);
+            try { progress.runStart('Sync run started'); } catch { /* best-effort */ }
+        }
+
         try {
             const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal, logger);
             result.RunID = run.ID;
@@ -373,13 +385,75 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 recordsErrored: result.RecordsErrored,
                 errorCount: result.Errors?.length ?? 0,
             });
+            await this.finalizeSyncProgress(progress, true, result.ErrorMessage);
             console.log(`[IntegrationEngine] Sync complete:\n${summary}`);
             return result;
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
             logger.emit('sync.run.fail', { error: errMsg, durationMs: Date.now() - startTime });
+            await this.finalizeSyncProgress(progress, false, errMsg);
             await this.FailRun(run, err, contextUser, onNotification);
             throw err;
+        }
+    }
+
+    /**
+     * Builds the durable progress emitter for a sync run. Best-effort: returns
+     * undefined (and never throws) if the artifact store can't be initialized, so
+     * structured logging can never block a sync.
+     */
+    private createSyncProgressEmitter(
+        runID: string,
+        companyIntegrationID: string,
+        config: RunConfiguration,
+        triggerType: SyncTriggerType,
+        options: IntegrationSyncOptions | undefined,
+        startTimeMs: number
+    ): IntegrationProgressEmitter | undefined {
+        try {
+            return new IntegrationProgressEmitter({
+                runID,
+                runKind: 'SyncRun',
+                integrationID: config.companyIntegration.IntegrationID ?? undefined,
+                companyIntegrationID,
+                triggerType: this.mapTriggerTypeForManifest(triggerType),
+                startedAt: new Date(startTimeMs).toISOString(),
+                context: {
+                    integration: config.companyIntegration.Integration ?? undefined,
+                    fullSync: options?.FullSync ?? false,
+                    entityMapCount: config.entityMaps.length,
+                },
+            });
+        } catch {
+            return undefined;
+        }
+    }
+
+    /** Maps the engine SyncTriggerType to the manifest's triggerType vocabulary. */
+    private mapTriggerTypeForManifest(t: SyncTriggerType): 'Manual' | 'Scheduled' | 'Webhook' | 'Pipeline' | 'Restart' {
+        switch (t) {
+            case 'Scheduled': return 'Scheduled';
+            case 'Webhook': return 'Webhook';
+            default: return 'Manual';
+        }
+    }
+
+    /** Writes the terminal artifact result + flushes. Best-effort — never throws. */
+    private async finalizeSyncProgress(
+        progress: IntegrationProgressEmitter | undefined,
+        success: boolean,
+        message?: string
+    ): Promise<void> {
+        if (!progress) return;
+        try {
+            if (success) {
+                await progress.complete(message ?? 'Sync run complete');
+            } else {
+                await progress.fail(message ?? 'Sync run failed');
+            }
+            await progress.flush();
+        } catch {
+            /* best-effort terminal write */
         }
     }
 

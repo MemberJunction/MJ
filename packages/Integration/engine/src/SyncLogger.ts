@@ -57,6 +57,8 @@ export type SyncLogEvent =
     | 'sync.run.fail'
     | 'sync.run.cancelled';
 
+import type { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+
 export interface SyncLoggerContext {
     /** CompanyIntegration ID — the per-run anchor for filtering. */
     ciId: string;
@@ -83,6 +85,7 @@ export interface SyncLogEntry {
  */
 export class SyncLogger {
     private readonly ctx: SyncLoggerContext;
+    private emitter?: IntegrationProgressEmitter;
 
     constructor(ctx: SyncLoggerContext) {
         this.ctx = ctx;
@@ -96,6 +99,18 @@ export class SyncLogger {
     /** Set the integration name once it's resolved from LoadRunConfiguration. */
     public attachIntegrationName(name: string | null | undefined): void {
         this.ctx.integration = name;
+    }
+
+    /**
+     * Attach a durable progress-artifact emitter. Once attached, the grep-friendly
+     * console events are ALSO forwarded (selectively, at stage/batch/error
+     * granularity — never per-record, to keep the stream queryable) to the run's
+     * append-only JSONL artifact so the sync is visible over GraphQL and survives an
+     * MJAPI restart. Terminal run.complete/run.fail are owned by the caller (which
+     * awaits the emitter's async terminal write), so they are NOT forwarded here.
+     */
+    public attachEmitter(emitter: IntegrationProgressEmitter): void {
+        this.emitter = emitter;
     }
 
     public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
@@ -114,5 +129,68 @@ export class SyncLogger {
         } else {
             console.log(line);
         }
+        this.forwardToEmitter(event, data);
+    }
+
+    /**
+     * Best-effort mirror of a sync event into the durable artifact stream. Any
+     * failure here is swallowed — structured logging must never break a sync.
+     */
+    private forwardToEmitter(event: SyncLogEvent, data: Record<string, unknown>): void {
+        const emitter = this.emitter;
+        if (!emitter) return;
+        try {
+            const stage = this.stageLabel(data);
+            switch (event) {
+                case 'sync.entity-map.start':
+                    emitter.stageStart(stage, `Syncing ${stage}`);
+                    break;
+                case 'sync.fetch.batch.complete':
+                    emitter.emit('records.batch.complete', {
+                        stage,
+                        counts: { processed: this.num(data.recordCount) },
+                        data,
+                    });
+                    break;
+                case 'sync.record.error':
+                    emitter.emit('record.error', {
+                        stage,
+                        level: 'error',
+                        message: typeof data.error === 'string' ? data.error : 'record error',
+                        data,
+                    });
+                    break;
+                case 'sync.record.conflict':
+                    emitter.emit('record.error', { stage, level: 'warn', message: 'conflict', data });
+                    break;
+                case 'sync.entity-map.complete':
+                    emitter.stageComplete(stage, {
+                        processed: this.num(data.recordsProcessed),
+                        succeeded: this.num(data.recordsCreated) + this.num(data.recordsUpdated),
+                        failed: this.num(data.recordsErrored),
+                        skipped: this.num(data.recordsSkipped),
+                    });
+                    break;
+                case 'sync.push.response':
+                    emitter.emit('external.call.complete', { stage, level: 'debug', data });
+                    break;
+                default:
+                    // run.start / config.loaded / connector.* / fetch.start / record.decision|saved /
+                    // push.candidates|record / terminal events are intentionally not mirrored — the
+                    // caller owns run lifecycle, and per-record events would bloat the stream.
+                    break;
+            }
+        } catch {
+            /* structured-artifact mirroring is best-effort — never break a sync */
+        }
+    }
+
+    private stageLabel(data: Record<string, unknown>): string {
+        const s = data.externalObjectName ?? data.entityMap ?? data.entity ?? data.objectName;
+        return typeof s === 'string' && s.length > 0 ? s : 'sync';
+    }
+
+    private num(v: unknown): number {
+        return typeof v === 'number' && Number.isFinite(v) ? v : 0;
     }
 }

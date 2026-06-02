@@ -42,6 +42,8 @@ import {
 } from "@memberjunction/integration-schema-builder";
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
+import { IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
+import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
@@ -714,6 +716,83 @@ class OperationProgressOutput {
     @Field({ nullable: true }) RSURunning?: boolean;
     @Field({ nullable: true }) ElapsedMs?: number;
     @Field({ nullable: true }) StartedAt?: string;
+}
+
+// ── STRUCTURED RUN ARTIFACTS (durable JSONL progress streams) ─────────
+// These expose the IntegrationProgressReader over GraphQL so a tenant can ask,
+// at any time, "what exactly happened (or is happening) on this run?" — backed
+// by the append-only <cwd>/logs/integration-runs/<runID>/progress.jsonl files
+// that survive an MJAPI restart and grow as the run progresses. Poll
+// IntegrationTailRunEvents(runID, sinceSeq) to follow a live run incrementally.
+
+@ObjectType()
+class IntegrationRunCountsOutput {
+    @Field({ nullable: true }) Processed?: number;
+    @Field({ nullable: true }) Succeeded?: number;
+    @Field({ nullable: true }) Failed?: number;
+    @Field({ nullable: true }) Skipped?: number;
+    @Field({ nullable: true }) TotalKnown?: number;
+}
+
+@ObjectType()
+class IntegrationRunSummaryArtifactOutput {
+    @Field() RunID: string;
+    @Field() RunKind: string;
+    @Field({ nullable: true }) IntegrationID?: string;
+    @Field({ nullable: true }) CompanyIntegrationID?: string;
+    @Field({ nullable: true }) ObjectName?: string;
+    @Field({ nullable: true }) TriggerType?: string;
+    @Field() StartedAt: string;
+    @Field() IsInFlight: boolean;
+    @Field() EventCount: number;
+    @Field({ nullable: true }) Success?: boolean;
+    @Field({ nullable: true }) ExitReason?: string;
+    @Field({ nullable: true }) CompletedAt?: string;
+    @Field({ nullable: true }) DurationMs?: number;
+    @Field({ nullable: true }) LatestEventType?: string;
+    @Field({ nullable: true }) LatestMessage?: string;
+    @Field(() => IntegrationRunCountsOutput, { nullable: true }) Counts?: IntegrationRunCountsOutput;
+}
+
+@ObjectType()
+class IntegrationRunEventOutput {
+    @Field() Ts: string;
+    @Field() Seq: number;
+    @Field() EventType: string;
+    @Field({ nullable: true }) Level?: string;
+    @Field({ nullable: true }) Stage?: string;
+    @Field({ nullable: true }) Message?: string;
+    @Field(() => IntegrationRunCountsOutput, { nullable: true }) Counts?: IntegrationRunCountsOutput;
+    /** Subsystem-specific payload, JSON-encoded (clients JSON.parse). */
+    @Field({ nullable: true }) DataJSON?: string;
+    /** Resumable-state payload on checkpoint events, JSON-encoded. */
+    @Field({ nullable: true }) ResumableStateJSON?: string;
+}
+
+@ObjectType()
+class IntegrationListRunsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [IntegrationRunSummaryArtifactOutput], { nullable: true }) Runs?: IntegrationRunSummaryArtifactOutput[];
+}
+
+@ObjectType()
+class IntegrationRunDetailOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => IntegrationRunSummaryArtifactOutput, { nullable: true }) Run?: IntegrationRunSummaryArtifactOutput;
+    @Field(() => [String], { nullable: true }) Errors?: string[];
+}
+
+@ObjectType()
+class IntegrationRunEventsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [IntegrationRunEventOutput], { nullable: true }) Events?: IntegrationRunEventOutput[];
+    /** Highest sequence returned — pass back as sinceSeq to poll for more. */
+    @Field() LatestSeq: number;
+    /** True while the run is still active — keep polling until false. */
+    @Field() IsInFlight: boolean;
 }
 
 // Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgress()
@@ -3795,6 +3874,139 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationGetSyncHistory error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+    }
+
+    // ── STRUCTURED RUN ARTIFACTS (durable, growing JSONL streams) ────────
+
+    /**
+     * Lists integration runs (sync, connector-creation, RSU, discovery, …) from the
+     * durable progress-artifact store, newest-first. Use this to render run history
+     * with live status for a multi-tenant control surface. Optionally scope to a
+     * single connector and/or run kind, or to only in-flight runs.
+     */
+    @Query(() => IntegrationListRunsOutput)
+    async IntegrationListRuns(
+        @Ctx() ctx: AppContext,
+        @Arg("companyIntegrationID", { nullable: true }) companyIntegrationID?: string,
+        @Arg("runKind", { nullable: true }) runKind?: string,
+        @Arg("inFlightOnly", { nullable: true }) inFlightOnly?: boolean,
+        @Arg("limit", { defaultValue: 50 }) limit?: number,
+    ): Promise<IntegrationListRunsOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const reader = new IntegrationProgressReader();
+            const snaps = await reader.ListRuns({
+                companyIntegrationID,
+                runKind: runKind as IntegrationRunKind | undefined,
+                inFlightOnly: inFlightOnly ?? false,
+            }, limit ?? 50);
+            return { Success: true, Message: `${snaps.length} run(s)`, Runs: snaps.map(s => this.toRunSummaryArtifact(s)) };
+        } catch (e) {
+            LogError(`IntegrationListRuns error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * Returns the summary of a single run (manifest + terminal result + latest counts).
+     * Pair with IntegrationTailRunEvents to read the full event stream.
+     */
+    @Query(() => IntegrationRunDetailOutput)
+    async IntegrationGetRun(
+        @Arg("runID") runID: string,
+        @Ctx() ctx: AppContext,
+    ): Promise<IntegrationRunDetailOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const reader = new IntegrationProgressReader();
+            const snap = await reader.GetRun(runID);
+            if (!snap) return { Success: false, Message: `Run '${runID}' not found` };
+            return {
+                Success: true,
+                Message: 'OK',
+                Run: this.toRunSummaryArtifact(snap),
+                Errors: snap.result?.errors?.map(er => er.stage ? `[${er.stage}] ${er.message}` : er.message),
+            };
+        } catch (e) {
+            LogError(`IntegrationGetRun error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * Tails a run's structured event stream from a given sequence number. The stream
+     * grows over the life of the run, so a client polls with the last LatestSeq it
+     * saw to fetch only the new events. IsInFlight=false signals the run is terminal
+     * and polling can stop.
+     */
+    @Query(() => IntegrationRunEventsOutput)
+    async IntegrationTailRunEvents(
+        @Arg("runID") runID: string,
+        @Ctx() ctx: AppContext,
+        @Arg("sinceSeq", { defaultValue: 0 }) sinceSeq?: number,
+    ): Promise<IntegrationRunEventsOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const reader = new IntegrationProgressReader();
+            const snap = await reader.GetRun(runID);
+            if (!snap) return { Success: false, Message: `Run '${runID}' not found`, LatestSeq: sinceSeq ?? 0, IsInFlight: false };
+            const events = await reader.Tail(runID, sinceSeq ?? 0);
+            const latestSeq = events.length > 0 ? events[events.length - 1].seq : (sinceSeq ?? 0);
+            return {
+                Success: true,
+                Message: `${events.length} event(s)`,
+                Events: events.map(ev => ({
+                    Ts: ev.ts,
+                    Seq: ev.seq,
+                    EventType: ev.eventType,
+                    Level: ev.level,
+                    Stage: ev.stage,
+                    Message: ev.message,
+                    Counts: this.toCountsOutput(ev.counts),
+                    DataJSON: ev.data ? JSON.stringify(ev.data) : undefined,
+                    ResumableStateJSON: ev.resumableState ? JSON.stringify(ev.resumableState) : undefined,
+                })),
+                LatestSeq: latestSeq,
+                IsInFlight: snap.isInFlight,
+            };
+        } catch (e) {
+            LogError(`IntegrationTailRunEvents error: ${e}`);
+            return { Success: false, Message: this.formatError(e), LatestSeq: sinceSeq ?? 0, IsInFlight: false };
+        }
+    }
+
+    /** Maps a reader snapshot to the GraphQL summary shape. */
+    private toRunSummaryArtifact(s: IntegrationRunSnapshot): IntegrationRunSummaryArtifactOutput {
+        return {
+            RunID: s.manifest.runID,
+            RunKind: s.manifest.runKind,
+            IntegrationID: s.manifest.integrationID,
+            CompanyIntegrationID: s.manifest.companyIntegrationID,
+            ObjectName: s.manifest.objectName,
+            TriggerType: s.manifest.triggerType,
+            StartedAt: s.manifest.startedAt,
+            IsInFlight: s.isInFlight,
+            EventCount: s.eventCount,
+            Success: s.result?.success,
+            ExitReason: s.result?.exitReason,
+            CompletedAt: s.result?.completedAt,
+            DurationMs: s.result?.durationMs,
+            LatestEventType: s.latestEvent?.eventType,
+            LatestMessage: s.latestEvent?.message,
+            Counts: this.toCountsOutput(s.counts),
+        };
+    }
+
+    /** Maps the reader's lowercase counts shape to the PascalCase GraphQL output. */
+    private toCountsOutput(c?: { processed?: number; succeeded?: number; failed?: number; skipped?: number; totalKnown?: number }): IntegrationRunCountsOutput | undefined {
+        if (!c) return undefined;
+        return {
+            Processed: c.processed,
+            Succeeded: c.succeeded,
+            Failed: c.failed,
+            Skipped: c.skipped,
+            TotalKnown: c.totalKnown,
+        };
     }
 
     // ── CONNECTOR CAPABILITIES ──────────────────────────────────────────
