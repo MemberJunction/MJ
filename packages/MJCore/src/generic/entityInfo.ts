@@ -18,7 +18,7 @@ export type EntityFieldExtendedType =
     | 'Code' | 'Email' | 'FaceTime' | 'Geo'
     | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
     | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Markdown'
+    | 'HTML' | 'Icon' | 'Markdown'
     | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
 
 /**

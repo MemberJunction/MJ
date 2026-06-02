@@ -1,6 +1,9 @@
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
+// Type-only import — avoids a runtime circular dependency with baseEngine.ts
+// (which imports BaseEngineRegistry). Erased at compile time.
+import type { BaseEnginePropertyConfig } from './baseEngine';
 
 /**
  * Information about a registered engine instance
@@ -56,6 +59,37 @@ export interface EngineMemoryStats {
      * Per-engine breakdown
      */
     engineStats: EngineRegistrationInfo[];
+}
+
+/**
+ * One loaded engine's in-memory cache of a given entity, returned by
+ * {@link BaseEngineRegistry.FindCachedEntity}. Carries enough context to both
+ * *use* the cache (a live pointer to the array) and *vet* it (the config that
+ * produced it, and whether it's the full unfiltered entity set).
+ */
+export interface CachedEntityMatch<T extends BaseEntity = BaseEntity> {
+    /** Class name of the engine that holds this cache (e.g. `'UserInfoEngine'`). */
+    engineClassName: string;
+    /** The live engine instance (a BaseEngine singleton). */
+    engine: unknown;
+    /**
+     * The engine's full property config for this entity — `EntityName`,
+     * `PropertyName`, `Filter`, `OrderBy`, `ResultType`, etc. Inspect this to
+     * decide whether the cache fits your needs (e.g. check `Filter`/`ResultType`).
+     */
+    config: BaseEnginePropertyConfig;
+    /**
+     * **Live reference** to the engine's cached array for this entity — NOT a
+     * copy. Reading is cheap; do not mutate it. When the config's `ResultType`
+     * is `'simple'` these are plain objects rather than `BaseEntity` instances.
+     */
+    records: T[];
+    /**
+     * True when the config has no `Filter` — i.e. the cache holds the **entire**
+     * entity set and can be treated as authoritative (safe for "show all" /
+     * in-memory search). False when a `Filter` means it's only a subset.
+     */
+    unfiltered: boolean;
 }
 
 /**
@@ -571,5 +605,114 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      */
     public ClearEntityLoadTracking(): void {
         this._entityLoadTracking.clear();
+    }
+
+    // ========================================================================
+    // CACHED-ENTITY REVERSE LOOKUP — "is this entity already in a loaded engine?"
+    // ========================================================================
+
+    /**
+     * Find every **loaded** engine that caches the given entity, returning each
+     * match's engine + the full property config that produced it + a **live
+     * pointer to the cached array** — so a single call tells you whether you can
+     * serve a lookup from memory (instead of hitting the database) and gives you
+     * the data without a second call.
+     *
+     * Matches are ordered **unfiltered-first**: a config with no `Filter` holds
+     * the complete entity set and is the authoritative cache to prefer (e.g. for
+     * "show all rows on focus" or in-memory search); filtered caches (a subset)
+     * come after. When more than one engine caches the entity you get them all,
+     * so callers can pick the right one (e.g. by `engineClassName` or by
+     * inspecting `config`).
+     *
+     * Typical use (1-liner intent):
+     * ```typescript
+     * const hit = BaseEngineRegistry.Instance.FindCachedEntity<UserInfo>('Users', { unfilteredOnly: true })[0];
+     * if (hit) {
+     *   // Small/static entity already fully in memory — search/sort it locally, no DB call.
+     *   const matches = hit.records.filter(u => u.Name.toLowerCase().includes(q));
+     * } else {
+     *   // Not cached unfiltered → fall back to a normal RunView against the DB.
+     * }
+     * ```
+     *
+     * Notes:
+     * - Only **loaded** engines are considered (a registered-but-not-yet-loaded
+     *   engine has no data to offer).
+     * - The returned `records` is the engine's *live* array — read it, don't
+     *   mutate it. For `'simple'` configs the rows are plain objects, not
+     *   `BaseEntity` instances (check `config.ResultType` if you need ORM rows).
+     *
+     * @param entityName     Entity to look up (case-insensitive, whitespace-trimmed).
+     * @param options.unfilteredOnly  When true, omit any cache that has a `Filter`
+     *                                 (i.e. only return full-set caches). Default false.
+     * @returns Matches (unfiltered first); empty array when no loaded engine caches it.
+     */
+    public FindCachedEntity<T extends BaseEntity = BaseEntity>(
+        entityName: string,
+        options?: { unfilteredOnly?: boolean }
+    ): CachedEntityMatch<T>[] {
+        const target = (entityName ?? '').trim().toLowerCase();
+        if (!target) return [];
+
+        const matches: CachedEntityMatch<T>[] = [];
+
+        for (const [className, info] of this._engines) {
+            const engine = info.instance;
+            if (!engine || typeof engine !== 'object') continue;
+            // Only loaded engines have data to offer.
+            if (!this.CheckEngineLoaded(engine)) continue;
+
+            const engineObj = engine as Record<string, unknown>;
+            const configs = engineObj['Configs'];
+            if (!Array.isArray(configs)) continue;
+
+            for (const cfg of configs as BaseEnginePropertyConfig[]) {
+                // Only entity configs (Type defaults to 'entity') with a matching EntityName.
+                if ((cfg.Type ?? 'entity') !== 'entity') continue;
+                if (!cfg.EntityName || cfg.EntityName.trim().toLowerCase() !== target) continue;
+
+                const records = cfg.PropertyName ? engineObj[cfg.PropertyName] : undefined;
+                if (!Array.isArray(records)) continue;
+
+                const unfiltered = !cfg.Filter || cfg.Filter.trim().length === 0;
+                if (options?.unfilteredOnly && !unfiltered) continue;
+
+                matches.push({
+                    engineClassName: className,
+                    engine,
+                    config: cfg,
+                    records: records as T[],
+                    unfiltered,
+                });
+            }
+        }
+
+        // Unfiltered caches first (authoritative full sets), then filtered subsets.
+        matches.sort((a, b) => (a.unfiltered === b.unfiltered ? 0 : a.unfiltered ? -1 : 1));
+        return matches;
+    }
+
+    /**
+     * Convenience wrapper over {@link FindCachedEntity} that returns just the
+     * **best** cached array for an entity (unfiltered preferred), or `null` when
+     * no loaded engine caches it. Use this for the common "if it's already in
+     * memory, use it; otherwise go to the DB" check.
+     *
+     * ```typescript
+     * const rows = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+     * if (rows) { /* serve from memory *\/ } else { /* RunView fallback *\/ }
+     * ```
+     *
+     * @param entityName     Entity to look up (case-insensitive, trimmed).
+     * @param options.unfilteredOnly  Require a full-set (no-`Filter`) cache. Default false.
+     * @returns The live cached array, or null if not cached (per the options).
+     */
+    public TryGetCachedRecords<T extends BaseEntity = BaseEntity>(
+        entityName: string,
+        options?: { unfilteredOnly?: boolean }
+    ): T[] | null {
+        const found = this.FindCachedEntity<T>(entityName, options);
+        return found.length > 0 ? found[0].records : null;
     }
 }
