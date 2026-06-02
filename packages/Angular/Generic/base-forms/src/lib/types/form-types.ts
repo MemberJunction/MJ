@@ -84,6 +84,12 @@ export interface FormContext {
   validationErrors?: ValidationErrorInfo[];
   /** Whether drag-and-drop section reordering is allowed. Read by panels to show/hide drag handles. */
   allowSectionReorder?: boolean;
+  /**
+   * Whether section headers may collapse/expand. When false, panels render
+   * always-expanded with no toggle chevron. Read by collapsible panels.
+   * Undefined / true means collapsible (the default).
+   */
+  collapsibleSections?: boolean;
 }
 
 /**

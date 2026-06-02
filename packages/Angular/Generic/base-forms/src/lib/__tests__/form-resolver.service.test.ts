@@ -72,7 +72,7 @@ vi.mock('@memberjunction/ng-base-forms', () => ({
 
 // ----- Test setup ---------------------------------------------------------
 
-import type { FormResolverService } from '../services/form-resolver.service';
+import type { FormResolverService } from '../resolver/form-resolver.service';
 
 const entity = { ID: 'entity-1', Name: 'Customer' } as any;
 const user = (overrides: Partial<{ ID: string; UserRoles: Array<{ RoleID: string }> }>) =>
@@ -98,7 +98,7 @@ beforeEach(async () => {
     classFactoryReg = null;
     for (const k of Object.keys(settingsBacking)) delete settingsBacking[k];
     vi.clearAllMocks();
-    const mod = await import('../services/form-resolver.service');
+    const mod = await import('../resolver/form-resolver.service');
     service = new mod.FormResolverService();
 });
 

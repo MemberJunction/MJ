@@ -285,6 +285,28 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.WidthMode;
   }
 
+  /**
+   * Whether the in-form toolbar renders at all. Driven by the form's
+   * `Config.toolbar`: an explicit `null` (the dialog/slide-in default) hides
+   * the entire toolbar so the surrounding chrome can own Save/Cancel/title.
+   * Any other value (undefined or a partial config) keeps the toolbar.
+   */
+  get EffectiveShowToolbar(): boolean {
+    return this.fc?.Config?.toolbar !== null;
+  }
+
+  /**
+   * Effective toolbar config: the bound `ToolbarConfig` (or the default)
+   * with the form's `Config.toolbar` partial merged on top. This is the
+   * no-regeneration bridge — generated templates never bind `[Config]`,
+   * yet per-instance toolbar tweaks still take effect through `fc.Config`.
+   */
+  get EffectiveToolbarConfig(): FormToolbarConfig {
+    const base = this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG;
+    const override = this.fc?.Config?.toolbar;
+    return override ? { ...base, ...override } : base;
+  }
+
   get EffectiveSearchFilter(): string {
     return this.fc?.searchFilter ?? '';
   }
@@ -380,9 +402,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Subscribe to panel Navigate events and relay them
     this.SubscribeToPanelNavigateEvents();
 
+    // Apply Config-driven section visibility (related-entity hide / allow-list).
+    this.ApplySectionVisibility();
+
     // Watch for panel changes to update counts and re-subscribe
     this.Panels.changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.SubscribeToPanelNavigateEvents();
+      this.ApplySectionVisibility();
       this.cdr.markForCheck();
     });
 
@@ -416,6 +442,42 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       panel.Navigate.pipe(takeUntil(this.panelNavReset$)).subscribe((event: FormNavigationEvent) => {
         this.Navigate.emit(event);
       });
+    });
+  }
+
+  /**
+   * Applies the form's `EntityFormConfig` section-visibility rules to the
+   * projected collapsible panels:
+   * - `visibleSectionKeys` (allow-list) hides every section not listed.
+   * - otherwise `hiddenSectionKeys` hides the listed sections.
+   * - `showRelatedEntities === false` hides all related-entity-variant panels.
+   *
+   * Deferred to a microtask to avoid ExpressionChangedAfterItHasBeenChecked
+   * when toggling panel inputs during/after content init.
+   */
+  private ApplySectionVisibility(): void {
+    const cfg = this.fc?.Config;
+    if (!this.Panels) return;
+    const allow = cfg?.visibleSectionKeys;
+    const hide = cfg?.hiddenSectionKeys;
+    const hideRelated = cfg?.showRelatedEntities === false;
+    // Nothing to do when no rules are configured — leave panels untouched.
+    if (!allow?.length && !hide?.length && !hideRelated) return;
+
+    Promise.resolve().then(() => {
+      this.Panels.forEach(p => {
+        let hidden = false;
+        if (allow && allow.length > 0) {
+          hidden = !allow.includes(p.SectionKey);
+        } else if (hide && hide.includes(p.SectionKey)) {
+          hidden = true;
+        }
+        if (!hidden && hideRelated && p.Variant === 'related-entity') {
+          hidden = true;
+        }
+        p.Hidden = hidden;
+      });
+      this.cdr.markForCheck();
     });
   }
 

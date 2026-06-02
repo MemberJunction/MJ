@@ -43,6 +43,16 @@ mj-collapsible-panel.mj-drag-over {
   border-bottom-color: var(--mj-brand-primary);
 }
 
+/* Static header — sections locked open (Config.collapsibleSections === false) */
+.mj-forms-panel-header--static {
+  cursor: default;
+}
+
+.mj-forms-panel-header--static:hover {
+  background: var(--mj-bg-surface-elevated);
+  border-bottom-color: var(--mj-border-default);
+}
+
 /* Drag handle */
 .mj-forms-drag-handle {
   display: flex;

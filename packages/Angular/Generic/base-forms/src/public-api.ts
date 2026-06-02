@@ -17,6 +17,13 @@ export * from './lib/types/form-types';
 export * from './lib/types/navigation-events';
 export * from './lib/types/toolbar-config';
 export * from './lib/types/form-events';
+export * from './lib/types/entity-form-config';
+
+// Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
+export * from './lib/resolver/form-resolver.service';
+
+// Presentation-agnostic form host (resolve → load → create → wire → teardown)
+export * from './lib/host/entity-form-host.component';
 
 // Base classes
 export * from './lib/base-record-component';
