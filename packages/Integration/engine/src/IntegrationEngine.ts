@@ -39,6 +39,7 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 
@@ -1493,6 +1494,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (!ext) return { action: 'proceed', attributes: fullAttributes };
 
         const policy = (entityMap.ConflictResolution as string) || 'DestWins';
+        // MostRecent is a per-record decision: compare the MJ row's last update against the
+        // external record's ModifiedAt once, up front. null = indeterminate (a timestamp is
+        // missing/unparseable) → the conflict falls back to DestWins so it's never dropped.
+        const mostRecentWinner = policy === 'MostRecent' ? this.resolveMostRecentWinner(change.Fields, ext) : null;
+        const mjWinsConflict = policy === 'DestWins'
+            || (policy === 'MostRecent' && mostRecentWinner !== 'external');
         const toPush: Record<string, unknown> = {};
         const conflictFields: string[] = [];
         let manualConflict = false;
@@ -1508,25 +1515,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 toPush[fm.SourceFieldName] = mjVal;                       // only we changed → push ours
             } else if (mjChanged && extChanged && !this.valuesEqual(mjVal, extVal)) {
                 conflictFields.push(fm.DestinationFieldName);            // both changed, different → conflict
-                if (policy === 'DestWins' || policy === 'MostRecent') {
-                    // MJ wins. (Full timestamp-compare for MostRecent is the deferred enhancement.)
-                    toPush[fm.SourceFieldName] = mjVal;
-                } else if (policy === 'Manual') {
+                if (policy === 'Manual') {
                     manualConflict = true;                               // quarantine for a human
+                } else if (mjWinsConflict) {
+                    toPush[fm.SourceFieldName] = mjVal;                  // DestWins, or MostRecent→MJ (incl. indeterminate)
                 }
-                // SourceWins → leave external as-is (don't push this field)
+                // SourceWins, or MostRecent→external → leave external as-is (don't push this field)
             }
             // !mjChanged → nothing to push; both-changed-same → converged.
         }
 
         if (conflictFields.length > 0) {
+            const resolution = policy === 'Manual' ? 'quarantined'
+                : policy === 'SourceWins' ? 'external-wins'
+                : policy === 'MostRecent' ? (mostRecentWinner === 'external' ? 'external-wins (most-recent)' : 'mj-wins (most-recent)')
+                : 'mj-wins';
             logger?.emit('sync.record.conflict', {
                 entity: entityMap.Entity,
                 externalId: externalID,
                 mjRecordId: change.RecordID,
                 conflictFields,
                 policy,
-                resolution: policy === 'Manual' ? 'quarantined' : (policy === 'SourceWins' ? 'external-wins' : 'mj-wins'),
+                resolution,
             });
             if (manualConflict) {
                 await this.markConflictOnMJRecord(change.RecordID, entityMap, conflictFields, contextUser);
@@ -1542,6 +1552,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (a == null && b == null) return true;
         if (a == null || b == null) return false;
         return String(a) === String(b);
+    }
+
+    /**
+     * MostRecent conflict resolution: compares the MJ row's last-update time
+     * (`__mj_UpdatedAt`) against the external record's `ModifiedAt`. Record-level recency
+     * (most sources don't expose per-field timestamps), so the caller computes it once
+     * and applies it to every conflicting field. Returns null when a timestamp is
+     * missing/unparseable → caller falls back to DestWins (a conflict is never dropped).
+     */
+    private resolveMostRecentWinner(mjFields: Record<string, unknown>, ext: ExternalRecord): RecencyWinner | null {
+        return mostRecentWinner(mjFields['__mj_UpdatedAt'], ext.ModifiedAt);
     }
 
     /** Marks an MJ mirror record in-conflict (Manual resolution) via its standard sync columns. Best-effort. */

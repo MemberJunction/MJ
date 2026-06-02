@@ -107,6 +107,10 @@ export { WatermarkService } from './WatermarkService.js';
 // Content hashing — watermark-less change detection key
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 
+// MostRecent conflict resolution recency comparison
+export { mostRecentWinner, parseTimestamp } from './ConflictRecency.js';
+export type { RecencyWinner } from './ConflictRecency.js';
+
 // Retry
 export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
 export type { RetryConfig } from './RetryRunner.js';
