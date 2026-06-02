@@ -57,13 +57,36 @@ describe('EnrichSchemaConstraints.InferForeignKeys', () => {
         expect(objects[2].Fields[0].IsForeignKey).toBe(false);
     });
 
-    it('does NOT infer a PK column or a self-reference', () => {
+    it('does NOT infer a single (surrogate) PK column or a self-reference', () => {
         const objects = [
             obj('companies', [field('id', { IsPrimaryKey: true }), field('CompanyId')]), // self
         ];
         const n = EnrichSchemaConstraints.InferForeignKeys(objects);
         expect(n).toBe(0);
         expect(objects[0].Fields[1].IsForeignKey).toBe(false);
+    });
+
+    it('INFERS FKs on the composite-PK parts of a junction/association table', () => {
+        // assoc_contacts_companies PK = [contact_id, company_id]; each part is an FK to a
+        // parent. The DAG must then order the association AFTER both parents (so it fills in).
+        const objects = [
+            obj('contacts', [field('hs_object_id', { IsPrimaryKey: true })], ['hs_object_id']),
+            obj('companies', [field('hs_object_id', { IsPrimaryKey: true })], ['hs_object_id']),
+            obj('assoc_contacts_companies', [
+                field('contact_id', { IsPrimaryKey: true }),
+                field('company_id', { IsPrimaryKey: true }),
+                field('association_type'),
+            ], ['contact_id', 'company_id']),
+        ];
+        const n = EnrichSchemaConstraints.InferForeignKeys(objects);
+        expect(n).toBe(2);
+        const assoc = objects[2];
+        expect(assoc.Fields.find(f => f.Name === 'contact_id')!.ForeignKeyTarget).toBe('contacts');
+        expect(assoc.Fields.find(f => f.Name === 'company_id')!.ForeignKeyTarget).toBe('companies');
+        expect(assoc.Relationships).toEqual([
+            { FieldName: 'contact_id', TargetObject: 'contacts', TargetField: 'hs_object_id' },
+            { FieldName: 'company_id', TargetObject: 'companies', TargetField: 'hs_object_id' },
+        ]);
     });
 
     it('leaves a non-matching field alone', () => {
