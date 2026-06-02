@@ -11,9 +11,13 @@
 import { HubSpotConnector } from '@memberjunction/integration-connectors';
 
 const stubUser = { ID: 'cred-test-user', Email: 'test@example.com', Name: 'Cred Test' };
-const hubspotCI = (token) => ({
+// The connector reads either `accessToken` (Private App token / Bearer) or `apiKey`.
+// We pass under `apiKey` since the user provided an "API key"; the connector currently
+// Bearer-auths it (correct for a `pat-` Private App token). A legacy UUID hapikey would
+// need query-param auth — flagged separately.
+const hubspotCI = (key) => ({
     ID: 'cred-test-ci', IntegrationID: 'cred-test-int', Integration: 'HubSpot',
-    CredentialID: null, Configuration: JSON.stringify({ accessToken: token }),
+    CredentialID: null, Configuration: JSON.stringify({ apiKey: key }),
 });
 
 /**
@@ -67,12 +71,12 @@ export async function hubspotTier1({ token }, scrub) {
  * The job's secretEnvNames may override the env-var names per deployment.
  */
 export const PLANS = {
-    'hubspot-tier1': { secrets: { token: 'HUBSPOT_PRIVATE_APP_TOKEN' }, run: hubspotTier1, writes: false },
+    'hubspot-tier1': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier1, writes: false },
     // Tier-2 full Apply/sync includes Create/Update against the external system, so it is
     // writes:true and gated behind allowWrite. Body lands when the workbench dual-dialect
     // harness is built; the gate is enforced regardless (refused before run() is reached).
     'hubspot-sync': {
-        secrets: { token: 'HUBSPOT_PRIVATE_APP_TOKEN' }, writes: true,
+        secrets: { token: 'HUBSPOT_API_KEY' }, writes: true,
         run: async () => { throw new Error('hubspot-sync (Tier-2 DB Apply) is not implemented in this harness yet — runs via the workbench.'); },
     },
 };

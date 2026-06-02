@@ -2,7 +2,7 @@
  * HubSpot live connector test — credential-safe.
  *
  * Validates a real HubSpot Private App token against the live API WITHOUT ever exposing
- * the token to anything but this process. Reads HUBSPOT_PRIVATE_APP_TOKEN by name via the
+ * the token to anything but this process. Reads HUBSPOT_API_KEY by name via the
  * credential-safe runner; the token is injected into the connector's Configuration JSON
  * in-process and never printed (the runner scrubs all output).
  *
