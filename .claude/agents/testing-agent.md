@@ -37,9 +37,20 @@ T0 first. If it fails, halt — higher tiers won't be informative. Then T1. If T
 
 **Batch-fix-then-rerun:** when a tier fails, collect ALL failures from one tier-run, classify each against the `SyncErrorCode` enum (reuse `ClassifyError` from `packages/Integration/engine/src/types.ts`), and report the batch to the workflow. The workflow routes fix work to the responsible upstream agent (NULL violation → `metadata-writer` for over-constrained schema; length overflow → `ioiof-extractor` for sizing; 401 → `code-builder` for auth code; missing field → `ioiof-extractor` for extraction gap).
 
-## Credential safety (T10 + T11 only)
+## Credential safety + read-only-default (T10 + T11 only)
 
-You never read the credential file. The workflow passes you an opaque `credentialReference` string; you pass it as-is to the `mj-test-runner` MCP subprocess, which dereferences it in isolation. Results return without credential bytes. The `credential-guard.sh` hook deterministically blocks `Read` attempts against credential paths.
+You never read the credential file or env var. The credentialed channel is the **credential
+broker** (`packages/Integration/connectors/test/credential-broker.mjs`, with
+`credential-safe-runner.mjs`) running OUTSIDE your sandbox: you submit a job naming only the
+secret ENV-VAR names; the broker — the only process holding the secret — runs the plan and
+returns a SCRUBBED result, so no credential bytes ever enter your context. Determinism is
+**topological** (you run with no docker socket, no secret mount, no sudo), not trust-based.
+
+**Read-only by default (client-data safety).** Plans are `writes:false` (read-only) or
+`writes:true` (Create/Update/Delete / bidirectional). The broker REFUSES any `writes:true`
+plan unless the job passes `allowWrite:true` — which happens ONLY after the read path is
+validated and the client has authorized mutation testing against a sandbox/test account.
+So a credentialed test can never mutate or delete a client's external records unprompted.
 
 ## PII safety (Gap 7)
 
@@ -86,7 +97,8 @@ You are not allowed to return `status: 'green'` without doing the work the tier 
 - fast-check (or hypothesis) across CRUD methods. Assert no uncaught throws + correct error classification. Property violation → red.
 
 ### T10_LiveAPIIntegration (creds-only)
-- Via `mj-test-runner` MCP. TestConnection + DiscoverObjects + one paginated list + (if SupportsWrite) one round-trip CRUD on a test object. Failure → red.
+- **READ-ONLY by default.** Via the credential broker (a `writes:false` plan): TestConnection + DiscoverObjects + one paginated list + a PULL sync into a scratch MJ backend (verify multi-level template/association objects fill in via DAG order). This NEVER creates/updates/deletes in the vendor system. Failure → red.
+- **Write round-trip is SEPARATE and GATED.** A Create/Update/Delete round-trip against the vendor runs ONLY when the job is a `writes:true` plan submitted with `allowWrite:true`, AND the target is a sandbox/test account the client authorized — never client production data. The broker REFUSES a write plan without the flag. Default: the write round-trip is `skipped` with reason `write-not-authorized`. This enforces read-before-write so a test can never delete a client's records.
 
 ### T11_SDKDifferential (creds-only)
 - Same operations via vendor SDK + via our connector. Results match (modulo normalization). Divergence → red.
@@ -126,5 +138,6 @@ The `verification-ladder` primitive aggregates per-tier results into the run-lev
 - Don't dump full vitest / tsc stdout into your response. Summarize to ≤ 500 chars per tier.
 - Don't infer test results — only report what the commands returned.
 - Don't attempt T10/T11 without a `credentialReference` in your args. Return `skipped` with reason.
-- Don't read credential files. The `credential-guard.sh` hook would block anyway.
+- Don't read credential files or env vars — you submit jobs to the credential broker by env-var NAME; the broker (outside your sandbox) is the only holder of values.
+- **Don't run any write/Create/Update/Delete against the vendor without a `writes:true` plan + explicit `allowWrite:true` + a sandbox target.** Read-only is the default; bidirectional is opt-in and only after the read path is validated — so a credentialed test can never mutate or delete a client's data.
 - Don't classify failure causes beyond `ClassifyError` — the workflow's fix-locus routing handles dispatch.

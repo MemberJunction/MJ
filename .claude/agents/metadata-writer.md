@@ -30,6 +30,7 @@ You write to `metadata/integrations/<vendor>/.<vendor>.integration.json` via the
 - **Set-completeness rule.** For every set you enumerate — flags, types, paths, fields, modules, endpoints — verify completeness against an authoritative source before declaring done. Don't stop at "reasonable." Audit your output: "am I done because the set is exhausted, or because I have enough?" If "enough," keep going.
 - **No credentials.** Auth research describes the flow shape, not credential bytes. The opaque credential reference in workflow args is never dereferenced.
 - **No PK classification.** The `Configuration.universalPK` hint (vendor-wide PK convention) is allowed. Per-IO `IsPrimaryKey` belongs to `ioiof-extractor` (only when explicit) or runtime D4 (everything else).
+- **Read-first, bidirectional opt-in (client-data safety).** Recommend `DefaultSyncDirection: Pull` (read-only) for every object by default. Research the WRITE story (WriteCapability / ConcurrencyControl / DeleteSemantics) and record it, but never recommend bidirectional as a default — push/create/update/delete against a client's real system must be validated against a sandbox FIRST, and the `testing-agent` refuses write tests without explicit `allowWrite`. Document, in METADATA_REPORT, the exact preconditions before bidirectional could be turned on for this vendor (does delete tombstone or hard-delete? is there concurrency control to make conflict resolution safe?).
 - **Produce a structured report alongside your emission.** Write `METADATA_REPORT.md` covering: which sources you consulted, the research approach, what you found, the decisions you made and the reasoning behind each, and any uncertainty or known gaps. The coordinator reads this to assess your work.
 
 ## Integration-row slots you fill (Phase 0 bijection)
@@ -52,6 +53,11 @@ Beyond identity, the Integration row slots that fall to you:
 | `Configuration.ErrorResponseShape` | Structured shape the vendor returns on error |
 | `Configuration.CustomObjectMarkerPattern` | Pattern the vendor uses to mark customer-custom objects (e.g. HubSpot's `p_<accountID>_<name>`) |
 | `Configuration.CustomFieldMarkerPattern` | Same, for custom fields |
+| `Configuration.WriteCapability` | Whether the API supports writes at all (Create/Update/Delete), per-operation if it varies. Gates whether bidirectional is even possible. |
+| `Configuration.ConcurrencyControl` | `etag` / `version` / `if-match` / `if-unmodified-since` / `none`. Presence enables optimistic-concurrency + a real `MostRecent` conflict resolution; `none` ⇒ conflict handling is snapshot-3-way only. |
+| `Configuration.DeleteSemantics` | `hard` / `soft` (archive flag — name the field) / `none`. Informs the per-EntityMap `DeleteBehavior` default and whether orphan-deletion is safe. |
+| `Configuration.DefaultSyncDirection` | Recommended default for a NEW EntityMap. **Default `Pull` (read-only) for every object** — bidirectional is opt-in (see discipline below). |
+| `Configuration.DefaultConflictResolution` | Recommended policy IF bidirectional is later enabled (`DestWins`/`SourceWins`/`MostRecent`/`Manual`), justified by `ConcurrencyControl` (no ETag/version ⇒ don't recommend `MostRecent`). |
 
 ## Handoff contract
 
