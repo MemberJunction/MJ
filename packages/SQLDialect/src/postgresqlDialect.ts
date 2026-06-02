@@ -506,10 +506,18 @@ export class PostgreSQLDialect extends SQLDialect {
     }
 
     AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        const col = `"${options.columnName}"`;
+        // PostgreSQL refuses to change a column's type when the old type cannot be
+        // *implicitly* cast to the new one (e.g. text → boolean, text → integer):
+        //   "column ... cannot be cast automatically to type boolean".
+        // A `USING <col>::<newtype>` expression makes the conversion explicit. It is
+        // valid for every type change (a no-op cast when the types already match), so
+        // we always emit it. SQL Server has no such requirement (handled in its own
+        // dialect), so this is PG-only.
         return (
             `ALTER TABLE ${quotedTable}\n` +
-            `    ALTER COLUMN "${options.columnName}" TYPE ${options.newType},\n` +
-            `    ALTER COLUMN "${options.columnName}" ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
+            `    ALTER COLUMN ${col} TYPE ${options.newType} USING ${col}::${options.newType},\n` +
+            `    ALTER COLUMN ${col} ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
         );
     }
 

@@ -218,7 +218,11 @@ export class DDLGenerator {
         if (platform === 'sqlserver') {
             return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${q(mod.ColumnName)} ${mod.NewType} ${nullable};`;
         }
-        return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${q(mod.ColumnName)} TYPE ${mod.NewType},\n    ALTER COLUMN ${q(mod.ColumnName)} ${mod.NewNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`;
+        // PostgreSQL requires an explicit USING expression when the old type cannot be
+        // implicitly cast to the new one (e.g. text → boolean). Always-valid, so emitted
+        // unconditionally. Mirrors postgresqlDialect.AlterColumnDDL.
+        const col = q(mod.ColumnName);
+        return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${col} TYPE ${mod.NewType} USING ${col}::${mod.NewType},\n    ALTER COLUMN ${col} ${mod.NewNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`;
     }
 
     private StandardColumns(platform: DatabasePlatform): string[] {
