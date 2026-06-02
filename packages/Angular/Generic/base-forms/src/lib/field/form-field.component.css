@@ -369,9 +369,26 @@
   background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
 }
 
-/* Matched state: solid accent underline */
+/* Linked state: solid accent underline + a leading chain icon, so it's obvious the
+   field holds a resolved record reference rather than free-typed text. */
 .mj-fk-search--matched .mj-forms-field-input {
   border-bottom: 2px solid var(--mj-brand-primary);
+}
+
+/* Linked indicator sits on the RIGHT (just left of the clear button) so it never
+   interrupts left-to-right reading of the value or overlaps the text. */
+.mj-fk-link-icon {
+  position: absolute;
+  right: 26px;
+  color: var(--mj-brand-primary);
+  font-size: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Make room on the right for the link icon + the clear button. */
+.mj-forms-field-input--linked {
+  padding-right: 46px;
 }
 
 /* ============================================
@@ -416,62 +433,145 @@
 }
 
 /* ============================================
-   MULTI-COLUMN FK DROPDOWN (icon + name + extra cols, hscroll)
+   MULTI-COLUMN FK DROPDOWN — aligned mini-grid (icon + name + extra cols)
+   with sortable headers and horizontal scroll.
    ============================================ */
 .mj-fk-dropdown--multi {
   padding: 4px;
+  /* The inner .mj-fk-options is the single scroll container (both axes) so the
+     sticky header anchors correctly; the dropdown just clips to its rounded border. */
+  overflow: hidden;
+  max-height: none;
 }
 
-/* Horizontal scroll region: rows can be wider than the dropdown when there are
-   many DefaultInView columns. The options list scrolls horizontally as a unit. */
-.mj-fk-options {
-  overflow-x: auto;
+/* Single scroll region (both axes) for the grid: vertical for long lists, horizontal
+   when many DefaultInView columns make rows wider than the dropdown. Being the sole
+   scroller lets the sticky column headers anchor to its top edge. */
+.mj-fk-dropdown--multi .mj-fk-options {
+  overflow: auto;
+  max-height: 260px;
 }
 
-.mj-fk-option--row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  white-space: nowrap;
+/* One CSS grid spans the header + all data rows so every column lines up.
+   grid-template-columns is supplied inline from FKGridTemplateColumns. */
+.mj-fk-grid {
+  display: grid;
   width: max-content;
   min-width: 100%;
+  align-items: stretch;
 }
 
-/* Keyboard / hover active row */
-.mj-fk-option--active {
+/* Rows are layout-transparent so their cells become direct grid items (this is
+   what makes columns align across rows). The row element still exists for click
+   handling and for the active-state selector below. */
+.mj-fk-grid-row {
+  display: contents;
+}
+
+/* Header cells: sticky to the top of the vertical scroll, clickable to sort. */
+.mj-fk-hcell {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-elevated);
+  border-bottom: 1px solid var(--mj-border-default);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.mj-fk-hcell:hover {
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-fk-hcell--icon {
+  cursor: default;
+  padding: 7px 8px;
+}
+
+.mj-fk-hcell--icon:hover {
+  background: var(--mj-bg-surface-elevated);
+}
+
+.mj-fk-hcell-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-fk-sort-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Idle (unsorted) columns show a faded sort glyph to signal sortability. */
+.mj-fk-sort-icon--idle {
+  opacity: 0.35;
+}
+
+/* Data cells */
+.mj-fk-cell {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  cursor: pointer;
+}
+
+.mj-fk-cell--icon {
+  justify-content: center;
+  padding: 8px;
+  max-width: none;
+  color: var(--mj-text-muted);
+  font-size: 13px;
+}
+
+.mj-fk-cell--name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--mj-text-primary);
+  gap: 6px;
+}
+
+.mj-fk-selected-check {
+  color: var(--mj-brand-primary);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Active (keyboard / hover) row — painted on the cells, since the row box is
+   removed by display:contents. The child combinator still matches. */
+.mj-fk-grid-row--active > .mj-fk-cell {
   background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
 }
 
-.mj-fk-option-icon {
-  flex-shrink: 0;
-  font-size: 13px;
-  color: var(--mj-text-muted);
-  width: 16px;
-  text-align: center;
+/* Currently-linked row — a subtle persistent tint so the user sees which record
+   is selected when they reopen the list (stacks under the brighter active tint). */
+.mj-fk-grid-row--selected > .mj-fk-cell {
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
 }
 
-/* Primary clickable label — the entity NameField */
-.mj-fk-option-name {
-  flex: 0 0 auto;
-  min-width: 140px;
-  font-weight: 500;
-  color: var(--mj-text-primary);
-}
-
-/* Secondary DefaultInView columns */
-.mj-fk-option-col {
-  flex: 0 0 auto;
-  min-width: 80px;
-  font-size: 13px;
-  color: var(--mj-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
+.mj-fk-grid-row--selected > .mj-fk-cell--name {
+  font-weight: 600;
+  color: var(--mj-brand-primary);
 }
 
 /* Matched-substring highlight inside the name column */
-.mj-fk-option-name :global(.mj-forms-search-highlight) {
+.mj-fk-cell--name :global(.mj-forms-search-highlight) {
   background-color: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
   color: var(--mj-text-primary);
   border-radius: 2px;

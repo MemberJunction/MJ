@@ -96,9 +96,13 @@
       <div class="mj-forms-field-control">
         <!-- Foreign Key fields get custom search autocomplete -->
         @if (HasRelatedEntity) {
-          <div class="mj-fk-search" [class.mj-fk-search--matched]="FKIsMatched">
+          <div class="mj-fk-search" [class.mj-fk-search--matched]="FKHasLinkedValue">
+            @if (FKHasLinkedValue) {
+              <i class="fa-solid fa-link mj-fk-link-icon" title="Linked record"></i>
+            }
             <input type="text"
               class="mj-forms-field-input"
+              [class.mj-forms-field-input--linked]="FKHasLinkedValue"
               [value]="FKSearchText"
               (input)="OnFKInput($event)"
               (focus)="OnFKFocus($event)"
@@ -128,20 +132,47 @@
                 }
                 @if (!FKLoading && FKSuggestions.length > 0) {
                   <div class="mj-fk-options">
-                    @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue; let i = $index) {
-                      <div class="mj-fk-option mj-fk-option--row"
-                          [class.mj-fk-option--active]="i === FKActiveIndex"
-                          (mousedown)="OnFKSelectItem(suggestion, $event)"
-                          (mouseenter)="FKActiveIndex = i">
-                        @if (FKRowIcon) {
-                          <i class="mj-fk-option-icon" [class]="FKRowIcon"></i>
+                    <div class="mj-fk-grid" [style.grid-template-columns]="FKGridTemplateColumns">
+                      <!-- Header row (click to sort) -->
+                      <div class="mj-fk-grid-row mj-fk-grid-row--header">
+                        @if (FKHasIconColumn) {
+                          <div class="mj-fk-hcell mj-fk-hcell--icon"></div>
                         }
-                        <span class="mj-fk-option-name" [innerHTML]="suggestion.HighlightedName"></span>
-                        @for (col of suggestion.ExtraColumns; track col.FieldName) {
-                          <span class="mj-fk-option-col" [title]="col.Header">{{ col.Value }}</span>
+                        <div class="mj-fk-hcell" (mousedown)="OnFKHeaderClick($event, FKNameField)" title="Sort by Name">
+                          <span class="mj-fk-hcell-label">Name</span>
+                          <i [class]="FKSortIcon(FKNameField)"></i>
+                        </div>
+                        @for (header of FKColumnHeaders; track header; let i = $index) {
+                          <div class="mj-fk-hcell" (mousedown)="OnFKHeaderClick($event, FKColumnFields[i])" [title]="'Sort by ' + header">
+                            <span class="mj-fk-hcell-label">{{ header }}</span>
+                            <i [class]="FKSortIcon(FKColumnFields[i])"></i>
+                          </div>
                         }
                       </div>
-                    }
+                      <!-- Data rows -->
+                      @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue; let i = $index) {
+                        <div class="mj-fk-grid-row"
+                            [class.mj-fk-grid-row--active]="i === FKActiveIndex"
+                            [class.mj-fk-grid-row--selected]="IsFKRowSelected(suggestion)"
+                            (mousedown)="OnFKSelectItem(suggestion, $event)"
+                            (mouseenter)="FKActiveIndex = i">
+                          @if (FKHasIconColumn) {
+                            <div class="mj-fk-cell mj-fk-cell--icon">
+                              @if (suggestion.Icon) { <i [class]="suggestion.Icon"></i> }
+                            </div>
+                          }
+                          <div class="mj-fk-cell mj-fk-cell--name">
+                            @if (IsFKRowSelected(suggestion)) {
+                              <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected"></i>
+                            }
+                            <span [innerHTML]="suggestion.HighlightedName"></span>
+                          </div>
+                          @for (col of suggestion.ExtraColumns; track col.FieldName) {
+                            <div class="mj-fk-cell" [title]="col.Value">{{ col.Value }}</div>
+                          }
+                        </div>
+                      }
+                    </div>
                   </div>
                 }
               </div>

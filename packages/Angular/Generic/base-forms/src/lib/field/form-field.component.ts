@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, Change
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
-import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat } from '@memberjunction/global';
+import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormatFKCell, FilterCachedFKRows } from './fk-search-utils';
@@ -40,6 +40,12 @@ export interface FKSuggestion {
   HighlightedName: string;
   /** Additional DefaultInView columns shown to the right of the name (multi-column rows). */
   ExtraColumns: FKSuggestionColumn[];
+  /**
+   * Leading icon for this row — a FontAwesome class. Per-row when the related
+   * entity has an `ExtendedType = 'Icon'` field; otherwise the entity-level
+   * icon; null when neither exists.
+   */
+  Icon: string | null;
 }
 
 /**
@@ -51,10 +57,18 @@ interface FKColumnPlan {
   NameFieldName: string;
   /** Code name of the related entity's PK field used as the FK value. */
   PkFieldName: string;
-  /** Extra DefaultInView field code names (excludes name + PK). */
+  /** Extra DefaultInView field code names (excludes name + PK + icon). */
   ExtraFieldNames: string[];
   /** Friendly headers for the extra columns, index-aligned with ExtraFieldNames. */
   ExtraHeaders: string[];
+  /**
+   * Code name of the related entity's `ExtendedType = 'Icon'` field, whose
+   * per-row value is a FontAwesome class — or null if the entity has no such
+   * field (then {@link EntityIcon} is used as a uniform fallback).
+   */
+  IconFieldName: string | null;
+  /** Entity-level icon (`EntityInfo.Icon`) used when there's no per-row icon field. */
+  EntityIcon: string | null;
 }
 
 /**
@@ -435,21 +449,46 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Calculated position for fixed-position dropdowns */
   DropdownTop = 0;
   DropdownLeft = 0;
-  DropdownWidth = 0;
+  /** Computed: dropdown is at least the trigger width, at most {@link DropdownMaxWidth}. */
+  DropdownMinWidth = 0;
+  DropdownMaxWidth = 0;
   OpenAbove = false;
+
+  /**
+   * Max width (px) of the FK suggestion dropdown. The panel grows to fit its
+   * columns up to this cap (then scrolls horizontally). When null, defaults to
+   * 2× the trigger width so multi-column rows aren't cramped by a narrow field.
+   * Always additionally bounded by the viewport's right edge.
+   */
+  @Input() FKDropdownMaxWidth: number | null = null;
+
+  /**
+   * Whether to highlight the typed query substring within each suggestion's name
+   * in the FK dropdown. Off by default (plain names); set true to enable the
+   * `<mark>` highlight.
+   */
+  @Input() FKHighlightMatches = false;
 
   /** Cleanup function for scroll/resize listeners */
   private _scrollCleanup: (() => void) | null = null;
 
   /** Inline style for the fixed-position dropdown */
   get DropdownPositionStyle(): Record<string, string> {
+    // min-width floors at the trigger width; max-width caps growth; the auto
+    // intrinsic width then shrink-to-fits the columns between the two, and
+    // `.mj-fk-options` scrolls horizontally once content exceeds the cap.
+    const sizing = {
+      'min-width': this.DropdownMinWidth + 'px',
+      'max-width': this.DropdownMaxWidth + 'px',
+      'width': 'max-content',
+    };
     if (this.OpenAbove) {
       return {
         'position': 'fixed',
         'bottom': (window.innerHeight - this.DropdownTop) + 'px',
         'top': 'auto',
         'left': this.DropdownLeft + 'px',
-        'width': this.DropdownWidth + 'px',
+        ...sizing,
         'z-index': '10000'
       };
     }
@@ -458,7 +497,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       'top': this.DropdownTop + 'px',
       'bottom': 'auto',
       'left': this.DropdownLeft + 'px',
-      'width': this.DropdownWidth + 'px',
+      ...sizing,
       'z-index': '10000'
     };
   }
@@ -479,18 +518,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.DropdownTop = rect.bottom + gap;
     }
     this.DropdownLeft = rect.left;
-    this.DropdownWidth = rect.width;
-
-    // Diagnostic: capture where we think the anchor is. Inside slide-in/dialog
-    // overlays that use CSS transform, a `position: fixed` descendant resolves
-    // relative to the transformed ancestor — the portal-to-body fix below makes
-    // these viewport coords authoritative again.
-    console.debug(
-      `[mj-form-field FK] position anchorRect=${JSON.stringify({
-        top: Math.round(rect.top), left: Math.round(rect.left),
-        bottom: Math.round(rect.bottom), width: Math.round(rect.width)
-      })} show=${this.ShowFKDropdown} hasAnchorEl=${!!anchorEl}`
-    );
+    // At least the trigger width; up to FKDropdownMaxWidth (default 2×), but never
+    // past the viewport's right edge. Content fills between min and max; overflow
+    // scrolls horizontally.
+    this.DropdownMinWidth = rect.width;
+    const desiredMax = this.FKDropdownMaxWidth ?? rect.width * 2;
+    this.DropdownMaxWidth = Math.max(rect.width, Math.min(desiredMax, window.innerWidth - rect.left - 8));
   }
 
   // ---- Dropdown portal (escape transformed ancestors) ----
@@ -508,15 +541,27 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * beyond clearing our tracking pointer.
    */
   private portalDropdownToBody(): void {
-    Promise.resolve().then(() => {
+    // Already portaled and still in the DOM → nothing to do (e.g. typing while open).
+    if (this._portaledDropdownEl?.isConnected) return;
+
+    // The dropdown is rendered by `@if (ShowFKDropdown)`. On the synchronous cached
+    // path (focus → searchCachedEntity → applySuggestions) the element may not be in
+    // the DOM yet when we first look, so retry across a few frames until it renders.
+    // (The async DB path lands here post-render, so it succeeds on the first try.)
+    const tryPortal = (retriesLeft: number): void => {
       const host = this.hostRef?.nativeElement;
       if (!host) return;
       const dropdown = host.querySelector('.mj-fk-dropdown') as HTMLElement | null;
-      if (dropdown && dropdown.parentElement !== document.body) {
-        this.renderer.appendChild(document.body, dropdown);
-        this._portaledDropdownEl = dropdown;
+      if (dropdown) {
+        if (dropdown.parentElement !== document.body) {
+          this.renderer.appendChild(document.body, dropdown);
+          this._portaledDropdownEl = dropdown;
+        }
+      } else if (retriesLeft > 0) {
+        setTimeout(() => tryPortal(retriesLeft - 1), 0);
       }
-    });
+    };
+    Promise.resolve().then(() => tryPortal(5));
   }
 
   /** Tracks a dropdown element we relocated to body so we can drop the reference on close. */
@@ -526,7 +571,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private startScrollListener(): void {
     this.stopScrollListener();
 
-    const onScroll = () => {
+    const onScroll = (e: Event) => {
+      // Scrolling WITHIN the dropdown (vertical list or horizontal column scroll)
+      // must not close it — only an ancestor/page scroll, which would detach the
+      // fixed-position panel from its trigger, should.
+      const target = e.target as Node | null;
+      if (this._portaledDropdownEl && target && this._portaledDropdownEl.contains(target)) return;
       this.closeAllDropdowns();
       this.cdr.markForCheck();
     };
@@ -595,8 +645,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Headers for the extra (DefaultInView) columns shown in the dropdown. */
   FKColumnHeaders: string[] = [];
 
-  /** Leading per-row icon (entity-level FontAwesome class), or null when the entity has none. */
-  FKRowIcon: string | null = null;
+  /** Field code names for the extra columns, index-aligned with {@link FKColumnHeaders}. */
+  FKColumnFields: string[] = [];
+
+  /** Code name of the name column (used as its sort key). */
+  FKNameField = '';
+
+  /** Whether rows render a leading icon column (drives the header's empty icon cell). */
+  FKHasIconColumn = false;
+
+  /** Active sort column (field code name), or null for natural (unsorted) order. */
+  FKSortField: string | null = null;
+
+  /** Active sort direction; only meaningful when {@link FKSortField} is set. */
+  FKSortDir: 'asc' | 'desc' = 'asc';
+
+  /** Unsorted snapshot of the current suggestions, used to restore natural order. */
+  private _fkSuggestionsNatural: FKSuggestion[] = [];
 
   /** Text the user is currently typing in the FK search input. null = use display name. */
   private _fkInputText: string | null = null;
@@ -620,6 +685,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
+   * True when this FK currently points at a real record (has a value AND we can show
+   * its name). Drives the "linked" affordance — the chain icon + accent — so the user
+   * can tell at a glance this is a resolved link, not free text.
+   */
+  get FKHasLinkedValue(): boolean {
+    return this.Value != null && this.Value !== '' && this.FKDisplayName != null;
+  }
+
+  /** Whether a dropdown row is the record currently linked by this FK (UUID-safe compare). */
+  IsFKRowSelected(suggestion: FKSuggestion): boolean {
+    const v = this.Value;
+    const pk = suggestion.PrimaryKeyValue;
+    if (v == null || pk == null) return false;
+    return UUIDsEqual(String(v), String(pk));
+  }
+
+  /**
    * Resolves the related `EntityInfo` for this FK field via the instance provider
    * (multi-provider safe — never the global `Metadata`).
    */
@@ -637,7 +719,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private getCachedRecordsForRelatedEntity(): BaseEntity[] | null {
     const relatedName = this.FieldInfo?.RelatedEntity;
     if (!relatedName) return null;
-    return BaseEngineRegistry.Instance.TryGetCachedRecords<BaseEntity>(relatedName, { unfilteredOnly: true });
+    const registry = BaseEngineRegistry.Instance;
+    const records = registry.TryGetCachedRecords<BaseEntity>(relatedName, { unfilteredOnly: true });
+    // Treat an empty (or absent) cache as "no usable cache" so callers fall through
+    // to the DB path and still show options on focus — never a blank dropdown.
+    return records && records.length > 0 ? records : null;
   }
 
   /**
@@ -659,20 +745,42 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const nameFieldName = nameField ? nameField.Name : pkFields[0].Name;
     const pkFieldName = this.FieldInfo?.RelatedEntityFieldName || (pkFields?.[0]?.Name ?? 'ID');
 
+    // A field flagged ExtendedType='Icon' holds a per-row icon class — render it
+    // as the row's leading glyph, not as a text column.
+    const iconField = relatedEntity.Fields.find(f => f.ExtendedType === 'Icon');
+    const iconFieldName = iconField?.Name ?? null;
+
     const extra = relatedEntity.Fields.filter(f =>
       f.DefaultInView &&
       f.Name !== nameFieldName &&
       f.Name !== pkFieldName &&
-      !f.IsPrimaryKey
+      f.Name !== iconFieldName &&
+      this.isUsefulExtraColumn(f)
     );
 
     this._fkColumnPlan = {
       NameFieldName: nameFieldName,
       PkFieldName: pkFieldName,
       ExtraFieldNames: extra.map(f => f.Name),
-      ExtraHeaders: extra.map(f => f.DisplayNameOrName)
+      ExtraHeaders: extra.map(f => f.DisplayNameOrName),
+      IconFieldName: iconFieldName,
+      EntityIcon: relatedEntity.Icon || null
     };
     return this._fkColumnPlan;
+  }
+
+  /**
+   * Whether a `DefaultInView` field is worth showing as an extra dropdown column.
+   * Excludes columns that read as opaque noise to a human picking a record:
+   *   • Primary keys (UUIDs/identities).
+   *   • Foreign-key columns — these hold the related record's raw ID (e.g. `ParentID`
+   *     → a GUID), not a human-readable label. The view's joined *name* field (if it's
+   *     itself `DefaultInView`) is the readable substitute and is kept.
+   */
+  private isUsefulExtraColumn(f: EntityFieldInfo): boolean {
+    if (f.IsPrimaryKey) return false;
+    if (f.RelatedEntityID && f.RelatedEntityID.length > 0) return false; // foreign key → raw ID
+    return true;
   }
 
   /** Format a raw cell value for display in the dropdown (delegates to the pure helper). */
@@ -692,26 +800,34 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   ): FKSuggestion[] {
     return rows.map(row => {
       const name = this.formatCell(row.get(plan.NameFieldName));
+      // Per-row icon from the entity's ExtendedType='Icon' field; else the
+      // entity-level icon; else none.
+      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName)).trim() : '';
       return {
         PrimaryKeyValue: row.get(plan.PkFieldName),
         DisplayName: name,
-        HighlightedName: HighlightSearchMatches(name, query, 'mj-forms-search-highlight'),
+        // Passing an empty query yields the (still HTML-escaped) plain name — no marks.
+        HighlightedName: HighlightSearchMatches(name, this.FKHighlightMatches ? query : '', 'mj-forms-search-highlight'),
         ExtraColumns: plan.ExtraFieldNames.map((fieldName, i) => ({
           FieldName: fieldName,
           Header: plan.ExtraHeaders[i],
           Value: this.formatCell(row.get(fieldName))
-        }))
+        })),
+        Icon: (rowIcon || plan.EntityIcon) || null
       };
     });
   }
 
   /** Apply a freshly-built suggestion list to the dropdown state + reposition + portal. */
   private applySuggestions(suggestions: FKSuggestion[], plan: FKColumnPlan): void {
-    this.FKSuggestions = suggestions;
+    this._fkSuggestionsNatural = suggestions;
     this.FKColumnHeaders = plan.ExtraHeaders;
-    this.FKActiveIndex = suggestions.length > 0 ? 0 : -1;
+    this.FKColumnFields = plan.ExtraFieldNames;
+    this.FKNameField = plan.NameFieldName;
+    this.FKHasIconColumn = suggestions.some(s => s.Icon != null);
+    this.FKSuggestions = this.sortSuggestions(suggestions);
+    this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
     this.FKNoMatches = suggestions.length === 0;
-    this.FKRowIcon = this.getRelatedEntityInfo()?.Icon || null;
 
     // Show the dropdown whenever we have rows OR a "no matches" state to surface.
     this.ShowFKDropdown = suggestions.length > 0 || this.FKNoMatches;
@@ -721,6 +837,68 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.portalDropdownToBody();
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns a sorted copy of the suggestions per the active sort column/direction.
+   * Null sort field → natural order (original array, untouched). Sorts on the name
+   * column's `DisplayName` or the matching extra column's formatted `Value`,
+   * case-insensitively.
+   */
+  private sortSuggestions(suggestions: FKSuggestion[]): FKSuggestion[] {
+    const field = this.FKSortField;
+    if (!field) return suggestions;
+    const keyOf = (s: FKSuggestion): string => {
+      if (field === this.FKNameField) return s.DisplayName ?? '';
+      return s.ExtraColumns.find(c => c.FieldName === field)?.Value ?? '';
+    };
+    const dir = this.FKSortDir === 'desc' ? -1 : 1;
+    return [...suggestions].sort((a, b) =>
+      dir * keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }
+
+  /**
+   * Toggle the sort on a column header: same column cycles asc → desc → none;
+   * a new column starts at asc. Re-derives the visible list from the natural snapshot.
+   */
+  OnFKSortToggle(fieldName: string): void {
+    if (this.FKSortField === fieldName) {
+      if (this.FKSortDir === 'asc') this.FKSortDir = 'desc';
+      else { this.FKSortField = null; this.FKSortDir = 'asc'; } // desc → cleared
+    } else {
+      this.FKSortField = fieldName;
+      this.FKSortDir = 'asc';
+    }
+    this.FKSuggestions = this.sortSuggestions(this._fkSuggestionsNatural);
+    this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Header mousedown: keep focus on the input (preventDefault stops the blur that
+   * would close the body-portaled dropdown), then toggle the column's sort.
+   */
+  OnFKHeaderClick(event: MouseEvent, fieldName: string): void {
+    event.preventDefault();
+    this.OnFKSortToggle(fieldName);
+  }
+
+  /** FontAwesome class for a column header's sort indicator (idle / asc / desc). */
+  FKSortIcon(fieldName: string): string {
+    if (this.FKSortField !== fieldName) return 'fa-solid fa-sort mj-fk-sort-icon mj-fk-sort-icon--idle';
+    return this.FKSortDir === 'asc'
+      ? 'fa-solid fa-sort-up mj-fk-sort-icon'
+      : 'fa-solid fa-sort-down mj-fk-sort-icon';
+  }
+
+  /** CSS `grid-template-columns` for the dropdown grid: icon? + name + extra columns. */
+  get FKGridTemplateColumns(): string {
+    const cols: string[] = [];
+    if (this.FKHasIconColumn) cols.push('min-content');
+    cols.push('minmax(120px, max-content)');       // name
+    for (let i = 0; i < this.FKColumnHeaders.length; i++) cols.push('minmax(80px, max-content)');
+    return cols.join(' ');
   }
 
   /** Handle typing in the FK search input */
@@ -740,15 +918,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       return;
     }
 
-    // DB path: debounce a RunView search.
+    // DB path: debounce a RunView search. Empty query (cleared field) → first N,
+    // so clearing the field reveals the list rather than closing it.
     if (this._fkSearchTimeout) clearTimeout(this._fkSearchTimeout);
     this._fkSearchTimeout = setTimeout(() => {
-      if (this._fkInputText && this._fkInputText.length >= 1) {
-        this.searchRelatedEntity(this._fkInputText);
-      } else {
-        this.closeFKDropdown();
-        this.cdr.markForCheck();
-      }
+      void this.searchRelatedEntity(this._fkInputText ?? '');
     }, 300);
   }
 
@@ -758,22 +932,30 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * a cache we keep prior behavior: only re-open if we already have suggestions.
    */
   OnFKFocus(event: FocusEvent): void {
-    const input = event.target as HTMLElement;
+    const input = event.target as HTMLInputElement;
     this._lastFKInputEl = input;
+    // Select any pre-filled (linked) text so the first keystroke replaces it instead
+    // of appending — matches how a searchable dropdown behaves.
+    if (input.value) input.select();
+    this.showInitialFKSuggestions();
+  }
 
+  /**
+   * Show the initial suggestion list (no/empty query): the full set from a cached
+   * unfiltered engine, otherwise the first N rows via a DB query. Used on focus and
+   * when the field is cleared, so the user always sees options without typing.
+   */
+  private showInitialFKSuggestions(): void {
+    // Always show the FULL list (empty query) on focus/clear — even when a value is
+    // already selected — so the user can browse and re-pick like a normal dropdown.
+    // Filtering only kicks in once they actually type (OnFKInput).
     const cached = this.getCachedRecordsForRelatedEntity();
     if (cached) {
-      this.searchCachedEntity(cached, this._fkInputText ?? '');
+      if (this._fkSearchTimeout) { clearTimeout(this._fkSearchTimeout); this._fkSearchTimeout = null; }
+      this.searchCachedEntity(cached, '');
       return;
     }
-
-    if (this.FKSuggestions.length > 0) {
-      this.updateDropdownPosition(input);
-      this.startScrollListener();
-      this.portalDropdownToBody();
-      this.ShowFKDropdown = true;
-      this.cdr.markForCheck();
-    }
+    void this.searchRelatedEntity('');
   }
 
   /**
@@ -792,8 +974,6 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       MjFormFieldComponent.FK_FOCUS_SHOW_LIMIT,
       r => r.Get(plan.NameFieldName)
     );
-
-    console.debug(`[mj-form-field FK] search entity=${this.FieldInfo?.RelatedEntity} query="${query}" path=cached rows=${matches.length}`);
 
     this.FKLoading = false;
     this.applySuggestions(this.buildSuggestions(matches.map(accessor), plan, query), plan);
@@ -883,12 +1063,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Clear FK value via the X button */
   OnFKClearClick(event: MouseEvent): void {
+    // preventDefault keeps focus on the input (the button never steals it), so the
+    // freshly-opened dropdown stays open for the user to pick a replacement.
     event.preventDefault();
     this.Value = null;
     this._fkInputText = null;
     this.FKIsMatched = false;
-    this.FKSuggestions = [];
-    this.closeFKDropdown();
     this._resolvedFKName = undefined;
     this._resolvedFKValue = undefined;
 
@@ -896,6 +1076,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (nameFieldMap) {
       this.Record.Set(nameFieldMap, '');
     }
+
+    // Re-open the full list — clearing almost always precedes picking something else.
+    this.showInitialFKSuggestions();
     this.cdr.markForCheck();
   }
 
@@ -930,14 +1113,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
     this.cdr.markForCheck();
 
-    // Build Fields: PK + name + extra DefaultInView columns (dedup automatically via Set)
-    const fields = Array.from(new Set([plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames]));
-    const escapedQuery = query.replace(/'/g, "''");
+    // Build Fields: PK + name + extra DefaultInView columns + the per-row icon
+    // field (when present), deduped via Set.
+    const fields = Array.from(new Set([
+      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames,
+      ...(plan.IconFieldName ? [plan.IconFieldName] : [])
+    ]));
+    const escapedQuery = query.replace(/'/g, "''").trim();
 
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<Record<string, unknown>>({
       EntityName: fieldInfo.RelatedEntity,
-      ExtraFilter: `[${plan.NameFieldName}] LIKE '%${escapedQuery}%'`,
+      // Empty query (focus / cleared field) → no filter → first N rows.
+      ExtraFilter: escapedQuery ? `[${plan.NameFieldName}] LIKE '%${escapedQuery}%'` : '',
       MaxRows: MjFormFieldComponent.FK_DB_SEARCH_LIMIT,
       ResultType: 'simple',
       Fields: fields
@@ -948,11 +1136,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKLoading = false;
 
     if (result.Success) {
-      console.debug(`[mj-form-field FK] search entity=${fieldInfo.RelatedEntity} query="${query}" path=db rows=${result.Results.length}`);
       const accessor = (r: Record<string, unknown>) => ({ get: (field: string) => r[field] });
       this.applySuggestions(this.buildSuggestions(result.Results.map(accessor), plan, query), plan);
     } else {
-      console.debug(`[mj-form-field FK] search entity=${fieldInfo.RelatedEntity} query="${query}" path=db rows=error`);
       this.FKSuggestions = [];
       this.FKNoMatches = true;
       this.ShowFKDropdown = true;
@@ -1187,7 +1373,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this.FKLoading = false;
         this.FKNoMatches = false;
         this.FKColumnHeaders = [];
-        this.FKRowIcon = null;
+        this.FKColumnFields = [];
+        this.FKSortField = null;
+        this.FKSortDir = 'asc';
+        this._fkSuggestionsNatural = [];
         this._portaledDropdownEl = null;
         this._fkColumnPlan = null;
         this._resolvedFKName = undefined;
