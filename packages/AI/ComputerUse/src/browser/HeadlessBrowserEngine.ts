@@ -28,7 +28,7 @@ import { BaseSingleton } from '@memberjunction/global';
 import type { Browser, BrowserContext } from 'playwright';
 import { BrowserConfig } from '../types/browser.js';
 import { SharedContextBrowserAdapter } from './SharedContextBrowserAdapter.js';
-import { classifyConnectEndpoint } from './connect-endpoint.js';
+import { ClassifyConnectEndpoint } from './connect-endpoint.js';
 
 interface RecycledEntry {
     Context: BrowserContext;
@@ -128,7 +128,7 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         }
 
         if (connect) {
-            const method = classifyConnectEndpoint(connect, connectType);
+            const method = ClassifyConnectEndpoint(connect, connectType);
             this._browser = method === 'server'
                 ? await chromium.connect(connect)
                 : await chromium.connectOverCDP(connect);

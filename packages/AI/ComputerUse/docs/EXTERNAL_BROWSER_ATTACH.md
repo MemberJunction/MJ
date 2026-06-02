@@ -342,6 +342,6 @@ That shouldn't happen — `Close()` honors ownership. If it does, something is w
 - [`PlaywrightBrowserAdapter.Launch()`](../src/browser/PlaywrightBrowserAdapter.ts) — single-adapter attach
 - [`HeadlessBrowserEngine.Initialize()`](../src/browser/HeadlessBrowserEngine.ts) — singleton attach
 - [`ComputerUseTestConfig.connect`](../../MJComputerUse/src/test-driver/types.ts) — declarative test-driver attach
-- [`classifyConnectEndpoint()`](../src/browser/connect-endpoint.ts) — the scheme-detection helper, exported in case you want to validate endpoints in your own code
+- [`ClassifyConnectEndpoint()`](../src/browser/connect-endpoint.ts) — the scheme-detection helper, exported in case you want to validate endpoints in your own code
 
 For the upstream reference implementation that this feature mirrors, see [`@memberjunction/react-test-harness`'s `BrowserManager`](../../../React/test-harness/src/lib/browser-context.ts).

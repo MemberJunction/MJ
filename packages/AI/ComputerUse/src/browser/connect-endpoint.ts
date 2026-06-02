@@ -11,7 +11,7 @@
  *
  * @throws if the scheme is unrecognized and no explicit `hint` is given.
  */
-export function classifyConnectEndpoint(
+export function ClassifyConnectEndpoint(
     endpoint: string,
     hint: 'cdp' | 'server' | 'auto' = 'auto'
 ): 'cdp' | 'server' {

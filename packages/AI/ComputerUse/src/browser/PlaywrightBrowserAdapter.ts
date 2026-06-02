@@ -23,7 +23,7 @@ import {
     ActionExecutionResult,
     CookieEntry,
 } from '../types/browser.js';
-import { classifyConnectEndpoint } from './connect-endpoint.js';
+import { ClassifyConnectEndpoint } from './connect-endpoint.js';
 
 export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private browser: Browser | null = null;
@@ -64,7 +64,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         if (config.Connect) {
             // Attach to an already-running browser. We don't own its lifecycle,
             // so Close() must not call browser.close().
-            const method = classifyConnectEndpoint(config.Connect, config.ConnectType);
+            const method = ClassifyConnectEndpoint(config.Connect, config.ConnectType);
             this.browser = method === 'server'
                 ? await chromium.connect(config.Connect)
                 : await chromium.connectOverCDP(config.Connect);
