@@ -121,12 +121,33 @@ export interface FetchContext {
     RequestedSourceFields?: string[];
 }
 
+/**
+ * A non-fatal diagnostic a connector attaches to a fetch result so the engine surfaces it in the
+ * structured run artifact instead of letting it be a swallowed `console.warn`. The canonical use is
+ * a second-layer/association object that fetched ZERO records because its parents weren't available
+ * (not synced, unmapped, or DAG-ordered wrong) — the classic silent-empty.
+ */
+export interface FetchWarning {
+    /** Stable machine code, e.g. 'ZERO_PARENTS'. */
+    Code: string;
+    /** Human-readable explanation. */
+    Message: string;
+    /** Optional structured context (parent object name, counts, etc.). */
+    Data?: Record<string, unknown>;
+}
+
 /** Result of a FetchChanges call, containing a batch of records */
 export interface FetchBatchResult {
     /** Records retrieved in this batch */
     Records: ExternalRecord[];
     /** Whether there are more records to fetch after this batch */
     HasMore: boolean;
+    /**
+     * Non-fatal diagnostics from this fetch (e.g. a second-layer object that found zero parents).
+     * The engine forwards each to the structured progress artifact as a SyncWarning so the
+     * silent-empty case is visible over GraphQL instead of a swallowed console.warn.
+     */
+    Warnings?: FetchWarning[];
     /** Updated watermark value after this batch */
     NewWatermarkValue?: string;
     /** Next page number to pass back via FetchContext.CurrentPage on the next call (page-based pagination) */

@@ -622,6 +622,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     recordsSkipped: mapResult.RecordsSkipped,
                     recordsErrored: mapResult.RecordsErrored,
                 });
+                this.checkSecondLayerEmpty(entityMap, mapResult, depGraph, processedByIoId, ioNameById, ioCategoryById, logger);
             } catch (err) {
                 const objName = entityMap.ExternalObjectName ?? entityMap.ID;
                 const errMsg = err instanceof Error ? err.message : String(err);
@@ -664,8 +665,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // its parent. Within a layer the maps are mutually independent and run up to `concurrency`
         // at a time. Default concurrency is 1 (sequential — unchanged behavior); opt in to
         // parallelism via CompanyIntegration.Configuration {"syncConcurrency": N}.
-        const layers = this.buildEntityMapDependencyLayers(config);
+        const layers = this.buildEntityMapDependencyLayers(config, logger);
         const concurrency = this.getSyncConcurrency(config);
+
+        // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
+        // record count + the FK dependency graph, so an association/dependent object that fetches
+        // ZERO records while it HAS parents is surfaced as a structured SyncWarning. Layers run
+        // parents-first, so a child's parents' counts are already recorded by the time it completes.
+        const depGraph = this.computeSelectedDependencyGraph(config);
+        const processedByIoId = new Map<string, number>();
+        const ioNameById = new Map<string, string>();
+        const ioCategoryById = new Map<string, string>();   // for Category='Association' objects the FK graph can't see
+        if (depGraph) {
+            for (const io of this.GetIntegrationObjectsByIntegrationID(config.companyIntegration.IntegrationID) ?? []) {
+                ioNameById.set(io.ID.toUpperCase(), io.Name);
+                if (io.Category) ioCategoryById.set(io.ID.toUpperCase(), io.Category);
+            }
+        }
+
         for (const layer of layers) {
             if (abortSignal?.aborted) {
                 console.log(`[IntegrationEngine] Sync cancelled (${globalIndex}/${totalMaps} maps processed)`);
@@ -687,44 +704,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * original order) if the graph can't be resolved — preserving current behavior. Stable: the
      * original config order is preserved within each layer.
      */
-    private buildEntityMapDependencyLayers(config: RunConfiguration): ICompanyIntegrationEntityMap[][] {
+    private buildEntityMapDependencyLayers(config: RunConfiguration, logger?: SyncLogger): ICompanyIntegrationEntityMap[][] {
         const maps = config.entityMaps;
         if (maps.length <= 1) return [maps];
         try {
-            const ios = this.GetIntegrationObjectsByIntegrationID(config.companyIntegration.IntegrationID);
-            if (!ios || ios.length === 0) return [maps];
-
-            const ioByName = new Map<string, string>();   // lower(IO.Name) → IO.ID (upper)
-            for (const io of ios) ioByName.set(io.Name.toLowerCase(), io.ID.toUpperCase());
-
-            const mapToIoId = new Map<string, string>();   // entityMap.ID → IO.ID
-            const selectedIoIds = new Set<string>();
-            for (const m of maps) {
-                const ioId = m.ExternalObjectName ? ioByName.get(m.ExternalObjectName.toLowerCase()) : undefined;
-                if (ioId) { mapToIoId.set(m.ID, ioId); selectedIoIds.add(ioId); }
-            }
-            if (selectedIoIds.size === 0) return [maps];
-
-            // deps: IO.ID → set of selected parent IO.IDs
-            const deps = new Map<string, Set<string>>();
-            for (const ioId of selectedIoIds) {
-                const set = new Set<string>();
-                for (const f of this.GetIntegrationObjectFields(ioId)) {
-                    const parent = f.RelatedIntegrationObjectID?.toUpperCase();
-                    if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
-                }
-                deps.set(ioId, set);
-            }
+            const graph = this.computeSelectedDependencyGraph(config);
+            if (!graph) return [maps];
+            const { mapToIoId, parentsByIoId } = graph;
+            const selectedIoIds = new Set(parentsByIoId.keys());
 
             // Kahn layering: an IO is ready when all its (selected) parents are already placed.
             const ioLayer = new Map<string, number>();
             const remaining = new Set(selectedIoIds);
             let layerNum = 0;
             while (remaining.size > 0) {
-                const ready = [...remaining].filter(id => [...deps.get(id)!].every(p => !remaining.has(p)));
+                const ready = [...remaining].filter(id => [...parentsByIoId.get(id)!].every(p => !remaining.has(p)));
                 if (ready.length === 0) {
-                    // cycle (or unresolved) — place the rest in the current layer so they still run
+                    // cycle (or unresolved) — place the rest in the current layer so they still run,
+                    // but SURFACE it: parent-before-child ordering is no longer guaranteed for them,
+                    // so a second-layer object here may fetch before its parents are populated.
                     for (const id of remaining) ioLayer.set(id, layerNum);
+                    logger?.warning('dependency-graph', 'DEPENDENCY_LAYERING_DEGRADED',
+                        `Dependency cycle or unresolved parent among ${remaining.size} integration object(s) — parent-before-child ordering is NOT guaranteed for them; a second-layer object may fetch before its parents are populated (possible silent-empty).`,
+                        { unresolvedObjectCount: remaining.size });
                     break;
                 }
                 for (const id of ready) { ioLayer.set(id, layerNum); remaining.delete(id); }
@@ -739,9 +741,101 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 byLayer.get(l)!.push(m);
             }
             return [...byLayer.keys()].sort((a, b) => a - b).map(k => byLayer.get(k)!);
-        } catch {
+        } catch (err) {
+            // Building the dependency graph itself failed — we still run (single flat layer, original
+            // order) but parent-before-child ordering is NOT guaranteed, so SURFACE it rather than
+            // silently degrade (this path previously emitted nothing).
+            logger?.warning('dependency-graph', 'DEPENDENCY_LAYERING_DEGRADED',
+                `Failed to build the integration dependency graph (${err instanceof Error ? err.message : String(err)}) — running all objects in a single flat layer; parent-before-child ordering is NOT guaranteed, so a second-layer object may fetch before its parents are populated.`,
+                { fallback: 'single-layer' });
             return [maps];   // any failure → single layer, original order
         }
+    }
+
+    /**
+     * Builds the selected-object FK dependency graph for a run: each selected IntegrationObject →
+     * the set of its SELECTED parent IntegrationObject IDs (via IntegrationObjectField.RelatedIntegrationObjectID).
+     * Shared by {@link buildEntityMapDependencyLayers} (parent-before-child ordering) and the
+     * second-layer silent-empty tripwire ({@link checkSecondLayerEmpty}). Returns null when the
+     * graph can't be resolved (no IOs, or none of the maps resolve to an IO) — callers then fall
+     * back to flat/original ordering.
+     */
+    private computeSelectedDependencyGraph(config: RunConfiguration):
+        { mapToIoId: Map<string, string>; parentsByIoId: Map<string, Set<string>> } | null {
+        const ios = this.GetIntegrationObjectsByIntegrationID(config.companyIntegration.IntegrationID);
+        if (!ios || ios.length === 0) return null;
+        const ioByName = new Map<string, string>();   // lower(IO.Name) → IO.ID (upper)
+        for (const io of ios) ioByName.set(io.Name.toLowerCase(), io.ID.toUpperCase());
+
+        const mapToIoId = new Map<string, string>();   // entityMap.ID → IO.ID
+        const selectedIoIds = new Set<string>();
+        for (const m of config.entityMaps) {
+            const ioId = m.ExternalObjectName ? ioByName.get(m.ExternalObjectName.toLowerCase()) : undefined;
+            if (ioId) { mapToIoId.set(m.ID, ioId); selectedIoIds.add(ioId); }
+        }
+        if (selectedIoIds.size === 0) return null;
+
+        const parentsByIoId = new Map<string, Set<string>>();
+        for (const ioId of selectedIoIds) {
+            const set = new Set<string>();
+            for (const f of this.GetIntegrationObjectFields(ioId)) {
+                const parent = f.RelatedIntegrationObjectID?.toUpperCase();
+                if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
+            }
+            parentsByIoId.set(ioId, set);
+        }
+        return { mapToIoId, parentsByIoId };
+    }
+
+    /**
+     * Surfaces the second-layer silent-empty case as a structured warning. An object that HAS FK
+     * parents (an association/dependent — a "second-layer" object) but fetched ZERO records is the
+     * classic silent fail: a successful run that quietly produced nothing because its parents
+     * weren't synced/mapped or the DAG ordered it too early. Rather than let that look identical to
+     * "genuinely no data", we emit a SyncWarning (with the parent record counts) so it is visible
+     * over GraphQL. Must be called AFTER the map completes; relies on parents (earlier layers)
+     * having already recorded their counts in `processedByIoId`.
+     */
+    private checkSecondLayerEmpty(
+        entityMap: ICompanyIntegrationEntityMap,
+        mapResult: SyncResult,
+        depGraph: { mapToIoId: Map<string, string>; parentsByIoId: Map<string, Set<string>> } | null,
+        processedByIoId: Map<string, number>,
+        ioNameById: Map<string, string>,
+        ioCategoryById: Map<string, string>,
+        logger?: SyncLogger
+    ): void {
+        if (!depGraph) return;
+        const ioId = depGraph.mapToIoId.get(entityMap.ID);
+        if (!ioId) return;
+        processedByIoId.set(ioId, (processedByIoId.get(ioId) ?? 0) + mapResult.RecordsProcessed);
+
+        const parents = depGraph.parentsByIoId.get(ioId);
+        const category = ioCategoryById.get(ioId);
+        // An object is "second-layer" if the FK graph KNOWS it has parents OR it is an association
+        // by Category. The Category branch is essential: HubSpot (and similar) associations carry no
+        // FK edges (Relationships:[]), so the graph alone is blind to them — Category catches them.
+        const isSecondLayer = (parents !== undefined && parents.size > 0) || category === 'Association';
+        if (!isSecondLayer) return;                        // not a second-layer object
+        if (mapResult.RecordsProcessed > 0) return;        // it filled in — nothing to flag
+
+        const parentRecordCounts: Record<string, number> = {};
+        if (parents) for (const p of parents) parentRecordCounts[ioNameById.get(p) ?? p] = processedByIoId.get(p) ?? 0;
+        const knownParents = Object.keys(parentRecordCounts);
+        const parentsHadRows = Object.values(parentRecordCounts).some(n => n > 0);
+
+        const why = knownParents.length === 0
+            ? `No FK edges are declared for it (RelatedIntegrationObjectID is unset on its FK fields), so the sync DAG cannot order it after its parents — set those FK edges (or run C8 enrichment) so it orders correctly; until then it may fetch before its parents are populated (possible SILENT FAIL).`
+            : parentsHadRows
+                ? `Its parents DID sync rows — likely a missing FK edge, missing/disabled entity-map, or wrong DAG order (possible SILENT FAIL).`
+                : `Its parent layer produced 0 rows — either there is genuinely nothing to associate, or the parents were not synced/mapped.`;
+
+        logger?.warning(
+            entityMap.ExternalObjectName ?? entityMap.ID,
+            'SECOND_LAYER_EMPTY',
+            `'${entityMap.ExternalObjectName}' is a second-layer object (${knownParents.length ? `depends on ${knownParents.join(', ')}` : `category '${category}'`}) but fetched 0 records this run. ${why}`,
+            { parentRecordCounts, parentsHadRows, category },
+        );
     }
 
     /** Opt-in sync concurrency from CompanyIntegration.Configuration; default 1 (sequential), clamped [1,16]. */
@@ -976,6 +1070,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 nextOffset: batch.NextOffset ?? null,
                 nextCursor: batch.NextCursor ?? null,
             });
+
+            // Forward any non-fatal diagnostics the connector attached (e.g. a second-layer object
+            // that found zero parents) into the structured artifact so they're visible over GraphQL
+            // instead of a swallowed console.warn.
+            if (batch.Warnings && batch.Warnings.length > 0) {
+                for (const w of batch.Warnings) {
+                    logger?.warning(entityMap.ExternalObjectName ?? 'sync', w.Code, w.Message, w.Data);
+                }
+            }
 
             // If the connector returned more records than MaxBatchSize, log it but never truncate —
             // all records are written, just in sub-batches to keep DB transactions manageable.
@@ -1773,6 +1876,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
                 const classified = ClassifyError(err);
                 const msg = err instanceof Error ? err.message : String(err);
+                // Surface the save-side failure in the durable artifact (not just result.Errors[]/the
+                // run-detail row) so a rolled-back SAVE batch is visible over GraphQL, like fetch
+                // errors are. One event per batch (not per record) keeps the stream queryable.
+                logger?.emit('sync.record.error', {
+                    phase: 'save',
+                    externalObjectName: entityMap.ExternalObjectName,
+                    batchSize: batch.length,
+                    error: `Batch rolled back: ${msg}`,
+                    errorCode: classified.Code,
+                });
                 for (const rec of batch) {
                     result.RecordsProcessed++;
                     result.RecordsErrored++;

@@ -360,8 +360,8 @@ export class IntegrationSchemaSync {
             if (srcObj.Description) obj.Description = srcObj.Description;
             if (srcObj.IncrementalWatermarkField) obj.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
             obj.Status = 'Active';
-            obj.Set('IsCustom', true);
-            obj.Set('MetadataSource', 'Discovered');
+            obj.IsCustom = true;
+            obj.MetadataSource = 'Discovered';
             obj.Sequence = 999;
             const saved = await obj.Save();
             if (saved) {
@@ -512,8 +512,8 @@ export class IntegrationSchemaSync {
             field.IsReadOnly = srcField.IsReadOnly ?? false;
             field.IsUniqueKey = srcField.IsUniqueKey ?? false;
             field.Status = 'Active';
-            field.Set('IsCustom', true);
-            field.Set('MetadataSource', 'Discovered');
+            field.IsCustom = true;
+            field.MetadataSource = 'Discovered';
             field.Sequence = 999;
             if (srcField.IsForeignKey && srcField.ForeignKeyTarget) {
                 const resolvedID = resolveFK(srcField.ForeignKeyTarget);

@@ -36,6 +36,13 @@ export type IntegrationProgressEventType =
     | 'records.batch.complete'
     /** A single record errored within a batch. */
     | 'record.error'
+    /**
+     * A non-fatal warning surfaced during the run. Carries a structured
+     * {stage, code, message, data} payload (see {@link SyncWarning}). Distinct
+     * from `stage.error`/`record.error`: a warning never fails the run, it is
+     * aggregated separately into the result's `warnings[]` rollup.
+     */
+    | 'warning'
     /** Long-running progress with no record-level granularity. */
     | 'progress.heartbeat'
     /**
@@ -68,6 +75,23 @@ export type IntegrationProgressEventType =
 
 /** Severity levels for progress events. */
 export type IntegrationProgressLevel = 'info' | 'warn' | 'error' | 'debug';
+
+/**
+ * A structured, non-fatal warning surfaced during an integration run. Emitted via
+ * `IntegrationProgressEmitter.warning(...)` as a `'warning'` event and aggregated by
+ * the reader into the run result's `warnings[]` rollup (with a `warningCount`).
+ * Unlike errors, warnings never fail the run.
+ */
+export interface SyncWarning {
+    /** Stable, machine-matchable warning code (e.g. 'FIELD_TRUNCATED'). */
+    code: string;
+    /** The stage that produced the warning. */
+    stage: string;
+    /** Human-readable warning message. */
+    message: string;
+    /** Optional subsystem-specific structured payload. */
+    data?: Record<string, unknown>;
+}
 
 /** A single event in the progress.jsonl stream (one line, JSON-encoded). */
 export interface IntegrationProgressEvent {
@@ -130,6 +154,10 @@ export interface IntegrationRunResult {
         skipped: number;
     };
     errors?: Array<{ stage?: string; message: string; code?: string }>;
+    /** Non-fatal warnings surfaced during the run (rollup of `'warning'` events). */
+    warnings?: SyncWarning[];
+    /** Total number of `'warning'` events emitted (length of `warnings`). */
+    warningCount?: number;
     /** When non-empty, this run is resumable: latest checkpoint event sequence. */
     resumableFromSeq?: number;
 }
@@ -143,6 +171,10 @@ export interface IntegrationRunSnapshot {
     isInFlight: boolean;
     /** Latest counts derived from the event stream. */
     counts?: NonNullable<IntegrationProgressEvent['counts']>;
+    /** Non-fatal warnings derived from the `'warning'` events in the stream. */
+    warnings?: SyncWarning[];
+    /** Total number of `'warning'` events in the stream (length of `warnings`). */
+    warningCount?: number;
 }
 
 /** Filter shape for the reader's ListRuns API. */

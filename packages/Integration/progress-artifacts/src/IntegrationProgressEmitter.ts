@@ -7,6 +7,7 @@ import type {
     IntegrationRunKind,
     IntegrationRunManifest,
     IntegrationRunResult,
+    SyncWarning,
 } from './types.js';
 
 export interface EmitterOptions {
@@ -37,6 +38,7 @@ export class IntegrationProgressEmitter {
     private terminated = false;
     private aggregateCounts = { processed: 0, succeeded: 0, failed: 0, skipped: 0 };
     private errors: NonNullable<IntegrationRunResult['errors']> = [];
+    private warnings: SyncWarning[] = [];
     private latestCheckpointSeq?: number;
     private readonly startMs = Date.now();
 
@@ -80,6 +82,9 @@ export class IntegrationProgressEmitter {
                 code,
             });
         }
+        if (eventType === 'warning') {
+            this.warnings.push(this.warningFromEvent(event));
+        }
         const line = JSON.stringify(event) + '\n';
         if (this.consoleMirror) {
             this.mirrorToConsole(event);
@@ -99,6 +104,19 @@ export class IntegrationProgressEmitter {
     }
     public stageError(stage: string, message: string, data?: Record<string, unknown>): void {
         this.emit('stage.error', { stage, message, level: 'error', data });
+    }
+    /**
+     * Emit a non-fatal warning. Carries a structured {stage, code, message, data}
+     * payload that the reader aggregates into the run result's `warnings[]` rollup.
+     * Unlike `stageError`, a warning never fails the run.
+     */
+    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        this.emit('warning', {
+            stage,
+            message,
+            level: 'warn',
+            data: { code, ...(data ?? {}) },
+        });
     }
     public heartbeat(stage: string, message: string, counts?: IntegrationProgressEvent['counts']): void {
         this.emit('progress.heartbeat', { stage, message, counts, level: 'info' });
@@ -183,9 +201,22 @@ export class IntegrationProgressEmitter {
             durationMs: Date.now() - this.startMs,
             aggregateCounts: this.aggregateCounts,
             errors: this.errors.length > 0 ? this.errors : undefined,
+            warnings: this.warnings.length > 0 ? this.warnings : undefined,
+            warningCount: this.warnings.length,
             resumableFromSeq: this.latestCheckpointSeq,
         };
         await fs.writeFile(this.resultPath, JSON.stringify(result, null, 2), 'utf-8');
+    }
+
+    /** Reconstruct a {@link SyncWarning} from an emitted `'warning'` event. */
+    private warningFromEvent(event: IntegrationProgressEvent): SyncWarning {
+        const { code, ...rest } = event.data ?? {};
+        return {
+            code: typeof code === 'string' ? code : 'UNKNOWN',
+            stage: event.stage ?? '',
+            message: event.message ?? '',
+            data: Object.keys(rest).length > 0 ? rest : undefined,
+        };
     }
 
     private mirrorToConsole(event: IntegrationProgressEvent): void {

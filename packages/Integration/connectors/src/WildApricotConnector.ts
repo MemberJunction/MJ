@@ -639,15 +639,45 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
     private staticFieldsFor(objectName: string): ExternalFieldSchema[] {
         const obj = WILD_APRICOT_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
+        return obj.Fields.map(f => {
+            const fkTarget = this.resolveForeignKeyTarget(f.Name);
+            return {
+                Name: f.Name,
+                Label: f.DisplayName,
+                Description: f.Description,
+                DataType: f.Type,
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.IsPrimaryKey,
+                IsReadOnly: f.IsReadOnly,
+                IsForeignKey: fkTarget != null,
+                ForeignKeyTarget: fkTarget,
+            };
+        });
+    }
+
+    /**
+     * Resolves a field name to a sibling object's external name when the field
+     * is an implicit foreign key — i.e. it is named `<Sibling>Id` / `<Sibling>_id`
+     * / `<Sibling>Ref` AND `<Sibling>` matches another object declared in this
+     * connector (singular/plural aware). Provable-only: returns null unless the
+     * named sibling is itself a declared WILD_APRICOT_OBJECTS object, so no FK is
+     * invented for references whose target this connector does not model.
+     *
+     * With the current static catalog this resolves exactly one field —
+     * EventRegistrationTypes.EventId → Events. (RegistrationTypeId does NOT
+     * resolve: no "RegistrationType(s)" object is declared.)
+     */
+    private resolveForeignKeyTarget(fieldName: string): string | null {
+        const m = /^(.+?)(Id|_id|Ref)$/.exec(fieldName);
+        if (!m) return null;
+        const sibling = m[1].toLowerCase();
+        const singular = sibling.endsWith('s') ? sibling.slice(0, -1) : sibling;
+        const plural = `${singular}s`;
+        const target = WILD_APRICOT_OBJECTS.find(o => {
+            const name = o.Name.toLowerCase();
+            return name === sibling || name === singular || name === plural;
+        });
+        return target ? target.Name : null;
     }
 
     /**

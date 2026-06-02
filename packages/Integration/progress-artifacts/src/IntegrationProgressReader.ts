@@ -6,6 +6,7 @@ import type {
     IntegrationRunManifest,
     IntegrationRunResult,
     IntegrationRunSnapshot,
+    SyncWarning,
 } from './types.js';
 
 /**
@@ -46,6 +47,7 @@ export class IntegrationProgressReader {
         const events = await this.readProgressTail(join(runDir, 'progress.jsonl'), 1);
         const latestEvent = events[events.length - 1];
         const allCounts = await this.aggregateCountsFromTail(join(runDir, 'progress.jsonl'));
+        const warnings = await this.aggregateWarningsFromTail(join(runDir, 'progress.jsonl'));
         const eventCount = await this.countLines(join(runDir, 'progress.jsonl'));
         return {
             manifest,
@@ -54,6 +56,8 @@ export class IntegrationProgressReader {
             result,
             isInFlight: !result,
             counts: allCounts,
+            warnings: warnings.length > 0 ? warnings : undefined,
+            warningCount: warnings.length,
         };
     }
 
@@ -138,5 +142,29 @@ export class IntegrationProgressReader {
             } catch { /* skip */ }
         }
         return totals;
+    }
+    private async aggregateWarningsFromTail(path: string): Promise<SyncWarning[]> {
+        const raw = await this.safeReadFile(path);
+        if (!raw) return [];
+        const warnings: SyncWarning[] = [];
+        for (const line of raw.split('\n')) {
+            if (!line.trim()) continue;
+            try {
+                const ev = JSON.parse(line) as IntegrationProgressEvent;
+                if (ev.eventType !== 'warning') continue;
+                warnings.push(this.warningFromEvent(ev));
+            } catch { /* skip */ }
+        }
+        return warnings;
+    }
+    /** Reconstruct a {@link SyncWarning} from a persisted `'warning'` event. */
+    private warningFromEvent(event: IntegrationProgressEvent): SyncWarning {
+        const { code, ...rest } = event.data ?? {};
+        return {
+            code: typeof code === 'string' ? code : 'UNKNOWN',
+            stage: event.stage ?? '',
+            message: event.message ?? '',
+            data: Object.keys(rest).length > 0 ? rest : undefined,
+        };
     }
 }

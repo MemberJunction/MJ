@@ -1466,6 +1466,38 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }];
     }
 
+    /**
+     * Priority-ordered list of HubSpot "last changed" timestamp field names, used to
+     * populate SourceObjectInfo.IncrementalWatermarkField. Every name here is a field
+     * the connector ALREADY declares on its objects — CRM objects expose
+     * `hs_lastmodifieddate` (contacts use the legacy `lastmodifieddate`), while non-CRM
+     * REST objects expose `updatedAt`. Provable-only: the watermark is set on an object
+     * solely from that object's own declared field list, never invented.
+     */
+    private static readonly WATERMARK_FIELD_CANDIDATES: readonly string[] = [
+        'hs_lastmodifieddate',
+        'lastmodifieddate',
+        'updatedAt',
+    ];
+
+    /**
+     * Promotes an object's own declared "last changed" timestamp field into the
+     * IncrementalWatermarkField slot. Returns the first candidate present in the
+     * supplied field-name set, or undefined when the object declares none — an honest
+     * gap rather than a fabricated watermark. Matching is case-insensitive so a
+     * DB-cached field list (which may differ in casing) still resolves.
+     */
+    private PickIncrementalWatermarkField(fieldNames: string[]): string | undefined {
+        const present = new Set(fieldNames.map(n => n.toLowerCase()));
+        for (const candidate of HubSpotConnector.WATERMARK_FIELD_CANDIDATES) {
+            if (present.has(candidate.toLowerCase())) {
+                // Return the actually-declared name (preserve its real casing).
+                return fieldNames.find(n => n.toLowerCase() === candidate.toLowerCase());
+            }
+        }
+        return undefined;
+    }
+
 
     /**
      * Full schema introspection — discovers all objects and their fields from the live API.
@@ -1550,6 +1582,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                     Fields: sourceFields,
                     PrimaryKeyFields: pkFields.map(f => f.Name),
                     Relationships: [],
+                    IncrementalWatermarkField: this.PickIncrementalWatermarkField(sourceFields.map(f => f.Name)),
                 });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
@@ -1587,6 +1620,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                             Fields: sourceFields,
                             PrimaryKeyFields: pkFields.map(f => f.Name),
                             Relationships: [],
+                            IncrementalWatermarkField: this.PickIncrementalWatermarkField(sourceFields.map(f => f.Name)),
                         });
                         console.log(`[HubSpot] Used ${dbFields.length} DB-cached fields for "${obj.Name}" after exception`);
                         continue;
@@ -2893,7 +2927,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const parsed = this.ParseAssociationPath(obj.APIPath);
         if (!parsed) {
             console.warn(`[HubSpot] Cannot parse association path: ${obj.APIPath}`);
-            return { Records: [], HasMore: false };
+            return {
+                Records: [], HasMore: false,
+                Warnings: [{
+                    Code: 'ASSOCIATION_PATH_UNPARSEABLE',
+                    Message: `Association '${obj.Name}' has an unparseable APIPath '${obj.APIPath}' — cannot determine the from/to object types, so 0 associations were fetched (not a real "no data" result).`,
+                    Data: { object: obj.Name, apiPath: obj.APIPath },
+                }],
+            };
         }
         const { fromType, toType } = parsed;
 
@@ -2908,6 +2949,24 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const parentIDs = await this.LoadAssociationParentIDs(fromType, ctx);
         const parentOffset = ctx.CurrentOffset ?? 0;
         const BATCH_LIMIT = 100; // HubSpot v4 batch/read max inputs per request
+
+        // Zero parents on the FIRST page = the silent-empty case for a second-layer object: there is
+        // no parent `fromType` data in MJ to read associations from (parent not synced/mapped, or its
+        // entity-map disabled, or DAG ordered this before its parent). Surface it as a structured
+        // FetchWarning so the engine records it in the run artifact (visible over GraphQL) instead
+        // of a quiet zero-record "success". Subsequent pages legitimately exhaust to 0 — not flagged.
+        if (parentOffset === 0 && parentIDs.length === 0) {
+            console.warn(`[HubSpot] Association '${obj.Name}': 0 parent ${fromType} records in MJ — nothing to associate.`);
+            return {
+                Records: [],
+                HasMore: false,
+                Warnings: [{
+                    Code: 'ZERO_PARENTS',
+                    Message: `Association '${obj.Name}' has no parent ${fromType} records in MJ to read associations from — '${fromType}' was not synced/mapped this run (or its entity-map is disabled). 0 associations fetched.`,
+                    Data: { object: obj.Name, parentType: fromType },
+                }],
+            };
+        }
 
         if (parentOffset === 0) {
             console.log(`[HubSpot] Fetching ${obj.Name}: ${parentIDs.length} parent ${fromType} via batch API (100/request)`);
@@ -2949,8 +3008,10 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         if (response.Status < 200 || response.Status >= 300) {
             const respBody = response.Body as Record<string, unknown> | undefined;
             const msg = respBody?.message ?? respBody?.error ?? JSON.stringify(respBody);
-            console.warn(`[HubSpot] Association batch read failed for ${objectName}: HTTP ${response.Status} — ${msg}`);
-            return [];
+            // Surface as a real error (the engine's fetch handler records it as sync.record.error in
+            // the run artifact) instead of a swallowed console.warn + empty result that reads as a
+            // successful "no associations" — a non-2xx batch/read is a failure, not absence of data.
+            throw new Error(`[HubSpot] Association batch read failed for ${objectName}: HTTP ${response.Status} — ${msg}`);
         }
 
         const respBody = response.Body as {

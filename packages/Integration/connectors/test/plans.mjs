@@ -10,6 +10,7 @@
  */
 import { HubSpotConnector } from '@memberjunction/integration-connectors';
 
+const HUBSPOT_API_BASE = 'https://api.hubapi.com';
 const stubUser = { ID: 'cred-test-user', Email: 'test@example.com', Name: 'Cred Test' };
 // The connector reads either `accessToken` (Private App token / Bearer) or `apiKey`.
 // We pass under `apiKey` since the user provided an "API key"; the connector currently
@@ -59,6 +60,91 @@ export async function hubspotTier1({ token }, scrub) {
 }
 
 /**
+ * Tier-2 association read-only validation (no DB): proves the contacts↔companies
+ * association data — the thing the junction/DAG fix exists to fill in — is fetchable
+ * against REAL data, without writing anything anywhere.
+ *
+ * It (1) lists real contacts + companies via the connector's own ListRecords (DB-free
+ * reads), then (2) calls the SAME v4 `POST /crm/v4/associations/contacts/companies/batch/read`
+ * endpoint the connector's FetchAssociationBatch uses, with the real contact ids, and
+ * verifies the association FK pair (contact_id, company_id) comes back populated.
+ *
+ * READ-ONLY: every call reads. `batch/read` is a read despite being a POST — it never
+ * creates/updates/deletes in HubSpot. Surfaces only opaque ids + counts (no PII: contact
+ * field values like name/email are never read). The full DAG-ordered sync-into-DB path is
+ * covered separately by Tier-2a (DDL) + the engine's 295 unit tests; this closes the
+ * "are real associations actually fetchable + does the FK pair populate" question.
+ *
+ * @param {{token:string}} secrets  dereferenced by the runner
+ * @param {(s:string)=>string} scrub
+ */
+export async function hubspotTier2Assoc({ token }, scrub) {
+    const ci = hubspotCI(token);
+    const connector = new HubSpotConnector();
+    const out = { ok: false, tier: '2-assoc', readOnly: true, steps: {} };
+
+    const conn = await connector.TestConnection(ci, stubUser);
+    out.steps.testConnection = { success: !!conn.Success, message: scrub(conn.Message ?? '') };
+    if (!conn.Success) return out;
+
+    // 1) Parent reads (DB-free) — real contacts + companies.
+    const listCtx = (ObjectName) => ({ CompanyIntegration: ci, ContextUser: stubUser, ObjectName, PageSize: 30 });
+    let contactIDs = [];
+    try {
+        const contacts = await connector.ListRecords(listCtx('contacts'));
+        const companies = await connector.ListRecords(listCtx('companies'));
+        contactIDs = contacts.Records.map(r => r.ExternalID).filter(Boolean);
+        out.steps.parents = { contacts: contacts.Records.length, companies: companies.Records.length };
+    } catch (e) {
+        out.steps.parents = { error: scrub(e instanceof Error ? e.message : String(e)) };
+        return out;
+    }
+
+    if (contactIDs.length === 0) {
+        out.steps.associations = { skipped: 'no contacts returned (missing read scope or empty portal)' };
+        return out;
+    }
+
+    // 2) v4 association batch/read — same endpoint the connector uses. READ-ONLY.
+    try {
+        const resp = await fetch(`${HUBSPOT_API_BASE}/crm/v4/associations/contacts/companies/batch/read`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inputs: contactIDs.map(id => ({ id })) }),
+        });
+        if (!resp.ok) {
+            out.steps.associations = { error: scrub(`HTTP ${resp.status}: ${(await resp.text()).slice(0, 300)}`) };
+            return out;
+        }
+        const body = await resp.json();
+        const results = body.results ?? [];
+        let pairCount = 0, contactsWithCompany = 0, samplePair = null;
+        for (const item of results) {
+            const tos = item.to ?? [];
+            if (tos.length > 0) contactsWithCompany++;
+            for (const t of tos) {
+                pairCount++;
+                if (!samplePair) samplePair = { contact_id: String(item.from?.id ?? ''), company_id: String(t.toObjectId ?? '') };
+            }
+        }
+        out.steps.associations = {
+            contactsQueried: contactIDs.length,
+            contactsWithAtLeastOneCompany: contactsWithCompany,
+            totalAssociationPairs: pairCount,
+            samplePair, // opaque numeric ids only — no PII
+            fkPairBothPopulated: samplePair ? (!!samplePair.contact_id && !!samplePair.company_id) : null,
+            proves: pairCount > 0
+                ? 'REAL association fill-in confirmed: v4 batch/read returns (contact_id, company_id) pairs'
+                : 'endpoint reachable but this portal has no contact↔company links to confirm fill-in',
+        };
+        out.ok = true;
+    } catch (e) {
+        out.steps.associations = { error: scrub(e instanceof Error ? e.message : String(e)) };
+    }
+    return out;
+}
+
+/**
  * Registry: task name → { secrets (logicalName→ENV_VAR default), run, writes }.
  *
  * `writes` is the SAFETY flag. A live test against a client's real credentials must NEVER
@@ -72,6 +158,9 @@ export async function hubspotTier1({ token }, scrub) {
  */
 export const PLANS = {
     'hubspot-tier1': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier1, writes: false },
+    // Tier-2 association read-only proof (no DB, no mutation) — real contacts/companies +
+    // the v4 batch/read association endpoint. Safe against live data.
+    'hubspot-tier2-assoc': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier2Assoc, writes: false },
     // Tier-2 full Apply/sync includes Create/Update against the external system, so it is
     // writes:true and gated behind allowWrite. Body lands when the workbench dual-dialect
     // harness is built; the gate is enforced regardless (refused before run() is reached).
