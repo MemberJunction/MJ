@@ -1,0 +1,9 @@
+{
+  "concept": "demographics_xml",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "Although both columns share the name 'Demographics' and use XML storage, they represent fundamentally different entities (individual persons vs. business stores) with non-overlapping internal schemas, making them unsuitable for value-based matching.",
+  "outliers": [],
+  "subClusters": []
+}

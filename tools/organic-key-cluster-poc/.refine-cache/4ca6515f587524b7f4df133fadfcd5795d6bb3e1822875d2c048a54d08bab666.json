@@ -1,0 +1,9 @@
+{
+  "concept": "scheduling_dates",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "These columns represent distinct temporal milestones (start, end, and due dates) rather than shared identifiers. While they share a date data type and scheduling context, they are not used as keys to link entities across the schema.",
+  "outliers": [],
+  "subClusters": []
+}

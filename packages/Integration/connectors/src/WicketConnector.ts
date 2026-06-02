@@ -11,6 +11,7 @@ import {
     type PaginationType,
     type ConnectionTestResult,
     type ExternalRecord,
+    type ExternalObjectSchema,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
     type FetchContext,
@@ -449,6 +450,74 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
         }
 
         return result;
+    }
+
+    // ─── DiscoverObjects ──────────────────────────────────────────────
+
+    /**
+     * Canonical Wicket top-level objects PLUS live-discovered per-tenant
+     * additional-info schemas (Wicket's "custom tables" concept — each
+     * org/event/etc can extend their data model via JSON-Schema-Forms).
+     *
+     * Standard objects are merged with what's already persisted so curated
+     * customizations aren't lost.  The additional-info schemas live at
+     * `/additional_info_schemas` (Wicket exposes them as queryable
+     * resources); each schema becomes a Discovered IO.
+     */
+    public override async DiscoverObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const persisted = await super.DiscoverObjects(companyIntegration, contextUser);
+        const canonical: ExternalObjectSchema[] = [
+            { Name: 'people', Label: 'People', Description: 'Member/person records. /people.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'organizations', Label: 'Organizations', Description: 'Organization records. /organizations.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'person_memberships', Label: 'Person Memberships', Description: 'Per-person membership assignments. /person_memberships.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'organization_memberships', Label: 'Organization Memberships', Description: 'Per-organization membership assignments. /organization_memberships.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'memberships', Label: 'Membership Definitions', Description: 'Tenant-defined membership types/categories. /memberships.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'connections', Label: 'Connections', Description: 'Relationships between people / between people and organizations. /connections.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'groups', Label: 'Groups', Description: 'Group records (committees, chapters, etc). /groups.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'group_members', Label: 'Group Members', Description: 'Group membership entries. /group_members.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'segments', Label: 'Segments', Description: 'Saved audience segments. /segments.', SupportsIncrementalSync: false, SupportsWrite: false },
+            { Name: 'taxonomies', Label: 'Taxonomies', Description: 'Tenant-defined taxonomy categories. /taxonomies.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'additional_info_schemas', Label: 'Additional Info Schemas', Description: 'Tenant-defined JSON-Schema extensions for custom attributes (per-tenant "custom tables"). /additional_info_schemas.', SupportsIncrementalSync: false, SupportsWrite: false },
+        ];
+        const byName = new Map<string, ExternalObjectSchema>();
+        for (const o of persisted) byName.set(o.Name.toLowerCase(), o);
+        for (const c of canonical) {
+            if (!byName.has(c.Name.toLowerCase())) byName.set(c.Name.toLowerCase(), c);
+        }
+
+        // Live-discover per-tenant additional-info schemas — each one is a
+        // custom table the operator has defined.  Best-effort: probe failure
+        // is non-fatal (canonical set still returned).
+        try {
+            const auth = await this.Authenticate(companyIntegration, contextUser);
+            const headers = this.BuildHeaders(auth);
+            const baseURL = this.GetBaseURL(companyIntegration);
+            const resp = await this.MakeHTTPRequest(auth, `${baseURL}/additional_info_schemas`, 'GET', headers);
+            if (resp.Status === 200) {
+                const body = resp.Body as { data?: Array<{ id?: string; attributes?: { name?: string; slug?: string; description?: string } }> };
+                for (const sch of body.data ?? []) {
+                    const slug = sch.attributes?.slug ?? sch.attributes?.name ?? sch.id;
+                    if (!slug) continue;
+                    const ioName = `additional_info.${slug}`;
+                    if (!byName.has(ioName.toLowerCase())) {
+                        byName.set(ioName.toLowerCase(), {
+                            Name: ioName,
+                            Label: sch.attributes?.name ?? slug,
+                            Description: sch.attributes?.description ?? `Tenant-defined additional-info schema (Wicket custom table). /additional_info_schemas/${sch.id}.`,
+                            SupportsIncrementalSync: false,
+                            SupportsWrite: false,
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn(`[Wicket] additional_info_schemas live discovery failed (non-fatal, canonical set still returned): ${err instanceof Error ? err.message : err}`);
+        }
+
+        return [...byName.values()];
     }
 
     // ─── TestConnection ──────────────────────────────────────────────

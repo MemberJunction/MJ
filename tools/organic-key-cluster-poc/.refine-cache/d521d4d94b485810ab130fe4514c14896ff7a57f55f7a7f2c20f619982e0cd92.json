@@ -1,0 +1,9 @@
+{
+  "concept": "unit_of_measure_code",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "All columns represent standardized unit of measure codes used to define the scale of physical attributes or quantities. They share a common domain of values (e.g., 'CM', 'LB', 'EA') and are essential for correlating product specifications with manufacturing requirements.",
+  "outliers": [],
+  "subClusters": []
+}

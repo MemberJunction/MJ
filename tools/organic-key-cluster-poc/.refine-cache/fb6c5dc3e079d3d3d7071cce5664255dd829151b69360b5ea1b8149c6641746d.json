@@ -1,0 +1,9 @@
+{
+  "concept": "revision_number",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent the same semantic concept of a version counter, they are internal sequence numbers specific to individual records. Matching across tables based on a revision count does not represent a meaningful business relationship.",
+  "outliers": [],
+  "subClusters": []
+}

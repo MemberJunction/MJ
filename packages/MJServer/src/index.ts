@@ -348,6 +348,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           ...createMSSQLConfig(),
           user: codegenUser,
           password: codegenPass,
+          // CodeGen's metadata management ("manage entity fields", schema refresh) runs
+          // long-running queries across ALL entities. The default API requestTimeout (30s)
+          // is far too short at scale — e.g. a large integration Create-Tables pushing the
+          // schema to 400+ entities times out mid-refresh and leaves entity-field metadata
+          // only partially applied. This pool is used ONLY for CodeGen/DDL (never to serve
+          // API requests), so a generous timeout is safe. Mirrors MJCLI's baseline connection.
+          requestTimeout: 600000,
         });
         codegenPool.on('error', (err) => {
           console.error('[ConnectionPool] CodeGen pool connection error:', err.message);
@@ -390,6 +397,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
           console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
+
+          // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
+          // `additionalSchemaInfo`). Without this, RSU writes soft PKs to its own default
+          // path while CodeGen reads a different one and skips every integration table
+          // with "No primary key found".
+          if (codegenConfig.additionalSchemaInfo) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(codegenConfig.additionalSchemaInfo);
+            console.log(`RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
+          }
         } catch (codegenErr) {
           console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
         }

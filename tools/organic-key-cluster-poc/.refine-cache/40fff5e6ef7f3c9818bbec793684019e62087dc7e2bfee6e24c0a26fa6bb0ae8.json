@@ -1,0 +1,12 @@
+{
+  "concept": "shipping_method",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "The cluster groups a surrogate identifier (ShipMethodID) with a descriptive string (Name). These represent different data types and semantic levels, making them unsuitable for value-based matching.",
+  "outliers": [
+    "Purchasing.PurchaseOrderHeader.ShipMethodID",
+    "Purchasing.ShipMethod.Name"
+  ],
+  "subClusters": []
+}

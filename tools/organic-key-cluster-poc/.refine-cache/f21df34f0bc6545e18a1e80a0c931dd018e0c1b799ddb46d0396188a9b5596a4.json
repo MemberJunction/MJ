@@ -1,0 +1,9 @@
+{
+  "concept": "due_date",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent the same semantic concept of a deadline, dates are temporal attributes rather than business identifiers. Matching records across tables based on a shared date is a filtering or reporting function, not a reliable way to establish entity relationships like an email or ID would.",
+  "outliers": [],
+  "subClusters": []
+}

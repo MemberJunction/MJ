@@ -1,0 +1,1310 @@
+{
+  "hubspot": [
+    {
+      "TableName": "account_info",
+      "PrimaryKey": [
+        {
+          "FieldName": "portalId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ad_accounts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ad_campaigns",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "api_usage",
+      "PrimaryKey": [
+        {
+          "FieldName": "date",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "name",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "appointments",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_companies_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_feedback_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "feedback_submission_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_contacts_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_line_items",
+      "PrimaryKey": [
+        {
+          "FieldName": "line_item_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_quotes",
+      "PrimaryKey": [
+        {
+          "FieldName": "quote_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_deals_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_quotes_contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "quote_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_quotes_line_items",
+      "PrimaryKey": [
+        {
+          "FieldName": "line_item_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "quote_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_tickets_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_tickets_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_tickets_feedback_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "feedback_submission_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_tickets_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_tickets_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "assoc_tickets_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "audit_logs",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "behavioral_events",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_authors",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_posts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_settings",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_tags",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "business_units",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "campaigns",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "carts",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "commerce_payments",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "communications",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "contracts",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_channels",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_custom_channels",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_inbox_channels",
+      "PrimaryKey": [
+        {
+          "FieldName": "channelId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_inboxes",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_messages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_threads",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "courses",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "crm_exports",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "crm_imports",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "currencies",
+      "PrimaryKey": [
+        {
+          "FieldName": "currencyCode",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "custom_coded_actions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "datasource_ingestion",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "deal_pipeline_stages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "deal_pipelines",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "deal_splits",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "discounts",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "domains",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "email_campaigns_legacy",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "event_completions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "event_definitions",
+      "PrimaryKey": [
+        {
+          "FieldName": "name",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "feedback_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "fees",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "file_folders",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "files",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "forecasts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "form_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "submittedAt",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "conversionId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "forms",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "goal_targets",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "goals",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "hubdb_rows",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "hubdb_tables",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "invoices",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "landing_pages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "leads",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "line_items",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "list_folders",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "list_memberships",
+      "PrimaryKey": [
+        {
+          "FieldName": "recordId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "listings",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "lists",
+      "PrimaryKey": [
+        {
+          "FieldName": "listId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_events",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "media_bridge",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "meeting_scheduler",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "owners",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "portal_users",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "postal_mail",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "products",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "projects",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "quotes",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "scim_groups",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "scim_users",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "sequences",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "services",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "single_send_v4",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "site_pages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "site_search",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "source_code",
+      "PrimaryKey": [
+        {
+          "FieldName": "path",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "subscription_definitions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "subscriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tax_rates",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "taxes",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ticket_pipeline_stages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ticket_pipelines",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "timeline_event_templates",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "transactional_smtp_tokens",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "transcriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "url_mappings",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "url_redirects",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "user_roles",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "users",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "visitor_identification",
+      "PrimaryKey": [
+        {
+          "FieldName": "token",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "workflows",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "concept": "business_entity_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "BusinessEntityID is a consistent identifier for persons or organizations across the schema, allowing for the aggregation of related data like addresses and emails. AddressID is a distinct identifier for a physical location and does not belong in this cluster.",
+  "outliers": [
+    "Person.BusinessEntityAddress.AddressID"
+  ],
+  "subClusters": []
+}

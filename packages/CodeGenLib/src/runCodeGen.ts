@@ -215,8 +215,23 @@ export class RunCodeGenBase {
 
         if (configInfo.advancedGeneration?.enableAdvancedGeneration) {
           startSpinner('Initializing AI Engine for advanced generation...');
-          await AIEngine.Instance.Config(false, currentUser);
-          succeedSpinner('AI Engine initialized');
+          try {
+            await AIEngine.Instance.Config(false, currentUser);
+            succeedSpinner('AI Engine initialized');
+          } catch (e) {
+            // Advanced generation is OPTIONAL. Many deployments — e.g. small,
+            // single-tenant BI instances running RSU codegen headless — have NO AI
+            // provider configured. A failure to initialize the AI engine must NOT
+            // abort the whole codegen run. Degrade gracefully: turn advanced
+            // generation off for the remainder of this run so the downstream gates
+            // (which all read configInfo.advancedGeneration?.enableAdvancedGeneration)
+            // skip the AI-dependent paths instead of crashing on an uninitialized engine.
+            warnSpinner('AI Engine init failed — continuing with advanced generation DISABLED for this run');
+            logWarning(`Advanced generation disabled: AI Engine initialization failed: ${e instanceof Error ? e.message : String(e)}`);
+            if (configInfo.advancedGeneration) {
+              configInfo.advancedGeneration.enableAdvancedGeneration = false;
+            }
+          }
         }
         return m;
       });

@@ -1,0 +1,9 @@
+{
+  "concept": "database_user",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "Both columns represent the identity of the database user performing an action or encountering an error, making them highly useful for cross-referencing audit and error logs for troubleshooting.",
+  "outliers": [],
+  "subClusters": []
+}

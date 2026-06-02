@@ -25,6 +25,7 @@ import {
     type SearchResult,
     type ListContext,
     type ListResult,
+    type ExternalObjectSchema,
     type DefaultIntegrationConfig,
 } from '@memberjunction/integration-engine';
 import * as crypto from 'node:crypto';
@@ -293,6 +294,39 @@ export class MailchimpConnector extends BaseRESTIntegrationConnector {
      * Merge-field schema varies per audience, so the returned set is a
      * best-effort sample. Production sync should call this per-list.
      */
+    /**
+     * Canonical Mailchimp Marketing API v3 top-level objects.  Merges the
+     * vendor-standard catalog with anything already persisted in
+     * IntegrationObject (via super.DiscoverObjects) so curated rows aren't
+     * lost.  Per-account merge-fields are NOT new tables — they're new
+     * columns on `lists.members` and surface via DiscoverFields when
+     * IntegrationObject.Name='lists.members'.
+     */
+    public override async DiscoverObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const persisted = await super.DiscoverObjects(companyIntegration, contextUser);
+        const canonical: ExternalObjectSchema[] = [
+            { Name: 'lists', Label: 'Lists / Audiences', Description: 'Audience lists. v3 API /lists.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'lists.members', Label: 'List Members', Description: 'Subscribers per list (parent-templated). v3 API /lists/{list_id}/members. Per-list merge fields surface here via DiscoverFields.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'lists.merge-fields', Label: 'List Merge Fields', Description: 'Per-audience merge-field schema. v3 API /lists/{list_id}/merge-fields.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'lists.segments', Label: 'List Segments', Description: 'Per-audience saved/static segments. v3 API /lists/{list_id}/segments.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'lists.interest-categories', Label: 'List Interest Categories', Description: 'Group categories per audience. v3 API /lists/{list_id}/interest-categories.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'campaigns', Label: 'Campaigns', Description: 'Email campaigns. v3 API /campaigns.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'automations', Label: 'Automations', Description: 'Marketing automations. v3 API /automations.', SupportsIncrementalSync: true, SupportsWrite: false },
+            { Name: 'templates', Label: 'Templates', Description: 'Email templates. v3 API /templates.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'reports', Label: 'Reports', Description: 'Per-campaign reporting metrics. v3 API /reports.', SupportsIncrementalSync: true, SupportsWrite: false },
+            { Name: 'conversations', Label: 'Conversations', Description: 'Reply conversations. v3 API /conversations.', SupportsIncrementalSync: true, SupportsWrite: false },
+        ];
+        const byName = new Map<string, ExternalObjectSchema>();
+        for (const o of persisted) byName.set(o.Name.toLowerCase(), o);
+        for (const c of canonical) {
+            if (!byName.has(c.Name.toLowerCase())) byName.set(c.Name.toLowerCase(), c);
+        }
+        return [...byName.values()];
+    }
+
     public override async DiscoverFields(
         companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,

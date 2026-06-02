@@ -1,0 +1,9 @@
+{
+  "concept": "account_number",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns share a name and general purpose, they represent identifiers for distinct business domains (Vendors vs. Customers). There is no semantic expectation that a Vendor account number would match a Customer account number.",
+  "outliers": [],
+  "subClusters": []
+}

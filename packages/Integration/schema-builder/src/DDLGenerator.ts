@@ -61,7 +61,11 @@ export class DDLGenerator {
         }
 
         const body = lines.join(',\n');
-        const createTable = `CREATE TABLE ${fullTable} (\n${body}\n);`;
+        // Idempotent create: skip if the physical table already exists. Makes re-running
+        // Create-Tables safe even when MJ has no entity for the table yet (e.g. a prior run
+        // created the table but entity generation hadn't completed), avoiding
+        // "There is already an object named '<table>'" collisions.
+        const createTable = this.GenerateIdempotentCreateTableStatement(fullTable, body, platform);
 
         // Generate extended properties for descriptions (SQL Server only)
         if (platform === 'sqlserver') {
@@ -75,6 +79,27 @@ export class DDLGenerator {
     }
 
     /**
+     * Build a platform-specific, idempotent CREATE TABLE statement (creates only when the
+     * table is absent). Each platform is handled explicitly — postgresql is NOT treated as a
+     * "not sqlserver" catch-all — and the `never` default makes adding a new DatabasePlatform
+     * a compile error here rather than a silent fall-through to the wrong dialect.
+     */
+    private GenerateIdempotentCreateTableStatement(fullTable: string, body: string, platform: DatabasePlatform): string {
+        switch (platform) {
+            case 'sqlserver':
+                // Single-statement IF guard (no BEGIN/END) so RSU's batch chunking on ';\n' can't split it.
+                return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${body}\n);`;
+            case 'postgresql':
+                // Postgres has native idempotent create.
+                return `CREATE TABLE IF NOT EXISTS ${fullTable} (\n${body}\n);`;
+            default: {
+                const unsupported: never = platform;
+                throw new Error(`GenerateIdempotentCreateTableStatement: unsupported database platform '${String(unsupported)}'`);
+            }
+        }
+    }
+
+    /**
      * Generate sp_addextendedproperty calls for table and column descriptions.
      */
     GenerateExtendedProperties(config: TargetTableConfig): string[] {
@@ -83,19 +108,22 @@ export class DDLGenerator {
         // Table-level description
         if (config.Description) {
             const escaped = EscapeSqlString(config.Description);
-            props.push(
+            const exec =
                 `EXEC sp_addextendedproperty\n` +
                 `    @name = N'MS_Description',\n` +
                 `    @value = N'${escaped}',\n` +
                 `    @level0type = N'SCHEMA', @level0name = '${config.SchemaName}',\n` +
-                `    @level1type = N'TABLE', @level1name = '${config.TableName}';`
-            );
+                `    @level1type = N'TABLE', @level1name = '${config.TableName}';`;
+            props.push(this.GuardExtendedProperty(config.SchemaName, config.TableName, null, exec));
         }
 
         // Standard column descriptions
         const standardDescriptions: Record<string, string> = {
-            '__mj_integration_SyncStatus': 'Current sync status: Active, Archived, or Error',
+            '__mj_integration_SyncStatus': 'Current per-record sync status: Active, Archived, Error, or Conflict (both sides changed the same field; the record awaits resolution per the entity map ConflictResolution policy).',
             '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
+            '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
+            '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
+            '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
         };
 
         for (const [colName, desc] of Object.entries(standardDescriptions)) {
@@ -118,13 +146,32 @@ export class DDLGenerator {
         schemaName: string, tableName: string, columnName: string, description: string
     ): string {
         const escaped = EscapeSqlString(description);
-        return (
+        const exec =
             `EXEC sp_addextendedproperty\n` +
             `    @name = N'MS_Description',\n` +
             `    @value = N'${escaped}',\n` +
             `    @level0type = N'SCHEMA', @level0name = '${schemaName}',\n` +
             `    @level1type = N'TABLE', @level1name = '${tableName}',\n` +
-            `    @level2type = N'COLUMN', @level2name = '${columnName}';`
+            `    @level2type = N'COLUMN', @level2name = '${columnName}';`;
+        return this.GuardExtendedProperty(schemaName, tableName, columnName, exec);
+    }
+
+    /**
+     * Wrap an sp_addextendedproperty EXEC in an existence guard so re-running a migration is
+     * idempotent — without it, re-adding MS_Description to a table/column that already has it
+     * throws "Property cannot be added ... already has the property". Single-statement IF
+     * (no BEGIN/END) so RSU's batch chunking on ';\n' can't split it. SQL Server only —
+     * postgresql uses no extended properties here. Pass columnName=null for a table-level
+     * property, or the column name for a column-level one (levels must match the EXEC).
+     */
+    private GuardExtendedProperty(
+        schemaName: string, tableName: string, columnName: string | null, execStatement: string
+    ): string {
+        const level2 = columnName ? `N'COLUMN', N'${columnName}'` : `NULL, NULL`;
+        return (
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(` +
+            `N'MS_Description', N'SCHEMA', N'${schemaName}', N'TABLE', N'${tableName}', ${level2}))\n` +
+            execStatement
         );
     }
 
@@ -172,7 +219,11 @@ export class DDLGenerator {
         if (platform === 'sqlserver') {
             return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${q(mod.ColumnName)} ${mod.NewType} ${nullable};`;
         }
-        return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${q(mod.ColumnName)} TYPE ${mod.NewType},\n    ALTER COLUMN ${q(mod.ColumnName)} ${mod.NewNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`;
+        // PostgreSQL requires an explicit USING expression when the old type cannot be
+        // implicitly cast to the new one (e.g. text → boolean). Always-valid, so emitted
+        // unconditionally. Mirrors postgresqlDialect.AlterColumnDDL.
+        const col = q(mod.ColumnName);
+        return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${col} TYPE ${mod.NewType} USING ${col}::${mod.NewType},\n    ALTER COLUMN ${col} ${mod.NewNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`;
     }
 
     private StandardColumns(platform: DatabasePlatform): string[] {
@@ -181,11 +232,17 @@ export class DDLGenerator {
             return [
                 `    ${q('__mj_integration_SyncStatus')} NVARCHAR(50) NOT NULL DEFAULT 'Active'`,
                 `    ${q('__mj_integration_LastSyncedAt')} DATETIMEOFFSET NULL`,
+                `    ${q('__mj_integration_LastSyncedSnapshot')} NVARCHAR(MAX) NULL`,
+                `    ${q('__mj_integration_SyncMessage')} NVARCHAR(MAX) NULL`,
+                `    ${q('__mj_integration_ContentHash')} NVARCHAR(64) NULL`,
             ];
         }
         return [
             `    ${q('__mj_integration_SyncStatus')} VARCHAR(50) NOT NULL DEFAULT 'Active'`,
             `    ${q('__mj_integration_LastSyncedAt')} TIMESTAMPTZ NULL`,
+            `    ${q('__mj_integration_LastSyncedSnapshot')} TEXT NULL`,
+            `    ${q('__mj_integration_SyncMessage')} TEXT NULL`,
+            `    ${q('__mj_integration_ContentHash')} VARCHAR(64) NULL`,
         ];
     }
 }

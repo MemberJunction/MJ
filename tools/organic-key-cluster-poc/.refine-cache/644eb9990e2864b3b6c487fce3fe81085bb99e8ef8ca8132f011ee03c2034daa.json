@@ -1,0 +1,9 @@
+{
+  "concept": "transaction_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "These columns represent the same business identifier across live and archived transaction tables, enabling users to trace records as they move to historical storage.",
+  "outliers": [],
+  "subClusters": []
+}

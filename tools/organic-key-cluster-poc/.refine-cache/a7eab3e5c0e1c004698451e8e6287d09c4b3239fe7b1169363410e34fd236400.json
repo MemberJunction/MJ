@@ -1,0 +1,9 @@
+{
+  "concept": "tax_amount",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent the same semantic concept of tax currency values, they are calculated financial metrics rather than identifiers. Matching records based on identical tax amounts is not a meaningful way to link entities in a business context.",
+  "outliers": [],
+  "subClusters": []
+}

@@ -186,3 +186,11 @@ Demos/sample-skip-code-fix-prompt.json
 # Per-run artifacts from /audit-memory-leaks
 plans/.memory-leak-snapshots/
 demo/
+
+# Integration run progress artifacts — durable JSONL streams written at runtime by
+# IntegrationProgressEmitter to <cwd>/logs/integration-runs (sync runs, connector
+# creation, RSU). Runtime output, never committed.
+**/logs/integration-runs/
+
+# Credential broker runtime mailbox (job/result files — never committed)
+**/.cred-mailbox/

@@ -1,0 +1,9 @@
+{
+  "concept": "replication_guid",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "These are system-generated GUIDs used exclusively for database replication and synchronization. They do not represent business-level identifiers that users would use to match or relate records across entities.",
+  "outliers": [],
+  "subClusters": []
+}

@@ -71,6 +71,7 @@
     "@memberjunction/global": "5.37.0",
     "@memberjunction/graphql-dataprovider": "5.37.0",
     "@memberjunction/integration-engine": "5.37.0",
+    "@memberjunction/integration-progress-artifacts": "5.37.0",
     "@memberjunction/integration-schema-builder": "5.37.0",
     "@memberjunction/interactive-component-types": "5.37.0",
     "@memberjunction/lists": "5.37.0",

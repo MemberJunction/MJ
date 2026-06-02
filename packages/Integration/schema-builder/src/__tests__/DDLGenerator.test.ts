@@ -128,6 +128,33 @@ describe('DDLGenerator', () => {
             const config = MakeTableConfig({ TableName: 'bad table!' });
             expect(() => gen.GenerateCreateTable(config, 'sqlserver')).toThrow('Invalid table name');
         });
+
+        it('should be idempotent on SQL Server via an IF OBJECT_ID guard before CREATE TABLE', () => {
+            const config = MakeTableConfig();
+            const sql = gen.GenerateCreateTable(config, 'sqlserver');
+            expect(sql).toContain("IF OBJECT_ID(N'[hubspot].[Contact]', N'U') IS NULL");
+            // The guard must precede CREATE TABLE so it governs it (single-statement IF).
+            expect(sql.indexOf("IF OBJECT_ID")).toBeGreaterThanOrEqual(0);
+            expect(sql.indexOf("IF OBJECT_ID")).toBeLessThan(sql.indexOf('CREATE TABLE'));
+        });
+
+        it('should be idempotent on PostgreSQL via native CREATE TABLE IF NOT EXISTS (NOT the SQL Server guard)', () => {
+            const config = MakeTableConfig();
+            const sql = gen.GenerateCreateTable(config, 'postgresql');
+            expect(sql).toContain('CREATE TABLE IF NOT EXISTS "hubspot"."Contact"');
+            // Postgres must never receive the SQL Server OBJECT_ID guard — explicit per-platform handling.
+            expect(sql).not.toContain('OBJECT_ID');
+        });
+
+        it('should guard extended properties so a re-run does not re-add descriptions (SQL Server)', () => {
+            const config = MakeTableConfig({ Description: 'Contacts from HubSpot' });
+            const sql = gen.GenerateCreateTable(config, 'sqlserver');
+            // Table-level guard uses NULL, NULL for the level-2 (column) args.
+            expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', NULL, NULL)");
+            // Standard column description is guarded at the column level.
+            expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'__mj_integration_SyncStatus')");
+            expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty');
+        });
     });
 
     describe('GenerateAlterTableAddColumn', () => {

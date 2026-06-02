@@ -1,0 +1,9 @@
+{
+  "concept": "stocked_quantity",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "While both columns represent the same semantic concept of inventory quantity additions, numeric measurements are not identifiers. Matching records based on shared quantity values (e.g., matching all orders with a quantity of 10) does not represent a meaningful business relationship.",
+  "outliers": [],
+  "subClusters": []
+}

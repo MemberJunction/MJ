@@ -1,0 +1,305 @@
+{
+  "Vendor": "YourMembership",
+  "VendorParent": "Community Brands HoldCo, LLC",
+  "ApiBaseURL": "https://ws.yourmembership.com",
+  "DiscoveredAt": "2026-05-30T18:30:00Z",
+  "Sources": [
+    {
+      "SourceID": "ym-openapi-swagger2",
+      "URL": "https://ws.yourmembership.com/openapi",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Title": "YM REST Services — Swagger 2.0 / OpenAPI specification",
+      "Format": "application/json (Swagger 2.0)",
+      "ServerVersion": "ServiceStack 5.0.2.0; spec info.version='1.0, ServiceStack: 5.0.2.0'",
+      "Reachability": {
+        "HttpStatus": 200,
+        "ContentBytes": 1102210,
+        "Server": "Cloudflare in front of ServiceStack/5.02 NET45 (x-powered-by header)",
+        "VerifiedVia": "curl -sL on 2026-05-30 18:28 UTC"
+      },
+      "WhatItContains": {
+        "TotalPaths": 297,
+        "TotalDefinitions": 656,
+        "TotalTags": 6,
+        "SecuritySchemes": ["basic"],
+        "TagBreakdown": {
+          "Ams": 383,
+          "Ymc": 13,
+          "auth": 8,
+          "authenticate": 8,
+          "OAuth": 3,
+          ".well-known": 1
+        }
+      },
+      "CoversTaxonomies": [
+        "Ams Resource Families (160 distinct)",
+        "Ymc Career Resource Family",
+        "OAuth 2.0 Token Endpoints",
+        "ServiceStack Session Authenticate Endpoints",
+        "JWKS / JWT Issuer Endpoints"
+      ],
+      "AccessNotes": "Authoritative machine-readable contract. Single best source for endpoint enumeration, request/response schema, and resource topology. Cloudflare-fronted but unauthenticated GET; no bot wall on the openapi document itself.",
+      "PrimaryUseDownstream": "Endpoint enumeration, schema extraction, IO emission — feed directly into ioiof-extractor."
+    },
+    {
+      "SourceID": "ym-metadata-portal",
+      "URL": "https://ws.yourmembership.com/metadata",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "YM REST Services — Metadata Portal (operation index)",
+      "Format": "text/html (ServiceStack metadata page)",
+      "Reachability": {
+        "HttpStatus": 200,
+        "ContentBytes": 260,
+        "VerifiedVia": "curl -sL on 2026-05-30 18:28 UTC"
+      },
+      "WhatItContains": {
+        "OperationLinks": 221,
+        "OperationDetailPattern": "https://ws.yourmembership.com/json/metadata?op={OperationName}",
+        "PerOperationPageContents": "Required roles (admin, oauthadmin, …), routes (method + path), request parameters with DataType/REQUIRED/DESCRIPTION columns, BaseDto parameters"
+      },
+      "CoversTaxonomies": [
+        "Operation Names (221 services)",
+        "Per-Operation Auth Requirements (admin / oauthadmin roles, 'Requires Authentication' flag)"
+      ],
+      "AccessNotes": "Human-browsable index of operations grouped by name. Each name links to a deep page with parameter tables. Useful cross-check for OpenAPI completeness and for role-gate information (admin vs oauthadmin) that isn't always carried by OpenAPI security stanzas.",
+      "PrimaryUseDownstream": "Per-operation auth/role discovery; sanity-check against OpenAPI path coverage."
+    },
+    {
+      "SourceID": "ym-rest-api-getting-started-pdf",
+      "URL": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Getting Started with the REST API (2021 PDF, Community Brands)",
+      "Format": "application/pdf",
+      "Reachability": {
+        "HttpStatus": 200,
+        "ContentBytes": 879500,
+        "VerifiedVia": "WebFetch + binary read on 2026-05-30 18:29 UTC; rendered visually with 9 pages confirmed"
+      },
+      "WhatItContains": {
+        "BaseURL": "https://ws.yourmembership.com",
+        "AuthFlow": "POST /Ams/Authenticate with ClientID/UserType/Username/Password → SessionId returned, used as x-ss-id header on subsequent calls; session TTL 15 minutes",
+        "ExampleService": "CampaignEmailLists CRUD pattern (GET list, GET by id, PUT update, DELETE list, DELETE recipient)",
+        "PointersToOtherDocs": "Metadata page + Swagger UI"
+      },
+      "CoversTaxonomies": [
+        "Session-Auth Flow (x-ss-id)",
+        "Generic /Ams/{ClientID}/{Resource} URL Pattern"
+      ],
+      "AccessNotes": "First-party narrative document. Establishes the URL convention, the session-auth header contract, and points downstream readers to /metadata + /swagger-ui/. Older 2021 publication date but base URL + auth contract still match the live API.",
+      "PrimaryUseDownstream": "Auth flow contract; ground-truth for the x-ss-id session header semantics."
+    },
+    {
+      "SourceID": "ym-oauth-getting-started-pdf",
+      "URL": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Getting Started with OAuth (2021 PDF, Community Brands)",
+      "Format": "application/pdf",
+      "Reachability": {
+        "HttpStatus": 200,
+        "ContentBytes": 426300,
+        "VerifiedVia": "WebFetch on 2026-05-30 18:29 UTC; PDF binary; routes corroborated by search-snippet + by /OAuth/* paths in OpenAPI"
+      },
+      "WhatItContains": {
+        "OAuthEndpoints": "/OAuth/GetAccessToken, /OAuth/GetToken, /OAuth/OIDC/GetAccessToken",
+        "ParamShape": "AppID + AppSecret + GrantType ('Code' or 'RefreshToken')",
+        "ClientAppSetup": "Admin → General Settings → API Configuration → OAuth Management → Add Client App; configures redirect URI(s)"
+      },
+      "CoversTaxonomies": [
+        "OAuth 2.0 Authorization Code + Refresh Token Flow",
+        "OAuth Client App Provisioning (admin console)"
+      ],
+      "AccessNotes": "OAuth-specific narrative. Pairs with OpenAPI /OAuth/* paths. PDF body extraction via WebFetch returned binary; key info recovered via search-snippet abstraction. Live OAuth paths in OpenAPI confirm this PDF's accuracy.",
+      "PrimaryUseDownstream": "OAuth flow modeling; client-app provisioning runbook."
+    },
+    {
+      "SourceID": "ym-api-overview-pdf",
+      "URL": "https://www.yourmembership.com/wp-content/uploads/2020/05/YM-AMS-APIOverview.pdf",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "YourMembership AMS API Overview (May 2020 PDF)",
+      "Format": "application/pdf",
+      "Reachability": {
+        "HttpStatus": 200,
+        "ContentBytes": 157748,
+        "VerifiedVia": "curl HEAD on 2026-05-30 18:28 UTC"
+      },
+      "WhatItContains": {
+        "Scope": "Marketing-flavored overview of API capabilities and licensing model; lighter technical content than the Getting Started PDFs"
+      },
+      "CoversTaxonomies": [
+        "AMS Product API Capability Surface (high-level)"
+      ],
+      "AccessNotes": "Marketing/positioning document. Useful for licensing context (YM requires customers to license the REST API) but not endpoint-level.",
+      "PrimaryUseDownstream": "Licensing-model context; informational only."
+    },
+    {
+      "SourceID": "ym-developer-landing",
+      "URL": "https://www.yourmembership.com/api/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "YourMembership API Documentation Landing Page",
+      "Format": "text/html",
+      "Reachability": {
+        "HttpStatus": 200,
+        "VerifiedVia": "WebFetch on 2026-05-30 18:27 UTC"
+      },
+      "WhatItContains": {
+        "LinksOut": "REST API Getting Started PDF, OAuth Getting Started PDF, metadata page, Swagger UI"
+      },
+      "CoversTaxonomies": [
+        "Document Index (pointer-only)"
+      ],
+      "AccessNotes": "Public entry point. Confirms all four authoritative pointers (PDFs + /metadata + /swagger-ui/) come from Community Brands itself, not third parties.",
+      "PrimaryUseDownstream": "Provenance anchor — proves the OpenAPI spec is the vendor's own, not a community mirror."
+    },
+    {
+      "SourceID": "ym-swagger-ui",
+      "URL": "https://ws.yourmembership.com/swagger-ui/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "YM REST Services — Swagger UI (interactive)",
+      "Format": "text/html (Swagger UI 2.x)",
+      "Reachability": {
+        "HttpStatus": 200,
+        "VerifiedVia": "curl HEAD on 2026-05-30 18:27 UTC"
+      },
+      "WhatItContains": {
+        "DocSource": "Loads /openapi from same host",
+        "InteractiveBrowser": "Standard Swagger UI try-it-out shell"
+      },
+      "CoversTaxonomies": [
+        "Same surface as the OpenAPI spec; UI render only"
+      ],
+      "AccessNotes": "UI wrapper around the OpenAPI spec. Use OpenAPI JSON directly for extraction.",
+      "PrimaryUseDownstream": "Human reference; not used for automated extraction (OpenAPI JSON is canonical)."
+    },
+    {
+      "SourceID": "higherlogic-ym-rest-integration",
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/4410238657172-YourMembership-REST-API-Integration-Guide",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Higher Logic — YourMembership REST API Integration Guide",
+      "Format": "text/html",
+      "Reachability": {
+        "HttpStatus": 200,
+        "VerifiedVia": "curl HEAD on 2026-05-30 18:28 UTC"
+      },
+      "WhatItContains": {
+        "PartnerContext": "Higher Logic is a sibling Community Brands product; this guide documents the YM↔Higher Logic SSO + member sync wiring",
+        "EndpointsNamed": "MemberProfile (for ReadContacts), People (for ReadContact); /Ams/{ClientID}/CampaignEmailLists; OAuth Client App setup with redirect URI {livesiteurl}/higherlogic/security/membersso/callback"
+      },
+      "CoversTaxonomies": [
+        "Partner-Integration Reference Mapping (which YM resources flow to a downstream system)"
+      ],
+      "AccessNotes": "Third-party but corporate-sibling. Useful as a real-world worked example of which YM resources matter for member-sync use cases.",
+      "PrimaryUseDownstream": "Validation that Members/People/MemberProfile are the canonical contact-sync surfaces."
+    },
+    {
+      "SourceID": "rasa-ym-integration",
+      "URL": "https://help.rasa.io/yourmembership-integration-documentation",
+      "AccessStatus": "404",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "Title": "Rasa.io — YourMembership Integration Documentation",
+      "Format": "text/html",
+      "Reachability": {
+        "HttpStatus": 404,
+        "VerifiedVia": "curl HEAD on 2026-05-30 18:28 UTC — page has been removed/relocated by Rasa"
+      },
+      "WhatItContains": {},
+      "CoversTaxonomies": [],
+      "AccessNotes": "Discovered via search but currently returns 404. Recorded for transparency; not usable downstream.",
+      "PrimaryUseDownstream": "None — gap recorded."
+    },
+    {
+      "SourceID": "quorumus-ym-api-php",
+      "URL": "https://github.com/QuorumUS/ym-api",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "Title": "QuorumUS/ym-api — PHP wrapper",
+      "Format": "GitHub repo / PHP source",
+      "Reachability": {
+        "HttpStatus": 200,
+        "VerifiedVia": "curl HEAD + WebFetch on 2026-05-30 18:28 UTC"
+      },
+      "WhatItContains": {
+        "Status": "ARCHIVED 2024-05-09; last release v0.2.2 dated 2017-01-30",
+        "Era": "Pre-dates the current /Ams REST API; references the legacy yourmembership.com/company/api-reference (XML-RPC era)",
+        "Coverage": "Self-described work-in-progress; only Session.Create concretely demonstrated"
+      },
+      "CoversTaxonomies": [
+        "(historical only)"
+      ],
+      "AccessNotes": "Legacy. Helpful as a sanity-check of which resource names existed in the XML-RPC era, NOT as a reference for the current ws.yourmembership.com REST API.",
+      "PrimaryUseDownstream": "None — superseded. Listed for completeness so downstream agents don't waste cycles on it."
+    },
+    {
+      "SourceID": "echo-your-membership-ruby",
+      "URL": "https://github.com/ECHOInternational/your_membership",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "Title": "ECHOInternational/your_membership — Ruby SDK (legacy XML API v2.00)",
+      "Format": "GitHub repo / Ruby source",
+      "Reachability": {
+        "HttpStatus": 200,
+        "VerifiedVia": "curl HEAD + WebFetch on 2026-05-30 18:28 UTC"
+      },
+      "WhatItContains": {
+        "Era": "Legacy XML API v2.00 (different surface from the current REST API)",
+        "Namespaces": "Events, Member, Sa (system admin), Session, People, Profile, Export"
+      },
+      "CoversTaxonomies": [
+        "(historical only — XML API v2.00 noun set)"
+      ],
+      "AccessNotes": "Legacy XML API only. The current REST API at ws.yourmembership.com is a separate generation with overlapping but not identical resource names. DO NOT extract IOs from this; use only as a hint for what 'classical' YM nouns exist.",
+      "PrimaryUseDownstream": "None for extraction; historical reference only."
+    }
+  ],
+  "Coverage": {
+    "OpenAPISpec": true,
+    "AuthFlow_OAuth": true,
+    "AuthFlow_Session": true,
+    "WebhookOrEventDocs": "Partial (Zoom event listener endpoints present in OpenAPI but no narrative webhook docs found)",
+    "RateLimitDocs": "Not found in any public source — gap",
+    "ErrorCatalog": "Not found in any public source — gap (only ResponseStatus shape from Getting Started PDF)",
+    "ChangeLog": "Not found in any public source — gap",
+    "PostmanCollection": "Not found — gap. PDF shows Postman screenshots but no published .postman_collection.json"
+  },
+  "Gaps": [
+    "Rate-limit policy (RPS, daily quotas, throttle headers) — no published documentation",
+    "Error code catalog beyond the generic ServiceStack ResponseStatus shape",
+    "Webhook/Push event subscription docs (Zoom listener endpoints exist but no narrative)",
+    "Changelog / version history for the REST API",
+    "Published Postman collection (the Getting Started PDF uses Postman in screenshots only)",
+    "Per-field semantic documentation for the larger DTOs in the 656-definition schema is limited — descriptions are short or absent on many properties"
+  ],
+  "Statistics": {
+    "TotalSourcesCataloged": 11,
+    "Tier1Sources": 4,
+    "Tier2Sources": 4,
+    "Tier3Sources": 3,
+    "ReachableSources": 10,
+    "FailedSources": 1,
+    "TopSource": "ym-openapi-swagger2",
+    "TopSourceCoverage": "297 paths, 656 schemas, 6 tags — complete machine-readable contract"
+  },
+  "Decision": {
+    "ProceedToExtraction": true,
+    "Rationale": "Vendor publishes a complete machine-readable OpenAPI spec at ws.yourmembership.com/openapi (Tier 1) plus official Getting Started PDFs for auth flows. Coverage across taxonomies is strong enough to drive ioiof-extractor without escalation. Gaps (rate-limits, error catalog) are real but not blocking — they affect operational hardening, not entity/endpoint extraction.",
+    "EscalationNeeded": false
+  }
+}

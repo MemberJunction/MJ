@@ -311,6 +311,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   private _ddlProvider: DatabaseProviderBase | null = null;
   private _codeGenRunner: IRSUCodeGenRunner | null = null;
   private _codeGenOutputPaths: string[] = [];
+  private _additionalSchemaInfoPath: string | null = null;
   private _outOfSync = false;
   private _outOfSyncSince: Date | null = null;
   private _lastRunAt: Date | null = null;
@@ -341,6 +342,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   public SetCodeGenOutputPaths(paths: string[]): void {
     this._codeGenOutputPaths = paths;
+  }
+
+  /**
+   * Set the additionalSchemaInfo file path that CodeGen reads (from mj.config.cjs
+   * `additionalSchemaInfo`). RSU writes its soft PK/FK config to THIS path so the
+   * subsequent CodeGen run actually finds it. Injected by the server at startup,
+   * mirroring SetCodeGenOutputPaths.
+   *
+   * Without injection, RSU falls back to RSU_ADDITIONAL_SCHEMA_INFO_PATH /
+   * 'additionalSchemaInfo.json' — a path that need not match CodeGen's configured
+   * one. When they diverge, RSU writes soft PKs to a file CodeGen never reads, and
+   * every integration table is skipped with "No primary key found". Keeping the two
+   * in lockstep is the whole point of this setter.
+   */
+  public SetAdditionalSchemaInfoPath(configuredPath: string): void {
+    this._additionalSchemaInfoPath = configuredPath;
+  }
+
+  /**
+   * The additionalSchemaInfo path RSU writes to, relative to WorkDir. Prefers the
+   * CodeGen-configured path (injected at startup) so writer and reader agree; falls
+   * back to the env/default only when nothing was injected.
+   */
+  private get additionalSchemaInfoPath(): string {
+    return this._additionalSchemaInfoPath ?? rsuConfig.AdditionalSchemaInfoPath;
   }
 
   // ─── Pending Work (post-restart tasks) ─────────────────────────
@@ -767,7 +793,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const directoriesToCheck = [
       nodePath.join(workDir, rsuConfig.MigrationsPath),
       nodePath.join(workDir, rsuConfig.PendingWorkPath),
-      dirname(nodePath.join(workDir, rsuConfig.AdditionalSchemaInfoPath)),
+      dirname(nodePath.join(workDir, this.additionalSchemaInfoPath)),
       rsuConfig.CodeGenDir,
       workDir, // pipeline log
     ];
@@ -888,7 +914,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('node:fs');
     const { join, dirname } = await import('node:path');
-    const configFilePath = join(rsuConfig.WorkDir, rsuConfig.AdditionalSchemaInfoPath);
+    const configFilePath = join(rsuConfig.WorkDir, this.additionalSchemaInfoPath);
 
     // Load existing config or start fresh
     // Format: { schemaName: [ { TableName, PrimaryKey?, ForeignKeys? }, ... ], ... }

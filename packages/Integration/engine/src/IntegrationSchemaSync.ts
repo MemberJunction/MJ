@@ -24,6 +24,7 @@ import type {
     MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
+import { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
@@ -62,6 +63,39 @@ export interface FieldMergeLog {
         Description?: 'Declared' | 'Discovered' | 'Initial';
         ForeignKey?: 'Declared' | 'Discovered' | 'Initial';
     };
+}
+
+/**
+ * Pure-function overlay rule for a single boolean attribute.
+ *
+ * The rule that the rest of the codebase must obey when merging a Declared
+ * (curated/static-catalog) row with a Discovered (live-from-connector) value:
+ *
+ *   - If `discovered` is `undefined`, the source has **no opinion** —
+ *     the Declared value sticks. Winner = 'Declared'. Never overwrite.
+ *   - If `discovered` is defined and equal to `declared`, nothing changes.
+ *     Winner = 'Declared'.
+ *   - If `discovered` is defined and DIFFERENT, the Discovered value wins
+ *     (it reflects the live system's current truth, e.g. a column flipped
+ *     from nullable to non-nullable). Winner = 'Discovered'.
+ *
+ * The bug this exists to prevent: pre-Phase-0 v5.39.x the overlay treated
+ * `undefined` as if the source had said `false`, silently wiping declared
+ * PK flags across every IO the moment live discovery ran on connectors
+ * (HubSpot, Salesforce) whose property-list APIs don't return an
+ * `IsPrimaryKey` field at all. See `IntegrationSchemaSync.test.ts`.
+ */
+export function decideBooleanOverlay(
+    declared: boolean | undefined,
+    discovered: boolean | undefined,
+): { value: boolean | undefined; winner: 'Declared' | 'Discovered' } {
+    if (discovered === undefined) {
+        return { value: declared, winner: 'Declared' };
+    }
+    if (declared === discovered) {
+        return { value: declared, winner: 'Declared' };
+    }
+    return { value: discovered, winner: 'Discovered' };
 }
 
 /** Per-object provenance summary. */
@@ -139,6 +173,12 @@ export class IntegrationSchemaSync {
             FieldMergeLog: [],
         };
 
+        // Lightweight constraint discovery: deterministically infer the FKs the source
+        // did NOT declare (naming-based, provable-only) so discovered objects gain proper
+        // relationships before the Declared/Discovered merge below resolves them. No AI
+        // dependency — safe on AI-less BI instances.
+        EnrichSchemaConstraints.InferForeignKeys(SourceSchema.Objects);
+
         // Load existing objects for this integration from cache
         const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);
 
@@ -199,6 +239,16 @@ export class IntegrationSchemaSync {
                         AttributeWinners: fr.AttributeWinners,
                     });
                 }
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'persist.object.fields-done',
+                    objectName: r.srcObj.ExternalName,
+                    integrationObjectID: r.ObjectID,
+                    fieldsInSource: r.srcObj.Fields.length,
+                    fieldsCreated: perObjectStats.created,
+                    fieldsUpdated: perObjectStats.updated,
+                    fieldsUnchanged: r.srcObj.Fields.length - perObjectStats.created - perObjectStats.updated,
+                }));
                 return { stats: perObjectStats, logs: perObjectLogs };
             });
 
@@ -262,18 +312,37 @@ export class IntegrationSchemaSync {
             // IncrementalWatermarkField if newly observed). Curated values win for
             // everything human-authored; describe wins only for technical/empty slots.
             let dirty = false;
+            const changes: string[] = [];
             if (!existing.Description && srcObj.Description) {
                 existing.Description = srcObj.Description;
                 dirty = true;
+                changes.push('Description');
             }
             if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
                 existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
                 dirty = true;
+                changes.push('IncrementalWatermarkField');
             }
             if (dirty) {
                 try { await existing.Save(); } catch { /* ignore save failures on declared records */ }
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'persist.object.updated',
+                    objectName: srcObj.ExternalName,
+                    integrationObjectID: existing.ID,
+                    effectiveSource: 'Declared',
+                    fieldsTouched: changes,
+                }));
                 return { ObjectID: existing.ID, Created: false, Updated: true, EffectiveSource: 'Declared' };
             }
+            console.log(JSON.stringify({
+                ts: new Date().toISOString(),
+                event: 'persist.object.unchanged',
+                objectName: srcObj.ExternalName,
+                integrationObjectID: existing.ID,
+                effectiveSource: 'Declared',
+                reason: 'no-overlay-deltas',
+            }));
             return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared' };
         }
 
@@ -296,6 +365,14 @@ export class IntegrationSchemaSync {
             obj.Sequence = 999;
             const saved = await obj.Save();
             if (saved) {
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'persist.object.created',
+                    objectName: srcObj.ExternalName,
+                    integrationObjectID: obj.ID,
+                    effectiveSource: 'Discovered',
+                    metadataSource: 'Discovered',
+                }));
                 return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered' };
             }
         } catch (err) {
@@ -350,34 +427,40 @@ export class IntegrationSchemaSync {
             } else {
                 winners.AllowsNull = 'Declared';
             }
-            if (existing.IsRequired !== srcField.IsRequired) {
-                existing.IsRequired = srcField.IsRequired;
+            // No-fabrication overlay rule for boolean attributes — see
+            // `decideBooleanOverlay`.  Discovered values only override when
+            // the source actually has an opinion (defined boolean).  Undefined
+            // means "no opinion" — the Declared value sticks.  Pre-Phase 0
+            // v5.39.x this branch treated undefined as `false` and silently
+            // wiped every declared PK on HubSpot/SF the moment live discovery
+            // ran.  See IntegrationSchemaSync.test.ts for the regression pin.
+            const reqOverlay = decideBooleanOverlay(existing.IsRequired, srcField.IsRequired);
+            if (reqOverlay.winner === 'Discovered' && reqOverlay.value !== undefined) {
+                existing.IsRequired = reqOverlay.value;
                 dirty = true;
-                winners.IsRequired = 'Discovered';
-            } else {
-                winners.IsRequired = 'Declared';
             }
-            if (existing.IsPrimaryKey !== srcField.IsPrimaryKey) {
-                existing.IsPrimaryKey = srcField.IsPrimaryKey;
+            winners.IsRequired = reqOverlay.winner;
+
+            const pkOverlay = decideBooleanOverlay(existing.IsPrimaryKey, srcField.IsPrimaryKey);
+            if (pkOverlay.winner === 'Discovered' && pkOverlay.value !== undefined) {
+                existing.IsPrimaryKey = pkOverlay.value;
                 dirty = true;
-                winners.IsPrimaryKey = 'Discovered';
-            } else {
-                winners.IsPrimaryKey = 'Declared';
             }
-            if (srcField.IsUniqueKey !== undefined && existing.IsUniqueKey !== srcField.IsUniqueKey) {
-                existing.IsUniqueKey = srcField.IsUniqueKey;
+            winners.IsPrimaryKey = pkOverlay.winner;
+
+            const uqOverlay = decideBooleanOverlay(existing.IsUniqueKey, srcField.IsUniqueKey);
+            if (uqOverlay.winner === 'Discovered' && uqOverlay.value !== undefined) {
+                existing.IsUniqueKey = uqOverlay.value;
                 dirty = true;
-                winners.IsUniqueKey = 'Discovered';
-            } else {
-                winners.IsUniqueKey = 'Declared';
             }
-            if (srcField.IsReadOnly !== undefined && existing.IsReadOnly !== srcField.IsReadOnly) {
-                existing.IsReadOnly = srcField.IsReadOnly;
+            winners.IsUniqueKey = uqOverlay.winner;
+
+            const roOverlay = decideBooleanOverlay(existing.IsReadOnly, srcField.IsReadOnly);
+            if (roOverlay.winner === 'Discovered' && roOverlay.value !== undefined) {
+                existing.IsReadOnly = roOverlay.value;
                 dirty = true;
-                winners.IsReadOnly = 'Discovered';
-            } else {
-                winners.IsReadOnly = 'Declared';
             }
+            winners.IsReadOnly = roOverlay.winner;
             // Description: only fill if missing — curated descriptions outrank
             // generic describe output. So 'Declared' wins unless the row had
             // no description at all and discovery has one.

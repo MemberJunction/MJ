@@ -1,5 +1,5 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
-import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { FieldCategoryInfo, LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -107,11 +107,15 @@ export type FormLayoutResult = {
  * All prompts are now stored in the database as AI Prompt entities with proper model configuration.
  */
 export class AdvancedGeneration {
-    private _metadata: Metadata;
     private _promptRunner: AIPromptRunner;
 
     constructor() {
-        this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+        // NOTE: do NOT construct a Metadata instance here. It was previously held in an
+        // unused field; constructing it on every AdvancedGeneration instantiation (5 call
+        // sites in manage-metadata) forced redundant provider work and could hang the
+        // headless codegen child process at the advanced-generation phase (~112s) on small
+        // AI-less/Postgres BI instances. The class reads metadata via AIEngine.Instance,
+        // which is configured once (and now non-fatally) in runCodeGen.
         this._promptRunner = new AIPromptRunner();
     }
 

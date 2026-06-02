@@ -1,0 +1,9 @@
+{
+  "concept": "country_region_code",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 1,
+  "reasoning": "Both columns represent standardized ISO 3166-1 alpha-2 country codes, providing a clear and useful link between geographic definitions and sales territories for cross-entity matching.",
+  "outliers": [],
+  "subClusters": []
+}

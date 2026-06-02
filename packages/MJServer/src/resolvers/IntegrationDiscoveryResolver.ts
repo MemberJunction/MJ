@@ -27,7 +27,8 @@ import {
     IntegrationEngine,
     IntegrationSyncOptions,
     SourceSchemaInfo,
-    IntegrationSchemaSync
+    IntegrationSchemaSync,
+    IntegrationConnectorCreationPipeline
 } from "@memberjunction/integration-engine";
 import { IntegrationEngineBase } from "@memberjunction/integration-engine-base";
 import {
@@ -41,6 +42,8 @@ import {
 } from "@memberjunction/integration-schema-builder";
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
+import { IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
+import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
@@ -332,6 +335,46 @@ class ConnectionTestOutput {
     ServerVersion?: string;
 }
 
+// ─── Refresh Connector Schema (Phase 0 v5.39.x) ─────────────────────────────
+// Invokes IntegrationConnectorCreationPipeline.Run() which drives
+// TestConnection → IntrospectSchema (parallel describe) →
+// PersistDiscoveredSchema (overlay precedence: declared wins for semantic,
+// discovered wins for technical) → SoftPKClassifier (4-tier cascade) and emits
+// structured progress events the operator can grep in the MJAPI log file:
+//   "event":"discovery.object.added"  with source: Declared | Discovered | Custom
+//   "event":"discovery.field.added"   ditto
+//   "event":"pk.classifier.invoked"   per object missing an explicit PK
+//   "event":"pk.classifier.result"    the classifier's verdict + strategy + reason
+//   "event":"entity.generated"        IO has a PK → eligible for MJ entity generation
+//   "event":"entity.skipped-no-pk"    IO has NO PK → not eligible, deferred
+//
+// Per-run JSONL artifacts also land at:
+//   <cwd>/logs/integration-runs/<runID>/{manifest,progress,result}.json
+
+@ObjectType()
+class RefreshConnectorSchemaPKVerdictOutput {
+    @Field() ObjectName: string;
+    @Field() Confident: boolean;
+    @Field({ nullable: true }) Nominee?: string;
+    @Field() Confidence: number;
+    @Field() Strategy: string;
+    @Field() Reason: string;
+}
+
+@ObjectType()
+class RefreshConnectorSchemaOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field() RunID: string;
+    @Field({ nullable: true }) ObjectsCreated?: number;
+    @Field({ nullable: true }) ObjectsUpdated?: number;
+    @Field({ nullable: true }) FieldsCreated?: number;
+    @Field({ nullable: true }) FieldsUpdated?: number;
+    @Field(() => [RefreshConnectorSchemaPKVerdictOutput], { nullable: true }) PKVerdicts?: RefreshConnectorSchemaPKVerdictOutput[];
+    @Field(() => [String], { nullable: true }) UnresolvedObjects?: string[];
+    @Field({ nullable: true }) FailureMessage?: string;
+}
+
 // --- Preview Data Types ---
 
 @ObjectType()
@@ -463,6 +506,17 @@ class CreateConnectionInput {
 }
 
 @ObjectType()
+class CreateConnectionPipelineSummary {
+    @Field() RunID: string;
+    @Field() ObjectsCreated: number;
+    @Field() ObjectsUpdated: number;
+    @Field() FieldsCreated: number;
+    @Field() FieldsUpdated: number;
+    @Field(() => [String]) UnresolvedObjects: string[];
+    @Field(() => [RefreshConnectorSchemaPKVerdictOutput], { nullable: true }) PKVerdicts?: RefreshConnectorSchemaPKVerdictOutput[];
+}
+
+@ObjectType()
 class CreateConnectionOutput {
     @Field() Success: boolean;
     @Field() Message: string;
@@ -470,6 +524,13 @@ class CreateConnectionOutput {
     @Field({ nullable: true }) CredentialID?: string;
     @Field({ nullable: true }) ConnectionTestSuccess?: boolean;
     @Field({ nullable: true }) ConnectionTestMessage?: string;
+    /**
+     * Schema-refresh pipeline result. Populated when the resolver auto-runs
+     * IntegrationConnectorCreationPipeline after a successful TestConnection.
+     * Use to drive the wizard's next step (show user how many IOs were live-
+     * discovered, what's still PK-less, etc).
+     */
+    @Field(() => CreateConnectionPipelineSummary, { nullable: true }) SchemaRefresh?: CreateConnectionPipelineSummary;
 }
 
 @ObjectType()
@@ -655,6 +716,83 @@ class OperationProgressOutput {
     @Field({ nullable: true }) RSURunning?: boolean;
     @Field({ nullable: true }) ElapsedMs?: number;
     @Field({ nullable: true }) StartedAt?: string;
+}
+
+// ── STRUCTURED RUN ARTIFACTS (durable JSONL progress streams) ─────────
+// These expose the IntegrationProgressReader over GraphQL so a tenant can ask,
+// at any time, "what exactly happened (or is happening) on this run?" — backed
+// by the append-only <cwd>/logs/integration-runs/<runID>/progress.jsonl files
+// that survive an MJAPI restart and grow as the run progresses. Poll
+// IntegrationTailRunEvents(runID, sinceSeq) to follow a live run incrementally.
+
+@ObjectType()
+class IntegrationRunCountsOutput {
+    @Field({ nullable: true }) Processed?: number;
+    @Field({ nullable: true }) Succeeded?: number;
+    @Field({ nullable: true }) Failed?: number;
+    @Field({ nullable: true }) Skipped?: number;
+    @Field({ nullable: true }) TotalKnown?: number;
+}
+
+@ObjectType()
+class IntegrationRunSummaryArtifactOutput {
+    @Field() RunID: string;
+    @Field() RunKind: string;
+    @Field({ nullable: true }) IntegrationID?: string;
+    @Field({ nullable: true }) CompanyIntegrationID?: string;
+    @Field({ nullable: true }) ObjectName?: string;
+    @Field({ nullable: true }) TriggerType?: string;
+    @Field() StartedAt: string;
+    @Field() IsInFlight: boolean;
+    @Field() EventCount: number;
+    @Field({ nullable: true }) Success?: boolean;
+    @Field({ nullable: true }) ExitReason?: string;
+    @Field({ nullable: true }) CompletedAt?: string;
+    @Field({ nullable: true }) DurationMs?: number;
+    @Field({ nullable: true }) LatestEventType?: string;
+    @Field({ nullable: true }) LatestMessage?: string;
+    @Field(() => IntegrationRunCountsOutput, { nullable: true }) Counts?: IntegrationRunCountsOutput;
+}
+
+@ObjectType()
+class IntegrationRunEventOutput {
+    @Field() Ts: string;
+    @Field() Seq: number;
+    @Field() EventType: string;
+    @Field({ nullable: true }) Level?: string;
+    @Field({ nullable: true }) Stage?: string;
+    @Field({ nullable: true }) Message?: string;
+    @Field(() => IntegrationRunCountsOutput, { nullable: true }) Counts?: IntegrationRunCountsOutput;
+    /** Subsystem-specific payload, JSON-encoded (clients JSON.parse). */
+    @Field({ nullable: true }) DataJSON?: string;
+    /** Resumable-state payload on checkpoint events, JSON-encoded. */
+    @Field({ nullable: true }) ResumableStateJSON?: string;
+}
+
+@ObjectType()
+class IntegrationListRunsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [IntegrationRunSummaryArtifactOutput], { nullable: true }) Runs?: IntegrationRunSummaryArtifactOutput[];
+}
+
+@ObjectType()
+class IntegrationRunDetailOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => IntegrationRunSummaryArtifactOutput, { nullable: true }) Run?: IntegrationRunSummaryArtifactOutput;
+    @Field(() => [String], { nullable: true }) Errors?: string[];
+}
+
+@ObjectType()
+class IntegrationRunEventsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [IntegrationRunEventOutput], { nullable: true }) Events?: IntegrationRunEventOutput[];
+    /** Highest sequence returned — pass back as sinceSeq to poll for more. */
+    @Field() LatestSeq: number;
+    /** True while the run is still active — keep polling until false. */
+    @Field() IsInFlight: boolean;
 }
 
 // Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgress()
@@ -974,6 +1112,87 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return {
                 Success: false,
                 Message: `Error: ${this.formatError(e)}`
+            };
+        }
+    }
+
+    /**
+     * Refreshes the connector's IntegrationObject + IntegrationObjectField
+     * catalog by running the Phase 0 v5.39.x IntegrationConnectorCreationPipeline.
+     * The pipeline:
+     *   1. TestConnection      — validates credentials before any heavy work.
+     *   2. IntrospectSchema    — parallel describe across all objects.
+     *   3. PersistDiscoveredSchema — overlay-aware upsert (declared wins for
+     *      semantic, discovered wins for technical attributes), populates
+     *      MetadataSource and per-attribute AttributeWinners.
+     *   4. PKClassify          — SoftPKClassifier 4-tier cascade for any IO
+     *      that still lacks an explicit PK marker.
+     *
+     * Structured progress events ride the IntegrationProgressEmitter and land
+     * both on stdout (visible in the MJAPI log file) and in a per-run
+     * `<cwd>/logs/integration-runs/<runID>/progress.jsonl` artifact.
+     */
+    @Mutation(() => RefreshConnectorSchemaOutput)
+    async IntegrationRefreshConnectorSchema(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<RefreshConnectorSchemaOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
+
+            const pipeline = new IntegrationConnectorCreationPipeline();
+            // Cast through unknown — duplicate package type declarations
+            // between integration-engine's resolved core-entities and this
+            // resolver's resolved core-entities (same shape, different
+            // identities at type level).
+            const runOpts = {
+                Connector: connector,
+                CompanyIntegration: companyIntegration,
+                ContextUser: user,
+                Provider: provider,
+                UniversalPKConvention: universalPKConvention || undefined,
+                ConsoleMirror: true,
+                TriggerType: 'Manual' as const,
+            };
+            const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
+
+            // Refresh the metadata cache so subsequent reads see the new IO/IOF
+            // rows the pipeline just wrote.  Without this the engine returns the
+            // pre-pipeline snapshot until the next process bootstrap.
+            const md = new Metadata();
+            await md.Refresh();
+            await IntegrationEngine.Instance.Config(true, user, provider);
+
+            return {
+                Success: result.Success,
+                Message: result.Success
+                    ? `Refresh complete: ${result.PersistResult?.ObjectsCreated ?? 0} created, ${result.PersistResult?.ObjectsUpdated ?? 0} updated, ${result.UnresolvedObjects.length} IOs still PK-less (deferred to additionalSchemaInfo authoring)`
+                    : `Refresh failed: ${result.FailureMessage ?? 'unknown error'}`,
+                RunID: result.RunID,
+                ObjectsCreated: result.PersistResult?.ObjectsCreated,
+                ObjectsUpdated: result.PersistResult?.ObjectsUpdated,
+                FieldsCreated: result.PersistResult?.FieldsCreated,
+                FieldsUpdated: result.PersistResult?.FieldsUpdated,
+                PKVerdicts: result.PKVerdicts.map(v => ({
+                    ObjectName: v.ObjectName,
+                    Confident: v.Confident,
+                    Nominee: v.Nominee,
+                    Confidence: v.Confidence,
+                    Strategy: v.Strategy,
+                    Reason: v.Reason,
+                })),
+                UnresolvedObjects: result.UnresolvedObjects,
+                FailureMessage: result.FailureMessage,
+            };
+        } catch (e) {
+            LogError(`IntegrationRefreshConnectorSchema error: ${this.formatError(e)}`);
+            return {
+                Success: false,
+                Message: `Error: ${this.formatError(e)}`,
+                RunID: 'error',
             };
         }
     }
@@ -1675,6 +1894,140 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Runs IntegrationConnectorCreationPipeline + refreshes the metadata cache.
+     * Shared by IntegrationCreateConnection's auto-refresh path and the
+     * standalone IntegrationRefreshConnectorSchema mutation.
+     */
+    /**
+     * Reconstructs a `SourceSchemaInfo` from already-persisted IntegrationObject
+     * and IntegrationObjectField rows held by `IntegrationEngineBase`'s
+     * in-memory cache.
+     *
+     * Why this exists: after the Phase 0 v5.39.x `MJCompanyIntegrationEntityServer`
+     * hook fires the pipeline on `IsActive false→true`, the IO/IOF rows are
+     * already fresh.  The legacy `IntegrationApplyAllBatch` / `ApplyAll` /
+     * `ApplySchema` resolvers then called `connector.IntrospectSchema()` AGAIN
+     * to feed `SchemaBuilder`, which produced a second full vendor-API
+     * roundtrip (HubSpot 130 objects × 60+ DiscoverFields probes, ~100s
+     * wasted on the user's HubSpot run).  Using the persisted rows skips
+     * that round-trip entirely.
+     *
+     * Caveats:
+     *   - The persisted `Type` is the MJ canonical type (string / int / datetime / …),
+     *     NOT the original vendor source type.  `TypeMapper` in SchemaBuilder
+     *     accepts canonical types so DDL generation still works; if a connector
+     *     has unusual nuances around its source-type strings, fall back to live
+     *     introspect (the caller can pass `forceLive: true`).
+     *   - PrimaryKeyFields are recomputed from the IOF rows where
+     *     `IsPrimaryKey=true`.
+     *   - Foreign-key relationships are reconstructed from
+     *     `RelatedIntegrationObjectID` lookups against the same cache.
+     */
+    private buildSourceSchemaFromPersistedRows(
+        integrationID: string,
+        requestedNames?: string[],
+    ): SourceSchemaInfo {
+        const engine = IntegrationEngineBase.Instance;
+        const ios = engine.GetIntegrationObjectsByIntegrationID(integrationID);
+        const filter = requestedNames && requestedNames.length > 0
+            ? new Set(requestedNames.map(n => n.toLowerCase()))
+            : null;
+
+        // Cache (id → name) for FK relationship reconstruction.  Same-integration
+        // only — cross-integration relationships are not modeled in the slot table.
+        const ioByID = new Map<string, string>();
+        for (const io of ios) ioByID.set(io.ID, io.Name);
+
+        const result: SourceSchemaInfo = { Objects: [] };
+        for (const io of ios) {
+            if (filter && !filter.has(io.Name.toLowerCase())) continue;
+            const iofs = engine.GetIntegrationObjectFields(io.ID);
+
+            const fields = iofs.map(iof => {
+                const targetIOName = iof.RelatedIntegrationObjectID
+                    ? ioByID.get(iof.RelatedIntegrationObjectID) ?? null
+                    : null;
+                return {
+                    Name: iof.Name,
+                    Label: iof.DisplayName ?? iof.Name,
+                    Description: iof.Description ?? undefined,
+                    SourceType: iof.Type ?? 'string',
+                    IsRequired: iof.IsRequired ?? false,
+                    AllowsNull: iof.AllowsNull ?? undefined,
+                    MaxLength: iof.Length ?? null,
+                    Precision: iof.Precision ?? null,
+                    Scale: iof.Scale ?? null,
+                    DefaultValue: iof.DefaultValue ?? null,
+                    IsPrimaryKey: iof.IsPrimaryKey ?? false,
+                    IsUniqueKey: iof.IsUniqueKey ?? false,
+                    IsReadOnly: iof.IsReadOnly ?? false,
+                    IsForeignKey: !!iof.RelatedIntegrationObjectID,
+                    ForeignKeyTarget: targetIOName,
+                };
+            });
+
+            result.Objects.push({
+                ExternalName: io.Name,
+                ExternalLabel: io.DisplayName ?? io.Name,
+                Description: io.Description ?? undefined,
+                Fields: fields,
+                PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                Relationships: fields
+                    .filter(f => f.IsForeignKey && f.ForeignKeyTarget)
+                    .map(f => ({
+                        FieldName: f.Name,
+                        TargetObject: f.ForeignKeyTarget!,
+                        TargetField: 'ID',
+                    })),
+                IncrementalWatermarkField: io.IncrementalWatermarkField ?? undefined,
+            });
+        }
+        return result;
+    }
+
+    private async runSchemaRefreshPipeline(
+        companyIntegrationID: string,
+        user: UserInfo,
+        provider: IMetadataProvider,
+        universalPKConvention?: string,
+    ): Promise<CreateConnectionPipelineSummary> {
+        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
+        const pipeline = new IntegrationConnectorCreationPipeline();
+        const runOpts = {
+            Connector: connector,
+            CompanyIntegration: companyIntegration,
+            ContextUser: user,
+            Provider: provider,
+            UniversalPKConvention: universalPKConvention || undefined,
+            ConsoleMirror: true,
+            TriggerType: 'Manual' as const,
+        };
+        const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
+
+        // Refresh in-memory caches so downstream queries (object picker,
+        // ApplyAll, etc.) see the just-written IO/IOF rows.
+        await new Metadata().Refresh();
+        await IntegrationEngine.Instance.Config(true, user, provider);
+
+        return {
+            RunID: result.RunID,
+            ObjectsCreated: result.PersistResult?.ObjectsCreated ?? 0,
+            ObjectsUpdated: result.PersistResult?.ObjectsUpdated ?? 0,
+            FieldsCreated: result.PersistResult?.FieldsCreated ?? 0,
+            FieldsUpdated: result.PersistResult?.FieldsUpdated ?? 0,
+            UnresolvedObjects: result.UnresolvedObjects,
+            PKVerdicts: result.PKVerdicts.map(v => ({
+                ObjectName: v.ObjectName,
+                Confident: v.Confident,
+                Nominee: v.Nominee,
+                Confidence: v.Confidence,
+                Strategy: v.Strategy,
+                Reason: v.Reason,
+            })),
+        };
+    }
+
+    /**
      * Rolls back a freshly created connection by deleting both the CompanyIntegration and Credential records.
      */
     private async rollbackCreatedConnection(
@@ -1799,6 +2152,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     async IntegrationCreateConnection(
         @Arg("input") input: CreateConnectionInput,
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
+        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline (live introspect → persist Declared/Discovered/Custom → SoftPKClassifier). The intermittent server-side work the wizard's Forward step represents." }) runSchemaRefresh: boolean,
+        @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot). Improves SoftPKClassifier convergence." }) universalPKConvention: string | undefined,
         @Ctx() ctx: AppContext
     ): Promise<CreateConnectionOutput> {
         try {
@@ -1838,6 +2193,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             // 3. Optionally test the connection; rollback on failure
+            let testPassed: boolean = !testConnection; // if no test asked, treat as "passed" so the refresh below still runs
+            let testMessage = '';
             if (testConnection) {
                 const testResult = await this.testConnectionForCI(ci.ID, user, md);
                 if (!testResult.Success) {
@@ -1849,13 +2206,39 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         ConnectionTestMessage: testResult.Message
                     };
                 }
+                testPassed = true;
+                testMessage = testResult.Message;
+            }
+
+            // 4. Auto-run schema refresh pipeline (intermittent server-side period).
+            // Fires whenever runSchemaRefresh=true, regardless of whether the
+            // caller also asked for a test.  The wizard may have tested separately
+            // and just be hitting Create to save.
+            let schemaRefreshSummary: CreateConnectionPipelineSummary | undefined;
+            if (runSchemaRefresh) {
+                try {
+                    const refreshResult = await this.runSchemaRefreshPipeline(
+                        ci.ID, user, md, universalPKConvention
+                    );
+                    schemaRefreshSummary = refreshResult;
+                } catch (refreshErr) {
+                    // Refresh failure does NOT roll back the connection —
+                    // user can re-run via IntegrationRefreshConnectorSchema.
+                    LogError(`IntegrationCreateConnection: pipeline error — ${refreshErr}`);
+                }
+            }
+
+            if (testConnection || schemaRefreshSummary) {
                 return {
                     Success: true,
-                    Message: 'Connection created and test passed',
+                    Message: schemaRefreshSummary
+                        ? `Connection created${testConnection ? ', test passed' : ''}, schema refresh: ${schemaRefreshSummary.ObjectsCreated} created, ${schemaRefreshSummary.ObjectsUpdated} updated, ${schemaRefreshSummary.UnresolvedObjects.length} PK-unresolved`
+                        : 'Connection created and test passed',
                     CompanyIntegrationID: ci.ID,
                     CredentialID: credentialID,
-                    ConnectionTestSuccess: true,
-                    ConnectionTestMessage: testResult.Message
+                    ConnectionTestSuccess: testPassed,
+                    ConnectionTestMessage: testMessage,
+                    SchemaRefresh: schemaRefreshSummary,
                 };
             }
 
@@ -1881,6 +2264,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("configuration", { nullable: true }) configuration: string,
         @Arg("externalSystemID", { nullable: true }) externalSystemID: string,
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
+        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline. Same intermittent server-side step as the create flow." }) runSchemaRefresh: boolean,
+        @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -1921,7 +2306,25 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     await this.revertUpdateConnection(ci, oldConfiguration, oldExternalSystemID, oldCredentialValues, user, md);
                     return { Success: false, Message: `Connection test failed: ${testResult.Message}. Changes have been reverted.` };
                 }
-                return { Success: true, Message: 'Updated and connection test passed' };
+            }
+
+            // Auto-run schema refresh pipeline (intermittent server-side period).
+            // Fires whenever runSchemaRefresh=true, regardless of whether the
+            // caller also asked for a test — the wizard may have tested separately
+            // already and is just hitting Update to save edits.
+            if (runSchemaRefresh) {
+                try {
+                    const refreshResult = await this.runSchemaRefreshPipeline(
+                        companyIntegrationID, user, md, universalPKConvention
+                    );
+                    return {
+                        Success: true,
+                        Message: `Updated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
+                    };
+                } catch (refreshErr) {
+                    LogError(`IntegrationUpdateConnection: pipeline error — ${refreshErr}`);
+                    return { Success: true, Message: `Updated (schema refresh failed: ${this.formatError(refreshErr)})` };
+                }
             }
 
             return { Success: true, Message: 'Updated' };
@@ -2092,13 +2495,28 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
-            const introspect = connector.IntrospectSchema.bind(connector) as
-                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
-            const sourceSchema = await introspect(companyIntegration, user);
+            // Reconstruct source schema from the IO/IOF rows already persisted by
+            // the Phase 0 v5.39.x Save hook.  Fall back to live IntrospectSchema only
+            // for direct-API callers bypassing the wizard (empty IO cache).
+            const requestedNames = new Set(objects.map(o => o.SourceObjectName));
+            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                Array.from(requestedNames),
+            );
+            if (sourceSchema.Objects.length === 0) {
+                LogError(`[IntegrationApplySchema] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
+                const introspect = connector.IntrospectSchema.bind(connector) as
+                    (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
+                sourceSchema = await introspect(companyIntegration, user);
+            } else {
+                console.log(
+                    `[IntegrationApplySchema] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
+                    `— skipped duplicate IntrospectSchema (Save-hook already discovered).`
+                );
+            }
 
             await this.resolveObjectInputs(objects, sourceSchema, user);
 
-            const requestedNames = new Set(objects.map(o => o.SourceObjectName));
             const filteredSchema: SourceSchemaInfo = {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
             };
@@ -2242,71 +2660,78 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user, provider);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-            // Step 1b: Ensure IntegrationEngine cache is populated so IntrospectSchema's
-            // DB fallback (GetCachedObject/GetCachedFields) can find IntegrationObject records
+            // Step 1b: Ensure IntegrationEngine cache is populated so the persisted
+            // IO/IOF rows are available for reconstruction below.
             await IntegrationEngine.Instance.Config(false, user);
 
-            // Step 2: Introspect source schema and persist discovered objects/fields
-            const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
-                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
-
-            // Step 2b: Persist discovered objects/fields to IntegrationObject/IntegrationObjectField.
-            // Static records (IsCustom=false) are preserved; new/custom records get IsCustom=true.
-            // This ensures custom objects are available for future sync runs, action generation, etc.
-            try {
-                const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
-                    IntegrationID: companyIntegration.IntegrationID,
-                    SourceSchema: sourceSchema,
-                    ContextUser: user,
-                });
-                if (persistResult.ObjectsCreated > 0 || persistResult.FieldsCreated > 0) {
-                    console.log(
-                        `[IntegrationApplyAll] Persisted discovered schema: ` +
-                        `${persistResult.ObjectsCreated} new objects, ${persistResult.FieldsCreated} new fields, ` +
-                        `${persistResult.ObjectsUpdated} updated objects, ${persistResult.FieldsUpdated} updated fields`
-                    );
-                }
-
-                // Step 2c: Generate CRUD actions for newly discovered custom objects.
-                // Uses the same ActionMetadataGenerator as the offline CLI, persisted via BaseEntity.Save().
-                if (persistResult.ObjectsCreated > 0) {
-                    try {
-                        const engineObjects = IntegrationEngine.Instance
-                            .GetIntegrationObjectsByIntegrationID(companyIntegration.IntegrationID);
-                        const customObjects = sourceSchema.Objects
-                            .filter(o => !engineObjects
-                                .some(ex => ex.Name.toLowerCase() === o.ExternalName.toLowerCase() && !ex.IsCustom))
-                            .map(o => ({
-                                Name: o.ExternalName,
-                                DisplayName: o.ExternalLabel || o.ExternalName,
-                                Description: o.Description,
-                                SupportsWrite: false,
-                                Fields: o.Fields.map(f => ({
-                                    Name: f.Name,
-                                    DisplayName: f.Label || f.Name,
-                                    Description: f.Description || '',
-                                    Type: f.SourceType || 'string',
-                                    IsRequired: f.IsRequired,
-                                    IsReadOnly: false,
-                                    IsPrimaryKey: f.IsPrimaryKey,
-                                })),
-                            }));
-                        await IntegrationSchemaSync.GenerateActionsForCustomObjects({
-                            IntegrationName: companyIntegration.Integration,
-                            CustomObjects: customObjects,
-                            SupportsSearch: connector.SupportsSearch,
-                            SupportsListing: connector.SupportsListing,
-                            ContextUser: user,
-                        });
-                    } catch (actionErr) {
-                        const msg = actionErr instanceof Error ? actionErr.message : String(actionErr);
-                        console.warn(`[IntegrationApplyAll] Action generation warning (non-fatal): ${msg}`);
+            // Step 2: Reconstruct SourceSchemaInfo from the persisted IO/IOF rows
+            // (already freshened by the Phase 0 v5.39.x MJCompanyIntegrationEntityServer
+            // Save hook on IsActive false→true).  Avoids the duplicate vendor-API
+            // introspect that used to fire here.
+            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            if (sourceSchema.Objects.length === 0) {
+                // Fallback: the engine cache is empty (Save hook didn't run, or this
+                // is a direct-API caller bypassing the wizard).  Do a one-time live
+                // introspect + persist + action-generation so the apply still proceeds.
+                LogError(`[IntegrationApplyAll] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
+                sourceSchema = await (connector.IntrospectSchema.bind(connector) as
+                    (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+                try {
+                    const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
+                        IntegrationID: companyIntegration.IntegrationID,
+                        SourceSchema: sourceSchema,
+                        ContextUser: user,
+                    });
+                    if (persistResult.ObjectsCreated > 0 || persistResult.FieldsCreated > 0) {
+                        console.log(
+                            `[IntegrationApplyAll] Fallback persist: ` +
+                            `${persistResult.ObjectsCreated} new objects, ${persistResult.FieldsCreated} new fields, ` +
+                            `${persistResult.ObjectsUpdated} updated objects, ${persistResult.FieldsUpdated} updated fields`
+                        );
                     }
+                    if (persistResult.ObjectsCreated > 0) {
+                        try {
+                            const engineObjects = IntegrationEngine.Instance
+                                .GetIntegrationObjectsByIntegrationID(companyIntegration.IntegrationID);
+                            const customObjects = sourceSchema.Objects
+                                .filter(o => !engineObjects
+                                    .some(ex => ex.Name.toLowerCase() === o.ExternalName.toLowerCase() && !ex.IsCustom))
+                                .map(o => ({
+                                    Name: o.ExternalName,
+                                    DisplayName: o.ExternalLabel || o.ExternalName,
+                                    Description: o.Description,
+                                    SupportsWrite: false,
+                                    Fields: o.Fields.map(f => ({
+                                        Name: f.Name,
+                                        DisplayName: f.Label || f.Name,
+                                        Description: f.Description || '',
+                                        Type: f.SourceType || 'string',
+                                        IsRequired: f.IsRequired,
+                                        IsReadOnly: false,
+                                        IsPrimaryKey: f.IsPrimaryKey,
+                                    })),
+                                }));
+                            await IntegrationSchemaSync.GenerateActionsForCustomObjects({
+                                IntegrationName: companyIntegration.Integration,
+                                CustomObjects: customObjects,
+                                SupportsSearch: connector.SupportsSearch,
+                                SupportsListing: connector.SupportsListing,
+                                ContextUser: user,
+                            });
+                        } catch (actionErr) {
+                            const msg = actionErr instanceof Error ? actionErr.message : String(actionErr);
+                            console.warn(`[IntegrationApplyAll] Action generation warning (non-fatal): ${msg}`);
+                        }
+                    }
+                } catch (persistErr) {
+                    const msg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+                    console.warn(`[IntegrationApplyAll] Schema persistence warning (non-fatal): ${msg}`);
                 }
-            } catch (persistErr) {
-                // Non-fatal: schema persistence failure should not block table creation
-                const msg = persistErr instanceof Error ? persistErr.message : String(persistErr);
-                console.warn(`[IntegrationApplyAll] Schema persistence warning (non-fatal): ${msg}`);
+            } else {
+                console.log(
+                    `[IntegrationApplyAll] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
+                    `— skipped duplicate IntrospectSchema (Save-hook already discovered).`
+                );
             }
 
             const resolved = await this.resolveSourceObjectsToNames(input.SourceObjects, sourceSchema, user);
@@ -2633,20 +3058,38 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<{ schemaOutput: SchemaBuilderOutput; rsuInput: RSUPipelineInput }> {
         const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
-        // If the caller already ran IntrospectSchema (e.g. IntegrationApplyAllBatch),
-        // reuse it. The legacy path was running introspect TWICE per apply — once
-        // in the resolver and once here — which doubled probe time on connectors
-        // like Sage Intacct AND silently dropped selections when the second pass
-        // returned fewer objects than the first (rate limits, transient errors).
-        // The picked items would then fail to match `filteredSchema` below and
-        // get silently stripped before reaching buildTargetConfigs.
+        // Source-schema resolution order:
+        //   1. Use prefetched schema if the caller passed one (legacy ApplyAllBatch path).
+        //   2. Reconstruct from persisted IO/IOF rows — the Phase 0 v5.39.x Save hook
+        //      already discovered + persisted everything when the wizard flipped
+        //      `IsActive false→true`.  No need to re-hit the vendor API.
+        //   3. Only when both above are empty do we fall back to live IntrospectSchema
+        //      (direct-API callers bypassing the wizard).
+        //
+        // Pre-Phase-0 the legacy path ran introspect TWICE per apply — once in the
+        // resolver and once here — which doubled probe time on connectors like Sage
+        // Intacct AND silently dropped selections when the second pass returned
+        // fewer objects than the first (rate limits, transient errors).
         let sourceSchema: SourceSchemaInfo;
         if (prefetchedSourceSchema) {
             sourceSchema = prefetchedSourceSchema;
         } else {
-            const introspect = connector.IntrospectSchema.bind(connector) as
-                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
-            sourceSchema = await introspect(companyIntegration, user);
+            const requestedNamesForReuse = objects.map(o => o.SourceObjectName);
+            sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                requestedNamesForReuse,
+            );
+            if (sourceSchema.Objects.length === 0) {
+                LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
+                const introspect = connector.IntrospectSchema.bind(connector) as
+                    (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
+                sourceSchema = await introspect(companyIntegration, user);
+            } else {
+                console.log(
+                    `[buildSchemaForConnector] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
+                    `— skipped duplicate IntrospectSchema (Save-hook already discovered).`
+                );
+            }
         }
 
         // Normalize names to match source schema casing
@@ -3433,6 +3876,139 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    // ── STRUCTURED RUN ARTIFACTS (durable, growing JSONL streams) ────────
+
+    /**
+     * Lists integration runs (sync, connector-creation, RSU, discovery, …) from the
+     * durable progress-artifact store, newest-first. Use this to render run history
+     * with live status for a multi-tenant control surface. Optionally scope to a
+     * single connector and/or run kind, or to only in-flight runs.
+     */
+    @Query(() => IntegrationListRunsOutput)
+    async IntegrationListRuns(
+        @Ctx() ctx: AppContext,
+        @Arg("companyIntegrationID", { nullable: true }) companyIntegrationID?: string,
+        @Arg("runKind", { nullable: true }) runKind?: string,
+        @Arg("inFlightOnly", { nullable: true }) inFlightOnly?: boolean,
+        @Arg("limit", { defaultValue: 50 }) limit?: number,
+    ): Promise<IntegrationListRunsOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const reader = new IntegrationProgressReader();
+            const snaps = await reader.ListRuns({
+                companyIntegrationID,
+                runKind: runKind as IntegrationRunKind | undefined,
+                inFlightOnly: inFlightOnly ?? false,
+            }, limit ?? 50);
+            return { Success: true, Message: `${snaps.length} run(s)`, Runs: snaps.map(s => this.toRunSummaryArtifact(s)) };
+        } catch (e) {
+            LogError(`IntegrationListRuns error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * Returns the summary of a single run (manifest + terminal result + latest counts).
+     * Pair with IntegrationTailRunEvents to read the full event stream.
+     */
+    @Query(() => IntegrationRunDetailOutput)
+    async IntegrationGetRun(
+        @Arg("runID") runID: string,
+        @Ctx() ctx: AppContext,
+    ): Promise<IntegrationRunDetailOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const reader = new IntegrationProgressReader();
+            const snap = await reader.GetRun(runID);
+            if (!snap) return { Success: false, Message: `Run '${runID}' not found` };
+            return {
+                Success: true,
+                Message: 'OK',
+                Run: this.toRunSummaryArtifact(snap),
+                Errors: snap.result?.errors?.map(er => er.stage ? `[${er.stage}] ${er.message}` : er.message),
+            };
+        } catch (e) {
+            LogError(`IntegrationGetRun error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * Tails a run's structured event stream from a given sequence number. The stream
+     * grows over the life of the run, so a client polls with the last LatestSeq it
+     * saw to fetch only the new events. IsInFlight=false signals the run is terminal
+     * and polling can stop.
+     */
+    @Query(() => IntegrationRunEventsOutput)
+    async IntegrationTailRunEvents(
+        @Arg("runID") runID: string,
+        @Ctx() ctx: AppContext,
+        @Arg("sinceSeq", { defaultValue: 0 }) sinceSeq?: number,
+    ): Promise<IntegrationRunEventsOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const reader = new IntegrationProgressReader();
+            const snap = await reader.GetRun(runID);
+            if (!snap) return { Success: false, Message: `Run '${runID}' not found`, LatestSeq: sinceSeq ?? 0, IsInFlight: false };
+            const events = await reader.Tail(runID, sinceSeq ?? 0);
+            const latestSeq = events.length > 0 ? events[events.length - 1].seq : (sinceSeq ?? 0);
+            return {
+                Success: true,
+                Message: `${events.length} event(s)`,
+                Events: events.map(ev => ({
+                    Ts: ev.ts,
+                    Seq: ev.seq,
+                    EventType: ev.eventType,
+                    Level: ev.level,
+                    Stage: ev.stage,
+                    Message: ev.message,
+                    Counts: this.toCountsOutput(ev.counts),
+                    DataJSON: ev.data ? JSON.stringify(ev.data) : undefined,
+                    ResumableStateJSON: ev.resumableState ? JSON.stringify(ev.resumableState) : undefined,
+                })),
+                LatestSeq: latestSeq,
+                IsInFlight: snap.isInFlight,
+            };
+        } catch (e) {
+            LogError(`IntegrationTailRunEvents error: ${e}`);
+            return { Success: false, Message: this.formatError(e), LatestSeq: sinceSeq ?? 0, IsInFlight: false };
+        }
+    }
+
+    /** Maps a reader snapshot to the GraphQL summary shape. */
+    private toRunSummaryArtifact(s: IntegrationRunSnapshot): IntegrationRunSummaryArtifactOutput {
+        return {
+            RunID: s.manifest.runID,
+            RunKind: s.manifest.runKind,
+            IntegrationID: s.manifest.integrationID,
+            CompanyIntegrationID: s.manifest.companyIntegrationID,
+            ObjectName: s.manifest.objectName,
+            TriggerType: s.manifest.triggerType,
+            StartedAt: s.manifest.startedAt,
+            IsInFlight: s.isInFlight,
+            EventCount: s.eventCount,
+            Success: s.result?.success,
+            ExitReason: s.result?.exitReason,
+            CompletedAt: s.result?.completedAt,
+            DurationMs: s.result?.durationMs,
+            LatestEventType: s.latestEvent?.eventType,
+            LatestMessage: s.latestEvent?.message,
+            Counts: this.toCountsOutput(s.counts),
+        };
+    }
+
+    /** Maps the reader's lowercase counts shape to the PascalCase GraphQL output. */
+    private toCountsOutput(c?: { processed?: number; succeeded?: number; failed?: number; skipped?: number; totalKnown?: number }): IntegrationRunCountsOutput | undefined {
+        if (!c) return undefined;
+        return {
+            Processed: c.processed,
+            Succeeded: c.succeeded,
+            Failed: c.failed,
+            Skipped: c.skipped,
+            TotalKnown: c.totalKnown,
+        };
+    }
+
     // ── CONNECTOR CAPABILITIES ──────────────────────────────────────────
 
     /**
@@ -3555,29 +4131,42 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                             fieldsByName.set(p.Name.toLowerCase(), p.Fields);
                         }
                     } else {
-                        // Legacy path (HubSpot, YourMembership, Sage Intacct, etc.)
-                        // — describe all, persist all, then resolve by either
-                        // SourceObjectID (legacy clients) OR SourceObjectName
-                        // (newly-discovered objects from connectors that probe
-                        // their full catalog at picker time, e.g. SI's 666
-                        // candidates). Without this fallback, freshly-probed
-                        // selections silently drop.
-                        sourceSchema = await (connector.IntrospectSchema.bind(connector) as
-                            (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
-
-                        try {
-                            const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
-                                IntegrationID: companyIntegration.IntegrationID,
-                                SourceSchema: sourceSchema,
-                                ContextUser: user,
-                            });
+                        // Legacy path (HubSpot, YourMembership, Sage Intacct, etc.).
+                        //
+                        // Phase 0 v5.39.x change: the `MJCompanyIntegrationEntityServer.Save()`
+                        // hook already ran the full discovery + persist pipeline when
+                        // the wizard's Finish flipped `IsActive false→true`.  The IO/IOF
+                        // rows in `IntegrationEngineBase`'s cache are already fresh.
+                        // Calling `connector.IntrospectSchema()` again here just to feed
+                        // `SchemaBuilder` doubles the vendor-API roundtrip — on HubSpot
+                        // (130 objects, 60+ DiscoverFields probes) that's an extra ~100s
+                        // wasted per Apply.  Reconstruct `SourceSchemaInfo` from the
+                        // persisted rows instead.
+                        //
+                        // Persist is also skipped here — the Save hook already did it.
+                        sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+                        if (sourceSchema.Objects.length === 0) {
+                            // Defensive fallback: if the engine cache is empty (hook
+                            // didn't run, or this is a direct-API caller that bypasses
+                            // the wizard), do a one-time live introspect + persist so
+                            // the apply still proceeds.  Rare.
+                            LogError(`[IntegrationApplyAllBatch] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
+                            sourceSchema = await (connector.IntrospectSchema.bind(connector) as
+                                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+                            try {
+                                await IntegrationSchemaSync.PersistDiscoveredSchema({
+                                    IntegrationID: companyIntegration.IntegrationID,
+                                    SourceSchema: sourceSchema,
+                                    ContextUser: user,
+                                });
+                            } catch (persistErr) {
+                                LogError(`IntegrationApplyAllBatch: PersistDiscoveredSchema fallback failed for ${companyIntegration.Integration}: ${persistErr}`);
+                            }
+                        } else {
                             console.log(
-                                `[IntegrationApplyAllBatch] Persisted discovered schema for ${companyIntegration.Integration}: ` +
-                                `${persistResult.ObjectsCreated} new objects, ${persistResult.FieldsCreated} new fields, ` +
-                                `${persistResult.ObjectsUpdated} updated objects, ${persistResult.FieldsUpdated} updated fields`
+                                `[IntegrationApplyAllBatch] Reusing ${sourceSchema.Objects.length} persisted IOs for ${companyIntegration.Integration} ` +
+                                `— skipped duplicate IntrospectSchema (Save-hook already discovered).`
                             );
-                        } catch (persistErr) {
-                            LogError(`IntegrationApplyAllBatch: PersistDiscoveredSchema failed for ${companyIntegration.Integration}: ${persistErr}`);
                         }
 
                         // Resolve names from BOTH ID lookups and direct names.

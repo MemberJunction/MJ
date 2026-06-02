@@ -1,0 +1,9 @@
+{
+  "concept": "total_due_amount",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent the same semantic concept of a monetary total, currency amounts are not used as identifiers to link records across entities. Like timestamps, they are shared attributes but do not function as organic keys for record matching.",
+  "outliers": [],
+  "subClusters": []
+}

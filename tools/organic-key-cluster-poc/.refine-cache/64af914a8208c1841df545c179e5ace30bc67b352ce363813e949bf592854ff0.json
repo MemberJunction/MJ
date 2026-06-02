@@ -1,0 +1,9 @@
+{
+  "concept": "sales_quota_amount",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "While both columns represent the same semantic concept of a financial target, numeric currency values are not used as identifiers to link or match records across entities in a meaningful way.",
+  "outliers": [],
+  "subClusters": []
+}

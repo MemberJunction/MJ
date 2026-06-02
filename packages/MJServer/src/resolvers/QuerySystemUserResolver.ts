@@ -350,14 +350,20 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * automatically without manual updates. Related entity arrays are mapped explicitly.
      */
     private buildSuccessResult(entity: MJQueryEntityServer): QueryMutationResultType {
+        // Casts through unknown — the server-side related-array accessors return
+        // *Info shapes (read-only projections from the engine cache), while the
+        // map helpers were typed against the full BaseEntity subclasses. The map
+        // helpers only touch fields the *Info shapes already carry, so the cast
+        // is safe and unblocks the build. Pre-existing on this branch; fixed
+        // here so the new IntegrationRefreshConnectorSchema mutation can build.
         return {
             Success: true,
             Query: {
                 ...entity.GetAll(),
-                MJQueryFields_QueryIDArray: this.mapFields(entity.QueryFields),
-                MJQueryParameters_QueryIDArray: this.mapParameters(entity.QueryParameters),
-                MJQueryEntities_QueryIDArray: this.mapEntities(entity.QueryEntities),
-                MJQueryPermissions_QueryIDArray: this.mapPermissions(entity.QueryPermissions),
+                MJQueryFields_QueryIDArray: this.mapFields(entity.QueryFields as unknown as MJQueryFieldEntity[]),
+                MJQueryParameters_QueryIDArray: this.mapParameters(entity.QueryParameters as unknown as MJQueryParameterEntity[]),
+                MJQueryEntities_QueryIDArray: this.mapEntities(entity.QueryEntities as unknown as MJQueryEntityEntity[]),
+                MJQueryPermissions_QueryIDArray: this.mapPermissions(entity.QueryPermissions as unknown as MJQueryPermissionEntity[]),
             } as MJQuery_
         };
     }

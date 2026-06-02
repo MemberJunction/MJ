@@ -1,0 +1,11 @@
+{
+  "concept": "sales_reason_id",
+  "isUsefulOrganicKey": true,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "The cluster correctly identifies SalesReasonID across tables, which is a valid business identifier for matching. SalesOrderID is a distinct identifier for a different entity and is an outlier.",
+  "outliers": [
+    "Sales.SalesOrderHeaderSalesReason.SalesOrderID"
+  ],
+  "subClusters": []
+}

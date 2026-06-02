@@ -461,15 +461,43 @@ export abstract class BaseIntegrationConnector {
                 const myIdx = nextIdx++;
                 if (myIdx >= total) return;
                 const obj = objects[myIdx];
+                const objStart = Date.now();
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'introspect.object.start',
+                    objectIndex: myIdx + 1,
+                    total,
+                    objectName: obj.Name,
+                }));
                 let fields: ExternalFieldSchema[];
                 try {
                     fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
                     console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
+                    console.log(JSON.stringify({
+                        ts: new Date().toISOString(),
+                        event: 'introspect.object.skipped',
+                        objectIndex: myIdx + 1,
+                        total,
+                        objectName: obj.Name,
+                        error: msg,
+                        durationMs: Date.now() - objStart,
+                    }));
                     skipped++;
                     continue;
                 }
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'introspect.object.complete',
+                    objectIndex: myIdx + 1,
+                    total,
+                    objectName: obj.Name,
+                    fieldsDiscovered: fields.length,
+                    primaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                    foreignKeyFields: fields.filter(f => f.IsForeignKey).length,
+                    durationMs: Date.now() - objStart,
+                }));
                 result.Objects.push({
                     ExternalName: obj.Name,
                     ExternalLabel: obj.Label,

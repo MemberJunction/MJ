@@ -1,0 +1,9 @@
+{
+  "concept": "discount_value",
+  "isUsefulOrganicKey": false,
+  "normalization": "ExactMatch",
+  "confidence": 0.95,
+  "reasoning": "These columns represent numeric measures (percentages or amounts) rather than business identifiers. While they share a semantic meaning, matching records based on a shared discount value is not a standard or reliable way to link entities compared to using a SpecialOfferID.",
+  "outliers": [],
+  "subClusters": []
+}
