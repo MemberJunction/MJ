@@ -71,6 +71,16 @@ interface PaginatedFetchResult {
     NextCursor?: string;
 }
 
+/** One template variable resolved to its parent IntegrationObject + FK field. */
+interface ResolvedTemplateVar {
+    /** The `{var}` placeholder name as it appears in APIPath. */
+    templateVar: string;
+    /** The field name to tag fetched child records with (the resolved parent ID). */
+    fkFieldName: string;
+    /** The parent IntegrationObject this var resolves to. */
+    parentObjectID: string;
+}
+
 /** Maximum number of pages to fetch before stopping (safety limit to prevent infinite loops) */
 
 // ─── BaseRESTIntegrationConnector ────────────────────────────────────
@@ -497,9 +507,16 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     // ── Per-parent fetch (template variables) ────────────────────────
 
     /**
-     * Fetches records from a template-variable endpoint by iterating over parent records.
-     * Identifies the parent object from FK field metadata, loads parent IDs from the
-     * local database, then fetches child records per parent.
+     * Fetches records from a template-variable endpoint, generalized to MULTI-LEVEL
+     * (nested / chained) paths such as `/orgs/{OrgID}/depts/{DeptID}/employees`.
+     *
+     * Each `{var}` is resolved to a parent IntegrationObject; the engine then walks the
+     * FK dependency graph in path order (outermost first), loading each level's parent
+     * IDs — filtered by the OUTER parent via FK when one links them (true nested
+     * semantics, avoids a cartesian 404 storm), or unfiltered when the vars are
+     * independent — substituting them into the path until it is flat, then fetching.
+     * This is the connector-side realization of the topological traversal the engine
+     * already uses for sync ORDER. A single-var path behaves exactly as before.
      */
     private async FetchWithTemplateVars(
         auth: RESTAuthContext,
@@ -509,100 +526,141 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         templateVars: string[],
         ctx: FetchContext
     ): Promise<FetchBatchResult> {
-        const parentInfo = this.ResolveParentInfo(fields, templateVars, ctx.CompanyIntegration.IntegrationID);
-        if (!parentInfo) {
-            console.warn(
-                `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template variables ` +
-                `[${templateVars.join(', ')}] could not be resolved to a parent object.`
-            );
-            return { Records: [], HasMore: false };
+        const resolutions: ResolvedTemplateVar[] = [];
+        const seenParents = new Set<string>();
+        for (const tVar of templateVars) {
+            const info = this.ResolveParentForVar(fields, tVar, ctx.CompanyIntegration.IntegrationID);
+            if (!info) {
+                console.warn(
+                    `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template variable ` +
+                    `{${tVar}} could not be resolved to a parent object.`
+                );
+                return { Records: [], HasMore: false };
+            }
+            // Cycle guard: a parent chain that revisits an object is a metadata error —
+            // name the offending edge instead of looping forever.
+            if (seenParents.has(info.parentObjectID)) {
+                console.warn(
+                    `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template-var dependency ` +
+                    `cycle at {${tVar}} → a parent object already present in the chain.`
+                );
+                return { Records: [], HasMore: false };
+            }
+            seenParents.add(info.parentObjectID);
+            resolutions.push(info);
         }
 
-        const parentIDs = await this.LoadParentIDs(parentInfo.parentObjectID, ctx.ContextUser);
         const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
-        const allRecords: ExternalRecord[] = [];
-
-        for (const parentID of parentIDs) {
-            const resolvedPath = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, parentID);
-            const fullURL = this.BuildFullURL(baseURL, resolvedPath);
-            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
-
-            const tagged = result.Records.map(r => {
-                r[parentInfo.fkFieldName] = parentID;
-                const transformed = this.TransformRecord(r, obj, fields);
-                return this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames);
-            });
-
-            allRecords.push(...tagged);
-        }
-
-        return { Records: allRecords, HasMore: false };
+        const out: ExternalRecord[] = [];
+        await this.DescendTemplateVars(auth, baseURL, obj, fields, resolutions, 0, obj.APIPath, {}, [], ctx, pkFieldNames, out);
+        return { Records: out, HasMore: false };
     }
 
     /**
-     * Resolves which template variable maps to which FK field + parent object.
+     * Recursive descent over the ordered template-var resolutions, one layer per level.
      *
-     * Resolution strategy (in order):
-     * 1. Explicit: FK field with RelatedIntegrationObjectID that matches a template var name
-     * 2. PK fallback: finds a sibling integration object whose primary key field name
-     *    matches the template var, allowing resolution without explicit FK metadata
-     *
-     * Returns null if no match is found by either strategy.
+     * Each layer's records are constrained to the valid SUBSET of the combinations of
+     * ALL prior layers: this level's parent is filtered by an FK to EVERY prior-layer
+     * parent it links to (AND-combined). A prior layer this parent has no FK to leaves
+     * that axis unconstrained (cartesian). So `outerStack` carries every prior layer's
+     * (objectID, idValue) — not just the immediate parent — which is what makes a
+     * layer-2 endpoint depending on both layer-0 and layer-1 prune correctly. At the leaf
+     * (all vars substituted) it fetches with pagination and tags each record with the
+     * resolved parent FK values.
      */
-    private ResolveParentInfo(
+    private async DescendTemplateVars(
+        auth: RESTAuthContext,
+        baseURL: string,
+        obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
-        templateVars: string[],
+        resolutions: ResolvedTemplateVar[],
+        level: number,
+        path: string,
+        fkTags: Record<string, string>,
+        outerStack: Array<{ objectID: string; idValue: string }>,
+        ctx: FetchContext,
+        pkFieldNames: string[],
+        out: ExternalRecord[]
+    ): Promise<void> {
+        if (level >= resolutions.length) {
+            const fullURL = this.BuildFullURL(baseURL, path);
+            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+            for (const r of result.Records) {
+                for (const [k, v] of Object.entries(fkTags)) r[k] = v;
+                const transformed = this.TransformRecord(r, obj, fields);
+                out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
+            }
+            return;
+        }
+
+        const res = resolutions[level];
+        // Prune to the valid subset: one AND-filter per prior layer this parent has an FK to.
+        const filters: Array<{ column: string; value: string }> = [];
+        for (const prior of outerStack) {
+            const fkCol = this.FindFKColumnToParent(res.parentObjectID, prior.objectID);
+            if (fkCol) filters.push({ column: fkCol, value: prior.idValue });
+        }
+        const parentIDs = await this.LoadParentIDs(res.parentObjectID, ctx.ContextUser, filters);
+
+        for (const parentID of parentIDs) {
+            const nextPath = this.SubstituteTemplateVars(path, res.templateVar, parentID);
+            const nextTags = { ...fkTags, [res.fkFieldName]: parentID };
+            await this.DescendTemplateVars(
+                auth, baseURL, obj, fields, resolutions, level + 1, nextPath, nextTags,
+                [...outerStack, { objectID: res.parentObjectID, idValue: parentID }],
+                ctx, pkFieldNames, out
+            );
+        }
+    }
+
+    /**
+     * Resolves a SINGLE template variable to its parent object + FK field.
+     *
+     * Strategy (in order):
+     * 1. Explicit: an FK field (RelatedIntegrationObjectID) whose name matches the var.
+     * 2. PK fallback: a sibling integration object whose primary-key field name matches
+     *    the var (e.g. {ProfileID} → the Members object whose PK field is "ProfileID"),
+     *    allowing resolution without explicit FK metadata.
+     *
+     * Returns null when neither strategy matches.
+     */
+    private ResolveParentForVar(
+        fields: MJIntegrationObjectFieldEntity[],
+        templateVar: string,
         integrationID: string
-    ): { templateVar: string; fkFieldName: string; parentObjectID: string } | null {
-        // Strategy 1: Explicit FK field with RelatedIntegrationObjectID
+    ): ResolvedTemplateVar | null {
+        const tVarLower = templateVar.toLowerCase();
+
+        // Strategy 1: explicit FK field whose name matches this var.
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
-
-            for (const tVar of templateVars) {
-                if (field.Name.toLowerCase().includes(tVar.toLowerCase())) {
-                    return {
-                        templateVar: tVar,
-                        fkFieldName: field.Name,
-                        parentObjectID: field.RelatedIntegrationObjectID,
-                    };
-                }
+            if (field.Name.toLowerCase().includes(tVarLower)) {
+                return { templateVar, fkFieldName: field.Name, parentObjectID: field.RelatedIntegrationObjectID };
             }
         }
 
-        // Strategy 2: Match template var against PK fields of sibling objects
-        return this.ResolveParentByPKMatch(templateVars, integrationID);
-    }
-
-    /**
-     * Fallback resolution: finds a sibling integration object whose primary key
-     * field name matches one of the template variables (case-insensitive).
-     * E.g., {ProfileID} matches Members object which has PK field "ProfileID".
-     */
-    private ResolveParentByPKMatch(
-        templateVars: string[],
-        integrationID: string
-    ): { templateVar: string; fkFieldName: string; parentObjectID: string } | null {
+        // Strategy 2: sibling object whose PK field name equals this var.
         const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
-
-        for (const tVar of templateVars) {
-            const tVarLower = tVar.toLowerCase();
-
-            for (const sibling of siblingObjects) {
-                const siblingFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID);
-                const pkField = siblingFields.find(f => f.IsPrimaryKey);
-                if (!pkField) continue;
-
-                if (pkField.Name.toLowerCase() === tVarLower) {
-                    return {
-                        templateVar: tVar,
-                        fkFieldName: tVar, // Use the template var name as the FK field name
-                        parentObjectID: sibling.ID,
-                    };
-                }
+        for (const sibling of siblingObjects) {
+            const siblingFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID);
+            const pkField = siblingFields.find(f => f.IsPrimaryKey);
+            if (pkField && pkField.Name.toLowerCase() === tVarLower) {
+                return { templateVar, fkFieldName: templateVar, parentObjectID: sibling.ID };
             }
         }
 
         return null;
+    }
+
+    /**
+     * Finds the FK column on `innerObjectID` that points at `outerObjectID` — used to
+     * filter a child level by its parent in a nested path. Returns null when no FK links
+     * them, in which case that level loads unfiltered (independent vars / cartesian).
+     */
+    private FindFKColumnToParent(innerObjectID: string, outerObjectID: string): string | null {
+        const innerFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(innerObjectID);
+        const fk = innerFields.find(f => f.RelatedIntegrationObjectID && UUIDsEqual(f.RelatedIntegrationObjectID, outerObjectID));
+        return fk ? fk.Name : null;
     }
 
     /**
@@ -612,7 +670,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     private async LoadParentIDs(
         parentObjectID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        filters?: Array<{ column: string; value: string }>
     ): Promise<string[]> {
         // Use engine cache for metadata lookups
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
@@ -639,9 +698,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         }
 
         const entityName = entityMapResult.Results[0].Entity;
+        // Constrain to the rows satisfying every prior-layer FK (AND). Bare identifiers →
+        // the PG provider auto-quotes them; values are single-quote-escaped.
+        const extraFilter = filters && filters.length > 0
+            ? filters.map(f => `${f.column}='${String(f.value).replace(/'/g, "''")}'`).join(' AND ')
+            : undefined;
         const idResult = await rv.RunView<Record<string, unknown>>({
             EntityName: entityName,
             Fields: [pkFieldName],
+            ExtraFilter: extraFilter,
             ResultType: 'simple',
         }, contextUser);
 
