@@ -22,13 +22,15 @@ ALTER TABLE ${flyway:defaultSchema}.EntityField ADD CONSTRAINT CK_EntityField_Ex
 GO
 
 -- Backfill: opt existing icon-bearing fields into the new behavior. Any field
--- whose Name contains 'Icon' and has no ExtendedType set is assumed to hold an
+-- whose Name starts or ends with 'Icon' and has no ExtendedType set is assumed to hold an
 -- icon class (e.g. Icon, IconClass, DisplayIcon, IconURL...). Only touches rows
 -- where ExtendedType IS NULL, so explicit choices are preserved.
 UPDATE ${flyway:defaultSchema}.EntityField
    SET ExtendedType = 'Icon'
- WHERE ExtendedType IS NULL
-   AND Name LIKE '%Icon%';
+ WHERE 
+   ExtendedType IS NULL
+   AND (Name LIKE 'Icon%' OR Name LIKE '%Icon' ) 
+   AND EntityID IN (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE SchemaName = '__mj');
 GO
 
 -- Refresh the column's documentation so CodeGen carries the new option through
