@@ -79,7 +79,13 @@ interface FKColumnPlan {
   NameFieldName: string;
   /** Code name of the related entity's PK field used as the FK value. */
   PkFieldName: string;
-  /** Extra DefaultInView field code names (excludes name + PK + icon). */
+  /**
+   * The ordered list of ALL display columns INCLUDING the name field — this is the
+   * user-reorderable column order. The name field is always present (can't be hidden)
+   * but may sit anywhere in the order.
+   */
+  ColumnFields: string[];
+  /** Non-name display columns (ColumnFields minus the name field), for cell building. */
   ExtraFieldNames: string[];
   /** Friendly headers for the extra columns, index-aligned with ExtraFieldNames. */
   ExtraHeaders: string[];
@@ -806,13 +812,15 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const iconField = relatedEntity.Fields.find(f => f.ExtendedType === 'Icon');
     const iconFieldName = iconField?.Name ?? null;
 
-    const extra = this.computeExtraColumns(relatedEntity, nameFieldName, pkFieldName, iconFieldName);
+    const columnFields = this.computeOrderedColumns(relatedEntity, nameFieldName, pkFieldName, iconFieldName);
+    const extraFieldNames = columnFields.filter(c => c !== nameFieldName);
 
     this._fkColumnPlan = {
       NameFieldName: nameFieldName,
       PkFieldName: pkFieldName,
-      ExtraFieldNames: extra.map(f => f.Name),
-      ExtraHeaders: extra.map(f => f.DisplayNameOrName),
+      ColumnFields: columnFields,
+      ExtraFieldNames: extraFieldNames,
+      ExtraHeaders: extraFieldNames.map(n => this.labelForRelatedField(n)),
       IconFieldName: iconFieldName,
       EntityIcon: relatedEntity.Icon || null
     };
@@ -836,28 +844,39 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
-   * The extra (non-name) columns to render. Honors a user `visibleFields` override
-   * (exact set + order, letting them add fields like ID or drop defaults); otherwise
-   * falls back to the entity's `DefaultInView` columns (minus FK/PK noise).
+   * The ordered list of display columns INCLUDING the name field — the user-reorderable
+   * column order. Honors a user `visibleFields` override (exact set + order, letting them
+   * add fields like ID, drop defaults, or move the name field); otherwise falls back to
+   * `[name, ...DefaultInView columns]`. The name field is always guaranteed present, and
+   * the icon field is never a text column.
    */
-  private computeExtraColumns(
+  private computeOrderedColumns(
     relatedEntity: EntityInfo, nameFieldName: string, pkFieldName: string, iconFieldName: string | null
-  ): EntityFieldInfo[] {
-    const notReserved = (f: EntityFieldInfo) =>
-      f.Name !== nameFieldName && f.Name !== pkFieldName && f.Name !== iconFieldName;
+  ): string[] {
+    const exists = (n: string) => n !== iconFieldName && !!relatedEntity.Fields.find(f => f.Name === n);
 
     const saved = this.fkHostEntityName && this.fkFieldCodeName
       ? LinkedFieldOptionsStore.Instance.Get(this.fkHostEntityName, this.fkFieldCodeName) : undefined;
 
+    let cols: string[];
     if (saved?.visibleFields) {
-      // User override: honor the exact set/order. Exclude only the name + icon fields
-      // (rendered specially elsewhere) — the PK (e.g. ID) IS allowed here, since the
-      // user explicitly asked to see it even though it's hidden by default.
-      return saved.visibleFields
-        .map(n => relatedEntity.Fields.find(f => f.Name === n))
-        .filter((f): f is EntityFieldInfo => !!f && f.Name !== nameFieldName && f.Name !== iconFieldName);
+      cols = saved.visibleFields.filter(exists);
+      // Migrate older prefs (stored extras-only, without the name field) and guarantee
+      // the name field is always present.
+      if (!cols.includes(nameFieldName)) cols = [nameFieldName, ...cols];
+    } else {
+      const defaults = relatedEntity.Fields
+        .filter(f => f.DefaultInView && f.Name !== nameFieldName && f.Name !== pkFieldName
+          && f.Name !== iconFieldName && this.isUsefulExtraColumn(f))
+        .map(f => f.Name);
+      cols = [nameFieldName, ...defaults];
     }
-    return relatedEntity.Fields.filter(f => f.DefaultInView && notReserved(f) && this.isUsefulExtraColumn(f));
+
+    // De-dupe (preserve order) and ensure the name field is present.
+    const seen = new Set<string>();
+    const ordered = cols.filter(c => (seen.has(c) ? false : (seen.add(c), true)));
+    if (!ordered.includes(nameFieldName)) ordered.unshift(nameFieldName);
+    return ordered;
   }
 
   // ============================================
@@ -903,13 +922,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private buildSearchableFields(plan: FKColumnPlan): FKSearchableField[] {
     const re = this.getRelatedEntityInfo();
     if (!re) return [];
-    const shown = new Set([plan.NameFieldName, ...plan.ExtraFieldNames]);
-    const list: FKSearchableField[] = [
-      { FieldName: plan.NameFieldName, Label: this.labelForRelatedField(plan.NameFieldName), Icon: 'fa-solid fa-font', Group: 'shown' },
-      ...plan.ExtraFieldNames.map((fn, i) => ({
-        FieldName: fn, Label: plan.ExtraHeaders[i], Icon: 'fa-solid fa-tag', Group: 'shown' as const
-      }))
-    ];
+    const iconFor = (fieldName: string) => {
+      if (fieldName === plan.NameFieldName) return 'fa-solid fa-font';
+      return re.Fields.find(x => x.Name === fieldName)?.IsPrimaryKey ? 'fa-solid fa-hashtag' : 'fa-solid fa-tag';
+    };
+    // 'shown' group rendered in the actual column order so the menu matches the grid
+    // (and so the up/down arrows hide correctly on the true first/last columns).
+    const shown = new Set(plan.ColumnFields);
+    const list: FKSearchableField[] = plan.ColumnFields.map(fieldName => ({
+      FieldName: fieldName,
+      Label: this.labelForRelatedField(fieldName),
+      Icon: iconFor(fieldName),
+      Group: 'shown' as const
+    }));
     for (const f of re.Fields) {
       if (shown.has(f.Name) || f.Name === plan.IconFieldName) continue;
       if (!this.isScopeSearchableField(f)) continue;
@@ -1000,9 +1025,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Apply a freshly-built suggestion list to the dropdown state + reposition + portal. */
   private applySuggestions(suggestions: FKSuggestion[], plan: FKColumnPlan): void {
     this._fkSuggestionsNatural = suggestions;
-    this.FKColumnHeaders = plan.ExtraHeaders;
-    this.FKColumnFields = plan.ExtraFieldNames;
     this.FKNameField = plan.NameFieldName;
+    // Full ordered column list (incl. the name field) + matching headers.
+    this.FKColumnFields = plan.ColumnFields;
+    this.FKColumnHeaders = plan.ColumnFields.map(c => c === plan.NameFieldName ? 'Name' : this.labelForRelatedField(c));
+    this.FKHasIconColumn = suggestions.some(s => s.Icon != null);
     this.FKHasIconColumn = suggestions.some(s => s.Icon != null);
     this.FKSuggestions = this.sortSuggestions(suggestions);
     this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
@@ -1157,132 +1184,46 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.cdr.markForCheck();
   }
 
+  // ---- Column reorder (up/down arrows in the field-selector menu) ----
+
+  /** Whether the column can move up (it's a column and not already first). */
+  CanMoveFKColumnUp(field: string): boolean {
+    return this.FKColumnFields.indexOf(field) > 0;
+  }
+
+  /** Whether the column can move down (it's a column and not already last). */
+  CanMoveFKColumnDown(field: string): boolean {
+    const i = this.FKColumnFields.indexOf(field);
+    return i >= 0 && i < this.FKColumnFields.length - 1;
+  }
+
   /**
-   * Reorder the visible columns: move `field` to insertion `index` (0 = first,
-   * length = last). The index is measured against the pre-move list, so we shift it
-   * down by one when the field came from before the target. Persists + rebuilds.
+   * Move a column one slot up (delta -1) or down (delta +1) and persist. mousedown +
+   * stopPropagation so the row's select-scope handler doesn't fire and the menu stays open.
    */
-  private moveVisibleColumnToIndex(field: string, index: number): void {
+  MoveFKColumn(event: MouseEvent, field: string, delta: -1 | 1): void {
+    event.preventDefault();
+    event.stopPropagation();
     const cols = [...this.FKColumnFields];
-    const from = cols.indexOf(field);
-    if (from < 0) return;
-    cols.splice(from, 1);
-    const to = Math.max(0, Math.min(from < index ? index - 1 : index, cols.length));
-    if (to === from && cols[to] === field) return; // no-op
-    cols.splice(to, 0, field);
+    const i = cols.indexOf(field);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= cols.length) return;
+    [cols[i], cols[j]] = [cols[j], cols[i]];
     this.applyVisibleColumns(cols);
   }
 
-  // ---- Column reorder (drag a header in the grid, or a shown row in the menu) ----
-
-  /** The column currently being dragged (drives the dragging visual), or null. */
-  FKDragField: string | null = null;
   /**
-   * Insertion index among the extra columns where the drop will land (0 = before the
-   * first column, length = after the last). Drives the insertion-line visual.
-   */
-  FKDragOverIndex: number | null = null;
-
-  private _fkDrag: { field: string; context: 'header' | 'menu'; startX: number; startY: number; dragging: boolean } | null = null;
-  private _fkDragMove: ((e: MouseEvent) => void) | null = null;
-  private _fkDragUp: ((e: MouseEvent) => void) | null = null;
-
-  /**
-   * Pointer-down on a draggable header cell or shown menu row. We don't know yet
-   * whether it's a click (sort / select-scope) or a drag (reorder) — that's decided
-   * on move (past a threshold) vs up (no movement). preventDefault keeps input focus.
-   */
-  StartFKFieldDrag(event: MouseEvent, field: string, context: 'header' | 'menu'): void {
-    event.preventDefault();
-    this._fkDrag = { field, context, startX: event.clientX, startY: event.clientY, dragging: false };
-    this._fkDragMove = (e: MouseEvent) => this.onFKDragMove(e);
-    this._fkDragUp = () => this.onFKDragUp();
-    document.addEventListener('mousemove', this._fkDragMove);
-    document.addEventListener('mouseup', this._fkDragUp);
-  }
-
-  private onFKDragMove(e: MouseEvent): void {
-    const d = this._fkDrag;
-    if (!d) return;
-    if (!d.dragging) {
-      if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) <= 4) return;
-      if (d.field === this.FKNameField) return; // Name isn't reorderable → leave as a click
-      d.dragging = true;
-      this.FKDragField = d.field;
-    }
-    this.FKDragOverIndex = this.fkDropIndex(d.context, d.context === 'header' ? e.clientX : e.clientY);
-    this.cdr.markForCheck();
-  }
-
-  private onFKDragUp(): void {
-    const d = this._fkDrag;
-    this.teardownFKDragListeners();
-    if (!d) return;
-    if (d.dragging) {
-      if (this.FKDragOverIndex != null) this.moveVisibleColumnToIndex(d.field, this.FKDragOverIndex);
-    } else if (d.context === 'header') {
-      // Header click (no movement) → sort. (Menu drag starts from the grip, so a
-      // no-move grip press does nothing — the row's own mousedown handles select.)
-      this.OnFKSortToggle(d.field);
-    }
-    this.FKDragField = null;
-    this.FKDragOverIndex = null;
-    this._fkDrag = null;
-    this.cdr.markForCheck();
-  }
-
-  /**
-   * Insertion index among the extra columns for the current pointer position: the
-   * number of columns the pointer has *fully passed* (whose trailing edge is before
-   * it). So hovering anywhere within a column → insert before it; hovering past the
-   * last column → insert at the end. This makes the first slot trivial to hit (just
-   * hover the first column) and leaves no dead zones. Headers measure X, menu rows Y;
-   * the always-first Name element is excluded.
-   */
-  private fkDropIndex(context: 'header' | 'menu', coord: number): number {
-    const selector = context === 'header' ? '.mj-fk-hcell[data-fk-field]' : '.mj-fk-scope-mi[data-fk-field]';
-    const root: ParentNode = this._portaledDropdownEl ?? this.hostRef.nativeElement;
-    const els = (Array.from(root.querySelectorAll(selector)) as HTMLElement[])
-      .filter(el => el.getAttribute('data-fk-field') !== this.FKNameField); // extras only, in column order
-    let idx = 0;
-    for (const el of els) {
-      const r = el.getBoundingClientRect();
-      const trailingEdge = context === 'header' ? r.right : r.bottom;
-      if (coord >= trailingEdge) idx++;
-      else break;
-    }
-    return idx;
-  }
-
-  /** True when the drop insertion line should render at the LEADING edge of this column. */
-  IsFKDropBefore(field: string): boolean {
-    return this.FKDragField != null && this.FKDragOverIndex != null
-      && this.FKColumnFields[this.FKDragOverIndex] === field;
-  }
-
-  /** True when the drop line should render after the LAST column (insert at the end). */
-  IsFKDropAtEnd(field: string): boolean {
-    return this.FKDragField != null
-      && this.FKDragOverIndex === this.FKColumnFields.length
-      && this.FKColumnFields[this.FKColumnFields.length - 1] === field;
-  }
-
-  private teardownFKDragListeners(): void {
-    if (this._fkDragMove) document.removeEventListener('mousemove', this._fkDragMove);
-    if (this._fkDragUp) document.removeEventListener('mouseup', this._fkDragUp);
-    this._fkDragMove = null;
-    this._fkDragUp = null;
-  }
-
-  /**
-   * CSS `grid-template-columns` for the dropdown grid: icon? + name + extra columns.
-   * A user-resized column uses its saved pixel width; otherwise it sizes to content.
+   * CSS `grid-template-columns` for the dropdown grid: optional icon column, then one
+   * track per ordered column (the name field included, wherever it sits). A user-resized
+   * column uses its saved pixel width; otherwise it sizes to content.
    */
   get FKGridTemplateColumns(): string {
     const cols: string[] = [];
     if (this.FKHasIconColumn) cols.push('min-content');
-    cols.push(this.fkColumnTrack(this.FKNameField, 'minmax(120px, max-content)'));
-    for (const field of this.FKColumnFields) cols.push(this.fkColumnTrack(field, 'minmax(80px, max-content)'));
+    for (const field of this.FKColumnFields) {
+      const dflt = field === this.FKNameField ? 'minmax(120px, max-content)' : 'minmax(80px, max-content)';
+      cols.push(this.fkColumnTrack(field, dflt));
+    }
     return cols.join(' ');
   }
 
@@ -1290,6 +1231,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private fkColumnTrack(field: string, dflt: string): string {
     const w = this._fkColWidths[field];
     return w ? `${w}px` : dflt;
+  }
+
+  /** The built cell (value + highlighted html) for a non-name column of a suggestion. */
+  FKCellFor(suggestion: FKSuggestion, field: string): FKSuggestionColumn | undefined {
+    return suggestion.ExtraColumns.find(c => c.FieldName === field);
+  }
+
+  /** Header sort handler (grid headers click-to-sort only; drag-reorder is menu-only). */
+  OnFKHeaderSort(event: MouseEvent, field: string): void {
+    event.preventDefault(); // keep input focus so the body-portaled dropdown stays open
+    this.OnFKSortToggle(field);
   }
 
   // ---- Column resize (drag a header's right edge) ----
@@ -1852,7 +1804,6 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       clearTimeout(this._fkSearchTimeout);
     }
     this.teardownFKResizeListeners();
-    this.teardownFKDragListeners();
     this.stopScrollListener();
     // If we relocated the dropdown to <body> and Angular tears us down while it's
     // still open, remove the orphaned node ourselves (Angular removes by reference,

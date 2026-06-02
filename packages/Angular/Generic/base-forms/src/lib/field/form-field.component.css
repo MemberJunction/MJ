@@ -503,43 +503,47 @@
   font-weight: 600;
 }
 
-/* Uniform leading slot on every row so the field icons line up whether or not the
-   row has a drag grip. */
-.mj-fk-scope-grip-slot {
+/* Fixed-width LEFT slot: a compact stacked up/down reorder control that reveals on row
+   hover. Reserved (same width) on every row so the field icons + labels stay aligned. */
+.mj-fk-col-reorder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   width: 14px;
+  height: 22px;
   flex-shrink: 0;
+}
+
+.mj-fk-col-move {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* Always-visible drag handle on reorderable rows (the explicit drag affordance). */
-.mj-fk-scope-grip {
-  font-size: 11px;
+  width: 14px;
+  height: 10px;
+  padding: 0;
+  background: transparent;
+  border: none;
   color: var(--mj-text-muted);
-  cursor: grab;
-  transition: color var(--mj-transition-base);
+  cursor: pointer;
+  font-size: 8px;
+  opacity: 0; /* hover-reveal for a clean resting state */
+  transition: opacity var(--mj-transition-base), color var(--mj-transition-base);
 }
 
-.mj-fk-scope-grip:hover {
-  color: var(--mj-text-primary);
+.mj-fk-scope-mi:hover .mj-fk-col-move:not(:disabled) {
+  opacity: 0.8;
 }
 
-.mj-fk-scope-grip:active {
-  cursor: grabbing;
+.mj-fk-col-move:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--mj-brand-primary);
 }
 
-.mj-fk-scope-mi--dragging {
-  opacity: 0.45;
-}
-
-/* Insertion line: above the row for a "before" drop, below it for an "after-last" drop. */
-.mj-fk-scope-mi--drop-before {
-  box-shadow: inset 0 2px 0 0 var(--mj-brand-primary);
-}
-
-.mj-fk-scope-mi--drop-after {
-  box-shadow: inset 0 -2px 0 0 var(--mj-brand-primary);
+/* End-of-range arrows stay hidden (slot still reserved) rather than greyed. */
+.mj-fk-col-move:disabled {
+  opacity: 0 !important;
+  cursor: default;
 }
 
 .mj-fk-scope-mi-icon {
@@ -556,9 +560,14 @@
   white-space: nowrap;
 }
 
-.mj-fk-scope-mi-check {
-  font-size: 10px;
-  opacity: 1 !important;
+/* Fixed-width RIGHT slot so the eye (or its empty space, for the name row) aligns. */
+.mj-fk-col-eye-slot {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Eye toggle: show/hide a field as a grid column (independent of search scope). */
@@ -568,7 +577,6 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  flex-shrink: 0;
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -722,20 +730,6 @@
 .mj-fk-hcell--icon {
   cursor: default;
   padding: 7px 8px;
-}
-
-/* Column reorder: dim the dragged header, show a brand insertion line at the drop slot
-   (leading edge for "before", trailing edge for "after-last"). */
-.mj-fk-hcell--dragging {
-  opacity: 0.4;
-}
-
-.mj-fk-hcell--drop-before {
-  box-shadow: inset 3px 0 0 0 var(--mj-brand-primary);
-}
-
-.mj-fk-hcell--drop-after {
-  box-shadow: inset -3px 0 0 0 var(--mj-brand-primary);
 }
 
 .mj-fk-hcell--icon:hover {
