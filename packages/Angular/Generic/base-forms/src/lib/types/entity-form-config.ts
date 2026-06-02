@@ -119,3 +119,49 @@ export const SLIDEIN_FORM_CONFIG: EntityFormConfig = {
   widthMode: 'full-width',
   enableRecordLinks: false,
 };
+
+// ── Pure resolution helpers (used by the record-form container; unit-tested) ──
+
+/**
+ * Whether the in-form toolbar should render for the given config. An explicit
+ * `toolbar: null` (dialog/slide-in default) hides it entirely; anything else
+ * (undefined or a partial config) keeps it.
+ */
+export function resolveFormShowToolbar(config: EntityFormConfig | null | undefined): boolean {
+  return config?.toolbar !== null;
+}
+
+/**
+ * Merge a config's `toolbar` partial over a base toolbar config. Returns `base`
+ * unchanged when there's no override (or it's `null`).
+ */
+export function resolveFormToolbarConfig(
+  base: FormToolbarConfig,
+  config: EntityFormConfig | null | undefined,
+): FormToolbarConfig {
+  const override = config?.toolbar;
+  return override ? { ...base, ...override } : base;
+}
+
+/**
+ * Whether a section should be hidden given the config's visibility rules:
+ * - `visibleSectionKeys` (allow-list) hides anything not listed;
+ * - else `hiddenSectionKeys` hides the listed keys;
+ * - `showRelatedEntities === false` additionally hides related-entity panels.
+ */
+export function isFormSectionHidden(
+  config: EntityFormConfig | null | undefined,
+  sectionKey: string,
+  variant: string | undefined,
+): boolean {
+  if (!config) return false;
+  const allow = config.visibleSectionKeys;
+  const hide = config.hiddenSectionKeys;
+  if (allow && allow.length > 0) {
+    if (!allow.includes(sectionKey)) return true;
+  } else if (hide && hide.includes(sectionKey)) {
+    return true;
+  }
+  if (config.showRelatedEntities === false && variant === 'related-entity') return true;
+  return false;
+}

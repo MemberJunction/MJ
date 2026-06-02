@@ -1,9 +1,9 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit, inject } from '@angular/core';
 import { MJQueryEntityExtended, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity, MJQueryDependencyEntity, QueryEngine } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
-import { RUN_QUERY_SQL_FILTERS, CompositeKey } from '@memberjunction/core';
+import { RUN_QUERY_SQL_FILTERS, CompositeKey, BaseEntity } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
@@ -106,6 +106,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
     
     private navigationService = inject(NavigationService);
+    private formPresenter = inject(MJFormPresenterService);
     private destroy$ = new Subject<void>();
 
     /**
@@ -535,12 +536,37 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     /**
      * Handle category creation from dialog
      */
-    onCategoryCreated(newCategory: MJQueryCategoryEntity) {
+    /** Open the generic entity-form dialog to create a new Query Category. */
+    createCategory(): void {
+        this.showCategoryDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Edit the currently-selected category in a slide-in via the generic
+     * MJFormPresenterService. On save, refresh the category tree.
+     */
+    async editSelectedCategory(): Promise<void> {
+        if (!this.record.CategoryID) return;
+        const ref = this.formPresenter.open({
+            entityName: 'MJ: Query Categories',
+            recordId: this.record.CategoryID,
+            presentation: 'slide-in',
+            provider: this.ProviderToUse,
+        });
+        const saved = await ref.afterSaved();
+        if (saved) {
+            this.loadCategories();
+            this.cdr.detectChanges();
+        }
+    }
+
+    onCategoryCreated(newCategory: BaseEntity) {
         // Reload categories to include the new one
         this.loadCategories();
 
         // Set the new category as selected
-        this.record.CategoryID = newCategory.ID;
+        this.record.CategoryID = (newCategory as MJQueryCategoryEntity).ID;
 
         // Trigger change detection
         this.cdr.detectChanges();

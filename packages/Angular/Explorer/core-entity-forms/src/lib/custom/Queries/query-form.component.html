@@ -57,17 +57,27 @@
             <div class="query-meta-item">
               <label class="meta-label">Category</label>
               @if (EditMode) {
-                <mj-tree-dropdown
-                  [BranchConfig]="CategoryBranchConfig"
-                  [Value]="CategoryIDAsKey"
-                  [SelectableTypes]="'branch'"
-                  [SelectionMode]="'single'"
-                  [Placeholder]="'Select category...'"
-                  [EnableSearch]="true"
-                  [Clearable]="true"
-                  (ValueChange)="OnCategoryTreeChange($event)"
-                  class="meta-dropdown">
-                </mj-tree-dropdown>
+                <div class="meta-dropdown-row">
+                  <mj-tree-dropdown
+                    [BranchConfig]="CategoryBranchConfig"
+                    [Value]="CategoryIDAsKey"
+                    [SelectableTypes]="'branch'"
+                    [SelectionMode]="'single'"
+                    [Placeholder]="'Select category...'"
+                    [EnableSearch]="true"
+                    [Clearable]="true"
+                    (ValueChange)="OnCategoryTreeChange($event)"
+                    class="meta-dropdown">
+                  </mj-tree-dropdown>
+                  <button mjButton variant="icon" title="New category" (click)="createCategory()">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                  @if (record.CategoryID) {
+                    <button mjButton variant="icon" title="Edit category" (click)="editSelectedCategory()">
+                      <i class="fa-solid fa-pen"></i>
+                    </button>
+                  }
+                </div>
               } @else {
                 <span class="meta-value">{{ categoryPathDisplay || 'Uncategorized' }}</span>
               }
@@ -764,9 +774,12 @@
   (onClose)="onRunDialogClose()">
 </mj-query-run-dialog>
 
-<!-- Category Creation Dialog -->
-<mj-query-category-dialog
-  [(isVisible)]="showCategoryDialog"
-  (onCategoryCreated)="onCategoryCreated($event)">
-</mj-query-category-dialog>
+<!-- Category Creation Dialog (generic entity-form dialog) -->
+<mj-form-dialog
+  EntityName="MJ: Query Categories"
+  Title="New Query Category"
+  [Provider]="Provider"
+  [(Visible)]="showCategoryDialog"
+  (Saved)="onCategoryCreated($event)">
+</mj-form-dialog>
 }

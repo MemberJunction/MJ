@@ -552,6 +552,18 @@ export class WorkspaceComponent {
 4. **Framework Alignment**: Works with Angular's change detection naturally
 5. **Multiple Instance Support**: Same component can be used multiple times without conflict
 
+## 🚨 Forms as Tabs, Dialogs & Slide-Ins — read the architecture guide first 🚨
+
+Any entity form (generated, custom, or interactive) can be rendered as a **full-page tab, a modal dialog, or a slide-in panel** from one set of forms — no per-surface code, no regeneration. Before building a bespoke "edit a record in a popup/drawer" component, use the generic capability:
+
+- **Declarative:** `<mj-form-dialog [EntityName]="..." [(Visible)]="...">` / `<mj-form-slide-in ...>`
+- **Imperative:** `MJFormPresenterService.open({ entityName, recordId, presentation: 'dialog' | 'slide-in' })`
+- **Per-instance control:** `EntityFormConfig` (toolbar/sections/width/links) — bridged through the form reference, so generated forms honor it without re-running CodeGen.
+
+All of it lives in `@memberjunction/ng-base-forms` (`MjEntityFormHostComponent` is the shared headless core; Explorer's `SingleRecordComponent` is now a thin wrapper over it). **Full details:** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../guides/FORMS_ARCHITECTURE_GUIDE.md).
+
+---
+
 ## 🚨 CRITICAL: Extending Entity Forms — Two Valid Patterns 🚨
 
 MemberJunction has **two** patterns for extending generated entity forms. Both are first-class and supported — they exist because they solve different problems. Pick the one that matches your scope.

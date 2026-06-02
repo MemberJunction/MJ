@@ -11,6 +11,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { resolveFormShowToolbar, resolveFormToolbarConfig, isFormSectionHidden } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
@@ -292,7 +293,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Any other value (undefined or a partial config) keeps the toolbar.
    */
   get EffectiveShowToolbar(): boolean {
-    return this.fc?.Config?.toolbar !== null;
+    return resolveFormShowToolbar(this.fc?.Config);
   }
 
   /**
@@ -302,9 +303,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * yet per-instance toolbar tweaks still take effect through `fc.Config`.
    */
   get EffectiveToolbarConfig(): FormToolbarConfig {
-    const base = this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG;
-    const override = this.fc?.Config?.toolbar;
-    return override ? { ...base, ...override } : base;
+    return resolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
   }
 
   get EffectiveSearchFilter(): string {
@@ -466,16 +465,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     Promise.resolve().then(() => {
       this.Panels.forEach(p => {
-        let hidden = false;
-        if (allow && allow.length > 0) {
-          hidden = !allow.includes(p.SectionKey);
-        } else if (hide && hide.includes(p.SectionKey)) {
-          hidden = true;
-        }
-        if (!hidden && hideRelated && p.Variant === 'related-entity') {
-          hidden = true;
-        }
-        p.Hidden = hidden;
+        p.Hidden = isFormSectionHidden(cfg, p.SectionKey, p.Variant);
       });
       this.cdr.markForCheck();
     });

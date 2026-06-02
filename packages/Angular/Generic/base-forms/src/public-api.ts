@@ -25,6 +25,13 @@ export * from './lib/resolver/form-resolver.service';
 // Presentation-agnostic form host (resolve → load → create → wire → teardown)
 export * from './lib/host/entity-form-host.component';
 
+// Overlay shells (dialog / slide-in) + imperative presenter (Layer 3 + 4)
+export * from './lib/overlays/base-form-overlay';
+export * from './lib/overlays/form-dialog.component';
+export * from './lib/overlays/form-slide-in.component';
+export * from './lib/overlays/form-presenter.types';
+export * from './lib/overlays/form-presenter.service';
+
 // Base classes
 export * from './lib/base-record-component';
 export * from './lib/base-form-component';

@@ -1,0 +1,35 @@
+@if (Visible) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="effectiveTitle"
+    [Width]="Width"
+    [Height]="Height"
+    (Close)="onCancel()">
+
+    <mj-entity-form-host #host
+      [EntityName]="EntityName"
+      [PrimaryKey]="effectivePrimaryKey!"
+      [Record]="Record"
+      [NewRecordValues]="NewRecordValues"
+      [EditMode]="EditMode"
+      [Config]="Config"
+      [Provider]="Provider"
+      (Saved)="onHostSaved($event)"
+      (Dismissed)="onHostDismissed()"
+      (FormCreated)="onFormCreated($event)"
+      (Navigate)="Navigate.emit($event)"
+      (Notification)="Notification.emit($event)"
+      (RecordDeleted)="RecordDeleted.emit($event)"
+      (RecordSaveFailed)="RecordSaveFailed.emit($event)"
+      (ValidationFailed)="ValidationFailed.emit($event)"
+      (LoadError)="LoadError.emit($event)">
+    </mj-entity-form-host>
+
+    @if (ShowFooter) {
+      <mj-dialog-actions>
+        <button mjButton variant="primary" [disabled]="saving" (click)="onSaveClick()">{{ SaveButtonText }}</button>
+        <button mjButton [disabled]="saving" (click)="onCancel()">{{ CancelButtonText }}</button>
+      </mj-dialog-actions>
+    }
+  </mj-dialog>
+}
