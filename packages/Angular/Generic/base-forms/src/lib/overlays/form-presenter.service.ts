@@ -15,13 +15,13 @@ import { MJFormPresenterOptions, MJFormRef, MJFormPresentation } from './form-pr
  * from anywhere — one call, no template wiring.
  *
  * ```typescript
- * const ref = this.formPresenter.open({
- *   entityName: 'MJ: AI Agents',
- *   recordId: agentId,
- *   presentation: 'slide-in',
- *   config: { showRelatedEntities: false },
+ * const ref = this.formPresenter.Open({
+ *   EntityName: 'MJ: AI Agents',
+ *   RecordId: agentId,
+ *   Presentation: 'slide-in',
+ *   Config: { ShowRelatedEntities: false },
  * });
- * const saved = await ref.afterSaved(); // BaseEntity | null
+ * const saved = await ref.AfterSaved(); // BaseEntity | null
  * ```
  *
  * Mounts the (standalone) overlay shell onto `document.body`, wires its outputs
@@ -32,8 +32,8 @@ export class MJFormPresenterService {
   private readonly appRef = inject(ApplicationRef);
   private readonly envInjector = inject(EnvironmentInjector);
 
-  open(options: MJFormPresenterOptions): MJFormRef {
-    const presentation: MJFormPresentation = options.presentation ?? 'dialog';
+  Open(options: MJFormPresenterOptions): MJFormRef {
+    const presentation: MJFormPresentation = options.Presentation ?? 'dialog';
     const hostEl = document.createElement('div');
     document.body.appendChild(hostEl);
 
@@ -95,24 +95,24 @@ export class MJFormPresenterService {
 
   /** Copies presenter options onto the overlay instance. */
   private applyInputs(inst: BaseFormOverlay, o: MJFormPresenterOptions, presentation: MJFormPresentation): void {
-    inst.EntityName = o.entityName ?? null;
-    if (o.primaryKey) inst.PrimaryKey = o.primaryKey;
-    if (o.recordId) inst.RecordID = o.recordId;
-    inst.Record = o.record ?? null;
-    inst.NewRecordValues = o.newRecordValues ?? null;
-    inst.SectionName = o.sectionName ?? null;
-    inst.EditMode = o.editMode ?? null;
-    if (o.config) inst.Config = o.config;
-    if (o.title) inst.Title = o.title;
-    inst.Provider = o.provider ?? null;
-    if (o.showFooter !== undefined) inst.ShowFooter = o.showFooter;
-    if (o.saveButtonText) inst.SaveButtonText = o.saveButtonText;
-    if (o.cancelButtonText) inst.CancelButtonText = o.cancelButtonText;
+    inst.EntityName = o.EntityName ?? null;
+    if (o.PrimaryKey) inst.PrimaryKey = o.PrimaryKey;
+    if (o.RecordId) inst.RecordID = o.RecordId;
+    inst.Record = o.Record ?? null;
+    inst.NewRecordValues = o.NewRecordValues ?? null;
+    inst.SectionName = o.SectionName ?? null;
+    inst.EditMode = o.EditMode ?? null;
+    if (o.Config) inst.Config = o.Config;
+    if (o.Title) inst.Title = o.Title;
+    inst.Provider = o.Provider ?? null;
+    if (o.ShowFooter !== undefined) inst.ShowFooter = o.ShowFooter;
+    if (o.SaveButtonText) inst.SaveButtonText = o.SaveButtonText;
+    if (o.CancelButtonText) inst.CancelButtonText = o.CancelButtonText;
 
     if (presentation === 'slide-in') {
-      if (o.widthPx != null) (inst as MjFormSlideInComponent).WidthPx = o.widthPx;
-    } else if (o.width != null) {
-      (inst as MjFormDialogComponent | MjFormWindowComponent).Width = o.width;
+      if (o.WidthPx != null) (inst as MjFormSlideInComponent).WidthPx = o.WidthPx;
+    } else if (o.Width != null) {
+      (inst as MjFormDialogComponent | MjFormWindowComponent).Width = o.Width;
     }
   }
 }

@@ -7,52 +7,52 @@ import { FormOverlayCloseReason } from './base-form-overlay';
 export type MJFormPresentation = 'dialog' | 'slide-in' | 'window';
 
 /**
- * Options for {@link MJFormPresenterService.open}. Supply EITHER a pre-loaded
- * `record`, OR `entityName` + (`recordId` / `primaryKey`) to load it (omit both
+ * Options for {@link MJFormPresenterService.Open}. Supply EITHER a pre-loaded
+ * `Record`, OR `EntityName` + (`RecordId` / `PrimaryKey`) to load it (omit both
  * keys for a new record).
  */
 export interface MJFormPresenterOptions {
   /** Dialog (default), slide-in, or floating non-modal window. */
-  presentation?: MJFormPresentation;
+  Presentation?: MJFormPresentation;
 
   // ── Record selection ──
-  /** Entity name to load (ignored when `record` is supplied). */
-  entityName?: string;
+  /** Entity name to load (ignored when `Record` is supplied). */
+  EntityName?: string;
   /** Single-column ('ID') key convenience. */
-  recordId?: string;
-  /** Full composite key (beats `recordId`). */
-  primaryKey?: CompositeKey;
+  RecordId?: string;
+  /** Full composite key (beats `RecordId`). */
+  PrimaryKey?: CompositeKey;
   /** Pre-loaded record to bind directly. */
-  record?: BaseEntity;
+  Record?: BaseEntity;
   /** New-record default values (URL-segment string or object). */
-  newRecordValues?: string | Record<string, unknown>;
+  NewRecordValues?: string | Record<string, unknown>;
   /** Render a single registered form section instead of the full form. */
-  sectionName?: string;
+  SectionName?: string;
   /** Force edit mode (default: new → edit, existing → read). */
-  editMode?: boolean;
+  EditMode?: boolean;
 
   // ── Presentation / config ──
   /** Per-instance form config; defaults to the surface's preset. */
-  config?: EntityFormConfig;
+  Config?: EntityFormConfig;
   /** Chrome title; derived from the record when omitted. */
-  title?: string;
+  Title?: string;
   /** Metadata provider for multi-provider apps. */
-  provider?: IMetadataProvider;
+  Provider?: IMetadataProvider;
   /** Dialog width (px or CSS). */
-  width?: number | string;
+  Width?: number | string;
   /** Slide-in initial width in px. */
-  widthPx?: number;
+  WidthPx?: number;
   /** Show the Save/Cancel footer. Default: true. */
-  showFooter?: boolean;
+  ShowFooter?: boolean;
   /** Save button label. */
-  saveButtonText?: string;
+  SaveButtonText?: string;
   /** Cancel button label. */
-  cancelButtonText?: string;
+  CancelButtonText?: string;
 }
 
 /**
- * Handle to a form opened via {@link MJFormPresenterService.open}.
- * Resolve {@link afterSaved} / {@link afterClosed} or imperatively {@link close}.
+ * Handle to a form opened via {@link MJFormPresenterService.Open}.
+ * Resolve {@link AfterSaved} / {@link AfterClosed} or imperatively {@link Close}.
  */
 export class MJFormRef {
   constructor(
@@ -63,14 +63,14 @@ export class MJFormRef {
   ) {}
 
   /** Resolves with the saved entity, or `null` if the form was cancelled. */
-  afterSaved(): Promise<BaseEntity | null> { return this._saved; }
+  AfterSaved(): Promise<BaseEntity | null> { return this._saved; }
 
   /** Resolves with how the overlay closed ('save' | 'cancel'). */
-  afterClosed(): Promise<FormOverlayCloseReason> { return this._closed; }
+  AfterClosed(): Promise<FormOverlayCloseReason> { return this._closed; }
 
   /** Programmatically close the overlay (treated as cancel — reverts edits). */
-  close(): void { this._closeFn(); }
+  Close(): void { this._closeFn(); }
 
   /** The live form component instance (null before load / after teardown). */
-  get form(): BaseFormComponent | null { return this._form(); }
+  get Form(): BaseFormComponent | null { return this._form(); }
 }

@@ -17,7 +17,7 @@ slide-in panels — from **one** set of forms, with **no per-surface code** and
 ## 1. The big picture
 
 ```
-┌─ Layer 4  MJFormPresenterService.open({...}) → MJFormRef      (imperative, 1 call)
+┌─ Layer 4  MJFormPresenterService.Open({...}) → MJFormRef      (imperative, 1 call)
 │           <mj-form-dialog> / <mj-form-slide-in>               (declarative)
 ├─ Layer 3  Presentation shells — dialog / slide-in chrome
 │           (own the title + Save/Cancel; bubble events; proxy inputs)
@@ -153,19 +153,19 @@ import { MJFormPresenterService } from '@memberjunction/ng-base-forms';
 constructor(private forms: MJFormPresenterService) {}
 
 async edit(id: string) {
-  const ref = this.forms.open({
-    entityName: 'MJ: AI Agents',
-    recordId: id,                     // omit for a new record
-    presentation: 'slide-in',         // 'dialog' | 'slide-in' | 'window'
-    config: { showRelatedEntities: false },
-    provider: this.ProviderToUse,     // multi-provider apps
+  const ref = this.forms.Open({
+    EntityName: 'MJ: AI Agents',
+    RecordId: id,                     // omit for a new record
+    Presentation: 'slide-in',         // 'dialog' | 'slide-in' | 'window'
+    Config: { ShowRelatedEntities: false },
+    Provider: this.ProviderToUse,     // multi-provider apps
   });
-  const saved = await ref.afterSaved();   // BaseEntity | null
+  const saved = await ref.AfterSaved();   // BaseEntity | null
   if (saved) { /* refresh */ }
 }
 ```
 
-`MJFormRef` gives you `afterSaved()`, `afterClosed()`, `close()`, and `form`. The
+`MJFormRef` gives you `AfterSaved()`, `AfterClosed()`, `Close()`, and `Form`. The
 presenter mounts the shell on `document.body` and tears it down after close — no
 template wiring, no module registration.
 
@@ -179,14 +179,14 @@ it takes effect on every existing generated form **without re-running CodeGen**.
 
 ```typescript
 export interface EntityFormConfig {
-  toolbar?: Partial<FormToolbarConfig> | null; // null = no toolbar (dialog/slide-in default)
-  showRelatedEntities?: boolean;               // hide related-entity grids
-  collapsibleSections?: boolean;               // false = sections locked open, no chevron
-  hiddenSectionKeys?: string[];                // hide specific sections
-  visibleSectionKeys?: string[];               // allow-list (wins over hidden)
-  widthMode?: 'centered' | 'full-width';
-  enableRecordLinks?: boolean;                 // false = in-form links inert (modal default)
-  startInEditMode?: boolean;
+  Toolbar?: Partial<FormToolbarConfig> | null; // null = no toolbar (dialog/slide-in default)
+  ShowRelatedEntities?: boolean;               // hide related-entity grids
+  CollapsibleSections?: boolean;               // false = sections locked open, no chevron
+  HiddenSectionKeys?: string[];                // hide specific sections
+  VisibleSectionKeys?: string[];               // allow-list (wins over hidden)
+  WidthMode?: 'centered' | 'full-width';
+  EnableRecordLinks?: boolean;                 // false = in-form links inert (modal default)
+  StartInEditMode?: boolean;
 }
 ```
 
@@ -195,7 +195,7 @@ Presets: **`TAB_FORM_CONFIG`** (full toolbar, everything on), **`DIALOG_FORM_CON
 The dialog/slide-in shells default to their presets; spread and override:
 
 ```typescript
-config: { ...DIALOG_FORM_CONFIG, collapsibleSections: false, toolbar: { ShowDeleteButton: false } }
+Config: { ...DIALOG_FORM_CONFIG, CollapsibleSections: false, Toolbar: { ShowDeleteButton: false } }
 ```
 
 ### Why no regeneration?
@@ -245,10 +245,10 @@ required touching the generated form. Full authoring contract:
 
 > **These injected sections are controllable from the stack.** Because every
 > panel — generated, custom, OR slot-injected — receives `FormContext`, the
-> `EntityFormConfig` visibility rules (`hiddenSectionKeys` / `visibleSectionKeys`
-> / `showRelatedEntities`) apply uniformly. So a dialog can open the Content
+> `EntityFormConfig` visibility rules (`HiddenSectionKeys` / `VisibleSectionKeys`
+> / `ShowRelatedEntities`) apply uniformly. So a dialog can open the Content
 > Sources form and hide the crawler section with
-> `config: { hiddenSectionKeys: ['websiteCrawlerSettings'] }` — no per-panel code.
+> `Config: { HiddenSectionKeys: ['websiteCrawlerSettings'] }` — no per-panel code.
 
 ### 7b. Render a single section standalone (`SectionName`)
 
@@ -260,7 +260,7 @@ To render just **one** registered `BaseFormSectionComponent` (`@RegisterClass(Ba
 ```
 
 ```typescript
-this.forms.open({ entityName: 'My Entity', recordId: id, sectionName: 'QuickEdit', presentation: 'slide-in' });
+this.forms.Open({ EntityName: 'My Entity', RecordId: id, SectionName: 'QuickEdit', Presentation: 'slide-in' });
 ```
 
 Section mode bypasses the full-form resolver/toolbar/container — the section
@@ -273,22 +273,22 @@ supports it on every surface.)
 ## 8. Navigation from inside a dialog / slide-in
 
 In a modal context, in-form record links are **inert by default**
-(`enableRecordLinks: false`) so clicking one doesn't teleport the user out of the
+(`EnableRecordLinks: false`) so clicking one doesn't teleport the user out of the
 overlay. **Generic code never routes** — only Explorer-layer code touches
 `NavigationService`.
 
-To make links live and decide what happens, set `enableRecordLinks: true` and
+To make links live and decide what happens, set `EnableRecordLinks: true` and
 handle the bubbled `Navigate` event yourself — e.g. open the target in a **nested
 overlay**:
 
 ```typescript
-const ref = this.forms.open({ entityName: 'Accounts', recordId: id, presentation: 'dialog' });
-// ...but with config.enableRecordLinks = true, or via the declarative shell:
+const ref = this.forms.Open({ EntityName: 'Accounts', RecordId: id, Presentation: 'dialog' });
+// ...but with Config.EnableRecordLinks = true, or via the declarative shell:
 ```
 
 ```html
 <mj-form-dialog [EntityName]="'Accounts'" [RecordID]="id" [(Visible)]="show"
-  [Config]="{ enableRecordLinks: true }"
+  [Config]="{ EnableRecordLinks: true }"
   (Navigate)="onNavigate($event)"></mj-form-dialog>
 ```
 
@@ -296,7 +296,7 @@ const ref = this.forms.open({ entityName: 'Accounts', recordId: id, presentation
 onNavigate(e: FormNavigationEvent) {
   if (e.Kind === 'record') {
     // open the related record in a nested dialog (overlay stays open)
-    this.forms.open({ entityName: e.EntityName, primaryKey: e.PrimaryKey, presentation: 'dialog' });
+    this.forms.Open({ EntityName: e.EntityName, PrimaryKey: e.PrimaryKey, Presentation: 'dialog' });
   }
   // or, in an Explorer-layer component, route via NavigationService instead
 }
@@ -312,10 +312,10 @@ That keeps the Generic stack routing-free and lets each consumer pick the UX.
 | You want to… | Use |
 |--------------|-----|
 | Show/edit a record in the main tab area | `SingleRecordComponent` (Explorer) — already host-backed |
-| Quick-create/edit a record in a modal | `<mj-form-dialog>` or `forms.open({presentation:'dialog'})` |
-| Edit a record in a side panel without leaving the page | `<mj-form-slide-in>` or `forms.open({presentation:'slide-in'})` |
-| Keep a record open (non-modal) while working elsewhere | `<mj-form-window>` or `forms.open({presentation:'window'})` |
-| Edit just one section of a record in an overlay | `SectionName` on any shell / `forms.open({sectionName})` |
+| Quick-create/edit a record in a modal | `<mj-form-dialog>` or `forms.Open({Presentation:'dialog'})` |
+| Edit a record in a side panel without leaving the page | `<mj-form-slide-in>` or `forms.Open({Presentation:'slide-in'})` |
+| Keep a record open (non-modal) while working elsewhere | `<mj-form-window>` or `forms.Open({Presentation:'window'})` |
+| Edit just one section of a record in an overlay | `SectionName` on any shell / `forms.Open({SectionName})` |
 | Add a custom section into a generated form | `BaseFormPanel` + slot — [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md) (Content Sources is the example) |
 | Replace a form's whole layout | Custom `*Extended` form — [Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) |
 | Build a brand-new bespoke editor dialog | **Stop** — first check if a `<mj-form-dialog>` covers it |

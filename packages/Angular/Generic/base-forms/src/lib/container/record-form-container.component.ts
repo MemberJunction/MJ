@@ -11,7 +11,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
-import { resolveFormShowToolbar, resolveFormToolbarConfig } from '../types/entity-form-config';
+import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
@@ -288,22 +288,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /**
    * Whether the in-form toolbar renders at all. Driven by the form's
-   * `Config.toolbar`: an explicit `null` (the dialog/slide-in default) hides
+   * `Config.Toolbar`: an explicit `null` (the dialog/slide-in default) hides
    * the entire toolbar so the surrounding chrome can own Save/Cancel/title.
    * Any other value (undefined or a partial config) keeps the toolbar.
    */
   get EffectiveShowToolbar(): boolean {
-    return resolveFormShowToolbar(this.fc?.Config);
+    return ResolveFormShowToolbar(this.fc?.Config);
   }
 
   /**
    * Effective toolbar config: the bound `ToolbarConfig` (or the default)
-   * with the form's `Config.toolbar` partial merged on top. This is the
+   * with the form's `Config.Toolbar` partial merged on top. This is the
    * no-regeneration bridge — generated templates never bind `[Config]`,
    * yet per-instance toolbar tweaks still take effect through `fc.Config`.
    */
   get EffectiveToolbarConfig(): FormToolbarConfig {
-    return resolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
+    return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
   }
 
   get EffectiveSearchFilter(): string {

@@ -36,7 +36,6 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public hasUnsavedChanges = false;
     public showFiltersHelp = false;
     public showRunDialog = false;
-    public showCategoryDialog = false;
     public categoryPathDisplay = '';
     public IsSaving = false;
 
@@ -534,27 +533,37 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
     
     /**
-     * Handle category creation from dialog
+     * Create a new Query Category in a slide-in via the generic
+     * MJFormPresenterService. A new record opens in edit mode automatically.
+     * On save, refresh the category tree and select the new category.
      */
-    /** Open the generic entity-form dialog to create a new Query Category. */
-    createCategory(): void {
-        this.showCategoryDialog = true;
-        this.cdr.markForCheck();
+    async createCategory(): Promise<void> {
+        const ref = this.formPresenter.Open({
+            EntityName: 'MJ: Query Categories',
+            Presentation: 'slide-in',
+            Provider: this.ProviderToUse,
+        });
+        const saved = await ref.AfterSaved();
+        if (saved) {
+            this.onCategoryCreated(saved);
+        }
     }
 
     /**
      * Edit the currently-selected category in a slide-in via the generic
-     * MJFormPresenterService. On save, refresh the category tree.
+     * MJFormPresenterService. `StartInEditMode` opens the existing record
+     * editable. On save, refresh the category tree.
      */
     async editSelectedCategory(): Promise<void> {
         if (!this.record.CategoryID) return;
-        const ref = this.formPresenter.open({
-            entityName: 'MJ: Query Categories',
-            recordId: this.record.CategoryID,
-            presentation: 'slide-in',
-            provider: this.ProviderToUse,
+        const ref = this.formPresenter.Open({
+            EntityName: 'MJ: Query Categories',
+            RecordId: this.record.CategoryID,
+            Presentation: 'slide-in',
+            Config: { StartInEditMode: true },
+            Provider: this.ProviderToUse,
         });
-        const saved = await ref.afterSaved();
+        const saved = await ref.AfterSaved();
         if (saved) {
             this.loadCategories();
             this.cdr.detectChanges();

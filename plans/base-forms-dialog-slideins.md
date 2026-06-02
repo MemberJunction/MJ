@@ -34,14 +34,14 @@ The missing pieces: (a) the resolve→load→create→wire→cleanup **host** lo
 
 | # | Decision |
 |---|---|
-| D1 | **No routing in Generic.** Host emits `Navigate`; the consumer decides. Only `Angular/Explorer/**` touches `NavigationService`. Dialog/slide-in default `Config.enableRecordLinks = false` (links inert) to avoid teleporting out of a modal; prop available to flip on. |
+| D1 | **No routing in Generic.** Host emits `Navigate`; the consumer decides. Only `Angular/Explorer/**` touches `NavigationService`. Dialog/slide-in default `Config.EnableRecordLinks = false` (links inert) to avoid teleporting out of a modal; prop available to flip on. |
 | D2 | **Interactive forms are first-class on all surfaces.** `InteractiveFormsEngine` lives in `@memberjunction/core-entities`; `FormResolverService` is Explorer-coupling-free and **moves into `base-forms`**. No resolver abstraction. |
 | D3 | **Slide-in primitive relocates** from `@memberjunction/ng-versions` → `@memberjunction/ng-ui-components`; `versions` refactored to consume it. (Use Matt's generic slide-in instead if/when located.) |
 | D4 | **No regeneration** of CodeGen forms — config is bridged through the `FormComponent` reference. Holds permanently for this feature. |
 | D5 | **`Config` property** (not `FormConfig`) on `BaseFormComponent`, typed `EntityFormConfig`, exported from `base-forms`. |
 | D6 | **Dialog & slide-in hide the toolbar by default**; full-page tab keeps it. Toolbar presence is a `Config` knob. |
-| D7 | **Imperative (`MJFormPresenterService.open()`) + declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`)** consumer APIs both ship. |
-| D8 | **D1 default = inert links** in dialog/slide-in (`Config.enableRecordLinks=false`); prop flips them live. |
+| D7 | **Imperative (`MJFormPresenterService.Open()`) + declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`)** consumer APIs both ship. |
+| D8 | **D1 default = inert links** in dialog/slide-in (`Config.EnableRecordLinks=false`); prop flips them live. |
 | D9 | **Shells + presenter service live IN `base-forms`** (not a separate package); `base-forms` adds a dependency on `@memberjunction/ng-ui-components` for dialog/window/slide-in chrome. |
 | D10 | **Relocate `versions/slide-panel` → `ui-components`** now (Matt's generic slide-in not present on this branch). |
 | D11 | **Phase 1 test candidates:** dialog = MJ: Query Categories (`query-category-dialog`); slide-in = MJ: Credentials (`credential-dialog`). |
@@ -51,7 +51,7 @@ The missing pieces: (a) the resolve→load→create→wire→cleanup **host** lo
 ## 3. Layered Architecture
 
 ```
-┌─ Layer 4 (Generic):  MJFormPresenterService.open({...}) → MJFormRef     (imperative)
+┌─ Layer 4 (Generic):  MJFormPresenterService.Open({...}) → MJFormRef     (imperative)
 │                      <mj-form-dialog> / <mj-form-slide-in>              (declarative)
 ├─ Layer 3 (Generic):  Presentation shells — dialog / slide-in / window
 │                      own chrome + footer Save/Cancel + title; bubble events
@@ -95,36 +95,36 @@ export interface EntityFormConfig {
    * - `null`      → render NO toolbar (default for dialog & slide-in).
    * - `Partial<FormToolbarConfig>` → merged over the surface default.
    */
-  toolbar?: Partial<FormToolbarConfig> | null;
+  Toolbar?: Partial<FormToolbarConfig> | null;
 
   /** Show related-entity grid sections. Default: true (tab), false (dialog/slide-in). */
-  showRelatedEntities?: boolean;
+  ShowRelatedEntities?: boolean;
 
   /** Allow section headers to collapse. When false, sections render always-expanded, no chevron. Default: true. */
-  collapsibleSections?: boolean;
+  CollapsibleSections?: boolean;
 
   /** Hide specific sections by sectionKey (field or related-entity). */
-  hiddenSectionKeys?: string[];
+  HiddenSectionKeys?: string[];
 
-  /** Allow-list: render ONLY these sectionKeys. Mutually exclusive with hiddenSectionKeys. */
-  visibleSectionKeys?: string[];
+  /** Allow-list: render ONLY these sectionKeys. Mutually exclusive with HiddenSectionKeys. */
+  VisibleSectionKeys?: string[];
 
   /** Initial width mode. Default: 'centered' (tab), 'full-width' (slide-in body). */
-  widthMode?: FormWidthMode;
+  WidthMode?: FormWidthMode;
 
   /**
    * Whether in-form record links emit `Navigate` events. The host NEVER routes;
    * it only emits. Default: true (tab), false (dialog/slide-in — links inert so a
    * modal context doesn't teleport the user away).
    */
-  enableRecordLinks?: boolean;
+  EnableRecordLinks?: boolean;
 
   /** Start in edit mode. Default: true for new records, false for existing. */
-  startInEditMode?: boolean;
+  StartInEditMode?: boolean;
 }
 ```
 
-Three presets exported alongside it: `TAB_FORM_CONFIG` (full toolbar, everything on), `DIALOG_FORM_CONFIG` (`toolbar: null`, `showRelatedEntities: false`, `enableRecordLinks: false`), `SLIDEIN_FORM_CONFIG` (same as dialog + `widthMode: 'full-width'`).
+Three presets exported alongside it: `TAB_FORM_CONFIG` (full toolbar, everything on), `DIALOG_FORM_CONFIG` (`Toolbar: null`, `ShowRelatedEntities: false`, `EnableRecordLinks: false`), `SLIDEIN_FORM_CONFIG` (same as dialog + `WidthMode: 'full-width'`).
 
 ---
 
@@ -172,9 +172,9 @@ Net effect: **every existing generated form honors `Config` with zero regenerati
 - `MjFormSlideInComponent` — relocated slide-in + host; default `SLIDEIN_FORM_CONFIG`; same wiring.
 
 ### 6.5 Layer 4 — service + ref — **NEW**, in `base-forms`
-- `MJFormPresenterService` (extends `BaseSingleton`? No — Angular `@Injectable({providedIn:'root'})`) with `open(options): MJFormRef`. Mounts the chosen shell programmatically (technique mirrors `MJDialogService`).
-- `MJFormRef` — `afterSaved(): Promise<BaseEntity | null>`, `afterClosed(): Promise<'save'|'cancel'>`, `close()`, `get form()`.
-- `MJFormPresenterOptions` — `{ entityName, recordId?|record?, newRecordValues?, presentation: 'dialog'|'slide-in'|'window', config?, provider? }`.
+- `MJFormPresenterService` (extends `BaseSingleton`? No — Angular `@Injectable({providedIn:'root'})`) with `Open(options): MJFormRef`. Mounts the chosen shell programmatically (technique mirrors `MJDialogService`).
+- `MJFormRef` — `AfterSaved(): Promise<BaseEntity | null>`, `AfterClosed(): Promise<'save'|'cancel'>`, `Close()`, `get Form()`.
+- `MJFormPresenterOptions` — `{ EntityName, RecordId?|Record?, NewRecordValues?, Presentation: 'dialog'|'slide-in'|'window', Config?, Provider? }`.
 
 ### 6.6 Explorer — thin wrapper
 - `single-record.component.ts`: delete the inline resolve/load/create/wire/teardown; render `<mj-entity-form-host>` and subscribe to its outputs, mapping `Navigate`→`NavigationService`, `Notification`→`SharedService`, `Dismissed`→close, plus `recentAccessService.logAccess`. Import `FormResolverService` from `@memberjunction/ng-base-forms`.
@@ -190,13 +190,13 @@ Net effect: **every existing generated form honors `Config` with zero regenerati
 
 **Imperative (one line from anywhere):**
 ```typescript
-const ref = this.formPresenter.open({
-  entityName: 'MJ: AI Agents',
-  recordId: agentId,                 // omit → new record
-  presentation: 'slide-in',          // 'dialog' | 'slide-in' | 'window'
-  config: { showRelatedEntities: false, collapsibleSections: false, toolbar: { ShowDeleteButton: false } },
+const ref = this.formPresenter.Open({
+  EntityName: 'MJ: AI Agents',
+  RecordId: agentId,                 // omit → new record
+  Presentation: 'slide-in',          // 'dialog' | 'slide-in' | 'window'
+  Config: { ShowRelatedEntities: false, CollapsibleSections: false, Toolbar: { ShowDeleteButton: false } },
 });
-const saved = await ref.afterSaved(); // BaseEntity on save, null on cancel
+const saved = await ref.AfterSaved(); // BaseEntity on save, null on cancel
 ```
 
 **Declarative:**

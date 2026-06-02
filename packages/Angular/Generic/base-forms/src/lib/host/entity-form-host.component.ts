@@ -165,7 +165,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   private _viewInitialized = false;
 
   /** The live form component instance, or null before mount / after teardown. */
-  get form(): BaseFormComponent | null {
+  get Form(): BaseFormComponent | null {
     return this._formComponentRef?.instance ?? null;
   }
 
@@ -197,7 +197,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     if (this._isSection) {
       return this._currentRecord ? this._currentRecord.Save() : false;
     }
-    const f = this.form;
+    const f = this.Form;
     if (!f) return false;
     return f.SaveRecord(true);
   }
@@ -208,7 +208,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       if (this._currentRecord?.Dirty) this._currentRecord.Revert();
       return;
     }
-    this.form?.CancelEdit();
+    this.Form?.CancelEdit();
   }
 
   // ── Core: resolve → load → create → bind → wire ──────────────────────────
@@ -277,7 +277,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       instance.record = record;
       instance.userPermissions = permissions;
       instance.Config = this.Config;
-      instance.EditMode = this._editMode ?? !record.IsSaved;
+      instance.EditMode = this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
 
       this.applyVariants(instance, resolution, entityName);
       this.subscribeToFormEvents(instance);
@@ -326,7 +326,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     const instance = ref.instance as BaseFormSectionComponent & { userPermissions?: unknown };
     instance.record = record;
     instance.userPermissions = permissions;
-    instance.EditMode = this._editMode ?? !record.IsSaved;
+    instance.EditMode = this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
 
     this.RecordReady.emit(record);
     this.LoadComplete.emit();

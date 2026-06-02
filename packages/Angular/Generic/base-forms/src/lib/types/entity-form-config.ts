@@ -20,9 +20,9 @@ import { FormWidthMode } from './form-types';
  * ```typescript
  * host.Config = {
  *   ...DIALOG_FORM_CONFIG,
- *   showRelatedEntities: false,
- *   collapsibleSections: false,
- *   toolbar: { ShowDeleteButton: false },
+ *   ShowRelatedEntities: false,
+ *   CollapsibleSections: false,
+ *   Toolbar: { ShowDeleteButton: false },
  * };
  * ```
  */
@@ -34,38 +34,38 @@ export interface EntityFormConfig {
    *   where the chrome owns the title and Save/Cancel buttons).
    * - `Partial<FormToolbarConfig>` → merged over the surface default config.
    */
-  toolbar?: Partial<FormToolbarConfig> | null;
+  Toolbar?: Partial<FormToolbarConfig> | null;
 
   /**
    * Whether related-entity grid sections (panels with `Variant="related-entity"`)
    * are shown. Default: `true` on tabs, `false` in dialog/slide-in.
    */
-  showRelatedEntities?: boolean;
+  ShowRelatedEntities?: boolean;
 
   /**
    * Whether section headers can collapse/expand. When `false`, every section
    * renders always-expanded with no toggle chevron. Default: `true`.
    */
-  collapsibleSections?: boolean;
+  CollapsibleSections?: boolean;
 
   /**
    * Hide specific sections by their `sectionKey` (field OR related-entity).
-   * Mutually exclusive with {@link visibleSectionKeys}; if both are set,
-   * `visibleSectionKeys` wins.
+   * Mutually exclusive with {@link VisibleSectionKeys}; if both are set,
+   * `VisibleSectionKeys` wins.
    */
-  hiddenSectionKeys?: string[];
+  HiddenSectionKeys?: string[];
 
   /**
    * Allow-list of `sectionKey`s to render — every other section is hidden.
-   * Mutually exclusive with {@link hiddenSectionKeys}.
+   * Mutually exclusive with {@link HiddenSectionKeys}.
    */
-  visibleSectionKeys?: string[];
+  VisibleSectionKeys?: string[];
 
   /**
    * Initial width mode for the form body. Default: `'centered'` on tabs,
    * `'full-width'` in a slide-in.
    */
-  widthMode?: FormWidthMode;
+  WidthMode?: FormWidthMode;
 
   /**
    * Whether in-form record links emit `Navigate` events. The form host NEVER
@@ -73,13 +73,13 @@ export interface EntityFormConfig {
    * `true` on tabs, `false` in dialog/slide-in (links render inert so a modal
    * context doesn't teleport the user away).
    */
-  enableRecordLinks?: boolean;
+  EnableRecordLinks?: boolean;
 
   /**
    * Force the form to start in edit mode. When omitted, the host starts new
    * records in edit mode and existing records in read mode.
    */
-  startInEditMode?: boolean;
+  StartInEditMode?: boolean;
 }
 
 /**
@@ -88,11 +88,11 @@ export interface EntityFormConfig {
  * config at all — provided for explicitness and as a merge base.
  */
 export const TAB_FORM_CONFIG: EntityFormConfig = {
-  toolbar: undefined,
-  showRelatedEntities: true,
-  collapsibleSections: true,
-  widthMode: 'centered',
-  enableRecordLinks: true,
+  Toolbar: undefined,
+  ShowRelatedEntities: true,
+  CollapsibleSections: true,
+  WidthMode: 'centered',
+  EnableRecordLinks: true,
 };
 
 /**
@@ -101,11 +101,11 @@ export const TAB_FORM_CONFIG: EntityFormConfig = {
  * the dialog focused, sections collapsible, in-form links inert.
  */
 export const DIALOG_FORM_CONFIG: EntityFormConfig = {
-  toolbar: null,
-  showRelatedEntities: false,
-  collapsibleSections: true,
-  widthMode: 'centered',
-  enableRecordLinks: false,
+  Toolbar: null,
+  ShowRelatedEntities: false,
+  CollapsibleSections: true,
+  WidthMode: 'centered',
+  EnableRecordLinks: false,
 };
 
 /**
@@ -113,33 +113,33 @@ export const DIALOG_FORM_CONFIG: EntityFormConfig = {
  * dialog default but full-width to use the panel's vertical real estate.
  */
 export const SLIDEIN_FORM_CONFIG: EntityFormConfig = {
-  toolbar: null,
-  showRelatedEntities: false,
-  collapsibleSections: true,
-  widthMode: 'full-width',
-  enableRecordLinks: false,
+  Toolbar: null,
+  ShowRelatedEntities: false,
+  CollapsibleSections: true,
+  WidthMode: 'full-width',
+  EnableRecordLinks: false,
 };
 
 // ── Pure resolution helpers (used by the record-form container; unit-tested) ──
 
 /**
  * Whether the in-form toolbar should render for the given config. An explicit
- * `toolbar: null` (dialog/slide-in default) hides it entirely; anything else
+ * `Toolbar: null` (dialog/slide-in default) hides it entirely; anything else
  * (undefined or a partial config) keeps it.
  */
-export function resolveFormShowToolbar(config: EntityFormConfig | null | undefined): boolean {
-  return config?.toolbar !== null;
+export function ResolveFormShowToolbar(config: EntityFormConfig | null | undefined): boolean {
+  return config?.Toolbar !== null;
 }
 
 /**
- * Merge a config's `toolbar` partial over a base toolbar config. Returns `base`
+ * Merge a config's `Toolbar` partial over a base toolbar config. Returns `base`
  * unchanged when there's no override (or it's `null`).
  */
-export function resolveFormToolbarConfig(
+export function ResolveFormToolbarConfig(
   base: FormToolbarConfig,
   config: EntityFormConfig | null | undefined,
 ): FormToolbarConfig {
-  const override = config?.toolbar;
+  const override = config?.Toolbar;
   return override ? { ...base, ...override } : base;
 }
 
@@ -148,6 +148,9 @@ export function resolveFormToolbarConfig(
  * {@link EntityFormConfig} and `FormContext` satisfy this, so the same helper
  * works whether driven by config directly or via the form context that reaches
  * every panel (including slot-injected `BaseFormPanel`s).
+ *
+ * Note: these property names stay camelCase to match the structural
+ * {@link FormContext} interface that panels actually receive at runtime.
  */
 export interface SectionVisibilityRules {
   showRelatedEntities?: boolean;
@@ -161,7 +164,7 @@ export interface SectionVisibilityRules {
  * - else `hiddenSectionKeys` hides the listed keys;
  * - `showRelatedEntities === false` additionally hides related-entity panels.
  */
-export function isFormSectionHidden(
+export function IsFormSectionHidden(
   config: SectionVisibilityRules | null | undefined,
   sectionKey: string,
   variant: string | undefined,

@@ -730,25 +730,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
       validationErrors: this._validationErrors,
-      collapsibleSections: this.Config?.collapsibleSections,
-      enableRecordLinks: this.Config?.enableRecordLinks,
-      showRelatedEntities: this.Config?.showRelatedEntities,
-      hiddenSectionKeys: this.Config?.hiddenSectionKeys,
-      visibleSectionKeys: this.Config?.visibleSectionKeys,
+      collapsibleSections: this.Config?.CollapsibleSections,
+      enableRecordLinks: this.Config?.EnableRecordLinks,
+      showRelatedEntities: this.Config?.ShowRelatedEntities,
+      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
   }
 
   /**
    * Resolves whether section drag-reorder is allowed for the current Config.
-   * When no toolbar is rendered (dialog/slide-in, `Config.toolbar === null`)
+   * When no toolbar is rendered (dialog/slide-in, `Config.Toolbar === null`)
    * reorder is disabled; otherwise we honor the toolbar config's flag, defaulting
    * to allowed when unspecified (classic tab behavior).
    */
   private resolveAllowSectionReorder(): boolean {
     if (!this.Config) return true;
-    if (this.Config.toolbar === null) return false;
-    return this.Config.toolbar?.AllowSectionReorder ?? true;
+    if (this.Config.Toolbar === null) return false;
+    return this.Config.Toolbar?.AllowSectionReorder ?? true;
   }
 
   /** Clears all validation display state (called on save success, cancel, end edit) */
@@ -922,7 +922,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * default on subsequent opens.
    */
   public getDefaultFormWidthMode(): 'centered' | 'full-width' {
-    return this.Config?.widthMode ?? 'centered';
+    return this.Config?.WidthMode ?? 'centered';
   }
 
   public getFormWidthMode(): 'centered' | 'full-width' {

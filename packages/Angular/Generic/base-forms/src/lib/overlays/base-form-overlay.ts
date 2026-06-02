@@ -107,7 +107,7 @@ export abstract class BaseFormOverlay extends BaseAngularComponent {
 
   /** The live form component instance (for power-user wiring via MJFormRef). */
   get formInstance(): BaseFormComponent | null {
-    return this.host?.form ?? null;
+    return this.host?.Form ?? null;
   }
 
   /** Resolves the primary key to pass to the host (PrimaryKey beats RecordID). */
