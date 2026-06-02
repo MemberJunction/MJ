@@ -4,7 +4,11 @@
      [attr.data-section-key]="SectionKey">
 
   <!-- Panel Header -->
-  <div class="mj-forms-panel-header" role="button" tabindex="0" (click)="Toggle()">
+  <div class="mj-forms-panel-header"
+       [class.mj-forms-panel-header--static]="!Collapsible"
+       [attr.role]="Collapsible ? 'button' : null"
+       [attr.tabindex]="Collapsible ? 0 : null"
+       (click)="Toggle()">
     <!-- Drag Handle (hidden when reorder disabled) -->
     @if (ReorderAllowed) {
       <div class="mj-forms-drag-handle"
@@ -40,10 +44,12 @@
       </a>
     }
 
-    <!-- Chevron -->
-    <div class="mj-forms-panel-chevron">
-      <i [class]="Expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
-    </div>
+    <!-- Chevron (hidden when sections are locked open) -->
+    @if (Collapsible) {
+      <div class="mj-forms-panel-chevron">
+        <i [class]="Expanded ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"></i>
+      </div>
+    }
   </div>
 
   <!-- Panel Body -->
