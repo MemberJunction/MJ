@@ -1,4 +1,4 @@
-import { CompositeKey } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Union type for all navigation event kinds emitted by the forms package.
@@ -25,6 +25,7 @@ export type FormNavigationEvent =
   | EntityHierarchyNavigationEvent
   | ChildEntityTypeNavigationEvent
   | NewRecordNavigationEvent
+  | CreateRelatedNavigationEvent
   | DismissFormNavigationEvent;
 
 /**
@@ -117,4 +118,49 @@ export interface DismissFormNavigationEvent {
   Kind: 'dismiss';
   /** Reason for the dismiss request — useful for analytics / different host behaviors. */
   Reason: 'new-record-discarded';
+}
+
+/**
+ * A field (e.g. a foreign-key dropdown) is asking the host to create a NEW record of a
+ * related entity — typically because the user searched for one that doesn't exist yet.
+ *
+ * The Generic forms layer only *emits* this; it deliberately does not open the create
+ * form itself (that would couple a generic component to the app-layer form presenter).
+ * The host application opens the related entity's form (e.g. via `MJFormPresenterService`
+ * as a dialog or slide-in), prefilled with {@link NewRecordValues}, and — when the user
+ * saves — calls {@link Complete} with the new record so the requesting field can select it.
+ *
+ * @example Explorer handler:
+ * ```typescript
+ * case 'create-related': {
+ *   const ref = this.forms.Open({
+ *     EntityName: event.EntityName,
+ *     Presentation: event.Presentation ?? 'dialog',
+ *     NewRecordValues: event.NewRecordValues,
+ *     Provider: event.Provider,
+ *   });
+ *   event.Complete(await ref.AfterSaved());
+ *   break;
+ * }
+ * ```
+ */
+export interface CreateRelatedNavigationEvent {
+  Kind: 'create-related';
+  /** Entity to create a new record of (the FK field's related entity). */
+  EntityName: string;
+  /**
+   * Default field values to prefill on the new record — lets the requester seed any
+   * fields (e.g. `{ Name: 'Marketing' }` from the typed search text), not just the name.
+   */
+  NewRecordValues?: Record<string, unknown>;
+  /** Preferred surface for the create form. The host may honor or override it. */
+  Presentation?: 'dialog' | 'slide-in';
+  /** Metadata provider to use (multi-provider apps). */
+  Provider?: IMetadataProvider;
+  /**
+   * Host callback: invoke with the saved record (or `null` if the user cancelled) so the
+   * requesting field can select it. Optional for the host to call — a host with no create
+   * surface can ignore the whole event.
+   */
+  Complete: (created: BaseEntity | null) => void;
 }

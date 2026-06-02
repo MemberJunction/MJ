@@ -2,7 +2,7 @@ import { Injectable, Type } from '@angular/core';
 import { IMetadataProvider, UserInfo, EntityInfo, LogError } from '@memberjunction/core';
 import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /**
