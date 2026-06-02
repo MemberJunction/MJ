@@ -86,8 +86,12 @@ async function main() {
     const entryPaths = directory.files.map((f) => f.path);
     logInfo(`ZIP entry count: ${entryPaths.length}`);
 
-    if (entryPaths.length > 100) {
-        logResult('pass', `ZIP has ${entryPaths.length} entries (sanity floor: 100)`);
+    // The assembler produces ~90 entries for a clean checkout (the bulk of
+    // MJAPI/MJExplorer/GeneratedEntities content gets npm-install'd by the
+    // installer, not bundled). Floor at 50 to catch catastrophic truncation
+    // without flagging a normal bundle.
+    if (entryPaths.length >= 50) {
+        logResult('pass', `ZIP has ${entryPaths.length} entries (sanity floor: 50)`);
     } else {
         logResult('fail', `ZIP has only ${entryPaths.length} entries — distribution looks truncated`);
     }
