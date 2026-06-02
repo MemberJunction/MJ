@@ -114,28 +114,29 @@ If you reach for a click target, it belongs in `[actions]` or `[toolbar]`.
 
 ### `[actions]` — "What can I change / what do I do?"
 
-Page-level controls and buttons. **Cap: 4 items.** If you need more, consolidate
-into a `<mj-filter-popover>` or move secondary state into `[toolbar]`.
+Action buttons only. **Under the concise model (§3), the `<mj-filter-popover>` and
+`<mj-view-toggle>` do NOT live here — they move into the `[toolbar]` control bar
+next to search.** `[actions]` keeps just:
 
 **Ordering, left → right:**
 
-1. **State controls** (modify the view): `<mj-filter-popover>`, `<mj-view-toggle>`,
-   auto-refresh toggle
-2. **Secondary action buttons**: `Refresh`, `Export`
-3. **Primary action button** (rightmost): `New X`, `Save`, `Create`
+1. **Secondary action buttons**: `Refresh`, `Export`
+2. **Primary action button** (rightmost): `New X`, `Save`, `Create`
 
 ```
-[ filter-popover ] [ view-toggle ] | [ Refresh ] | [ New Item ]
-   └── state/modifiers ──────────┘ └─ buttons ─┘  └─ primary ─┘
+[ Refresh ] [ Export ] | [ New Item ]
+   └─ secondary ─────┘   └─ primary ─┘
 ```
+
+(The `search · Filter · view` control bar lives in `[toolbar]` — see §2 `[toolbar]` and §3.)
 
 Notes:
 - Primary-rightmost in page chrome is **intentional** and inverse to dialog footer
   convention (primary-leftmost). Page chrome is exploratory; dialogs are imperative.
-- `Refresh` is a button, so it goes **after** view-toggle / filter-popover, not
-  before. State-then-action reading flow.
 - Only ONE primary action per page. If you have two equally important actions,
   reconsider the design.
+- Older pages still place Filter/view in `[actions]` (the pre-concise convention);
+  migrating them = relocating both into `[toolbar]`. See the rollout tracker.
 
 ### `[toolbar]` — "How do I find what I'm looking at?"
 
