@@ -161,10 +161,26 @@
                   </div>
                 }
 
-                <!-- Shared scope-menu row: click = search this field; eye = show/hide as a column. -->
+                <!-- Shared scope-menu row: click = search this field; drag a shown row = reorder
+                     columns; eye = show/hide as a column. -->
                 <ng-template #scopeRow let-f>
-                  <div class="mj-fk-scope-mi" [class.mj-fk-scope-mi--on]="IsFKScopeActive(f)" (mousedown)="OnFKScopeSelect($event, f)">
-                    <i [class]="f.Icon"></i>
+                  <div class="mj-fk-scope-mi"
+                      [class.mj-fk-scope-mi--on]="IsFKScopeActive(f)"
+                      [class.mj-fk-scope-mi--dragging]="FKDragField === f.FieldName"
+                      [class.mj-fk-scope-mi--drop-before]="IsFKDropBefore(f.FieldName)"
+                      [class.mj-fk-scope-mi--drop-after]="IsFKDropAtEnd(f.FieldName)"
+                      [attr.data-fk-field]="f.Group === 'shown' ? f.FieldName : null"
+                      (mousedown)="OnFKScopeSelect($event, f)">
+                    <!-- Uniform grip slot on every row keeps icons aligned; only shown,
+                         toggleable rows render a draggable grip. -->
+                    <span class="mj-fk-scope-grip-slot">
+                      @if (f.Group === 'shown' && CanToggleFKColumn(f)) {
+                        <i class="fa-solid fa-grip-vertical mj-fk-scope-grip"
+                           (mousedown)="$event.stopPropagation(); StartFKFieldDrag($event, f.FieldName, 'menu')"
+                           title="Drag to reorder"></i>
+                      }
+                    </span>
+                    <i [class]="f.Icon + ' mj-fk-scope-mi-icon'"></i>
                     <span class="mj-fk-scope-mi-label">{{ f.Label }}</span>
                     @if (IsFKScopeActive(f)) { <i class="fa-solid fa-check mj-fk-scope-mi-check" title="Searching this field"></i> }
                     @if (CanToggleFKColumn(f)) {
@@ -193,18 +209,27 @@
                 @if (!FKLoading && FKSuggestions.length > 0) {
                   <div class="mj-fk-options">
                     <div class="mj-fk-grid" [style.grid-template-columns]="FKGridTemplateColumns">
-                      <!-- Header row (click to sort) -->
+                      <!-- Header row: click to sort, drag to reorder columns. -->
                       <div class="mj-fk-grid-row mj-fk-grid-row--header">
                         @if (FKHasIconColumn) {
                           <div class="mj-fk-hcell mj-fk-hcell--icon"></div>
                         }
-                        <div class="mj-fk-hcell" (mousedown)="OnFKHeaderClick($event, FKNameField)" title="Sort by Name">
+                        <div class="mj-fk-hcell"
+                            [attr.data-fk-field]="FKNameField"
+                            (mousedown)="StartFKFieldDrag($event, FKNameField, 'header')"
+                            title="Click to sort">
                           <span class="mj-fk-hcell-label">Name</span>
                           <i [class]="FKSortIcon(FKNameField)"></i>
                           <span class="mj-fk-resizer" (mousedown)="OnFKColResizeStart($event, FKNameField)" title="Drag to resize"></span>
                         </div>
                         @for (header of FKColumnHeaders; track header; let i = $index) {
-                          <div class="mj-fk-hcell" (mousedown)="OnFKHeaderClick($event, FKColumnFields[i])" [title]="'Sort by ' + header">
+                          <div class="mj-fk-hcell"
+                              [attr.data-fk-field]="FKColumnFields[i]"
+                              [class.mj-fk-hcell--dragging]="FKDragField === FKColumnFields[i]"
+                              [class.mj-fk-hcell--drop-before]="IsFKDropBefore(FKColumnFields[i])"
+                              [class.mj-fk-hcell--drop-after]="IsFKDropAtEnd(FKColumnFields[i])"
+                              (mousedown)="StartFKFieldDrag($event, FKColumnFields[i], 'header')"
+                              [title]="'Click to sort · drag to reorder'">
                             <span class="mj-fk-hcell-label">{{ header }}</span>
                             <i [class]="FKSortIcon(FKColumnFields[i])"></i>
                             <span class="mj-fk-resizer" (mousedown)="OnFKColResizeStart($event, FKColumnFields[i])" title="Drag to resize"></span>

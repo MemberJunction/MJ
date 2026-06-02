@@ -1064,15 +1064,6 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
   }
 
-  /**
-   * Header mousedown: keep focus on the input (preventDefault stops the blur that
-   * would close the body-portaled dropdown), then toggle the column's sort.
-   */
-  OnFKHeaderClick(event: MouseEvent, fieldName: string): void {
-    event.preventDefault();
-    this.OnFKSortToggle(fieldName);
-  }
-
   /** FontAwesome class for a column header's sort indicator (idle / asc / desc). */
   FKSortIcon(fieldName: string): string {
     if (this.FKSortField !== fieldName) return 'fa-solid fa-sort mj-fk-sort-icon mj-fk-sort-icon--idle';
@@ -1104,6 +1095,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** User picked a field to search by — persist the override and re-run the search. */
   OnFKScopeSelect(event: MouseEvent, field: FKSearchableField): void {
     event.preventDefault();
+    this.selectScope(field);
+  }
+
+  /** Set the active search field (used by click + the no-drag path of menu drag). */
+  private selectScope(field: FKSearchableField): void {
     this.FKSearchField = field.FieldName;
     this.FKSearchFieldLabel = field.Label;
     this.FKShowScopeMenu = false;
@@ -1148,13 +1144,134 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const idx = next.indexOf(field.FieldName);
     if (idx >= 0) next.splice(idx, 1);
     else next.push(field.FieldName);
+    this.applyVisibleColumns(next);
+  }
 
+  /** Persist a new visible-column set/order and rebuild the grid live. */
+  private applyVisibleColumns(cols: string[]): void {
     if (this.fkHostEntityName && this.fkFieldCodeName) {
-      LinkedFieldOptionsStore.Instance.SetVisibleFields(this.fkHostEntityName, this.fkFieldCodeName, next);
+      LinkedFieldOptionsStore.Instance.SetVisibleFields(this.fkHostEntityName, this.fkFieldCodeName, cols);
     }
-    this._fkColumnPlan = null; // force rebuild with the new column set
+    this._fkColumnPlan = null; // force rebuild with the new column set/order
     this.rerunCurrentFKSearch();
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Reorder the visible columns: move `field` to insertion `index` (0 = first,
+   * length = last). The index is measured against the pre-move list, so we shift it
+   * down by one when the field came from before the target. Persists + rebuilds.
+   */
+  private moveVisibleColumnToIndex(field: string, index: number): void {
+    const cols = [...this.FKColumnFields];
+    const from = cols.indexOf(field);
+    if (from < 0) return;
+    cols.splice(from, 1);
+    const to = Math.max(0, Math.min(from < index ? index - 1 : index, cols.length));
+    if (to === from && cols[to] === field) return; // no-op
+    cols.splice(to, 0, field);
+    this.applyVisibleColumns(cols);
+  }
+
+  // ---- Column reorder (drag a header in the grid, or a shown row in the menu) ----
+
+  /** The column currently being dragged (drives the dragging visual), or null. */
+  FKDragField: string | null = null;
+  /**
+   * Insertion index among the extra columns where the drop will land (0 = before the
+   * first column, length = after the last). Drives the insertion-line visual.
+   */
+  FKDragOverIndex: number | null = null;
+
+  private _fkDrag: { field: string; context: 'header' | 'menu'; startX: number; startY: number; dragging: boolean } | null = null;
+  private _fkDragMove: ((e: MouseEvent) => void) | null = null;
+  private _fkDragUp: ((e: MouseEvent) => void) | null = null;
+
+  /**
+   * Pointer-down on a draggable header cell or shown menu row. We don't know yet
+   * whether it's a click (sort / select-scope) or a drag (reorder) — that's decided
+   * on move (past a threshold) vs up (no movement). preventDefault keeps input focus.
+   */
+  StartFKFieldDrag(event: MouseEvent, field: string, context: 'header' | 'menu'): void {
+    event.preventDefault();
+    this._fkDrag = { field, context, startX: event.clientX, startY: event.clientY, dragging: false };
+    this._fkDragMove = (e: MouseEvent) => this.onFKDragMove(e);
+    this._fkDragUp = () => this.onFKDragUp();
+    document.addEventListener('mousemove', this._fkDragMove);
+    document.addEventListener('mouseup', this._fkDragUp);
+  }
+
+  private onFKDragMove(e: MouseEvent): void {
+    const d = this._fkDrag;
+    if (!d) return;
+    if (!d.dragging) {
+      if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) <= 4) return;
+      if (d.field === this.FKNameField) return; // Name isn't reorderable → leave as a click
+      d.dragging = true;
+      this.FKDragField = d.field;
+    }
+    this.FKDragOverIndex = this.fkDropIndex(d.context, d.context === 'header' ? e.clientX : e.clientY);
+    this.cdr.markForCheck();
+  }
+
+  private onFKDragUp(): void {
+    const d = this._fkDrag;
+    this.teardownFKDragListeners();
+    if (!d) return;
+    if (d.dragging) {
+      if (this.FKDragOverIndex != null) this.moveVisibleColumnToIndex(d.field, this.FKDragOverIndex);
+    } else if (d.context === 'header') {
+      // Header click (no movement) → sort. (Menu drag starts from the grip, so a
+      // no-move grip press does nothing — the row's own mousedown handles select.)
+      this.OnFKSortToggle(d.field);
+    }
+    this.FKDragField = null;
+    this.FKDragOverIndex = null;
+    this._fkDrag = null;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Insertion index among the extra columns for the current pointer position: the
+   * number of columns the pointer has *fully passed* (whose trailing edge is before
+   * it). So hovering anywhere within a column → insert before it; hovering past the
+   * last column → insert at the end. This makes the first slot trivial to hit (just
+   * hover the first column) and leaves no dead zones. Headers measure X, menu rows Y;
+   * the always-first Name element is excluded.
+   */
+  private fkDropIndex(context: 'header' | 'menu', coord: number): number {
+    const selector = context === 'header' ? '.mj-fk-hcell[data-fk-field]' : '.mj-fk-scope-mi[data-fk-field]';
+    const root: ParentNode = this._portaledDropdownEl ?? this.hostRef.nativeElement;
+    const els = (Array.from(root.querySelectorAll(selector)) as HTMLElement[])
+      .filter(el => el.getAttribute('data-fk-field') !== this.FKNameField); // extras only, in column order
+    let idx = 0;
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      const trailingEdge = context === 'header' ? r.right : r.bottom;
+      if (coord >= trailingEdge) idx++;
+      else break;
+    }
+    return idx;
+  }
+
+  /** True when the drop insertion line should render at the LEADING edge of this column. */
+  IsFKDropBefore(field: string): boolean {
+    return this.FKDragField != null && this.FKDragOverIndex != null
+      && this.FKColumnFields[this.FKDragOverIndex] === field;
+  }
+
+  /** True when the drop line should render after the LAST column (insert at the end). */
+  IsFKDropAtEnd(field: string): boolean {
+    return this.FKDragField != null
+      && this.FKDragOverIndex === this.FKColumnFields.length
+      && this.FKColumnFields[this.FKColumnFields.length - 1] === field;
+  }
+
+  private teardownFKDragListeners(): void {
+    if (this._fkDragMove) document.removeEventListener('mousemove', this._fkDragMove);
+    if (this._fkDragUp) document.removeEventListener('mouseup', this._fkDragUp);
+    this._fkDragMove = null;
+    this._fkDragUp = null;
   }
 
   /**
@@ -1735,6 +1852,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       clearTimeout(this._fkSearchTimeout);
     }
     this.teardownFKResizeListeners();
+    this.teardownFKDragListeners();
     this.stopScrollListener();
     // If we relocated the dropdown to <body> and Angular tears us down while it's
     // still open, remove the orphaned node ourselves (Angular removes by reference,

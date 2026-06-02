@@ -503,7 +503,46 @@
   font-weight: 600;
 }
 
-.mj-fk-scope-mi > i:first-child {
+/* Uniform leading slot on every row so the field icons line up whether or not the
+   row has a drag grip. */
+.mj-fk-scope-grip-slot {
+  width: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Always-visible drag handle on reorderable rows (the explicit drag affordance). */
+.mj-fk-scope-grip {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  cursor: grab;
+  transition: color var(--mj-transition-base);
+}
+
+.mj-fk-scope-grip:hover {
+  color: var(--mj-text-primary);
+}
+
+.mj-fk-scope-grip:active {
+  cursor: grabbing;
+}
+
+.mj-fk-scope-mi--dragging {
+  opacity: 0.45;
+}
+
+/* Insertion line: above the row for a "before" drop, below it for an "after-last" drop. */
+.mj-fk-scope-mi--drop-before {
+  box-shadow: inset 0 2px 0 0 var(--mj-brand-primary);
+}
+
+.mj-fk-scope-mi--drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--mj-brand-primary);
+}
+
+.mj-fk-scope-mi-icon {
   width: 14px;
   font-size: 11px;
   opacity: 0.75;
@@ -683,6 +722,20 @@
 .mj-fk-hcell--icon {
   cursor: default;
   padding: 7px 8px;
+}
+
+/* Column reorder: dim the dragged header, show a brand insertion line at the drop slot
+   (leading edge for "before", trailing edge for "after-last"). */
+.mj-fk-hcell--dragging {
+  opacity: 0.4;
+}
+
+.mj-fk-hcell--drop-before {
+  box-shadow: inset 3px 0 0 0 var(--mj-brand-primary);
+}
+
+.mj-fk-hcell--drop-after {
+  box-shadow: inset -3px 0 0 0 var(--mj-brand-primary);
 }
 
 .mj-fk-hcell--icon:hover {
