@@ -2,6 +2,14 @@
 
 A reusable Angular dialog component that displays a MemberJunction entity form for viewing and/or editing any record from any entity. Supports showing the complete form or a specific section.
 
+> **For most new code, prefer the generic forms-as-overlays stack** in
+> `@memberjunction/ng-base-forms` — `<mj-form-dialog>` / `<mj-form-slide-in>` and
+> `MJFormPresenterService` — which resolves the form (including interactive
+> overrides + variants), wires the full event surface, and supports per-instance
+> `EntityFormConfig`. See [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md).
+> `EntityFormDialogComponent` remains for its **section-mode** rendering (a single
+> `BaseFormSectionComponent`), which the newer stack does not yet cover.
+
 ## Overview
 
 The `EntityFormDialogComponent` wraps MemberJunction's dynamic form system inside a Kendo UI dialog window. It dynamically loads the registered form component for the given entity (including custom form overrides) and provides configurable Save/Cancel buttons with automatic record handling.

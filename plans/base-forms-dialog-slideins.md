@@ -179,7 +179,7 @@ Net effect: **every existing generated form honors `Config` with zero regenerati
 ### 6.6 Explorer — thin wrapper
 - `single-record.component.ts`: delete the inline resolve/load/create/wire/teardown; render `<mj-entity-form-host>` and subscribe to its outputs, mapping `Navigate`→`NavigationService`, `Notification`→`SharedService`, `Dismissed`→close, plus `recentAccessService.logAccess`. Import `FormResolverService` from `@memberjunction/ng-base-forms`.
 - Update `explorer-core` `form-resolver.service.test.ts` import path; update `dashboards/ComponentStudio/services/entity-form-override.service.ts` import.
-- **Rebuild & retire** `entity-form-dialog` package internals to delegate to `MjFormDialogComponent` (keep the public selector for back-compat, or mark deprecated). Update its sole consumer `simple-record-list`.
+- **`entity-form-dialog` retirement — DEFERRED.** It exposes a **section-mode** (rendering a single `BaseFormSectionComponent`) that the new stack doesn't cover, and its consumer `simple-record-list` relies on it. Retiring it requires section-mode support in the new host first. For now its README points new code at `<mj-form-dialog>` / `MJFormPresenterService`; full retirement is a follow-up.
 
 ### 6.7 Audit
 - `packages/Actions/CoreActions/.../get-active-form-for-entity.action.ts` references resolution — verify it's an independent server-side path (it can't import the Angular service). No change expected; confirm.
