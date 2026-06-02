@@ -25,7 +25,8 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         '## Agent Pipelines',
         '',
         'Run a multi-step dataflow **server-side** so large intermediate results never enter your context. ' +
-            'Emit a `pipeline` with a flat `steps` array; **values flow between stages as structured JSON** ' +
+            'Set `nextStep.type` to `"Pipeline"` and provide `nextStep.pipeline.steps` (a flat array); ' +
+            '**values flow between stages as structured JSON** ' +
             '(arrays/objects), PowerShell-style — stages bind to fields, you do NOT re-parse text. Only the ' +
             'FINAL stage\'s value is returned to you. Reach for this whenever a step produces a large payload ' +
             'and you only need a slice/shape of it, or to chain several actions without paying context for the ' +
@@ -73,13 +74,16 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         '```json',
         JSON.stringify(
             {
-                pipeline: {
-                    steps: [
-                        { tool: sourceToolNames[0], with: {} },
-                        { where: "Status == 'Rejected'" },
-                        { select: ['ID', 'Email'] },
-                        { first: 10 },
-                    ],
+                nextStep: {
+                    type: 'Pipeline',
+                    pipeline: {
+                        steps: [
+                            { tool: sourceToolNames[0], with: {} },
+                            { where: "Status == 'Rejected'" },
+                            { select: ['ID', 'Email'] },
+                            { first: 10 },
+                        ],
+                    },
                 },
             },
             null,
@@ -90,13 +94,16 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         '```json',
         JSON.stringify(
             {
-                pipeline: {
-                    steps: [
-                        { tool: sourceToolNames[0], with: {} },
-                        { where: 'Balance > 0' },
-                        { map: { as: 'row', do: [{ tool: sourceToolNames[0], with: { Note: '{{row.ID}}' } }] } },
-                        { count: true },
-                    ],
+                nextStep: {
+                    type: 'Pipeline',
+                    pipeline: {
+                        steps: [
+                            { tool: sourceToolNames[0], with: {} },
+                            { where: 'Balance > 0' },
+                            { map: { as: 'row', do: [{ tool: sourceToolNames[0], with: { Note: '{{row.ID}}' } }] } },
+                            { count: true },
+                        ],
+                    },
                 },
             },
             null,
@@ -107,13 +114,16 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         '```json',
         JSON.stringify(
             {
-                pipeline: {
-                    steps: [
-                        { tool: 'get_rows', with: { artifactId: 'A', start: 0, count: 500 } },
-                        { where: "Department == 'Engineering' and Status == 'Active'" },
-                        { select: ['EmployeeID', 'Name', 'Region'] },
-                        { distinct: 'Region' },
-                    ],
+                nextStep: {
+                    type: 'Pipeline',
+                    pipeline: {
+                        steps: [
+                            { tool: 'get_rows', with: { artifactId: 'A', start: 0, count: 500 } },
+                            { where: "Department == 'Engineering' and Status == 'Active'" },
+                            { select: ['EmployeeID', 'Name', 'Region'] },
+                            { distinct: 'Region' },
+                        ],
+                    },
                 },
             },
             null,
@@ -125,13 +135,16 @@ export function BuildPipelineToolDocs(sourceToolNames: string[]): string {
         '```json',
         JSON.stringify(
             {
-                pipeline: {
-                    steps: [
-                        { tool: 'get_full', with: { artifactId: 'A' } },
-                        { groupBy: { by: 'Category', sum: 'Amount', avg: 'Amount' } },
-                        { sort: '-sum_Amount' },
-                        { first: 10 },
-                    ],
+                nextStep: {
+                    type: 'Pipeline',
+                    pipeline: {
+                        steps: [
+                            { tool: 'get_full', with: { artifactId: 'A' } },
+                            { groupBy: { by: 'Category', sum: 'Amount', avg: 'Amount' } },
+                            { sort: '-sum_Amount' },
+                            { first: 10 },
+                        ],
+                    },
                 },
             },
             null,

@@ -81,18 +81,35 @@ function isGetFullEnvelope(d: unknown): boolean {
     );
 }
 
-/** Pass values through; parse strings that look like JSON objects/arrays so operators can bind. */
+/**
+ * Pass values through; parse strings that are *clearly* a JSON object/array so structured operators
+ * can bind to them (e.g. an Action that returns its rows as a JSON string).
+ *
+ * Deliberately conservative: we only attempt a parse when the trimmed string both opens AND closes
+ * with matching JSON delimiters (`{…}` / `[…]`) AND the parse yields an object/array. This avoids
+ * mis-parsing prose like `"[Note: see attached]"` or `"{TBD}"` (a leading bracket alone isn't enough),
+ * and never coerces a bare JSON scalar (`"42"`, `"true"`) — those stay strings. A string that isn't
+ * unambiguously a JSON container is returned verbatim.
+ *
+ * Known nuance: an Action returning structured data vs. the same data as a JSON string still converge
+ * here by design (that's the point — operators shouldn't care which). What we will NOT do is guess at
+ * partial/ambiguous text.
+ */
 function coerceMaybeJson(v: unknown): PipeValue {
     if (typeof v !== 'string') {
         return v as PipeValue;
     }
     const t = v.trim();
-    if (t.startsWith('{') || t.startsWith('[')) {
-        try {
-            return JSON.parse(t) as PipeValue;
-        } catch {
-            return v;
-        }
+    const looksLikeContainer = (t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'));
+    if (!looksLikeContainer) {
+        return v;
     }
-    return v;
+    try {
+        const parsed = JSON.parse(t) as PipeValue;
+        // Only treat it as structured if it actually parsed to an object/array — never a coincidental
+        // scalar — otherwise hand back the original string untouched.
+        return parsed !== null && typeof parsed === 'object' ? parsed : v;
+    } catch {
+        return v;
+    }
 }

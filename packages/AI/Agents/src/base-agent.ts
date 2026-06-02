@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJPipelineRunEntity, MJPipelineRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -74,6 +74,7 @@ import {
     ArtifactToolInvocable,
     BuildPipelineToolDocs,
     formatFinalOutput,
+    summarizePipelineStages,
 } from './pipeline';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
@@ -253,8 +254,13 @@ export class BaseAgent {
     /**
      * Queue map to chain database saves sequentially per step entity.
      * Prevents UPDATE queries running before INSERT queries on quick steps.
+     *
+     * Keyed by the step ENTITY INSTANCE, not its `ID`: a new step's `ID` is empty at create time and
+     * only gets populated during its INSERT `Save()`, so keying by `ID` would file the create and the
+     * finalize under different buckets and defeat the chain — letting the UPDATE race ahead of the
+     * INSERT on millisecond-fast steps (e.g. pipelines), which left them stuck at `Running`.
      */
-    private _stepSavePromises: Map<string, Promise<any>> = new Map();
+    private _stepSavePromises: Map<MJAIAgentRunStepEntityExtended, Promise<any>> = new Map();
 
     /**
      * Active per-request metadata provider, set at the start of Execute().
@@ -4192,10 +4198,11 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Runs a tool pipeline as a single `Tool` step in the run tree (sibling of the prompt step
-     * that requested it, matching artifact-tool steps). The step's OutputData captures the
-     * per-step records + bytes-saved for observability. Persistence into the first-class
-     * `MJ: Pipeline Runs` / `MJ: Pipeline Run Steps` entities is layered on separately.
+     * Runs a tool pipeline as a single `Tool` step in the run tree (sibling of the prompt step that
+     * requested it, matching artifact-tool steps). ALL pipeline observability lives in this step's
+     * `OutputData` — the per-stage breakdown, totals, bytes saved, and the tool chain — so there are
+     * no dedicated pipeline entities and no extra SQL I/O; the run tree alone carries everything a
+     * debug UI needs.
      *
      * @protected
      */
@@ -4213,84 +4220,20 @@ The context is now within limits. Please retry your request with the recovered c
         const registry = this.buildPipelineRegistry(params);
         const result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
 
-        // A pipeline is ONE run-step — not a parent + a child step per stage. It runs server-side in
-        // a single fast pass, so the per-stage breakdown lives in this step's OutputData (and the
-        // first-class `MJ: Pipeline Run Steps` rows) for a future UI to visualize, rather than as N
-        // extra AIAgentRunStep rows that multiply DB writes for no tree-navigation benefit.
+        // A pipeline is ONE run-step — not a parent + a child step per stage. It runs server-side in a
+        // single fast pass, so the full per-stage breakdown + totals live in this step's OutputData for
+        // a debug UI to visualize — no separate entities, no extra DB writes.
         await this.finalizeStepEntity(stepEntity, result.success, result.success ? undefined : result.error, {
             success: result.success,
+            toolChain: summarizePipelineStages(result.steps),
             steps: result.steps,
             contextBytesSaved: result.contextBytesSaved,
+            totalBytesStreamed: result.steps.reduce((sum, s) => sum + s.outputSize, 0),
+            totalDurationMs: result.steps.reduce((sum, s) => sum + s.durationMs, 0),
             failedStepIndex: result.failedStepIndex,
         });
 
-        await this.persistPipelineRun(pipeline, result, params);
         return result;
-    }
-
-    /**
-     * Persists a pipeline run + its steps to the first-class `MJ: Pipeline Runs` /
-     * `MJ: Pipeline Run Steps` entities for cross-substrate debug visibility. Wired once CodeGen
-     * has generated those entity classes; until then the run tree's `Tool` step (see
-     * {@link executePipelineAsStep}) carries observability, so this is intentionally a no-op.
-     *
-     * @protected
-     */
-    protected async persistPipelineRun(
-        pipeline: AgentPipelineRequest,
-        result: PipelineExecutionResult,
-        params: ExecuteAgentParams,
-    ): Promise<void> {
-        try {
-            const runEntity = await this._activeProvider.GetEntityObject<MJPipelineRunEntity>(
-                'MJ: Pipeline Runs',
-                params.contextUser,
-            );
-            runEntity.AgentRunID = this._agentRun?.ID ?? null;
-            runEntity.StepCount = pipeline.steps.length;
-            runEntity.Success = result.success;
-            runEntity.TotalDurationMS = result.steps.reduce((sum, s) => sum + s.durationMs, 0);
-            runEntity.ContextBytesSaved = result.contextBytesSaved;
-            runEntity.TotalBytesStreamed = result.steps.reduce((sum, s) => sum + s.outputSize, 0);
-            runEntity.FailedStepIndex = result.failedStepIndex ?? null;
-            runEntity.ErrorMessage = result.error ?? null;
-            if (!(await runEntity.Save())) {
-                this.logStatus(`[Pipeline] Failed to persist pipeline run: ${runEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`, true, params);
-                return;
-            }
-            for (const step of result.steps) {
-                await this.persistPipelineRunStep(runEntity.ID, step, params);
-            }
-        } catch (e) {
-            // Persistence is observability, not core function — never let it break the agent turn.
-            this.logStatus(`[Pipeline] Error persisting pipeline run: ${(e as Error).message}`, true, params);
-        }
-    }
-
-    /** Persists one pipeline step row. Failures are logged, not thrown (observability only). */
-    protected async persistPipelineRunStep(
-        pipelineRunID: string,
-        step: PipelineExecutionResult['steps'][number],
-        params: ExecuteAgentParams,
-    ): Promise<void> {
-        const stepEntity = await this._activeProvider.GetEntityObject<MJPipelineRunStepEntity>(
-            'MJ: Pipeline Run Steps',
-            params.contextUser,
-        );
-        stepEntity.PipelineRunID = pipelineRunID;
-        stepEntity.StepIndex = step.index;
-        stepEntity.ToolName = step.toolName;
-        stepEntity.ProviderKind = step.providerKind;
-        stepEntity.InputSize = step.inputSize;
-        stepEntity.OutputSize = step.outputSize;
-        stepEntity.DurationMS = step.durationMs;
-        stepEntity.Success = step.success;
-        stepEntity.ErrorMessage = step.error ?? null;
-        stepEntity.ActionExecutionLogID = step.logRef.actionExecutionLogId ?? null;
-        stepEntity.Preview = step.logRef.preview ?? null;
-        if (!(await stepEntity.Save())) {
-            this.logStatus(`[Pipeline] Failed to persist pipeline step ${step.index}: ${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`, true, params);
-        }
     }
 
     /**
@@ -4304,9 +4247,13 @@ The context is now within limits. Please retry your request with the recovered c
         const diagnostic = result.success && result.diagnostic
             ? `\n⚠ Empty result — ${result.diagnostic}`
             : '';
+        // Identify which pipeline this result belongs to (stage chain, e.g. `get_rows → where →
+        // select`). Without it, multiple pipeline results across turns are indistinguishable once
+        // compacted — mirrors how artifact-tool results name their tool/artifact.
+        const label = summarizePipelineStages(result.steps);
         const content = result.success
-            ? `Pipeline result (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n\`\`\`\n${formatFinalOutput(result.finalOutput)}\n\`\`\`${diagnostic}`
-            : `Pipeline failed.\n${result.error}`;
+            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n\`\`\`\n${formatFinalOutput(result.finalOutput)}\n\`\`\`${diagnostic}`
+            : `Pipeline failed [${label}].\n${result.error}`;
 
         const message: AgentChatMessage = {
             role: 'user',
@@ -5881,17 +5828,18 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
-        const id = stepEntity.ID;
-        const previousSave = this._stepSavePromises.get(id) ?? Promise.resolve();
+        // Chain on the entity INSTANCE (stable), NOT stepEntity.ID — the ID is empty until the INSERT
+        // Save() assigns it, so an ID-keyed chain breaks for fast create→finalize sequences.
+        const previousSave = this._stepSavePromises.get(stepEntity) ?? Promise.resolve();
         const currentSave = previousSave.then(() => stepEntity.Save()).then((ok) => {
             if (!ok) {
                 LogError(
-                    `Failed to save agent run step record ${id}: ${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    `Failed to save agent run step record ${stepEntity.ID || '(unsaved)'}: ${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`
                 );
             }
             return ok;
         });
-        this._stepSavePromises.set(id, currentSave);
+        this._stepSavePromises.set(stepEntity, currentSave);
         this._pendingSaves.push(currentSave);
     }
 

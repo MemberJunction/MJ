@@ -36,3 +36,20 @@ describe('structureArtifactData (get_rows envelope unwrap)', () => {
         expect(structureArtifactData({ data: [1, 2] })).toEqual({ data: [1, 2] });
     });
 });
+
+describe('conservative JSON coercion (coerceMaybeJson)', () => {
+    it('parses strings that are unambiguously a JSON container', () => {
+        expect(structureArtifactData('{"a":1}')).toEqual({ a: 1 });
+        expect(structureArtifactData('  [1, 2, 3]  ')).toEqual([1, 2, 3]);
+    });
+    it('leaves prose with a leading bracket as a string (no matching close / not valid JSON)', () => {
+        expect(structureArtifactData('[Note: see attached]')).toBe('[Note: see attached]');
+        expect(structureArtifactData('{See attached}')).toBe('{See attached}');
+        expect(structureArtifactData('[TODO')).toBe('[TODO');
+    });
+    it('does not coerce bare JSON scalars to non-strings', () => {
+        expect(structureArtifactData('42')).toBe('42');
+        expect(structureArtifactData('true')).toBe('true');
+        expect(structureArtifactData('plain text')).toBe('plain text');
+    });
+});

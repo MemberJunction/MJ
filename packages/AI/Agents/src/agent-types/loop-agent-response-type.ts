@@ -61,14 +61,6 @@ export interface LoopAgentResponse<P = any> {
     artifactToolCalls?: ArtifactToolCall[];
 
     /**
-     * A tool pipeline to run server-side this turn. Like artifact tools / client tools, it is a
-     * yield/await action: the agent cannot know the result until it executes, so the loop runs
-     * the pipeline inline, injects the final output, and forces one more turn. Only the final
-     * step's output enters the context window.
-     */
-    pipeline?: AgentPipelineRequest;
-
-    /**
      * Internal reasoning for debugging
      */
     reasoning?: string;
@@ -83,9 +75,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline';
 
         /**
          * Actions to execute (when type='Actions')
@@ -94,6 +86,16 @@ export interface LoopAgentResponse<P = any> {
             name: string;
             params: Record<string, unknown>;
         }>;
+
+        /**
+         * Tool pipeline to run server-side (when type='Pipeline'). Like client tools, it is a
+         * yield/await action: the agent cannot know the result until it executes, so the loop runs
+         * the pipeline inline, injects the final output, and forces one more turn. Only the final
+         * step's output enters the context window. Modeling it as a `nextStep.type` (rather than a
+         * top-level field) makes it structurally mutually exclusive with Actions/Chat/etc. — the LLM
+         * cannot accidentally request a pipeline AND another step in the same turn.
+         */
+        pipeline?: AgentPipelineRequest;
 
         /**
          * Index of a compacted message to expand (when type='Retry').

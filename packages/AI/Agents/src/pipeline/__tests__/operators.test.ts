@@ -110,6 +110,13 @@ describe('text operators', () => {
         expect(apply('head', log, 2)).toBe('INFO ok\nERROR boom');
         expect(apply('tail', log, 1)).toBe('ERROR three');
     });
+    it('head / tail reject arrays and point to first / last', () => {
+        expect(() => apply('head', rows, 2)).toThrow(/text only.*"first"/);
+        expect(() => apply('tail', rows, 2)).toThrow(/text only.*"last"/);
+        // first / last remain the array operators
+        expect((apply('first', rows, 2) as unknown[]).length).toBe(2);
+        expect((apply('last', rows, 1) as unknown[]).length).toBe(1);
+    });
 });
 
 describe('operator registry', () => {

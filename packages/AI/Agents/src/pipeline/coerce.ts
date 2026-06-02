@@ -5,12 +5,32 @@
  *
  * @module @memberjunction/ai-agents
  */
-import { PipeValue } from './pipeline.types';
+import { PipeValue, PipelineStepRecord } from './pipeline.types';
 
 /** Default max characters of the final value returned to the LLM before truncation. */
 export const FINAL_OUTPUT_LIMIT = 8000;
 /** Max characters of a per-step debug preview. */
 export const PREVIEW_LIMIT = 500;
+/** Max stages shown in a pipeline identity label before the middle is elided. */
+export const MAX_LABEL_STAGES = 6;
+
+/**
+ * Compact identity for a pipeline run — the stage chain, e.g. `get_rows → where → select`. Used to
+ * label the injected result message so multiple pipeline results across turns stay distinguishable
+ * after compaction (mirrors how artifact-tool results name their tool). Elides the middle when there
+ * are many stages so the label never bloats the context it's meant to economize.
+ */
+export function summarizePipelineStages(steps: PipelineStepRecord[]): string {
+    const names = steps.map((s) => s.toolName);
+    if (names.length === 0) {
+        return 'empty pipeline';
+    }
+    if (names.length <= MAX_LABEL_STAGES) {
+        return names.join(' → ');
+    }
+    const head = names.slice(0, MAX_LABEL_STAGES - 1).join(' → ');
+    return `${head} → …(${names.length - (MAX_LABEL_STAGES - 1)} more)`;
+}
 
 /** Compact text form: strings pass through raw; null/undefined → ''; everything else → compact JSON. */
 export function valueToText(v: PipeValue): string {

@@ -192,4 +192,20 @@ describe('PipelineExecutor (value model)', () => {
         const many = Array.from({ length: MAX_PIPELINE_STAGES + 1 }, () => ({ count: true }));
         expect((await exec.Execute(many as PipelineStage[])).error).toMatch(/at most/);
     });
+
+    it('fails (without throwing) when the abort signal is already aborted', async () => {
+        const ac = new AbortController();
+        ac.abort();
+        const e = new PipelineExecutor(registryWith(runView), MAX_PIPELINE_STAGES, { signal: ac.signal });
+        const r = await e.Execute([{ tool: 'Run View', with: {} }] as PipelineStage[]);
+        expect(r.success).toBe(false);
+        expect(r.error).toMatch(/cancelled/i);
+    });
+
+    it('fails with a time-budget message when the deadline is already past', async () => {
+        const e = new PipelineExecutor(registryWith(runView), MAX_PIPELINE_STAGES, { deadlineMs: 0 });
+        const r = await e.Execute([{ tool: 'Run View', with: {} }] as PipelineStage[]);
+        expect(r.success).toBe(false);
+        expect(r.error).toMatch(/time budget/i);
+    });
 });

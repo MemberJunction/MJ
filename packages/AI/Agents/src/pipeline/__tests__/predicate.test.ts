@@ -46,4 +46,21 @@ describe('predicate', () => {
         expect(() => parsePredicate('Balance >')).toThrow();
         expect(() => parsePredicate('Balance 5')).toThrow(/operator/);
     });
+
+    describe('matches ReDoS guard', () => {
+        it('rejects catastrophic-backtracking patterns (nested quantifiers)', () => {
+            // `(a+)+$` is the classic exponential pattern — must be refused, not compiled.
+            expect(() => match(row, "Name matches '(a+)+$'")).toThrow(/unsafe|catastrophic/i);
+            expect(() => match(row, "Name matches '(a*)*'")).toThrow(/unsafe|catastrophic/i);
+        });
+        it('rejects over-long patterns', () => {
+            const huge = 'a'.repeat(201);
+            expect(() => match(row, `Name matches '${huge}'`)).toThrow(/too long/i);
+        });
+        it('still allows safe patterns', () => {
+            expect(match(row, "Name matches '^Acme'")).toBe(true);
+            expect(match(row, "Name matches 'Corp$'")).toBe(true);
+            expect(match(row, "Name matches 'X{2,4}'")).toBe(false);
+        });
+    });
 });

@@ -12,13 +12,20 @@
  *   value  := string | number | true | false | null | today | now | '[' value (',' value)* ']'
  *
  * Parsed with a hand-written recursive-descent parser — never `eval`'d. The `matches` operator
- * compiles a user regex (bounded risk); everything else is plain comparison. This is the security
- * spine for LLM-authored filters.
+ * compiles a user regex behind a ReDoS guard (length cap + star-height check; see {@link safeRegex});
+ * everything else is plain comparison. This is the security spine for LLM-authored filters.
  *
  * @module @memberjunction/ai-agents
  */
+import safeRegexCheck from 'safe-regex';
 import { PipeValue } from './pipeline.types';
 import { getValue } from './path';
+
+/**
+ * Hard cap on the source length of a `matches` pattern. The pattern is LLM-authored, so this bounds
+ * the parsing surface; the real ReDoS defense is {@link safeRegex}'s star-height check below.
+ */
+const MAX_REGEX_PATTERN_LENGTH = 200;
 
 type Comparison = { kind: 'cmp'; path: string; op: string; value: PipeValue | PipeValue[] };
 type PredicateNode =
@@ -305,7 +312,25 @@ function compare(a: PipeValue, b: PipeValue): number {
     return sa < sb ? -1 : sa > sb ? 1 : 0;
 }
 
+/**
+ * Compile an LLM-authored `matches` pattern into a RegExp, guarding against catastrophic
+ * backtracking (ReDoS). `new RegExp(pattern).test(longString)` runs synchronously on the event
+ * loop, so a pattern like `(a+)+$` against a long value can hang the whole Node process. We bound
+ * the pattern length and reject patterns whose star height > 1 (the structural source of
+ * exponential backtracking) via `safe-regex`. Both failure modes throw a clear, agent-facing
+ * message so the model can rephrase the filter rather than wedge the server.
+ */
 function safeRegex(pattern: string): RegExp {
+    if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+        throw new Error(
+            `Regex in "matches" is too long (${pattern.length} > ${MAX_REGEX_PATTERN_LENGTH} chars). Simplify the pattern or use contains/startsWith/endsWith.`,
+        );
+    }
+    if (!safeRegexCheck(pattern)) {
+        throw new Error(
+            `Regex in "matches" was rejected as unsafe (risk of catastrophic backtracking, e.g. nested quantifiers like "(a+)+"). Rewrite it without nested/overlapping repetition, or use contains/startsWith/endsWith.`,
+        );
+    }
     try {
         return new RegExp(pattern);
     } catch (e) {

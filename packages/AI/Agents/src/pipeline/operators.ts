@@ -19,6 +19,17 @@ function requireArray(input: PipeValue, op: string): PipeValue[] {
     return input;
 }
 
+/**
+ * Guard for the text-only operators (`head`/`tail`): reject arrays and point the agent at the
+ * array equivalent. Keeps the verb choice unambiguous — `head`/`tail` operate on text LINES,
+ * `first`/`last` operate on array ELEMENTS — instead of both silently slicing arrays.
+ */
+function rejectArray(input: PipeValue, op: string, arrayOp: string): void {
+    if (Array.isArray(input)) {
+        throw new Error(`"${op}" operates on text only; for the ${input.length}-element array use "${arrayOp}" instead.`);
+    }
+}
+
 function describe(v: PipeValue): string {
     if (Array.isArray(v)) return 'an array';
     if (v === null) return 'null';
@@ -315,24 +326,24 @@ const Grep: PipelineOperator = {
 
 const Head: PipelineOperator = {
     name: 'head',
-    description: 'First N lines of a string (or first N elements of an array).',
+    description: 'First N LINES of a string (text only — use `first` for the first N array elements).',
     argsHint: 'a number N',
     apply(input, args) {
+        rejectArray(input, 'head', 'first');
         const n = Math.max(0, asInt(args, 'head'));
-        if (Array.isArray(input)) return input.slice(0, n);
         return toLines(input).slice(0, n).join('\n');
     },
 };
 
 const Tail: PipelineOperator = {
     name: 'tail',
-    description: 'Last N lines of a string (or last N elements of an array).',
+    description: 'Last N LINES of a string (text only — use `last` for the last N array elements).',
     argsHint: 'a number N',
     apply(input, args) {
+        rejectArray(input, 'tail', 'last');
         const n = Math.max(0, asInt(args, 'tail'));
-        const items = Array.isArray(input) ? input : toLines(input);
-        const sliced = items.slice(Math.max(0, items.length - n));
-        return Array.isArray(input) ? sliced : (sliced as string[]).join('\n');
+        const lines = toLines(input);
+        return lines.slice(Math.max(0, lines.length - n)).join('\n');
     },
 };
 

@@ -28,6 +28,16 @@ import { sizeOf, previewOf, describeEmptyMatch } from './coerce';
 export const MAX_PIPELINE_STAGES = 20;
 export const MAX_MAP_ELEMENTS = 1000;
 export const MAP_CONCURRENCY = 8;
+/** Default wall-clock budget for an entire pipeline (incl. all map/let sub-pipelines). */
+export const DEFAULT_PIPELINE_DEADLINE_MS = 120_000;
+
+/** Optional runtime controls for a pipeline execution. */
+export interface PipelineExecutorOptions {
+    /** Wall-clock budget for the whole pipeline. Checked between stages + map batches. */
+    deadlineMs?: number;
+    /** Caller cancellation; honored at the same checkpoints as the deadline. */
+    signal?: AbortSignal;
+}
 
 /** Internal outcome of running a single stage (never throws). */
 interface StageOutcome {
@@ -41,13 +51,44 @@ interface StageOutcome {
 }
 
 export class PipelineExecutor {
-    /** Total bytes produced by every stage anywhere in the tree (incl. map/let sub-pipelines). */
+    /**
+     * Total bytes produced by every stage anywhere in the tree (incl. map/let sub-pipelines).
+     * INSTANCE state, not shared: a fresh executor is created per pipeline run (see
+     * `base-agent.executePipelineAsStep`), so concurrent agent turns each get their own counter —
+     * this is never read/written across parallel runs. Do NOT make PipelineExecutor a singleton.
+     */
     private producedBytes = 0;
+    /** Absolute wall-clock deadline (epoch ms) for this run; set at the start of {@link Execute}. */
+    private deadlineAt = Number.POSITIVE_INFINITY;
+    private readonly deadlineMs: number;
+    private readonly signal?: AbortSignal;
 
     constructor(
         private readonly registry: PipelineToolRegistry,
         private readonly maxStages: number = MAX_PIPELINE_STAGES,
-    ) {}
+        opts: PipelineExecutorOptions = {},
+    ) {
+        this.deadlineMs = opts.deadlineMs ?? DEFAULT_PIPELINE_DEADLINE_MS;
+        this.signal = opts.signal;
+    }
+
+    /**
+     * Throw if the run has been cancelled or has blown its wall-clock budget. Checked between
+     * top-level stages, before each `map` batch, and before each sub-pipeline stage — so a long
+     * `map` over many elements (or a chain of slow Actions) can't run unbounded. NOTE: this bounds
+     * wall-clock *between* stage invocations; it does not interrupt a single in-flight Action mid-call
+     * (that needs Action-level cancellation — a follow-up once the Action layer accepts an AbortSignal).
+     */
+    private checkAbort(): void {
+        if (this.signal?.aborted) {
+            throw new Error('Pipeline cancelled.');
+        }
+        if (Date.now() >= this.deadlineAt) {
+            throw new Error(
+                `Pipeline exceeded its ${this.deadlineMs}ms time budget. Narrow the work (fewer map elements, smaller fetches) or split across turns.`,
+            );
+        }
+    }
 
     /** Validate + run a pipeline. Returns a structured result; never throws on stage failure. */
     public async Execute(stages: PipelineStage[]): Promise<PipelineExecutionResult> {
@@ -60,6 +101,7 @@ export class PipelineExecutor {
         const scope: TemplateScope = {};
         let current: PipeValue = null;
         this.producedBytes = 0;
+        this.deadlineAt = Date.now() + this.deadlineMs;
         let firstDiagnostic: string | undefined;
 
         for (let i = 0; i < stages.length; i++) {
@@ -127,6 +169,7 @@ export class PipelineExecutor {
     /** Dispatch one stage. Never throws — converts errors into a failed outcome. */
     private async runStage(stage: PipelineStage, current: PipeValue, scope: TemplateScope): Promise<StageOutcome> {
         try {
+            this.checkAbort(); // deadline/cancellation → failed outcome (caught below), never an uncaught throw
             if ('tool' in stage) {
                 return await this.runToolStage(stage, current, scope);
             }
@@ -192,11 +235,16 @@ export class PipelineExecutor {
         }
 
         const failFast = cfg.continueOnError === false;
+        // KNOWN LIMITATION: every element's final value is buffered here before returning. With
+        // MAX_MAP_ELEMENTS=1000 and large per-element outputs this is real memory pressure — keep each
+        // element's final sub-stage SMALL (select/count/grep), not whole fetched pages. A streaming /
+        // chunked map that doesn't materialize the full array is a v2 candidate.
         const results: PipeValue[] = new Array(current.length).fill(null);
         let failures = 0;
         let firstError: string | undefined;
 
         for (let start = 0; start < current.length; start += MAP_CONCURRENCY) {
+            this.checkAbort();
             const batch = current.slice(start, start + MAP_CONCURRENCY);
             await Promise.all(
                 batch.map(async (element, j) => {

@@ -38,10 +38,13 @@ flow between stages without materializing. Not built; v1 holds values in memory.
 ### Stage regularity (the LLM-facing surface)
 A pipeline is a flat `steps[]`. **Every stage is an object with exactly one verb key** + its args —
 jq/PowerShell-regular, so the LLM picks one verb per stage and never learns a bespoke shape. The
-agent emits a `pipeline` field on its response ([`AgentPipelineRequest`](../packages/AI/CorePlus/src/agent-types.ts)):
+agent requests a pipeline as a `nextStep.type: "Pipeline"` with `nextStep.pipeline`
+([`AgentPipelineRequest`](../packages/AI/CorePlus/src/agent-types.ts)) — dispatched through the same
+singular `nextStep.type` as `Actions`/`Sub-Agent`/`ForEach`/etc., so it's structurally mutually
+exclusive with them (the LLM cannot emit a pipeline *and* another step and have one silently dropped):
 
 ```json
-{ "pipeline": { "steps": [
+{ "nextStep": { "type": "Pipeline", "pipeline": { "steps": [
   { "tool":  "Run View", "with": { "EntityName": "Invoices", "ExtraFilter": "Status='Open'" } },
   { "where": "Balance > 0 and DueDate < today" },
   { "select": ["ID", "CustomerEmail", "Balance"] },
@@ -52,8 +55,13 @@ agent emits a `pipeline` field on its response ([`AgentPipelineRequest`](../pack
         "with": { "To": "{{row.CustomerEmail}}", "Subject": "Overdue invoice" },
         "pipeInto": "Body" }
   ]}}
-] } }
+] } } }
 ```
+
+Like client tools, a pipeline is a yield/await step: it pre-empts `taskComplete` (runs inline, injects
+its final value, forces one more turn so the LLM can use the result). The response validator accepts
+`"Pipeline"` as a step type; gated by the `includePipelineDocs` / `includeResponseTypeDefinition.pipeline`
+prompt params (default **true**) — both off ⇒ the type and its docs are never injected.
 
 Only the final value returns to the LLM. The 500-row RunView dump, the filtered set, the per-row
 email bodies — none touch context.
@@ -74,8 +82,10 @@ Invoke any Action or artifact tool the agent has. ([`providers/`](../packages/AI
 - `pipeInto`: name of the param that receives the **whole upstream value** (stdin-style). Omit → the
   stage ignores upstream (a pure *source*, e.g. the first stage).
 - Emits the tool's result as a **structured value** — `serialize.ts` does NOT stringify: it unwraps a
-  single output param to its value, multiple to an object keyed by name, an artifact `get_full`
-  envelope to its content, and parses JSON-looking strings so downstream operators can bind.
+  single output param to its value, multiple to an object keyed by name, and an artifact `get_full`
+  envelope to its content. String coercion is conservative: a string is parsed as JSON only when it
+  *unambiguously* opens and closes as a container (`{…}`/`[…]`) and parses to an object/array —
+  prose like `[Note: …]` or a bare scalar (`"42"`) is left as a string.
 
 ### Operators (pure, object-aware — PowerShell cmdlets)
 Code-defined verbs in [`operators.ts`](../packages/AI/Agents/src/pipeline/operators.ts) (not registry
@@ -99,14 +109,15 @@ For genuinely textual values (web pages, documents, logs):
 |---|---|
 | `lines` | split a string into an array of lines (so object operators apply) |
 | `grep` | keep matching lines (string) or elements (array) by regex; `{pattern, ignoreCase?, invert?}` or a bare pattern |
-| `head` / `tail` | first/last N lines of a string (or elements of an array) |
+| `head` / `tail` | first/last N **lines of a string** (text only — reject arrays; use `first`/`last` for array elements) |
 
 ### The `where` predicate language
 [`predicate.ts`](../packages/AI/Agents/src/pipeline/predicate.ts) — a hand-written recursive-descent
 parser (never `eval`). Operators: `== != < > <= >= contains startsWith endsWith matches in`, combined
 with `and` / `or` / `not` and parentheses. Values: strings, numbers, `true`/`false`/`null`, `[lists]`
-for `in`, and the literals `today` / `now`. `matches` compiles a user regex (bounded risk); the rest
-are plain comparisons.
+for `in`, and the literals `today` / `now`. `matches` compiles a user regex behind a **ReDoS guard**
+(`safe-regex` star-height check + a 200-char pattern cap; an unsafe pattern like `(a+)+$` is rejected
+with a clear, agent-facing message rather than hanging the event loop); the rest are plain comparisons.
 
 ### The multiplier — `map`
 `{ "map": { "as": "row", "do": [ ...sub-stages... ] } }` runs the sub-pipeline **once per element** of
@@ -147,8 +158,17 @@ Power without usability is useless. The deliberate choices for the model:
   upstream value size, and the underlying error.
 - **Caps**: `MAX_PIPELINE_STAGES = 20`, `MAX_MAP_ELEMENTS = 1000`, `MAP_CONCURRENCY = 8` (map runs in
   bounded-concurrency batches), `FINAL_OUTPUT_LIMIT = 8000` chars on return.
+- **Wall-clock budget**: `DEFAULT_PIPELINE_DEADLINE_MS = 120_000`, plus an optional `AbortSignal`
+  (`PipelineExecutorOptions`). Both are checked between every stage and before each `map` batch, so a
+  long map or a chain of slow Actions can't run unbounded — a breach becomes a clean failed result
+  (never an uncaught throw). NOTE: this bounds wall-clock *between* stage invocations; interrupting a
+  single in-flight Action mid-call needs Action-level cancellation (a follow-up once the Action layer
+  accepts a signal).
 - **map fail-policy**: per-element failures collect into a summary; `continueOnError: false` makes the
   whole map fail-fast on the first bad element.
+- **map memory**: per-element final values are buffered into one array before returning (known
+  limitation at `MAX_MAP_ELEMENTS` × large outputs — keep each element's last stage small; a
+  streaming/chunked map is a v2 candidate).
 - **Determinism**: pure operators are deterministic; `tool` stages log to `ActionExecutionLog` as today.
 - **`ContextBytesSaved`**: bytes produced *anywhere* in the tree (top-level + every map/let sub-stage)
   minus the single final value returned — i.e. what the LLM never had to read.
@@ -163,28 +183,28 @@ code verbs, not registry entries, so their names are reserved; a capability whos
 another is **skipped for pipeline use and logged** (still callable normally) rather than aborting the
 run.
 
-## Observability — first-class run entities
+## Observability — AgentRunStep OutputData (no dedicated entities)
 
-Two `MJ:`-prefixed entities (migration `V202606011200__v5.39.x__Pipeline_Runs.sql`), not nullable
-columns bolted onto `ActionExecutionLog` (which couldn't represent artifact-tool steps):
+A pipeline run produces **no dedicated entities and no extra SQL I/O**. It surfaces as a single native
+`Tool` run-step (`Pipeline: N step(s)`) in the agent run tree, and everything a debug UI needs lives in
+that step's **`OutputData`**:
 
-- **`MJ: Pipeline Runs`** (`PipelineRun`) — one row per invocation: `AgentRunID`, `StepCount`,
-  `Success`, `TotalDurationMS`, `ContextBytesSaved`, `TotalBytesStreamed`, `FailedStepIndex`,
-  `ErrorMessage`.
-- **`MJ: Pipeline Run Steps`** (`PipelineRunStep`) — one row per top-level stage: `StepIndex`,
-  `ToolName`, `ProviderKind` (`Action` / `ArtifactTool` / `Transform`), `InputSize`, `OutputSize`,
-  `DurationMS`, `Success`, `ErrorMessage`, polymorphic `ActionExecutionLogID` (Action steps) or
-  `Preview` (everything else).
+- `success`, `toolChain` (the stage chain, e.g. `get_rows → where → count`), `contextBytesSaved`,
+  `totalBytesStreamed`, `totalDurationMs`, `failedStepIndex`, and
+- `steps[]` — the per-stage breakdown: `index`, `toolName`, `providerKind` (`Action` / `ArtifactTool` /
+  `Transform`), `inputSize`, `outputSize`, `durationMs`, `success`, `error`, and a `logRef`
+  (`ActionExecutionLogID` for Action steps, an inline `preview` for everything else).
 
-Each top-level stage also surfaces as a native child `Tool` run-step under a `Pipeline: N step(s)`
-parent in the agent run tree, with action steps linking to their `ActionExecutionLog`. `map`/`let`
-sub-stages are summarized into their parent step (e.g. `map(300)`), not emitted as individual rows.
+Action stages still log to `ActionExecutionLog` as usual. `map`/`let` sub-stages are summarized into the
+step (e.g. `map(300)`), not emitted as individual rows. (Earlier drafts created `MJ: Pipeline Run(s)`
+entities; per review these were dropped — the run-step `OutputData` already carries the full picture
+without the write amplification or a new overloaded "Pipeline" entity name.)
 
 ## Agent-loop integration (`base-agent.ts`)
 
 - `buildPipelineRegistry(params)` — unifies Actions + artifact tools into one namespace.
-- `executePipelineAsStep(pipeline, params)` — runs the executor as one `Tool` step, emits child
-  run-steps, finalizes the step, persists the run + step rows.
+- `executePipelineAsStep(pipeline, params)` — runs the executor as one `Tool` step and finalizes it
+  with the full per-stage breakdown + totals in its `OutputData` (no separate entities).
 - `injectPipelineResultMessage(...)` — pushes only the final output (or the failure message) into the
   conversation for the next turn, mirroring the artifact-tool "inject once, then expire" pattern
   (3-turn compacting expiry). Then forces one more turn.
@@ -231,10 +251,11 @@ Run: `cd packages/AI/Agents && npx vitest run src/pipeline/__tests__/`
 | `jsonpath-eval.test.ts` | The eval-free JSONPath subset: member/index/wildcard/recursive-descent; rejects filter/script expressions and unsupported selectors. |
 | `path.test.ts` | Relative↔absolute path normalization; `getValue`/`getValues`; field-name extraction. |
 | `predicate.test.ts` | The `where` grammar: comparison + word operators, `and/or/not`, parens, `in [list]`, `today`/`now`, malformed-input errors. |
-| `operators.test.ts` | Each operator (`where/select/sort/first/last/count/distinct/flatten/jsonpath` + `lines/grep/head/tail`): array + text modes, wrong-type errors. |
+| `operators.test.ts` | Each operator (`where/select/sort/first/last/count/distinct/flatten/jsonpath` + `lines/grep/head/tail`): array + text modes, wrong-type errors, and `head`/`tail` rejecting arrays (→ `first`/`last`). |
 | `template.test.ts` | `{{path}}` resolution: whole-string → raw value, embedded → interpolated text, unknown-binding error. |
-| `serialize.test.ts` | `structureActionResult` (single/multi/none output params), `structureArtifactData` (`get_full` envelope, JSON-string coercion). |
-| `pipeline-executor.test.ts` | Threading value→value; only-final-returned; bytes-saved; `map`/`let`; caps (>20 stages, >1000 map elements); fail-fast without echoing input; empty-match diagnostic. |
+| `serialize.test.ts` | `structureActionResult` (single/multi/none output params), `structureArtifactData` (`get_full` envelope), and conservative JSON-string coercion (container parses; prose / bare scalars stay strings). |
+| `pipeline-executor.test.ts` | Threading value→value; only-final-returned; bytes-saved; `map`/`let`; caps (>20 stages, >1000 map elements); abort-signal + past-deadline → clean failure; fail-fast without echoing input; empty-match diagnostic. |
+| `loop-agent-type.test.ts` | `DetermineNextStep` accepts `nextStep.type: 'Pipeline'` (non-terminal Retry carrying the pipeline), infers it from a bare `nextStep.pipeline`, and Retries on empty steps. |
 | `pipeline-docs.test.ts` | Docs generator: empty when no sources; lists operators + sources + worked examples. |
 
 Full package regression: `cd packages/AI/Agents && npx vitest run`.
@@ -243,8 +264,10 @@ Full package regression: `cd packages/AI/Agents && npx vitest run`.
 
 Start MJAPI + MJExplorer against a fresh DB. Prereqs:
 - `mj sync push --dir=metadata --include="prompts"` so the loop-agent template change (the
-  `_PIPELINE_TOOLS` block + `pipeline?` response field) is live. **Without it the LLM is never told
-  about the `pipeline` tool** and the scenarios below won't fire.
+  `_PIPELINE_TOOLS` block + the `nextStep.type: 'Pipeline'` response field) is live. **Without it the
+  LLM is never told about pipelines** and the scenarios below won't fire. (This is also the failure
+  mode if the server runs stale code: new prompt teaching `type: 'Pipeline'` but old dispatch/validator
+  that doesn't accept it → the step is bounced and never executes.)
 - An agent with at least one Action that returns a large payload (e.g. **Run View**) so there's a
   source worth slicing.
 
@@ -252,7 +275,7 @@ Start MJAPI + MJExplorer against a fresh DB. Prereqs:
 
 | # | Scenario | Expected |
 |---|---|---|
-| F1 | **Source → object ops.** `Run View` → `where Status == 'Rejected'` → `select [ID, Email]` → `first 10`. | Agent emits one `pipeline`. Only the final filtered array appears next turn. The full RunView dump never enters any LLM message. |
+| F1 | **Source → object ops.** `Run View` → `where Status == 'Rejected'` → `select [ID, Email]` → `first 10`. | Agent emits one `nextStep.type: 'Pipeline'`. Only the final filtered array appears next turn. The full RunView dump never enters any LLM message. |
 | F2 | **Single-stage pipeline.** Agent wraps one source. | Allowed; final = source value. |
 | F3 | **Text source → text ops.** Large text source → `lines` → `grep` → `tail 50`. | Only the last 50 matching lines returned. |
 | F4 | **Artifact-tool source.** Input artifact; `get_full` (with `artifactId`) → `where`/`grep`. | Content read + filtered server-side; only matches returned. |
@@ -271,35 +294,39 @@ Start MJAPI + MJExplorer against a fresh DB. Prereqs:
 | E6 | `map` over a non-array, or >1000 elements. | `"map" expects an array …` / `"map" capped at 1000 elements …` |
 | E7 | Empty match. | Pipeline succeeds; final message carries the empty-match diagnostic (field values present). |
 
-## 5. Persistence / observability
+## 5. Observability (AgentRunStep OutputData — no dedicated entities)
 
-After F1–F6, inspect `MJ: Pipeline Runs` + `MJ: Pipeline Run Steps`:
+After F1–F6, inspect the `Pipeline: N step(s)` `Tool` step in the agent run tree (no `PipelineRun`
+tables exist — observability lives entirely in the run-step's `OutputData`):
 
-- [ ] One run row per pipeline with correct `StepCount`, `Success`, `ContextBytesSaved`,
-      `TotalBytesStreamed`, `TotalDurationMS`; `AgentRunID` links to the run.
-- [ ] N step rows with correct `StepIndex`, `ToolName`, `ProviderKind`, `InputSize`, `OutputSize`,
-      `Success`.
-- [ ] Action steps carry `ActionExecutionLogID`; transform/artifact steps carry a `Preview`.
-- [ ] On failure (E5): run `Success=0`, `FailedStepIndex` set, `ErrorMessage` set, only the stages
-      that ran present.
-- [ ] The run also shows as a `Pipeline: N step(s)` `Tool` step in the agent run tree, with per-stage
-      children.
+- [ ] The pipeline shows as one `Pipeline: N step(s)` `Tool` step under the agent run.
+- [ ] Its `OutputData` has `success`, `toolChain`, `contextBytesSaved`, `totalBytesStreamed`,
+      `totalDurationMs`, and a `steps[]` array with per-stage `index`/`toolName`/`providerKind`/
+      `inputSize`/`outputSize`/`durationMs`/`success`.
+- [ ] Action stages' `steps[].logRef.actionExecutionLogId` link to `ActionExecutionLog`;
+      transform/artifact stages carry a `preview`.
+- [ ] On failure (E5): step `success=false`, `failedStepIndex` set, error set, only the stages that
+      ran present in `steps[]`.
 
 ```sql
-SELECT TOP 20 * FROM __mj.PipelineRun ORDER BY __mj_CreatedAt DESC;
-SELECT * FROM __mj.PipelineRunStep WHERE PipelineRunID = '<id>' ORDER BY StepIndex;
+-- The pipeline run-step lives in the standard agent run tree:
+SELECT TOP 20 ID, StepName, Status, OutputData
+FROM __mj.AIAgentRunStep
+WHERE StepName LIKE 'Pipeline:%'
+ORDER BY __mj_CreatedAt DESC;
 ```
 
 ## 6. Prompt / discovery
 
 - [ ] With `includePipelineDocs` on and ≥1 source, the system prompt contains the `## Agent Pipelines`
-      block (operators + source list + examples) and the `pipeline?` response field.
+      block (operators + source list + examples) and the `nextStep.type: 'Pipeline'` option.
 - [ ] With no sources, the block is absent (pipelines impossible).
-- [ ] `includePipelineDocs=false` on an agent type suppresses both the docs and the response field.
+- [ ] `includePipelineDocs=false` (or `includeResponseTypeDefinition.pipeline=false`) on an agent type
+      suppresses both the docs and the `'Pipeline'` step type.
 
 ## 7. Regression
 
-- [ ] Agents with no pipeline usage behave identically (`pipeline` is optional).
+- [ ] Agents with no pipeline usage behave identically (the `'Pipeline'` step type is optional).
 - [ ] Artifact-tool calls and action steps work unchanged.
 - [ ] `npm run build` clean; full Agents vitest green.
 
@@ -308,3 +335,17 @@ SELECT * FROM __mj.PipelineRunStep WHERE PipelineRunID = '<id>' ORDER BY StepInd
 - No automated end-to-end agent-run test (needs a live MJAPI + seeded agent); F1–F6 cover it manually.
 - A capability whose name collides with an operator is skipped for pipeline use and logged — verify
   the log line if such a collision exists in a target environment.
+- **Action-level cancellation**: the wall-clock deadline / `AbortSignal` is honored *between* stages
+  and map batches, not *during* a single in-flight Action — interrupting a hung Action mid-call needs
+  the Action execution layer to accept a signal (follow-up).
+- **Streaming `map`**: per-element final values are buffered into one array before returning; a
+  streaming/chunked map (no full materialization) is a v2 candidate for very large fan-outs.
+- **Model-aware capability gating**: the prompt-param flags are per-agent-type, not per-model; a
+  policy layer that injects pipeline (and other) capabilities based on model strength is a future
+  enhancement.
+
+> **Post-review revision.** This PR was revised after review: the ReDoS guard was added; `pipeline`
+> moved from a top-level response field to `nextStep.type: 'Pipeline'`; the injected result message
+> gained a stage-chain identity; `head`/`tail` became text-only; JSON-string coercion was tightened;
+> a wall-clock deadline/abort was added; and the dedicated `MJ: Pipeline Run(s)` entities were
+> **dropped** in favour of capturing everything in the run-step `OutputData` (no extra SQL I/O).
