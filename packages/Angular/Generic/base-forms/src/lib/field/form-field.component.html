@@ -257,6 +257,15 @@
                     </div>
                   </div>
                 }
+
+                <!-- Sticky "create new" footer — always visible at the bottom (no scrolling),
+                     prefilled with the typed text. Gated on create permission. -->
+                @if (CanCreateFK) {
+                  <button type="button" class="mj-fk-create-footer" (mousedown)="OnFKCreateNew($event)" [title]="FKCreateLabel">
+                    <i class="fa-solid fa-plus mj-fk-create-icon"></i>
+                    <span class="mj-fk-create-label">{{ FKCreateLabel }}</span>
+                  </button>
+                }
               </div>
             }
           </div>

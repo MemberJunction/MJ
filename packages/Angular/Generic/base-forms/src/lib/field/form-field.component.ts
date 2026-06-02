@@ -498,6 +498,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   @Input() FKHighlightMatches = true;
 
+  /**
+   * Whether to offer inline "create new" for the related record when the one you need
+   * isn't found. The affordance only renders when this is true AND the current user can
+   * create records of the related entity (entity allows creation + role permits it).
+   */
+  @Input() AllowFKCreate = true;
+
+  /** Surface used for the inline create form: a modal dialog (default) or a slide-in. */
+  @Input() FKCreatePresentation: 'dialog' | 'slide-in' = 'dialog';
+
   /** Cleanup function for scroll/resize listeners */
   private _scrollCleanup: (() => void) | null = null;
 
@@ -1458,6 +1468,73 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (nameFieldMap) {
       this.Record.Set(nameFieldMap, suggestion.DisplayName);
     }
+    this.cdr.markForCheck();
+  }
+
+  // ---- Inline "create new related record" ----
+
+  /**
+   * Whether to show the inline-create affordance: the field opts in (`AllowFKCreate`),
+   * the related entity resolves, and the current user can create records of it (entity
+   * allows creation + role permits — `GetUserPermisions().CanCreate` folds in `AllowCreateAPI`).
+   */
+  get CanCreateFK(): boolean {
+    if (!this.AllowFKCreate) return false;
+    const re = this.getRelatedEntityInfo();
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!re || !user) return false;
+    return re.GetUserPermisions(user)?.CanCreate === true;
+  }
+
+  /** Footer label: prefilled with the typed text when present, else generic "create new". */
+  get FKCreateLabel(): string {
+    const entityLabel = this.getRelatedEntityInfo()?.DisplayName || this.FieldInfo?.RelatedEntity || 'record';
+    const query = (this._fkInputText ?? '').trim();
+    return query ? `Create "${query}"` : `Create new ${entityLabel}`;
+  }
+
+  /**
+   * Ask the host (app layer) to create a new related record, prefilled with the typed
+   * text as the name. We only EMIT the request — opening the form is the app's job (the
+   * generic forms layer must not depend on the app-level form presenter). The host calls
+   * `Complete(record)` when saved and we select it.
+   */
+  OnFKCreateNew(event: MouseEvent): void {
+    event.preventDefault(); // don't blur the input before we capture the query
+    const plan = this.buildColumnPlan();
+    const relatedEntity = this.FieldInfo?.RelatedEntity;
+    if (!plan || !relatedEntity) return;
+
+    const query = (this._fkInputText ?? '').trim();
+    this.FKShowScopeMenu = false;
+    this.FKFocused = false;
+    this.closeFKDropdown();
+    this.cdr.markForCheck();
+
+    const newRecordValues: Record<string, unknown> = {};
+    if (query) newRecordValues[plan.NameFieldName] = query;
+
+    this.Navigate.emit({
+      Kind: 'create-related',
+      EntityName: relatedEntity,
+      NewRecordValues: Object.keys(newRecordValues).length ? newRecordValues : undefined,
+      Presentation: this.FKCreatePresentation,
+      Provider: this.Provider ?? undefined,
+      Complete: (created: BaseEntity | null) => { if (created) this.selectCreatedFKRecord(created, plan); },
+    });
+  }
+
+  /** Select a freshly-created related record as this field's value. */
+  private selectCreatedFKRecord(created: BaseEntity, plan: FKColumnPlan): void {
+    const pk = created.Get(plan.PkFieldName);
+    if (pk == null) return;
+    const name = this.formatCell(created.Get(plan.NameFieldName));
+    this._fkInputText = name;
+    this.Value = pk;
+    this.FKIsMatched = true;
+    const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
+    if (nameFieldMap) this.Record.Set(nameFieldMap, name);
+    this.closeFKDropdown();
     this.cdr.markForCheck();
   }
 
