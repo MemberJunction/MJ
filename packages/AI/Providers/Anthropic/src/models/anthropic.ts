@@ -25,6 +25,9 @@ export const ANTHROPIC_CACHE_BREAKPOINT = '<<<MJ_CACHE_BREAKPOINT>>>';
 /** Anthropic allows at most 4 cache_control breakpoints per request. */
 const MAX_CACHE_BREAKPOINTS = 4;
 
+/** A minimal Anthropic text content block, optionally carrying an ephemeral cache breakpoint. */
+type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
+
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
     private _anthropic: Anthropic;
@@ -109,9 +112,9 @@ export class AnthropicLLM extends BaseLLM {
      *   uncached unless `cacheLastSegment` is true. The marker text itself is removed. Breakpoints
      *   are capped at {@link MAX_CACHE_BREAKPOINTS}.
      */
-    private pushTextBlocks(out: any[], text: string, enableCaching: boolean, cacheLastSegment: boolean): void {
+    private pushTextBlocks(out: AnthropicTextBlock[], text: string, enableCaching: boolean, cacheLastSegment: boolean): void {
         if (!text.includes(ANTHROPIC_CACHE_BREAKPOINT)) {
-            const block: any = { type: "text", text };
+            const block: AnthropicTextBlock = { type: "text", text };
             if (enableCaching && cacheLastSegment) {
                 block.cache_control = { type: "ephemeral" };
             }
@@ -127,7 +130,7 @@ export class AnthropicLLM extends BaseLLM {
         let breakpointsUsed = 0;
         for (let i = 0; i < segments.length; i++) {
             const isFinalSegment = i === segments.length - 1;
-            const block: any = { type: "text", text: segments[i] };
+            const block: AnthropicTextBlock = { type: "text", text: segments[i] };
             if (enableCaching && !isFinalSegment && breakpointsUsed < MAX_CACHE_BREAKPOINTS) {
                 block.cache_control = { type: "ephemeral" };
                 breakpointsUsed++;

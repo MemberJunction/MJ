@@ -153,9 +153,6 @@ export class ModelUsage {
      * These are billed at a steep discount versus normal input tokens (e.g. Anthropic ~0.1x,
      * OpenAI ~0.5x, Gemini ~0.1x) and are the primary source of prompt-caching savings.
      *
-     * These are billed at a steep discount versus normal input tokens (e.g. Anthropic ~0.1x,
-     * OpenAI ~0.5x, Gemini ~0.1x) and are the primary source of prompt-caching savings.
-     *
      * DISJOINT from {@link promptTokens} (which is uncached/net-new only) on EVERY provider — the
      * adapter normalizes to guarantee this. So `totalInputTokens = promptTokens + cacheReadTokens +
      * cacheWriteTokens` holds uniformly.
