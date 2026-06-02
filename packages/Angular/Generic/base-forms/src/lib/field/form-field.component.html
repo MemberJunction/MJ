@@ -9,9 +9,13 @@
         <!-- FK fields with a mapped name field: show the name as a hyperlink -->
         @if (IsFKWithNameField) {
           <span class="mj-forms-field-value">
-            <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+            @if (RecordLinksEnabled) {
+              <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+                {{ FKDisplayName }}
+              </a>
+            } @else {
               {{ FKDisplayName }}
-            </a>
+            }
           </span>
         }
         @else {
@@ -34,10 +38,14 @@
             }
             @case ('Record') {
               <span class="mj-forms-field-value">
-                <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                @if (RecordLinksEnabled) {
+                  <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                    {{ FormatValue() }}
+                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                  </a>
+                } @else {
                   {{ FormatValue() }}
-                  <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
-                </a>
+                }
               </span>
             }
             @default {
@@ -88,14 +96,36 @@
       <div class="mj-forms-field-control">
         <!-- Foreign Key fields get custom search autocomplete -->
         @if (HasRelatedEntity) {
-          <div class="mj-fk-search" [class.mj-fk-search--matched]="FKIsMatched">
+          <div class="mj-fk-search"
+              [class.mj-fk-search--matched]="FKHasLinkedValue"
+              [class.mj-fk-search--scoped]="FKFocused && FKSearchableFields.length > 1">
+            @if (FKHasLinkedValue && !(FKFocused && FKSearchableFields.length > 1)) {
+              <i class="fa-solid fa-link mj-fk-link-icon" title="Linked record"></i>
+            }
             <input type="text"
               class="mj-forms-field-input"
+              [class.mj-forms-field-input--linked]="FKHasLinkedValue"
               [value]="FKSearchText"
               (input)="OnFKInput($event)"
               (focus)="OnFKFocus($event)"
               (blur)="OnFKBlur()"
+              (keydown)="OnFKKeydown($event)"
               placeholder="Search...">
+
+            <!-- Scope pill: only while focused, only when there's more than one searchable field.
+                 The menu itself lives INSIDE the results dropdown (below) so it overlays the
+                 list and rides the same above/below flip. -->
+            @if (FKFocused && FKSearchableFields.length > 1) {
+              <button class="mj-fk-scope-pill"
+                  [class.mj-fk-scope-pill--open]="FKShowScopeMenu"
+                  (mousedown)="OnFKScopeToggle($event)"
+                  [title]="'Searching ' + FKSearchFieldLabel + ' — click to change'">
+                <i class="fa-solid fa-magnifying-glass mj-fk-scope-pill-icon"></i>
+                <span class="mj-fk-scope-pill-label">{{ FKSearchFieldLabel }}</span>
+                <i class="fa-solid mj-fk-scope-pill-caret" [class.fa-chevron-up]="FKShowScopeMenu" [class.fa-chevron-down]="!FKShowScopeMenu"></i>
+              </button>
+            }
+
             @if (FKSearchText) {
               <button class="mj-fk-clear" (mousedown)="OnFKClearClick($event)" title="Clear">
                 <i class="fa-solid fa-xmark"></i>
@@ -103,11 +133,128 @@
             } @else {
               <i class="fa-solid fa-magnifying-glass mj-fk-search-icon"></i>
             }
-            @if (ShowFKDropdown && FKSuggestions.length > 0) {
-              <div class="mj-fk-dropdown" [ngStyle]="DropdownPositionStyle" [class.mj-fk-dropdown--above]="OpenAbove">
-                @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue) {
-                  <div class="mj-fk-option" (mousedown)="OnFKSelectItem(suggestion, $event)">
-                    {{ suggestion.DisplayName }}
+            @if (ShowFKDropdown) {
+              <div class="mj-fk-dropdown mj-fk-dropdown--multi"
+                  [ngStyle]="DropdownPositionStyle"
+                  [class.mj-fk-dropdown--above]="OpenAbove"
+                  [class.mj-fk-dropdown--scope-open]="FKShowScopeMenu">
+
+                <!-- Scope (search-field) picker + column toggles — overlays the list, anchored to the pill edge.
+                     Click a row to SEARCH that field; click the eye to SHOW/HIDE it as a column. -->
+                @if (FKShowScopeMenu) {
+                  <div class="mj-fk-scope-menu" [class.mj-fk-scope-menu--bottom]="OpenAbove">
+                    <div class="mj-fk-scope-grp">Columns shown</div>
+                    @for (f of FKSearchableFields; track f.FieldName) {
+                      @if (f.Group === 'shown') {
+                        <ng-container *ngTemplateOutlet="scopeRow; context: { $implicit: f }"></ng-container>
+                      }
+                    }
+                    @if (FKHasOtherSearchableFields) {
+                      <div class="mj-fk-scope-divider"></div>
+                      <div class="mj-fk-scope-grp">Other fields</div>
+                      @for (f of FKSearchableFields; track f.FieldName) {
+                        @if (f.Group === 'other') {
+                          <ng-container *ngTemplateOutlet="scopeRow; context: { $implicit: f }"></ng-container>
+                        }
+                      }
+                    }
+                  </div>
+                }
+
+                <!-- Shared scope-menu row, fixed-slot layout for clean alignment:
+                     [reorder ▲▼ — hover-reveal] [icon] [label] [eye].
+                     Click the row = search this field; the active search row is shown bold+accent. -->
+                <ng-template #scopeRow let-f>
+                  <div class="mj-fk-scope-mi"
+                      [class.mj-fk-scope-mi--on]="IsFKScopeActive(f)"
+                      (mousedown)="OnFKScopeSelect($event, f)">
+                    <span class="mj-fk-col-reorder">
+                      @if (f.Group === 'shown') {
+                        <button type="button" class="mj-fk-col-move mj-fk-col-move--up" [disabled]="!CanMoveFKColumnUp(f.FieldName)"
+                            (mousedown)="MoveFKColumn($event, f.FieldName, -1)" title="Move column up">
+                          <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                        <button type="button" class="mj-fk-col-move mj-fk-col-move--down" [disabled]="!CanMoveFKColumnDown(f.FieldName)"
+                            (mousedown)="MoveFKColumn($event, f.FieldName, 1)" title="Move column down">
+                          <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                      }
+                    </span>
+                    <i [class]="f.Icon + ' mj-fk-scope-mi-icon'"></i>
+                    <span class="mj-fk-scope-mi-label">{{ f.Label }}</span>
+                    <span class="mj-fk-col-eye-slot">
+                      @if (CanToggleFKColumn(f)) {
+                        <button type="button" class="mj-fk-col-toggle"
+                            [class.mj-fk-col-toggle--on]="IsFKColumnVisible(f)"
+                            (mousedown)="OnFKColumnToggle($event, f)"
+                            [title]="IsFKColumnVisible(f) ? 'Hide this column' : 'Show as a column'">
+                          <i class="fa-solid" [class.fa-eye]="IsFKColumnVisible(f)" [class.fa-eye-slash]="!IsFKColumnVisible(f)"></i>
+                        </button>
+                      }
+                    </span>
+                  </div>
+                </ng-template>
+
+                @if (FKLoading) {
+                  <div class="mj-fk-status">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Searching…</span>
+                  </div>
+                }
+                @if (!FKLoading && FKNoMatches) {
+                  <div class="mj-fk-status mj-fk-status--empty">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>No matches</span>
+                  </div>
+                }
+                @if (!FKLoading && FKSuggestions.length > 0) {
+                  <div class="mj-fk-options">
+                    <div class="mj-fk-grid" [style.grid-template-columns]="FKGridTemplateColumns">
+                      <!-- Header row: click to sort, drag the right edge to resize.
+                           (Column reorder lives in the field-selector menu, not here.) -->
+                      <div class="mj-fk-grid-row mj-fk-grid-row--header">
+                        @if (FKHasIconColumn) {
+                          <div class="mj-fk-hcell mj-fk-hcell--icon"></div>
+                        }
+                        @for (col of FKColumnFields; track col; let i = $index) {
+                          <div class="mj-fk-hcell"
+                              (mousedown)="OnFKHeaderSort($event, col)"
+                              [title]="'Click to sort by ' + FKColumnHeaders[i]">
+                            <span class="mj-fk-hcell-label">{{ FKColumnHeaders[i] }}</span>
+                            <i [class]="FKSortIcon(col)"></i>
+                            <span class="mj-fk-resizer" (mousedown)="OnFKColResizeStart($event, col)" title="Drag to resize"></span>
+                          </div>
+                        }
+                      </div>
+                      <!-- Data rows -->
+                      @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue; let i = $index) {
+                        <div class="mj-fk-grid-row"
+                            [class.mj-fk-grid-row--active]="i === FKActiveIndex"
+                            [class.mj-fk-grid-row--selected]="IsFKRowSelected(suggestion)"
+                            (mousedown)="OnFKSelectItem(suggestion, $event)"
+                            (mouseenter)="FKActiveIndex = i">
+                          @if (FKHasIconColumn) {
+                            <div class="mj-fk-cell mj-fk-cell--icon">
+                              @if (suggestion.Icon) { <i [class]="suggestion.Icon"></i> }
+                            </div>
+                          }
+                          @for (col of FKColumnFields; track col; let last = $last) {
+                            @if (col === FKNameField) {
+                              <div class="mj-fk-cell mj-fk-cell--name" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)">
+                                @if (IsFKRowSelected(suggestion)) {
+                                  <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected"></i>
+                                }
+                                <span [innerHTML]="suggestion.HighlightedName"></span>
+                              </div>
+                            } @else {
+                              <div class="mj-fk-cell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)" [title]="FKCellFor(suggestion, col)?.Value || ''">
+                                <span [innerHTML]="FKCellFor(suggestion, col)?.HighlightedValue || ''"></span>
+                              </div>
+                            }
+                          }
+                        </div>
+                      }
+                    </div>
                   </div>
                 }
               </div>

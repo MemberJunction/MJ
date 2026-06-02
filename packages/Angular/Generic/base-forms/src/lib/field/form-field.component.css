@@ -369,9 +369,253 @@
   background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
 }
 
-/* Matched state: solid accent underline */
+/* Linked state: solid accent underline + a leading chain icon, so it's obvious the
+   field holds a resolved record reference rather than free-typed text. */
 .mj-fk-search--matched .mj-forms-field-input {
   border-bottom: 2px solid var(--mj-brand-primary);
+}
+
+/* Linked indicator sits on the RIGHT (just left of the clear button) so it never
+   interrupts left-to-right reading of the value or overlaps the text. */
+.mj-fk-link-icon {
+  position: absolute;
+  right: 26px;
+  color: var(--mj-brand-primary);
+  font-size: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Make room on the right for the link icon + the clear button. */
+.mj-forms-field-input--linked {
+  padding-right: 46px;
+}
+
+/* ============================================
+   SCOPE PILL + FIELD-PICKER MENU (search-field scope)
+   ============================================ */
+/* When the pill is showing, reserve room on the right of the input for it. */
+.mj-fk-search--scoped .mj-forms-field-input {
+  padding-right: 150px;
+}
+
+.mj-fk-scope-pill {
+  position: absolute;
+  right: 30px;
+  /* Vertically centered in the input so it clears the focus underline below. */
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 120px;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  color: var(--mj-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  /* Kept short so it clears the input's focus underline without making the row taller. */
+  padding: 1px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.35;
+  transition: background var(--mj-transition-base), border-color var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-scope-pill:hover,
+.mj-fk-scope-pill--open {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-primary);
+}
+
+.mj-fk-scope-pill-icon {
+  font-size: 9px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.mj-fk-scope-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-fk-scope-pill-caret {
+  font-size: 8px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* The menu is rendered INSIDE the results dropdown panel so it overlays the list
+   (correct z-order, no extra real estate) and rides the dropdown's above/below
+   flip. Anchored to the dropdown's top-right — right under the pill. */
+.mj-fk-scope-menu {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 5;
+  min-width: 180px;
+  max-width: calc(100vw - 24px);
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-shadow-lg);
+  padding: 5px;
+  animation: mj-dropdown-in 120ms ease;
+}
+
+/* When the dropdown opens ABOVE the input, anchor the menu to its bottom edge so it
+   stays next to the pill (which is at the input/dropdown boundary). */
+.mj-fk-scope-menu--bottom {
+  top: auto;
+  bottom: 4px;
+}
+
+.mj-fk-scope-grp {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  padding: 7px 10px 4px;
+  font-weight: 700;
+}
+
+.mj-fk-scope-mi {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border-radius: 5px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.mj-fk-scope-mi:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-fk-scope-mi--on {
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+
+/* Fixed-width LEFT slot: a compact stacked up/down reorder control that reveals on row
+   hover. Reserved (same width) on every row so the field icons + labels stay aligned. */
+.mj-fk-col-reorder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.mj-fk-col-move {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 10px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 8px;
+  opacity: 0; /* hover-reveal for a clean resting state */
+  transition: opacity var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-scope-mi:hover .mj-fk-col-move:not(:disabled) {
+  opacity: 0.8;
+}
+
+.mj-fk-col-move:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--mj-brand-primary);
+}
+
+/* End-of-range arrows stay hidden (slot still reserved) rather than greyed. */
+.mj-fk-col-move:disabled {
+  opacity: 0 !important;
+  cursor: default;
+}
+
+.mj-fk-scope-mi-icon {
+  width: 14px;
+  font-size: 11px;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.mj-fk-scope-mi-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fixed-width RIGHT slot so the eye (or its empty space, for the name row) aligns. */
+.mj-fk-col-eye-slot {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Eye toggle: show/hide a field as a grid column (independent of search scope). */
+.mj-fk-col-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-col-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
+}
+
+.mj-fk-col-toggle--on {
+  color: var(--mj-brand-primary);
+}
+
+.mj-fk-scope-divider {
+  height: 1px;
+  background: var(--mj-border-subtle);
+  margin: 4px 6px;
+}
+
+/* Narrow / mobile screens: shrink the pill + its reserved space, give menu rows a
+   larger touch target, and keep the menu within the viewport. */
+@media (max-width: 560px) {
+  .mj-fk-search--scoped .mj-forms-field-input {
+    padding-right: 116px;
+  }
+  .mj-fk-scope-pill {
+    max-width: 88px;
+  }
+  .mj-fk-scope-menu {
+    min-width: 160px;
+  }
+  .mj-fk-scope-mi {
+    padding: 10px 10px;
+  }
 }
 
 /* ============================================
@@ -415,6 +659,226 @@
   background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
+/* ============================================
+   MULTI-COLUMN FK DROPDOWN — aligned mini-grid (icon + name + extra cols)
+   with sortable headers and horizontal scroll.
+   ============================================ */
+.mj-fk-dropdown--multi {
+  padding: 4px;
+  /* The inner .mj-fk-options is the single scroll container (both axes) so the
+     sticky header anchors correctly; the dropdown just clips to its rounded border. */
+  overflow: hidden;
+  max-height: none;
+}
+
+/* Single scroll region (both axes) for the grid: vertical for long lists, horizontal
+   when many DefaultInView columns make rows wider than the dropdown. Being the sole
+   scroller lets the sticky column headers anchor to its top edge. */
+.mj-fk-dropdown--multi .mj-fk-options {
+  overflow: auto;
+  max-height: 260px;
+}
+
+/* While the scope menu is open it must escape the panel's clip (the inner
+   .mj-fk-options keeps its own scroll, so the grid still behaves). */
+.mj-fk-dropdown--scope-open {
+  overflow: visible;
+}
+
+/* One CSS grid spans the header + all data rows so every column lines up.
+   grid-template-columns is supplied inline from FKGridTemplateColumns.
+   `width: 100%` (with `min-width: max-content`) lets the last column's `1fr` track
+   absorb leftover width, while still overflowing → horizontal scroll when the columns
+   are collectively wider than the dropdown. */
+.mj-fk-grid {
+  display: grid;
+  width: 100%;
+  min-width: max-content;
+  align-items: stretch;
+}
+
+/* Rows are layout-transparent so their cells become direct grid items (this is
+   what makes columns align across rows). The row element still exists for click
+   handling and for the active-state selector below. */
+.mj-fk-grid-row {
+  display: contents;
+}
+
+/* Header cells: sticky to the top of the vertical scroll, clickable to sort. */
+.mj-fk-hcell {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-elevated);
+  border-bottom: 1px solid var(--mj-border-default);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.mj-fk-hcell:hover {
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-fk-hcell--icon {
+  cursor: default;
+  padding: 7px 8px;
+}
+
+.mj-fk-hcell--icon:hover {
+  background: var(--mj-bg-surface-elevated);
+}
+
+.mj-fk-hcell-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-fk-sort-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Idle (unsorted) columns show a faded sort glyph to signal sortability. */
+.mj-fk-sort-icon--idle {
+  opacity: 0.35;
+}
+
+/* Data cells */
+.mj-fk-cell {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  cursor: pointer;
+}
+
+/* The fill column (last, or a user-resized one) drops the default content cap so its
+   cells stretch to the full track width that the header already occupies. */
+.mj-fk-cell--fill {
+  max-width: none;
+}
+
+/* Wrapping span keeps the highlighted text+<mark> as one inline run (so flex
+   doesn't strip the space next to the mark) while still truncating with ellipsis. */
+.mj-fk-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.mj-fk-cell--icon {
+  justify-content: center;
+  padding: 8px;
+  max-width: none;
+  color: var(--mj-text-muted);
+  font-size: 13px;
+}
+
+.mj-fk-cell--name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--mj-text-primary);
+  gap: 6px;
+}
+
+.mj-fk-selected-check {
+  color: var(--mj-brand-primary);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Active (keyboard / hover) row — painted on the cells, since the row box is
+   removed by display:contents. The child combinator still matches. */
+.mj-fk-grid-row--active > .mj-fk-cell {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
+/* Currently-linked row — a subtle persistent tint so the user sees which record
+   is selected when they reopen the list (stacks under the brighter active tint). */
+.mj-fk-grid-row--selected > .mj-fk-cell {
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+
+.mj-fk-grid-row--selected > .mj-fk-cell--name {
+  font-weight: 600;
+  color: var(--mj-brand-primary);
+}
+
+/* Matched-substring highlight inside the name column */
+/* ::ng-deep (not :global, which Angular's emulated encapsulation ignores) so the
+   style reaches the <mark> injected via [innerHTML]. Color comes from the shared
+   theme token so light/dark/white-label all control it centrally. */
+.mj-fk-cell--name ::ng-deep .mj-forms-search-highlight,
+.mj-fk-cell ::ng-deep .mj-forms-search-highlight {
+  background-color: var(--mj-search-highlight-bg);
+  color: var(--mj-search-highlight-text);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
+/* Column resize handle — thin grab strip on the right edge of each header cell. */
+.mj-fk-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.mj-fk-resizer::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: 2px;
+  width: 2px;
+  height: 60%;
+  background: transparent;
+  transition: background var(--mj-transition-base);
+}
+
+.mj-fk-hcell:hover .mj-fk-resizer::after,
+.mj-fk-resizer:hover::after {
+  background: var(--mj-border-strong);
+}
+
+/* Loading / empty status rows */
+.mj-fk-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+}
+
+.mj-fk-status i {
+  font-size: 12px;
+}
+
+.mj-fk-status--empty {
+  font-style: italic;
+}
+
 @keyframes mj-dropdown-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -428,13 +892,14 @@
 /* ============================================
    SEARCH HIGHLIGHTING
    ============================================ */
-.mj-forms-field-label :global(.mj-forms-search-highlight) {
-  background-color: var(--mj-color-warning-200, #fef08a);
-  color: var(--mj-color-warning-800, #854d0e);
-  padding: 0;
+.mj-forms-field-label ::ng-deep .mj-forms-search-highlight {
+  /* Shared search-highlight theme token. ::ng-deep (not :global) so it reaches
+     innerHTML content. */
+  background-color: var(--mj-search-highlight-bg);
+  color: var(--mj-search-highlight-text);
   border-radius: 2px;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px var(--mj-color-warning-200, #fef08a);
+  padding: 0 1px;
+  font-weight: 600;
 }
 
 /* ============================================
@@ -540,7 +1005,7 @@
 
 /* Warning message colors */
 .mj-forms-field-validation--warning .mj-forms-field-validation-item {
-  color: var(--mj-color-warning-700);
+  color: var(--mj-status-warning-text);
 }
 
 .mj-forms-field-validation--warning .mj-forms-field-validation-item i {

@@ -845,3 +845,14 @@
 .dependent-card:hover .open-link {
     color: var(--mj-brand-primary-hover);
 }
+
+/* Category selector row: tree-dropdown + create/edit icon buttons */
+.meta-dropdown-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.meta-dropdown-row .meta-dropdown {
+  flex: 1;
+  min-width: 0;
+}
