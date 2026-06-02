@@ -1214,23 +1214,33 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /**
    * CSS `grid-template-columns` for the dropdown grid: optional icon column, then one
-   * track per ordered column (the name field included, wherever it sits). A user-resized
-   * column uses its saved pixel width; otherwise it sizes to content.
+   * track per ordered column. The LAST column grows to fill any remaining width (`1fr`)
+   * so the grid never leaves dead space on the right; earlier columns size to content.
+   * A user-resized column uses its saved pixel width as the floor.
    */
   get FKGridTemplateColumns(): string {
     const cols: string[] = [];
     if (this.FKHasIconColumn) cols.push('min-content');
-    for (const field of this.FKColumnFields) {
-      const dflt = field === this.FKNameField ? 'minmax(120px, max-content)' : 'minmax(80px, max-content)';
-      cols.push(this.fkColumnTrack(field, dflt));
-    }
+    const lastIdx = this.FKColumnFields.length - 1;
+    this.FKColumnFields.forEach((field, i) => cols.push(this.fkColumnTrack(field, i === lastIdx)));
     return cols.join(' ');
   }
 
-  /** Track sizing for one column: fixed px when the user resized it, else the default. */
-  private fkColumnTrack(field: string, dflt: string): string {
+  /**
+   * Track sizing for one column. Resized → fixed px (the last column still grows past it
+   * via `1fr` when there's room). Default → content-sized, except the last column which
+   * fills remaining space.
+   */
+  private fkColumnTrack(field: string, isLast: boolean): string {
     const w = this._fkColWidths[field];
-    return w ? `${w}px` : dflt;
+    const min = field === this.FKNameField ? 120 : 80;
+    if (w) return isLast ? `minmax(${w}px, 1fr)` : `${w}px`;
+    return isLast ? `minmax(${min}px, 1fr)` : `minmax(${min}px, max-content)`;
+  }
+
+  /** Whether a column's cells should stretch to fill their track (last column or resized). */
+  FKColumnFillsTrack(field: string, isLast: boolean): boolean {
+    return isLast || this._fkColWidths[field] != null;
   }
 
   /** The built cell (value + highlighted html) for a non-name column of a suggestion. */

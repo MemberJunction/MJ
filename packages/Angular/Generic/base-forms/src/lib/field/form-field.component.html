@@ -238,16 +238,16 @@
                               @if (suggestion.Icon) { <i [class]="suggestion.Icon"></i> }
                             </div>
                           }
-                          @for (col of FKColumnFields; track col) {
+                          @for (col of FKColumnFields; track col; let last = $last) {
                             @if (col === FKNameField) {
-                              <div class="mj-fk-cell mj-fk-cell--name">
+                              <div class="mj-fk-cell mj-fk-cell--name" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)">
                                 @if (IsFKRowSelected(suggestion)) {
                                   <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected"></i>
                                 }
                                 <span [innerHTML]="suggestion.HighlightedName"></span>
                               </div>
                             } @else {
-                              <div class="mj-fk-cell" [title]="FKCellFor(suggestion, col)?.Value || ''">
+                              <div class="mj-fk-cell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)" [title]="FKCellFor(suggestion, col)?.Value || ''">
                                 <span [innerHTML]="FKCellFor(suggestion, col)?.HighlightedValue || ''"></span>
                               </div>
                             }

@@ -686,11 +686,14 @@
 }
 
 /* One CSS grid spans the header + all data rows so every column lines up.
-   grid-template-columns is supplied inline from FKGridTemplateColumns. */
+   grid-template-columns is supplied inline from FKGridTemplateColumns.
+   `width: 100%` (with `min-width: max-content`) lets the last column's `1fr` track
+   absorb leftover width, while still overflowing → horizontal scroll when the columns
+   are collectively wider than the dropdown. */
 .mj-fk-grid {
   display: grid;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: max-content;
   align-items: stretch;
 }
 
@@ -763,6 +766,12 @@
   text-overflow: ellipsis;
   max-width: 320px;
   cursor: pointer;
+}
+
+/* The fill column (last, or a user-resized one) drops the default content cap so its
+   cells stretch to the full track width that the header already occupies. */
+.mj-fk-cell--fill {
+  max-width: none;
 }
 
 /* Wrapping span keeps the highlighted text+<mark> as one inline run (so flex
