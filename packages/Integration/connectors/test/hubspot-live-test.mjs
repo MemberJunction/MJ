@@ -16,57 +16,10 @@
  *   DAG-ordering fix) runs through the workbench — see test/README.md.
  */
 import { runCredentialSafe } from './credential-safe-runner.mjs';
-import { HubSpotConnector } from '@memberjunction/integration-connectors';
+import { PLANS } from './plans.mjs';
 
-// Minimal stubs — the connector only needs Configuration (token) + a context user object.
-const makeCompanyIntegration = (token) => ({
-    ID: 'live-test-ci',
-    IntegrationID: 'live-test-int',
-    Integration: 'HubSpot',
-    CredentialID: null,
-    Configuration: JSON.stringify({ accessToken: token }),
-});
-const stubUser = { ID: 'live-test-user', Email: 'test@example.com', Name: 'Live Test' };
-
-const result = await runCredentialSafe({
-    secrets: { token: 'HUBSPOT_PRIVATE_APP_TOKEN' },
-    run: async ({ token }, scrub) => {
-        const ci = makeCompanyIntegration(token);
-        const connector = new HubSpotConnector();
-
-        const out = { ok: false, tier: 1, steps: {} };
-
-        // 1) TestConnection
-        const conn = await connector.TestConnection(ci, stubUser);
-        out.steps.testConnection = { success: !!conn.Success, message: scrub(conn.Message ?? ''), serverVersion: conn.ServerVersion ?? null };
-        if (!conn.Success) { out.ok = false; return out; }
-
-        // 2) DiscoverObjects
-        const objects = await connector.DiscoverObjects(ci, stubUser);
-        out.steps.discoverObjects = {
-            count: objects.length,
-            sample: objects.slice(0, 10).map(o => o.Name),
-            hasContacts: objects.some(o => o.Name === 'contacts'),
-            hasCompanies: objects.some(o => o.Name === 'companies'),
-            associationCount: objects.filter(o => o.Name.startsWith('assoc_')).length,
-        };
-
-        // 3) DiscoverFields for contacts (real properties from /crm/v3/properties/contacts)
-        try {
-            const fields = await connector.DiscoverFields(ci, 'contacts', stubUser);
-            out.steps.discoverFieldsContacts = {
-                count: fields.length,
-                pkFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
-                sample: fields.slice(0, 12).map(f => f.Name),
-            };
-        } catch (e) {
-            out.steps.discoverFieldsContacts = { error: scrub(e instanceof Error ? e.message : String(e)) };
-        }
-
-        out.ok = conn.Success && objects.length > 0;
-        return out;
-    },
-});
+const plan = PLANS['hubspot-tier1']; // read-only (writes:false) — safe against live data
+const result = await runCredentialSafe({ secrets: plan.secrets, run: plan.run });
 
 console.log('\n=== HubSpot live test result (token-redacted) ===');
 console.log(JSON.stringify(result, null, 2));

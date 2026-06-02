@@ -191,3 +191,6 @@ demo/
 # IntegrationProgressEmitter to <cwd>/logs/integration-runs (sync runs, connector
 # creation, RSU). Runtime output, never committed.
 **/logs/integration-runs/
+
+# Credential broker runtime mailbox (job/result files — never committed)
+**/.cred-mailbox/

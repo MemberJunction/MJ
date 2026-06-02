@@ -52,10 +52,60 @@ back to Claude — it contains no secret.
   confirms "associations fill in" on both dialects. (Harness driven the same credential-safe
   way; the credentialed sync step is launched by you under `sudo`.)
 
+## Deterministic isolation (the real guarantee) — broker + sandbox
+
+"Don't read the file" trusts the agent and a hardened host (on this box, Docker membership ≈
+root, so a file mode alone isn't deterministic). The deterministic design instead makes the
+secret topologically unreachable by the agent's process:
+
+```
+┌─ SANDBOX (e.g. workbench `claude-dev`: no docker socket, no secret, no sudo) ─┐
+│  Claude writes  <mailbox>/jobs/<id>.json   ──┐                                │
+│  Claude reads   <mailbox>/results/<id>.json ◄─┼── shared volume only          │
+└───────────────────────────────────────────────┼──────────────────────────────┘
+                                                 │
+┌─ OUTSIDE the sandbox (host / sibling runner) ──┴──────────────────────────────┐
+│  credential-broker.mjs  — the ONLY process holding the secret (its own env)    │
+│  watches jobs/ → runs the plan via the credential-safe runner → writes results │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+The agent can only drop job files and read scrubbed results. It has no socket, no secret
+mount, no sudo → no path to the secret. Run the agent inside `claude-dev`
+(`docker compose up`, then `docker exec -it claude-dev …`) and the broker outside it:
+
+```bash
+# OUTSIDE the sandbox, you, with the secret:
+sudo bash -c 'set -a; . /etc/mj-hubspot.env; set +a; \
+  MJ_CRED_MAILBOX=/abs/path/to/shared/mailbox \
+  exec node packages/Integration/connectors/test/credential-broker.mjs'
+```
+
+Job file the agent writes (`<mailbox>/jobs/<id>.json`):
+```json
+{ "jobId": "hs-1", "task": "hubspot-tier1" }
+```
+
+### Read-only by default (protects client data)
+
+A live test against a client's REAL credentials must never mutate or delete their external
+records. Plans are classified `writes:false` (read-only) or `writes:true` (Create/Update/
+Delete / bidirectional). **The broker REFUSES any `writes:true` plan unless the job passes
+`"allowWrite": true`** — which should happen only after the read/pull path is validated and
+the client has authorized mutation testing. (Verified: a `hubspot-sync` job is
+`REFUSED(write-not-authorized)` without the flag.) This also enforces the ordering you want:
+bidirectional is exercised only *after* read is proven, so testing can't delete records.
+
 ## Agent-architecture reuse
 
-`credential-safe-runner.mjs` is connector-agnostic. The testing-agent invokes it as a
-subprocess passing only the env-var NAMES of the secrets a connector's `CredentialType`
-declares; the values are injected by the out-of-band runner the agent does not control; the
-agent reads the scrubbed JSON result. No credential bytes ever enter the agent's context —
-the same guarantee you get manually.
+`credential-safe-runner.mjs` + `credential-broker.mjs` ARE the agent's credential channel.
+The testing-agent (on `agentic/connector-builder`) submits a job naming only the secret
+env-vars a connector's `CredentialType` declares; the broker (outside the agent's sandbox)
+dereferences them and returns a scrubbed, detailed report. No credential bytes ever enter
+the agent's context — identical to the manual path — and the read-only-default gate keeps
+agent test runs from ever writing to a client system unprompted.
+
+> Note: `agentic/connector-builder` was branched off this framework branch *before* the
+> current framework work; merge this branch into it first so the agent generates/tests
+> against the real, current capabilities (multi-level templates, content-hash, FK/junction
+> inference, the association DAG fix).
