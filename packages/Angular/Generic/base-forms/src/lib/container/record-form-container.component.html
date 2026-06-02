@@ -5,7 +5,9 @@
 
 <!-- ============================================
      TOOLBAR (bridges FormComponent state → toolbar inputs)
+     Hidden entirely when Config.Toolbar === null (dialog/slide-in surfaces).
      ============================================ -->
+@if (EffectiveShowToolbar) {
 <mj-form-toolbar
   [Record]="EffectiveRecord"
   [EditMode]="EffectiveEditMode"
@@ -19,7 +21,7 @@
   [TagCount]="TagCount"
   [VersionCount]="VersionCount"
   [EntityInfo]="EffectiveEntityInfo"
-  [Config]="ToolbarConfig"
+  [Config]="EffectiveToolbarConfig"
   [IsSaving]="EffectiveIsSaving"
   [VisibleSectionCount]="VisibleSectionCount"
   [TotalSectionCount]="TotalSectionCount"
@@ -55,6 +57,7 @@
   (TagsPanelToggled)="OnTagsPanelToggled()"
   (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
+}
 
 <!-- ============================================
      SCROLL AREA (full-width so mouse wheel works anywhere)
