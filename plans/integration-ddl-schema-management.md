@@ -2,7 +2,7 @@
 
 > **Status**: Draft v2 — Reviewed & Refined
 > **Date**: March 4, 2026
-> **Depends On**: [Integration Engine Architecture](integration-engine-architecture.md) *(companion plan — being restored)*
+> **Depends On**: [Integration Engine Architecture](complete/integration-engine-architecture.md) *(companion plan — being restored)*
 > **Branch**: `claude/study-integration-architecture-qW5p1`
 
 ---

@@ -229,8 +229,11 @@ async function executeSQLCore(
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 
-    // Throw error with detailed message - caller decides whether to log
-    throw new Error(errorMessage);
+    // Preserve the original error type (ConnectionError vs RequestError) so callers
+    // can structurally distinguish infrastructure failures from query-level errors.
+    // Attach the detailed message while keeping the error's class identity and code.
+    error.message = errorMessage;
+    throw error;
   }
 }
 

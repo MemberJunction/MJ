@@ -1,6 +1,8 @@
 # @memberjunction/ng-versions
 
-Angular components for viewing entity record version history in MemberJunction applications. Provides a slide panel, label creation, label detail, and record micro-view for working with the built-in Record Changes system.
+Angular components for viewing entity record version history in MemberJunction applications. Provides label creation, label detail, and a record micro-view for working with the built-in Record Changes system.
+
+> **Note:** the generic slide-in/dialog primitive `MjSlidePanelComponent` (`mj-slide-panel`) previously lived here and now lives in [`@memberjunction/ng-ui-components`](../ui-components). Import it from there.
 
 ## Installation
 
@@ -14,7 +16,7 @@ MemberJunction includes built-in version control ("Record Changes") that tracks 
 
 ```mermaid
 flowchart TD
-    subgraph Panel["SlidePanelComponent"]
+    subgraph Panel["Version History Panel"]
         A["Version List"]
         A --> B["RecordMicroViewComponent"]
         A --> C["LabelCreateComponent"]
@@ -48,16 +50,14 @@ import { VersionsModule } from '@memberjunction/ng-versions';
 export class YourModule {}
 ```
 
-### Slide Panel
+### Slide Panel — moved
 
-```html
-<mj-slide-panel
-  [EntityName]="'Products'"
-  [RecordID]="productId"
-  [Mode]="'slide'"
-  [Visible]="showVersionPanel">
-</mj-slide-panel>
-```
+> **`MjSlidePanelComponent` (`mj-slide-panel`) now lives in
+> `@memberjunction/ng-ui-components`** as a first-class shared UI primitive.
+> Import it from there:
+> `import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';`
+> (It's a standalone component — add it to your component/module `imports`.)
+> The `SlidePanelMode` type moved with it.
 
 ### Record Micro View
 
@@ -82,7 +82,6 @@ export class YourModule {}
 
 | Component | Selector | Purpose |
 |-----------|----------|---------|
-| `SlidePanelComponent` | `mj-slide-panel` | Container for version history navigation |
 | `RecordMicroViewComponent` | `mj-record-micro-view` | Compact snapshot preview with field diffs |
 | `LabelCreateComponent` | `mj-label-create` | Create a named label/bookmark for a version |
 | `LabelDetailComponent` | `mj-label-detail` | View and manage label details |
@@ -113,15 +112,9 @@ interface FieldChangeView {
 }
 ```
 
-### SlidePanelMode
-
-```typescript
-type SlidePanelMode = 'slide' | 'dialog';
-```
-
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/README.md) -- Metadata, RunView
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- RecordChange entities
-- [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) -- Data provider
+- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunView
+- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- RecordChange entities
+- [@memberjunction/graphql-dataprovider](../../../GraphQLDataProvider/README.md) -- Data provider
 - [@memberjunction/ng-shared-generic](../shared/README.md) -- Loading component

@@ -32870,7 +32870,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
+@ObjectType({ description: `Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
@@ -44228,7 +44228,7 @@ export class MJEntityField_ {
     @MaxLength(20)
     ValueListType: string;
         
-    @Field({nullable: true, description: `Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`}) 
+    @Field({nullable: true, description: `Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`}) 
     @MaxLength(50)
     ExtendedType?: string;
         
@@ -65639,6 +65639,9 @@ export class MJScheduledJob_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`}) 
+    RunImmediatelyIfNeverRun: boolean;
+        
     @Field() 
     @MaxLength(100)
     JobType: string;
@@ -65742,6 +65745,9 @@ export class CreateMJScheduledJobInput {
     @Field({ nullable: true })
     ConcurrencyMode?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    RunImmediatelyIfNeverRun?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -65829,6 +65835,9 @@ export class UpdateMJScheduledJobInput {
 
     @Field({ nullable: true })
     ConcurrencyMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RunImmediatelyIfNeverRun?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -69621,6 +69630,10 @@ export class MJTagSynonym_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`}) 
+    @MaxLength(20)
+    Status: string;
+        
     @Field() 
     @MaxLength(255)
     Tag: string;
@@ -69644,6 +69657,9 @@ export class CreateMJTagSynonymInput {
     @Field({ nullable: true })
     Source?: string;
 
+    @Field({ nullable: true })
+    Status?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69665,6 +69681,9 @@ export class UpdateMJTagSynonymInput {
 
     @Field({ nullable: true })
     Source?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

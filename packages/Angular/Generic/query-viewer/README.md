@@ -136,8 +136,8 @@ export class YourModule {}
 
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/README.md) -- Metadata, RunQuery, QueryInfo
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- UserInfoEngine for state persistence
+- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunQuery, QueryInfo
+- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- UserInfoEngine for state persistence
 - [@memberjunction/ng-notifications](../notifications/README.md) -- User notifications
 - [@memberjunction/ng-shared-generic](../shared/README.md) -- Loading component
 - [@memberjunction/ng-export-service](../export-service/README.md) -- Export functionality
@@ -145,4 +145,3 @@ export class YourModule {}
 
 ## Related Packages
 
-- [@memberjunction/ng-query-grid](../query-grid/README.md) -- Deprecated predecessor

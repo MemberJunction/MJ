@@ -71,11 +71,11 @@ The literal lowercase `x` is the patch component (matches the V-file convention 
 
 ### 4. Workbench script
 
-[`docker/workbench/baseline-roundtrip.sh`](../../../../docker/workbench/baseline-roundtrip.sh) — six-phase end-to-end runner. Wired into `Dockerfile` + `.zshrc` (alias `mjbaseline`, `mjbaseline-mssql`, `mjbaseline-pg`) + welcome banner.
+[`docker/workbench/baseline-roundtrip.sh`](../../../../../docker/workbench/baseline-roundtrip.sh) — six-phase end-to-end runner. Wired into `Dockerfile` + `.zshrc` (alias `mjbaseline`, `mjbaseline-mssql`, `mjbaseline-pg`) + welcome banner.
 
 ### 5. Slash command
 
-[`.claude/commands/create-new-baseline-migration.md`](../../../../.claude/commands/create-new-baseline-migration.md) — drives the workbench from outside. Real implementation, not a stub.
+[`.claude/commands/create-new-baseline-migration.md`](../../../../../.claude/commands/create-new-baseline-migration.md) — drives the workbench from outside. Real implementation, not a stub.
 
 ### 6. Tests
 

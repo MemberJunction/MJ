@@ -154,6 +154,21 @@ describe('ConfigurePhase', () => {
       expect(envTsContent).toContain("AUTH_TYPE: 'msal'");
     });
 
+    it('exports the environment object `as const` so union fields keep their literal types', async () => {
+      const config = sampleConfig();
+      const ctx = makeContext({ Config: config, Yes: true });
+      await phase.Run(ctx);
+
+      const envTsContent = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.endsWith('environment.ts') && !p.includes('development')
+      )?.[1];
+      const envDevContent = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.endsWith('environment.development.ts')
+      )?.[1];
+      expect(envTsContent).toContain('} as const;');
+      expect(envDevContent).toContain('} as const;');
+    });
+
     it('should map AuthProvider entra to AUTH_TYPE msal', async () => {
       const config = sampleConfig();
       config.AuthProvider = 'entra';

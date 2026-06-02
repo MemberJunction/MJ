@@ -185,9 +185,8 @@ This workflow:
 4. Determines version bump (minor if new migrations, patch otherwise)
 5. Builds all packages
 6. Publishes to npm via OIDC
-7. Creates a distribution zip
-8. Tags the release
-9. **Auto-merges `main` back into `next`** and updates lock files
+7. Tags the release
+8. **Auto-merges `main` back into `next`** and updates lock files
 
 ### 8b. `docker.yml` — Build & Publish Docker Images
 
@@ -223,16 +222,16 @@ Go to [ReadMe Dashboard](https://dash.readme.com/):
 
 1. Click **Edit**
 2. Navigate to **quickstart-download**
-3. Add a new row for the releasing version
-4. Update the download URL with the new version number
-5. **Save** — this can be done while the post-merge actions are still running
+3. Confirm the quickstart points users at the CLI installer — `npx @memberjunction/cli install` (online) or `npx @memberjunction/cli bundle` for an offline zip — rather than a per-version download link.
+4. **Save** — this can be done while the post-merge actions are still running
+
+> **Note:** The legacy per-version distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) has been retired. `mj install` now sparse-fetches and assembles the project from the tagged source on demand, so there is no longer a version-specific zip URL to update each release.
 
 ### Step 10: Update Changelog
 
 **Wait until ALL of the following are complete before saving:**
 - [ ] npm packages published
 - [ ] Docker images pushed
-- [ ] Distribution zip created
 
 > Saving the changelog sends a notification to users, so everything must be live first.
 

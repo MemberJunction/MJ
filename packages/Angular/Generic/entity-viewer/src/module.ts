@@ -8,7 +8,7 @@ import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
-import { VersionsModule } from '@memberjunction/ng-versions';
+import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -75,7 +75,7 @@ import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.comp
     ExportServiceModule,
     MapViewModule,
     RecordChangesModule,
-    VersionsModule
+    MjSlidePanelComponent
   ],
   exports: [
     EntityCardsComponent,

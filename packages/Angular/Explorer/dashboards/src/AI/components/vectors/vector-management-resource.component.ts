@@ -30,7 +30,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
-import { CronToHumanReadable } from '../autotagging/autotagging-pipeline-resource.component';
+import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {

@@ -890,15 +890,6 @@ export class TreeComponent implements OnInit, OnDestroy {
             CacheLocal: config.CacheLocal ?? true
         });
 
-        console.debug('[TreeComponent] Branches query result:', {
-            entityName: config.EntityName,
-            filter: config.ExtraFilter || '(none)',
-            cacheLocal: config.CacheLocal ?? true,
-            success: result.Success,
-            recordCount: result.Results?.length || 0,
-            records: result.Results?.map((r: Record<string, unknown>) => ({ ID: r['ID'], Name: r['Name'] }))
-        });
-
         if (!result.Success) {
             throw new Error(`Failed to load branches: ${result.ErrorMessage}`);
         }
