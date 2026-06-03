@@ -510,11 +510,20 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
     lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(u.name)}) IS NULL`);
     lines.push('BEGIN');
     lines.push(`    DECLARE @login_exists_${safeSuffix(u.name)} BIT = 0;`);
-    lines.push(
-      `    IF SERVERPROPERTY('EngineEdition') = 5 SET @login_exists_${safeSuffix(u.name)} = 1; ` +
-      `ELSE IF EXISTS (SELECT 1 FROM master.sys.server_principals WHERE name = ${quoteString(u.name)}) ` +
-      `SET @login_exists_${safeSuffix(u.name)} = 1;`,
-    );
+    // On Azure SQL DB (EngineEdition=5) there are no server logins, so treat the login as
+    // present (the contained-user path below). Otherwise probe master.sys.server_principals —
+    // but via sp_executesql so the cross-database reference is COMPILED only when the ELSE
+    // branch actually runs. Azure SQL compiles the entire batch up front, so a *static*
+    // master.sys.* reference fails to compile there even though this runtime EngineEdition
+    // guard would skip it. Deferring it into a dynamic statement keeps it out of the batch's
+    // compile pass, and it is never compiled on Azure SQL because the ELSE branch is dead there.
+    lines.push(`    IF SERVERPROPERTY('EngineEdition') = 5`);
+    lines.push(`        SET @login_exists_${safeSuffix(u.name)} = 1;`);
+    lines.push('    ELSE');
+    lines.push('        EXEC sp_executesql');
+    lines.push(`            N'IF EXISTS (SELECT 1 FROM master.sys.server_principals WHERE name = @n) SET @e = 1',`);
+    lines.push(`            N'@n NVARCHAR(128), @e BIT OUTPUT',`);
+    lines.push(`            @n = ${quoteString(u.name)}, @e = @login_exists_${safeSuffix(u.name)} OUTPUT;`);
     lines.push(`    IF @login_exists_${safeSuffix(u.name)} = 1`);
     lines.push(`        EXEC('CREATE USER ${quoteIdent(u.name)} FOR LOGIN ${quoteIdent(u.name)}');`);
     lines.push('    ELSE');
