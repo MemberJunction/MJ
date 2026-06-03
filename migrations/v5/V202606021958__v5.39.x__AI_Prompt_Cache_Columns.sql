@@ -1,6 +1,168 @@
+-- Prompt-cache columns across the AI cost/usage model, consolidated into one migration:
+--   * AIPromptRun  — provider prompt-cache token counts (read/write) and their hierarchical rollups
+--   * AIModelCost  — optional cache read/write per-unit pricing (priced like InputPricePerUnit)
+--   * AIAgentRun   — agent-level cache token rollups (cache counterparts of TotalPromptTokensUsed)
+--
+-- Cache token columns are informational COUNTS as reported by the provider (Anthropic
+-- cache_read/creation_input_tokens; OpenAI/Gemini/Groq/Cerebras prompt_tokens_details.cached_tokens).
+-- They are distinct from the existing CacheHit/CacheKey columns, which track MemberJunction's own
+-- server-side RESULT cache, not the provider's prompt cache. The *Rollup variants mirror
+-- TokensUsedRollup/TokensPromptRollup: leaf = own value; consolidated parent (parallel / multi-attempt
+-- / failover) = sum of attempts, so fan-out provider calls are not under-counted.
+--
+-- AIModelCost cache rates are NULLABLE: NULL means "no distinct cache rate," and the cost calculator
+-- falls back to InputPricePerUnit for that bucket (so behavior is unchanged until rates are populated).
+--
+-- Hand-written DDL + extended properties only. CodeGen regenerates EntityField metadata, base views,
+-- and CRUD procedures into its own migration.
+
+ALTER TABLE ${flyway:defaultSchema}.AIPromptRun ADD
+    TokensCacheRead        INT NULL,
+    TokensCacheWrite       INT NULL,
+    TokensCacheReadRollup  INT NULL,
+    TokensCacheWriteRollup INT NULL;
+
+ALTER TABLE ${flyway:defaultSchema}.AIModelCost ADD
+    CacheReadPricePerUnit  DECIMAL(18,8) NULL,
+    CacheWritePricePerUnit DECIMAL(18,8) NULL;
+
+ALTER TABLE ${flyway:defaultSchema}.AIAgentRun ADD
+    TotalCacheReadTokensUsed  INT NULL,
+    TotalCacheWriteTokensUsed INT NULL;
+
+-- ── AIPromptRun extended properties ──
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Number of input tokens served from the AI provider''s prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction''s own result cache.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+    @level2type = N'COLUMN', @level2name = N'TokensCacheRead';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Number of input tokens written to the AI provider''s prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+    @level2type = N'COLUMN', @level2name = N'TokensCacheWrite';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+    @level2type = N'COLUMN', @level2name = N'TokensCacheReadRollup';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+    @level2type = N'COLUMN', @level2name = N'TokensCacheWriteRollup';
+
+-- ── AIModelCost extended properties ──
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Optional price per unit for input tokens served from the AI provider''s prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIModelCost',
+    @level2type = N'COLUMN', @level2name = N'CacheReadPricePerUnit';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Optional price per unit for input tokens written to the AI provider''s prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIModelCost',
+    @level2type = N'COLUMN', @level2name = N'CacheWritePricePerUnit';
+
+-- ── AIAgentRun extended properties ──
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Total input tokens served from the AI provider''s prompt cache (cache reads / hits) across this agent run, summed from child prompt runs'' TokensCacheReadRollup and sub-agent runs'' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRun',
+    @level2type = N'COLUMN', @level2name = N'TotalCacheReadTokensUsed';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Total input tokens written to the AI provider''s prompt cache (cache writes / creation) across this agent run, summed from child prompt runs'' TokensCacheWriteRollup and sub-agent runs'' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRun',
+    @level2type = N'COLUMN', @level2name = N'TotalCacheWriteTokensUsed';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e031cc66-cb76-4515-adbd-aac808653144' OR (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCacheReadTokensUsed')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '958e6122-4a84-4344-bb31-28ea36f2c435' OR (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCacheReadTokensUsed')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -33,7 +195,7 @@
          )
          VALUES
          (
-            'e031cc66-cb76-4515-adbd-aac808653144',
+            '958e6122-4a84-4344-bb31-28ea36f2c435',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
             100109,
             'TotalCacheReadTokensUsed',
@@ -65,7 +227,7 @@
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3016dd5-c3b9-49d3-b0ac-7aa77ca7a64a' OR (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCacheWriteTokensUsed')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7fb2889e-fc20-40e0-b089-9f491221bad5' OR (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'TotalCacheWriteTokensUsed')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -98,7 +260,7 @@
          )
          VALUES
          (
-            'f3016dd5-c3b9-49d3-b0ac-7aa77ca7a64a',
+            '7fb2889e-fc20-40e0-b089-9f491221bad5',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
             100110,
             'TotalCacheWriteTokensUsed',
@@ -130,7 +292,7 @@
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b7b51aa7-f0af-4e84-a360-6a63a4b98074' OR (EntityID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127' AND Name = 'CacheReadPricePerUnit')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c4cb30a3-bbb6-43fa-8fe4-10b114c25a02' OR (EntityID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127' AND Name = 'CacheReadPricePerUnit')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -163,7 +325,7 @@
          )
          VALUES
          (
-            'b7b51aa7-f0af-4e84-a360-6a63a4b98074',
+            'c4cb30a3-bbb6-43fa-8fe4-10b114c25a02',
             '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127', -- Entity: MJ: AI Model Costs
             100037,
             'CacheReadPricePerUnit',
@@ -195,7 +357,7 @@
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '77ea784f-5522-497a-971b-b1277681d5c3' OR (EntityID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127' AND Name = 'CacheWritePricePerUnit')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '52f629fa-0f43-4df3-89b8-429948b462a4' OR (EntityID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127' AND Name = 'CacheWritePricePerUnit')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -228,7 +390,7 @@
          )
          VALUES
          (
-            '77ea784f-5522-497a-971b-b1277681d5c3',
+            '52f629fa-0f43-4df3-89b8-429948b462a4',
             '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127', -- Entity: MJ: AI Model Costs
             100038,
             'CacheWritePricePerUnit',
@@ -260,7 +422,7 @@
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '89dacee1-6160-4ed9-9623-b458571ee42f' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCacheReadRollup')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fdcf4c42-9a26-4027-ae01-d40a9f2f05ef' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCacheRead')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -293,7 +455,137 @@
          )
          VALUES
          (
-            '89dacee1-6160-4ed9-9623-b458571ee42f',
+            'fdcf4c42-9a26-4027-ae01-d40a9f2f05ef',
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
+            100189,
+            'TokensCacheRead',
+            'Tokens Cache Read',
+            'Number of input tokens served from the AI provider''s prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction''s own result cache.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fdaccfbb-6bf6-4685-bc44-e12a1779ce27' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCacheWrite')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fdaccfbb-6bf6-4685-bc44-e12a1779ce27',
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
+            100190,
+            'TokensCacheWrite',
+            'Tokens Cache Write',
+            'Number of input tokens written to the AI provider''s prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2965ab00-25ac-4682-a93a-e27cd6f91b76' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCacheReadRollup')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2965ab00-25ac-4682-a93a-e27cd6f91b76',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
             100191,
             'TokensCacheReadRollup',
@@ -325,7 +617,7 @@
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c1879842-1930-4ac7-9002-53b2400b0d2e' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCacheWriteRollup')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a2228fe8-f07d-4841-b170-8a21dd352af0' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'TokensCacheWriteRollup')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -358,7 +650,7 @@
          )
          VALUES
          (
-            'c1879842-1930-4ac7-9002-53b2400b0d2e',
+            'a2228fe8-f07d-4841-b170-8a21dd352af0',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
             100192,
             'TokensCacheWriteRollup',
@@ -6496,7 +6788,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
+               SET UserSearchPredicateAPI = 'Exact'
                WHERE ID = '4333EAE9-2185-403F-B742-B8FF9631C860'
                AND AutoUpdateUserSearchPredicate = 1;
 
@@ -6509,13 +6801,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
             SET AllowUserSearchAPI = 1
             WHERE ID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127'
             AND AutoUpdateAllowUserSearchAPI = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'A60033A0-D13C-4954-8EF3-6BB8A5618126'
-               AND AutoUpdateDefaultInView = 1;
 
 /* Set field properties for entity */
 
@@ -6542,6 +6827,13 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
                WHERE ID = 'F1D62EEE-FEEF-4D0C-8955-7AB4442A9150'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'E1F5A7A4-9248-4C45-9D74-04E7B44A1DD5'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set categories for 21 fields */
@@ -6695,28 +6987,6 @@ SET
 WHERE 
    ID = 'B308AD69-D31B-4B46-802C-09698DBBAF18' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Model Costs.CacheReadPricePerUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Pricing Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Cache Read Price',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B7B51AA7-F0AF-4E84-A360-6A63A4B98074' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.CacheWritePricePerUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Pricing Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Cache Write Price',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '77EA784F-5522-497A-971B-B1277681D5C3' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: AI Model Costs.UnitTypeID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -6747,6 +7017,26 @@ SET
 WHERE 
    ID = 'E3600DEA-E0E2-46A3-9FB3-2B0FD203E01F' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: AI Model Costs.CacheReadPricePerUnit 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Pricing Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C4CB30A3-BBB6-43FA-8FE4-10B114C25A02' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Model Costs.CacheWritePricePerUnit 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Pricing Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '52F629FA-0F43-4DF3-89B8-429948B462A4' AND AutoUpdateCategory = 1;
+
 /* Set categories for 62 fields */
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.ID 
@@ -6776,6 +7066,89 @@ SET
    CodeType = NULL
 WHERE 
    ID = '8BE780BC-757D-4AC0-9ECC-5C9FFBAA38FD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.LastRunID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '44D62D04-D013-4C3B-A535-555E3AA388BB' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.RunName 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '51A944B0-A282-4ED0-9D4E-1EE41498065A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ScheduledJobRunID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '77918E52-6BA1-4FA6-9AE1-F5987906D0C8' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ExternalReferenceID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'External Reference',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '40EA5AB0-58A3-4CCE-B7E1-C9BB56E7D5A4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ParentRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D94F2321-5DCA-4B11-8E17-57DC851BFDC5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.LastRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2996B20E-9DFD-41C8-A810-B0EC3038622B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ScheduledJobRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Scheduled Job Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3C30AB32-15A4-460D-9955-DD89EDEF5F62' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.RootParentRunID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A860DAE5-5AA8-4EBE-9C5F-914AFDD0E3C6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.RootLastRunID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D3B3BBE7-627B-4A67-BFC3-81C2F248B9ED' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -6822,6 +7195,105 @@ SET
 WHERE 
    ID = '057C84E7-BAD3-405A-B2B9-5D13551EFCD4' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Result 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '974746E9-53D2-484B-AFF3-9B7D9292D6B7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.AgentState 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6FF56877-27AE-47D9-A6CD-641088C2458E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.CancellationReason 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '14A76D05-D24C-4EE0-B24E-B840DD330F60' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.FinalStep 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A04BEDCF-F261-4734-A1A6-91A1AEFEE5ED' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.FinalPayload 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6FFF2754-A03E-4DFD-AC17-FB16CDAD5346' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Message 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0B55CD7D-06C3-485C-9FC0-CF4C33D66DF5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.StartingPayload 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B106357D-347F-45BE-89AA-B96298ED1DDA' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalPromptIterations 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7411D673-9C57-4419-96BA-1C607B77DA43' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Data 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '08037344-3952-4EBE-BA34-F87BD670C61A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Verbose 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '07CD2EF5-1737-4662-BE76-301A3E88BD9D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Comments 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6962DE96-798F-4E1C-AE87-489429927C4C' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -6840,23 +7312,60 @@ SET
 WHERE 
    ID = '625FE9E6-9058-4FDD-8970-4595336C60D3' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Result 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationDetailID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '974746E9-53D2-484B-AFF3-9B7D9292D6B7' AND AutoUpdateCategory = 1;
+   ID = '8505597E-558F-4222-ABF7-5BA4E163A97D' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.AgentState 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationDetailSequence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Sequence',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D4896B2F-D530-4844-8C96-A0016F0A81D4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Agent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6FF56877-27AE-47D9-A6CD-641088C2458E' AND AutoUpdateCategory = 1;
+   ID = '38A3F73F-9364-428E-A195-5DF74B9F9ACB' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Conversation 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8FAF86E8-F74E-4D76-972A-197FBB245478' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.User 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9FEAEC67-96DB-4551-9954-AC631C8ADF0A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationDetail 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '66AAF27B-995D-4F5F-8149-BE6E35C7694C' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalTokensUsed 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -6876,24 +7385,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '34F910FE-C31E-42FE-9A9E-08407AF79BDB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '13198D22-60EB-4694-B420-7BDB4E3E9BB8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B025CDE5-5300-46DA-BC49-7130D0689E81' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalPromptTokensUsed 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -6954,88 +7445,27 @@ SET
 WHERE 
    ID = 'F9928463-5F2B-46C0-8DA3-6EEF2FA816EF' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationDetailID 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalCacheReadTokensUsed 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
+   Category = 'Resource Usage & Cost',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Cache Read Tokens',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8505597E-558F-4222-ABF7-5BA4E163A97D' AND AutoUpdateCategory = 1;
+   ID = '958E6122-4A84-4344-BB31-28EA36F2C435' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationDetailSequence 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalCacheWriteTokensUsed 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
+   Category = 'Resource Usage & Cost',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Sequence',
+   DisplayName = 'Cache Write Tokens',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D4896B2F-D530-4844-8C96-A0016F0A81D4' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.CancellationReason 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '14A76D05-D24C-4EE0-B24E-B840DD330F60' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.FinalStep 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A04BEDCF-F261-4734-A1A6-91A1AEFEE5ED' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.FinalPayload 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6FFF2754-A03E-4DFD-AC17-FB16CDAD5346' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Message 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0B55CD7D-06C3-485C-9FC0-CF4C33D66DF5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.LastRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '44D62D04-D013-4C3B-A535-555E3AA388BB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.StartingPayload 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B106357D-347F-45BE-89AA-B96298ED1DDA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalPromptIterations 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Prompt Iterations',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7411D673-9C57-4419-96BA-1C607B77DA43' AND AutoUpdateCategory = 1;
+   ID = '7FB2889E-FC20-40E0-B089-9F491221BAD5' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConfigurationID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7064,25 +7494,6 @@ SET
 WHERE 
    ID = 'F8747D24-8E7D-4D12-BCF8-8CD9F7749566' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Data 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '08037344-3952-4EBE-BA34-F87BD670C61A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Verbose 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Verbose',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '07CD2EF5-1737-4662-BE76-301A3E88BD9D' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.EffortLevel 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -7092,32 +7503,32 @@ SET
 WHERE 
    ID = 'B16B5B36-7238-4A90-ABAD-DA64ED8FADCA' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.RunName 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.Configuration 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '51A944B0-A282-4ED0-9D4E-1EE41498065A' AND AutoUpdateCategory = 1;
+   ID = '2F32D57F-954A-4DDD-BE50-A52E7E9FA1FF' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Comments 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.OverrideModel 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6962DE96-798F-4E1C-AE87-489429927C4C' AND AutoUpdateCategory = 1;
+   ID = 'F27EECF4-14ED-4338-9ABE-3E472415CE2B' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ScheduledJobRunID 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.OverrideVendor 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '77918E52-6BA1-4FA6-9AE1-F5987906D0C8' AND AutoUpdateCategory = 1;
+   ID = '9E8614CB-65CB-4C28-9D0B-198CBA49CBBF' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.TestRunID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7127,6 +7538,15 @@ SET
    CodeType = NULL
 WHERE 
    ID = '7685B81B-FD95-40F8-A3D6-4EB710DB054D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.TestRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '34DF8E45-2C56-4E9D-AC4C-2FD4C4EEE196' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.PrimaryScopeEntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7155,15 +7575,14 @@ SET
 WHERE 
    ID = '21FC62F2-F9CC-40C4-A1BA-462699CCD289' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ExternalReferenceID 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.PrimaryScopeEntity 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'External Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '40EA5AB0-58A3-4CCE-B7E1-C9BB56E7D5A4' AND AutoUpdateCategory = 1;
+   ID = 'ECFA16C9-1005-4B07-90CB-690623428037' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.CompanyID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7176,155 +7595,23 @@ SET
 WHERE 
    ID = '766B0728-BB2E-4827-B23A-7A4CA04FB7F6' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalCacheReadTokensUsed 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Resource Usage & Cost',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Cache Read Tokens',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'E031CC66-CB76-4515-ADBD-AAC808653144' AND AutoUpdateCategory = 1;
+   ID = '13198D22-60EB-4694-B420-7BDB4E3E9BB8' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalCacheWriteTokensUsed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Resource Usage & Cost',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Cache Write Tokens',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F3016DD5-C3B9-49D3-B0AC-7AA77CA7A64A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Agent 
+-- UPDATE Entity Field Category Info MJ: AI Agent Runs.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '38A3F73F-9364-428E-A195-5DF74B9F9ACB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ParentRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D94F2321-5DCA-4B11-8E17-57DC851BFDC5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Conversation 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8FAF86E8-F74E-4D76-972A-197FBB245478' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.User 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9FEAEC67-96DB-4551-9954-AC631C8ADF0A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ConversationDetail 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '66AAF27B-995D-4F5F-8149-BE6E35C7694C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.LastRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2996B20E-9DFD-41C8-A810-B0EC3038622B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.Configuration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2F32D57F-954A-4DDD-BE50-A52E7E9FA1FF' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.OverrideModel 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Model Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F27EECF4-14ED-4338-9ABE-3E472415CE2B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.OverrideVendor 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Vendor Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9E8614CB-65CB-4C28-9D0B-198CBA49CBBF' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.ScheduledJobRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3C30AB32-15A4-460D-9955-DD89EDEF5F62' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.TestRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '34DF8E45-2C56-4E9D-AC4C-2FD4C4EEE196' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.PrimaryScopeEntity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'ECFA16C9-1005-4B07-90CB-690623428037' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.RootParentRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A860DAE5-5AA8-4EBE-9C5F-914AFDD0E3C6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Runs.RootLastRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D3B3BBE7-627B-4A67-BFC3-81C2F248B9ED' AND AutoUpdateCategory = 1;
+   ID = 'B025CDE5-5300-46DA-BC49-7130D0689E81' AND AutoUpdateCategory = 1;
 
 /* Set categories for 103 fields */
 
@@ -7386,6 +7673,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Run Started At',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7413,6 +7701,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Was Successful',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7467,7 +7756,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Rerun From',
+   DisplayName = 'Rerun From Run',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7486,6 +7775,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Is Cancelled',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7549,8 +7839,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
+   ExtendedType = NULL,
+   CodeType = NULL
 WHERE 
    ID = '4B843B2C-8CC0-4B48-814C-1BF3B88D69BA' AND AutoUpdateCategory = 1;
 
@@ -7640,7 +7930,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Root Rerun From',
+   DisplayName = 'Root Rerun From Prompt Run',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7650,7 +7940,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = 'A863F3D6-18E5-4FBD-B498-BC74BB6C7592' AND AutoUpdateCategory = 1;
@@ -7660,7 +7950,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
-   CodeType = NULL
+   CodeType = 'Other'
 WHERE 
    ID = 'D3C9BC7E-8FDA-4CC9-A6AF-F928183ED4EC' AND AutoUpdateCategory = 1;
 
@@ -7668,7 +7958,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = '81BC5339-5D6D-41F7-8D40-B619AC308284' AND AutoUpdateCategory = 1;
@@ -7706,7 +7996,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    DisplayName = 'Model Response Details',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = '645594E9-9A4D-4302-9268-C5D0656D4189' AND AutoUpdateCategory = 1;
@@ -7724,7 +8014,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Prompt Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7860,7 +8149,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Used (Rollup)',
+   DisplayName = 'Total Tokens Used (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7870,7 +8159,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Prompt (Rollup)',
+   DisplayName = 'Total Prompt Tokens (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7880,7 +8169,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Completion (Rollup)',
+   DisplayName = 'Total Completion Tokens (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7908,7 +8197,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = '67CB5D9F-21C7-472F-968B-1A546D4DF8B1' AND AutoUpdateCategory = 1;
@@ -7917,7 +8206,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = 'E592040A-9AB1-4181-974D-D40598259CF2' AND AutoUpdateCategory = 1;
@@ -7935,7 +8224,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Original Start Time',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7945,7 +8233,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Total Failover Duration',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -7981,42 +8268,44 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheRead 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
+   Category = 'Performance & Cost Metrics',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'CE759024-EDCE-42BE-85E1-15069D68626C' AND AutoUpdateCategory = 1;
+   ID = 'FDCF4C42-9A26-4027-AE01-D40A9F2F05EF' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheWrite 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
+   Category = 'Performance & Cost Metrics',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F81872DE-BE88-47EE-A581-8E5808E48013' AND AutoUpdateCategory = 1;
+   ID = 'FDACCFBB-6BF6-4685-BC44-E12A1779CE27' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheReadRollup 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Performance & Cost Metrics',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Cache Read (Rollup)',
+   DisplayName = 'Total Tokens Cache Read (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '89DACEE1-6160-4ED9-9623-B458571EE42F' AND AutoUpdateCategory = 1;
+   ID = '2965AB00-25AC-4682-A93A-E27CD6F91B76' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheWriteRollup 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Performance & Cost Metrics',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Cache Write (Rollup)',
+   DisplayName = 'Total Tokens Cache Write (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'C1879842-1930-4AC7-9002-53B2400B0D2E' AND AutoUpdateCategory = 1;
+   ID = 'A2228FE8-F07D-4841-B170-8A21DD352AF0' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Prompt Runs.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8103,7 +8392,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Log Probs',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8113,7 +8401,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Top Log Probs',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8123,8 +8410,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Model Selection',
-   ExtendedType = 'Code',
+   DisplayName = 'Model Selection Details',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = 'F7B5B241-3D39-4715-80CA-77AB79AF8374' AND AutoUpdateCategory = 1;
@@ -8205,6 +8492,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Max Retries',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8268,7 +8556,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = '33BF165E-77A3-447D-94F3-DCB61EF83698' AND AutoUpdateCategory = 1;
@@ -8277,7 +8565,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
+   ExtendedType = NULL,
    CodeType = 'Other'
 WHERE 
    ID = '730E6B0B-B28C-4E90-A879-003181340C68' AND AutoUpdateCategory = 1;

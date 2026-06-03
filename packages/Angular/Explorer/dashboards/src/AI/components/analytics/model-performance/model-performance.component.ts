@@ -29,6 +29,8 @@ interface PromptRunRecord {
     TokensUsed: number | null;
     TokensPrompt: number | null;
     TokensCompletion: number | null;
+    TokensCacheRead: number | null;
+    TokensCacheWrite: number | null;
     ModelID: string | null;
     Model: string | null;
     VendorID: string | null;
@@ -48,6 +50,7 @@ interface ModelLeaderboardRow {
     P95LatencyMs: number;
     SuccessRate: number;
     CostPer1KTokens: number;
+    CacheHitRate: number;
     TotalCost: number;
 }
 
@@ -56,7 +59,7 @@ type SortByOption = 'cost-efficiency' | 'speed' | 'reliability' | 'usage-volume'
 const FIELDS = [
     'ID', 'RunAt', 'CompletedAt', 'ExecutionTimeMS', 'Success',
     'Cost', 'TotalCost', 'TokensUsed', 'TokensPrompt', 'TokensCompletion',
-    'ModelID', 'Model', 'VendorID', 'Vendor'
+    'TokensCacheRead', 'TokensCacheWrite', 'ModelID', 'Model', 'VendorID', 'Vendor'
 ];
 
 @Component({
@@ -81,13 +84,14 @@ const FIELDS = [
                                 <th class="col-numeric">Avg Latency</th>
                                 <th class="col-numeric">P95 Latency</th>
                                 <th class="col-numeric">Success Rate</th>
-                                <th class="col-numeric">$/1K Tokens</th>
+                                <th class="col-numeric" title="Share of input tokens served from the provider's prompt cache">Cache Hit</th>
+                                <th class="col-numeric" title="Cost per 1K tokens processed, including cached tokens (effective rate)">$/1K Tokens</th>
                                 <th class="col-numeric">Total Cost</th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (Rows.length === 0) {
-                                <tr><td colspan="9" class="empty-row">No model data for selected period</td></tr>
+                                <tr><td colspan="10" class="empty-row">No model data for selected period</td></tr>
                             }
                             @for (row of Rows; track row.ModelName) {
                                 <tr>
@@ -118,6 +122,7 @@ const FIELDS = [
                                             </div>
                                         </div>
                                     </td>
+                                    <td class="cell-numeric">{{ row.CacheHitRate > 0 ? ((row.CacheHitRate * 100 | number:'1.0-0') + '%') : '—' }}</td>
                                     <td class="cell-numeric">{{ FormatCurrency(row.CostPer1KTokens, 4) }}</td>
                                     <td class="cell-numeric cell-cost">{{ FormatCurrency(row.TotalCost) }}</td>
                                 </tr>
@@ -443,9 +448,17 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
 
         const p95Latency = this.computePercentile(latencies, 0.95);
 
-        const totalTokens = runs.reduce((s, r) => s + (r.TokensUsed ?? 0), 0);
+        // Effective rate uses TOTAL tokens the model processed, including cache reads/writes — so a
+        // model that caches heavily shows its true (lower) cost per token rather than dividing the
+        // discounted cost by only the uncached tokens.
+        const cacheRead = runs.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
+        const cacheWrite = runs.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
+        const totalTokens = runs.reduce((s, r) => s + (r.TokensUsed ?? 0), 0) + cacheRead + cacheWrite;
         const totalCost = runs.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
         const costPer1K = totalTokens > 0 ? (totalCost / totalTokens) * 1000 : 0;
+
+        const inputForHit = runs.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0) + cacheRead + cacheWrite;
+        const cacheHitRate = inputForHit > 0 ? cacheRead / inputForHit : 0;
 
         const firstName = runs.find(r => r.Model != null);
         const firstVendor = runs.find(r => r.Vendor != null);
@@ -472,6 +485,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
             P95LatencyMs: p95Latency,
             SuccessRate: successRate,
             CostPer1KTokens: costPer1K,
+            CacheHitRate: cacheHitRate,
             TotalCost: totalCost
         };
     }

@@ -72,7 +72,7 @@ interface StatusBreakdownItem extends BreakdownItem {
     cssClass: string;
 }
 
-type ChartMetric = 'volume' | 'cost' | 'tokens';
+type ChartMetric = 'volume' | 'cost' | 'tokens' | 'cacheHit';
 type SortField = 'RunAt' | 'Prompt' | 'Model' | 'Status' | 'ExecutionTimeMS' | 'TokensUsed' | 'Cost';
 type SortDirection = 'asc' | 'desc';
 
@@ -821,6 +821,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         { key: 'volume', label: 'By Volume' },
         { key: 'cost', label: 'By Cost' },
         { key: 'tokens', label: 'By Tokens' },
+        { key: 'cacheHit', label: 'By Cache Hit %' },
     ];
 
     readonly TableColumns: { field: SortField; label: string; sortable: boolean }[] = [
@@ -979,6 +980,9 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         if (this.ActiveChartMetric === 'cost') {
             return '$' + value.toFixed(2);
         }
+        if (this.ActiveChartMetric === 'cacheHit') {
+            return value.toFixed(0) + '%';
+        }
         if (value >= 1000) {
             return (value / 1000).toFixed(1) + 'k';
         }
@@ -1091,13 +1095,15 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         const rangeMs = now.getTime() - cutoff.getTime();
         const bucketMs = rangeMs / bucketCount;
 
-        const buckets: { label: string; total: number; start: Date; end: Date }[] = [];
+        const buckets: { label: string; total: number; cacheRead: number; inputForHit: number; start: Date; end: Date }[] = [];
         for (let i = 0; i < bucketCount; i++) {
             const start = new Date(cutoff.getTime() + i * bucketMs);
             const end = new Date(cutoff.getTime() + (i + 1) * bucketMs);
             buckets.push({
                 label: this.formatBucketLabel(start),
                 total: 0,
+                cacheRead: 0,
+                inputForHit: 0,
                 start,
                 end,
             });
@@ -1108,6 +1114,15 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             const idx = Math.min(Math.floor((runTime - cutoff.getTime()) / bucketMs), bucketCount - 1);
             if (idx >= 0 && idx < bucketCount) {
                 buckets[idx].total += this.getChartMetricValue(run);
+                // Cache hit-rate is a ratio, not a sum — accumulate the components and divide below.
+                buckets[idx].cacheRead += run.TokensCacheRead ?? 0;
+                buckets[idx].inputForHit += (run.TokensPrompt ?? 0) + (run.TokensCacheRead ?? 0) + (run.TokensCacheWrite ?? 0);
+            }
+        }
+
+        if (this.ActiveChartMetric === 'cacheHit') {
+            for (const b of buckets) {
+                b.total = b.inputForHit > 0 ? (b.cacheRead / b.inputForHit) * 100 : 0;
             }
         }
 
