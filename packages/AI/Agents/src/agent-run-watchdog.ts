@@ -207,6 +207,13 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             this._heartbeatTimer.unref?.();
         }
         if (!this._sweepTimer) {
+            // The periodic sweep is an always-on in-process timer rather than an MJ Scheduled Job
+            // (MJ: Scheduled Jobs / SchedulingEngine) on purpose. This is a reliability floor for
+            // orphaned runs, and ScheduledJobsService is gated by `scheduledJobs.enabled` in config
+            // — moving the sweep there would silently disable it in any deployment that runs with
+            // scheduled jobs off, exactly where the safety net still needs to work. A Scheduled Job
+            // could be added on top later as an observability/audit layer (it would call the same
+            // idempotent SweepOrphanedRuns), but it must not be the only thing that runs it.
             this._sweepTimer = setInterval(() => void this.periodicSweep(), this._config.sweepIntervalMs);
             this._sweepTimer.unref?.();
         }
