@@ -9,6 +9,7 @@ import { MjFormSlideInComponent } from './form-slide-in.component';
 import { MjFormWindowComponent } from './form-window.component';
 import { BaseFormOverlay, FormOverlayCloseReason } from './base-form-overlay';
 import { MJFormPresenterOptions, MJFormRef, MJFormPresentation } from './form-presenter.types';
+import { FormNavigationEvent } from '../types/navigation-events';
 
 /**
  * Imperatively opens any MemberJunction entity form as a dialog or slide-in
@@ -60,6 +61,11 @@ export class MJFormPresenterService {
         // Allow the close animation to finish before destroying the view.
         setTimeout(() => teardown(), 350);
       }),
+      // A form rendered INSIDE this overlay can ask to create a related record (e.g. an
+      // FK field's "+ Create" footer). Handle it by opening a nested form and handing the
+      // saved record back. This makes inline-create work for overlay-hosted forms, the same
+      // way SingleRecordComponent handles it for tab-hosted forms.
+      ref.instance.Navigate.subscribe((e: FormNavigationEvent) => this.handleOverlayNavigate(e)),
     ];
 
     let destroyed = false;
@@ -82,6 +88,22 @@ export class MJFormPresenterService {
       () => ref.instance.onCancel(),
       () => ref.instance.formInstance,
     );
+  }
+
+  /**
+   * Handle navigation events bubbling up from a form hosted inside an overlay. Currently
+   * the only one the presenter acts on is `create-related` — it opens a nested form and
+   * hands the saved record back via the event's `Complete` callback.
+   */
+  private handleOverlayNavigate(e: FormNavigationEvent): void {
+    if (e.Kind !== 'create-related') return;
+    const childRef = this.Open({
+      EntityName: e.EntityName,
+      Presentation: e.Presentation ?? 'dialog',
+      NewRecordValues: e.NewRecordValues,
+      Provider: e.Provider,
+    });
+    childRef.AfterSaved().then(created => e.Complete(created));
   }
 
   /** Maps a presentation to its (standalone) overlay shell component. */

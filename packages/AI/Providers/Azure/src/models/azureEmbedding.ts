@@ -123,6 +123,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: responseBody.usage?.prompt_tokens || 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };
@@ -143,6 +144,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };
@@ -202,6 +204,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: responseBody.usage?.prompt_tokens || 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };
@@ -222,6 +225,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };

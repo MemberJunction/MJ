@@ -2075,11 +2075,15 @@ export class EntityInfo extends BaseInfo {
                 bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
             }
 
+            // An API-driven action also requires that the entity ALLOWS that action at all
+            // (`Allow*API`). No role grant can create/update/delete records of an entity whose
+            // corresponding API is disabled — so fold the entity-level flag into the result.
+            // (Read has no `Allow*API` flag; it's governed by the entity view, so it's unchanged.)
             const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
-            userPermission.CanCreate = allow.CanCreate && !deny.CanCreate;
+            userPermission.CanCreate = this.AllowCreateAPI && allow.CanCreate && !deny.CanCreate;
             userPermission.CanRead   = allow.CanRead   && !deny.CanRead;
-            userPermission.CanUpdate = allow.CanUpdate && !deny.CanUpdate;
-            userPermission.CanDelete = allow.CanDelete && !deny.CanDelete;
+            userPermission.CanUpdate = this.AllowUpdateAPI && allow.CanUpdate && !deny.CanUpdate;
+            userPermission.CanDelete = this.AllowDeleteAPI && allow.CanDelete && !deny.CanDelete;
             userPermission.Entity = this;
             userPermission.User = user;
 
