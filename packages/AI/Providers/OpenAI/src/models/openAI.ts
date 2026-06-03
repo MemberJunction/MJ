@@ -95,6 +95,17 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
+     * Extra request-body params merged into BOTH the streaming and non-streaming ChatCompletion
+     * requests, beyond the standard OpenAI schema. Default is none. Subclasses targeting
+     * OpenAI-compatible gateways override this to opt into provider extensions the OpenAI SDK
+     * passes through verbatim — e.g. OpenRouter returns `usage.cost` / `usage.cost_details` only
+     * when `usage: { include: true }` is sent on the request.
+     */
+    protected getProviderRequestExtras(params: ChatParams): Record<string, unknown> {
+        return {};
+    }
+
+    /**
      * Implementation of non-streaming chat completion for OpenAI
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -182,6 +193,10 @@ export class OpenAILLM extends BaseLLM {
             }
         }
 
+        // Merge any provider-specific extras (e.g. OpenRouter's usage accounting opt-in). The OpenAI
+        // SDK forwards unknown body keys unchanged, so this is how compatible gateways are extended.
+        Object.assign(openAIParams, this.getProviderRequestExtras(params));
+
         const result = await this.OpenAI.chat.completions.create(openAIParams);
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
@@ -199,6 +214,15 @@ export class OpenAILLM extends BaseLLM {
         const usage = new ModelUsage(openAINetPromptTokens, result.usage.completion_tokens);
         usage.cacheReadTokens = openAICachedTokens;
         // cacheWriteTokens intentionally left at 0 (OpenAI implicit caching has no separate write charge).
+
+        // OpenAI-compatible gateways (e.g. OpenRouter, when usage accounting is requested) report the
+        // authoritative dollar cost on the usage object. OpenAI itself never sets this, so the read is
+        // a safe no-op for the base provider. When present we surface it as the provider-reported cost,
+        // which the prompt-cost pipeline prefers over rate-table estimation (see MJAIPromptRunEntityServer).
+        if (typeof extendedUsage.cost === 'number') {
+            usage.cost = extendedUsage.cost;
+            usage.costCurrency = 'USD';
+        }
         if (extendedUsage.completion_tokens_details) {
             // Store completion token details in usage if needed in future
         }
@@ -272,7 +296,10 @@ export class OpenAILLM extends BaseLLM {
                 reasoning_tokens: extendedUsage.completion_tokens_details?.reasoning_tokens,
                 cached_tokens: openAICachedTokens,
                 prompt_tokens_details: extendedUsage.prompt_tokens_details,
-                completion_tokens_details: extendedUsage.completion_tokens_details
+                completion_tokens_details: extendedUsage.completion_tokens_details,
+                // Present on OpenAI-compatible gateways that report cost (OpenRouter); undefined for OpenAI.
+                cost: extendedUsage.cost,
+                cost_details: extendedUsage.cost_details
             }
         };
         
@@ -357,9 +384,13 @@ export class OpenAILLM extends BaseLLM {
                 break;
         }
         
+        // Merge any provider-specific extras (e.g. OpenRouter's usage accounting opt-in), same as the
+        // non-streaming path. The OpenAI SDK forwards unknown body keys unchanged.
+        Object.assign(openAIParams, this.getProviderRequestExtras(params));
+
         return this.OpenAI.chat.completions.create(openAIParams);
     }
-    
+
     // State tracking for streaming thinking extraction
     private _streamingState: {
         accumulatedThinking: string;
@@ -414,7 +445,11 @@ export class OpenAILLM extends BaseLLM {
             promptTokens: streamNetPromptTokens,
             completionTokens: usage.completion_tokens || 0,
             totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-            cacheReadTokens: streamCacheReadTokens
+            cacheReadTokens: streamCacheReadTokens,
+            // Provider-reported cost (OpenRouter et al.) arrives on the final usage chunk; carry it
+            // forward so finalizeStreamingResponse can surface it as the authoritative cost.
+            cost: typeof usage.cost === 'number' ? usage.cost : undefined,
+            costCurrency: typeof usage.cost === 'number' ? 'USD' : undefined
         } : null;
 
         // Check if chunk contains reasoning content (for o1 models)
@@ -566,6 +601,12 @@ export class OpenAILLM extends BaseLLM {
         // OpenAI does not report cache writes, so cacheWriteTokens stays 0.
         const modelUsage = new ModelUsage(promptTokens, completionTokens);
         modelUsage.cacheReadTokens = cacheReadTokens;
+
+        // Provider-reported cost carried from the final usage chunk (OpenAI-compatible gateways).
+        if (typeof usage?.cost === 'number') {
+            modelUsage.cost = usage.cost;
+            modelUsage.costCurrency = usage.costCurrency || 'USD';
+        }
 
         // Set all properties
         result.data = {

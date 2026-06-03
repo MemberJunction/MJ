@@ -68,14 +68,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4 pricing on x.ai as of January 2025"
+            "Comments": "Grok 4 pricing on x.ai as of January 2025",
+            "CacheReadPricePerUnit": 0.75,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "2EA2BFFC-3EFB-4D23-9985-055C2FF18620"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:53.781Z",
-            "checksum": "e7141858b4b5010a713c44843266e23af2498a6a7a710892d52ece71eb008281"
+            "lastModified": "2026-06-03T16:00:03.365Z",
+            "checksum": "aed23034d762e05b2245c81ad2234789561e1c0a1b20e4a5ac3e7525f874bc7d"
           }
         }
       ]
@@ -180,14 +182,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Opus pricing on Anthropic as of November 2025.  Released Nov 24, 2025. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%)."
+            "Comments": "Claude 4.5 Opus pricing on Anthropic as of November 2025.  Released Nov 24, 2025. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%).",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "6A987D9F-584B-48A0-B5C2-0231AF7EF063"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.623Z",
-            "checksum": "b94014f12c88a6045798f071a2392374676e75515086627ac2ffad25098d5029"
+            "lastModified": "2026-06-03T16:00:03.393Z",
+            "checksum": "f146c61409c44887ba6f3f61ccdcace5c6944aa7c5e420361dba694d43860c7c"
           }
         },
         {
@@ -202,14 +206,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Opus pricing on Amazon Bedrock as of March 2026"
+            "Comments": "Claude 4.5 Opus pricing on Amazon Bedrock as of March 2026",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "F4A9EDDC-66F9-4565-9A39-268D58036379"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.725Z",
-            "checksum": "dbfb344a5158c3e9072f40ac26109682fe8e2ea9c254f7e7408887e796592011"
+            "lastModified": "2026-06-03T16:00:03.380Z",
+            "checksum": "22cc0a5e365403c28ecf33220ac97b2e3ebf28830e8992786ce3c0d5e57f0398"
           }
         }
       ]
@@ -314,14 +320,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Sonnet standard tier pricing on Anthropic as of September 2025. Prompt caching available: write $3.75/M, read $0.30/M. Batch processing: 50% discount. Extended context (>200K tokens): $6/M input, $22.50/M output."
+            "Comments": "Claude 4.5 Sonnet standard tier pricing on Anthropic as of September 2025. Prompt caching available: write $3.75/M, read $0.30/M. Batch processing: 50% discount. Extended context (>200K tokens): $6/M input, $22.50/M output.",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": 3.75
           },
           "primaryKey": {
             "ID": "F375172B-5BC4-4B63-B7DA-B3B6D5310F1A"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.623Z",
-            "checksum": "bf393686f9070598c262bca46c4ba105b161af7206833e99edef5eadad589399"
+            "lastModified": "2026-06-03T16:00:03.434Z",
+            "checksum": "1c7823de886ff798ce21fca7a0b50c4e6b544695dd4f454e3cf044fa62864040"
           }
         },
         {
@@ -336,14 +344,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 4.5 Sonnet pricing on Amazon Bedrock as of March 2026"
+            "Comments": "Claude 4.5 Sonnet pricing on Amazon Bedrock as of March 2026",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": 3.75
           },
           "primaryKey": {
             "ID": "7AC65CE1-1FE3-49AC-9580-28C4DEE68D9F"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.729Z",
-            "checksum": "301686b14517a985b3bd77b8c5a08711e254cf015d8ffa773fe39aa9e173edad"
+            "lastModified": "2026-06-03T16:00:03.418Z",
+            "checksum": "c1f0815008e0ab89cb5639e15ec054089d84fc3e2b83e1b022bb44d760256329"
           }
         }
       ]
@@ -424,14 +434,16 @@
             "OutputPricePerUnit": 0.08,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4o Image 1.5 pricing as of January 2026. Standard quality 1024x1024: $0.080/image. HD quality: $0.120/image. 2048x2048: $0.160/image."
+            "Comments": "GPT-4o Image 1.5 pricing as of January 2026. Standard quality 1024x1024: $0.080/image. HD quality: $0.120/image. 2048x2048: $0.160/image.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E1D2C3B4-A5F6-4E7D-8C9B-0A1F2E3D4C5B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.628Z",
-            "checksum": "87be675e5c1a95825e9527e68926c80a532dad3aa73be259c223d821b16dfb72"
+            "lastModified": "2026-06-03T16:00:03.459Z",
+            "checksum": "4d1a889752bc728b6af6abccb5614d3edb01a37bed716f65b32b764e3980b77d"
           }
         }
       ]
@@ -512,14 +524,16 @@
             "OutputPricePerUnit": 0.05,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Pro Image (Nano Banana Pro) pricing as of January 2026. 1024x1024: $0.050/image. 2048x2048: $0.100/image. 4K resolution: $0.200/image."
+            "Comments": "Gemini 3 Pro Image (Nano Banana Pro) pricing as of January 2026. 1024x1024: $0.050/image. 2048x2048: $0.100/image. 4K resolution: $0.200/image.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C3A4B5D6-E7F8-9A0B-1C2D-3E4F5A6B7C8D"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.627Z",
-            "checksum": "296d9aac02036246e2e7301906708229b3fbc0ced8fdc0f9eb64ba801cdebcb6"
+            "lastModified": "2026-06-03T16:00:03.459Z",
+            "checksum": "f1c44d6c3327b3493221065ddd16ca6b3d3bdb00d30d419e4d0b6a52fe181ebf"
           }
         }
       ]
@@ -641,14 +655,16 @@
             "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Flash pricing on Google as of December 2025. Released December 17, 2025 (also known as Gemini 2.0 Flash). API name is gemini-3-flash-preview (Host API ID: fiercefalcon). Features 1 million token input context window, 64,000 output capacity, and knowledge cutoff of January 1, 2025. Achieves state-of-the-art performance with Intelligence Index of 71, including top scores in MMLU-Pro (89%), GPQA Diamond (90%), and second highest on MMMU-Pro for multimodal reasoning. Highest score on AA-Omniscience knowledge benchmark. Supports multimodal input (text, image, video, audio), tool calling, structured outputs, and JSON mode. Output speed: 218 tokens per second. Blended rate: $1.125 per 1M tokens."
+            "Comments": "Gemini 3 Flash pricing on Google as of December 2025. Released December 17, 2025 (also known as Gemini 2.0 Flash). API name is gemini-3-flash-preview (Host API ID: fiercefalcon). Features 1 million token input context window, 64,000 output capacity, and knowledge cutoff of January 1, 2025. Achieves state-of-the-art performance with Intelligence Index of 71, including top scores in MMLU-Pro (89%), GPQA Diamond (90%), and second highest on MMMU-Pro for multimodal reasoning. Highest score on AA-Omniscience knowledge benchmark. Supports multimodal input (text, image, video, audio), tool calling, structured outputs, and JSON mode. Output speed: 218 tokens per second. Blended rate: $1.125 per 1M tokens.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "A810DD29-F83D-4076-9543-29581922B4A0"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.647Z",
-            "checksum": "233ed2a2cdd7462540efd953f508a76282cf65612e9eb6562220670ed7df216f"
+            "lastModified": "2026-06-03T16:00:03.483Z",
+            "checksum": "953b2b7ef0ea9fd508132807ce53b4bb61a866e26de061339d7eb8d1aefcd287"
           }
         },
         {
@@ -663,14 +679,16 @@
             "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Flash pricing on Vertex AI as of January 2025 (also known as Gemini 2.0 Flash). Features 1M token context window."
+            "Comments": "Gemini 3 Flash pricing on Vertex AI as of January 2025 (also known as Gemini 2.0 Flash). Features 1M token context window.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "7867DB3D-7665-451E-84ED-FC8C8BA56893"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.652Z",
-            "checksum": "451f3665414beb5f2620cb7f78c079aac56e306e975fde40f5389c5bbaf86ccb"
+            "lastModified": "2026-06-03T16:00:03.497Z",
+            "checksum": "6570cb67c72d2b238897e7dd9c76492762da454705fda0dc6f05487f3e190528"
           }
         }
       ]
@@ -792,14 +810,16 @@
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Pro pricing on Vertex AI as of January 2025. Input =200K tokens: $2.00/M, >200K: $4.00/M. Output =200K: $12.00/M, >200K: $18.00/M. Base tier pricing shown."
+            "Comments": "Gemini 3 Pro pricing on Vertex AI as of January 2025. Input =200K tokens: $2.00/M, >200K: $4.00/M. Output =200K: $12.00/M, >200K: $18.00/M. Base tier pricing shown.",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "77D9E0CE-E7E2-4F78-91BD-1E9FE736F4F2"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.646Z",
-            "checksum": "3b9a8b1f309974577d0c051669a174f1d79bccb2a2981e6ab0501b7e950adba0"
+            "lastModified": "2026-06-03T16:00:03.509Z",
+            "checksum": "1cc769f169e30852664c38bffce54ab7a3513f7fe0bb40849af66bb73e84862f"
           }
         },
         {
@@ -814,14 +834,16 @@
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3 Pro (Preview) pricing on Google as of November 2025. Base tier pricing shown ($2/$12 per 1M tokens for prompts <= 200k). Higher tier available for prompts > 200k ($4/$18 per 1M tokens). Released Nov 18, 2025 with fastest-ever deployment into Google Search. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%)."
+            "Comments": "Gemini 3 Pro (Preview) pricing on Google as of November 2025. Base tier pricing shown ($2/$12 per 1M tokens for prompts <= 200k). Higher tier available for prompts > 200k ($4/$18 per 1M tokens). Released Nov 18, 2025 with fastest-ever deployment into Google Search. API name is gemini-3-pro-preview and will be updated to gemini-3-pro when GA releases. Features 1M token input context window, 64k output capacity, and knowledge cutoff of January 2025. Achieves state-of-the-art performance across 19 of 20 major AI benchmarks including top scores in reasoning (Humanity's Last Exam: 37.5%), coding (SWE-Bench: 76.2%), and multimodal understanding (MMLU: 91.8%).",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "694B9C05-604C-42C0-849F-464EC66C900D"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.651Z",
-            "checksum": "5e83f4de64fe182eab7163c5f7a5d809ab84e67edf6a381419ab544d0c752ec0"
+            "lastModified": "2026-06-03T16:00:03.533Z",
+            "checksum": "59406381f374c1efd644d6a277216172e0a0381b58ab3643147baa038208d7a5"
           }
         }
       ]
@@ -944,14 +966,16 @@
             "OutputPricePerUnit": 0.88,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3 235B pricing on Fireworks.ai as of January 2026. Largest Qwen 3 series model with 128K context."
+            "Comments": "Qwen 3 235B pricing on Fireworks.ai as of January 2026. Largest Qwen 3 series model with 128K context.",
+            "CacheReadPricePerUnit": 0.11,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "328D471F-91B1-4BAB-AA09-EB13FB08CCA4"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:54.263Z",
-            "checksum": "06ec7aa95fbf4bedc0a7875a59133086be7b8ec20c800b06bf545b28a36e7f78"
+            "lastModified": "2026-06-03T16:00:03.571Z",
+            "checksum": "1d92c5d216e48f025948b0bb12755dfd861dcb6a072e8687a9cd5608b2dbbac4"
           }
         }
       ]
@@ -2148,14 +2172,16 @@
             "OutputPricePerUnit": 4.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o4-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "o4-mini pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.275,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "8F21BD20-899B-4C32-BD4E-1D56BF26698D"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.624Z",
-            "checksum": "90d7e5fbf4657383606726d16ea2ff50b260f9cf96e06d537abf38379c3daa4d"
+            "lastModified": "2026-06-03T16:00:03.643Z",
+            "checksum": "e5b6ab729e862157750af4ca815c0a1a305450a00d9f85fbc1920a0cc694d5eb"
           }
         }
       ]
@@ -2257,14 +2283,16 @@
             "OutputPricePerUnit": 8,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o3 pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "o3 pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "D5B91538-9EEE-4F8C-B7E0-4B4C912C757F"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.618Z",
-            "checksum": "9452742c4e53b7893b9d5bd617c9287f0672931ec715dd78a3233d6eb819fc12"
+            "lastModified": "2026-06-03T16:00:03.655Z",
+            "checksum": "962b572889337566094f893b28852eb148292f126c6478d62221f42895d51c1c"
           }
         }
       ]
@@ -2774,14 +2802,16 @@
             "OutputPricePerUnit": 0.8,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 3 70B pricing on Groq as of Jan 2025 (estimated)"
+            "Comments": "Llama 3 70B pricing on Groq as of Jan 2025 (estimated)",
+            "CacheReadPricePerUnit": 0.35,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "1A7D0E0C-A604-424B-97DE-086E9D649584"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:54.977Z",
-            "checksum": "382e3c4a1405c84f606d546f327c3728d812462706c18e8364ab5506e691372a"
+            "lastModified": "2026-06-03T16:00:03.688Z",
+            "checksum": "af94fcab599f20926d3096eaa353488b7dceffab51cf09718eb03c6d2f0d1a97"
           }
         }
       ]
@@ -2841,14 +2871,16 @@
             "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 3.1 405B pricing on Groq as of Jan 2025 (estimated)"
+            "Comments": "Llama 3.1 405B pricing on Groq as of Jan 2025 (estimated)",
+            "CacheReadPricePerUnit": 1.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E75F641A-5BF8-411C-95F3-06B26EBBD96E"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:54.988Z",
-            "checksum": "b50cf60dc4f48254032a47ff3d4a4682ac695ec321dacb76696ec0f4343d3906"
+            "lastModified": "2026-06-03T16:00:03.700Z",
+            "checksum": "36ed53a2d609f28b38866b31c95eaeab9241d28688d5fb7da32700e2b1abdd6a"
           }
         }
       ]
@@ -2908,14 +2940,16 @@
             "OutputPricePerUnit": 0.08,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 3.1 8B pricing on Groq as of Jan 2025"
+            "Comments": "Llama 3.1 8B pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "4F83F994-D8F3-4062-B883-8775DDE73E0A"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.001Z",
-            "checksum": "29294f2ed4259bbb64eb107e13d6ed49351a9df12a8765478dcd060dae2987c4"
+            "lastModified": "2026-06-03T16:00:03.715Z",
+            "checksum": "d37297115ae8834954ca4c221c28ccdd6a7f82d4603470fa517e8423aeb4dba0"
           }
         }
       ]
@@ -2993,14 +3027,16 @@
             "OutputPricePerUnit": 1.25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 3 Haiku pricing as of Jan 2025"
+            "Comments": "Claude 3 Haiku pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": 0.3125
           },
           "primaryKey": {
             "ID": "E05C90B8-6CD1-470E-AD11-FD592CF93AFB"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.012Z",
-            "checksum": "e34da7bce7708a4a1eaf6bf33bef8d3dd8067b060f770d82192023895cd1b1f4"
+            "lastModified": "2026-06-03T16:00:03.728Z",
+            "checksum": "3a2828f3830d8e1736f676924f58745ec4238c39e3549061179edf129fe8d7f4"
           }
         }
       ]
@@ -3105,14 +3141,16 @@
             "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4.1 Nano pricing as of July 2025"
+            "Comments": "GPT-4.1 Nano pricing as of July 2025",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F3A9A104-89AF-4703-90B9-191BBDA801F9"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.246Z",
-            "checksum": "28bd601cf3708a06b2091308d009bf931fb90104a19c4dc3fbab02d6a2e04d8c"
+            "lastModified": "2026-06-03T16:00:03.753Z",
+            "checksum": "d32b6ba399cdb48d1fc4b05d51d65ed21cebd2f82ba7be8741853664abda3f4a"
           }
         },
         {
@@ -3127,14 +3165,16 @@
             "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4.1-nano pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-4.1-nano pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "6177E858-5057-4D16-8698-6931AF060319"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.721Z",
-            "checksum": "321bcbb59fc45086cea66bf355805d1480ddda146f5c3fef0a896c74d96073eb"
+            "lastModified": "2026-06-03T16:00:03.767Z",
+            "checksum": "5c68a984c56938da7f1aa2973272ee9b351f9c9f0a2df02ff7a6510f91befba1"
           }
         }
       ]
@@ -3236,14 +3276,16 @@
             "OutputPricePerUnit": 8,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 4.1 pricing as of Jan 2025 - 1M token context window"
+            "Comments": "GPT 4.1 pricing as of Jan 2025 - 1M token context window",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "096C8D65-C5A7-4BB6-B146-7DFAA947B14A"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.259Z",
-            "checksum": "60ff02db453bf9d5c13d874eb9cd838f5bdf572ea5e66b7ac9e44c370aeda093"
+            "lastModified": "2026-06-03T16:00:03.781Z",
+            "checksum": "3e0db1b5a32f257961df2286d311d0ec283816da52e47cabe2f392353b4bb201"
           }
         },
         {
@@ -3258,14 +3300,16 @@
             "OutputPricePerUnit": 8,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4.1 pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-4.1 pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "45C3F3D5-E964-4A7F-9898-240FB9C7A005"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.723Z",
-            "checksum": "fc058266bf9da964b99f22c41009f04a792455cfb2e5626062e82c6fbf59be97"
+            "lastModified": "2026-06-03T16:00:03.795Z",
+            "checksum": "b07cbcda9ca72570cb1d26af4635983d6266d2c4ddc2c9d665f2424f2cfcb1f8"
           }
         }
       ]
@@ -3370,14 +3414,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.1-codex-max pricing on OpenAI as of November 2025. Released November 19, 2025 as OpenAI's new frontier agentic coding model available in Codex with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans. API name is gpt-5.1-codex-max. Purpose-built for long-running agentic coding tasks and only available in the Responses API. Features native training to operate across multiple context windows through compaction technique, allowing coherent work over millions of tokens in a single task. Capable of working on tasks for more than 24 hours in internal testing. Achieves 77.9% on SWE-Bench Verified, 79.9% on SWE-Lancer IC SWE, and 58.1% on TerminalBench 2.0. Matches GPT 5.1-Codex performance with ~30% fewer thinking tokens. Same pricing as GPT 5 ($1.25/$10 per 1M tokens). Knowledge cutoff of October 2024."
+            "Comments": "GPT 5.1-codex-max pricing on OpenAI as of November 2025. Released November 19, 2025 as OpenAI's new frontier agentic coding model available in Codex with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans. API name is gpt-5.1-codex-max. Purpose-built for long-running agentic coding tasks and only available in the Responses API. Features native training to operate across multiple context windows through compaction technique, allowing coherent work over millions of tokens in a single task. Capable of working on tasks for more than 24 hours in internal testing. Achieves 77.9% on SWE-Bench Verified, 79.9% on SWE-Lancer IC SWE, and 58.1% on TerminalBench 2.0. Matches GPT 5.1-Codex performance with ~30% fewer thinking tokens. Same pricing as GPT 5 ($1.25/$10 per 1M tokens). Knowledge cutoff of October 2024.",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "0A653508-E183-406B-8996-CFC0D3F8259B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.822Z",
-            "checksum": "c1044b117eb4f9ba81fbdfa869419021ab8260ac5c310a5f343e9dd3a4a71d1d"
+            "lastModified": "2026-06-03T16:00:03.820Z",
+            "checksum": "777639d353d74f72582644b3116610d9c7f578a3b3a8f6a11a9e1d8f1510e289"
           }
         },
         {
@@ -3392,14 +3438,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.1-codex-max pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-5.1-codex-max pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "76BD05B6-B322-4CC6-8D8D-7F7FD900F4B8"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.719Z",
-            "checksum": "b0a48709316f61788bd6d5afc6ad6ff774c155cdf507b6828dcf26783425ddb9"
+            "lastModified": "2026-06-03T16:00:03.835Z",
+            "checksum": "8c82bbd2f59a355e69e19ba358ce7fff7f99206a006b43cf86b549db01110fc0"
           }
         }
       ]
@@ -3501,14 +3549,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4o-mini pricing as of Jan 2025"
+            "Comments": "GPT-4o-mini pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "92F3C25B-AFD7-4C6D-8656-9B085396BCE8"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.401Z",
-            "checksum": "c43de2cb09c9f5cb7793821165e9b1d6d21d3444152414cd61b55b7e6fcade82"
+            "lastModified": "2026-06-03T16:00:03.861Z",
+            "checksum": "643b4f6ff557f9356e7338765e99eb27cc0a975b7c75ad38f22e7655a25e6874"
           }
         },
         {
@@ -3523,14 +3573,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4o-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-4o-mini pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "04682D16-B0E6-4FE5-88D9-B9D71670D239"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.712Z",
-            "checksum": "5a12590423f8eaa7d81f9ee68195ab1654d2faa675c546139e3c31225f92c1b4"
+            "lastModified": "2026-06-03T16:00:03.849Z",
+            "checksum": "ae405946cded097b6a231dd7e85791462feb404aa75d422b14476f71bfdbb9e1"
           }
         }
       ]
@@ -3611,14 +3663,16 @@
             "OutputPricePerUnit": 0.04,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4o Image 1.0 pricing as of January 2026. Standard quality 1024x1024: $0.040/image. HD quality: $0.080/image."
+            "Comments": "GPT-4o Image 1.0 pricing as of January 2026. Standard quality 1024x1024: $0.040/image. HD quality: $0.080/image.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F2E3D4C5-B6A7-8E9F-0A1B-2C3D4E5F6A7B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.823Z",
-            "checksum": "5c555acf29ce7ee09c5153909dd25c1e5faface751b6b09647a08d7ee8732376"
+            "lastModified": "2026-06-03T16:00:03.869Z",
+            "checksum": "1ffa8df749b05e2f47a7b2e53121bcf8062eab7d0dbe56f67d76e0812556abf8"
           }
         }
       ]
@@ -3723,14 +3777,16 @@
             "OutputPricePerUnit": 14,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.2 pricing on OpenAI as of December 2025. Base tier pricing shown ($1.75/$14.00 per 1M tokens). Tiered pricing available: GPT-5.2 Instant (speed-optimized for daily tasks), GPT-5.2 Thinking (deep reasoning for complex structured work), GPT-5.2 Pro ($21/$168 per 1M tokens - highest accuracy). Cached input pricing available at 10x reduction ($0.175 per 1M tokens). Batch API offers 50% discounts. Released December 11, 2025 (codenamed \"garlic\"). API name is gpt-5.2. Features 400,000 token input context window, 128,000 output capacity, and knowledge cutoff of August 31, 2025. Supports streaming, function calling, structured outputs, and response compaction via /responses/compact endpoint for long-running tool-heavy workflows with loss-aware compression. 1.4x the cost of GPT-5.1."
+            "Comments": "GPT-5.2 pricing on OpenAI as of December 2025. Base tier pricing shown ($1.75/$14.00 per 1M tokens). Tiered pricing available: GPT-5.2 Instant (speed-optimized for daily tasks), GPT-5.2 Thinking (deep reasoning for complex structured work), GPT-5.2 Pro ($21/$168 per 1M tokens - highest accuracy). Cached input pricing available at 10x reduction ($0.175 per 1M tokens). Batch API offers 50% discounts. Released December 11, 2025 (codenamed \"garlic\"). API name is gpt-5.2. Features 400,000 token input context window, 128,000 output capacity, and knowledge cutoff of August 31, 2025. Supports streaming, function calling, structured outputs, and response compaction via /responses/compact endpoint for long-running tool-heavy workflows with loss-aware compression. 1.4x the cost of GPT-5.1.",
+            "CacheReadPricePerUnit": 0.175,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "9D881C58-7846-4839-84E3-F51F0D32B02B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.825Z",
-            "checksum": "dc8b8aa1a38b402549a25cd0b5bccddd92620c68ea60e0acbc935fefbb799bf4"
+            "lastModified": "2026-06-03T16:00:03.884Z",
+            "checksum": "9608d3fc4f64aa682c58cc2b30b7ba7aac48f6035dc7dbc432493d4a374c065a"
           }
         },
         {
@@ -3745,14 +3801,16 @@
             "OutputPricePerUnit": 14,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.2 pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-5.2 pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.175,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "0802DE88-096F-4D66-89BA-5E1D47BEE8BF"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.726Z",
-            "checksum": "c643e52f19835cb37fc76f62a6763a13db0d86edf94490482d707648a183050d"
+            "lastModified": "2026-06-03T16:00:03.897Z",
+            "checksum": "a1076aec390f902905639d26867c81eddfafafd12f9a3d74ff363f24cdbb045c"
           }
         }
       ]
@@ -3857,14 +3915,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.1-codex-mini pricing on OpenAI as of November 2025. Released November 13, 2025 as a more efficient option for simpler coding tasks. API name is gpt-5.1-codex-mini. Features 400,000 token context window and provides up to 4x more usage compared to standard Codex models. Designed for local tasks where cost efficiency and speed are priorities. Part of OpenAI's Codex family optimized for agentic coding applications and integrates into developer environments including CLI, IDE extensions, and GitHub. Pricing matches GPT 5-mini at $0.25/$2.00 per 1M tokens. Knowledge cutoff of October 2024."
+            "Comments": "GPT 5.1-codex-mini pricing on OpenAI as of November 2025. Released November 13, 2025 as a more efficient option for simpler coding tasks. API name is gpt-5.1-codex-mini. Features 400,000 token context window and provides up to 4x more usage compared to standard Codex models. Designed for local tasks where cost efficiency and speed are priorities. Part of OpenAI's Codex family optimized for agentic coding applications and integrates into developer environments including CLI, IDE extensions, and GitHub. Pricing matches GPT 5-mini at $0.25/$2.00 per 1M tokens. Knowledge cutoff of October 2024.",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B65E00CB-7E35-46D0-90DB-89C09FFBD437"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.827Z",
-            "checksum": "0c451beb04d93a2d506f7af0a4b828e12d645bd0223d57aa6f650e7777c029d8"
+            "lastModified": "2026-06-03T16:00:03.909Z",
+            "checksum": "fdfeeb30238d6ea41cfd175dbd90803a93fe33ccfb0e729b84a21dea3289e7ce"
           }
         },
         {
@@ -3879,14 +3939,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.1-codex-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-5.1-codex-mini pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "48961FDB-5162-4E5A-A667-8ADD0AA2D901"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.721Z",
-            "checksum": "e79c11ce4f5d4241871966cb06b593f6e7880f8c993d5982f389d816156644e9"
+            "lastModified": "2026-06-03T16:00:03.933Z",
+            "checksum": "9e4cfbf514416580cfa6542572be75b2a289df20f27d68f302dbee9879e1c12d"
           }
         }
       ]
@@ -3991,14 +4053,16 @@
             "OutputPricePerUnit": 14,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.2-codex pricing on OpenAI as of December 2025. Released December 2025 in all Codex surfaces for paid ChatGPT users with API access planned. Features 400,000 token context window (actual max input 272k tokens with 128k reserved for output) and knowledge cutoff of October 2024. Version of GPT 5.2 further optimized for agentic coding with improvements to long-horizon work through context compaction, stronger performance on large code changes like refactors and migrations, improved performance in Windows environments, and significantly stronger cybersecurity capabilities. Represents 40% price increase over GPT 5 ($1.25/$10 per 1M tokens)."
+            "Comments": "GPT 5.2-codex pricing on OpenAI as of December 2025. Released December 2025 in all Codex surfaces for paid ChatGPT users with API access planned. Features 400,000 token context window (actual max input 272k tokens with 128k reserved for output) and knowledge cutoff of October 2024. Version of GPT 5.2 further optimized for agentic coding with improvements to long-horizon work through context compaction, stronger performance on large code changes like refactors and migrations, improved performance in Windows environments, and significantly stronger cybersecurity capabilities. Represents 40% price increase over GPT 5 ($1.25/$10 per 1M tokens).",
+            "CacheReadPricePerUnit": 0.175,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E7FA5A72-959E-4947-B20F-1D64B4019F67"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.828Z",
-            "checksum": "bf34864b0517cb89ad84ee2343bbbde70b93179f4b1a086b2fd9ddb80193eef6"
+            "lastModified": "2026-06-03T16:00:03.961Z",
+            "checksum": "6fd62c35a078baabe59fb4b9d984b5ca1d0f4b0cc5f8eb1a64d803956b5cbe5d"
           }
         },
         {
@@ -4013,14 +4077,16 @@
             "OutputPricePerUnit": 14,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.2-codex pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-5.2-codex pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.175,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B846C35F-AAE8-467B-8141-738C90C1568D"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.711Z",
-            "checksum": "e3df1cc7253fa8f3cfff3a7352b185e50902a611e571e3a028d0ff7fec65b89f"
+            "lastModified": "2026-06-03T16:00:03.948Z",
+            "checksum": "2505b43887dc342f4375915d90e0518431701149ecd74a0bc6b062d8688ab3cd"
           }
         }
       ]
@@ -4124,14 +4190,16 @@
             "OutputPricePerUnit": 1.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 4.1-mini pricing as of Jan 2025 - 1M token context window"
+            "Comments": "GPT 4.1-mini pricing as of Jan 2025 - 1M token context window",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "1BCF9014-50C4-4129-9E28-0CB286017C3C"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.543Z",
-            "checksum": "e0ced8c8f0c81f90059b3b9f03ce03aa6d299e7d960fc27478b41b232b72e77d"
+            "lastModified": "2026-06-03T16:00:03.972Z",
+            "checksum": "f97f6d16af0d5d16611164c44797b87e4cf53dad4690f315a903eb4850b27ce3"
           }
         },
         {
@@ -4146,14 +4214,16 @@
             "OutputPricePerUnit": 1.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4.1-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-4.1-mini pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5025B274-5E29-4A33-85E2-532FDAFCC7A9"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.712Z",
-            "checksum": "fba19af7c1f09c8dd87f63914f84f2daf4c269ce43ab3362bd188a29f96822e4"
+            "lastModified": "2026-06-03T16:00:03.997Z",
+            "checksum": "a575138b2e36d36533f3ff1f18a18f17b06fe6e01d513e34f94cbced6bad969b"
           }
         }
       ]
@@ -4255,14 +4325,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4o pricing as of Jan 2025"
+            "Comments": "GPT-4o pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 1.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "0122F53D-E449-4BB7-A11A-410181753AFF"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.554Z",
-            "checksum": "1169dbeaf765b43f4d6050513f45229a73dca1f8a81bee1cb157a13d17ac784b"
+            "lastModified": "2026-06-03T16:00:04.010Z",
+            "checksum": "ff42634010b1ee88256317fd540c610ed7a8eeaccdf09c9f21b32943cc7e20e3"
           }
         },
         {
@@ -4277,14 +4349,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-4o pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-4o pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 1.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C0950C4C-AE3E-48B5-B944-979C79D8AD52"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.708Z",
-            "checksum": "be0e95fe005756490626ad4a393412a56faf3ca03af0743a5bbdef7dc3fd061b"
+            "lastModified": "2026-06-03T16:00:04.023Z",
+            "checksum": "638f0e0c0d9941519f961734d633c4f020c52aa31401a57202fc32e2636ae64c"
           }
         }
       ]
@@ -4386,14 +4460,16 @@
             "OutputPricePerUnit": 4.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o3-mini pricing as of Jan 2025"
+            "Comments": "o3-mini pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 0.55,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E9CC9B7B-799A-4069-9E54-4D3DFF334E12"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.848Z",
-            "checksum": "fc5c51f02fdfe6f228d6de34d79c16870e3aa3ab61a8db9fe2440b58148fe135"
+            "lastModified": "2026-06-03T16:00:04.036Z",
+            "checksum": "53a2e8643a2e438fe2f8472f020e3976927a3b07489c54501f7224d5530a71fb"
           }
         },
         {
@@ -4408,14 +4484,16 @@
             "OutputPricePerUnit": 4.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o3-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "o3-mini pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.55,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "D233DF30-1371-43F4-B198-830C34821D74"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.710Z",
-            "checksum": "68a0db014cc6258eaa689b7b51492eaafc39d1eba18e2ffb5e0ef52caef6b1ef"
+            "lastModified": "2026-06-03T16:00:04.062Z",
+            "checksum": "eeb8aba74c927cd58cf5fcec547bf1bfbe42a285e3933ec15ebaee6509152272"
           }
         }
       ]
@@ -4495,14 +4573,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 3.7 Sonnet pricing as of Jan 2025 (same as Claude 4 Sonnet)"
+            "Comments": "Claude 3.7 Sonnet pricing as of Jan 2025 (same as Claude 4 Sonnet)",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": 3.75
           },
           "primaryKey": {
             "ID": "1C4C94B7-3D9E-4FDB-BE0C-6FAD82A4ECBE"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.864Z",
-            "checksum": "dc87ab1d9e7208f983eea5da8db5aa4933921753b0b4ec64408e531600c95f41"
+            "lastModified": "2026-06-03T16:00:04.075Z",
+            "checksum": "8ff3e3b63a8f7352623987846854b662f8adbe218f52e99f122ab4278f5a17e4"
           }
         }
       ]
@@ -4604,14 +4684,16 @@
             "OutputPricePerUnit": 60,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o1 reasoning model pricing as of Jan 2025"
+            "Comments": "o1 reasoning model pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 7.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "68EE9D5D-7183-4F2A-B211-4AFCC0B01587"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:55.876Z",
-            "checksum": "d14fe96db13727b32cb777319837ccf6f72845bc0d1e05ba0918d808ae3ac271"
+            "lastModified": "2026-06-03T16:00:04.087Z",
+            "checksum": "e8b97ac646a37e71b525b6eb152e62d9dd544ebfc15c229e844a79fb141c3312"
           }
         },
         {
@@ -4626,14 +4708,16 @@
             "OutputPricePerUnit": 60,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o1 pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "o1 pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 7.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "559352AC-EA0A-4669-A7B5-5CD2AD048F0B"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.706Z",
-            "checksum": "fde29688ac9540e2d10b9260ee9fcccc0632a2b54deb75838710b7532913cfbc"
+            "lastModified": "2026-06-03T16:00:04.098Z",
+            "checksum": "b8f728f2178adf31e214acf08e9ae117b3f389fdd07fdb9e43710267262d396c"
           }
         }
       ]
@@ -4712,14 +4796,16 @@
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "o1-mini pricing as of Jan 2025"
+            "Comments": "o1-mini pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 1.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "9FCE61BE-C582-46A9-B59D-81F73450C0E6"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.022Z",
-            "checksum": "60fcf847c874833743ff20d8af36169503998725a7772415ce77fa82edafc1b5"
+            "lastModified": "2026-06-03T16:00:04.123Z",
+            "checksum": "01137a7d984603dfa96f54fbd668ad29f5b53c0ada17c7021c90040a39a7a1ec"
           }
         }
       ]
@@ -4798,14 +4884,16 @@
             "OutputPricePerUnit": 75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 3 Opus pricing as of Jan 2025"
+            "Comments": "Claude 3 Opus pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 1.5,
+            "CacheWritePricePerUnit": 18.75
           },
           "primaryKey": {
             "ID": "6AB0AE41-58CF-44B9-9214-B165B2108100"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.034Z",
-            "checksum": "c66c7873443df15ad4387695466248e36d94f649160db5378581704b3c7517eb"
+            "lastModified": "2026-06-03T16:00:04.136Z",
+            "checksum": "49ac229ffef6dd38b933520e7453d5b1a07ea2ecc6180a777522d52f58dfaf3b"
           }
         }
       ]
@@ -4884,14 +4972,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 3.5 Sonnet pricing as of Jan 2025"
+            "Comments": "Claude 3.5 Sonnet pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": 3.75
           },
           "primaryKey": {
             "ID": "7C026453-4873-454F-B861-3E6CDBAB944F"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.045Z",
-            "checksum": "4aa33c399a00cb6203f7924341b38833759b2995f2f8ef6a315438058c532fd3"
+            "lastModified": "2026-06-03T16:00:04.147Z",
+            "checksum": "d36b7efa806c6e66fd07939514332d64275b85e7e290a190ee481ef113971791"
           }
         }
       ]
@@ -4973,14 +5063,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Large 3 pricing on Mistral AI as of December 2025. 675B parameter MoE model (41B active) with 256K context. Flagship multimodal model with vision capabilities. Open-weight with Apache 2.0 license."
+            "Comments": "Mistral Large 3 pricing on Mistral AI as of December 2025. 675B parameter MoE model (41B active) with 256K context. Flagship multimodal model with vision capabilities. Open-weight with Apache 2.0 license.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "2265B1E1-273F-4771-A3E8-ED62DE426C6D"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.833Z",
-            "checksum": "0ac83fe17682417de65f00d6fda0142950ad12fc2b132450f919081ead603796"
+            "lastModified": "2026-06-03T16:00:04.172Z",
+            "checksum": "a21305934c8b8182f25fb826ed8883a0d90833e4959e76e02236b5cd9f9fc698"
           }
         }
       ]
@@ -5062,14 +5154,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Medium 3.1 pricing on Mistral AI as of August 2025. 128K context window. Frontier-class multimodal model with vision and OCR capabilities. Improved tone and performance over previous versions."
+            "Comments": "Mistral Medium 3.1 pricing on Mistral AI as of August 2025. 128K context window. Frontier-class multimodal model with vision and OCR capabilities. Improved tone and performance over previous versions.",
+            "CacheReadPricePerUnit": 0.04,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "419A9055-52D1-45EE-BF52-4B038C3F1C7E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.834Z",
-            "checksum": "9bbba42f6748d1ed46d444f311e9d31e4619dbd50904f65b5e42ac3ddb3b93f7"
+            "lastModified": "2026-06-03T16:00:04.198Z",
+            "checksum": "5f0ec53d5b642923e1ab0604c5e31e140021a97b7dbaccf6813346a60a23cf19"
           }
         }
       ]
@@ -5151,14 +5245,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Devstral 2 pricing on Mistral AI as of December 2025. 123B parameter model with 256K context. Optimized for software engineering agents and multi-file code editing. Note: Currently free for limited time, but standard pricing listed here."
+            "Comments": "Devstral 2 pricing on Mistral AI as of December 2025. 123B parameter model with 256K context. Optimized for software engineering agents and multi-file code editing. Note: Currently free for limited time, but standard pricing listed here.",
+            "CacheReadPricePerUnit": 0.04,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "57410D23-A34C-4B0E-A320-FF30DE6046F1"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.834Z",
-            "checksum": "ea3b36688a6a81dd1322e539692f39532895fa5b38c7d6fb70fd33e3c4f119a1"
+            "lastModified": "2026-06-03T16:00:04.186Z",
+            "checksum": "abee7a2c5933fac124e26e98ca8ce831059d0f237ec24b37f32f9144f8a0f749"
           }
         }
       ]
@@ -5238,14 +5334,16 @@
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Large pricing as of Jan 2025 (estimated)"
+            "Comments": "Mistral Large pricing as of Jan 2025 (estimated)",
+            "CacheReadPricePerUnit": 0.4,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "4BE324BB-70A8-420B-BE87-0CDA6ECE336D"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.186Z",
-            "checksum": "f5bbf60c001aada2da8ebd616100ab8401532ee80c5ed0eb1c1531ccdc12f60f"
+            "lastModified": "2026-06-03T16:00:04.209Z",
+            "checksum": "0220501b50e03873c4ffb33c7ec63ebf69e3a31fe959ad9381ecb5cb82d99903"
           }
         }
       ]
@@ -5350,14 +5448,16 @@
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Haiku 4.5 pricing on Anthropic as of October 2025. Prompt caching available: up to 90% cost savings. Batch processing: 50% discount. Most affordable Anthropic model with reasoning support. Knowledge cutoff: February 2025."
+            "Comments": "Claude Haiku 4.5 pricing on Anthropic as of October 2025. Prompt caching available: up to 90% cost savings. Batch processing: 50% discount. Most affordable Anthropic model with reasoning support. Knowledge cutoff: February 2025.",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": 1.25
           },
           "primaryKey": {
             "ID": "E6E3A5C4-40DC-4DD1-B7E8-245F2E129E66"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.835Z",
-            "checksum": "c21a1301f9f33ff326afc70ff309df1171a356d29feb240e27512184aeee0735"
+            "lastModified": "2026-06-03T16:00:04.233Z",
+            "checksum": "673a5e3a05b6047e8e46cb8d4d555d47f5d79024b8a76e2f93ee316582f8ad80"
           }
         },
         {
@@ -5372,14 +5472,16 @@
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Haiku 4.5 pricing on Amazon Bedrock as of March 2026"
+            "Comments": "Claude Haiku 4.5 pricing on Amazon Bedrock as of March 2026",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": 1.25
           },
           "primaryKey": {
             "ID": "6436D300-9E79-4E8A-A7F7-A0CC89A63EAB"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.722Z",
-            "checksum": "c9ad826e59579842ab20565b53dfe6e2e894d14bb16e584c9b063aa7abc82776"
+            "lastModified": "2026-06-03T16:00:04.247Z",
+            "checksum": "8363297036c14e394dd4dab52a7e7f3a64af10014ac12222febc1da18a1899fe"
           }
         }
       ]
@@ -5461,14 +5563,16 @@
             "OutputPricePerUnit": 0.3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Small 3.2 pricing on Mistral AI as of June 2025. 24B parameter model with 128K context. Efficient multimodal model with vision capabilities. Open-weight, very cost-effective option for personal and commercial use."
+            "Comments": "Mistral Small 3.2 pricing on Mistral AI as of June 2025. 24B parameter model with 128K context. Efficient multimodal model with vision capabilities. Open-weight, very cost-effective option for personal and commercial use.",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "DD278D28-370A-422E-908C-3551B35908FE"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.836Z",
-            "checksum": "ee463fff0773d151d07b65d4b8cf78181330038d6c2bf50c9074109ad9b7238f"
+            "lastModified": "2026-06-03T16:00:04.259Z",
+            "checksum": "e5996bc517b97bdab59ce532dcb7fa66d82ca11133671b6ec52b408a5d9aeaeb"
           }
         }
       ]
@@ -5548,14 +5652,16 @@
             "OutputPricePerUnit": 8.1,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Medium pricing as of Jan 2025"
+            "Comments": "Mistral Medium pricing as of Jan 2025",
+            "CacheReadPricePerUnit": 0.275,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "675E5E06-184C-4503-A457-3594B9946C25"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.328Z",
-            "checksum": "9bbe4488b45cb7fc9eaa6e3ae8a811a8e88d092f977d1d05f6c986ac23de57d5"
+            "lastModified": "2026-06-03T16:00:04.284Z",
+            "checksum": "48ba965894711d150d6bc2ed43cf0fdc45095527b4e0341927151eb865768c4b"
           }
         }
       ]
@@ -5634,14 +5740,16 @@
             "OutputPricePerUnit": 0.7,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mixtral 8x7B pricing as of Jan 2025 (estimated)"
+            "Comments": "Mixtral 8x7B pricing as of Jan 2025 (estimated)",
+            "CacheReadPricePerUnit": 0.07,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F95A5535-5A03-468C-89B4-FFDDFA7EFAC0"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.505Z",
-            "checksum": "81cf58fa0b257783ac4d2da0eceba61b0367c12775421bb068ad2d237ef46814"
+            "lastModified": "2026-06-03T16:00:04.296Z",
+            "checksum": "10357f5567b45bfe39311013b2446919d382232e6a11439ace76ff176a064dc1"
           }
         }
       ]
@@ -5746,14 +5854,16 @@
             "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2 pricing on Groq as of July 2025"
+            "Comments": "Kimi K2 pricing on Groq as of July 2025",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "A261A9EC-A7E1-412B-86E2-BEEAD4B4F999"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.517Z",
-            "checksum": "eaec0db2983fa706aa21022a60f8a7ee693509a399e0850d1bb37e3d9916045e"
+            "lastModified": "2026-06-03T16:00:04.323Z",
+            "checksum": "eab8090c0f1947fc3c489262f69cabea5036fd7fc83923868fddd3547f256142"
           }
         },
         {
@@ -5768,14 +5878,16 @@
             "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2 Instruct/Thinking pricing on Fireworks.ai as of January 2026"
+            "Comments": "Kimi K2 Instruct/Thinking pricing on Fireworks.ai as of January 2026",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "57C8F70E-100B-4BF2-A30B-C91D104D4692"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.487Z",
-            "checksum": "9a9080bea7aa87d34921fc0bb9f3ecbaf06f9ed58901246cdce49933ea94cd4d"
+            "lastModified": "2026-06-03T16:00:04.312Z",
+            "checksum": "3b0264c4e86ec08d05066d871e1a5b2fa8dd1fcb8e8ef6599018fdeec4ca16e3"
           }
         }
       ]
@@ -5858,14 +5970,16 @@
             "OutputPricePerUnit": 0.79,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Deepseek R1 Distill Llama 70B pricing on Groq as of Jan 2025 (same as Llama 3.3 70B)"
+            "Comments": "Deepseek R1 Distill Llama 70B pricing on Groq as of Jan 2025 (same as Llama 3.3 70B)",
+            "CacheReadPricePerUnit": 0.295,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "7D562C72-384E-463E-8C9A-6511F35CD4C5"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.527Z",
-            "checksum": "3f7ba3f66dfcd7c028cbba24038e0119576f3ab34f7d96abb3dde5873b85da2e"
+            "lastModified": "2026-06-03T16:00:04.347Z",
+            "checksum": "8d93244d7159b8958e717af210a18d7894864e2c690ea236298975c451343efa"
           }
         }
       ]
@@ -5947,14 +6061,16 @@
             "OutputPricePerUnit": 0.79,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 3.3 70B Versatile pricing on Groq as of Jan 2025"
+            "Comments": "Llama 3.3 70B Versatile pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.295,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "1C25C80A-8952-4EDF-8AB4-428E7D296525"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.668Z",
-            "checksum": "62eaa6f765c791febfc6516176a70e9d03d5b72a2231852cb6fa8714b6563492"
+            "lastModified": "2026-06-03T16:00:04.364Z",
+            "checksum": "b3b113e671cb1b5b6252600cd08a655225f4b7e1f5e0bb099fdb35fb7cde9de3"
           }
         }
       ]
@@ -6035,14 +6151,16 @@
             "OutputPricePerUnit": 0.03,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "FLUX.2 Pro pricing as of January 2026. Standard pricing approximately $0.03/image. Uses megapixel-based pricing where cost scales with output resolution. 1 credit = $0.01 USD on BFL API."
+            "Comments": "FLUX.2 Pro pricing as of January 2026. Standard pricing approximately $0.03/image. Uses megapixel-based pricing where cost scales with output resolution. 1 credit = $0.01 USD on BFL API.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B3C4D5E6-F7A8-4B9C-0D1E-2F3A4B5C6D7E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.847Z",
-            "checksum": "8d8be2ac4c66c2866af5f18e596a208071ecbacd39bf8318d0533038fa2012ae"
+            "lastModified": "2026-06-03T16:00:04.369Z",
+            "checksum": "38effc8ebeda557d4753ecab39b9bd4ec87688eff11e6ac00878195559c38520"
           }
         }
       ]
@@ -6123,14 +6241,16 @@
             "OutputPricePerUnit": 0.04,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "FLUX 1.1 Pro pricing as of January 2026. $0.04/image standard resolution. Credit-based pricing on BFL API (1 credit = $0.01)."
+            "Comments": "FLUX 1.1 Pro pricing as of January 2026. $0.04/image standard resolution. Credit-based pricing on BFL API (1 credit = $0.01).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E6F7A8B9-C0D1-4E2F-3A4B-5C6D7E8F9A0B"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.848Z",
-            "checksum": "3266d85c7729788129b7b02944010769185359aef2b85b6ff6df63557933e165"
+            "lastModified": "2026-06-03T16:00:04.378Z",
+            "checksum": "6cd38553c9ae59f9511522fae718866236655695ce9710c04ab723e7f019da79"
           }
         }
       ]
@@ -6212,14 +6332,16 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4-1 Fast Non-Reasoning pricing on x.AI as of December 2025. Features 2 million token context window, multimodal input (text and images), JSON mode, and function calling support. Optimized for speed without reasoning overhead. Rate limits: 4M tokens per minute (tpm), 480 requests per minute (rpm). Blended rate: $0.35 per 1M tokens."
+            "Comments": "Grok 4-1 Fast Non-Reasoning pricing on x.AI as of December 2025. Features 2 million token context window, multimodal input (text and images), JSON mode, and function calling support. Optimized for speed without reasoning overhead. Rate limits: 4M tokens per minute (tpm), 480 requests per minute (rpm). Blended rate: $0.35 per 1M tokens.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "4B2D96C7-66EA-4170-9930-ED49CA4C4BE4"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.848Z",
-            "checksum": "1ccd47fcd8711c883e79893d79631ea01c75dbc9553a2f17006c6771883092a8"
+            "lastModified": "2026-06-03T16:00:04.393Z",
+            "checksum": "edbe62fb1ca2bb115ab561416ff121b453fd3a40168ebe2d06ce9838f9642179"
           }
         }
       ]
@@ -6301,14 +6423,16 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4 Fast (Non-Reasoning) base tier pricing on x.ai as of January 2025. Cached input tokens: $0.05/M. Tiered pricing applies for larger requests."
+            "Comments": "Grok 4 Fast (Non-Reasoning) base tier pricing on x.ai as of January 2025. Cached input tokens: $0.05/M. Tiered pricing applies for larger requests.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C3A9BE47-B186-4FA3-E4D8-8FEF2A9BDB01"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.822Z",
-            "checksum": "bf9171a3ca9b99686e46d9382f2ca524578ddbdd310267e4a039b02df8132dc3"
+            "lastModified": "2026-06-03T16:00:04.408Z",
+            "checksum": "543615be9d8d38b9972205f5b63888f939790a501a757f59a5be7a806a77b212"
           }
         }
       ]
@@ -6390,14 +6514,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok Code Fast 1 pricing on x.ai as of January 2025"
+            "Comments": "Grok Code Fast 1 pricing on x.ai as of January 2025",
+            "CacheReadPricePerUnit": 0.02,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "166A7DAA-3BDE-40CF-9363-A63FBE9798F2"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.833Z",
-            "checksum": "2529b4f31968e897d180116e17447fad916ce058f08742ac1b160e6bcf68ae6d"
+            "lastModified": "2026-06-03T16:00:04.420Z",
+            "checksum": "a40299b0b90d16c8af0463addb1d86f6f5fcb0c940c4b8ffab0c93a030230d59"
           }
         }
       ]
@@ -6479,14 +6605,16 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4-1 Fast Reasoning pricing on x.AI as of December 2025. Features 2 million token context window, reasoning capabilities, JSON mode, and function calling support. Rate limits: 4M tokens per minute (tpm), 480 requests per minute (rpm). Blended rate: $0.35 per 1M tokens."
+            "Comments": "Grok 4-1 Fast Reasoning pricing on x.AI as of December 2025. Features 2 million token context window, reasoning capabilities, JSON mode, and function calling support. Rate limits: 4M tokens per minute (tpm), 480 requests per minute (rpm). Blended rate: $0.35 per 1M tokens.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "BC1FBC43-FE9C-41FE-A073-4A1B64885466"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.850Z",
-            "checksum": "5964d3a446370e3115bd8a44004540ecfff7275dfe7800c2d7ca7d94312d64bf"
+            "lastModified": "2026-06-03T16:00:04.443Z",
+            "checksum": "63101d633a477d39314d4ba6fb7a0d432fa1f73d84323eedc3c82c87d720aee3"
           }
         }
       ]
@@ -6568,14 +6696,16 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4 Fast (Reasoning) base tier pricing on x.ai as of January 2025. Cached input tokens: $0.05/M. Tiered pricing applies for larger requests."
+            "Comments": "Grok 4 Fast (Reasoning) base tier pricing on x.ai as of January 2025. Cached input tokens: $0.05/M. Tiered pricing applies for larger requests.",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F2B8AD36-A075-4E92-D3C7-7EDE1A8BCB90"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.971Z",
-            "checksum": "27a1c78bf719eda71887eda29f5eff70daae283943db42e5ffb405ad39516dbf"
+            "lastModified": "2026-06-03T16:00:04.478Z",
+            "checksum": "7cb38d811f1559aa0814ed6ee938941f9f0311f8e68fb1fdef44b473c25fefc8"
           }
         }
       ]
@@ -6636,14 +6766,16 @@
             "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.032Z",
-            "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
+            "lastModified": "2026-06-03T16:00:04.455Z",
+            "checksum": "f0a727cc78d0957a0de340cf96937b839cb5fe12005c7cb38566ce1a48c66d42"
           }
         },
         {
@@ -6658,14 +6790,16 @@
             "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:56.994Z",
-            "checksum": "73619cec0c2e97847c211954e9fd84056d979b3f040be8f0120dabc1aba23a60"
+            "lastModified": "2026-06-03T16:00:04.455Z",
+            "checksum": "f0a727cc78d0957a0de340cf96937b839cb5fe12005c7cb38566ce1a48c66d42"
           }
         },
         {
@@ -6680,14 +6814,16 @@
             "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025"
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "8C917BF3-1B35-49C3-941B-397EFFD0E7F4"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.446Z",
-            "checksum": "e95f44f9b8a040febce41841d8da08971995b263bc983f5c870365f4938b698d"
+            "lastModified": "2026-06-03T16:00:04.468Z",
+            "checksum": "412ec5814ab5d6955f8034ef5534f43c5513e93b2bb264618d0241adbcb4223d"
           }
         }
       ]
@@ -6791,14 +6927,16 @@
             "OutputPricePerUnit": 0.39,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3 32B pricing on Groq as of Jan 2025 (based on QwQ-32B pricing)"
+            "Comments": "Qwen 3 32B pricing on Groq as of Jan 2025 (based on QwQ-32B pricing)",
+            "CacheReadPricePerUnit": 0.145,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "D1F6F522-20DD-4D86-9DEB-A4F2A3549CC6"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.167Z",
-            "checksum": "634551ac25ca631b82fb3b087a0fe99120c7bfb11b47d81b37bcc8eaef095fd6"
+            "lastModified": "2026-06-03T16:00:04.499Z",
+            "checksum": "f0a70a66315efbdc69b592e059630fe0bb39165686e8a5f76c1a54a1f76e5f82"
           }
         }
       ]
@@ -6926,14 +7064,16 @@
             "OutputPricePerUnit": 1.53,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3 Coder 480B average pricing on OpenRouter as of August 2025"
+            "Comments": "Qwen 3 Coder 480B average pricing on OpenRouter as of August 2025",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "36E2223B-4D16-46CB-BF74-DFF7679DCF59"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.179Z",
-            "checksum": "af86a2b957951b676fcfb35a525f4a0900d94fc3d62ec980ba8c456042a271d7"
+            "lastModified": "2026-06-03T16:00:04.518Z",
+            "checksum": "df3aaeb4d99db7fae939c6654fdd44caa1716db873a1e9ab6f2f3bca1328f168"
           }
         },
         {
@@ -6948,14 +7088,16 @@
             "OutputPricePerUnit": 1.8,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3 Coder 480B pricing on Fireworks.ai as of January 2026. Large code generation model with 128K context."
+            "Comments": "Qwen 3 Coder 480B pricing on Fireworks.ai as of January 2026. Large code generation model with 128K context.",
+            "CacheReadPricePerUnit": 0.225,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F44A0219-0E52-401E-A49E-9E75F6461939"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.142Z",
-            "checksum": "ca627830caec6f203529209eb1d958b1d3eedfeff5bde658b8b909dd1a208c5a"
+            "lastModified": "2026-06-03T16:00:04.515Z",
+            "checksum": "41d23ac4c6172728b013c062e9626fe140508984a5ff1e7d7b93d4dea86882a0"
           }
         }
       ]
@@ -7036,14 +7178,16 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": 1.875
           },
           "primaryKey": {
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.219Z",
-            "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
+            "lastModified": "2026-06-03T16:00:04.541Z",
+            "checksum": "b542e0fdbd829d4191887dbb0087b8c4a2fadda98ead603058abfccf08537e3f"
           }
         },
         {
@@ -7058,14 +7202,16 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": 1.875
           },
           "primaryKey": {
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.313Z",
-            "checksum": "b5b869576b542870b6b1952b2190917ef2d0c142be353772f19461647e064564"
+            "lastModified": "2026-06-03T16:00:04.541Z",
+            "checksum": "b542e0fdbd829d4191887dbb0087b8c4a2fadda98ead603058abfccf08537e3f"
           }
         },
         {
@@ -7080,14 +7226,16 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025"
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": 1.875
           },
           "primaryKey": {
             "ID": "5DDA609E-8445-467E-BE78-EE31BCC385B7"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.497Z",
-            "checksum": "8b1d7da35472e673e5b6ef0226ed27ca7bbd64800801aff62e791a370f5c6059"
+            "lastModified": "2026-06-03T16:00:04.554Z",
+            "checksum": "5e2074f9b648f3b5001dac2b685b783143a94e67f961a0f81747f2b91c4cf213"
           }
         }
       ]
@@ -7168,14 +7316,16 @@
             "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025",
+            "CacheReadPricePerUnit": 0.75,
+            "CacheWritePricePerUnit": 9.375
           },
           "primaryKey": {
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.217Z",
-            "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
+            "lastModified": "2026-06-03T16:00:04.566Z",
+            "checksum": "852754f9f7b92a23bc8ef402865a319135d8c744d81911d8d76cace031778a92"
           }
         },
         {
@@ -7190,14 +7340,16 @@
             "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025",
+            "CacheReadPricePerUnit": 0.75,
+            "CacheWritePricePerUnit": 9.375
           },
           "primaryKey": {
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.336Z",
-            "checksum": "2a55ce83c01609580fa11e4259df84294e94471477d02983e573fc0d2fdee7bd"
+            "lastModified": "2026-06-03T16:00:04.566Z",
+            "checksum": "852754f9f7b92a23bc8ef402865a319135d8c744d81911d8d76cace031778a92"
           }
         },
         {
@@ -7212,14 +7364,16 @@
             "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025"
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025",
+            "CacheReadPricePerUnit": 0.75,
+            "CacheWritePricePerUnit": 9.375
           },
           "primaryKey": {
             "ID": "F6C1FDB8-7BEF-4946-B3F8-B194B474543A"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.496Z",
-            "checksum": "88415174c6743126a3193188bba7ffec59a4cdadcf5c1243a6955e9dbeb5d382"
+            "lastModified": "2026-06-03T16:00:04.578Z",
+            "checksum": "c990860085c3a4992d6b60279502a198f9f69c81cf623e1b8b673d0106d89362"
           }
         }
       ]
@@ -7302,14 +7456,16 @@
             "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.055,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.214Z",
-            "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
+            "lastModified": "2026-06-03T16:00:04.600Z",
+            "checksum": "65b086f201426b892dfaba67a9f6b75c5f13b810083e7f791e56646d21f79d83"
           }
         },
         {
@@ -7324,14 +7480,16 @@
             "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.055,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.359Z",
-            "checksum": "205e47ff8c1f9f5c1b3b56f88de1d17d530071305f56757f5404779e10106702"
+            "lastModified": "2026-06-03T16:00:04.600Z",
+            "checksum": "65b086f201426b892dfaba67a9f6b75c5f13b810083e7f791e56646d21f79d83"
           }
         },
         {
@@ -7346,14 +7504,16 @@
             "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025"
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025",
+            "CacheReadPricePerUnit": 0.055,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C0780A29-BC07-430C-B1B8-EB182183F820"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:48:44.496Z",
-            "checksum": "0f2c27d4efc734045aa29cd956382519b22ab8cdd25475bdfeef3c3995a3bdb0"
+            "lastModified": "2026-06-03T16:00:04.612Z",
+            "checksum": "5420344d4ebad0aa4369f5f87b4f40cd701495923b49e0d411ca0566887d9356"
           }
         }
       ]
@@ -7550,14 +7710,16 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Groq as of August 2025"
+            "Comments": "GPT-OSS-20B pricing on Groq as of August 2025",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "42B213D6-BC91-4B4B-88D7-2C7ADCF0D789"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.527Z",
-            "checksum": "a7c72b1dcb89ef89cc776658a4fa732d89fe30156bc01f3f4edc3de041cf7f69"
+            "lastModified": "2026-06-03T16:00:04.636Z",
+            "checksum": "1be7cdbad4b1998bdf90e0b6365f634e212dd6a890cd194838a5b18a43b0bfea"
           }
         },
         {
@@ -7572,14 +7734,16 @@
             "OutputPricePerUnit": 0.3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 21B parameters optimized for local use."
+            "Comments": "GPT-OSS-20B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 21B parameters optimized for local use.",
+            "CacheReadPricePerUnit": 0.035,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "6DF64770-2EA3-4804-A1F1-FD3B8542B4E0"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:57.512Z",
-            "checksum": "e2501d2c56460e098851d68e07c53e54bb272be4daef9ad9f55519c4a10461d7"
+            "lastModified": "2026-06-03T16:00:04.647Z",
+            "checksum": "d0a53529917519a3740506bb1e673fc3bbb97f7c5228a112eb2f2dbbd43d8c4e"
           }
         },
         {
@@ -7594,14 +7758,16 @@
             "OutputPricePerUnit": 0.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Amazon Bedrock (US East) as of March 2026"
+            "Comments": "GPT-OSS-20B pricing on Amazon Bedrock (US East) as of March 2026",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "DCCC3E1A-B295-45F4-BEA8-A7DB4BBF80FB"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.771Z",
-            "checksum": "b42d18d3b0fb7eb7c9b65492adf8f5a17673cfb731d13d9cdaad5678845e94f6"
+            "lastModified": "2026-06-03T16:00:04.622Z",
+            "checksum": "ef0c4b2e9c596d78a8c52ed5b8a34daa3e94492f273e9beb93840dc2c81b0134"
           }
         },
         {
@@ -7616,14 +7782,16 @@
             "OutputPricePerUnit": 0.1,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Azure Foundry (Preview) as of March 2026. Available via managed compute and Foundry Local."
+            "Comments": "GPT-OSS-20B pricing on Azure Foundry (Preview) as of March 2026. Available via managed compute and Foundry Local.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "70712E7F-50CF-412C-B427-68FBA196AB76"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.775Z",
-            "checksum": "95050383c21a2287d6d09c721b62721d40bd33387d88e9be96ac287673b26a49"
+            "lastModified": "2026-06-03T16:00:04.622Z",
+            "checksum": "a50bcf5dbb02079025f82a81fd8a606bd67e0982c7823387d84876613c7c04df"
           }
         }
       ]
@@ -7741,14 +7909,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 1.0 Ultra pricing on Vertex AI as of January 2025"
+            "Comments": "Gemini 1.0 Ultra pricing on Vertex AI as of January 2025",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "013CFD06-CC9C-4C96-A187-31ED863FAAB5"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.910Z",
-            "checksum": "34dc77f47377432125d4664ef5eee5f0cf54151267663985507c1c5c5feda4ff"
+            "lastModified": "2026-06-03T16:00:04.669Z",
+            "checksum": "61a8bb30a43e56ce8c7bd0a618b25becf5ce9f7ea6c18a79fa6416042af3088f"
           }
         }
       ]
@@ -7867,14 +8037,16 @@
             "OutputPricePerUnit": 0.3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 1.5 Flash pricing on Vertex AI as of January 2025. Input =128K tokens: $0.075/M, >128K: $0.15/M. Output =128K: $0.30/M, >128K: $0.60/M. Base tier pricing shown."
+            "Comments": "Gemini 1.5 Flash pricing on Vertex AI as of January 2025. Input =128K tokens: $0.075/M, >128K: $0.15/M. Output =128K: $0.30/M, >128K: $0.60/M. Base tier pricing shown.",
+            "CacheReadPricePerUnit": 0.0075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C6399A17-8519-4669-AD78-9E5DC2970E71"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.910Z",
-            "checksum": "3717b49f240efaa6e3dc56409025544d71ff4b4df645180ffef7b43d958f7f54"
+            "lastModified": "2026-06-03T16:00:04.682Z",
+            "checksum": "479c25ebc4408c1f8bf1aa8e0c334d94056b6d9afbb119beaa9d80b789bcb5f8"
           }
         }
       ]
@@ -7993,14 +8165,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.0 Flash pricing on Vertex AI as of January 2025. Text input: $0.15/M. Text output: $0.60/M. Audio input: $1.00/M. Video input: $3.00/M."
+            "Comments": "Gemini 2.0 Flash pricing on Vertex AI as of January 2025. Text input: $0.15/M. Text output: $0.60/M. Audio input: $1.00/M. Video input: $3.00/M.",
+            "CacheReadPricePerUnit": 0.015,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B47C8F74-DD9B-4DC2-A327-40ECB87E213F"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.911Z",
-            "checksum": "081b8562f7471a3016ac76fa3026e114f071cd7fd86b599844fe8fda2716a087"
+            "lastModified": "2026-06-03T16:00:04.704Z",
+            "checksum": "23ca5d4ec7a390b29d402027999690284d5f537a89a9770f6639e81301a1690a"
           }
         }
       ]
@@ -8120,14 +8294,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Pro Preview pricing on Vertex AI as of January 2025 (same as 2.5 Pro). Input =200K: $1.25/M, >200K: $2.50/M. Output =200K: $10.00/M, >200K: $15.00/M."
+            "Comments": "Gemini 2.5 Pro Preview pricing on Vertex AI as of January 2025 (same as 2.5 Pro). Input =200K: $1.25/M, >200K: $2.50/M. Output =200K: $10.00/M, >200K: $15.00/M.",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "127AE955-8C26-4053-AF81-25C03D347770"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.911Z",
-            "checksum": "431bdcd8abf2197550c14692787b42e761506aced638e136e8fa45f011660643"
+            "lastModified": "2026-06-03T16:00:04.716Z",
+            "checksum": "eb35fdf40ff33dddbbd1f8c7a3399830132a5ed36ffdcbcbf75811ecce8e19ab"
           }
         }
       ]
@@ -8247,14 +8423,16 @@
             "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash Preview pricing on Vertex AI as of January 2025 (same as 2.5 Flash)"
+            "Comments": "Gemini 2.5 Flash Preview pricing on Vertex AI as of January 2025 (same as 2.5 Flash)",
+            "CacheReadPricePerUnit": 0.03,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "24468BC7-A013-4CC8-AA58-7FECE3FB7EEE"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.912Z",
-            "checksum": "63ecc975f766e878b85eb2025dcf7ce7027c292be3934d7822e36d2df706e883"
+            "lastModified": "2026-06-03T16:00:04.740Z",
+            "checksum": "f8a615245290e1a29ae0dac1626e53d2f5f2389d2b98c0de1849610fa126c3ae"
           }
         }
       ]
@@ -8373,14 +8551,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.0 Flash-Lite pricing on Vertex AI as of January 2025 (same as 2.0 Flash)"
+            "Comments": "Gemini 2.0 Flash-Lite pricing on Vertex AI as of January 2025 (same as 2.0 Flash)",
+            "CacheReadPricePerUnit": 0.015,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "51933E2D-2595-4F15-8A65-79DFD2F6E8CA"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.913Z",
-            "checksum": "c0041a4416595ddc7671d2b099f2d66edd8ee1c7e6e9101d94a823c5d5163b00"
+            "lastModified": "2026-06-03T16:00:04.752Z",
+            "checksum": "0411f1c1e38c5f781fbc4a7636b0d5f2cbaf2ccacc2f3e399a670da2d0d6b932"
           }
         }
       ]
@@ -8499,14 +8679,16 @@
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 1.5 Pro pricing on Vertex AI as of January 2025. Input =128K tokens: $1.25/M, >128K: $2.50/M. Output =128K: $5.00/M, >128K: $10.00/M. Base tier pricing shown."
+            "Comments": "Gemini 1.5 Pro pricing on Vertex AI as of January 2025. Input =128K tokens: $1.25/M, >128K: $2.50/M. Output =128K: $5.00/M, >128K: $10.00/M. Base tier pricing shown.",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "3A52B620-239C-4978-8483-7ADD17738927"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.913Z",
-            "checksum": "d2186894c09211e7577bc62591e1830de132e8af6ae4a6c6254fca91e510e875"
+            "lastModified": "2026-06-03T16:00:04.775Z",
+            "checksum": "cf80a4f1800ea917949eccec3bf12aa42c7160e7ed2b188d87a5f043b9353bc9"
           }
         }
       ]
@@ -8634,14 +8816,16 @@
             "OutputPricePerUnit": 2.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 4.6 pricing on Cerebras as of late 2025. Ultra-fast inference at ~1000 tokens/sec. Preview model pricing - may change."
+            "Comments": "GLM 4.6 pricing on Cerebras as of late 2025. Ultra-fast inference at ~1000 tokens/sec. Preview model pricing - may change.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "CC4C9603-8359-4BE3-A353-136412256782"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.881Z",
-            "checksum": "a11714e9a8fd451452273ec93e082bd079996614df8afb2298e08723e2d331b9"
+            "lastModified": "2026-06-03T16:00:04.763Z",
+            "checksum": "945ee6a7e47af0fc7b2f7dcf7c7452aabc8592632c3f62685c29d840e95799a1"
           }
         },
         {
@@ -8656,14 +8840,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 4.6 pricing on OpenRouter as of September 2025. 355B parameter MoE model (32B active) with 200K context. Strong coding and agentic capabilities."
+            "Comments": "GLM 4.6 pricing on OpenRouter as of September 2025. 355B parameter MoE model (32B active) with 200K context. Strong coding and agentic capabilities.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "A64B8B3D-0AFC-411D-864D-335B8D282424"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.917Z",
-            "checksum": "cd339f6e3d4890e3ae69ac854f2fee05442356478735ead34c9dd12734f04910"
+            "lastModified": "2026-06-03T16:00:04.763Z",
+            "checksum": "ea89af950bd364e691e603b742e73c95cbb96d6d4925115af5bc7989860b6f3d"
           }
         },
         {
@@ -8678,14 +8864,16 @@
             "OutputPricePerUnit": 2.19,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 4.6 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model (32B active) with 200K context window."
+            "Comments": "GLM 4.6 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model (32B active) with 200K context window.",
+            "CacheReadPricePerUnit": 0.275,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E9D52260-1AE0-4685-8C19-991BA7C4DDC3"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.039Z",
-            "checksum": "22d44dde2ed6f20dad6817af2e8a622f1e71e3a353fa28dc35262a830f7011ca"
+            "lastModified": "2026-06-03T16:00:04.790Z",
+            "checksum": "49a9e19864683cba977ed148624cb38d68ea0771da4d6082d425cea3db3f46b3"
           }
         }
       ]
@@ -8790,14 +8978,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5 Mini pricing on Azure as of August 2025"
+            "Comments": "GPT-5 Mini pricing on Azure as of August 2025",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "866EF5E1-67BF-4090-840F-0C51C88228BA"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.195Z",
-            "checksum": "54f4121ce9bd283b85971983b4f55929bd3160f91d8d4ba82133fa6b4b4d0e99"
+            "lastModified": "2026-06-03T16:00:04.832Z",
+            "checksum": "bec4201610b52863ee387f28cd6a740b562a8860026fce54674180d0f64b9d26"
           }
         },
         {
@@ -8812,14 +9002,16 @@
             "OutputPricePerUnit": 2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5 Mini pricing on OpenAI as of August 2025"
+            "Comments": "GPT-5 Mini pricing on OpenAI as of August 2025",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "4D4CB947-AA09-48E6-9FF3-43C6AA75D58E"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.207Z",
-            "checksum": "0839c603df128d0b7c80e513f67ca0722b23f7609cddabe45f03a06d721fadf9"
+            "lastModified": "2026-06-03T16:00:04.818Z",
+            "checksum": "374b8006ae844599ebd87be6251c67462a16591ac630743c1529fde51158461b"
           }
         }
       ]
@@ -8924,14 +9116,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5 pricing on Azure as of August 2025"
+            "Comments": "GPT-5 pricing on Azure as of August 2025",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "32256481-17B2-4D99-BA39-99C969462459"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.221Z",
-            "checksum": "a01e22a58be227896fbf1917d3332585e593f768ae36e1fd2dc9e34a55c55344"
+            "lastModified": "2026-06-03T16:00:04.857Z",
+            "checksum": "3dc82f5966154351869b38aac622dec31a45eebf78aaab1f6116e2571b2c8b2b"
           }
         },
         {
@@ -8946,14 +9140,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5 pricing on OpenAI as of August 2025"
+            "Comments": "GPT-5 pricing on OpenAI as of August 2025",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5F8BC862-CFAF-4DD9-BEB0-C723C8447597"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.231Z",
-            "checksum": "29f1ca753cfc9b0919f5a532895e6628ab530d751626f76726601e81d0b8cf8b"
+            "lastModified": "2026-06-03T16:00:04.845Z",
+            "checksum": "afa0a8d594a450514f58ca5971b97289a270e9e6781cc2a122a56e77714afd24"
           }
         }
       ]
@@ -9058,14 +9254,16 @@
             "OutputPricePerUnit": 0.9,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Codestral 2508 pass-through pricing on OpenRouter as of August 2025"
+            "Comments": "Codestral 2508 pass-through pricing on OpenRouter as of August 2025",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "BA60D6EF-093A-4D25-8B25-8E45CF7B6310"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.394Z",
-            "checksum": "1b743d94d2f8f1a717cc85e03b8e1d3fb2edc3a95b7bd31a3115ee92fb23f98a"
+            "lastModified": "2026-06-03T16:00:04.866Z",
+            "checksum": "e1d79dd7cfe1eeb27db7d75ec2f8436056926b3ed6af9d054450e21a12c10325"
           }
         },
         {
@@ -9080,14 +9278,16 @@
             "OutputPricePerUnit": 0.9,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Codestral 2508 pricing on Mistral as of August 2025"
+            "Comments": "Codestral 2508 pricing on Mistral as of August 2025",
+            "CacheReadPricePerUnit": 0.03,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "6BC32706-CA3A-4F04-9B85-FC28AA9ADED0"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.409Z",
-            "checksum": "f838da3a402cf4b048880c7f0fe96dd98087c6846ff3c3940ccf5735bb1e50a1"
+            "lastModified": "2026-06-03T16:00:04.881Z",
+            "checksum": "45613204c3d6ad66eed4710aa18ac786a205c24f544474c11b9a0db864e4b7f6"
           }
         }
       ]
@@ -9192,14 +9392,16 @@
             "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5 Nano pricing on OpenAI as of August 2025"
+            "Comments": "GPT-5 Nano pricing on OpenAI as of August 2025",
+            "CacheReadPricePerUnit": 0.005,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "060C9269-CCA4-41A0-99DC-55A95D17A3E0"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.422Z",
-            "checksum": "29b9cca77683a1b23b1c2f0b314713bef5aad4620c1bf1efb45f8ee650e6ec44"
+            "lastModified": "2026-06-03T16:00:04.893Z",
+            "checksum": "5e4de145d0a1f05ade4868180c2e33e85b06d4b093461e14b41b1da66b62db37"
           }
         },
         {
@@ -9214,14 +9416,16 @@
             "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5 Nano pricing on Azure as of August 2025"
+            "Comments": "GPT-5 Nano pricing on Azure as of August 2025",
+            "CacheReadPricePerUnit": 0.005,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "1A383960-A7D7-457F-81CC-A40DB36F0098"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.432Z",
-            "checksum": "b90826981de2fc05b17fa1c78897d95f676b7e539877c77fd5c4f09a57685e2a"
+            "lastModified": "2026-06-03T16:00:04.904Z",
+            "checksum": "25e605eb40e418983aee7985fee9fa3b43bb3b03d8f191150862df3d1f909859"
           }
         }
       ]
@@ -9326,14 +9530,16 @@
             "OutputPricePerUnit": 75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.1 pricing on Amazon Bedrock as of August 2025"
+            "Comments": "Claude Opus 4.1 pricing on Amazon Bedrock as of August 2025",
+            "CacheReadPricePerUnit": 1.5,
+            "CacheWritePricePerUnit": 18.75
           },
           "primaryKey": {
             "ID": "64186C02-8782-41C1-B347-415D149133FC"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.596Z",
-            "checksum": "e53f1cb5a4277254e55ee2744f34302a6b67d24059b634f729d048dba9cee017"
+            "lastModified": "2026-06-03T16:00:04.928Z",
+            "checksum": "b302b2aabb484fee9fbcc4f8613d9a467a29d8f5535697cede822b82b3ed7adc"
           }
         },
         {
@@ -9348,14 +9554,16 @@
             "OutputPricePerUnit": 75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.1 pricing on Anthropic as of August 2025"
+            "Comments": "Claude Opus 4.1 pricing on Anthropic as of August 2025",
+            "CacheReadPricePerUnit": 1.5,
+            "CacheWritePricePerUnit": 18.75
           },
           "primaryKey": {
             "ID": "28C400E6-4DAC-4DE2-915C-8525D77FE92C"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.614Z",
-            "checksum": "08f8989b7d64dbfa813b522c8ecc02fee17b4f8c77c165681639fd62836e6c5c"
+            "lastModified": "2026-06-03T16:00:04.941Z",
+            "checksum": "76d18cb5586cf2463eaf20801556bc0adf2f6a339ce3f96302e444e2c358ed1d"
           }
         }
       ]
@@ -9484,14 +9692,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 4.7 pricing on OpenRouter as of December 2025. Latest Z.AI flagship with enhanced coding (\"Vibe Coding\"), 200K context, up to 128K output. Strong SWE-bench and LiveCodeBench performance."
+            "Comments": "GLM 4.7 pricing on OpenRouter as of December 2025. Latest Z.AI flagship with enhanced coding (\"Vibe Coding\"), 200K context, up to 128K output. Strong SWE-bench and LiveCodeBench performance.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B9CC2748-2B3B-49B3-A2A3-6F3908ADF5A5"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.891Z",
-            "checksum": "230780fd3c8eff1f7aab001cc226112b47a9bd0bd98fd45a3e325408c36aa984"
+            "lastModified": "2026-06-03T16:00:05.305Z",
+            "checksum": "1c89c584188e9c72e2f407daff43ac252009e8e6bd4050032bda3e9d338de33d"
           }
         },
         {
@@ -9506,14 +9716,16 @@
             "OutputPricePerUnit": 2.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Cerebras inference pricing for GLM-4.7 as of January 2026. Preview model for evaluation purposes. Delivers ~1,000 tokens/second. Pay-as-you-go tier starts at $10 with generous rate limits (24M tokens/day)."
+            "Comments": "Cerebras inference pricing for GLM-4.7 as of January 2026. Preview model for evaluation purposes. Delivers ~1,000 tokens/second. Pay-as-you-go tier starts at $10 with generous rate limits (24M tokens/day).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "BC44A754-7CAC-4A46-A72C-C0B439D3EE07"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:59.213Z",
-            "checksum": "261157f688df0803a8d064eb0e6daf612116ab1239575d616f159ca218ec7dec"
+            "lastModified": "2026-06-03T16:00:05.306Z",
+            "checksum": "940ded32f20613d9744275b88efc8ab6cb427b841cce916a6ac2dcf872621b95"
           }
         },
         {
@@ -9528,14 +9740,16 @@
             "OutputPricePerUnit": 2.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 4.7 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model with 200K context and up to 128K output."
+            "Comments": "GLM 4.7 pricing on Fireworks.ai as of January 2026. 355B parameter MoE model with 200K context and up to 128K output.",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "430DE5A5-46D7-4E90-A091-D40E752D8DF2"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:59.200Z",
-            "checksum": "384d80529990a90bf25280dccf8180ec76ddf53becccbfa15b9e9cd113a8a3db"
+            "lastModified": "2026-06-03T16:00:05.321Z",
+            "checksum": "3c93c36dc4976a62b57f08faf57a6ca242feda213d5de7949f0243786d4b29ea"
           }
         }
       ]
@@ -9657,14 +9871,16 @@
             "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash-Lite pricing on Vertex AI as of January 2026"
+            "Comments": "Gemini 2.5 Flash-Lite pricing on Vertex AI as of January 2026",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F16A2D71-B4B5-4FE5-B9AC-22BED68BFC40"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.627Z",
-            "checksum": "f30e6cff6eb3dafca5c94e3adc86ef735357b2bbe056f1a63a16ec7a55ee53a2"
+            "lastModified": "2026-06-03T16:00:04.953Z",
+            "checksum": "9e96e6d21791ac456c71f72d932f92b68d650a3d5a4c4fbf2344ffc10c910cae"
           }
         },
         {
@@ -9679,14 +9895,16 @@
             "OutputPricePerUnit": 0.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash-Lite pricing on Google as of January 2025"
+            "Comments": "Gemini 2.5 Flash-Lite pricing on Google as of January 2025",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "CA9801E9-2A63-4F8A-9357-800A4ADE9330"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.639Z",
-            "checksum": "20353b83a6aa511a60ebd4030e760563fddec3af66b16c388e053017451ed098"
+            "lastModified": "2026-06-03T16:00:04.967Z",
+            "checksum": "c573420fef11ce3c5ada059cf63efd845d67ab82c220fc441448445654486cbb"
           }
         }
       ]
@@ -9808,14 +10026,16 @@
             "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash pricing on Google as of January 2025"
+            "Comments": "Gemini 2.5 Flash pricing on Google as of January 2025",
+            "CacheReadPricePerUnit": 0.03,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "8548F400-4BE2-4D13-A67D-6C73ABE47D9E"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.788Z",
-            "checksum": "e8d8677ed4781449ee938e40634f33bd1451598aa08d0fe5501b92064b580315"
+            "lastModified": "2026-06-03T16:00:04.990Z",
+            "checksum": "5022e378fa21ee1447898ea892161159656f5b65077be7ff66267522e6457bb4"
           }
         },
         {
@@ -9830,14 +10050,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Flash pricing on Vertex AI as of January 2026"
+            "Comments": "Gemini 2.5 Flash pricing on Vertex AI as of January 2026",
+            "CacheReadPricePerUnit": 0.015,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "BEF6C6CC-BED3-4AF6-AC9E-A20615C5C48E"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.799Z",
-            "checksum": "222988d0981916bc7d324cf9f5ff0b4c59c2f90de2f7522b9dc4a7af71620388"
+            "lastModified": "2026-06-03T16:00:05.003Z",
+            "checksum": "a815043954d0443bd96c00d9422229a983743f7ef45fc450b0699cd00740b06a"
           }
         }
       ]
@@ -9959,14 +10181,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Pro pricing on Vertex AI as of January 2025. Input =200K tokens: $1.25/M, >200K: $2.50/M. Output =200K: $10.00/M, >200K: $15.00/M. Base tier pricing shown."
+            "Comments": "Gemini 2.5 Pro pricing on Vertex AI as of January 2025. Input =200K tokens: $1.25/M, >200K: $2.50/M. Output =200K: $10.00/M, >200K: $15.00/M. Base tier pricing shown.",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "EACFE17A-1522-4FA2-BE37-0E402A222D68"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.916Z",
-            "checksum": "09b004b5acded8b54fbad0f429420d92dcb7eed61410b517e2e2bd67f214c5ef"
+            "lastModified": "2026-06-03T16:00:05.028Z",
+            "checksum": "df199a41b2d58ac1b7cbef1e0fab0a484b5f05715a52b06e99ba200ae1f8845e"
           }
         },
         {
@@ -9981,14 +10205,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 2.5 Pro pricing on Google as of January 2025"
+            "Comments": "Gemini 2.5 Pro pricing on Google as of January 2025",
+            "CacheReadPricePerUnit": 0.125,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "A50024D8-76BF-46B3-9209-8F53993F4550"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.948Z",
-            "checksum": "b031b5c22800a6e5a8d734882600d1265c130325362f3ecc61635a609d176e0b"
+            "lastModified": "2026-06-03T16:00:05.039Z",
+            "checksum": "88767922e870bfd22f8e4f43adc31cd417cfb0f48ff45f9c075dfbe5b634da84"
           }
         }
       ]
@@ -10208,14 +10434,16 @@
             "OutputPricePerUnit": 0.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Groq as of August 2025"
+            "Comments": "GPT-OSS-120B pricing on Groq as of August 2025",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "37F35DF1-C29A-4ECA-BE52-0A8691842527"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.960Z",
-            "checksum": "44728eb7aa528c02b6790931c04b22c556d0ee9fb3151f09c702beb699469271"
+            "lastModified": "2026-06-03T16:00:05.063Z",
+            "checksum": "8cdfc272173cdfbf6b05154d830358d2dbb71e2c62fb5a90513131bcdbc8c6d4"
           }
         },
         {
@@ -10230,14 +10458,16 @@
             "OutputPricePerUnit": 0.69,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Cerebras as of August 2025"
+            "Comments": "GPT-OSS-120B pricing on Cerebras as of August 2025",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E6FD1FF0-B83B-4A6A-A5A0-944F73209188"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:58.971Z",
-            "checksum": "fd86a327789862d6217b844d19c571897d3b8e2f2269fc0cb64f57a5dccc50ad"
+            "lastModified": "2026-06-03T16:00:05.049Z",
+            "checksum": "e4e599ca36b6a7acac258af6315a91a4d669434de354b69acb151cd1c7c15742"
           }
         },
         {
@@ -10252,14 +10482,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 117B parameters and configurable reasoning."
+            "Comments": "GPT-OSS-120B pricing on Fireworks.ai as of January 2026. OpenAI's open-weight model with 117B parameters and configurable reasoning.",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "A568E672-C350-4791-AF97-410C3AD45067"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:59.066Z",
-            "checksum": "e91bca74b29ccd315607e650ebf335be2e8706ade444d4d9eb2ff80bdc20e812"
+            "lastModified": "2026-06-03T16:00:05.076Z",
+            "checksum": "0ad269af067bcdb52305aad4e80104576d80584b17a99e5f1887d9d6b37bc607"
           }
         },
         {
@@ -10274,14 +10506,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Amazon Bedrock (US East) as of March 2026"
+            "Comments": "GPT-OSS-120B pricing on Amazon Bedrock (US East) as of March 2026",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "678C3B1B-91FA-4019-B1AE-BDD19A8AE089"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.784Z",
-            "checksum": "b3c40946f8ac065892d854524e137d5475d152e493047c8cee5e2293daa90571"
+            "lastModified": "2026-06-03T16:00:05.049Z",
+            "checksum": "faebb9c67b39c9fe05596d80092491a2a61661595890dd079d3659e536f32a54"
           }
         },
         {
@@ -10296,14 +10530,16 @@
             "OutputPricePerUnit": 0.1,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Azure Foundry (Preview, GlobalStandard SKU) as of March 2026. Requires Foundry project deployment."
+            "Comments": "GPT-OSS-120B pricing on Azure Foundry (Preview, GlobalStandard SKU) as of March 2026. Requires Foundry project deployment.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "83592F9D-AB6E-44AF-851A-8337D2C108ED"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.789Z",
-            "checksum": "fced76b13eab22911d16214e1f6cfdb253cc5567374f091d17b4f5205777fd1a"
+            "lastModified": "2026-06-03T16:00:05.049Z",
+            "checksum": "b85a8d507995212ed5700f89237290ba4e75fde7c1537be017e0c3a77249539c"
           }
         }
       ]
@@ -10408,14 +10644,16 @@
             "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2.5 pricing on Moonshot AI as of January 2026. API access via Kimi official API. Released January 27, 2026 as 1T parameter native multimodal model with 256K context window and reasoning capabilities."
+            "Comments": "Kimi K2.5 pricing on Moonshot AI as of January 2026. API access via Kimi official API. Released January 27, 2026 as 1T parameter native multimodal model with 256K context window and reasoning capabilities.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "0DF125E9-8921-47B5-AA73-68DEF35DCFF1"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:59.077Z",
-            "checksum": "2bbb9d13ab14584e19e016554d6174f406291a258c2cc54823bed360632e2ab3"
+            "lastModified": "2026-06-03T16:00:05.050Z",
+            "checksum": "575f139a62177b139265427846b742cc23560f7feb57c3f61278b1b0446c62af"
           }
         },
         {
@@ -10430,14 +10668,16 @@
             "OutputPricePerUnit": 3,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2.5 pricing on Fireworks.ai as of January 2026. Cached input tokens available at $0.10/1M. Features 256K context window and reasoning capabilities."
+            "Comments": "Kimi K2.5 pricing on Fireworks.ai as of January 2026. Cached input tokens available at $0.10/1M. Features 256K context window and reasoning capabilities.",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "2E80CF95-0BD8-4673-BB84-8BFD23BF03A7"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:26:59.088Z",
-            "checksum": "e45512d64096a5a764eaee409434749f48aef732c1a381ca67f7725c7da52d7f"
+            "lastModified": "2026-06-03T16:00:05.087Z",
+            "checksum": "49e515d99d531c1a13273ad532179ea33bf84fae1b26c6c64f38506ab4e661b9"
           }
         }
       ]
@@ -10520,14 +10760,16 @@
             "OutputPricePerUnit": 3.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 5 pricing on Z.AI as of February 2026. 745B parameter MoE model (44B active) with 200K context and 128K output. Cached input tokens available at $0.20/1M. State-of-the-art open-source model rivaling Claude Opus on benchmarks."
+            "Comments": "GLM 5 pricing on Z.AI as of February 2026. 745B parameter MoE model (44B active) with 200K context and 128K output. Cached input tokens available at $0.20/1M. State-of-the-art open-source model rivaling Claude Opus on benchmarks.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5A453FFB-DBF1-4363-B08F-7FC1AAB158CA"
           },
           "sync": {
-            "lastModified": "2026-02-12T19:54:35.268Z",
-            "checksum": "5432e8153bdad5642a36a0c2cf7b7f8386a23afe62befa03db1ef7b62d34d343"
+            "lastModified": "2026-06-03T16:00:05.644Z",
+            "checksum": "388f731ff7a43ba4865d2043fb6222f7910975019cce41185d3a2a90d1590813"
           }
         }
       ]
@@ -10655,14 +10897,16 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.5 pricing on MiniMax as of February 2026. 230B MoE model (10B active) with 204K context and 128K output. Cached input available at $0.03/1M tokens."
+            "Comments": "MiniMax-M2.5 pricing on MiniMax as of February 2026. 230B MoE model (10B active) with 204K context and 128K output. Cached input available at $0.03/1M tokens.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "0441C917-DD13-4978-893A-BA0AA82EB1FB"
           },
           "sync": {
-            "lastModified": "2026-02-27T20:01:06.103Z",
-            "checksum": "76a4a790bd369b765fae6d4d443221e4ca924637b188403d4f69a0ee6d2aab6e"
+            "lastModified": "2026-06-03T16:00:05.117Z",
+            "checksum": "e0d621fc0f6994a790cfa85da8ca24ad092938632bf3e96c8601f2aeb84dce2f"
           }
         },
         {
@@ -10677,14 +10921,16 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.5 pricing on OpenRouter as of February 2026. Routed inference - provider may vary."
+            "Comments": "MiniMax-M2.5 pricing on OpenRouter as of February 2026. Routed inference - provider may vary.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "4D535607-2673-459C-8CAF-170BBFAC7D08"
           },
           "sync": {
-            "lastModified": "2026-02-27T20:01:06.117Z",
-            "checksum": "9185a8217108331e796f7e49aa63c0685959b52433470f61e8d7038f3b18d12e"
+            "lastModified": "2026-06-03T16:00:05.096Z",
+            "checksum": "7bf6feb5e537bb36321bb9d343c92bc15bbede750c95d90df892948d069f2785"
           }
         },
         {
@@ -10699,14 +10945,16 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.5 pricing on Fireworks.ai as of February 2026. Serverless deployment with cached input at $0.03/1M tokens."
+            "Comments": "MiniMax-M2.5 pricing on Fireworks.ai as of February 2026. Serverless deployment with cached input at $0.03/1M tokens.",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F740C7C6-8B3E-48AC-9897-0565909AB3ED"
           },
           "sync": {
-            "lastModified": "2026-02-27T20:01:06.130Z",
-            "checksum": "54c62d3f9c3c22237cc8b7c15f18188575c517f226562000ee0175b93ccdb6fc"
+            "lastModified": "2026-06-03T16:00:05.112Z",
+            "checksum": "89da4ad8d4d93cb0643d71af1d6b43ea1667a615ff005c60aa6ceaa582efa43d"
           }
         }
       ]
@@ -10788,14 +11036,16 @@
             "OutputPricePerUnit": 2.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.5-highspeed pricing on MiniMax as of February 2026. 2x standard M2.5 pricing for ~100 tps output speed (vs ~60 tps standard). Same model capability, optimized for low-latency inference."
+            "Comments": "MiniMax-M2.5-highspeed pricing on MiniMax as of February 2026. 2x standard M2.5 pricing for ~100 tps output speed (vs ~60 tps standard). Same model capability, optimized for low-latency inference.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "66D273F8-BDB7-44C5-9986-BE4E36A68E53"
           },
           "sync": {
-            "lastModified": "2026-02-27T20:01:06.142Z",
-            "checksum": "8780c96d128a346efb9abb518343dd6b97f3a40142b610abc62587bf3b4a12ca"
+            "lastModified": "2026-06-03T16:00:05.119Z",
+            "checksum": "88e401667a364b5365ba303dc5ec18751d9f2370c36721f484ff090ad51dcc0a"
           }
         }
       ]
@@ -10920,14 +11170,16 @@
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.1 Pro Preview pricing on Google AI Studio as of February 2026. Prompts <=200K: $2.00/$12.00 per 1M tokens. Prompts >200K: $4.00/$18.00 per 1M tokens. Cached input: $0.20/1M (<=200K), $0.40/1M (>200K). Base tier pricing shown."
+            "Comments": "Gemini 3.1 Pro Preview pricing on Google AI Studio as of February 2026. Prompts <=200K: $2.00/$12.00 per 1M tokens. Prompts >200K: $4.00/$18.00 per 1M tokens. Cached input: $0.20/1M (<=200K), $0.40/1M (>200K). Base tier pricing shown.",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "BE29F384-C9D6-4386-9FF6-AA0DBCA84640"
           },
           "sync": {
-            "lastModified": "2026-02-27T20:01:06.368Z",
-            "checksum": "0ceb57a5f26018783cc59dafb9518eaf9d6c45d0ddb73d2734398b5b0a287c62"
+            "lastModified": "2026-06-03T16:00:05.345Z",
+            "checksum": "5c18e9ab5f384ab16e5e4af56ff1e9e979e25f97ed41fcd66d720e111956a573"
           }
         },
         {
@@ -10942,14 +11194,16 @@
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.1 Pro Preview pricing on Vertex AI as of February 2026. Standard tier: $2.00/$12.00 per 1M tokens (<=200K), $4.00/$18.00 (>200K). Priority tier: $3.60/$21.60 (<=200K). Flex/Batch: $1.00/$6.00 (<=200K). Cached input: $0.20/1M. Base standard tier pricing shown."
+            "Comments": "Gemini 3.1 Pro Preview pricing on Vertex AI as of February 2026. Standard tier: $2.00/$12.00 per 1M tokens (<=200K), $4.00/$18.00 (>200K). Priority tier: $3.60/$21.60 (<=200K). Flex/Batch: $1.00/$6.00 (<=200K). Cached input: $0.20/1M. Base standard tier pricing shown.",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "ED052BC7-82BC-44D9-8937-5B6D1B7AE85B"
           },
           "sync": {
-            "lastModified": "2026-02-27T20:01:06.378Z",
-            "checksum": "0e76f73b2aa2bddac011513788c48d7510ae0a0ddc5bc84d2053ed235f4522e2"
+            "lastModified": "2026-06-03T16:00:05.359Z",
+            "checksum": "d9cd85ae62b10ebb0ea767b5cbe6f11bb83cd83efcfe19ef01ac798f4337d78e"
           }
         }
       ]
@@ -11031,14 +11285,16 @@
             "OutputPricePerUnit": 2.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.5 Plus pricing via OpenRouter/Alibaba Cloud as of February 2026. Standard tier (<=256K context): $0.40/$2.40 per 1M tokens. Extended context (>256K): $0.50/$3.00 per 1M tokens. Base tier pricing shown."
+            "Comments": "Qwen 3.5 Plus pricing via OpenRouter/Alibaba Cloud as of February 2026. Standard tier (<=256K context): $0.40/$2.40 per 1M tokens. Extended context (>256K): $0.50/$3.00 per 1M tokens. Base tier pricing shown.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "6CD0EB92-385B-41CB-BDAD-0C073FC049E1"
           },
           "sync": {
-            "lastModified": "2026-03-02T00:20:18.217Z",
-            "checksum": "912566e5f23932b1766d45da013ba8f640cec3364a9948685140708e1a2bfade"
+            "lastModified": "2026-06-03T16:00:05.127Z",
+            "checksum": "0d7dfa47e27b04be7a66e5f6de7dd90ca508f28be1750ce90b772123f07cbe76"
           }
         }
       ]
@@ -11163,14 +11419,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.1 Flash-Lite Preview pricing on Google AI Studio as of March 2026. $0.25/$1.50 per 1M tokens. Context caching available (up to 75% cost reduction). Batch processing available at 50% discount."
+            "Comments": "Gemini 3.1 Flash-Lite Preview pricing on Google AI Studio as of March 2026. $0.25/$1.50 per 1M tokens. Context caching available (up to 75% cost reduction). Batch processing available at 50% discount.",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5F471671-2088-43B0-B415-1CFED6D2B45F"
           },
           "sync": {
-            "lastModified": "2026-03-10T18:32:00.103Z",
-            "checksum": "4d509b9c0d7dc24edb9eab6e8b88497413358d54f6f012d345cea463585553ac"
+            "lastModified": "2026-06-03T16:00:05.373Z",
+            "checksum": "01f7da072dc101b8fac042df666d9421df8fc34e381da033907c1d307505e3db"
           }
         },
         {
@@ -11185,14 +11443,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.1 Flash-Lite Preview pricing on Vertex AI as of March 2026. $0.25/$1.50 per 1M tokens."
+            "Comments": "Gemini 3.1 Flash-Lite Preview pricing on Vertex AI as of March 2026. $0.25/$1.50 per 1M tokens.",
+            "CacheReadPricePerUnit": 0.025,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "FE590EAE-271B-4990-B336-FFF5034D1978"
           },
           "sync": {
-            "lastModified": "2026-03-10T18:32:00.119Z",
-            "checksum": "ff57b88f4c32d8493e04437686e483b91a9f159310e059b8a7d9aa61eb9b6878"
+            "lastModified": "2026-06-03T16:00:05.385Z",
+            "checksum": "fd37ffd3fc519591ddb6942e98592ced469304532856c402488d9ca8c9980344"
           }
         }
       ]
@@ -11298,14 +11558,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4 pricing on OpenAI as of March 2026. $2.50/$15.00 per 1M tokens. Pro variant available at $30/$180 per 1M tokens. Extended context (>272K input) billed at 2x input and 1.5x output. Cached input available. Batch API offers 50% discount."
+            "Comments": "GPT 5.4 pricing on OpenAI as of March 2026. $2.50/$15.00 per 1M tokens. Pro variant available at $30/$180 per 1M tokens. Extended context (>272K input) billed at 2x input and 1.5x output. Cached input available. Batch API offers 50% discount.",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "86A7C1E4-170F-4313-8E05-A81CB158761D"
           },
           "sync": {
-            "lastModified": "2026-03-10T18:32:00.188Z",
-            "checksum": "6f8f88ec077ff8d80920c57d3bea62418145aecbd57951277ede00009e23cc4e"
+            "lastModified": "2026-06-03T16:00:05.409Z",
+            "checksum": "dc3dc1f2af5996d06f21f166bfeaf078347fae2bd9c9022f1b689a43e66cdf92"
           }
         },
         {
@@ -11320,14 +11582,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.4 pricing on Azure OpenAI (Global Standard) as of March 2026"
+            "Comments": "GPT-5.4 pricing on Azure OpenAI (Global Standard) as of March 2026",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "A8398816-238C-4047-A525-307CEA36E7A7"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.723Z",
-            "checksum": "5fc0c8678d0937b5c99fbcc32365c4505ffb903473e11741d80414b20720c7e0"
+            "lastModified": "2026-06-03T16:00:05.424Z",
+            "checksum": "393d837ad133ca901f79f16f9e8b1193b0f716a63ab677724a659e1f648fe249"
           }
         }
       ]
@@ -11433,14 +11697,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing. Fast mode available at 6x rates ($30/$150 per 1M tokens)."
+            "Comments": "Claude Opus 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing. Fast mode available at 6x rates ($30/$150 per 1M tokens).",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "8D1DE4D6-1638-4879-ABEB-D5405DCD9599"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.625Z",
-            "checksum": "e22cf8eaedfc7d68742863924967e3fea56ab2878141fc10e1f251079067c989"
+            "lastModified": "2026-06-03T16:00:05.451Z",
+            "checksum": "dc907dd439ee27c9abf8206de2374de8a78cc2422bd227d65524749311eb4208"
           }
         },
         {
@@ -11455,14 +11721,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.6 pricing on Amazon Bedrock as of March 2026"
+            "Comments": "Claude Opus 4.6 pricing on Amazon Bedrock as of March 2026",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "F05316EC-CE9F-4B4B-B450-DBDED24C336A"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.713Z",
-            "checksum": "dec3b6313fb2f2426efe655851250373c7392a882b4577d3c476220ec097cb65"
+            "lastModified": "2026-06-03T16:00:05.438Z",
+            "checksum": "a2ef2cfe7e1ddb8e9808c618b6ec385ac1b773d8d5de46ad8a538108465d6b00"
           }
         }
       ]
@@ -11568,14 +11836,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing (no long-context surcharge unlike Sonnet 4.5)."
+            "Comments": "Claude Sonnet 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing (no long-context surcharge unlike Sonnet 4.5).",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": 3.75
           },
           "primaryKey": {
             "ID": "A09B493C-789D-4B2B-8F8E-892043149DCE"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.631Z",
-            "checksum": "f10e9a9185026b2680dc4be75f339790aaefabaeb35a77aafbd708fe7c17b8ad"
+            "lastModified": "2026-06-03T16:00:05.496Z",
+            "checksum": "78dfc21a39926195565cbcb4f919dd241bfc3f8d7b5045054369f2c4ff642ad7"
           }
         },
         {
@@ -11590,14 +11860,16 @@
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 4.6 pricing on Amazon Bedrock as of March 2026"
+            "Comments": "Claude Sonnet 4.6 pricing on Amazon Bedrock as of March 2026",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": 3.75
           },
           "primaryKey": {
             "ID": "D5F7BE82-07BC-468F-875B-49715B58A1C9"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.714Z",
-            "checksum": "03e3768d8ab7550dd2802cc8809a17109113d54a871c20d8f72be80e90e05d9e"
+            "lastModified": "2026-06-03T16:00:05.474Z",
+            "checksum": "eedc90124194208213f6583bb5129a1669b68fde4b712bcdef7575bc6adbef7e"
           }
         }
       ]
@@ -11703,14 +11975,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.7 pricing on Anthropic as of April 2026. Same per-token rates as Opus 4.6 ($5/$25 per 1M tokens). Full 1M context at standard pricing. Note: new tokenizer may use up to 1.35x more tokens per text, increasing effective cost per request."
+            "Comments": "Claude Opus 4.7 pricing on Anthropic as of April 2026. Same per-token rates as Opus 4.6 ($5/$25 per 1M tokens). Full 1M context at standard pricing. Note: new tokenizer may use up to 1.35x more tokens per text, increasing effective cost per request.",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "9A677E59-84B4-4933-9DB0-FCDA92DB3855"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.960Z",
-            "checksum": "84f1183f0ea1aa5a718ba2db85613842b836129b87d0baf404b434adb1794d24"
+            "lastModified": "2026-06-03T16:00:05.660Z",
+            "checksum": "88af1f34daae4fa807f49e19d85a99b8067021c2753ce2211afb7c07d301c00d"
           }
         },
         {
@@ -11725,14 +11999,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.7 pricing on Amazon Bedrock as of April 2026"
+            "Comments": "Claude Opus 4.7 pricing on Amazon Bedrock as of April 2026",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "5965C2B3-098A-4FD1-84F2-2B8467A17BFC"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.979Z",
-            "checksum": "217697c02121a9e3b4bc648da7d66cac9f19fd9f73f42c1b657036e5322250d3"
+            "lastModified": "2026-06-03T16:00:05.673Z",
+            "checksum": "1e81daded9aeb32b4d0f6cd27d7b01e7c1a3cea09882da6308b7ed65c4c232f3"
           }
         }
       ]
@@ -11838,14 +12114,16 @@
             "OutputPricePerUnit": 4.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4-mini pricing on OpenAI as of March 2026. $0.75/$4.50 per 1M tokens — ~70% cheaper input than full GPT 5.4."
+            "Comments": "GPT 5.4-mini pricing on OpenAI as of March 2026. $0.75/$4.50 per 1M tokens — ~70% cheaper input than full GPT 5.4.",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "852C0799-1BF7-4F19-9AC9-58D2FEA4504C"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.371Z",
-            "checksum": "a0139eba2929d829d4e5e5624443f4f9aac06e15315b4b24d4f4efd534c7a87f"
+            "lastModified": "2026-06-03T16:00:05.509Z",
+            "checksum": "ae550216353b4ab4beadb4742c4fa40847f754d966dbbf6206f397b778031394"
           }
         },
         {
@@ -11860,14 +12138,16 @@
             "OutputPricePerUnit": 4.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4-mini pricing on Azure OpenAI as of March 2026"
+            "Comments": "GPT 5.4-mini pricing on Azure OpenAI as of March 2026",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "90333D30-A33E-41D8-9620-2A5742140107"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.474Z",
-            "checksum": "f338b438893fb62d84f24eda6a27394799a48ec1123a832f9f44afda854ab8cd"
+            "lastModified": "2026-06-03T16:00:05.533Z",
+            "checksum": "f555b2ee7d036ef35d51aaa036217a7712cc895a3d75a1a0a96149079ea2c982"
           }
         }
       ]
@@ -11973,14 +12253,16 @@
             "OutputPricePerUnit": 1.25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4-nano pricing on OpenAI as of March 2026. $0.20/$1.25 per 1M tokens — undercuts most alternatives on input price. Suited for classification, extraction, ranking, and sub-agent workloads."
+            "Comments": "GPT 5.4-nano pricing on OpenAI as of March 2026. $0.20/$1.25 per 1M tokens — undercuts most alternatives on input price. Suited for classification, extraction, ranking, and sub-agent workloads.",
+            "CacheReadPricePerUnit": 0.02,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "F0766275-0DD3-4536-953E-620D04F0FE0C"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.536Z",
-            "checksum": "bd4972362c310a4bfcd6f4c9e76162be131677cceb7863de5ae8cca43ba9b535"
+            "lastModified": "2026-06-03T16:00:05.561Z",
+            "checksum": "eae22b8d4dacd65555aff69f76892a12b6daeb017ac5bf9eaf80cc7b80b79d54"
           }
         },
         {
@@ -11995,14 +12277,16 @@
             "OutputPricePerUnit": 1.25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4-nano pricing on Azure OpenAI as of March 2026"
+            "Comments": "GPT 5.4-nano pricing on Azure OpenAI as of March 2026",
+            "CacheReadPricePerUnit": 0.02,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5B9068C9-915D-4AB2-B8D2-A0CCB4552EA6"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.558Z",
-            "checksum": "dc04dec6aba5d38e5d9fc63cdb8b2079299fd3c8fda3ea0ebee516c730d438c8"
+            "lastModified": "2026-06-03T16:00:05.546Z",
+            "checksum": "c0ce938fab5bf1324152973e545d41daaa1a9ca3ad96b3ab54e14827ac66981e"
           }
         }
       ]
@@ -12085,14 +12369,16 @@
             "OutputPricePerUnit": 6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4.20 pricing on x.ai as of March 2026. $2/$6 per 1M tokens. Reasoning and non-reasoning variants (grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning) ship under same pricing. Multi-agent variant (grok-4.20-multi-agent-0309) also available at identical pricing."
+            "Comments": "Grok 4.20 pricing on x.ai as of March 2026. $2/$6 per 1M tokens. Reasoning and non-reasoning variants (grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning) ship under same pricing. Multi-agent variant (grok-4.20-multi-agent-0309) also available at identical pricing.",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5916320B-185C-4A30-B643-08AD1E2BCDB3"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.605Z",
-            "checksum": "67fe309919b10474190fe86dede017b03795ff14d23a7c1fe1026016ea15461d"
+            "lastModified": "2026-06-03T16:00:05.572Z",
+            "checksum": "c2977b6ce9e9164b3ff4e5d35b62ac4c4dd7151d09ad9ec9a8644d0ff3bb9f6c"
           }
         }
       ]
@@ -12175,14 +12461,16 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Small 4 pricing on Mistral AI as of March 2026. $0.15/$0.60 per 1M tokens. 119B-param MoE (6B active), Apache 2.0. Unifies Magistral (reasoning), Pixtral (vision), and Devstral (agentic coding). Open-weights; cheaper than Mistral Medium 3.1."
+            "Comments": "Mistral Small 4 pricing on Mistral AI as of March 2026. $0.15/$0.60 per 1M tokens. 119B-param MoE (6B active), Apache 2.0. Unifies Magistral (reasoning), Pixtral (vision), and Devstral (agentic coding). Open-weights; cheaper than Mistral Medium 3.1.",
+            "CacheReadPricePerUnit": 0.015,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "94E71422-1AA5-4ECB-9E00-DF0DC71A29D1"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.711Z",
-            "checksum": "7a789a3fe92febf9af82645ca6968ad0facea99e4a974ffc2d57e25b516f94c6"
+            "lastModified": "2026-06-03T16:00:05.598Z",
+            "checksum": "1747d6b92210280f69bdfc1ae7bd6e5baa4837f1f2836e97b41d6ea58d9f3a54"
           }
         }
       ]
@@ -12288,14 +12576,16 @@
             "OutputPricePerUnit": 20,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.1 Flash TTS pricing on Google AI Studio as of April 2026. $1.00/M input text tokens, $20.00/M audio output tokens. Batch mode 50% discount ($0.50/$10.00). Preview model."
+            "Comments": "Gemini 3.1 Flash TTS pricing on Google AI Studio as of April 2026. $1.00/M input text tokens, $20.00/M audio output tokens. Batch mode 50% discount ($0.50/$10.00). Preview model.",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "390D12A1-6FEE-4A96-8D05-3128413BC3D9"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.667Z",
-            "checksum": "7f92939048718c1b765ede324e639fe298ffb871f253898bb0d02fd43fe02c46"
+            "lastModified": "2026-06-03T16:00:05.163Z",
+            "checksum": "ca2e0863d516a85858c2d67759e9b73127b1454029bd5e1d8a9438209b41810b"
           }
         },
         {
@@ -12310,14 +12600,16 @@
             "OutputPricePerUnit": 20,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.1 Flash TTS pricing on Vertex AI as of April 2026. $1.00/M input text tokens, $20.00/M audio output tokens."
+            "Comments": "Gemini 3.1 Flash TTS pricing on Vertex AI as of April 2026. $1.00/M input text tokens, $20.00/M audio output tokens.",
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "0EB80DE1-DF09-42E4-B76A-4CDC150D71A8"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.683Z",
-            "checksum": "fe1a1df3963343122752b2447b2be6faaa27b1aaf4399d14a151d1aac1b26236"
+            "lastModified": "2026-06-03T16:00:05.151Z",
+            "checksum": "ac4bd157236c5aa4f096865d1faef9cf4a875d956e8f9260466d94c946688c52"
           }
         }
       ]
@@ -12399,14 +12691,16 @@
             "OutputPricePerUnit": 2.25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 35B A3B pricing on Alibaba Cloud Bailian as of April 2026. $0.38/$2.25 per 1M tokens. Open-weights Apache 2.0 — also available for local deployment via Hugging Face / ModelScope. ~211 tokens/second output speed."
+            "Comments": "Qwen 3.6 35B A3B pricing on Alibaba Cloud Bailian as of April 2026. $0.38/$2.25 per 1M tokens. Open-weights Apache 2.0 — also available for local deployment via Hugging Face / ModelScope. ~211 tokens/second output speed.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "37DF5C6A-4DAE-4401-8AC0-2C0506959EFF"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.727Z",
-            "checksum": "770112b8a6df4adf6f4672e0a6c74581e78141b7f05cc44a19c80827f17d22c2"
+            "lastModified": "2026-06-03T16:00:05.137Z",
+            "checksum": "6edfb33c2013946d9faaa6a16038b624d8363e928944d9fabd129d90600f9892"
           }
         }
       ]
@@ -12535,14 +12829,16 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.7 pricing on MiniMax direct API as of March 2026. 228B MoE with native chain-of-thought reasoning. Cached input available at $0.06/1M tokens."
+            "Comments": "MiniMax-M2.7 pricing on MiniMax direct API as of March 2026. 228B MoE with native chain-of-thought reasoning. Cached input available at $0.06/1M tokens.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E74896EB-C363-4AD1-8E2C-D561D0174FC3"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.789Z",
-            "checksum": "1da959143a4324b9e35a799fe19a9cc1f83ad3de56491927963ba74d474b6e51"
+            "lastModified": "2026-06-03T16:00:05.583Z",
+            "checksum": "95cf8b56de062f07cf14cf8a58c47f7cdafee2b1a77e12c6dbafcb6f99e7bdad"
           }
         },
         {
@@ -12557,14 +12853,16 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.7 pricing on OpenRouter as of March 2026. Routed inference — provider may vary."
+            "Comments": "MiniMax-M2.7 pricing on OpenRouter as of March 2026. Routed inference — provider may vary.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "025334E5-D504-4A06-89D0-943254237796"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.805Z",
-            "checksum": "b3ed99e5922c5d42525335451948759d060153d956e894e106125f1c8dfd02e8"
+            "lastModified": "2026-06-03T16:00:05.583Z",
+            "checksum": "c5d7f0a8e4d818dfd540d057699cf7da4f51f587e0db411282e79db403e1400b"
           }
         },
         {
@@ -12579,14 +12877,16 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.7 pricing on Fireworks.ai as of April 2026 (hosted from open-weights release April 12). Cached input at $0.06/1M tokens. LoRA fine-tuning supported."
+            "Comments": "MiniMax-M2.7 pricing on Fireworks.ai as of April 2026 (hosted from open-weights release April 12). Cached input at $0.06/1M tokens. LoRA fine-tuning supported.",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "9FA1FE98-458A-4A2F-9028-B5BF020520D7"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:33.817Z",
-            "checksum": "efd07b51233c9068a913c9660ceda359ef249d1a895bd4ecfbc4e6a35e8d5d05"
+            "lastModified": "2026-06-03T16:00:05.611Z",
+            "checksum": "59c43732e8337a6ab6c8da9929b2935371317bbadf6887714c34a6e7e2967e6b"
           }
         }
       ]
@@ -12669,14 +12969,16 @@
             "OutputPricePerUnit": 3.15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 5.1 pricing on Z.AI direct API as of April 2026. Cached input tokens ~$0.19/1M. Incremental refresh of GLM 5 with improved benchmarks. 744B total / 40B active MoE, 203K context, 66K output. Open-weights under MIT license."
+            "Comments": "GLM 5.1 pricing on Z.AI direct API as of April 2026. Cached input tokens ~$0.19/1M. Incremental refresh of GLM 5 with improved benchmarks. 744B total / 40B active MoE, 203K context, 66K output. Open-weights under MIT license.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "7550E9EF-3333-4EDD-8382-DFACF4C3B716"
           },
           "sync": {
-            "lastModified": "2026-04-27T18:50:01.924Z",
-            "checksum": "ae6ab97ad1e01c99132cf9f76b8e624acf2d9a345fb4a7dcb430f39c72f0761d"
+            "lastModified": "2026-06-03T16:00:05.727Z",
+            "checksum": "c891874c8181ba22e81afaafc36cb04f8fa3e2434df480b64eac1b8a30c07a7d"
           }
         }
       ]
@@ -12758,14 +13060,16 @@
             "OutputPricePerUnit": 0.38,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out."
+            "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "9856C369-1129-4AC2-ADF9-61F067964D1D"
           },
           "sync": {
-            "lastModified": "2026-04-27T18:50:00.860Z",
-            "checksum": "c75c767b6155f602e72ebca4640d28db03e3cdd5c82a34358e5f74884e290484"
+            "lastModified": "2026-06-03T16:00:05.173Z",
+            "checksum": "447d5e42054002a48337ffc06161e975397b4c96067e236ee7863fff13f86e8f"
           }
         }
       ]
@@ -12847,14 +13151,16 @@
             "OutputPricePerUnit": 0.35,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use."
+            "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "17725E8D-B7A0-48CA-8D31-9A38FA3EE8C5"
           },
           "sync": {
-            "lastModified": "2026-04-27T18:50:00.910Z",
-            "checksum": "517c422391eb9f86dcc05780d61cf4104154c1d1dfff292b77934c2d7052506a"
+            "lastModified": "2026-06-03T16:00:05.173Z",
+            "checksum": "268817475831174d1626e332ed303371f7cd1877a5dbeac48b4d5517b5ac0a18"
           }
         }
       ]
@@ -12936,14 +13242,16 @@
             "OutputPricePerUnit": 0.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mercury 2 pricing on Inception Labs as of April 2026. $0.25/M input, $0.75/M output. Cached input is $0.025/M (90% discount on cache hits)."
+            "Comments": "Mercury 2 pricing on Inception Labs as of April 2026. $0.25/M input, $0.75/M output. Cached input is $0.025/M (90% discount on cache hits).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B396DAC0-5974-4FAB-A845-A11EF6D927FC"
           },
           "sync": {
-            "lastModified": "2026-04-27T18:50:00.979Z",
-            "checksum": "35e1b843c9f09f7f70d4c165439ca101465bf8b7f8237b1fef10559c61b4951b"
+            "lastModified": "2026-06-03T16:00:05.181Z",
+            "checksum": "63d51ad99eb938b396acf119b7a49cc95a702702e19bc99dccf9378fbfdc00d7"
           }
         }
       ]
@@ -13049,14 +13357,16 @@
             "OutputPricePerUnit": 30,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.5 standard pricing on OpenAI as of April 24, 2026 launch. $5.00/$30.00 per 1M tokens. Prompts >272K input tokens billed at 2x input and 1.5x output for the full session (standard, batch, and flex tiers). Batch and Flex APIs at 50% off; Priority at 2.5x standard. Regional data-residency endpoints carry a 10% uplift. Source: https://openai.com/index/introducing-gpt-5-5/"
+            "Comments": "GPT 5.5 standard pricing on OpenAI as of April 24, 2026 launch. $5.00/$30.00 per 1M tokens. Prompts >272K input tokens billed at 2x input and 1.5x output for the full session (standard, batch, and flex tiers). Batch and Flex APIs at 50% off; Priority at 2.5x standard. Regional data-residency endpoints carry a 10% uplift. Source: https://openai.com/index/introducing-gpt-5-5/",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E049A222-E24B-4C5E-AB27-7DA7FEDCC44A"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:59.746Z",
-            "checksum": "8a213692b538409d4bb2a9c0f61e0eb46d82899797fd10dd3026f08559049a02"
+            "lastModified": "2026-06-03T16:00:05.694Z",
+            "checksum": "75ec9fb3618e222a6b2098184395e9aca13f37fc639fa218245f9fdd79f37922"
           }
         },
         {
@@ -13071,14 +13381,16 @@
             "OutputPricePerUnit": 30,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.5 pricing on Azure OpenAI / Microsoft Foundry (Global Standard) as of April 24, 2026 launch. Source: https://azure.microsoft.com/en-us/blog/openais-gpt-5-5-in-microsoft-foundry-frontier-intelligence-on-an-enterprise-ready-platform/"
+            "Comments": "GPT 5.5 pricing on Azure OpenAI / Microsoft Foundry (Global Standard) as of April 24, 2026 launch. Source: https://azure.microsoft.com/en-us/blog/openais-gpt-5-5-in-microsoft-foundry-frontier-intelligence-on-an-enterprise-ready-platform/",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "60686413-8D43-47BE-8C7A-401381B81CAC"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:59.761Z",
-            "checksum": "05f3886755eb2fdb92316531bf08752f5e9216419d73f7b8fbbfedda5c40e311"
+            "lastModified": "2026-06-03T16:00:05.706Z",
+            "checksum": "c005452766ecf43083fe3ce6f46175ac325cd985e9e7db99c843cebc856240b8"
           }
         }
       ]
@@ -13161,14 +13473,16 @@
             "OutputPricePerUnit": 180,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.5 Pro pricing on OpenAI as of April 24, 2026 launch. $30.00/$180.00 per 1M tokens. Available via Responses API and Batch API. Batch and Flex at 50% off. Source: https://openai.com/index/introducing-gpt-5-5/"
+            "Comments": "GPT 5.5 Pro pricing on OpenAI as of April 24, 2026 launch. $30.00/$180.00 per 1M tokens. Available via Responses API and Batch API. Batch and Flex at 50% off. Source: https://openai.com/index/introducing-gpt-5-5/",
+            "CacheReadPricePerUnit": 3,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "3F248960-FDCF-4DDB-BF04-E187D5DC6CE6"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:59.904Z",
-            "checksum": "2181e292987374129053f79f6d73998eea3826c310e5fb34bb748a0adf684b4d"
+            "lastModified": "2026-06-03T16:00:05.743Z",
+            "checksum": "acd3ad8d23462d68a63747bb81d0fe066efafec10dd359f585a57af062a1b33f"
           }
         }
       ]
@@ -13251,14 +13565,16 @@
             "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Grok 4.3 pricing on xAI direct API as of April 30, 2026 launch. $1.25/$2.50 per 1M tokens for requests up to 200,000 tokens; requests above 200K input billed at higher rates per xAI doc. Sources: https://docs.x.ai/developers/models/grok-4.3 ; https://venturebeat.com/technology/xai-launches-grok-4-3-at-an-aggressively-low-price-and-a-new-fast-powerful-voice-cloning-suite"
+            "Comments": "Grok 4.3 pricing on xAI direct API as of April 30, 2026 launch. $1.25/$2.50 per 1M tokens for requests up to 200,000 tokens; requests above 200K input billed at higher rates per xAI doc. Sources: https://docs.x.ai/developers/models/grok-4.3 ; https://venturebeat.com/technology/xai-launches-grok-4-3-at-an-aggressively-low-price-and-a-new-fast-powerful-voice-cloning-suite",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B0BC5332-1DFC-4164-AF29-7FA1057968E3"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:59.825Z",
-            "checksum": "e1ca3385fa1813ba220d6f0570912803e15fe0157f7128234cd5b3d51297fe22"
+            "lastModified": "2026-06-03T16:00:05.719Z",
+            "checksum": "2869d28bcc6a8927b4f5753367f27e81ce03643f96f4b8816ab36c8e0c2a821b"
           }
         }
       ]
@@ -13341,14 +13657,16 @@
             "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2.6 launch pricing on Moonshot direct API as of April 20, 2026: $0.60/$2.50 per 1M tokens. Some aggregator pages quote $0.74/$3.49 (likely a different SKU/tier or post-launch adjustment) - the official launch announcement quoted $0.60/$2.50. Verify on platform.moonshot.ai before relying on this price for billing. Sources: https://www.kimi.com/blog/kimi-k2-6 ; https://huggingface.co/moonshotai/Kimi-K2.6"
+            "Comments": "Kimi K2.6 launch pricing on Moonshot direct API as of April 20, 2026: $0.60/$2.50 per 1M tokens. Some aggregator pages quote $0.74/$3.49 (likely a different SKU/tier or post-launch adjustment) - the official launch announcement quoted $0.60/$2.50. Verify on platform.moonshot.ai before relying on this price for billing. Sources: https://www.kimi.com/blog/kimi-k2-6 ; https://huggingface.co/moonshotai/Kimi-K2.6",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "4AFC2907-E94D-40D9-9784-9ABD4604E0D7"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:59.501Z",
-            "checksum": "fb41bf54d89b76b6c0f3dff46fae173cb2f06d863fd6d75525fae6ecf48f9d2f"
+            "lastModified": "2026-06-03T16:00:05.620Z",
+            "checksum": "1ad9d15e117a40df28f31560258739cfdbbc77e82c20747d4966da8e93778859"
           }
         }
       ]
@@ -13430,14 +13748,16 @@
             "OutputPricePerUnit": 3.48,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "DeepSeek V4 Pro list pricing on DeepSeek direct API as of April 24, 2026 launch: $1.74/$3.48 per 1M tokens. A 75% promotional discount is in effect through 2026-05-31 15:59 UTC, bringing effective price to $0.435/$0.87 per 1M tokens. Cache-hit input pricing is 1/10 of launch price (effective from 2026-04-26). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+            "Comments": "DeepSeek V4 Pro list pricing on DeepSeek direct API as of April 24, 2026 launch: $1.74/$3.48 per 1M tokens. A 75% promotional discount is in effect through 2026-05-31 15:59 UTC, bringing effective price to $0.435/$0.87 per 1M tokens. Cache-hit input pricing is 1/10 of launch price (effective from 2026-04-26). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424",
+            "CacheReadPricePerUnit": 0.003625,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "702B44C3-0806-49EE-98DD-A457B5F0FF31"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:58.444Z",
-            "checksum": "1a23fc2a5167107300907202e6eb0c0e9cb508ac1b7fc8755bf343593b7cde5b"
+            "lastModified": "2026-06-03T16:00:05.231Z",
+            "checksum": "721b3f191176881e36f09b6315dfcfef74e52947b623fd10ef0efbf6749057fb"
           }
         }
       ]
@@ -13519,14 +13839,16 @@
             "OutputPricePerUnit": 0.28,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "DeepSeek V4 Flash pricing on DeepSeek direct API as of April 24, 2026 launch: $0.14/$0.28 per 1M tokens. Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+            "Comments": "DeepSeek V4 Flash pricing on DeepSeek direct API as of April 24, 2026 launch: $0.14/$0.28 per 1M tokens. Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424",
+            "CacheReadPricePerUnit": 0.0028,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "738963AB-9706-4DD5-87F0-B424BB87CBB0"
           },
           "sync": {
-            "lastModified": "2026-05-08T00:53:58.461Z",
-            "checksum": "ea5d8c681c5b62cf4a7e4e5b50e186f2cc2f1747ca121c4e01a6b4e7b4e25a68"
+            "lastModified": "2026-06-03T16:00:05.218Z",
+            "checksum": "3b482d91e97fabed964adf719947d9dd5cab7a7c2387bea75b746db883611e80"
           }
         }
       ]
@@ -13608,14 +13930,16 @@
             "OutputPricePerUnit": 0.053,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "GPT Image 2 (snapshot gpt-image-2-2026-04-21) pricing as of May 2026. OpenAI charges by tokens, not flat per-image: $5/M text input, $8/M image input (cached $2/M), $30/M image output. The per-image figure here ($0.053) is the representative cost for a 1024x1024 medium-quality image based on OpenAI's calculator — low quality ~$0.006/image, high quality ~$0.211/image. Batch API offers 50% discount on all token rates with 24h latency. Released April 21, 2026; API available early May 2026."
+            "Comments": "GPT Image 2 (snapshot gpt-image-2-2026-04-21) pricing as of May 2026. OpenAI charges by tokens, not flat per-image: $5/M text input, $8/M image input (cached $2/M), $30/M image output. The per-image figure here ($0.053) is the representative cost for a 1024x1024 medium-quality image based on OpenAI's calculator — low quality ~$0.006/image, high quality ~$0.211/image. Batch API offers 50% discount on all token rates with 24h latency. Released April 21, 2026; API available early May 2026.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "71148A7B-E3AA-47B9-80B9-833CAF56CDE9"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.133Z",
-            "checksum": "a75571c26e588759b6a6ad862c707a31b6e6882942a64f705277306275804cd7"
+            "lastModified": "2026-06-03T16:00:05.621Z",
+            "checksum": "dd660f3946b28a5bf1d6e24bb996edf1d4a245294ec9e8cab506d449cb2f8c7c"
           }
         }
       ]
@@ -13698,14 +14022,16 @@
             "OutputPricePerUnit": 30,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.5 Instant pricing as of May 2026. Provisionally recorded at the GPT-5.5 standard family rate ($5/$30 per 1M tokens) — OpenAI's pricing page may differentiate Instant to a lower rate; verify on next pricing-page review. Batch and Flex are 50% off; Priority is 2.5x standard. Released May 5, 2026 as the new default ChatGPT model; also surfaces in API as `chat-latest`."
+            "Comments": "GPT-5.5 Instant pricing as of May 2026. Provisionally recorded at the GPT-5.5 standard family rate ($5/$30 per 1M tokens) — OpenAI's pricing page may differentiate Instant to a lower rate; verify on next pricing-page review. Batch and Flex are 50% off; Priority is 2.5x standard. Released May 5, 2026 as the new default ChatGPT model; also surfaces in API as `chat-latest`.",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "FEAA70BB-8BAA-49D2-9300-B5E3CE93DECC"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.439Z",
-            "checksum": "b41af3e950917d7555864653a4103b3524f6ab0800c9bb79402e73b206dd55a2"
+            "lastModified": "2026-06-03T16:00:05.755Z",
+            "checksum": "7ce67993499b4726f4017a166b2aab3bf5a4e6b8a09237732ba2ec7097860a69"
           }
         }
       ]
@@ -13786,14 +14112,16 @@
             "OutputPricePerUnit": 24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-Realtime-2 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only. Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M. Released May 7, 2026 alongside GPT-Realtime-Translate and GPT-Realtime-Whisper (both minute-billed and flagged for human review pending Per-Minute PriceUnitType + Speech-to-Text AIModelType additions to MJ schema)."
+            "Comments": "GPT-Realtime-2 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only. Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M. Released May 7, 2026 alongside GPT-Realtime-Translate and GPT-Realtime-Whisper (both minute-billed and flagged for human review pending Per-Minute PriceUnitType + Speech-to-Text AIModelType additions to MJ schema).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "B98BE63A-4F29-449E-97FF-36B4E1B342B1"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:53.253Z",
-            "checksum": "5afff6cb32d3edd88afd2b9a139bd5a7cba2271d2faad6da51f6636a1c1f24e3"
+            "lastModified": "2026-06-03T16:00:05.240Z",
+            "checksum": "2c92d3f4031ebe3255c06a4577673036b6dd4f711a48abd8efbf454568894ec4"
           }
         }
       ]
@@ -13876,14 +14204,16 @@
             "OutputPricePerUnit": 4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM-5V Turbo pricing on Z.AI direct API as of May 2026: $1.20/M input, $4.00/M output. Released April 1, 2026 — Z.AI's first native multimodal agent model with image, video, and text input. Proprietary (not open-source) per the launch announcement."
+            "Comments": "GLM-5V Turbo pricing on Z.AI direct API as of May 2026: $1.20/M input, $4.00/M output. Released April 1, 2026 — Z.AI's first native multimodal agent model with image, video, and text input. Proprietary (not open-source) per the launch announcement.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "5DB866B6-5F56-4C5E-90F0-CEAA3708259F"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.539Z",
-            "checksum": "ae8cc9cd20af059aef11f6747870a6b221419c62fcd7b932e2f100ca81079fa5"
+            "lastModified": "2026-06-03T16:00:05.759Z",
+            "checksum": "0d307bd3e61092454fe1761e3402caa1e875c2298e1b1f7051f530d6c65b70f9"
           }
         }
       ]
@@ -13965,14 +14295,16 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Medium 3.5 pricing on Mistral direct API as of May 2026: $1.50/M input, $7.50/M output. Released May 1, 2026 as a public preview. Sibling of Mistral Medium 3.1 (already in inventory) — this is the new release, not a replacement."
+            "Comments": "Mistral Medium 3.5 pricing on Mistral direct API as of May 2026: $1.50/M input, $7.50/M output. Released May 1, 2026 as a public preview. Sibling of Mistral Medium 3.1 (already in inventory) — this is the new release, not a replacement.",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "501719EA-06AC-42AA-9090-BADA50495140"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.086Z",
-            "checksum": "a8c2e337668d4617d135ee6bd875927a167269369a099fa8f01ba8a98851b182"
+            "lastModified": "2026-06-03T16:00:05.634Z",
+            "checksum": "73db04b60466b4385cea3c5f57eda7d9eb13a3df1326691605424810779ec7c3"
           }
         }
       ]
@@ -14077,14 +14409,16 @@
             "OutputPricePerUnit": 1.95,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Plus pricing on Alibaba Cloud DashScope as of April 2, 2026 release. Source: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-plus"
+            "Comments": "Qwen 3.6 Plus pricing on Alibaba Cloud DashScope as of April 2, 2026 release. Source: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-plus",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "DCFF6327-5D3B-4DDB-8966-8450FCF8D8B7"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.559Z",
-            "checksum": "96c72e695533988fe9db4d352d355164f03b86444733b3270f023f34e675f465"
+            "lastModified": "2026-06-03T16:00:05.240Z",
+            "checksum": "fc02b6f6041fab0c877cf6730e382ff822cb1239171caec43d81681fefac0429"
           }
         },
         {
@@ -14099,14 +14433,16 @@
             "OutputPricePerUnit": 1.95,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Plus on OpenRouter (passthrough pricing). Source: https://openrouter.ai/qwen/qwen3.6-plus"
+            "Comments": "Qwen 3.6 Plus on OpenRouter (passthrough pricing). Source: https://openrouter.ai/qwen/qwen3.6-plus",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "6D3A63D8-4CA9-45D2-B699-0010FA1CA8AF"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.575Z",
-            "checksum": "aa8396a8286f59973f3648e7eedb6a3999d3c918d3c5de46e4858405eb70d4ac"
+            "lastModified": "2026-06-03T16:00:05.240Z",
+            "checksum": "836002b510b009b1a6a301d80287fcc01cf5d1f83486d5813159444431f34d6f"
           }
         }
       ]
@@ -14211,14 +14547,16 @@
             "OutputPricePerUnit": 6.24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Max Preview pricing on Alibaba Cloud DashScope as of April 27, 2026 release. Sources: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-max-preview ; https://tokenmix.ai/blog/qwen3-6-max-preview-benchmark-review-2026"
+            "Comments": "Qwen 3.6 Max Preview pricing on Alibaba Cloud DashScope as of April 27, 2026 release. Sources: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-max-preview ; https://tokenmix.ai/blog/qwen3-6-max-preview-benchmark-review-2026",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "8E08B7D0-A812-4148-B5E9-DB0CC86C8C42"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.788Z",
-            "checksum": "952877ef2ae3aaea14c974e412877920545f7b10894a36a047d213cec1014e36"
+            "lastModified": "2026-06-03T16:00:05.247Z",
+            "checksum": "6e09dd5ef88fd8c8f60966188d41e5aad1737a49a38c16de8900d574b5498220"
           }
         },
         {
@@ -14233,14 +14571,16 @@
             "OutputPricePerUnit": 6.24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview"
+            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "35E5C2D6-C32A-4D4C-8271-0F909D6F850A"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.803Z",
-            "checksum": "d7a8b00a750c0aeaf4e9a0dd27d4c553c059f9fe61ea558c15c48603e1fea2be"
+            "lastModified": "2026-06-03T16:00:05.248Z",
+            "checksum": "00f96ef283c996b7821f3253a1dfce39c0565afab4962ed6de0d569f2e556bc0"
           }
         }
       ]
@@ -14322,14 +14662,16 @@
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Flash pricing on Alibaba Cloud DashScope as of April 27, 2026 release (tiered pricing applies above 256K tokens). Sources: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-flash"
+            "Comments": "Qwen 3.6 Flash pricing on Alibaba Cloud DashScope as of April 27, 2026 release (tiered pricing applies above 256K tokens). Sources: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-flash",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "2391E2C1-0E75-49A6-A66F-B03D5BDF9A29"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.817Z",
-            "checksum": "21599ac3ecadd66f024f09e29fe9dda0b13d3543d4ca7d8f2ee174e0c2bfe7b5"
+            "lastModified": "2026-06-03T16:00:05.248Z",
+            "checksum": "8ea337b82d7dbf7dfd96a4b8d4c151229e4e5cf7f5b08e49b992bae31539d0fd"
           }
         }
       ]
@@ -14411,14 +14753,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Cohere Command A direct pricing as of May 2026. Sources: https://cohere.com/pricing ; https://docs.cohere.com/docs/command-a"
+            "Comments": "Cohere Command A direct pricing as of May 2026. Sources: https://cohere.com/pricing ; https://docs.cohere.com/docs/command-a",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "6966F069-CE39-4798-AAB7-0BE58BCFA4DF"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.829Z",
-            "checksum": "54c4a098d6cb946b921dff516c1d3fee7d635487e9aabbd5a065ef5703f86dff"
+            "lastModified": "2026-06-03T16:00:05.257Z",
+            "checksum": "1a8b586e7727bc4a952b147fd3509ccd565482c0e01246ea93a7a3351ce4c537"
           }
         }
       ]
@@ -14499,14 +14843,16 @@
             "OutputPricePerUnit": 0,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Cohere Embed v4 text pricing: $0.12/1M tokens. NOTE: Image embeddings priced separately at $0.47/1M image tokens — not represented in this cost row because the existing schema is single-input-token-rate. Sources: https://cohere.com/pricing ; https://cloudprice.net/models/cohere-embed-4"
+            "Comments": "Cohere Embed v4 text pricing: $0.12/1M tokens. NOTE: Image embeddings priced separately at $0.47/1M image tokens — not represented in this cost row because the existing schema is single-input-token-rate. Sources: https://cohere.com/pricing ; https://cloudprice.net/models/cohere-embed-4",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "E7E6D944-4842-4983-BC9D-B7F2613AD541"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:43.997Z",
-            "checksum": "b5e97ed3d9736e64cf2a9f366735262249026a38cc9bccb0da470c151f4189e3"
+            "lastModified": "2026-06-03T16:00:05.265Z",
+            "checksum": "89931d1f846b6d616945e615c08e5585a1c319a1c9350896d3cfc2e5bcf310f9"
           }
         }
       ]
@@ -14589,14 +14935,16 @@
             "OutputPricePerUnit": 0.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mercury Edit 2 pricing as of May 12, 2026 release: $0.25/1M input, $0.75/1M output, $0.025/1M cached input (10x discount). Sources: https://www.inceptionlabs.ai/blog/introducing-mercury-edit-2 ; https://docs.inceptionlabs.ai/get-started/models"
+            "Comments": "Mercury Edit 2 pricing as of May 12, 2026 release: $0.25/1M input, $0.75/1M output, $0.025/1M cached input (10x discount). Sources: https://www.inceptionlabs.ai/blog/introducing-mercury-edit-2 ; https://docs.inceptionlabs.ai/get-started/models",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "402525D9-1797-4994-AFD0-6B741807374D"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:45.784Z",
-            "checksum": "ec95f649cb02c4b0f6afcdeecdca36d8a163e7cb4603c80ebbe18ff3bff6e5c5"
+            "lastModified": "2026-06-03T16:00:05.638Z",
+            "checksum": "60f78f6a4cf8ff751b733cef048bf09c0a0cdb8aeb5d6fad7880eb49d9f0032d"
           }
         }
       ]
@@ -14720,14 +15068,16 @@
             "OutputPricePerUnit": 9,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.5 Flash pricing on Google as of May 19, 2026 GA release at Google I/O 2026. Standard global tier: $1.50/1M input, $9.00/1M output (including thinking tokens), $0.15/1M cached input. Batch tier: $0.75/$4.50, cached $0.075. Flex tier: $0.75/$4.50, cached $0.08. Priority tier: $2.70/$16.20, cached $0.27. Context caching storage: $1.00/1M tokens per hour across all tiers. Sources: https://deepmind.google/models/model-cards/gemini-3-5-flash/ ; https://ai.google.dev/gemini-api/docs/pricing"
+            "Comments": "Gemini 3.5 Flash pricing on Google as of May 19, 2026 GA release at Google I/O 2026. Standard global tier: $1.50/1M input, $9.00/1M output (including thinking tokens), $0.15/1M cached input. Batch tier: $0.75/$4.50, cached $0.075. Flex tier: $0.75/$4.50, cached $0.08. Priority tier: $2.70/$16.20, cached $0.27. Context caching storage: $1.00/1M tokens per hour across all tiers. Sources: https://deepmind.google/models/model-cards/gemini-3-5-flash/ ; https://ai.google.dev/gemini-api/docs/pricing",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "17C0D6AD-167F-4279-A7C2-2963C9466B32"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:44.011Z",
-            "checksum": "a32a44496adc3db921baf4b2831e19a95bc9163fdda11cd3408207f06dec4a16"
+            "lastModified": "2026-06-03T16:00:05.281Z",
+            "checksum": "96ca9d1bd19a6d13f5e585b556db9a91a720289cba675a1d0cf56e7cc5575791"
           }
         },
         {
@@ -14742,14 +15092,16 @@
             "OutputPricePerUnit": 9,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.5 Flash pricing on Vertex AI as of May 19, 2026 GA release. Same pricing structure as Google direct: $1.50/1M input, $9.00/1M output, $0.15/1M cached input. Sources: https://ai.google.dev/gemini-api/docs/pricing"
+            "Comments": "Gemini 3.5 Flash pricing on Vertex AI as of May 19, 2026 GA release. Same pricing structure as Google direct: $1.50/1M input, $9.00/1M output, $0.15/1M cached input. Sources: https://ai.google.dev/gemini-api/docs/pricing",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C02CF2E3-2A68-491C-B399-C4761A12CEA7"
           },
           "sync": {
-            "lastModified": "2026-05-20T23:53:44.025Z",
-            "checksum": "efb10110073aaa96d333b58047a0c3e6be4a2fb369c5769024e34d58eda2a6a5"
+            "lastModified": "2026-06-03T16:00:05.294Z",
+            "checksum": "0ac6d59142895f90a55022fb97f7217a9e10c820e55e8eff9a6d19435091b8cb"
           }
         }
       ]
@@ -14854,14 +15206,16 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.7 Max pricing on Alibaba Cloud Model Studio (International region) as of May 19, 2026 API availability. $2.50/1M input, $7.50/1M output. Explicit cache: $3.125/1M create, $0.25/1M read. Tool calls: web_search $10/1K. Snapshot: qwen3.7-max-2026-05-20. Limits: 1M context window, 991K max input (983K in Thinking Mode), 64K max output, RPM 600, TPM 1M. Structured Output, Batches, and Fine-tuning are NOT supported. Sources: https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.7-max&serviceSite=international ; https://artificialanalysis.ai/models/qwen3-7-max"
+            "Comments": "Qwen 3.7 Max pricing on Alibaba Cloud Model Studio (International region) as of May 19, 2026 API availability. $2.50/1M input, $7.50/1M output. Explicit cache: $3.125/1M create, $0.25/1M read. Tool calls: web_search $10/1K. Snapshot: qwen3.7-max-2026-05-20. Limits: 1M context window, 991K max input (983K in Thinking Mode), 64K max output, RPM 600, TPM 1M. Structured Output, Batches, and Fine-tuning are NOT supported. Sources: https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.7-max&serviceSite=international ; https://artificialanalysis.ai/models/qwen3-7-max",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "C7467C37-F976-4E43-99E2-D6BF6B3275BA"
           },
           "sync": {
-            "lastModified": "2026-05-21T22:25:11.509Z",
-            "checksum": "65ae5b50d75a2a9c0ff4b47e817580bc524948f5c8482617ead6f17c439cd750"
+            "lastModified": "2026-06-03T16:00:05.298Z",
+            "checksum": "e34a094887f06c2657ef066792ef831526bef13bbd6a8c6fbd28dbfa465ac3ad"
           }
         },
         {
@@ -14876,14 +15230,16 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.7 Max on OpenRouter (passthrough pricing). Source: https://openrouter.ai/qwen/qwen3.7-max"
+            "Comments": "Qwen 3.7 Max on OpenRouter (passthrough pricing). Source: https://openrouter.ai/qwen/qwen3.7-max",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           },
           "primaryKey": {
             "ID": "EA896356-AB09-4900-84A3-D4727B01DEF7"
           },
           "sync": {
-            "lastModified": "2026-05-21T22:25:11.526Z",
-            "checksum": "29f930e0f8cf62e10cb8a7ba75ff6fae0cec58a6cc871441423c4f5b4e24c648"
+            "lastModified": "2026-06-03T16:00:05.298Z",
+            "checksum": "7b3f077873f56a3a9d4f4940fa93aa747bf84fc180acef943dd19541777f6070"
           }
         }
       ]

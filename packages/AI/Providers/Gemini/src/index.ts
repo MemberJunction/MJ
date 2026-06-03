@@ -7,6 +7,26 @@ import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
+/**
+ * Snapshot of a request's cacheable-prefix info, captured so the GEMINI_CACHE_DEBUG diagnostics
+ * can report it next to the provider's reported cache usage. The hash lets you compare two
+ * "identical" runs: if the systemInstruction hash differs, the prefix is NOT byte-stable (e.g. a
+ * timestamp/date is embedded in the system prompt), which silently defeats Gemini's implicit cache.
+ */
+type GeminiCacheDiagContext = {
+    model: string;
+    systemInstructionChars: number;
+    systemInstructionHash: string;
+    historyLength: number;
+};
+
+/** Minimal shape of the fields we read off Gemini's usageMetadata for diagnostics. */
+type GeminiUsageMetadataLike = {
+    promptTokenCount?: number;
+    cachedContentTokenCount?: number;
+    candidatesTokenCount?: number;
+};
+
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
     protected _gemini: GoogleGenAI | null = null;
@@ -24,6 +44,10 @@ export class GeminiLLM extends BaseLLM {
         pendingContent: '',
         thinkingComplete: false
     };
+
+    // Diagnostic context for the in-flight streaming request, used only by the GEMINI_CACHE_DEBUG
+    // logging path so the final chunk's usage can be reported alongside the request's prefix info.
+    private _cacheDiagContext: GeminiCacheDiagContext | null = null;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -380,6 +404,12 @@ export class GeminiLLM extends BaseLLM {
             );
             geminiUsage.cacheReadTokens = geminiCachedTokens;
 
+            this.logCacheDiagnostics(
+                'non-streaming',
+                this.buildCacheDiagContext(modelName, systemInstructionText, history.length),
+                result.usageMetadata
+            );
+
             return {
                 success: true,
                 statusText: "OK",
@@ -509,6 +539,12 @@ export class GeminiLLM extends BaseLLM {
         // Split: all but last message go in history, last message gets system instructions prepended
         const history = tempMessages.slice(0, -1);
         const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
+
+        // Capture the request's cacheable-prefix info so the final streamed chunk's usage can be
+        // logged next to it (GEMINI_CACHE_DEBUG only; processStreamingChunk reads this).
+        this._cacheDiagContext = process.env.GEMINI_CACHE_DEBUG
+            ? this.buildCacheDiagContext(modelName, systemInstructionText, history.length)
+            : null;
 
         // System prompt is passed via systemInstruction (below), NOT bundled into the user message
         // — bundling defeats Gemini's implicit prompt caching (stable prompt ends up after the
@@ -644,6 +680,9 @@ export class GeminiLLM extends BaseLLM {
                 chunk.usageMetadata.candidatesTokenCount || 0
             );
             usage.cacheReadTokens = chunkCachedTokens;
+
+            // Usage only appears on the final chunk — log the cache diagnostic once here.
+            this.logCacheDiagnostics('streaming', this._cacheDiagContext, chunk.usageMetadata);
         }
 
         return {
@@ -651,6 +690,70 @@ export class GeminiLLM extends BaseLLM {
             finishReason,
             usage
         };
+    }
+
+    /**
+     * Builds a {@link GeminiCacheDiagContext} snapshot for the current request. Cheap (one djb2
+     * pass over the system prompt); only called when GEMINI_CACHE_DEBUG is set.
+     */
+    private buildCacheDiagContext(modelName: string, systemInstructionText: string, historyLength: number): GeminiCacheDiagContext {
+        return {
+            model: modelName,
+            systemInstructionChars: systemInstructionText?.length ?? 0,
+            systemInstructionHash: this.stableHash(systemInstructionText ?? ''),
+            historyLength
+        };
+    }
+
+    /**
+     * Emits a one-line prompt-cache diagnostic for a Gemini call, gated behind the
+     * GEMINI_CACHE_DEBUG env var so it is silent in normal operation. Surfaces exactly what we need
+     * to explain a cache miss: whether a stable systemInstruction prefix was sent (chars + hash so
+     * two runs can be compared), the history depth, the provider's native token split
+     * (prompt/cached/net/completion), and whether a cache hit occurred. Warns when the input is
+     * below Gemini's implicit-cache minimum or when no systemInstruction was sent at all.
+     */
+    private logCacheDiagnostics(
+        context: 'non-streaming' | 'streaming',
+        diag: GeminiCacheDiagContext | null,
+        usageMetadata: GeminiUsageMetadataLike | null | undefined
+    ): void {
+        if (!process.env.GEMINI_CACHE_DEBUG || !diag) {
+            return;
+        }
+        const promptTokens = usageMetadata?.promptTokenCount ?? 0;
+        const cachedTokens = usageMetadata?.cachedContentTokenCount ?? 0;
+        const completion = usageMetadata?.candidatesTokenCount ?? 0;
+        const netPrompt = Math.max(0, promptTokens - cachedTokens);
+        const cacheHit = cachedTokens > 0;
+        // Implicit caching has a per-model minimum prefix (~1,024 tokens for Gemini 2.5 Flash, more
+        // for Pro). Below that floor a cache can never form, which is the most common silent cause.
+        const belowImplicitFloor = promptTokens < 1024;
+        const warnings = [
+            belowImplicitFloor ? 'prompt<1024 (below implicit-cache minimum)' : '',
+            diag.systemInstructionChars === 0 ? 'no-systemInstruction (no stable cacheable prefix)' : ''
+        ].filter(Boolean).join('; ');
+        console.log(
+            `[Gemini cache] ${context} model=${diag.model} ` +
+            `systemInstruction{chars=${diag.systemInstructionChars}, hash=${diag.systemInstructionHash}} ` +
+            `history=${diag.historyLength} ` +
+            `tokens{prompt=${promptTokens}, cached=${cachedTokens}, net=${netPrompt}, completion=${completion}} ` +
+            `cacheHit=${cacheHit}` +
+            (warnings ? ` WARN=${warnings}` : '')
+        );
+    }
+
+    /**
+     * djb2 string hash → 8-char hex. Non-cryptographic; used only to compare whether the system
+     * prompt prefix is byte-identical across two runs (a changing hash means the prefix is unstable
+     * and implicit caching cannot engage). Dependency-free on purpose to keep this provider-local.
+     */
+    private stableHash(s: string): string {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) {
+            h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+        }
+        return (h >>> 0).toString(16).padStart(8, '0');
     }
     
     /**

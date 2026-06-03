@@ -2749,7 +2749,7 @@ export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
 export const MJAIAgentRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
+        * * Display Name: Run ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         * * Description: Unique identifier for this agent run`),
@@ -2824,7 +2824,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
     TotalTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Total Tokens
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
@@ -2846,27 +2846,27 @@ export const MJAIAgentRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalPromptTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsed
-        * * Display Name: Total Prompt Tokens Used
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalCompletionTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsed
-        * * Display Name: Total Completion Tokens Used
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsedRollup
-        * * Display Name: Total Tokens Used (Rollup)
+        * * Display Name: Total Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens Used (Rollup)
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens Used (Rollup)
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
@@ -2882,7 +2882,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Conversation Detail Sequence
+        * * Display Name: Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -2933,7 +2933,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`),
     TotalPromptIterations: z.number().describe(`
         * * Field Name: TotalPromptIterations
-        * * Display Name: Total Prompt Iterations
+        * * Display Name: Prompt Iterations
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
@@ -2963,7 +2963,7 @@ each time the agent processes a prompt step.`),
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
         * * Field Name: Verbose
-        * * Display Name: Verbose Logging
+        * * Display Name: Verbose
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
@@ -3012,14 +3012,24 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference ID
+        * * Display Name: External Reference
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
-        * * Display Name: Company ID
+        * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
+    TotalCacheReadTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCacheReadTokensUsed
+        * * Display Name: Cache Read Tokens
+        * * SQL Data Type: int
+        * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`),
+    TotalCacheWriteTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCacheWriteTokensUsed
+        * * Display Name: Cache Write Tokens
+        * * SQL Data Type: int
+        * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -3050,11 +3060,11 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Override Model Name
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor Name
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
@@ -4544,12 +4554,12 @@ export const MJAIModelCostSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -4581,7 +4591,7 @@ export const MJAIModelCostSchema = z.object({
         * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase`),
     PriceTypeID: z.string().describe(`
         * * Field Name: PriceTypeID
-        * * Display Name: Price Type ID
+        * * Display Name: Price Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
     InputPricePerUnit: z.number().describe(`
@@ -4596,7 +4606,7 @@ export const MJAIModelCostSchema = z.object({
         * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing`),
     UnitTypeID: z.string().describe(`
         * * Field Name: UnitTypeID
-        * * Display Name: Unit Type ID
+        * * Display Name: Unit Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)`),
     ProcessingType: z.union([z.literal('Batch'), z.literal('Realtime')]).describe(`
@@ -4623,21 +4633,31 @@ export const MJAIModelCostSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CacheReadPricePerUnit: z.number().nullable().describe(`
+        * * Field Name: CacheReadPricePerUnit
+        * * Display Name: Cache Read Price
+        * * SQL Data Type: decimal(18, 8)
+        * * Description: Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).`),
+    CacheWritePricePerUnit: z.number().nullable().describe(`
+        * * Field Name: CacheWritePricePerUnit
+        * * Display Name: Cache Write Price
+        * * SQL Data Type: decimal(18, 8)
+        * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     PriceType: z.string().describe(`
         * * Field Name: PriceType
-        * * Display Name: Price Type
+        * * Display Name: Price Type Name
         * * SQL Data Type: nvarchar(100)`),
     UnitType: z.string().describe(`
         * * Field Name: UnitType
-        * * Display Name: Unit Type
+        * * Display Name: Unit Type Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -5506,22 +5526,22 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`),
     CostCurrency: z.string().nullable().describe(`
         * * Field Name: CostCurrency
-        * * Display Name: Cost Currency
+        * * Display Name: Currency
         * * SQL Data Type: nvarchar(10)
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Tokens Used Rollup
+        * * Display Name: Tokens Used (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Tokens Prompt Rollup
+        * * Display Name: Tokens Prompt (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Tokens Completion Rollup
+        * * Display Name: Tokens Completion (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -5683,18 +5703,18 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
         * * Field Name: TotalFailoverDuration
-        * * Display Name: Total Failover Duration (ms)
+        * * Display Name: Total Failover Duration
         * * SQL Data Type: int
         * * Description: Total time spent in failover attempts in milliseconds`),
     RerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRunID
-        * * Display Name: Rerun From Run
+        * * Display Name: Rerun From
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
     ModelSelection: z.string().nullable().describe(`
         * * Field Name: ModelSelection
-        * * Display Name: Model Selection Details
+        * * Display Name: Model Selection
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`),
     Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Pending'), z.literal('Running')]).describe(`
@@ -5749,7 +5769,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
     JudgeID: z.string().nullable().describe(`
         * * Field Name: JudgeID
-        * * Display Name: Judge
+        * * Display Name: Judge Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
@@ -5803,7 +5823,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Model Specific Details
+        * * Display Name: Model Response Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     EffortLevel: z.number().nullable().describe(`
@@ -5842,25 +5862,35 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Tokens Cache Write
         * * SQL Data Type: int
         * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`),
+    TokensCacheReadRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCacheReadRollup
+        * * Display Name: Tokens Cache Read (Rollup)
+        * * SQL Data Type: int
+        * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`),
+    TokensCacheWriteRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCacheWriteRollup
+        * * Display Name: Tokens Cache Write (Rollup)
+        * * SQL Data Type: int
+        * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt
+        * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration Name
         * * SQL Data Type: nvarchar(100)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
@@ -5872,19 +5902,19 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
-        * * Display Name: Original Model
+        * * Display Name: Original Model Name
         * * SQL Data Type: nvarchar(50)`),
     RerunFromPromptRun: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRun
-        * * Display Name: Rerun From Run
+        * * Display Name: Rerun From Prompt Run
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
-        * * Display Name: Judge
+        * * Display Name: Judge Name
         * * SQL Data Type: nvarchar(255)`),
     ChildPrompt: z.string().nullable().describe(`
         * * Field Name: ChildPrompt
-        * * Display Name: Child Prompt
+        * * Display Name: Child Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
@@ -5896,7 +5926,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From Run
+        * * Display Name: Root Rerun From
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -34507,7 +34537,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
+    * * Display Name: Run ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     * * Description: Unique identifier for this agent run
@@ -34679,7 +34709,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Total Tokens
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of tokens consumed by all LLM calls during this agent run
@@ -34727,7 +34757,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsed
-    * * Display Name: Total Prompt Tokens Used
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -34740,7 +34770,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsed
-    * * Display Name: Total Completion Tokens Used
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -34753,7 +34783,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsedRollup
-    * * Display Name: Total Tokens Used (Rollup)
+    * * Display Name: Total Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
     */
@@ -34766,7 +34796,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens Used (Rollup)
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -34779,7 +34809,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens Used (Rollup)
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -34819,7 +34849,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Conversation Detail Sequence
+    * * Display Name: Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -34926,7 +34956,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptIterations
-    * * Display Name: Total Prompt Iterations
+    * * Display Name: Prompt Iterations
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of prompt iterations executed during this agent run. Incremented
@@ -34996,7 +35026,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Verbose
-    * * Display Name: Verbose Logging
+    * * Display Name: Verbose
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
@@ -35117,7 +35147,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference ID
+    * * Display Name: External Reference
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -35130,7 +35160,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: CompanyID
-    * * Display Name: Company ID
+    * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.
     */
@@ -35139,6 +35169,32 @@ each time the agent processes a prompt step.
     }
     set CompanyID(value: string | null) {
         this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: TotalCacheReadTokensUsed
+    * * Display Name: Cache Read Tokens
+    * * SQL Data Type: int
+    * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.
+    */
+    get TotalCacheReadTokensUsed(): number | null {
+        return this.Get('TotalCacheReadTokensUsed');
+    }
+    set TotalCacheReadTokensUsed(value: number | null) {
+        this.Set('TotalCacheReadTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCacheWriteTokensUsed
+    * * Display Name: Cache Write Tokens
+    * * SQL Data Type: int
+    * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.
+    */
+    get TotalCacheWriteTokensUsed(): number | null {
+        return this.Get('TotalCacheWriteTokensUsed');
+    }
+    set TotalCacheWriteTokensUsed(value: number | null) {
+        this.Set('TotalCacheWriteTokensUsed', value);
     }
 
     /**
@@ -35206,7 +35262,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Override Model Name
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -35215,7 +35271,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor Name
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -39338,7 +39394,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -39351,7 +39407,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -39423,7 +39479,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: PriceTypeID
-    * * Display Name: Price Type ID
+    * * Display Name: Price Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
     */
@@ -39462,7 +39518,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: UnitTypeID
-    * * Display Name: Unit Type ID
+    * * Display Name: Unit Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)
     */
@@ -39524,8 +39580,34 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     }
 
     /**
+    * * Field Name: CacheReadPricePerUnit
+    * * Display Name: Cache Read Price
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).
+    */
+    get CacheReadPricePerUnit(): number | null {
+        return this.Get('CacheReadPricePerUnit');
+    }
+    set CacheReadPricePerUnit(value: number | null) {
+        this.Set('CacheReadPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: CacheWritePricePerUnit
+    * * Display Name: Cache Write Price
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.
+    */
+    get CacheWritePricePerUnit(): number | null {
+        return this.Get('CacheWritePricePerUnit');
+    }
+    set CacheWritePricePerUnit(value: number | null) {
+        this.Set('CacheWritePricePerUnit', value);
+    }
+
+    /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -39534,7 +39616,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -39543,7 +39625,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: PriceType
-    * * Display Name: Price Type
+    * * Display Name: Price Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get PriceType(): string {
@@ -39552,7 +39634,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: UnitType
-    * * Display Name: Unit Type
+    * * Display Name: Unit Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get UnitType(): string {
@@ -42137,7 +42219,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: CostCurrency
-    * * Display Name: Cost Currency
+    * * Display Name: Currency
     * * SQL Data Type: nvarchar(10)
     * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.
     */
@@ -42150,7 +42232,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Tokens Used Rollup
+    * * Display Name: Tokens Used (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -42163,7 +42245,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Tokens Prompt Rollup
+    * * Display Name: Tokens Prompt (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -42176,7 +42258,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Tokens Completion Rollup
+    * * Display Name: Tokens Completion (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -42594,7 +42676,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TotalFailoverDuration
-    * * Display Name: Total Failover Duration (ms)
+    * * Display Name: Total Failover Duration
     * * SQL Data Type: int
     * * Description: Total time spent in failover attempts in milliseconds
     */
@@ -42607,7 +42689,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRunID
-    * * Display Name: Rerun From Run
+    * * Display Name: Rerun From
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID
@@ -42621,7 +42703,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSelection
-    * * Display Name: Model Selection Details
+    * * Display Name: Model Selection
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale
     */
@@ -42740,7 +42822,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: JudgeID
-    * * Display Name: Judge
+    * * Display Name: Judge Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
@@ -42874,7 +42956,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Model Specific Details
+    * * Display Name: Model Response Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
     */
@@ -42978,8 +43060,34 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: TokensCacheReadRollup
+    * * Display Name: Tokens Cache Read (Rollup)
+    * * SQL Data Type: int
+    * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.
+    */
+    get TokensCacheReadRollup(): number | null {
+        return this.Get('TokensCacheReadRollup');
+    }
+    set TokensCacheReadRollup(value: number | null) {
+        this.Set('TokensCacheReadRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheWriteRollup
+    * * Display Name: Tokens Cache Write (Rollup)
+    * * SQL Data Type: int
+    * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.
+    */
+    get TokensCacheWriteRollup(): number | null {
+        return this.Get('TokensCacheWriteRollup');
+    }
+    set TokensCacheWriteRollup(value: number | null) {
+        this.Set('TokensCacheWriteRollup', value);
+    }
+
+    /**
     * * Field Name: Prompt
-    * * Display Name: Prompt
+    * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string {
@@ -42988,7 +43096,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -42997,7 +43105,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -43006,7 +43114,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -43015,7 +43123,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -43042,7 +43150,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModel
-    * * Display Name: Original Model
+    * * Display Name: Original Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get OriginalModel(): string | null {
@@ -43051,7 +43159,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRun
-    * * Display Name: Rerun From Run
+    * * Display Name: Rerun From Prompt Run
     * * SQL Data Type: nvarchar(255)
     */
     get RerunFromPromptRun(): string | null {
@@ -43060,7 +43168,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Judge
-    * * Display Name: Judge
+    * * Display Name: Judge Name
     * * SQL Data Type: nvarchar(255)
     */
     get Judge(): string | null {
@@ -43069,7 +43177,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ChildPrompt
-    * * Display Name: Child Prompt
+    * * Display Name: Child Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ChildPrompt(): string | null {
@@ -43096,7 +43204,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From Run
+    * * Display Name: Root Rerun From
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
