@@ -4,6 +4,7 @@
  */
 
 import os from 'os';
+import { v4 as uuidv4 } from 'uuid';
 import {
     UserInfo,
     Metadata,
@@ -944,17 +945,15 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @private
      */
     private async tryAcquireLock(jobId: string): Promise<{ acquired: boolean; token?: string }> {
-        const token = this.generateGuid();
+        // uuidv4 (cryptographic) — Math.random()-based GUIDs would risk collision
+        // between concurrent engine instances and break the lost-mutex protection
+        // that releaseLockIfTokenMatches relies on (token identity = execution identity).
+        const token = uuidv4();
         const instance = this.getInstanceIdentifier();
         const expectedCompletion = new Date(Date.now() + this._leaseTimeoutMs);
 
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
         const schema = provider.MJCoreSchemaName;
-        // Pass parameters as a plain object — SQLServerDataProvider treats this
-        // as named-parameter mode (request.input(key, value) per Object.entries),
-        // which is what the @-prefixed placeholders in the EXEC require.
-        // An array would be treated positionally with p0/p1 names and the
-        // {Name, Value} shape would be passed as a literal object value.
         // MJ pattern: positional parameter array with @p0/@p1/... placeholders.
         // SQLServerDataProvider binds positional params by index (request.input('p0', val)).
         // The sproc's own parameters are bound by name via `@SprocParam=@p0` syntax.
@@ -1197,18 +1196,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private getInstanceIdentifier(): string {
         return `${os.hostname()}-${process.pid}`;
-    }
-
-    /**
-     * Generate a GUID for lock tokens
-     * @private
-     */
-    private generateGuid(): string {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === 'x' ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-        });
     }
 
     /**
