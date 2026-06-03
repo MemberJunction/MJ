@@ -2617,8 +2617,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
         }
 
+        // Validate that the user has read permission on every entity referenced by this query
+        if (user) {
+            this.ValidateQueryEntityPermissions(query, user);
+        }
+
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
+        }
+    }
+
+    /**
+     * Validates that the user has read permission on all entities referenced by a query.
+     * If QueryEntities are not populated (e.g. older queries), logs a warning and allows
+     * execution for backwards compatibility.
+     *
+     * @param query - The query to validate entity permissions for
+     * @param user - The user attempting to execute the query
+     * @throws Error if the user lacks read permission on any referenced entity
+     */
+    protected ValidateQueryEntityPermissions(query: MJQueryEntityExtended, user: UserInfo): void {
+        const queryEntities = query.QueryEntities;
+        if (!queryEntities || queryEntities.length === 0) {
+            LogStatus(`WARNING: Query '${query.Name}' (ID: ${query.ID}) has no QueryEntity records. ` +
+                `Entity-level permission check skipped. Run the extraction pipeline to populate query-entity associations.`);
+            return;
+        }
+
+        const deniedEntityNames: string[] = [];
+        for (const qe of queryEntities) {
+            const entityInfo = this.Entities.find(e => UUIDsEqual(e.ID, qe.EntityID));
+            if (!entityInfo) {
+                // Entity metadata not found — could be a stale reference. Skip rather than block.
+                continue;
+            }
+
+            const permissions = entityInfo.GetUserPermisions(user);
+            if (!permissions || !permissions.CanRead) {
+                deniedEntityNames.push(entityInfo.Name);
+            }
+        }
+
+        if (deniedEntityNames.length > 0) {
+            throw new Error(
+                `User does not have read permission on the following entities referenced by query '${query.Name}' ` +
+                `(ID: ${query.ID}): ${deniedEntityNames.join(', ')}. ` +
+                `Grant read access to these entities or remove them from the query.`
+            );
         }
     }
 
