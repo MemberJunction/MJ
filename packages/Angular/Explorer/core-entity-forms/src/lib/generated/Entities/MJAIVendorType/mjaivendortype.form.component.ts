@@ -17,7 +17,7 @@ export class MJAIVendorTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'vendorIdentification', sectionName: 'Vendor Identification', isExpanded: true },
             { sectionKey: 'typeSpecification', sectionName: 'Type Specification', isExpanded: true },
-            { sectionKey: 'statusAudit', sectionName: 'Status & Audit', isExpanded: false },
+            { sectionKey: 'statusAudit', sectionName: 'Status & Audit', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
