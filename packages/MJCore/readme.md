@@ -858,6 +858,56 @@ Key features:
 
 ---
 
+### BaseEngineRegistry — cross-engine cache reverse lookup
+
+Every `BaseEngine` registers itself with the process-wide `BaseEngineRegistry` on
+load, so the registry always knows **which loaded engines cache which entities**.
+You can use that to ask, from anywhere, *"is this entity already fully in memory?
+if so, hand me the array — and don't go to the database."*
+
+This is the introspection behind the Admin → System Diagnostics "loaded engines"
+view, plus two reverse-lookup helpers:
+
+```typescript
+import { BaseEngineRegistry, UserInfo } from '@memberjunction/core';
+
+// All loaded engines that cache 'Users', unfiltered (full-set) caches first.
+// Each match carries the engine, its config, and a LIVE pointer to the array.
+const matches = BaseEngineRegistry.Instance.FindCachedEntity<UserInfo>('Users');
+// matches[0] => { engineClassName, engine, config, records: UserInfo[], unfiltered }
+
+// Or the one-liner: the best (unfiltered-preferred) cached array, or null.
+const users = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (users) {
+    // Small/static entity already in memory — filter/sort locally, zero DB calls.
+    const hits = users.filter(u => u.Name.toLowerCase().includes(q));
+} else {
+    // Not cached as a full set → fall back to a normal RunView against the DB.
+}
+```
+
+`FindCachedEntity(entityName, { unfilteredOnly? })`:
+- Considers **only loaded** engines (a registered-but-unloaded engine has no data).
+- Matches an engine config when `Type === 'entity'` and `EntityName` matches (case-insensitive, trimmed).
+- Orders **unfiltered caches first** — a config with no `Filter` holds the *complete*
+  entity set and is authoritative (safe for "show all" / in-memory search); filtered
+  caches (a subset) come after. `unfilteredOnly: true` omits the filtered ones.
+- Returns the engine's **live array** (not a copy) — read it, don't mutate it. When the
+  config's `ResultType` is `'simple'`, rows are plain objects, not `BaseEntity` instances.
+- Returns **all** matches when several engines cache the same entity, so the caller can
+  pick (by `engineClassName`, by inspecting `config`, etc.).
+
+`TryGetCachedRecords(entityName, { unfilteredOnly? })` is the convenience wrapper —
+the best match's array, or `null`.
+
+**Why it's useful:** UI and service code that needs to look up records for a
+small/static entity (FK pickers, dropdowns, validation) can serve the lookup from
+an already-loaded engine cache in a single line — no extra DB round-trip, no
+per-keystroke query — and transparently fall back to `RunView` when the entity
+isn't cached as a full set.
+
+---
+
 ### RegisterForStartup
 
 The `@RegisterForStartup` decorator registers singleton engine classes (or any class implementing `IStartupSink`) with the `StartupManager` to automatically run configuration/setup during application boot.

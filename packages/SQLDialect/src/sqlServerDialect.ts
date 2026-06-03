@@ -587,6 +587,18 @@ export class SQLServerDialect extends SQLDialect {
         }
     }
 
+    // ─── Error Classification ────────────────────────────────────────
+
+    IsConnectionError(e: unknown): boolean {
+        if (!(e instanceof Error)) return false;
+
+        // mssql driver sets error.name to 'ConnectionError' for all connectivity
+        // failures (timeout, refused, reset, TLS handshake, etc.)
+        return e.name === 'ConnectionError';
+    }
+
+    // ─── Private Helpers ────────────────────────────────────────────
+
     private resolveStringType(maxLength?: number): string {
         if (maxLength != null && maxLength > 0) {
             if (maxLength > 4000) return 'NVARCHAR(MAX)';

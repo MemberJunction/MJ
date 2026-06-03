@@ -50,6 +50,7 @@
     "@memberjunction/ng-explorer-settings": "5.38.0",
     "@memberjunction/ng-file-storage": "5.38.0",
     "@memberjunction/ng-shared": "5.38.0",
+    "@memberjunction/tag-engine-base": "5.38.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

@@ -1017,6 +1017,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /** Cached auth context — reused within a session to avoid redundant credential loads */
     private _cachedAuth: RESTAuthContext | null = null;
 
+    /** Cache of resolved default association typeIds, keyed by `${fromType}/${toType}`. */
+    private _assocTypeIdCache = new Map<string, number>();
+
     // ── Per-instance config accessors (fall back to module-level defaults) ──
     private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
     private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
@@ -1231,9 +1234,26 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     private static readonly ASSOCIATION_OBJECTS: Array<{
         name: string; label: string; description: string;
         apiPath: string; pkFields: [string, string];
+        /**
+         * HubSpot v4 create/delete "from" object type (e.g. 'deals'). The wire direction is
+         * DECOUPLED from pkFields order and apiPath order: pkFields drive the
+         * stored composite ExternalID, fromType/toType drive only the request body's from/to.
+         */
+        fromType?: string; toType?: string;
+        /** Which pkField supplies the wire 'from.id' / 'to.id'. */
+        fromPkField?: string; toPkField?: string;
+        /** HUBSPOT_DEFINED for all default associations. */
+        associationCategory?: 'HUBSPOT_DEFINED';
+        /**
+         * HUBSPOT_DEFINED typeId for fromType->toType (portal-independent constant).
+         * When omitted, CreateAssociation falls back to a cached /labels lookup.
+         * Reference: HubSpot default association type IDs (deal->contact = 3, contact->deal = 4, ...).
+         */
+        associationTypeId?: number;
     }> = [
         { name: 'assoc_contacts_companies', label: 'Contact ↔ Company', description: 'Associations between contacts and companies', apiPath: '/crm/v4/associations/contacts/companies', pkFields: ['contact_id', 'company_id'] },
-        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals', pkFields: ['contact_id', 'deal_id'] },
+        // deal->contact = 3 (HUBSPOT_DEFINED, verified via /labels). Wire from=deal even though stored key is contact|deal.
+        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals', pkFields: ['contact_id', 'deal_id'], fromType: 'deals', toType: 'contacts', fromPkField: 'deal_id', toPkField: 'contact_id', associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 },
         { name: 'assoc_contacts_tickets', label: 'Contact ↔ Ticket', description: 'Associations between contacts and tickets', apiPath: '/crm/v4/associations/contacts/tickets', pkFields: ['contact_id', 'ticket_id'] },
         { name: 'assoc_contacts_calls', label: 'Contact ↔ Call', description: 'Associations between contacts and calls', apiPath: '/crm/v4/associations/contacts/calls', pkFields: ['contact_id', 'call_id'] },
         { name: 'assoc_contacts_emails', label: 'Contact ↔ Email', description: 'Associations between contacts and emails', apiPath: '/crm/v4/associations/contacts/emails', pkFields: ['contact_id', 'email_id'] },
@@ -1241,7 +1261,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         { name: 'assoc_contacts_notes', label: 'Contact ↔ Note', description: 'Associations between contacts and notes', apiPath: '/crm/v4/associations/contacts/notes', pkFields: ['contact_id', 'note_id'] },
         { name: 'assoc_contacts_tasks', label: 'Contact ↔ Task', description: 'Associations between contacts and tasks', apiPath: '/crm/v4/associations/contacts/tasks', pkFields: ['contact_id', 'task_id'] },
         { name: 'assoc_contacts_feedback_submissions', label: 'Contact ↔ Feedback Submission', description: 'Associations between contacts and feedback submissions', apiPath: '/crm/v4/associations/contacts/feedback_submissions', pkFields: ['contact_id', 'feedback_submission_id'] },
-        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals', pkFields: ['company_id', 'deal_id'] },
+        // No hardcoded typeId — resolved at runtime via /labels (deals/companies exposes multiple HUBSPOT_DEFINED defaults).
+        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals', pkFields: ['company_id', 'deal_id'], fromType: 'companies', toType: 'deals', fromPkField: 'company_id', toPkField: 'deal_id', associationCategory: 'HUBSPOT_DEFINED' },
         { name: 'assoc_companies_tickets', label: 'Company ↔ Ticket', description: 'Associations between companies and tickets', apiPath: '/crm/v4/associations/companies/tickets', pkFields: ['company_id', 'ticket_id'] },
         { name: 'assoc_companies_calls', label: 'Company ↔ Call', description: 'Associations between companies and calls', apiPath: '/crm/v4/associations/companies/calls', pkFields: ['company_id', 'call_id'] },
         { name: 'assoc_companies_emails', label: 'Company ↔ Email', description: 'Associations between companies and emails', apiPath: '/crm/v4/associations/companies/emails', pkFields: ['company_id', 'email_id'] },
@@ -1738,19 +1759,33 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             };
         }
 
-        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
-        const fromType = pathParts[pathParts.length - 2];
-        const toType = pathParts[pathParts.length - 1];
+        // Wire direction is explicit config, decoupled from pkFields/apiPath order.
+        // attributes are keyed by pkField name, so map from/to via fromPkField/toPkField.
+        const { fromType, toType } = this.GetAssociationWireTypes(assocConfig);
+        const fromID = assocConfig.fromPkField ? String(attributes[assocConfig.fromPkField] ?? '') : leftID;
+        const toID = assocConfig.toPkField ? String(attributes[assocConfig.toPkField] ?? '') : rightID;
+
+        // typeId: hardcoded verified-only fast path; otherwise resolve from /labels.
+        const typeId = assocConfig.associationTypeId
+            ?? await this.ResolveAssociationTypeId(auth, headers, fromType, toType);
+        if (typeId == null) {
+            return { Success: false, ExternalID: '', StatusCode: 400, ErrorMessage: `CreateAssociation ${objectName}: could not resolve a HUBSPOT_DEFINED association typeId for ${fromType}->${toType}` };
+        }
+        const types = [{ associationCategory: assocConfig.associationCategory ?? 'HUBSPOT_DEFINED', associationTypeId: typeId }];
 
         const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/create`;
-        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID }, types: [] }] };
+        const body = { inputs: [{ from: { id: fromID }, to: { id: toID }, types }] };
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
 
-        if (response.Status >= 200 && response.Status < 300) {
+        // Never trust a bare 2xx — HubSpot returns 2xx with numErrors/empty results on
+        // validation failures and on the old empty-types no-op.
+        const batchError = this.GetAssociationBatchError(response);
+        if (!batchError) {
+            // Stored ExternalID stays in pkFields order (left|right), NOT wire order.
             return { Success: true, ExternalID: `${leftID}|${rightID}`, StatusCode: response.Status };
         }
 
-        return this.BuildCRUDErrorResult(response, 'CreateAssociation', objectName);
+        return { Success: false, ExternalID: '', StatusCode: response.Status, ErrorMessage: `CreateAssociation ${objectName}: ${batchError}` };
     }
 
     /**
@@ -1781,12 +1816,16 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const leftID = externalID.substring(0, pipeIndex);
         const rightID = externalID.substring(pipeIndex + 1);
 
-        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
-        const fromType = pathParts[pathParts.length - 2];
-        const toType = pathParts[pathParts.length - 1];
+        // Stored key is in pkFields order (left=pkFields[0], right=pkFields[1]). Map to the
+        // explicit wire direction so archive matches the create direction.
+        const { fromType, toType } = this.GetAssociationWireTypes(assocConfig);
+        const [leftPkField] = assocConfig.pkFields;
+        const idByPkField: Record<string, string> = { [leftPkField]: leftID, [assocConfig.pkFields[1]]: rightID };
+        const fromID = assocConfig.fromPkField ? idByPkField[assocConfig.fromPkField] : leftID;
+        const toID = assocConfig.toPkField ? idByPkField[assocConfig.toPkField] : rightID;
 
         const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/archive`;
-        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID } }] };
+        const body = { inputs: [{ from: { id: fromID }, to: { id: toID } }] };
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
 
         // batch/archive returns 204 No Content on success
@@ -1889,6 +1928,87 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 : JSON.stringify(response.Body).slice(0, 500);
             throw new Error(`[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status}): ${bodyPreview}`);
         }
+    }
+
+    /**
+     * Resolves the v4 wire from/to object types for an association. Uses explicit fromType/toType
+     * config when present; otherwise falls back to apiPath segment order. Both
+     * CreateAssociation and DeleteAssociation share this so create and archive always agree.
+     */
+    private GetAssociationWireTypes(
+        assocConfig: typeof HubSpotConnector.ASSOCIATION_OBJECTS[number]
+    ): { fromType: string; toType: string } {
+        const segments = assocConfig.apiPath.split('/').filter(Boolean);
+        return {
+            fromType: assocConfig.fromType ?? segments.at(-2)!,
+            toType: assocConfig.toType ?? segments.at(-1)!,
+        };
+    }
+
+    /**
+     * Resolves the default HUBSPOT_DEFINED association typeId for a (fromType, toType) pair via
+     * GET /crm/v4/associations/{fromType}/{toType}/labels, cached per pair for the connector's life.
+     * Picks the unlabeled HUBSPOT_DEFINED entry (label === null) as the plain default; if none is
+     * unlabeled, falls back to the sole/first HUBSPOT_DEFINED entry. Returns null on lookup failure
+     * or when no HUBSPOT_DEFINED entry exists — callers MUST treat null as a hard error (never
+     * silently send empty types).
+     */
+    private async ResolveAssociationTypeId(
+        auth: RESTAuthContext,
+        headers: Record<string, string>,
+        fromType: string,
+        toType: string
+    ): Promise<number | null> {
+        const cacheKey = `${fromType}/${toType}`;
+        const cached = this._assocTypeIdCache.get(cacheKey);
+        if (cached != null) return cached;
+
+        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/labels`;
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status < 200 || response.Status >= 300) {
+            console.warn(`[HubSpot] /labels lookup failed for ${cacheKey}: HTTP ${response.Status}`);
+            return null;
+        }
+
+        const body = response.Body as { results?: Array<{ category?: string; typeId?: number; label?: string | null }> } | undefined;
+        const defined = (body?.results ?? []).filter(r => r.category === 'HUBSPOT_DEFINED' && r.typeId != null);
+        if (defined.length === 0) return null;
+
+        const unlabeled = defined.find(r => r.label == null);
+        const chosen = (unlabeled ?? defined[0]).typeId!;
+        this._assocTypeIdCache.set(cacheKey, chosen);
+        return chosen;
+    }
+
+    /**
+     * Validates a v4 association batch/create response BODY (not just the HTTP status).
+     * HubSpot returns 2xx even when zero associations are created — on the legacy empty-`types`
+     * no-op (empty results, no errors) and on validation failures (empty results + numErrors).
+     * Returns null when the operation genuinely completed; otherwise a human-readable error.
+     * Predicate verified against live HubSpot batch/create responses.
+     */
+    private GetAssociationBatchError(response: RESTResponse): string | null {
+        if (response.Status < 200 || response.Status >= 300) {
+            const b = response.Body as Record<string, unknown> | undefined;
+            return b?.['message'] ? String(b['message']) : `HTTP ${response.Status}`;
+        }
+        const body = response.Body as {
+            status?: string;
+            results?: unknown[];
+            errors?: Array<{ message?: string }>;
+            numErrors?: number;
+        } | undefined;
+
+        if (body?.numErrors || (body?.errors && body.errors.length > 0)) {
+            return body.errors?.[0]?.message ?? `HubSpot reported ${body?.numErrors ?? body?.errors?.length} association error(s)`;
+        }
+        if (body?.status && body.status !== 'COMPLETE') {
+            return `association batch status was '${body.status}', expected 'COMPLETE'`;
+        }
+        if (!body?.results || body.results.length === 0) {
+            return `HubSpot returned no association results (2xx but nothing linked)`;
+        }
+        return null;
     }
 
     /** Builds a CRUDResult for error responses. */

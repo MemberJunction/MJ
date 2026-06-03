@@ -1528,19 +1528,30 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Nuclear recovery: clear all browser-side cached data and reload the page.
-   * This clears localStorage, sessionStorage, and IndexedDB to recover
-   * from stuck loading states caused by corrupted or stale cached data.
+   * Nuclear recovery: reset server-side workspace, clear all browser-side
+   * cached data, and reload the page. This recovers from stuck loading states
+   * caused by corrupted, stale, or incompatible workspace/tab data (e.g., after
+   * a version upgrade that changes the workspace configuration schema).
    */
-  ResetApplication(): void {
+  async ResetApplication(): Promise<void> {
     try {
-      // 1. Clear localStorage
+      // 1. Reset server-side workspace to a clean default configuration.
+      //    This is the most common cause of stuck loading: stale tab configs
+      //    from a previous version reference resources/driver classes that
+      //    no longer exist or have changed format.
+      await this.workspaceManager.ResetConfiguration();
+    } catch (e) {
+      console.warn('Error resetting workspace configuration:', e);
+    }
+
+    try {
+      // 2. Clear localStorage
       localStorage.clear();
 
-      // 2. Clear sessionStorage
+      // 3. Clear sessionStorage
       sessionStorage.clear();
 
-      // 3. Delete all IndexedDB databases
+      // 4. Delete all IndexedDB databases
       if (window.indexedDB?.databases) {
         window.indexedDB.databases().then(databases => {
           for (const db of databases) {
