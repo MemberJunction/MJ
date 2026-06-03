@@ -90,7 +90,13 @@ export class VectorizeEntityResolver extends ResolverBase {
             };
 
             const result = await syncer.VectorizeEntity(params, currentUser);
-            LogStatus(`VectorizeEntity pipeline ${pipelineRunID} complete: success=${result.success}`);
+            if (result.success) {
+                LogStatus(`VectorizeEntity pipeline ${pipelineRunID} complete: success=true`);
+            } else {
+                // The run finished but some/all records failed to render or upsert. Surface it
+                // loudly instead of logging a bare "success=false" that reads like a clean finish.
+                LogError(`VectorizeEntity pipeline ${pipelineRunID} completed with errors (status=${result.status}): ${result.errorMessage}`);
+            }
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`VectorizeEntity pipeline ${pipelineRunID} failed: ${msg}`);
@@ -110,11 +116,18 @@ export class VectorizeEntityResolver extends ResolverBase {
      * Publish a progress update to the PipelineProgress subscription topic.
      */
     private publishProgress(pipelineRunID: string, update: VectorizeProgressUpdate): void {
+        // Carry a short error summary to the client via CurrentItem when the update reports failures,
+        // so the subscription reflects that the run didn't cleanly succeed.
+        const errorSummary = update.Errors && update.Errors.length > 0
+            ? `${update.Errors.length} record(s) failed — e.g. ${update.Errors[0].Message}`
+            : undefined;
+
         const notification: PipelineProgressNotification = {
             PipelineRunID: pipelineRunID,
             Stage: update.Stage,
             TotalItems: update.TotalRecords,
             ProcessedItems: update.ProcessedRecords,
+            CurrentItem: errorSummary,
             ElapsedMs: update.ElapsedMs,
             PercentComplete: update.PercentComplete,
         };
