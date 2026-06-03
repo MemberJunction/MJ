@@ -4,8 +4,8 @@
 import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities, toJSONSafe } from "@memberjunction/ai";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
+import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 
 /**
  * Snapshot of a request's cacheable-prefix info, captured so the GEMINI_CACHE_DEBUG diagnostics
@@ -437,7 +437,7 @@ export class GeminiLLM extends BaseLLM {
                 modelSpecificResponseDetails: {
                     provider: 'google',
                     model: modelName,
-                    raw: toJSONSafe(result)
+                    raw: ToJSONSafe(result)
                 },
                 errorMessage: "",
                 exception: null,

@@ -13,4 +13,3 @@ export * from './generic/baseAudio';
 export * from './generic/baseVideo';
 export * from './generic/errorTypes';
 export * from './generic/errorAnalyzer';
-export * from './generic/serialization';

@@ -16,6 +16,7 @@ vi.mock('@lmstudio/sdk', () => {
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
+  ToJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v))),
 }));
 
 vi.mock('@memberjunction/ai', () => {
@@ -75,7 +76,6 @@ vi.mock('@memberjunction/ai', () => {
     SummarizeParams: class {},
     SummarizeResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
-    toJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v))),
   };
 });
 

@@ -1,12 +1,5 @@
 /**
- * JSON-safety helpers for capturing raw provider responses.
- *
- * Provider SDK response objects are generally parsed-from-JSON and safe, but some carry
- * non-enumerable accessor methods, BigInt usage counters, or (rarely) circular references.
- * {@link toJSONSafe} produces a plain, structurally-cloned value that is guaranteed to survive a
- * downstream `JSON.stringify` — important because the AI prompt-run pipeline stringifies
- * `ChatResult.modelSpecificResponseDetails`, and a circular reference there would throw and abort
- * the run save.
+ * Low-level JSON-safety primitives.
  */
 
 /**
@@ -14,10 +7,13 @@
  * `'[Circular]'` and BigInts are stringified. Functions / undefined are dropped exactly as
  * `JSON.stringify` would drop them. Returns `null` if the value isn't representable at all.
  *
- * The return is typed `unknown` (not `any`) so callers must narrow before use; for capturing a
- * raw response into a `Record<string, any>` audit blob, assigning the result directly is fine.
+ * Useful for capturing arbitrary third-party objects (e.g. an SDK response) into an audit blob
+ * that must survive a later `JSON.stringify` without throwing on a circular reference.
+ *
+ * The return is typed `unknown` (not `any`) so callers must narrow before use; assigning the
+ * result directly into a `Record<string, any>` blob is fine.
  */
-export function toJSONSafe(value: unknown): unknown {
+export function ToJSONSafe(value: unknown): unknown {
     const seen = new WeakSet<object>();
     let json: string | undefined;
     try {

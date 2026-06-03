@@ -2,8 +2,8 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
-    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities, toJSONSafe } from "@memberjunction/ai";
-import { RegisterClass } from "@memberjunction/global";
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
+import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 
 /**
  * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
@@ -593,7 +593,7 @@ export class AnthropicLLM extends BaseLLM {
                     thinking_budget_tokens: result.thinking_usage?.budget_tokens
                 },
                 // Full native Anthropic response (circular-safe) for review/audit.
-                raw: toJSONSafe(result)
+                raw: ToJSONSafe(result)
             };
             
             return chatResult;   

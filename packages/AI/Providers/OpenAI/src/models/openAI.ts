@@ -1,6 +1,6 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, toJSONSafe } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { OpenAI } from "openai";
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
 
 /**
@@ -303,7 +303,7 @@ export class OpenAILLM extends BaseLLM {
             },
             // Full native provider response (circular-safe) for review/audit. OpenAI-compatible
             // gateways (OpenRouter, Groq, etc.) inherit this, so their raw payloads land here too.
-            raw: toJSONSafe(result)
+            raw: ToJSONSafe(result)
         };
         
         return chatResult;

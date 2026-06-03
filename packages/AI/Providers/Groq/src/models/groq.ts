@@ -1,5 +1,5 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock, toJSONSafe } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq from 'groq-sdk';
 import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart } from 'groq-sdk/resources/chat/completions';
 
@@ -278,7 +278,7 @@ export class GroqLLM extends BaseLLM {
             provider: 'groq',
             model: chatResponse.model,
             systemFingerprint: (chatResponse as any).system_fingerprint,
-            raw: toJSONSafe(chatResponse)
+            raw: ToJSONSafe(chatResponse)
         };
         
         return result;
