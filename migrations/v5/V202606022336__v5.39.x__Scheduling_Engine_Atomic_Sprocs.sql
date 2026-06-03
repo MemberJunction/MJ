@@ -67,6 +67,13 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spAcquireScheduledJobLock] TO [cdp_D
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spAcquireScheduledJobLock] TO [cdp_Integration];
 GO
 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Atomically acquires a lock on a ScheduledJob row if the row is currently unlocked (LockToken IS NULL) OR if the existing lock is stale (ExpectedCompletionAt < now). The conditional WHERE clause collapses the load → check → save acquire pattern into a single atomic UPDATE, eliminating the TOCTOU window where two overlapping polls could both pass a check and both write. Returns Acquired = 1 if the row was updated, 0 otherwise. Called by ScheduledJobEngine.tryAcquireLock as part of the v5.39 poll-loop decoupling fix (GH #2736).',
+    @level0type = N'SCHEMA',    @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'PROCEDURE', @level1name = N'spAcquireScheduledJobLock';
+GO
+
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJobStatistics]
     @JobID         UNIQUEIDENTIFIER,
     @Success       BIT,
@@ -88,6 +95,13 @@ GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateScheduledJobStatistics] TO [cdp_Developer];
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateScheduledJobStatistics] TO [cdp_Integration];
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Atomically updates ONLY the five per-run statistics columns on a ScheduledJob row: RunCount (incremented), SuccessCount (incremented if @Success=1), FailureCount (incremented if @Success=0), LastRunAt, NextRunAt. Deliberately does NOT touch the four lock columns (LockToken, LockedAt, LockedByInstance, ExpectedCompletionAt) — a full-entity BaseEntity.Save() would write stale in-memory lock values back to the DB and clobber the live token set by spAcquireScheduledJobLock. Called by ScheduledJobEngine.updateJobStatistics. Any future engine code path that mutates a ScheduledJob row during normal polling must follow this targeted-update pattern, not BaseEntity.Save(). See plans/scheduled-job-engine-decoupling.md decision #8b.',
+    @level0type = N'SCHEMA',    @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'PROCEDURE', @level1name = N'spUpdateScheduledJobStatistics';
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spReleaseScheduledJobLockIfTokenMatches]
@@ -113,4 +127,11 @@ GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spReleaseScheduledJobLockIfTokenMatches] TO [cdp_Developer];
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spReleaseScheduledJobLockIfTokenMatches] TO [cdp_Integration];
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Atomically releases a ScheduledJob lock IF AND ONLY IF the current DB LockToken matches the expected token (the token this execution originally acquired via spAcquireScheduledJobLock). Prevents the lost-mutex hazard reachable after the v5.39 poll-loop decoupling: a stale holder whose lease expired and was reclaimed by a fresh holder must not be able to release the fresh holder''s lock when it eventually settles. Returns Released = 1 if cleared, 0 if the token did not match (someone else holds the lock now) or the lock was already released. Called by ScheduledJobEngine.releaseLockIfTokenMatches in executeJobWithLock''s finally block.',
+    @level0type = N'SCHEMA',    @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'PROCEDURE', @level1name = N'spReleaseScheduledJobLockIfTokenMatches';
 GO

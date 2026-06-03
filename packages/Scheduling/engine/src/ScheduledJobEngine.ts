@@ -768,7 +768,16 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             run.Success = result.Success;
             run.ErrorMessage = result.ErrorMessage || null;
             run.Details = result.Details ? JSON.stringify(result.Details) : null;
-            await run.Save();
+            const runSaved = await run.Save();
+            if (!runSaved) {
+                this.logError(
+                    `Failed to save run record for job ${job.Name} (run ${run.ID}): ` +
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown'}`,
+                    null
+                );
+                // Continue — stats update + release are still important even if
+                // the run record save failed (best-effort persistence).
+            }
 
             // Update job statistics
             await this.updateJobStatistics(job, result.Success, run.ID);
@@ -789,7 +798,15 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 run.Status = 'Failed';
                 run.Success = false;
                 run.ErrorMessage = error instanceof Error ? error.message : 'Unknown error';
-                await run.Save();
+                const runSaved = await run.Save();
+                if (!runSaved) {
+                    this.logError(
+                        `Failed to save failed-run record for job ${job.Name} (run ${run.ID}): ` +
+                        `${run.LatestResult?.CompleteMessage ?? 'unknown'}`,
+                        null
+                    );
+                    // Continue — stats update + release still need to happen.
+                }
                 await this.updateJobStatistics(job, false, run.ID);
             }
             this.logError(`Job failed: ${job.Name}`, error);
