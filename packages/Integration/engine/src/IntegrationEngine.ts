@@ -39,6 +39,7 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
@@ -1072,6 +1073,58 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
 
+        // §8a keyset checkpoint-resume: a connector that declares a StableOrderingKey for this object
+        // scans by a monotonic seek key (`WHERE <key> > AfterKey ORDER BY <key>`) instead of a timestamp
+        // watermark. For those, an INTERRUPTED scan persists its last ordering key on the Pull watermark
+        // record (WatermarkType='Cursor'); a clean scan clears it. Resuming from that key is provably
+        // safe — the connector re-fetches only `key > AfterKey`, so no record is skipped and any boundary
+        // overlap is absorbed by the idempotent upsert (and content-hash keeps unchanged rows write-free).
+        // Entirely dormant for non-keyset connectors (StableOrderingKey === null), so the existing
+        // timestamp path is untouched.
+        //
+        // KNOWN LIMITATION (intentional, documented): declaring a StableOrderingKey forces
+        // `initialWatermark = null` below — i.e. this engine treats "has a stable ordering key" and "uses
+        // a timestamp watermark" as MUTUALLY EXCLUSIVE. They are actually orthogonal (watermark = the
+        // *what-to-fetch* incremental filter; keyset = the *where-am-I* resume position), and the clean
+        // future shape is two independent connector signals the engine combines. Until then: a connector
+        // whose object DOES have a usable server-side date/timestamp incremental MUST NOT declare a
+        // StableOrderingKey for that object — doing so would null the watermark and silently turn every
+        // incremental sync into a full scan. (Concretely: HubSpot CRM objects use a date-watermark search
+        // and deliberately return null here; their >10k-window scale problem is solved connector-locally
+        // via keyset *within* the date filter, not by this engine path.) StableOrderingKey is the right
+        // tool only for objects with NO usable date watermark (pure repeated full scans).
+        const isKeysetConnector = config.connector.StableOrderingKey(entityMap.ExternalObjectName) != null;
+
+        // §7 partition (Merkle) hash-diff reconcile: an OPT-IN mode for watermark-less objects. Instead of
+        // re-applying every fetched record, accumulate them, bucket by stable identity, fold each bucket's
+        // content hashes into one rollup, and compare against last sync's rollups — then deep-apply ONLY the
+        // partitions whose rollup moved (changed/added). Unchanged partitions are proven-identical and
+        // skipped entirely (no match lookup, no upsert). The rollup snapshot lives on the Pull watermark
+        // record (WatermarkType='ChangeToken'); since the object is watermark-less, that field is free, so
+        // null the timestamp watermark here (same orthogonality caveat as keyset). Default-off: a connector
+        // with a real watermark is untouched.
+        const partitionReconcile = !isKeysetConnector && this.isPartitionReconcileEnabled(entityMap);
+        const partitionCount = this.partitionReconcileCount(entityMap);
+        if (partitionReconcile) {
+            initialWatermark = null; // the watermark record holds the rollup snapshot, not a timestamp
+        }
+
+        let resumeAfterKey: string | undefined;
+        if (isKeysetConnector) {
+            initialWatermark = null; // keyset connectors filter by the seek key, never a timestamp
+            if (!config.fullSync && watermark?.WatermarkType === 'Cursor' && watermark.WatermarkValue) {
+                resumeAfterKey = watermark.WatermarkValue;
+                logger?.emit('sync.resume.keyset', {
+                    externalObjectName: entityMap.ExternalObjectName,
+                    resumeAfterKey,
+                });
+                console.log(
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: resuming interrupted keyset scan ` +
+                    `from ordering key '${resumeAfterKey}' instead of re-scanning from the start.`
+                );
+            }
+        }
+
         const result: SyncResult = {
             Success: true,
             RecordsProcessed: 0,
@@ -1089,12 +1142,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let currentPage: number | undefined;
         let currentOffset: number | undefined;
         let currentCursor: string | undefined;
-        let currentAfterKey: string | undefined;   // §7 keyset/seek resume position (last-seen StableOrderingKey)
+        let currentAfterKey: string | undefined = resumeAfterKey;   // §7 keyset/seek resume position (last-seen StableOrderingKey)
         let batchCount = 0;
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
         const MAX_BATCHES_PER_MAP = 5000;
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
+        const accumulatedMapped: MappedRecord[] = []; // partition-reconcile mode: collect mapped records, apply post-loop
 
         while (hasMore) {
             if (abortSignal?.aborted) {
@@ -1208,13 +1262,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const mapped = this.fieldMappingEngine.Apply(
                 batch.Records, fieldMaps, entityMap.Entity
             );
-            const resolved = await this.matchEngine.Resolve(
-                mapped, entityMap, fieldMaps, contextUser
-            );
+            // Partition (Merkle) reconcile defers match + apply: accumulate mapped records now; the
+            // partition-diff + selective apply runs once after the full fetch (applyViaPartitionReconcile).
+            if (partitionReconcile) accumulatedMapped.push(...mapped);
+            const resolved = partitionReconcile
+                ? []
+                : await this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser);
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             try {
-                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger);
+                if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger);
             } catch (applyErr) {
                 if (applyErr instanceof SchemaNotGeneratedError) {
                     // The destination spCreate/Update/Delete doesn't exist
@@ -1243,7 +1300,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             const afterApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
 
-            if (batch.Records.length > 0) {
+            if (!partitionReconcile && batch.Records.length > 0) {
                 const written = afterApply - beforeApply;
                 const offsetInfo = currentOffset != null ? ` (offset ${currentOffset})` : '';
                 console.log(
@@ -1287,11 +1344,35 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     batchIndex: batchCount,
                     recordsInMap,
                 });
+                // Durable floor for a hard process kill: persist the keyset seek position to the
+                // watermark record (the only per-map store the next run loads at startup). The
+                // post-loop save below handles graceful early-exits precisely; this covers a SIGKILL
+                // between graceful checkpoints, costing at most ~25 batches of re-fetch on resume.
+                if (isKeysetConnector && currentAfterKey) {
+                    await this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser);
+                }
             }
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
-        if (fetchCompletedCleanly) {
+        // Partition (Merkle) reconcile: the full set is now accumulated — diff it against last sync's
+        // rollups and deep-apply ONLY the changed/added partitions; the new rollup snapshot is persisted
+        // inside. Runs only on a CLEAN fetch (a partial set would mis-skip partitions and lose updates).
+        if (partitionReconcile && fetchCompletedCleanly) {
+            await this.applyViaPartitionReconcile(accumulatedMapped, config, entityMap, fieldMaps, result, contextUser, logger, partitionCount);
+        }
+
+        if (fetchCompletedCleanly && partitionReconcile) {
+            // The rollup snapshot (not a timestamp) was saved by applyViaPartitionReconcile above.
+            result.WatermarkAfter = null;
+        } else if (fetchCompletedCleanly && isKeysetConnector) {
+            // A clean keyset scan covered the whole ordering range. These connectors have no
+            // timestamp filter — the next scheduled sync re-seeks from the start (content-hash keeps
+            // unchanged rows write-free) — so clear the resume marker rather than writing a timestamp
+            // into it, which the restore logic would otherwise mis-read as a seek key.
+            await this.watermarkService.ClearKeysetPosition(entityMapID, contextUser);
+            result.WatermarkAfter = null;
+        } else if (fetchCompletedCleanly) {
             // Save a watermark on every clean fetch, even when the connector
             // can't compute a NewWatermarkValue (empty result set, or a source
             // object with no modstamp column). Without the fallback, every
@@ -1317,12 +1398,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             await this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull');
             result.WatermarkAfter = finalWatermark;
+        } else if (isKeysetConnector && currentAfterKey) {
+            // The keyset scan stopped early (cancel / fetch error / safety limit). Persist the precise
+            // last ordering key so the next run resumes the seek from here instead of restarting.
+            await this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser);
+            result.WatermarkAfter = currentAfterKey;
         }
 
-        // Orphan detection: on full sync, delete MJ records whose external counterpart no longer exists.
-        // Only runs if the fetch completed cleanly — a partial fetch (aborted, errored, safety-limited)
-        // means fetchedExternalIDs is incomplete; running deletion on it would be catastrophic.
-        if (config.fullSync && fetchedExternalIDs.size > 0 && fetchCompletedCleanly) {
+        // Orphan detection: delete/tombstone MJ records whose external counterpart no longer exists.
+        // Runs on a full sync OR a partition-reconcile (both fetch the COMPLETE set, so an MJ record
+        // whose ExternalID isn't in fetchedExternalIDs is genuinely gone — even one inside an otherwise
+        // unchanged/skipped partition). Only on a clean fetch — a partial set would delete live records.
+        if ((config.fullSync || partitionReconcile) && fetchedExternalIDs.size > 0 && fetchCompletedCleanly) {
             await this.DeleteOrphanedRecords(
                 config.companyIntegration, entityMap, fetchedExternalIDs, result, contextUser, logger
             );
@@ -1974,6 +2061,115 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }, contextUser);
 
         return result.Success ? result.Results : [];
+    }
+
+    /** Parses the entity map's Configuration JSON (best-effort) for engine-side feature toggles. */
+    private parseEntityMapConfig(entityMap: ICompanyIntegrationEntityMap): { partitionReconcile?: boolean; partitionCount?: number } | null {
+        const raw = entityMap.Configuration;
+        if (!raw) return null;
+        try { return JSON.parse(raw) as { partitionReconcile?: boolean; partitionCount?: number }; } catch { return null; }
+    }
+
+    /** Opt-in partition (Merkle) reconcile flag from the entity map Configuration (GQL-managed). */
+    private isPartitionReconcileEnabled(entityMap: ICompanyIntegrationEntityMap): boolean {
+        return this.parseEntityMapConfig(entityMap)?.partitionReconcile === true;
+    }
+
+    /** Partition count for the reconcile (default 256), from the entity map Configuration if set. */
+    private partitionReconcileCount(entityMap: ICompanyIntegrationEntityMap): number {
+        const n = Number(this.parseEntityMapConfig(entityMap)?.partitionCount);
+        return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 256;
+    }
+
+    /**
+     * Partition (Merkle) hash-diff reconcile (§7). Given ALL mapped records of a watermark-less object,
+     * bucket them by stable identity, fold each bucket's content hashes into one order-independent rollup,
+     * compare against last sync's rollups, and deep-apply (match + upsert) ONLY the partitions whose rollup
+     * moved (changed/added). Partitions whose rollup matches are proven identical and skipped entirely
+     * (counted as skipped — no match lookup, no write). The new snapshot is persisted ONLY after a clean
+     * apply, so a failure re-reconciles from the prior snapshot next time. Deletes are handled by the
+     * caller's orphan sweep over the full fetched-id set.
+     *
+     * MEMORY: this mode buffers the ENTIRE fetched set (`accumulatedMapped`) in RAM until this post-loop
+     * apply, rather than streaming batch-by-batch — that's the cost of one complete cross-batch snapshot.
+     * It is intended for watermark-less small/medium objects (the kind that re-fetch everything anyway,
+     * e.g. a membership roster of tens of thousands). Don't enable it on a multi-million-row object; for
+     * those, leave it off and rely on per-record content-hash (which streams).
+     */
+    private async applyViaPartitionReconcile(
+        mappedRecords: MappedRecord[],
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        fieldMaps: ICompanyIntegrationFieldMap[],
+        result: SyncResult,
+        contextUser: UserInfo,
+        logger: SyncLogger | undefined,
+        partitionCount: number,
+    ): Promise<void> {
+        const entityMapID = entityMap.ID;
+        const idOf = (r: MappedRecord) => r.ExternalRecord.ExternalID;
+        const partitionOf = (r: MappedRecord) => partitionKeyForIdentity(idOf(r), partitionCount);
+
+        // Bucket + rollup the just-fetched full set.
+        const buckets = partitionRecords(mappedRecords, idOf, partitionOf);
+        const newRollups = new Map<string, string>();
+        for (const [partition, recs] of buckets) {
+            newRollups.set(partition, partitionRollupHash(recs, r => r.MappedFields));
+        }
+
+        // Diff against last sync's snapshot; only changed/added partitions need a deep apply. On a FORCED
+        // FULL SYNC, treat the snapshot as empty so EVERY partition is re-applied: fullSync is the operator's
+        // explicit "redo everything" — used to repair out-of-band drift (a manual DB edit, a changed field
+        // map, a partition that failed to apply on a prior run). Honoring the snapshot on fullSync would
+        // silently skip exactly the partitions the operator is trying to repair.
+        const stored = config.fullSync
+            ? new Map<string, string>()
+            : await this.watermarkService.LoadPartitionRollups(entityMapID, contextUser);
+        const diff = diffPartitions(newRollups, stored);
+        const toApply = new Set<string>([...diff.changed, ...diff.added]);
+
+        let appliedRecords = 0;
+        let skippedPartitions = 0;
+        let skippedRecords = 0;
+        try {
+            for (const [partition, recs] of buckets) {
+                if (!toApply.has(partition)) {
+                    skippedPartitions++;
+                    skippedRecords += recs.length;
+                    // Count as processed-and-skipped so the run invariant holds
+                    // (processed == created + updated + skipped + errored); these records never enter
+                    // ApplyRecords, which is the only other place RecordsProcessed is incremented.
+                    result.RecordsProcessed += recs.length;
+                    result.RecordsSkipped += recs.length;
+                    continue;
+                }
+                const resolved = await this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser);
+                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger);
+                appliedRecords += recs.length;
+            }
+        } catch (applyErr) {
+            if (applyErr instanceof SchemaNotGeneratedError) {
+                result.Errors.push({ ExternalID: '', ChangeType: 'Create', ErrorMessage: applyErr.message, ErrorCode: 'CONFIGURATION_ERROR', Severity: 'Critical' });
+                console.warn(`[IntegrationEngine] ${entityMap.ExternalObjectName} → ${entityMap.Entity}: ${applyErr.message} (partition reconcile aborted; snapshot not advanced)`);
+                return; // do NOT persist the new rollups — next sync re-reconciles from the prior snapshot
+            }
+            throw applyErr;
+        }
+
+        // Persist the new snapshot only after a clean apply.
+        await this.watermarkService.SavePartitionRollups(entityMapID, newRollups, contextUser);
+
+        logger?.emit('sync.partition.reconcile', {
+            externalObjectName: entityMap.ExternalObjectName,
+            totalRecords: mappedRecords.length,
+            totalPartitions: buckets.size,
+            changedPartitions: diff.changed.length,
+            addedPartitions: diff.added.length,
+            removedPartitions: diff.removed.length,
+            appliedRecords,
+            skippedPartitions,
+            skippedRecords,
+        });
     }
 
     /**

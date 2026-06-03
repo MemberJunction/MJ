@@ -23,6 +23,18 @@ import { computeContentHash } from './ContentHash.js';
  * side of the comparison.
  */
 
+/**
+ * Stable partition bucket for a record IDENTITY (e.g. its ExternalID). Hashing the identity (not the
+ * content) keeps a record in the SAME partition across syncs even when its content changes — so a
+ * content edit shows up as a *changed partition* rather than a record hopping buckets. SHA-256 of the
+ * id, first 4 bytes folded modulo `partitionCount`, gives an even, deterministic spread. Default 256
+ * buckets is a sane balance (few enough rollups to store, fine-grained enough to skip most work).
+ */
+export function partitionKeyForIdentity(identity: string, partitionCount = 256): string {
+    const hex = createHash('sha256').update(identity).digest('hex').slice(0, 8);
+    return String(parseInt(hex, 16) % Math.max(1, partitionCount));
+}
+
 /** Outcome of comparing a local partition→rollup map against a remote one. */
 export type PartitionDiff = {
     /** Partitions present on BOTH sides whose rollup hash differs — need a deep re-sync. */

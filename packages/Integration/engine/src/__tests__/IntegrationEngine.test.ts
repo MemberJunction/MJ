@@ -159,6 +159,7 @@ function createMockConnector(fetchResult: FetchBatchResult): BaseIntegrationConn
         RateLimitPolicy: null,
         ExtractRetryAfterMs: () => undefined,
         PostProcessRecord: (r: ExternalRecord) => r,
+        StableOrderingKey: () => null,
     } as unknown as BaseIntegrationConnector;
 }
 
@@ -449,6 +450,7 @@ describe('IntegrationEngine', () => {
             RateLimitPolicy: null,
             ExtractRetryAfterMs: () => undefined,
             PostProcessRecord: (r: ExternalRecord) => r,
+            StableOrderingKey: () => null,
         } as unknown as BaseIntegrationConnector;
 
         const companyIntegration = createMockCompanyIntegration();
@@ -507,6 +509,77 @@ describe('IntegrationEngine', () => {
             expect(result.RecordsProcessed).toBe(3);
             expect(result.RecordsCreated).toBe(3);
             expect(fetchCallCount).toBe(2);
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+        }
+    });
+
+    it('should resume a keyset scan from the persisted Cursor watermark (§8a checkpoint-resume)', async () => {
+        const seenAfterKeys: Array<string | null | undefined> = [];
+        const connector = {
+            TestConnection: vi.fn(),
+            DiscoverObjects: vi.fn(),
+            DiscoverFields: vi.fn(),
+            FetchChanges: vi.fn().mockImplementation(async (ctx: FetchContext) => {
+                seenAfterKeys.push(ctx.AfterKeyValue);
+                return {
+                    Records: [{ ExternalID: 'ext-9', ObjectType: 'Contact', Fields: { Name: 'Contact 9' }, IsDeleted: false }],
+                    HasMore: false,
+                    NextAfterKeyValue: 'ext-9',
+                };
+            }),
+            GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+            RateLimitPolicy: null,
+            ExtractRetryAfterMs: () => undefined,
+            PostProcessRecord: (r: ExternalRecord) => r,
+            // Keyset-capable: declares a stable ordering key for this object, so the engine resumes by seek.
+            StableOrderingKey: () => 'hs_object_id',
+        } as unknown as BaseIntegrationConnector;
+
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1', Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null), Name: 'Test', ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            { Success: true, Results: [{
+                Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                CompanyIntegrationID: 'ci-1', EntityID: 'entity-1', ConflictResolution: 'SourceWins',
+                DeleteBehavior: 'SoftDelete', Entity: 'Contacts', ExternalObjectName: 'contacts',
+            }] },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        // The previously-interrupted scan left a Cursor watermark at ordering key '1500'.
+        const cursorWatermark = {
+            EntityMapID: 'em-1', Direction: 'Pull', WatermarkType: 'Cursor', WatermarkValue: '1500',
+            LastSyncAt: null, RecordsSynced: 0, Save: vi.fn().mockResolvedValue(true),
+        };
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return { Success: true, Results: [{ SourceFieldName: 'Name', DestinationFieldName: 'Name', TransformPipeline: null, IsKeyField: false, Status: 'Active', Priority: 0 }] };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [cursorWatermark] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            await orchestrator.RunSync('ci-1', contextUser);
+            // The first (and only) fetch must have been seeded with the persisted seek key — proof the
+            // engine resumed the interrupted scan instead of restarting from the beginning.
+            expect(seenAfterKeys[0]).toBe('1500');
+            // A clean scan clears the resume marker so the next run seeks fresh.
+            expect(cursorWatermark.WatermarkValue).toBeNull();
+            expect(cursorWatermark.Save).toHaveBeenCalled();
         } finally {
             ConnectorFactory.Resolve = resolveOrig;
         }

@@ -66,11 +66,12 @@ export async function runCredentialSafe({ secrets, run }) {
 
     const scrub = makeScrubber(Object.values(values));
 
-    // Wrap console so anything the connector prints is scrubbed before it reaches stdout.
+    // Route ALL captured console output to STDERR, scrubbed — so STDOUT is reserved for the single
+    // final JSON result line. A parent process (the broker) can then capture a clean result from
+    // stdout while the scrubbed logs still stream on stderr.
     const orig = { log: console.log, warn: console.warn, error: console.error, info: console.info, debug: console.debug };
-    const wrap = (fn) => (...args) => fn(...args.map(a => (typeof a === 'string' ? scrub(a) : scrubDeep(a, scrub))));
-    console.log = wrap(orig.log); console.warn = wrap(orig.warn); console.error = wrap(orig.error);
-    console.info = wrap(orig.info); console.debug = wrap(orig.debug);
+    const toErr = (...args) => process.stderr.write(args.map(a => (typeof a === 'string' ? scrub(a) : JSON.stringify(scrubDeep(a, scrub)))).join(' ') + '\n');
+    console.log = toErr; console.info = toErr; console.debug = toErr; console.warn = toErr; console.error = toErr;
 
     try {
         const result = await run(values, scrub);

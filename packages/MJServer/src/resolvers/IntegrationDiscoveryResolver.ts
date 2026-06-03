@@ -554,6 +554,8 @@ class EntityMapInput {
     @Field({ nullable: true }) EntityID?: string;
     @Field({ nullable: true, defaultValue: 'Pull' }) SyncDirection?: string;
     @Field({ nullable: true, defaultValue: 0 }) Priority?: number;
+    /** Per-map engine config JSON (e.g. {"partitionReconcile":true,"partitionCount":256}). GQL-set so it's the source of truth. */
+    @Field({ nullable: true }) Configuration?: string;
     @Field(() => [FieldMapInput], { nullable: true }) FieldMaps?: FieldMapInput[];
 }
 
@@ -631,6 +633,8 @@ class EntityMapUpdateInput {
     @Field({ nullable: true }) SyncDirection?: string;
     @Field({ nullable: true }) Priority?: number;
     @Field({ nullable: true }) Status?: string;
+    /** Per-map engine config JSON (e.g. {"partitionReconcile":true}). GQL is the source of truth. */
+    @Field({ nullable: true }) Configuration?: string;
 }
 
 @ObjectType()
@@ -642,6 +646,8 @@ class EntityMapSummaryOutput {
     @Field({ nullable: true }) SyncDirection?: string;
     @Field({ nullable: true }) Priority?: number;
     @Field({ nullable: true }) Status?: string;
+    /** Per-map engine config JSON (partitionReconcile, etc.) so callers can read the source of truth. */
+    @Field({ nullable: true }) Configuration?: string;
 }
 
 @ObjectType()
@@ -2503,6 +2509,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 em.SyncDirection = syncDir;
                 em.Priority = mapDef.Priority || 0;
                 em.Status = 'Active';
+                if (mapDef.Configuration != null) em.Configuration = mapDef.Configuration;
 
                 if (!await em.Save()) {
                     return { Success: false, Message: `Failed to create map for ${mapDef.ExternalObjectName}`, Created: created };
@@ -3643,7 +3650,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'Priority ASC',
                 ResultType: 'simple',
-                Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status']
+                Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status', 'Configuration']
             }, user);
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
@@ -3709,6 +3716,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     em.SyncDirection = update.SyncDirection;
                 }
                 if (update.Priority != null) em.Priority = update.Priority;
+                if (update.Configuration != null) em.Configuration = update.Configuration;
                 if (update.Status != null) {
                     if (!isValidEntityMapStatus(update.Status)) {
                         errors.push(`${update.EntityMapID}: invalid Status "${update.Status}"`);

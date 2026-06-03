@@ -1,5 +1,43 @@
 import { describe, it, expect } from 'vitest';
-import { partitionRecords, partitionRollupHash, diffPartitions } from '../HashDiff.js';
+import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from '../HashDiff.js';
+
+describe('partitionKeyForIdentity', () => {
+    it('is deterministic — same identity always maps to the same partition', () => {
+        expect(partitionKeyForIdentity('ext-123')).toBe(partitionKeyForIdentity('ext-123'));
+        expect(partitionKeyForIdentity('ext-123', 64)).toBe(partitionKeyForIdentity('ext-123', 64));
+    });
+    it('stays within [0, partitionCount)', () => {
+        for (let i = 0; i < 500; i++) {
+            const p = Number(partitionKeyForIdentity(`id-${i}`, 16));
+            expect(p).toBeGreaterThanOrEqual(0);
+            expect(p).toBeLessThan(16);
+        }
+    });
+    it('distributes across buckets (not all in one)', () => {
+        const seen = new Set<string>();
+        for (let i = 0; i < 1000; i++) seen.add(partitionKeyForIdentity(`id-${i}`, 256));
+        expect(seen.size).toBeGreaterThan(100); // ~256 expected; assert it's clearly spread
+    });
+    it('defaults to 256 buckets', () => {
+        for (let i = 0; i < 200; i++) expect(Number(partitionKeyForIdentity(`id-${i}`))).toBeLessThan(256);
+    });
+    it('partition is stable under content change (keyed by identity, not content)', () => {
+        // The same ExternalID lands in the same bucket regardless of any other attribute.
+        expect(partitionKeyForIdentity('contact-9')).toBe(partitionKeyForIdentity('contact-9'));
+    });
+
+    it('fullSync semantics: diffing against an EMPTY snapshot re-applies EVERY partition (all added)', () => {
+        // applyViaPartitionReconcile treats the stored snapshot as empty when config.fullSync is true, so
+        // every partition becomes "added" → applied. This is the repair path: fullSync redoes everything,
+        // never skipping a partition whose MJ row drifted out-of-band from the snapshot.
+        const newRollups = new Map([['0', 'a'], ['1', 'b'], ['2', 'c']]);
+        const diff = diffPartitions(newRollups, new Map());
+        expect(diff.added.sort()).toEqual(['0', '1', '2']);
+        expect(diff.changed).toEqual([]);
+        expect(diff.removed).toEqual([]);
+        // toApply = changed ∪ added = all three → nothing skipped.
+    });
+});
 
 type Rec = { id: string; partition: string; name: string; score: number };
 

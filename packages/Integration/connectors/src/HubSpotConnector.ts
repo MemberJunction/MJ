@@ -94,6 +94,29 @@ const REQUEST_TIMEOUT_MS = 30000;
 const MIN_REQUEST_INTERVAL_MS = 100;
 
 /**
+ * HubSpot CRM search API hard cap: the opaque `after` offset cannot page beyond 10,000 results
+ * within a single query window. Incremental windows larger than this (and same-`hs_lastmodifieddate`
+ * clusters bigger than 10k from bulk imports) must re-anchor by keyset to be fetched completely.
+ */
+const HUBSPOT_SEARCH_WINDOW_CAP = 10_000;
+
+/**
+ * Within-scan resume state for the search-based incremental fetch (FetchChangesViaSearch).
+ * Serialized into FetchBatchResult.NextCursor so the engine threads it back via
+ * FetchContext.CurrentCursor on the next call.
+ *
+ * - `after` paginates WITHIN a single ≤10k HubSpot search window (the API's own opaque offset).
+ * - `anchorDateMs` + `anchorId` re-anchor the NEXT window by a (dateField, hs_object_id) keyset
+ *   once the 10k cap is hit, so a window larger than 10k — including a >10k cluster that all shares
+ *   one modified-date — is paged completely instead of stalling on a watermark that cannot advance.
+ */
+interface HubSpotSearchCursor {
+    after?: string;
+    anchorDateMs?: string;
+    anchorId?: string;
+}
+
+/**
  * Comprehensive HubSpot object metadata — single source of truth for both
  * action generation and API property requests.
  *
@@ -2761,8 +2784,28 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /**
      * Fetches changed records using the HubSpot search API with server-side date filtering.
      * Much more efficient than fetching ALL records and filtering client-side.
+     *
+     * Handles the search API's 10,000-results-per-window hard cap by keyset re-anchoring: results
+     * are sorted by (dateField, hs_object_id) ASCENDING, paginated within a window by the API's
+     * opaque `after` offset, and once that offset hits the 10k cap the NEXT window re-anchors with a
+     * compound filter `(dateField > anchor) OR (dateField == anchor AND hs_object_id > anchorId)`.
+     * This makes an incremental window — or a bulk-import cluster of >10k records that all share one
+     * `hs_lastmodifieddate` — page through completely in a single sync, instead of the watermark
+     * stalling on a same-timestamp cluster it can never advance past (which silently lost records).
+     * The date GTE watermark remains the primary filter throughout, so incremental sync is preserved.
+     *
+     * LIVE-VERIFY (confirm during the credentialed run against a real >10k same-timestamp cluster):
+     *  1. hs_object_id GT/EQ comparison in v3 search is NUMERIC, not lexicographic. HIGHEST STAKES — if
+     *     lexicographic, '2' > '10000' and the keyset would skip records. (hs_object_id is a sequential
+     *     64-bit integer / number-typed property, so numeric is expected, but prove it across an
+     *     id-magnitude boundary, e.g. ids 9, 10, 100, 1000 within one timestamp cluster.)
+     *  2. Datetime filter values accept epoch-millis-as-string for EQ/GT/GTE (the pre-existing GTE
+     *     watermark filter already relies on this, so a regression here would also break prior behavior).
+     *  3. The compound (dateField ASC, hs_object_id ASC) sort is honored deterministically across pages
+     *     and object types, so the last raw result is the true (date,id)-max keyset boundary.
+     *  4. `total` reflects the CURRENT filterGroups per re-anchored query (not a cached original count).
      */
-    private async FetchChangesViaSearch(ctx: FetchContext): Promise<FetchBatchResult> {
+    protected async FetchChangesViaSearch(ctx: FetchContext): Promise<FetchBatchResult> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -2773,21 +2816,36 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const properties = this.BuildEffectiveProperties(ctx.ObjectName, ctx.RequestedSourceFields);
         const pageSize = Math.min(ctx.BatchSize ?? 100, 100); // HubSpot search API max is 100
 
+        const cursor = this.parseSearchCursor(ctx.CurrentCursor);
+        const isReanchored = cursor.anchorDateMs != null && cursor.anchorId != null;
+
+        // When re-anchored past a 10k window, the keyset predicate replaces the plain GTE filter.
+        // anchorDateMs is always >= watermarkMs (we only ever advance), so the keyset predicate
+        // subsumes the original watermark filter — incremental scope is never widened.
+        const filterGroups = isReanchored
+            ? [
+                  { filters: [{ propertyName: dateField, operator: 'GT', value: cursor.anchorDateMs }] },
+                  { filters: [
+                      { propertyName: dateField, operator: 'EQ', value: cursor.anchorDateMs },
+                      { propertyName: 'hs_object_id', operator: 'GT', value: cursor.anchorId },
+                  ] },
+              ]
+            : [{ filters: [{ propertyName: dateField, operator: 'GTE', value: String(watermarkMs) }] }];
+
         const searchBody: Record<string, unknown> = {
-            filterGroups: [{
-                filters: [{
-                    propertyName: dateField,
-                    operator: 'GTE',
-                    value: String(watermarkMs),
-                }],
-            }],
-            sorts: [{ propertyName: dateField, direction: 'ASCENDING' }],
+            filterGroups,
+            // Secondary sort on hs_object_id is REQUIRED: it makes ordering deterministic within a
+            // same-timestamp cluster so the keyset anchor (last record's id) is well-defined and the
+            // next window can never skip or re-emit a record at the boundary.
+            sorts: [
+                { propertyName: dateField, direction: 'ASCENDING' },
+                { propertyName: 'hs_object_id', direction: 'ASCENDING' },
+            ],
             properties,
             limit: pageSize,
         };
-
-        if (ctx.CurrentCursor) {
-            searchBody['after'] = ctx.CurrentCursor;
+        if (cursor.after) {
+            searchBody['after'] = cursor.after;
         }
 
         const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/search`;
@@ -2799,20 +2857,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             total?: number;
             paging?: { next?: { after?: string } };
         };
-
-        // HubSpot Search API hard limit: 10,000 results maximum per query window.
-        // If total > 10K, only the oldest-modified records (sorted ASCENDING) are returned.
-        // The watermark advances to the batch's max date each cycle, so subsequent syncs
-        // pick up the remainder — no records are permanently lost, but multiple sync cycles
-        // are needed to catch up. Log a warning so operators can monitor.
         const searchTotal = body.total ?? 0;
-        if (searchTotal > 10_000) {
-            console.warn(
-                `[HubSpot] ${ctx.ObjectName}: Search API returned total=${searchTotal} but is capped at 10,000 results. ` +
-                `Sync will require ${Math.ceil(searchTotal / 10_000)} cycles to catch up from watermark ${ctx.WatermarkValue}. ` +
-                `Consider reducing the sync interval or enabling continuous sync for this object.`
-            );
-        }
 
         const rawResults = body.results ?? [];
         const records: ExternalRecord[] = rawResults.map(r => {
@@ -2825,11 +2870,39 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             };
         });
 
-        const nextCursor = body.paging?.next?.after;
-        const hasMore = nextCursor != null;
+        // Keyset anchor for the NEXT window = the last record in (date, id) sort order.
+        const anchor = this.extractSearchAnchor(rawResults, dateField);
+        const { nextCursor, hasMore, stalled } = this.computeSearchResume({
+            incoming: cursor,
+            pagingNextAfter: body.paging?.next?.after,
+            total: searchTotal,
+            lastAnchorDateMs: anchor.dateMs,
+            lastAnchorId: anchor.id,
+        });
 
-        // On the final page of active records, also fetch archived (deleted) records
-        // since the watermark so they flow through the engine's delete pipeline.
+        if (stalled) {
+            // total exceeds the window cap but we couldn't form a keyset anchor to page past it. Fail
+            // LOUD rather than silently dropping the remainder: the engine catches this, marks the
+            // fetch incomplete, and leaves the watermark un-advanced so the next sync retries the gap.
+            throw new Error(
+                `HubSpot ${ctx.ObjectName}: search reported total=${searchTotal} (beyond the ` +
+                `${HUBSPOT_SEARCH_WINDOW_CAP}-record window cap) but the last page returned no keyset anchor, ` +
+                `so the scan cannot advance without risking silent record loss. Aborting this fetch; the ` +
+                `watermark is left un-advanced and the remainder is retried on the next sync.`
+            );
+        }
+
+        if (searchTotal > HUBSPOT_SEARCH_WINDOW_CAP && !cursor.after && !isReanchored) {
+            // Informational only — the keyset re-anchor below pages through the whole window in this
+            // sync; this is no longer a multi-cycle stall, just a large object worth noting.
+            console.log(
+                `[HubSpot] ${ctx.ObjectName}: ${searchTotal} records since watermark exceed the 10k search window; ` +
+                `keyset-paginating by (${dateField}, hs_object_id) to fetch them all in this sync.`
+            );
+        }
+
+        // On the final page of the entire scan, also fetch archived (deleted) records since the
+        // watermark so they flow through the engine's delete pipeline.
         if (!hasMore) {
             const archived = await this.FetchArchivedCRMChanges(
                 auth, headers, ctx.ObjectName, dateField, watermarkMs, properties
@@ -2849,9 +2922,109 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         return {
             Records: records,
             HasMore: hasMore,
-            NextCursor: nextCursor,
+            NextCursor: nextCursor ? JSON.stringify(nextCursor) : undefined,
             NewWatermarkValue: newWatermark,
         };
+    }
+
+    /**
+     * Parses the {@link HubSpotSearchCursor} threaded via FetchContext.CurrentCursor. Tolerates a
+     * legacy raw `after` string (pre-keyset format) by treating it as a plain window offset, so an
+     * in-flight sync mid-upgrade degrades gracefully rather than throwing.
+     */
+    protected parseSearchCursor(raw: string | undefined): HubSpotSearchCursor {
+        if (!raw) return {};
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed as HubSpotSearchCursor;
+            // Parsed to a primitive (e.g. a bare numeric `after` like "9900" from the pre-keyset
+            // format) — treat the raw value as a plain window offset.
+            return { after: raw };
+        } catch {
+            return { after: raw };
+        }
+    }
+
+    /**
+     * Extracts the keyset anchor (the last record's dateField-as-epoch-ms and hs_object_id) from a
+     * batch of raw search results. Because results are sorted (dateField, hs_object_id) ASCENDING,
+     * the last element is the maximum position and therefore the resume point for the next window.
+     * Returns undefined fields when the batch is empty or the values can't be parsed.
+     */
+    private extractSearchAnchor(
+        rawResults: unknown[],
+        dateField: string
+    ): { dateMs?: string; id?: string } {
+        if (rawResults.length === 0) return {};
+        const lastFlat = this.FlattenHubSpotRecord(rawResults[rawResults.length - 1] as Record<string, unknown>);
+        const id = lastFlat['hs_object_id'];
+        const result: { dateMs?: string; id?: string } = {};
+        if (id != null && String(id).length > 0) result.id = String(id);
+        const dateMs = this.toEpochMs(lastFlat[dateField]);
+        if (dateMs != null) result.dateMs = dateMs;
+        return result;
+    }
+
+    /**
+     * Normalizes a HubSpot datetime property value to an epoch-millis string for use in a search
+     * filter. Accepts both an ISO-8601 string (the usual v3 shape) and a bare epoch-millis numeric
+     * string (some endpoints/properties). Returns undefined when unparseable — callers then skip
+     * re-anchoring rather than seeking from a NaN position.
+     */
+    private toEpochMs(dateVal: unknown): string | undefined {
+        if (dateVal == null) return undefined;
+        const s = String(dateVal);
+        const iso = new Date(s).getTime();
+        if (!Number.isNaN(iso)) return String(iso);
+        const epoch = Number(s);
+        if (!Number.isNaN(epoch) && epoch > 0) return String(epoch);
+        return undefined;
+    }
+
+    /**
+     * Pure decision for the next search window, given this page's pagination + total. No network.
+     *
+     * - If more pages remain inside the current ≤10k window, advance the API `after` offset and keep
+     *   the same anchor.
+     * - Otherwise the window is exhausted (the API stopped returning `after`, or it reached the 10k
+     *   cap). If records still match the current filter (`total > cap`), re-anchor the next window on
+     *   the last record's (dateField, hs_object_id) keyset; else the scan is complete.
+     *
+     * `total` is the count matching the CURRENT filter, so after each re-anchor it shrinks by roughly
+     * one window until it falls to/under the cap — guaranteeing termination with no skipped records
+     * (the anchor's id strictly increases) and no duplicates (the keyset predicate excludes it).
+     */
+    protected computeSearchResume(args: {
+        incoming: HubSpotSearchCursor;
+        pagingNextAfter: string | undefined;
+        total: number;
+        lastAnchorDateMs: string | undefined;
+        lastAnchorId: string | undefined;
+    }): { nextCursor: HubSpotSearchCursor | undefined; hasMore: boolean; stalled?: boolean } {
+        const { incoming, pagingNextAfter, total, lastAnchorDateMs, lastAnchorId } = args;
+        const cap = HUBSPOT_SEARCH_WINDOW_CAP;
+
+        const withinWindow = pagingNextAfter != null && Number(pagingNextAfter) < cap;
+        if (withinWindow) {
+            return {
+                nextCursor: { after: pagingNextAfter, anchorDateMs: incoming.anchorDateMs, anchorId: incoming.anchorId },
+                hasMore: true,
+            };
+        }
+
+        if (total > cap) {
+            if (lastAnchorId != null && lastAnchorDateMs != null) {
+                return { nextCursor: { anchorDateMs: lastAnchorDateMs, anchorId: lastAnchorId }, hasMore: true };
+            }
+            // total exceeds the 10k window cap but this page produced no usable keyset anchor — which
+            // means HubSpot returned a total > 0 with an empty/anchorless page (a contract violation).
+            // Re-anchoring is impossible; silently stopping here would DROP the remaining records — the
+            // exact silent-loss this fix exists to prevent. Flag it so the caller aborts loudly and
+            // leaves the watermark un-advanced (the next sync retries the gap) instead of skipping it.
+            return { nextCursor: undefined, hasMore: false, stalled: true };
+        }
+
+        return { nextCursor: undefined, hasMore: false };
     }
 
     /**
@@ -2887,7 +3060,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                         value: String(watermarkMs),
                     }],
                 }],
-                sorts: [{ propertyName: dateField, direction: 'ASCENDING' }],
+                // Secondary sort on hs_object_id matches the active-record path: bulk deletions often
+                // share one hs_lastmodifieddate, so without a tie-breaker the opaque `after` pages of
+                // this archived scan have undefined intra-cluster order and could skip/duplicate.
+                sorts: [
+                    { propertyName: dateField, direction: 'ASCENDING' },
+                    { propertyName: 'hs_object_id', direction: 'ASCENDING' },
+                ],
                 properties,
                 limit: 100,
                 archived: true,

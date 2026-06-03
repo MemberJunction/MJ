@@ -42,6 +42,8 @@ export type SyncLogEvent =
     | 'sync.connector.built'
     | 'sync.connector.test'
     | 'sync.entity-map.start'
+    | 'sync.resume.keyset'
+    | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'
     | 'sync.fetch.batch.complete'
     | 'sync.record.decision'

@@ -96,7 +96,7 @@ export { WatermarkService } from './WatermarkService.js';
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 
 // Partitioned / Merkle-style hash-diff — find changed partitions cheaply when no incremental cursor exists
-export { partitionRecords, partitionRollupHash, diffPartitions } from './HashDiff.js';
+export { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 export type { PartitionDiff } from './HashDiff.js';
 
 // MostRecent conflict resolution recency comparison
