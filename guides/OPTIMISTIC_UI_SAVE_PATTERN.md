@@ -56,19 +56,31 @@ OnValidated?: (entity: unknown) => void;
 MJ already has an entity event bus — `BaseEntity.RaiseEvent(...)` emits `save_started` (fires *before*
 validation) and `save` (fires *after* persist) as `BaseEntityEvent` types, and `BaseEngine.ObserveProperty`
 / `DataChange$` consume them. The validation-passed/pre-persist moment could instead be modeled as a **new
-`'validated'` event type** on that bus, which any subscriber could observe.
+`'validated'` event type** on that bus. We use a **per-call `OnValidated` option** instead, for two reasons:
 
-This proposal uses a **per-call `OnValidated` option** rather than a broadcast event, deliberately:
+1. **Cardinality.** Optimistic render is **1:1 and the initiator *is* the observer** — the component that
+   called `Save()` is the one that wants to render. A callback handed into that call is the correct shape for
+   1:1; an event is for 1:N, where parties *other than the saver* react. (A broadcast event is perfectly
+   *correlatable* — `BaseEntityEvent` carries the entity — so "which save fired?" is not the obstacle; the
+   mismatch is cardinality + cost: a global `validated` event fires on **every** save and wakes **every**
+   subscriber on a hot path, for a feature a handful of callers use. The per-call option costs nothing when
+   the field is undefined.)
+2. **The 1:N pre-persist niche is already filled.** MJ's PreSave hooks (`RegisterDataHook('PreSave', …)`) are
+   exactly the broadcast, cross-cutting "about to persist — observe or gate it" mechanism. A `validated` event
+   would largely *duplicate* them. The one gap neither hooks nor events fill cheaply is "let the **saver**
+   render its own change" — which the per-call callback fills precisely.
 
-- The optimistic-UI use case is "**this** component rendering **its** change" — a per-call callback maps
-  directly to the one save in flight. A broadcast `validated` event forces subscribers to correlate *which*
-  save fired (entity identity, re-entrancy), which is exactly the bookkeeping we're trying to remove.
-- It keeps the blast radius to the one caller that opted in, instead of waking every entity-event subscriber
-  on a hot path.
+The event-bus route stays the better shape only if a use case emerges where **non-saver** observers must react
+at validation time — and even then, PreSave hooks may already suffice.
 
-The event-bus route is the more "MJ-reactive" shape and is worth a second look if a use case emerges that
-needs *other* observers (not the saver) to react at validation time. For optimistic rendering, the per-call
-option is the better fit.
+**Two sharp edges, called out so reviewers see they were considered:**
+
+- **Naming.** `OnValidated` fires after `Validate`, `ValidateAsync`, **and** PreSave hooks — i.e. "all
+  pre-flight gating passed, persist imminent." `OnPrePersist` would be more literal; `OnValidated` is kept for
+  friendliness since validation is the common case. The JSDoc states the exact firing point.
+- **`(entity: unknown)` typing.** The parameter is `unknown` because `EntitySaveOptions` lives in
+  `interfaces.ts`, which `BaseEntity` imports — typing it as `BaseEntity` would be a circular reference. In
+  practice callers close over their own entity reference and ignore the parameter (as `PinMessage` does).
 
 ---
 

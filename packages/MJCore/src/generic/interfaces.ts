@@ -311,6 +311,10 @@ export class EntitySaveOptions {
      * It does **not** fire when the save is skipped (not dirty / `ReplayOnly`) or when validation
      * fails. Any error thrown by the callback is swallowed and logged so a UI bug can never
      * abort the persistence it was meant to accompany. See `guides/OPTIMISTIC_UI_SAVE_PATTERN.md`.
+     *
+     * The parameter is typed `unknown` (not `BaseEntity`) only to avoid a circular type reference:
+     * `BaseEntity` imports this interface. Callers typically close over their own entity reference
+     * and ignore the parameter; cast it if you need the instance.
      */
     OnValidated?: (entity: unknown) => void;
 
