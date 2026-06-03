@@ -107,6 +107,7 @@ SQL Scripts/generated/
 **/.embed-cache/
 **/.refine-cache/
 **/connectors-registry/*/cache/
+**/connectors-registry/*/runs/
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql
 SQL Scripts/internal_only/BC CDP Create missing ContactCompanyIntegration and AccountCompanyIntegration records.sql
 SQL Scripts/internal_only/BC CDP GRANT DBO permissions.sql
