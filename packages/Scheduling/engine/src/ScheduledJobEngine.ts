@@ -10,7 +10,9 @@ import {
     IMetadataProvider,
     LogError,
     LogStatusEx,
-    IsVerboseLoggingEnabled
+    IsVerboseLoggingEnabled,
+    RunView,
+    type DatabaseProviderBase
 } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -68,6 +70,57 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private static readonly HIGH_FREQUENCY_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
 
     // ========================================================================
+    // DECOUPLING STATE (added in v5.39 — see plans/scheduled-job-engine-decoupling.md)
+    // ========================================================================
+
+    /**
+     * Maximum concurrent scheduled jobs on this engine instance. Default 5.
+     * Configurable via MJServer's `scheduledJobs.maxConcurrentJobs` config.
+     *
+     * SOFT CAP: under overlapping poll bodies the cap may be transiently
+     * exceeded by a small amount bounded by overlap count. See README
+     * "Cap and lease semantics" for tuning guidance.
+     */
+    private _maxConcurrentJobs: number = 5;
+
+    /**
+     * Lock lease duration. Default 10 minutes. Configurable via
+     * mj.config.cjs `scheduling.leaseTimeoutMinutes`.
+     *
+     * Public API uses minutes (operational readability); internal computations
+     * use _leaseTimeoutMs for precision and testability. Tests inject sub-second
+     * leases via `_setLeaseTimeoutMsForTest`.
+     *
+     * Constraint: must be > maximum expected runtime of any job. Setting too
+     * low causes healthy long jobs to be reclaimed and re-dispatched.
+     */
+    private _leaseTimeoutMs: number = 10 * 60 * 1000;
+
+    /**
+     * Promises for jobs currently dispatched but not yet settled. Keyed by job ID.
+     *
+     * Three purposes:
+     *   1. Bounded concurrency — DispatchScheduledJobs checks size vs MaxConcurrentJobs.
+     *   2. Sweep untracking — sweepStaleInflightJobs deletes by ID for jobs whose
+     *      lease has expired, freeing the cap slot even though the JS promise leaks
+     *      (see README "Leaked promise behavior").
+     *   3. Graceful shutdown — StopPolling can await all in-flight via .values().
+     *
+     * Self-cleans via identity-checked .finally() on each dispatched promise
+     * (no-op if a sweep + re-dispatch already replaced the entry).
+     *
+     * NOT used for double-dispatch prevention — that's the atomic lock sproc's job.
+     */
+    private inflightJobPromises: Map<string, Promise<MJScheduledJobRunEntity | null>> = new Map();
+
+    /**
+     * When false, DispatchScheduledJobs becomes a no-op. Set false in StopPolling
+     * BEFORE snapshotting inflightJobPromises for shutdown drain, so no new
+     * entries sneak in during the shutdown window.
+     */
+    private acceptingDispatches: boolean = true;
+
+    // ========================================================================
     // DELEGATED METADATA PROPERTIES AND METHODS
     // ========================================================================
 
@@ -89,6 +142,55 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     /** Gets the current active polling interval in milliseconds. */
     public get ActivePollingInterval(): number | null {
         return this.Base.ActivePollingInterval;
+    }
+
+    /**
+     * Maximum concurrent scheduled jobs on this engine instance. Default 5.
+     * Configurable via MJServer's `scheduledJobs.maxConcurrentJobs` config.
+     */
+    public get MaxConcurrentJobs(): number {
+        return this._maxConcurrentJobs;
+    }
+    public set MaxConcurrentJobs(value: number) {
+        if (!Number.isInteger(value) || value < 1) {
+            throw new Error(`MaxConcurrentJobs must be a positive integer, got ${value}`);
+        }
+        const old = this._maxConcurrentJobs;
+        this._maxConcurrentJobs = value;
+        this.log(`MaxConcurrentJobs changed from ${old} to ${value}`);
+    }
+
+    /**
+     * Lock lease duration in milliseconds. Default 600000 (10 minutes).
+     * Production callers should use this setter — matches the ms unit of
+     * MJServer's `scheduledJobs.defaultLockTimeout` config.
+     */
+    public get LeaseTimeoutMs(): number {
+        return this._leaseTimeoutMs;
+    }
+    public set LeaseTimeoutMs(value: number) {
+        if (!Number.isFinite(value) || value <= 0) {
+            throw new Error(`LeaseTimeoutMs must be a positive number, got ${value}`);
+        }
+        const old = this._leaseTimeoutMs;
+        this._leaseTimeoutMs = value;
+        this.log(`LeaseTimeoutMs changed from ${old} to ${value}`);
+    }
+
+    /**
+     * Convenience accessor — lease duration as integer minutes. Production
+     * code may use either this or `LeaseTimeoutMs`. The setter validates
+     * positive integer minutes (no fractional minutes via this path; use
+     * `LeaseTimeoutMs` for sub-minute precision, including tests).
+     */
+    public get LeaseTimeoutMinutes(): number {
+        return Math.round(this._leaseTimeoutMs / 60_000);
+    }
+    public set LeaseTimeoutMinutes(value: number) {
+        if (!Number.isInteger(value) || value < 1) {
+            throw new Error(`LeaseTimeoutMinutes must be a positive integer, got ${value}`);
+        }
+        this.LeaseTimeoutMs = value * 60 * 1000;
     }
 
     /** Find a job type by name. */
@@ -139,86 +241,120 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     // ========================================================================
 
     /**
-     * Start continuous polling for scheduled jobs
-     * Uses adaptive interval based on ActivePollingInterval
+     * Start continuous polling for scheduled jobs.
+     *
+     * Async (changed in v5.39) because upfront work — Config, initial-NextRunAt
+     * seeding, stale-lock cleanup, permission probe — runs ONCE before the
+     * first poll fires. Subsequent polls assume that work is complete.
+     *
+     * The poll callback re-arms its timer FIRST, before any awaited work, so
+     * that any hang downstream (Config, DispatchScheduledJobs, etc.) cannot
+     * prevent the next poll from firing on schedule. This is the load-bearing
+     * invariant of the decoupling fix (see plans/scheduled-job-engine-decoupling.md).
      *
      * @param contextUser - User context for execution
      */
-    public StartPolling(contextUser: UserInfo): void {
+    public async StartPolling(contextUser: UserInfo): Promise<void> {
         if (this.isPolling) {
             this.log('Polling already started');
             return;
         }
 
-        this.isPolling = true;
+        // Upfront work — done ONCE before any poll fires.
+        // Order: Config first (so this.ScheduledJobs is populated), then
+        // initializeNextRunTimes / cleanupStaleLocks / permission probe.
+        await this.Config(false, contextUser);
+        await this.initializeNextRunTimes(contextUser);
+        await this.cleanupStaleLocks(contextUser);
+        await this.probeLockSprocPermissions();
 
-        const poll = async () => {
-            // Initialize NextRunAt and clean up stale locks on first poll only
-            if (!this.hasInitialized) {
-                await this.initializeNextRunTimes(contextUser);
-                await this.cleanupStaleLocks(contextUser);
-                // No need to force-reload: initializeNextRunTimes and cleanupStaleLocks
-                // modify and save the in-memory entity objects directly, so the cache
-                // already reflects the current DB state.
-                this.hasInitialized = true;
-
-                // Check if there are no jobs after initialization
-                if (this.ScheduledJobs.length === 0) {
-                    console.log(`📅 Scheduled Jobs: No active jobs found, stopping polling`);
-                    this.StopPolling();
-                    return;
-                }
-
-                this.warnAboutHighFrequencyJobs();
-            }
-            try {
-                const runs = await this.ExecuteScheduledJobs(contextUser);
-
-                // Only log if jobs were actually executed
-                if (runs.length > 0) {
-                    console.log(`📅 Scheduled Jobs: Executed ${runs.length} job(s)`);
-                }
-
-                // Schedule next poll based on current ActivePollingInterval
-                if (this.isPolling) {
-                    const interval = this.ActivePollingInterval;
-
-                    // If interval is null (no jobs), stop polling
-                    if (interval === null) {
-                        console.log(`📅 Scheduled Jobs: All jobs removed, stopping polling`);
-                        this.StopPolling();
-                        return;
-                    }
-
-                    this.pollingTimer = setTimeout(poll, interval);
-                }
-            } catch (error) {
-                this.logError('Error during polling', error);
-                // Continue polling even after errors
-                if (this.isPolling) {
-                    this.pollingTimer = setTimeout(poll, 60000); // Fallback to 1 minute
-                }
-            }
-        };
-
-        // Start first poll immediately
-        poll();
-    }
-
-    /**
-     * Stop continuous polling
-     */
-    public StopPolling(): void {
-        if (!this.isPolling) {
+        if (this.ScheduledJobs.length === 0) {
+            console.log(`📅 Scheduled Jobs: No active jobs found, polling not started`);
             return;
         }
 
+        this.warnAboutHighFrequencyJobs();
+
+        this.isPolling = true;
+        this.acceptingDispatches = true;
+        this.hasInitialized = true;
+
+        const poll = async () => {
+            // Re-arm IMMEDIATELY — load-bearing invariant. The next poll fires
+            // on schedule regardless of any await downstream.
+            if (this.isPolling) {
+                const interval = this.ActivePollingInterval;
+                if (interval === null) {
+                    console.log(`📅 Scheduled Jobs: All jobs removed, stopping polling`);
+                    // Schedule the cleanup via the same async path so we still
+                    // return cleanly from this poll body.
+                    this.StopPolling().catch(err => this.logError('Error during StopPolling', err));
+                    return;
+                }
+                this.pollingTimer = setTimeout(poll, interval);
+            }
+
+            try {
+                const result = await this.DispatchScheduledJobs(contextUser);
+                if (result.swept > 0 || result.dispatched > 0 || result.lockedOut > 0 || result.skippedAtCapacity > 0) {
+                    console.log(
+                        `📅 Scheduled Jobs: swept=${result.swept}, dispatched=${result.dispatched}, ` +
+                        `lockedOut=${result.lockedOut}, skippedAtCapacity=${result.skippedAtCapacity}, ` +
+                        `inflight=${this.inflightJobPromises.size}/${this.MaxConcurrentJobs}`
+                    );
+                }
+            } catch (error) {
+                this.logError('Error during DispatchScheduledJobs', error);
+                // No fallback timer needed — re-arm at top of function already
+                // scheduled the next poll before any await could fire.
+            }
+        };
+
+        // First poll fires on the timer (not immediate) so observers can stop
+        // us between StartPolling returning and the first poll firing.
+        this.pollingTimer = setTimeout(poll, this.ActivePollingInterval ?? 60_000);
+        this.log('Started scheduled job polling');
+    }
+
+    /**
+     * Stop continuous polling.
+     *
+     * Async (changed in v5.39). With opts.waitForInflight=true, awaits all
+     * currently-dispatched jobs to settle before returning. With opts.maxWaitMs,
+     * bounds that wait so a zombie can't make shutdown hang indefinitely.
+     *
+     * Order matters: sets acceptingDispatches=false FIRST so no new entries
+     * can be added to inflightJobPromises during the snapshot for allSettled.
+     *
+     * @param opts.waitForInflight - Await dispatched jobs before returning
+     * @param opts.maxWaitMs - Bound the wait (only meaningful with waitForInflight)
+     */
+    public async StopPolling(opts?: { waitForInflight?: boolean; maxWaitMs?: number }): Promise<void> {
+        if (!this.isPolling) return;
+
+        // Order matters: block new dispatches BEFORE snapshotting inflight.
+        this.acceptingDispatches = false;
         this.isPolling = false;
+
         if (this.pollingTimer) {
             clearTimeout(this.pollingTimer);
             this.pollingTimer = undefined;
         }
         this.log('Stopped scheduled job polling');
+
+        if (opts?.waitForInflight && this.inflightJobPromises.size > 0) {
+            const promises = [...this.inflightJobPromises.values()];
+            this.log(`Waiting for ${promises.length} in-flight job(s) to settle...`);
+            if (opts.maxWaitMs) {
+                await Promise.race([
+                    Promise.allSettled(promises),
+                    new Promise<void>(resolve => setTimeout(resolve, opts.maxWaitMs))
+                ]);
+            } else {
+                await Promise.allSettled(promises);
+            }
+            this.log(`Shutdown wait complete`);
+        }
     }
 
     /**
@@ -377,13 +513,25 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt?.toISOString() || 'NULL'}, Status=${job.Status}`);
 
             if (this.isJobDue(job, evalTime)) {
-                console.log(`    ✓ Job is due, executing...`);
+                console.log(`    ✓ Job is due, attempting to acquire lock...`);
                 try {
-                    const run = await this.executeJob(job, contextUser);
-                    if (run) { // null if skipped
-                        runs.push(run);
+                    const lockResult = await this.tryAcquireLock(job.ID);
+                    if (!lockResult.acquired) {
+                        if (job.ConcurrencyMode === 'Queue') {
+                            this.log(`Job ${job.Name} is locked, queueing (ConcurrencyMode=Queue)`);
+                            const queuedRun = await this.createQueuedJobRun(job, contextUser);
+                            runs.push(queuedRun);
+                        } else if (job.ConcurrencyMode === 'Skip') {
+                            console.log(`    ⊘ Job is locked, skipping (ConcurrencyMode=Skip)`);
+                        } else {
+                            // Concurrent mode: proceed without lock
+                            console.log(`    ↪ Concurrent mode, proceeding without lock`);
+                            const run = await this.executeJobWithLock(job, null, contextUser);
+                            if (run) runs.push(run);
+                        }
                     } else {
-                        console.log(`    ⊘ Job was skipped (locked or queued)`);
+                        const run = await this.executeJobWithLock(job, lockResult.token!, contextUser);
+                        if (run) runs.push(run);
                     }
                 } catch (error) {
                     this.logError(`Failed to execute job ${job.Name}`, error);
@@ -418,7 +566,111 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             throw new Error(`Scheduled job ${jobId} not found or not active`);
         }
 
-        return await this.executeJob(job, contextUser);
+        const lockResult = await this.tryAcquireLock(job.ID);
+        if (!lockResult.acquired) {
+            throw new Error(`Could not acquire lock for job ${jobId} — held by another holder`);
+        }
+        const run = await this.executeJobWithLock(job, lockResult.token!, contextUser);
+        if (!run) {
+            throw new Error(`Job execution returned null for ${jobId}`);
+        }
+        return run;
+    }
+
+    /**
+     * Dispatch all currently-due scheduled jobs WITHOUT awaiting their completion.
+     *
+     * This is the polling-path entry point introduced in v5.39 as part of the
+     * scheduler decoupling fix (GH #2736). The poll loop calls this and re-arms
+     * its timer based on the synchronous-portion return; jobs run in the background.
+     *
+     * Two phases:
+     *
+     *   PHASE 1 — Stale-inflight sweep (decoupled from isJobDue AND from the cap):
+     *     Walks inflightJobPromises looking for jobs whose DB lease has expired.
+     *     Untracks each, frees its cap slot, and fire-and-forget marks any
+     *     orphaned `Status='Running'` run records as abandoned. Runs first so
+     *     it can free slots BEFORE the cap check throttles dispatch.
+     *
+     *   PHASE 2 — Cap-bounded dispatch loop:
+     *     For each due job, atomically acquire its lock via spAcquireScheduledJobLock.
+     *     Only jobs whose lock was acquired count against MaxConcurrentJobs.
+     *     Lock-failed jobs are reported via `lockedOut` counter.
+     *     If at-cap, remaining due jobs counted via `skippedAtCapacity` and
+     *     picked up by subsequent polls as slots free (no in-memory queueing).
+     *
+     * Same-instance double-dispatch is structurally prevented by the atomic
+     * lock sproc — its WHERE clause filters held-and-not-stale locks, so any
+     * second attempt against the same job ID returns Acquired=0.
+     *
+     * In-flight dispatched promises are tracked in `inflightJobPromises` so
+     * `StopPolling({ waitForInflight: true })` can perform graceful shutdown.
+     *
+     * @returns Counters for observability.
+     */
+    public async DispatchScheduledJobs(
+        contextUser: UserInfo,
+        evalTime: Date = new Date()
+    ): Promise<{ swept: number; dispatched: number; lockedOut: number; skippedAtCapacity: number }> {
+        if (!this.acceptingDispatches) {
+            return { swept: 0, dispatched: 0, lockedOut: 0, skippedAtCapacity: 0 };
+        }
+
+        // PHASE 1: stale-inflight sweep. Decoupled from isJobDue and cap.
+        const swept = await this.sweepStaleInflightJobs(contextUser);
+
+        // PHASE 2: cap-bounded dispatch.
+        let dispatched = 0;
+        let lockedOut = 0;
+        let skippedAtCapacity = 0;
+
+        for (const job of this.ScheduledJobs) {
+            if (!this.isJobDue(job, evalTime)) continue;
+
+            if (this.inflightJobPromises.size >= this.MaxConcurrentJobs) {
+                skippedAtCapacity++;
+                continue;
+            }
+
+            const lockResult = await this.tryAcquireLock(job.ID);
+            if (!lockResult.acquired) {
+                if (job.ConcurrencyMode === 'Queue') {
+                    await this.createQueuedJobRun(job, contextUser);
+                }
+                lockedOut++;
+                continue;
+            }
+
+            // TDZ-safe identity tracking: set Map entry SYNCHRONOUSLY before
+            // attaching catch/finally. A synchronous throw in executeJobWithLock
+            // (e.g. ClassFactory.CreateInstance failing on a missing DriverClass)
+            // would otherwise fire .finally before .set runs and orphan the entry.
+            const promise = this.executeJobWithLock(job, lockResult.token!, contextUser);
+            this.inflightJobPromises.set(job.ID, promise);
+
+            promise
+                .catch(error => {
+                    this.logError(
+                        `Unexpected throw escaping executeJobWithLock for job ${job.Name} ` +
+                        `(indicates a bug in the engine itself, not a plugin)`,
+                        error
+                    );
+                    return null;
+                })
+                .finally(() => {
+                    // Identity check: only delete if the entry still refers to
+                    // OUR promise. If a sweep + re-dispatch already replaced it,
+                    // leave the new entry alone.
+                    if (this.inflightJobPromises.get(job.ID) === promise) {
+                        this.inflightJobPromises.delete(job.ID);
+                    }
+                });
+
+            dispatched++;
+        }
+
+        this.UpdatePollingInterval();
+        return { swept, dispatched, lockedOut, skippedAtCapacity };
     }
 
     /**
@@ -450,35 +702,37 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     /**
      * Execute a single scheduled job
      *
-     * @param job - The job to execute
-     * @param contextUser - User context
-     * @returns The created job run record
+     * Execute a single scheduled job WITH a pre-acquired lock token.
+     *
+     * Caller (DispatchScheduledJobs / ExecuteScheduledJob / ExecuteScheduledJobs)
+     * is responsible for acquiring the lock atomically via tryAcquireLock and
+     * passing the resulting token. This method owns the lock's lifecycle from
+     * this point forward: every exit path (success, failure, exception)
+     * releases the lock via releaseLockIfTokenMatches.
+     *
+     * If lockToken is null, the job is running in `ConcurrencyMode='Concurrent'`
+     * (no lock acquired) — finally simply skips the release.
+     *
+     * @param job - The job entity. READ-ONLY from this method's perspective —
+     *              do not mutate or call Save on it. The shared entity in
+     *              this.ScheduledJobs must not be touched here.
+     * @param lockToken - The token returned by tryAcquireLock, or null for
+     *                    Concurrent mode where no lock was acquired.
+     * @param contextUser - User context for execution.
+     * @returns The created run record (Completed or Failed), or null if a
+     *          synchronous setup error prevented run creation.
      * @private
      */
-    private async executeJob(
+    private async executeJobWithLock(
         job: MJScheduledJobEntity,
+        lockToken: string | null,
         contextUser: UserInfo
     ): Promise<MJScheduledJobRunEntity | null> {
-        // Try to acquire lock for this job
-        const lockAcquired = await this.tryAcquireLock(job);
-
-        if (!lockAcquired) {
-            // Handle based on concurrency mode
-            if (job.ConcurrencyMode === 'Skip') {
-                this.log(`Job ${job.Name} is locked, skipping (ConcurrencyMode=Skip)`);
-                return null; // Skip this execution
-            } else if (job.ConcurrencyMode === 'Queue') {
-                this.log(`Job ${job.Name} is locked, queueing (ConcurrencyMode=Queue)`);
-                // Create a queued run record for future processing
-                return await this.createQueuedJobRun(job, contextUser);
-            }
-            // Concurrent mode: proceed without lock
-        }
-
-        // Create run record
-        const run = await this.createJobRun(job, contextUser);
+        let run: MJScheduledJobRunEntity | null = null;
 
         try {
+            run = await this.createJobRun(job, contextUser);
+
             // Get job type
             const jobType = this.ScheduledJobTypes.find(t => UUIDsEqual(t.ID, job.JobTypeID));
             if (!jobType) {
@@ -530,23 +784,23 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             return run;
 
         } catch (error) {
-            // Update run with failure
-            run.CompletedAt = new Date();
-            run.Status = 'Failed';
-            run.Success = false;
-            run.ErrorMessage = error instanceof Error ? error.message : 'Unknown error';
-            await run.Save();
-
-            // Update job failure count
-            await this.updateJobStatistics(job, false, run.ID);
-
+            if (run) {
+                run.CompletedAt = new Date();
+                run.Status = 'Failed';
+                run.Success = false;
+                run.ErrorMessage = error instanceof Error ? error.message : 'Unknown error';
+                await run.Save();
+                await this.updateJobStatistics(job, false, run.ID);
+            }
             this.logError(`Job failed: ${job.Name}`, error);
-
             return run;
+
         } finally {
-            // Release lock if we acquired it
-            if (lockAcquired) {
-                await this.releaseLock(job);
+            // Token-checked release — safe under lease-expiry races.
+            // Sproc no-ops if our token no longer matches (another holder reclaimed).
+            // Skip entirely for Concurrent mode (no lock to release).
+            if (lockToken) {
+                await this.releaseLockIfTokenMatches(job.ID, lockToken);
             }
         }
     }
@@ -582,21 +836,44 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async updateJobStatistics(
         job: MJScheduledJobEntity,
         success: boolean,
-        runId: string
+        _runId: string
     ): Promise<void> {
+        const now = new Date();
+        const nextRun = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
+
+        // Update in-memory entity so callers reading job.RunCount/job.NextRunAt
+        // immediately after see the new values without a Load round-trip.
         job.RunCount++;
         if (success) {
             job.SuccessCount++;
         } else {
             job.FailureCount++;
         }
-        job.LastRunAt = new Date();
-        job.NextRunAt = CronExpressionHelper.GetNextRunTime(
-            job.CronExpression,
-            job.Timezone
-        );
+        job.LastRunAt = now;
+        job.NextRunAt = nextRun;
 
-        await job.Save();
+        // Persist via the targeted sproc — touches ONLY the 5 stats columns.
+        // We deliberately do NOT call job.Save() here: a full-entity Save would
+        // overwrite the DB's lock columns with the entity's stale in-memory
+        // values (the entity was loaded BEFORE the atomic lock sproc set
+        // LockToken), blowing away the live lock. That manifested as a
+        // false-positive token mismatch on every successful job completion.
+        // See plans/scheduled-job-engine-decoupling.md and the migration
+        // V202606022027__v5.39.x__Scheduling_Engine_Atomic_Stats_Update.sql.
+        const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+        const schema = provider.MJCoreSchemaName;
+        await provider.ExecuteSQL(
+            `EXEC [${schema}].[spUpdateScheduledJobStatistics] ` +
+                `@JobID=@JobID, @Success=@Success, @LastRunAt=@LastRunAt, @NextRunAt=@NextRunAt`,
+            {
+                JobID: job.ID,
+                Success: success ? 1 : 0,
+                LastRunAt: now,
+                NextRunAt: nextRun,
+            } as unknown as unknown[],
+            { isMutation: true, description: 'spUpdateScheduledJobStatistics' },
+            this.Base.ContextUser
+        );
     }
 
     /**
@@ -642,125 +919,246 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * Try to acquire a lock for job execution
      * @private
      */
-    private async tryAcquireLock(job: MJScheduledJobEntity): Promise<boolean> {
-        console.log(`    🔒 tryAcquireLock: job.LockToken=${job.LockToken?.substring(0, 8) || 'NULL'}, ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString() || 'NULL'}`);
+    /**
+     * Atomically acquire a lock on a job via spAcquireScheduledJobLock.
+     * The sproc's WHERE clause handles both the free-lock and stale-lease cases
+     * in a single statement — no TOCTOU window between check and write.
+     *
+     * Operates only on lock columns; never mutates the shared entity in
+     * this.ScheduledJobs. Caller passes jobId (string), not the entity object.
+     *
+     * @returns { acquired: true, token } on success; { acquired: false } otherwise.
+     * @private
+     */
+    private async tryAcquireLock(jobId: string): Promise<{ acquired: boolean; token?: string }> {
+        const token = this.generateGuid();
+        const instance = this.getInstanceIdentifier();
+        const expectedCompletion = new Date(Date.now() + this._leaseTimeoutMs);
 
-        if (job.LockToken != null) {
-            const now = new Date();
-            console.log(`      Lock exists! Checking if stale: ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString()}, now=${now.toISOString()}`);
+        const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+        const schema = provider.MJCoreSchemaName;
+        // Pass parameters as a plain object — SQLServerDataProvider treats this
+        // as named-parameter mode (request.input(key, value) per Object.entries),
+        // which is what the @-prefixed placeholders in the EXEC require.
+        // An array would be treated positionally with p0/p1 names and the
+        // {Name, Value} shape would be passed as a literal object value.
+        // SQLServerDataProvider's runtime accepts a plain object for named
+        // params (request.input(key, value) per Object.entries), but the
+        // abstract IMetadataProvider.ExecuteSQL signature declares
+        // `parameters?: unknown[]`. Cast through `unknown` to bridge the gap
+        // without changing the cross-cutting abstract signature.
+        const rows = await provider.ExecuteSQL<{ Acquired: number }>(
+            `EXEC [${schema}].[spAcquireScheduledJobLock] ` +
+                `@JobID=@JobID, @Token=@Token, @Instance=@Instance, @ExpectedCompletionAt=@ExpectedCompletionAt`,
+            {
+                JobID: jobId,
+                Token: token,
+                Instance: instance,
+                ExpectedCompletionAt: expectedCompletion,
+            } as unknown as unknown[],
+            { isMutation: true, description: 'spAcquireScheduledJobLock' },
+            this.Base.ContextUser
+        );
 
-            if (job.ExpectedCompletionAt && now > job.ExpectedCompletionAt) {
-                console.log(`      → Lock is STALE, cleaning up...`);
-                this.log(`Detected stale lock on job ${job.Name}, cleaning up`);
-                const cleaned = await this.cleanupStaleLock(job);
-                if (!cleaned) {
-                    console.log(`      ❌ Failed to clean up stale lock, skipping`);
-                    return false;
-                }
-                // Reload from DB to verify cleanup succeeded
-                await job.Load(job.ID);
-                if (job.LockToken != null) {
-                    console.log(`      ❌ Lock still present after cleanup (re-acquired by ${job.LockedByInstance}), skipping`);
-                    return false;
-                }
-                console.log(`      ✓ Stale lock cleaned successfully`);
+        const acquired = rows?.[0]?.Acquired === 1;
+        return acquired ? { acquired: true, token } : { acquired: false };
+    }
+
+    /**
+     * Atomically release a lock IF AND ONLY IF the current DB token matches
+     * expectedToken. Prevents the lost-mutex hazard under lease-expiry races:
+     * if a stale holder's execution eventually settles after the lease was
+     * reclaimed by a fresh holder, this no-ops (token mismatch).
+     *
+     * Idempotent — safe to call on an already-released lock (returns false).
+     *
+     * @returns true if released, false if token mismatch / already released
+     * @private
+     */
+    private async releaseLockIfTokenMatches(jobId: string, expectedToken: string): Promise<boolean> {
+        const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+        const schema = provider.MJCoreSchemaName;
+        // Named-parameter mode — see tryAcquireLock for rationale.
+        const rows = await provider.ExecuteSQL<{ Released: number }>(
+            `EXEC [${schema}].[spReleaseScheduledJobLockIfTokenMatches] ` +
+                `@JobID=@JobID, @ExpectedToken=@ExpectedToken`,
+            {
+                JobID: jobId,
+                ExpectedToken: expectedToken,
+            } as unknown as unknown[],
+            { isMutation: true, description: 'spReleaseScheduledJobLockIfTokenMatches' },
+            this.Base.ContextUser
+        );
+
+        const released = rows?.[0]?.Released === 1;
+        if (!released) {
+            this.log(
+                `Lock for job ${jobId.substring(0, 8)} was not released ` +
+                `(token mismatch — reclaimed by another holder, or already released)`
+            );
+        }
+        return released;
+    }
+
+    /**
+     * Pre-flight: verify EXECUTE permission on lock sprocs. Fails LOUDLY at boot
+     * if the engine's DB principal lacks grants — much better than a silent
+     * runtime failure the next time a job tries to dispatch.
+     *
+     * Wrapped in try/catch: probe failure (e.g., non-SQL-Server provider where
+     * `sys.fn_my_permissions` doesn't exist) must NOT crash boot. We log and
+     * continue; any actual permission issue will surface at first sproc call.
+     *
+     * @private
+     */
+    private async probeLockSprocPermissions(): Promise<void> {
+        try {
+            const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+            const schema = provider.MJCoreSchemaName;
+            const sql = `SELECT permission_name FROM sys.fn_my_permissions(` +
+                `'${schema}.spAcquireScheduledJobLock', 'OBJECT') WHERE permission_name = 'EXECUTE'`;
+
+            const rows = await provider.ExecuteSQL<{ permission_name: string }>(
+                sql,
+                [],
+                { isMutation: false, description: 'Scheduling engine permission probe' },
+                this.Base.ContextUser
+            );
+
+            if (!rows || rows.length === 0) {
+                this.logError(
+                    `⚠️  Scheduling engine DB principal lacks EXECUTE on ` +
+                    `${schema}.spAcquireScheduledJobLock. Job dispatch WILL fail. ` +
+                    `Grant cdp_Developer or cdp_Integration role to the principal and restart.`,
+                    null
+                );
             } else {
-                console.log(`      → Lock is ACTIVE (not stale), returning false`);
-                return false;
+                this.log(`Lock sproc permission check OK`);
             }
-        } else {
-            console.log(`      → No lock exists, will try to acquire`);
+        } catch (probeError) {
+            // Probe itself failed (non-SQL-Server provider, or unexpected error).
+            // Don't crash boot. Log and continue.
+            this.log(
+                `Permission probe skipped (provider may not support sys.fn_my_permissions): ${probeError}`
+            );
+        }
+    }
+
+    /**
+     * Sweep stale inflight jobs. Runs unconditionally at top of every poll.
+     *
+     * SINGLE BATCH QUERY (not N round-trips). Returns only jobs whose lease has
+     * expired OR whose lock has already been cleared. In steady-state (no zombies)
+     * the query matches zero rows and the sweep is essentially free.
+     *
+     * For each stale entry:
+     *   - Untrack the leaked promise from inflightJobPromises (frees cap slot).
+     *   - FIRE-AND-FORGET abandon any orphaned `Status='Running'` run records.
+     *     NOT awaited because cleanup must not delay dispatch under a fleet-wide
+     *     hang event where the sweep finds many zombies at once.
+     *
+     * Decoupled from:
+     *   - isJobDue — irrelevant; we care about lease state, not cron.
+     *   - MaxConcurrentJobs — the sweep IS what frees the cap when saturated by hangs.
+     *
+     * See plans/scheduled-job-engine-decoupling.md for the full rationale.
+     *
+     * @returns count of inflight entries swept
+     * @private
+     */
+    private async sweepStaleInflightJobs(contextUser: UserInfo): Promise<number> {
+        if (this.inflightJobPromises.size === 0) return 0;
+
+        const trackedIds = [...this.inflightJobPromises.keys()];
+        // ID values interpolated below are engine-generated GUIDs from
+        // this.inflightJobPromises keys (originally from this.ScheduledJobs[].ID),
+        // never user input. No SQL-injection vector. RunViewParams.ExtraFilter
+        // does not support parameterized binding in current MJCore.
+        const idList = trackedIds.map(id => `'${id}'`).join(',');
+        const nowIso = new Date().toISOString();
+
+        const rv = new RunView(this.Base.RunViewProviderToUse);
+        const result = await rv.RunView<{ ID: string; Name: string; ExpectedCompletionAt: Date | null }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter: `ID IN (${idList}) AND (LockToken IS NULL OR ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
+            Fields: ['ID', 'Name', 'ExpectedCompletionAt'],
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (!result.Success || result.Results.length === 0) return 0;
+
+        let swept = 0;
+        for (const row of result.Results) {
+            const jobName = row.Name ?? row.ID;
+            this.log(
+                `[sweep] Untracking inflight job ${jobName}: ` +
+                `lease=${row.ExpectedCompletionAt?.toISOString() ?? 'NULL'}, now=${nowIso}. ` +
+                `Original execution presumed hung. See README "Leaked promise behavior".`
+            );
+            this.inflightJobPromises.delete(row.ID);
+            swept++;
+
+            // FIRE-AND-FORGET: cleanup must not block dispatch.
+            this.abandonOrphanedRunRecords(row.ID, contextUser).catch(err =>
+                this.logError(`Background abandon-orphaned-runs failed for ${row.ID}`, err)
+            );
         }
 
-        return this.attemptLockAcquisition(job);
+        return swept;
     }
 
     /**
-     * Attempt to acquire a fresh lock on a job that is currently unlocked.
-     * Separated from tryAcquireLock to keep the stale-cleanup and acquisition
-     * paths distinct and easier to follow.
+     * Mark any Running run records for the given job as Failed/abandoned.
+     *
+     * IMPORTANT: the `Status='Running'` filter is LOAD-BEARING — not just for
+     * finding zombies. It also protects against a sweep/release race:
+     *
+     *   - Job completes normally.
+     *   - executeJobWithLock's finally calls releaseLockIfTokenMatches (clears LockToken).
+     *   - BEFORE that completes, a poll's sweep query sees LockToken IS NULL
+     *     and classifies the just-completed job as a zombie.
+     *   - But its run record is already Status='Completed' (set inside the try block,
+     *     before the finally), so THIS FILTER excludes it from abandonment.
+     *
+     * Removing or relaxing this filter would corrupt completed run records.
+     * If "optimizing" this method, preserve the Status='Running' filter.
+     *
      * @private
      */
-    private async attemptLockAcquisition(job: MJScheduledJobEntity): Promise<boolean> {
-        const lockToken = this.generateGuid();
-        const instanceId = this.getInstanceIdentifier();
-        const expectedCompletion = new Date(Date.now() + 10 * 60 * 1000);
+    private async abandonOrphanedRunRecords(jobId: string, contextUser: UserInfo): Promise<void> {
+        // jobId is an engine-supplied GUID from the sweep's RunView result row,
+        // not user input. No SQL-injection vector.
+        const rv = new RunView(this.Base.RunViewProviderToUse);
+        const result = await rv.RunView<MJScheduledJobRunEntity>({
+            EntityName: 'MJ: Scheduled Job Runs',
+            ExtraFilter: `ScheduledJobID='${jobId}' AND Status='Running'`,
+            ResultType: 'entity_object',
+        }, contextUser);
 
-        try {
-            // Reload to get latest DB state right before acquiring
-            await job.Load(job.ID);
+        if (!result.Success || result.Results.length === 0) return;
 
-            if (job.LockToken != null) {
-                console.log(`      ❌ Lock was acquired by another process during reload`);
-                return false;
-            }
-
-            job.LockToken = lockToken;
-            job.LockedAt = new Date();
-            job.LockedByInstance = instanceId;
-            job.ExpectedCompletionAt = expectedCompletion;
-
-            console.log(`      → Attempting to save with lock: ${lockToken.substring(0, 8)}...`);
-
-            const saveResult = await job.Save();
-
-            if (saveResult) {
-                console.log(`      ✅ Lock acquired successfully!`);
-                return true;
-            } else {
-                console.log(`      ❌ Save failed: ${job.LatestResult?.CompleteMessage ?? 'unknown'}`);
-                this.clearInMemoryLockFields(job);
-                return false;
-            }
-        } catch (error) {
-            this.logError(`Failed to acquire lock for job ${job.Name}`, error);
-            this.clearInMemoryLockFields(job);
-            return false;
-        }
-    }
-
-    /**
-     * Clear in-memory lock fields without saving — used when a save attempt
-     * fails and we need the in-memory object to reflect "unlocked" so the
-     * next poll cycle doesn't see a phantom lock.
-     * @private
-     */
-    private clearInMemoryLockFields(job: MJScheduledJobEntity): void {
-        job.LockToken = null;
-        job.LockedAt = null;
-        job.LockedByInstance = null;
-        job.ExpectedCompletionAt = null;
-    }
-
-    /**
-     * Release a lock after job execution
-     * @private
-     */
-    private async releaseLock(job: MJScheduledJobEntity): Promise<boolean> {
-        try {
-            job.LockToken = null;
-            job.LockedAt = null;
-            job.LockedByInstance = null;
-            job.ExpectedCompletionAt = null;
-            const saved = await job.Save();
+        const now = new Date();
+        for (const run of result.Results) {
+            run.CompletedAt = now;
+            run.Status = 'Failed';
+            run.Success = false;
+            run.ErrorMessage =
+                `Execution abandoned by scheduling engine sweep: lease (started ` +
+                `${run.StartedAt?.toISOString()}) expired and the original execution ` +
+                `never settled. The hung promise was untracked so its concurrency slot ` +
+                `could be reused. See packages/Scheduling/engine/README.md ` +
+                `"Leaked promise behavior" for details.`;
+            const saved = await run.Save();
             if (!saved) {
-                this.logError(`Failed to release lock for job ${job.Name}: ${job.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
+                this.logError(
+                    `Failed to abandon orphaned run ${run.ID}: ` +
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown'}`,
+                    null
+                );
+            } else {
+                this.log(`[sweep] Abandoned orphaned run ${run.ID} for job ${jobId}`);
             }
-            return saved;
-        } catch (error) {
-            this.logError(`Failed to release lock for job ${job.Name}`, error);
-            return false;
         }
-    }
-
-    /**
-     * Clean up a stale lock. Returns true if the lock was successfully
-     * cleared in the database, false if the save failed.
-     * @private
-     */
-    private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<boolean> {
-        this.log(`Cleaning up stale lock on job ${job.Name} (locked by ${job.LockedByInstance})`);
-        return this.releaseLock(job);
     }
 
     /**
@@ -830,6 +1228,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                     job.NextRunAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
                 }
                 try {
+                    // SAFE: this Save runs in StartPolling's upfront block, BEFORE
+                    // isPolling=true is set. No locks can have been acquired yet,
+                    // so the full-entity Save cannot clobber any live lock state.
+                    // If you ever move this call site outside the upfront block,
+                    // refactor to a targeted UPDATE sproc — see
+                    // updateJobStatistics for the pattern.
                     await job.Save();
                     console.log(`  ⚙️  Initialized NextRunAt for ${job.Name} -> ${job.NextRunAt.toISOString()}`);
                 } catch (error) {
@@ -840,57 +1244,66 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Clean up stale locks on startup
+     * Clean up stale locks on startup using atomic sprocs.
+     *
+     * For each job whose DB shows a stale lock (ExpectedCompletionAt < now OR
+     * ExpectedCompletionAt IS NULL while LockToken IS NOT NULL):
+     *   1. Atomically acquire the stale lock with a fresh token (sproc's WHERE
+     *      handles the stale-detection in a single statement).
+     *   2. Immediately release it with that same token.
+     *
+     * Net effect: stale lock cleared atomically with zero TOCTOU window. Uses
+     * the new sproc-backed pattern instead of load-compare-save on shared
+     * this.ScheduledJobs entities (see plans/scheduled-job-engine-decoupling.md
+     * for why the old pattern was unsafe once polling became concurrent).
+     *
      * @private
      */
     private async cleanupStaleLocks(contextUser: UserInfo): Promise<void> {
-        const now = new Date();
+        const nowIso = new Date().toISOString();
+        console.log(`  🔍 Checking for stale locks (current time: ${nowIso})...`);
+
+        // Read-side: find candidate stale-locked jobs. RunView scoped to the
+        // engine's per-instance provider per <RUNVIEW_PROVIDER_BINDING>.
+        const rv = new RunView(this.Base.RunViewProviderToUse);
+        const result = await rv.RunView<{ ID: string; Name: string; LockedByInstance: string | null }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter: `LockToken IS NOT NULL AND (ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
+            Fields: ['ID', 'Name', 'LockedByInstance'],
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (!result.Success) {
+            this.logError(`cleanupStaleLocks: read query failed: ${result.ErrorMessage}`);
+            return;
+        }
+
+        if (result.Results.length === 0) {
+            console.log(`  ✓ No stale locks found`);
+            return;
+        }
+
         let cleanedCount = 0;
-
-        console.log(`  🔍 Checking for stale locks (current time: ${now.toISOString()})...`);
-
-        for (const job of this.ScheduledJobs) {
-            if (job.LockToken) {
-                console.log(`    Job "${job.Name}": LockToken=${job.LockToken?.substring(0, 8)}..., ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString() || 'NULL'}`);
-
-                if (job.ExpectedCompletionAt) {
-                    const isStale = job.ExpectedCompletionAt < now;
-                    console.log(`      → Is stale? ${isStale} (${job.ExpectedCompletionAt.getTime()} < ${now.getTime()} = ${job.ExpectedCompletionAt.getTime() < now.getTime()})`);
-
-                    if (isStale) {
-                        console.log(`      🔓 Cleaning stale lock (locked by ${job.LockedByInstance})`);
-                        job.LockToken = null;
-                        job.LockedAt = null;
-                        job.LockedByInstance = null;
-                        job.ExpectedCompletionAt = null;
-                        try {
-                            await job.Save();
-                            cleanedCount++;
-                        } catch (error) {
-                            this.logError(`Failed to clean stale lock for job ${job.Name}`, error);
-                        }
-                    }
+        for (const row of result.Results) {
+            try {
+                // Atomic reclaim: acquire returns Acquired=1 if the lock was
+                // stale (per the sproc's WHERE clause). Then immediately release
+                // with the new token to leave the lock free.
+                const lockResult = await this.tryAcquireLock(row.ID);
+                if (lockResult.acquired) {
+                    await this.releaseLockIfTokenMatches(row.ID, lockResult.token!);
+                    console.log(`    🔓 Cleared stale lock on "${row.Name}" (was held by ${row.LockedByInstance})`);
+                    cleanedCount++;
                 } else {
-                    console.log(`      ⚠️  Lock exists but no ExpectedCompletionAt - clearing anyway`);
-                    job.LockToken = null;
-                    job.LockedAt = null;
-                    job.LockedByInstance = null;
-                    job.ExpectedCompletionAt = null;
-                    try {
-                        await job.Save();
-                        cleanedCount++;
-                    } catch (error) {
-                        this.logError(`Failed to clean stale lock for job ${job.Name}`, error);
-                    }
+                    // Another instance acquired between our query and acquire.
+                    console.log(`    ℹ️  Stale lock on "${row.Name}" was cleared by another holder`);
                 }
+            } catch (error) {
+                this.logError(`Failed to clean stale lock for job ${row.Name}`, error);
             }
         }
 
-        if (cleanedCount > 0) {
-            console.log(`  ✅ Cleaned ${cleanedCount} stale lock(s)`);
-        } else {
-            console.log(`  ✓ No stale locks found`);
-        }
+        console.log(`  ✅ Cleaned ${cleanedCount} stale lock(s)`);
     }
 
     private log(message: string): void {
