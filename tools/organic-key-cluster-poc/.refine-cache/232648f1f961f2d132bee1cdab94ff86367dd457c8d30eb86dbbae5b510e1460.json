@@ -1,9 +1,0 @@
-{
-  "concept": "sales_entity_descriptions",
-  "isUsefulOrganicKey": false,
-  "normalization": "Trim",
-  "confidence": 0.95,
-  "reasoning": "These columns represent human-readable descriptive text for distinct business entities (sales reasons vs. promotional offers) rather than shared identifiers. They are unlikely to share common values that would facilitate meaningful record matching.",
-  "outliers": [],
-  "subClusters": []
-}

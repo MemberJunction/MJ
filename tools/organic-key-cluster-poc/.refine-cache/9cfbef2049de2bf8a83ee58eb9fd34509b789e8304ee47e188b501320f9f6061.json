@@ -1,9 +1,0 @@
-{
-  "concept": "end_date",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns represent the end of a historical assignment, dates are temporal attributes rather than identifiers. Matching records across different business domains (HR vs Sales) based on a shared end date is not a standard or useful business practice for entity resolution.",
-  "outliers": [],
-  "subClusters": []
-}

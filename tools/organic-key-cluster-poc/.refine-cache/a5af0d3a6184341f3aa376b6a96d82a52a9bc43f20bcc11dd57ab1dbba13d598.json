@@ -1,9 +1,0 @@
-{
-  "concept": "actual_cost",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While these columns are semantically identical across the live and archive tables, they represent financial measures (amounts) rather than identifiers. Users do not typically navigate or link records based on matching currency values, as these lack the uniqueness and intent required for an organic key.",
-  "outliers": [],
-  "subClusters": []
-}

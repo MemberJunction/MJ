@@ -1,9 +1,0 @@
-{
-  "concept": "product_classification_names",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns store descriptive names, they represent distinct levels of a product hierarchy (Category vs. Subcategory). Matching a category name to a subcategory name does not represent a valid business relationship or a shared identifier.",
-  "outliers": [],
-  "subClusters": []
-}

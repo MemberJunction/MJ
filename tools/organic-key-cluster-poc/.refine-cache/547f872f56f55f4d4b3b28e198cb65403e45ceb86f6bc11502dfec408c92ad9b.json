@@ -1,9 +1,0 @@
-{
-  "concept": "event_timestamp",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "These are audit-style timestamps indicating when a log entry was recorded. Per the criteria, shared audit timestamps are not useful organic keys as they do not represent a shared business identifier used for matching records.",
-  "outliers": [],
-  "subClusters": []
-}

@@ -1,9 +1,0 @@
-{
-  "concept": "audit_modification_timestamp",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "These columns represent system-level audit timestamps indicating when a row was last updated. While semantically identical across tables, they are not business identifiers and matching records based on identical modification times is not a valid or useful way to navigate related business entities.",
-  "outliers": [],
-  "subClusters": []
-}

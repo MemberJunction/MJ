@@ -1,9 +1,0 @@
-{
-  "concept": "freight_cost",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns represent the same semantic concept of shipping costs, freight amounts are numeric values that do not function as identifiers. Matching records based on identical freight costs would result in coincidental rather than meaningful business relationships.",
-  "outliers": [],
-  "subClusters": []
-}

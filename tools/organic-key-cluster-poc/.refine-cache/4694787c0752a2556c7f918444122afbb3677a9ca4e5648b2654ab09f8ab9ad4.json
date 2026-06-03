@@ -1,9 +1,0 @@
-{
-  "concept": "location_id",
-  "isUsefulOrganicKey": true,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "All columns represent a consistent identifier for manufacturing or storage locations, allowing users to link master location data with inventory levels and work order schedules.",
-  "outliers": [],
-  "subClusters": []
-}

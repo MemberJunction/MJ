@@ -1,9 +1,0 @@
-{
-  "concept": "person_entity_identifiers",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.98,
-  "reasoning": "The cluster groups primary keys for distinct entities and metadata categories (Address, AddressType, ContactType, and PhoneNumberType). These IDs are not semantically equivalent and do not share a common value space for meaningful cross-table matching.",
-  "outliers": [],
-  "subClusters": []
-}

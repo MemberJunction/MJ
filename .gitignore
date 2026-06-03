@@ -99,7 +99,14 @@ packages/MJExplorer/src/environments/environment.ts
 Schema Files/
 /docs/
 SQL Scripts/generated/
+**/SQL Scripts/generated/
 *.old
+
+# Generated/derived caches that must never be committed. The root-anchored patterns
+# above missed these nested paths, so CodeGen SQL output + tool caches leaked into git once.
+**/.embed-cache/
+**/.refine-cache/
+**/connectors-registry/*/cache/
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql
 SQL Scripts/internal_only/BC CDP Create missing ContactCompanyIntegration and AccountCompanyIntegration records.sql
 SQL Scripts/internal_only/BC CDP GRANT DBO permissions.sql

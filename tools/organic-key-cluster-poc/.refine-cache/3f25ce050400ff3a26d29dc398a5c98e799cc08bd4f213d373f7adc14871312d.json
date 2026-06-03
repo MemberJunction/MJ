@@ -1,9 +1,0 @@
-{
-  "concept": "transaction_date",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While these columns represent the same semantic event, timestamps are generally not used as organic keys for matching records; users would typically link history and archive tables using a TransactionID rather than a temporal value.",
-  "outliers": [],
-  "subClusters": []
-}

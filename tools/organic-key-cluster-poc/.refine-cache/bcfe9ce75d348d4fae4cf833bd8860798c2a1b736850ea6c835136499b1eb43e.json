@@ -1,9 +1,0 @@
-{
-  "concept": "sales_event_start_date",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "These are temporal attributes representing distinct business events (quota period starts vs. territory assignment starts). While they share a data type and general context, they are not used as identifiers to link records across entities.",
-  "outliers": [],
-  "subClusters": []
-}
