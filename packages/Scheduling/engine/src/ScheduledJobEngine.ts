@@ -1259,47 +1259,47 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      *
      * @private
      */
-    private async cleanupStaleLocks(contextUser: UserInfo): Promise<void> {
-        const nowIso = new Date().toISOString();
-        console.log(`  🔍 Checking for stale locks (current time: ${nowIso})...`);
+    private async cleanupStaleLocks(_contextUser: UserInfo): Promise<void> {
+        const now = new Date();
+        console.log(`  🔍 Checking for stale locks (current time: ${now.toISOString()})...`);
 
-        // Read-side: find candidate stale-locked jobs. RunView scoped to the
-        // engine's per-instance provider per <RUNVIEW_PROVIDER_BINDING>.
-        const rv = new RunView(this.Base.RunViewProviderToUse);
-        const result = await rv.RunView<{ ID: string; Name: string; LockedByInstance: string | null }>({
-            EntityName: 'MJ: Scheduled Jobs',
-            ExtraFilter: `LockToken IS NOT NULL AND (ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
-            Fields: ['ID', 'Name', 'LockedByInstance'],
-            ResultType: 'simple',
-        }, contextUser);
+        // Use the engine's already-loaded cache instead of round-tripping to
+        // the DB — this method runs in StartPolling's upfront block, IMMEDIATELY
+        // after Config() loads this.Base.ScheduledJobs, so the cached lock-column
+        // values are current (no stale-state risk that the sweep path has). Saves
+        // one query + silences the "already loaded by SchedulingEngineBase"
+        // telemetry warning.
+        //
+        // Caveat: only safe HERE because the cache was just loaded. The sweep
+        // path (sweepStaleInflightJobs) MUST hit the DB because by then the
+        // cache's lock columns are stale (atomic sprocs bypass the entity cache).
+        const stale = this.Base.ScheduledJobs.filter(job =>
+            job.LockToken != null &&
+            (job.ExpectedCompletionAt == null || job.ExpectedCompletionAt < now)
+        );
 
-        if (!result.Success) {
-            this.logError(`cleanupStaleLocks: read query failed: ${result.ErrorMessage}`);
-            return;
-        }
-
-        if (result.Results.length === 0) {
+        if (stale.length === 0) {
             console.log(`  ✓ No stale locks found`);
             return;
         }
 
         let cleanedCount = 0;
-        for (const row of result.Results) {
+        for (const job of stale) {
             try {
                 // Atomic reclaim: acquire returns Acquired=1 if the lock was
                 // stale (per the sproc's WHERE clause). Then immediately release
                 // with the new token to leave the lock free.
-                const lockResult = await this.tryAcquireLock(row.ID);
+                const lockResult = await this.tryAcquireLock(job.ID);
                 if (lockResult.acquired) {
-                    await this.releaseLockIfTokenMatches(row.ID, lockResult.token!);
-                    console.log(`    🔓 Cleared stale lock on "${row.Name}" (was held by ${row.LockedByInstance})`);
+                    await this.releaseLockIfTokenMatches(job.ID, lockResult.token!);
+                    console.log(`    🔓 Cleared stale lock on "${job.Name}" (was held by ${job.LockedByInstance})`);
                     cleanedCount++;
                 } else {
-                    // Another instance acquired between our query and acquire.
-                    console.log(`    ℹ️  Stale lock on "${row.Name}" was cleared by another holder`);
+                    // Another instance acquired between our cache load and acquire.
+                    console.log(`    ℹ️  Stale lock on "${job.Name}" was cleared by another holder`);
                 }
             } catch (error) {
-                this.logError(`Failed to clean stale lock for job ${row.Name}`, error);
+                this.logError(`Failed to clean stale lock for job ${job.Name}`, error);
             }
         }
 
