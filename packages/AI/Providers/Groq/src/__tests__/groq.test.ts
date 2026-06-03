@@ -122,7 +122,8 @@ vi.mock('@memberjunction/ai', () => {
         SummarizeResult: class {},
         ClassifyParams: ChatParams,
         ClassifyResult: class {},
-        ErrorAnalyzer: { analyzeError: vi.fn() }
+        ErrorAnalyzer: { analyzeError: vi.fn() },
+        toJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v)))
     };
 });
 

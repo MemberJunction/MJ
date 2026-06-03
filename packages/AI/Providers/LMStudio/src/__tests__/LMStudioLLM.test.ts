@@ -75,6 +75,7 @@ vi.mock('@memberjunction/ai', () => {
     SummarizeParams: class {},
     SummarizeResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    toJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v))),
   };
 });
 

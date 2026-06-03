@@ -113,6 +113,7 @@ vi.mock('@memberjunction/ai', () => {
     EmbedTextResult: class {},
     EmbedTextsResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    toJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v))),
     parseBase64DataUrl: vi.fn().mockImplementation((input: string) => {
       const match = input.match(/^data:([^;]+);base64,(.+)$/);
       if (match) return { mediaType: match[1], data: match[2] };
