@@ -237,12 +237,8 @@
 }
 
 @media (max-width: 768px) {
-  /* Search grows so the icon-only Filter · sort · view controls share one line.
-     (.action-btn-label hiding is owned by the shared chrome — page-header.scss.) */
-  mj-page-search {
-    flex: 1;
-  }
-
+  /* Search-grow + .action-btn-label collapse are owned by the shared chrome
+     (page-header.scss) since search lives in the [toolbar] slot. None here. */
   .explorer-content {
     padding: 12px;
   }
