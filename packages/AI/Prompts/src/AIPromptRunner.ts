@@ -1105,6 +1105,11 @@ export class AIPromptRunner {
     if (selectedResultUsage) {
       consolidatedPromptRun.TokensPrompt = selectedResultUsage.promptTokens;
       consolidatedPromptRun.TokensCompletion = selectedResultUsage.completionTokens;
+      // Persist the selected result's cache token counts so (a) they are recorded and (b) any
+      // downstream cost recompute (MJAIPromptRunEntityServer, when no provider cost is present)
+      // prices the full input including cached tokens rather than dropping them.
+      consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
+      consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
       if (selectedResultUsage.cost !== undefined) {
         consolidatedPromptRun.Cost = selectedResultUsage.cost;
       }
@@ -5056,7 +5061,11 @@ export class AIPromptRunner {
 
       // Extract token usage and cost - use cumulative if retries occurred
       if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
-        // Multiple attempts occurred, use cumulative totals
+        // Multiple attempts occurred, use cumulative totals. cumulativeTokens.promptTokens is the
+        // UNCACHED ("net-new") input summed across attempts; cache reads/writes are NOT summed (the
+        // re-sent prefix would over-count) and are persisted from the final model result below.
+        // TokensUsed must equal TokensPrompt + TokensCompletion (AIPromptRun invariant), so it does
+        // NOT include the cache buckets — those live in TokensCacheRead/TokensCacheWrite.
         promptRun.TokensPrompt = cumulativeTokens.promptTokens;
         promptRun.TokensCompletion = cumulativeTokens.completionTokens;
         promptRun.TokensUsed = cumulativeTokens.promptTokens + cumulativeTokens.completionTokens;
@@ -5091,7 +5100,16 @@ export class AIPromptRunner {
           promptRun.CompletionTime = modelResult.data.usage.completionTime;
         }
       }
-      
+
+      // Provider prompt-cache token counts (informational; no cost is derived here). Taken from the
+      // final model result in both the single-attempt and retry paths — cache reads are best
+      // represented by the final call rather than summed across retries (which would over-count the
+      // re-sent prefix). 0 means "no cache activity reported", consistent with ModelUsage defaults.
+      if (modelResult.data?.usage) {
+        promptRun.TokensCacheRead = modelResult.data.usage.cacheReadTokens ?? 0;
+        promptRun.TokensCacheWrite = modelResult.data.usage.cacheWriteTokens ?? 0;
+      }
+
       // Save model-specific response details if available
       if (modelResult.modelSpecificResponseDetails) {
         promptRun.ModelSpecificResponseDetails = JSON.stringify(modelResult.modelSpecificResponseDetails);

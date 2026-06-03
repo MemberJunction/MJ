@@ -150,8 +150,8 @@
 }
 
 .mj-sm-row-badge--inherited {
-  background: color-mix(in srgb, var(--mj-color-indigo-500) 10%, var(--mj-bg-surface));
-  color: var(--mj-color-indigo-500);
+  background: color-mix(in srgb, var(--mj-brand-accent) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-accent);
 }
 
 /* Arrow buttons */

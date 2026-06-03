@@ -288,6 +288,13 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 
 - **[Search Overview Guide](guides/SEARCH_OVERVIEW_GUIDE.md)**: Decision tree across MJ's search/lookup APIs — `EntityByName`/`EntityByID` (definition lookup), `SearchEntity`/`SearchEntities` (per-entity ranked hybrid search, see [ENTITY_SEARCH_GUIDE](guides/ENTITY_SEARCH_GUIDE.md)), `FullTextSearch` (multi-entity DB-level FTS, see [FULL_TEXT_SEARCH_GUIDE](packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)), and `SearchEngine.Search` (cross-source unified search with scopes, see [SEARCH_SCOPES_AND_RAG_GUIDE](guides/SEARCH_SCOPES_AND_RAG_GUIDE.md)). Read this first when you need to find records / definitions / cross-source matches — picking the wrong API can mean wasted round-trips or missed semantic matches.
 
+- **[Forms Architecture Guide](guides/FORMS_ARCHITECTURE_GUIDE.md)**: How MJ renders/edits entity records across **all** surfaces from one set of forms — full-page tabs, modal dialogs, and slide-in panels. Covers:
+  - The 4-layer architecture (`MjEntityFormHostComponent` → presentation shells → `MJFormPresenterService`), all in `@memberjunction/ng-base-forms` with zero Explorer/Router coupling
+  - How **generated**, **custom (`*Extended`)**, and **interactive (`EntityFormOverride`)** forms coexist, plus the variant picker
+  - **`EntityFormConfig`** — per-instance control over toolbar / related-entity sections / collapsibility / width / in-form navigation, applied **without regenerating** any form
+  - Imperative (`forms.open({...})`) and declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`) usage
+  - **Read this before building any bespoke "edit a record in a dialog/slide-in" component** — the generic capability almost certainly covers it.
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
