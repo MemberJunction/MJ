@@ -159,6 +159,81 @@ export class DatabaseProvisionPhase {
   // SQL script generation
   // ---------------------------------------------------------------------------
 
+  /**
+   * Returns true when `userName` is a SQL Server built-in sysadmin principal that
+   * cannot be the target of `CREATE LOGIN` / `CREATE USER` / role-grant statements.
+   *
+   * The only such principal we expect to see at this layer is `sa` — but case-
+   * insensitive because SQL Server itself treats logins as case-insensitive by
+   * default. Without this guard, an install that configures `sa` as the CodeGen
+   * or API user (a common pattern in dev / Docker / single-user setups) produces
+   * `Msg 15405, Cannot use the special principal 'sa'` errors throughout setup.
+   * The database itself still gets created (step 1 succeeds before any sa-specific
+   * statement runs), but the visible errors are confusing and the script reports
+   * partial failure.
+   */
+  private isBuiltInSysadmin(userName: string): boolean {
+    return userName.trim().toLowerCase() === 'sa';
+  }
+
+  /** SQL for the server-level CREATE LOGIN block, or a skip-comment for `sa`. */
+  private loginBlock(user: string, password: string): string {
+    if (this.isBuiltInSysadmin(user)) {
+      return `-- Skipping CREATE LOGIN [${user}] — sa is a built-in sysadmin and already exists in every SQL Server instance.
+PRINT 'Skipped CREATE LOGIN: ${user} (built-in sysadmin)';
+GO`;
+    }
+    return `IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '${user}')
+BEGIN
+    CREATE LOGIN [${user}] WITH PASSWORD = '${password}';
+    PRINT 'Created login: ${user}';
+END
+GO`;
+  }
+
+  /** SQL for the database-level CREATE USER block, or a skip-comment for `sa`. */
+  private userBlock(user: string): string {
+    if (this.isBuiltInSysadmin(user)) {
+      return `-- Skipping CREATE USER [${user}] — SQL Server rejects \`CREATE USER FOR LOGIN [sa]\` with Msg 15405 (special principal).
+-- sa already has implicit sysadmin permissions in every database; no user-mapping is required.
+PRINT 'Skipped CREATE USER: ${user} (built-in sysadmin)';
+GO`;
+    }
+    return `IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${user}')
+BEGIN
+    CREATE USER [${user}] FOR LOGIN [${user}];
+    PRINT 'Created user: ${user}';
+END
+GO`;
+  }
+
+  /** SQL for an `ALTER ROLE <role> ADD MEMBER [user]` block, or a skip-comment for `sa`. */
+  private roleGrantBlock(user: string, role: string): string {
+    if (this.isBuiltInSysadmin(user)) {
+      return `-- Skipping ALTER ROLE ${role} ADD MEMBER [${user}] — sa is sysadmin and has all permissions implicitly.
+GO`;
+    }
+    return `IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
+    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
+    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
+    WHERE rp.name = '${role}' AND mp.name = '${user}')
+BEGIN
+    ALTER ROLE ${role} ADD MEMBER [${user}];
+    PRINT 'Granted ${role} to ${user}';
+END
+GO`;
+  }
+
+  /** SQL for a `GRANT EXECUTE TO [user]` block, or a skip-comment for `sa`. */
+  private grantExecuteBlock(user: string): string {
+    if (this.isBuiltInSysadmin(user)) {
+      return `-- Skipping GRANT EXECUTE TO [${user}] — sa is sysadmin and has EXECUTE permission implicitly.
+GO`;
+    }
+    return `GRANT EXECUTE TO [${user}];
+GO`;
+  }
+
   private generateSetupScript(config: PartialInstallConfig): string {
     const dbName = config.DatabaseName ?? 'MemberJunction';
     const codeGenUser = config.CodeGenUser ?? 'MJ_CodeGen';
@@ -204,19 +279,9 @@ GO
 USE [master];
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '${codeGenUser}')
-BEGIN
-    CREATE LOGIN [${codeGenUser}] WITH PASSWORD = '${codeGenPassword}';
-    PRINT 'Created login: ${codeGenUser}';
-END
-GO
+${this.loginBlock(codeGenUser, codeGenPassword)}
 
-IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '${apiUser}')
-BEGIN
-    CREATE LOGIN [${apiUser}] WITH PASSWORD = '${apiPassword}';
-    PRINT 'Created login: ${apiUser}';
-END
-GO
+${this.loginBlock(apiUser, apiPassword)}
 
 --============================================================================
 -- 4. Create database users
@@ -224,57 +289,22 @@ GO
 USE [${dbName}];
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${codeGenUser}')
-BEGIN
-    CREATE USER [${codeGenUser}] FOR LOGIN [${codeGenUser}];
-    PRINT 'Created user: ${codeGenUser}';
-END
-GO
+${this.userBlock(codeGenUser)}
 
-IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${apiUser}')
-BEGIN
-    CREATE USER [${apiUser}] FOR LOGIN [${apiUser}];
-    PRINT 'Created user: ${apiUser}';
-END
-GO
+${this.userBlock(apiUser)}
 
 --============================================================================
 -- 5. Grant roles
 --============================================================================
 -- CodeGen needs elevated permissions for schema modifications
-IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
-    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
-    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
-    WHERE rp.name = 'db_owner' AND mp.name = '${codeGenUser}')
-BEGIN
-    ALTER ROLE db_owner ADD MEMBER [${codeGenUser}];
-    PRINT 'Granted db_owner to ${codeGenUser}';
-END
-GO
+${this.roleGrantBlock(codeGenUser, 'db_owner')}
 
 -- API user needs read/write + execute
-IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
-    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
-    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
-    WHERE rp.name = 'db_datareader' AND mp.name = '${apiUser}')
-BEGIN
-    ALTER ROLE db_datareader ADD MEMBER [${apiUser}];
-    PRINT 'Granted db_datareader to ${apiUser}';
-END
-GO
+${this.roleGrantBlock(apiUser, 'db_datareader')}
 
-IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
-    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
-    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
-    WHERE rp.name = 'db_datawriter' AND mp.name = '${apiUser}')
-BEGIN
-    ALTER ROLE db_datawriter ADD MEMBER [${apiUser}];
-    PRINT 'Granted db_datawriter to ${apiUser}';
-END
-GO
+${this.roleGrantBlock(apiUser, 'db_datawriter')}
 
-GRANT EXECUTE TO [${apiUser}];
-GO
+${this.grantExecuteBlock(apiUser)}
 
 PRINT '';
 PRINT '=== MemberJunction database setup complete ===';
