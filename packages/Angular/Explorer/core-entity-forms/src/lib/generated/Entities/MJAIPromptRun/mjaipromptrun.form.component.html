@@ -505,6 +505,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCacheRead"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCacheWrite"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -826,10 +842,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Rerun From) Section -->
+    <!-- AI Prompt Runs (Rerun From Run) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsRerunFromPromptRunID"
-        SectionName="AI Prompt Runs (Rerun From)"
+        SectionName="AI Prompt Runs (Rerun From Run)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

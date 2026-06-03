@@ -1,4 +1,4 @@
-import { LogError, Metadata } from "@memberjunction/core";
+import { LogError, LogErrorEx, Metadata } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
@@ -270,12 +270,15 @@ export class ActionEngineServer extends ActionEngineBase {
          return result;
       }
       catch (e) {
-         // if we get here, something went wrong in the action code
-         LogError(`Error running action ${params.Action.Name}:`, e);
+         // if we get here, something went wrong in the action code.
+         // NOTE: LogError's 2nd positional arg is `logToFileName`, NOT the error —
+         // passing the error there silently swallows it. Use LogErrorEx so the
+         // real message + stack trace actually print to the console.
+         LogErrorEx({ message: `Error running action ${params.Action.Name}`, error: e instanceof Error ? e : new Error(String(e)) });
          const result: ActionResult = {
             RunParams: params,
             Success: false,
-            Message: `Error running action ${params.Action.Name}: ${e.message}`,
+            Message: `Error running action ${params.Action.Name}: ${e instanceof Error ? e.message : String(e)}`,
             LogEntry: logEntry,
             Params: params.Params,
             Result: undefined

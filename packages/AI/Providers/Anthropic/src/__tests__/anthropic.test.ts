@@ -111,7 +111,7 @@ vi.mock('@memberjunction/ai', () => {
     };
 });
 
-import { AnthropicLLM } from '../models/anthropic';
+import { AnthropicLLM, ANTHROPIC_CACHE_BREAKPOINT } from '../models/anthropic';
 import { ChatMessageRole } from '@memberjunction/ai';
 
 describe('AnthropicLLM', () => {
@@ -244,6 +244,32 @@ describe('AnthropicLLM', () => {
             expect(result).toHaveLength(2);
             expect(result[0]).toEqual({ type: 'text', text: 'First' });
             expect(result[1]).toEqual({ type: 'text', text: 'Last' });
+        });
+
+        it('should split a string on a cache-breakpoint marker, caching the stable prefix only', () => {
+            const result = callMethod(`STABLE PREFIX${ANTHROPIC_CACHE_BREAKPOINT}VOLATILE TAIL`) as Array<Record<string, unknown>>;
+            expect(result).toHaveLength(2);
+            // Stable prefix gets the breakpoint; marker text is removed.
+            expect(result[0]).toEqual({ type: 'text', text: 'STABLE PREFIX', cache_control: { type: 'ephemeral' } });
+            // Volatile tail is left uncached so it never poisons the cached prefix.
+            expect(result[1]).toEqual({ type: 'text', text: 'VOLATILE TAIL' });
+        });
+
+        it('should strip the marker (no breakpoints) when caching is disabled', () => {
+            const result = callMethod(`STABLE${ANTHROPIC_CACHE_BREAKPOINT}VOLATILE`, false) as Array<Record<string, unknown>>;
+            expect(result).toHaveLength(2);
+            expect(result[0]).toEqual({ type: 'text', text: 'STABLE' });
+            expect(result[1]).toEqual({ type: 'text', text: 'VOLATILE' });
+            expect(result.some((b) => 'cache_control' in b)).toBe(false);
+        });
+
+        it('should cap cache_control breakpoints at 4 even with many markers', () => {
+            const text = ['a', 'b', 'c', 'd', 'e', 'f'].join(ANTHROPIC_CACHE_BREAKPOINT);
+            const result = callMethod(text) as Array<Record<string, unknown>>;
+            const breakpoints = result.filter((b) => 'cache_control' in b).length;
+            expect(breakpoints).toBeLessThanOrEqual(4);
+            // Marker text must not leak into any block.
+            expect(result.every((b) => !(b.text as string).includes(ANTHROPIC_CACHE_BREAKPOINT))).toBe(true);
         });
     });
 

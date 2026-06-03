@@ -195,6 +195,10 @@ export class AzureLLM extends BaseLLM {
                 };
             });
             
+            // Normalize usage: Azure's prompt_tokens INCLUDES cached tokens, so subtract them out
+            const usage = this.buildUsageFromAzure(chatResponse.usage);
+            const cacheRead = usage.cacheReadTokens ?? 0;
+
             // Return result
             return {
                 success: true,
@@ -204,8 +208,9 @@ export class AzureLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 data: {
                     choices: choices,
-                    usage: new ModelUsage(chatResponse.usage.prompt_tokens, chatResponse.usage.completion_tokens)
+                    usage
                 },
+                cacheInfo: { cacheHit: cacheRead > 0, cachedTokenCount: cacheRead },
                 errorMessage: "",
                 exception: null,
             };
@@ -320,12 +325,9 @@ export class AzureLLM extends BaseLLM {
                 content = choice.delta.content;
             }
             
-            // Save usage information if available
+            // Save usage information if available (normalized to subtract cached tokens)
             if (chunkData?.usage) {
-                usage = new ModelUsage(
-                    chunkData.usage.prompt_tokens || 0,
-                    chunkData.usage.completion_tokens || 0
-                );
+                usage = this.buildUsageFromAzure(chunkData.usage);
             }
         }
         
@@ -351,6 +353,7 @@ export class AzureLLM extends BaseLLM {
         const result = new ChatResult(true, now, now);
         
         // Set all properties
+        const finalUsage: ModelUsage = usage || new ModelUsage(0, 0);
         result.data = {
             choices: [{
                 message: {
@@ -360,9 +363,12 @@ export class AzureLLM extends BaseLLM {
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
                 index: 0
             }],
-            usage: usage || new ModelUsage(0, 0)
+            usage: finalUsage
         };
-        
+
+        const cacheRead = finalUsage.cacheReadTokens ?? 0;
+        result.cacheInfo = { cacheHit: cacheRead > 0, cachedTokenCount: cacheRead };
+
         result.statusText = 'success';
         result.errorMessage = '';
         result.exception = null;
@@ -375,6 +381,25 @@ export class AzureLLM extends BaseLLM {
      * @param params Summarization parameters
      * @returns Summarize result
      */
+    /**
+     * Build a normalized {@link ModelUsage} from Azure's OpenAI-compatible usage payload.
+     *
+     * Azure's `prompt_tokens` INCLUDES tokens served from the prompt cache (reported in
+     * `prompt_tokens_details.cached_tokens`). The MJ contract requires `promptTokens` to be the
+     * UNCACHED net-new input only, with cached tokens tracked separately in `cacheReadTokens`
+     * (disjoint). So we subtract: promptTokens = prompt_tokens − cached_tokens (clamped at 0).
+     *
+     * Azure does not report cache writes, so `cacheWriteTokens` stays at its default of 0.
+     */
+    private buildUsageFromAzure(usage: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | null | undefined): ModelUsage {
+        const nativePrompt = usage?.prompt_tokens ?? 0;
+        const completion = usage?.completion_tokens ?? 0;
+        const cacheRead = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        const result = new ModelUsage(Math.max(0, nativePrompt - cacheRead), completion);
+        result.cacheReadTokens = cacheRead;
+        return result;
+    }
+
     /**
      * Helper function to convert ChatMessageContent to string
      */
