@@ -1,14 +1,24 @@
 ---
 "@memberjunction/ng-map-view": patch
+"@memberjunction/ng-dashboards": patch
 ---
 
-fix(map-view): isolate stacking context so the map no longer paints over app overlays
+fix(data-explorer): stop body view content from painting over header dropdowns
 
-Leaflet's internal panes/controls and the map toolbar use z-index values up to
-~1000 but the component never established its own stacking context, so those
-values competed directly with overlays opened above the map (e.g. the Data
-Explorer view-selector "new view" dropdown) — and since the map renders later in
-the DOM, equal z-index meant the map won and obscured the menu. Adding
-`isolation: isolate` to the component `:host` flattens Leaflet's z-indices into
-the map's own stacking context so external overlays layer correctly. No z-index
-values changed; the map's internal layering is unaffected.
+After #2701 lowered the Data Explorer `.content-header` to `z-index: 2` (to keep
+it below the shell header), body view content that leaks a higher z-index began
+painting over the header's own dropdowns. The map view was the visible symptom —
+its Leaflet panes/toolbar (z-index up to ~1000) covered the view-selector "new
+view" dropdown — and the entity grid's option menu (z-index 1000) is the same
+latent class.
+
+Two complementary fixes, both pure containment (no z-index values changed):
+
+- **`@memberjunction/ng-map-view`** — add `isolation: isolate` to the component
+  `:host` so Leaflet's z-indices stay contained in the map's own stacking
+  context. Generic hygiene that protects the map in any consumer.
+- **`@memberjunction/ng-dashboards`** — add `isolation: isolate` to the Data
+  Explorer `.content-body` so all body view content (grid menus, map, cards,
+  timeline, future view modes) is contained beneath the header in one stacking
+  context. Safe because modals and the record detail panel render at the
+  dashboard root, outside `.content-body`, so they still overlay everything.
