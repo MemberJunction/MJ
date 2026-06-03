@@ -1587,6 +1587,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!delResult.Success) {
                 if (delResult.StatusCode === 403) {
                     console.warn(`[IntegrationEngine] Skipping delete — ${delResult.ErrorMessage}`);
+                    this.warnPushSkip(logger, entityMap, 'delete', delResult.ErrorMessage ?? 'forbidden (403)', { statusCode: 403, recordID: change.RecordID });
                     result.RecordsSkipped++;
                     return;
                 }
@@ -1619,6 +1620,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!updResult.Success) {
                 if (updResult.StatusCode === 403) {
                     console.warn(`[IntegrationEngine] Skipping update — ${updResult.ErrorMessage}`);
+                    this.warnPushSkip(logger, entityMap, 'update', updResult.ErrorMessage ?? 'forbidden (403)', { statusCode: 403, recordID: change.RecordID });
                     result.RecordsSkipped++;
                     return;
                 }
@@ -1634,6 +1636,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!createResult.Success) {
                 if (createResult.StatusCode === 403) {
                     console.warn(`[IntegrationEngine] Skipping create — ${createResult.ErrorMessage}`);
+                    this.warnPushSkip(logger, entityMap, 'create', createResult.ErrorMessage ?? 'forbidden (403)', { statusCode: 403, recordID: change.RecordID });
                     result.RecordsSkipped++;
                     return;
                 }
@@ -1651,8 +1654,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             result.RecordsCreated++;
         } else {
+            // A changed MJ record with no external counterpart, but the connector can't create it —
+            // silently dropping the change would lose it, so surface it.
+            this.warnPushSkip(logger, entityMap, 'create',
+                'connector does not support create; a new MJ record with no external counterpart was not pushed',
+                { recordID: change.RecordID });
             result.RecordsSkipped++;
         }
+    }
+
+    /**
+     * Surface a SKIPPED push (forbidden write / unsupported op) as a structured SyncWarning so a
+     * change that was NOT written to the external system is visible over GraphQL — not just a
+     * console.warn + a silent RecordsSkipped bump. Mirrors the read-side silent-fail surfacing
+     * (plan.md §8 "things go right, and when they don't it's loud" — applied to the write path).
+     */
+    private warnPushSkip(
+        logger: SyncLogger | undefined,
+        entityMap: ICompanyIntegrationEntityMap,
+        operation: string,
+        message: string,
+        data?: Record<string, unknown>,
+    ): void {
+        logger?.warning(
+            entityMap.ExternalObjectName ?? entityMap.ID,
+            'PUSH_SKIPPED',
+            `Push ${operation} skipped — the change was NOT written to the external system: ${message}`,
+            { operation, ...data },
+        );
     }
 
     /**
