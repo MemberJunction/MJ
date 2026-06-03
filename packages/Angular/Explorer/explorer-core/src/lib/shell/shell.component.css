@@ -650,6 +650,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .mobile-nav-action {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -699,6 +700,18 @@ mj-tab-container ::ng-deep .lm_stack {
   .shell-header {
     padding: 0 12px;
     gap: 8px;
+  }
+
+  /* Keep the right-edge cluster (chat/nav-bar app icons + avatar) on one row.
+     Without pinning this, the icons can wrap and the avatar drops onto a second
+     line, stacking under the chat icon. */
+  .header-actions {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  .header-actions .user-menu,
+  .header-actions .nav-bar-apps {
+    flex-shrink: 0;
   }
 }
 

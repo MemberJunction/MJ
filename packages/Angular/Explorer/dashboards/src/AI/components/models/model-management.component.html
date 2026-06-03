@@ -16,6 +16,17 @@
         </mj-stat-badge>
       </div>
       <div actions>
+        <button mjButton variant="primary" size="sm" (click)="createNewModel()" title="Create New Model">
+          <i class="fa-solid fa-plus"></i>
+          <span class="action-btn-label">New Model</span>
+        </button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search models..."
+          [Value]="searchTerm"
+          (ValueChange)="onSearchChange($event)">
+        </mj-page-search>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -49,24 +60,11 @@
             </mj-filter-field>
           </mj-filter-panel>
         </mj-filter-popover>
-
         <mj-view-toggle
           [Options]="modelViewOptions"
           [ActiveKey]="viewMode"
           (KeyChange)="setViewMode($any($event))">
         </mj-view-toggle>
-
-        <button mjButton variant="primary" size="sm" (click)="createNewModel()" title="Create New Model">
-          <i class="fa-solid fa-plus"></i>
-          New Model
-        </button>
-      </div>
-      <div toolbar>
-        <mj-page-search
-          Placeholder="Search models..."
-          [Value]="searchTerm"
-          (ValueChange)="onSearchChange($event)">
-        </mj-page-search>
       </div>
     </mj-page-header>
 

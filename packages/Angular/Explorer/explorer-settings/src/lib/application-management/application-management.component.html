@@ -16,33 +16,32 @@
     </mj-stat-badge>
   </div>
   <div toolbar>
+    <!-- Concise-chrome control bar: search · Filter. Status lives behind the
+         one Filter button; applied filters show as removable chips below the
+         card. On mobile the popover docks as a bottom sheet. -->
     <mj-page-search
       Placeholder="Search applications by name or description..."
       [Value]="filters$.value.search"
       (ValueChange)="updateFilter({ search: $event })">
     </mj-page-search>
-    <div class="status-chips" role="group" aria-label="Filter by status">
-      <mj-filter-chip
-        Label="All"
-        [Active]="filters$.value.status === 'all'"
-        (Clicked)="onStatusFilterChange('all')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Active"
-        [Active]="filters$.value.status === 'active'"
-        (Clicked)="onStatusFilterChange('active')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Inactive"
-        [Active]="filters$.value.status === 'inactive'"
-        (Clicked)="onStatusFilterChange('inactive')">
-      </mj-filter-chip>
-    </div>
+    <mj-filter-popover
+      Label="Filters"
+      Icon="fa-solid fa-filter"
+      [ActiveCount]="TotalActiveFilterCount"
+      [ShowClearAll]="TotalActiveFilterCount > 0"
+      (ClearAllRequested)="clearAllAppliedFilters()">
+      <mj-filter-panel
+        [Fields]="filterFields"
+        [Values]="filterValues"
+        (ValuesChange)="onFilterPanelChange($event)"
+        (Reset)="clearAllAppliedFilters()">
+      </mj-filter-panel>
+    </mj-filter-popover>
   </div>
   <div actions>
     <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()"></mj-refresh-button>
     <button mjButton variant="primary" size="sm" (click)="createNewApplication()" aria-label="Add new application">
-      <i class="fa-solid fa-plus"></i> Add Application
+      <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add Application</span>
     </button>
   </div>
 </mj-page-header-interior>

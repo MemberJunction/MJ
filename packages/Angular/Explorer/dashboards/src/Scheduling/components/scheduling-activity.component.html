@@ -7,6 +7,14 @@
       Icon="fa-solid fa-clock-rotate-left"
       Subtitle="Execution history, trends, and job type statistics">
       <div actions>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search executions..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -18,21 +26,6 @@
             (Reset)="ResetFilters()">
           </mj-filter-panel>
         </mj-filter-popover>
-        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
-      </div>
-      <div toolbar>
-        <mj-page-search
-          Placeholder="Search executions..."
-          [Value]="SearchTerm"
-          (ValueChange)="OnSearchChange($event)">
-        </mj-page-search>
-        @for (range of TimeRanges; track range.value) {
-          <mj-filter-chip
-            [Label]="range.label"
-            [Active]="SelectedTimeRange === range.value"
-            (Clicked)="OnTimeRangeChange(range.value)">
-          </mj-filter-chip>
-        }
       </div>
     </mj-page-header>
     <mj-page-body>
