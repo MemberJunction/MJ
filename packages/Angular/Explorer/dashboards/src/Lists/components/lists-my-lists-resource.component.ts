@@ -35,7 +35,7 @@ interface CategoryNode {
         </div>
         <div actions>
           <button mjButton variant="primary" size="sm" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i> New List
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
           </button>
         </div>
         <div toolbar>

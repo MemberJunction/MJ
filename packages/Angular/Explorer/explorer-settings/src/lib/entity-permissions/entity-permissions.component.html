@@ -16,44 +16,25 @@
     </mj-stat-badge>
   </div>
   <div toolbar>
+    <!-- Concise-chrome control bar: search · Filter · view. Access level + Role
+         live behind the one Filter button; applied filters show as removable
+         chips below the card. On mobile the popover docks as a bottom sheet. -->
     <mj-page-search
       Placeholder="Search entities by name or description..."
       [Value]="filters$.value.entitySearch"
       (ValueChange)="updateFilter({ entitySearch: $event })">
     </mj-page-search>
-    <div class="status-chips" role="group" aria-label="Filter by access level">
-      <mj-filter-chip
-        Label="All"
-        [Active]="filters$.value.accessLevel === 'all'"
-        (Clicked)="onAccessLevelChange('all')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Public"
-        [Active]="filters$.value.accessLevel === 'public'"
-        (Clicked)="onAccessLevelChange('public')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Restricted"
-        [Active]="filters$.value.accessLevel === 'restricted'"
-        (Clicked)="onAccessLevelChange('restricted')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Custom"
-        [Active]="filters$.value.accessLevel === 'custom'"
-        (Clicked)="onAccessLevelChange('custom')">
-      </mj-filter-chip>
-    </div>
-  </div>
-  <div actions>
     <mj-filter-popover
-      [ActiveCount]="popoverActiveFilterCount"
-      [ShowClearAll]="popoverActiveFilterCount > 0"
-      (ClearAllRequested)="onFilterPanelChange({ roleId: null })">
+      Label="Filters"
+      Icon="fa-solid fa-filter"
+      [ActiveCount]="TotalActiveFilterCount"
+      [ShowClearAll]="TotalActiveFilterCount > 0"
+      (ClearAllRequested)="clearAllAppliedFilters()">
       <mj-filter-panel
         [Fields]="filterFields"
         [Values]="filterValues"
         (ValuesChange)="onFilterPanelChange($event)"
-        (Reset)="onFilterPanelChange({ roleId: null })">
+        (Reset)="clearAllAppliedFilters()">
       </mj-filter-panel>
     </mj-filter-popover>
     <mj-view-toggle
@@ -61,6 +42,8 @@
       [ActiveKey]="viewMode"
       (KeyChange)="setViewMode($any($event))">
     </mj-view-toggle>
+  </div>
+  <div actions>
     <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()"></mj-refresh-button>
   </div>
 </mj-page-header-interior>
