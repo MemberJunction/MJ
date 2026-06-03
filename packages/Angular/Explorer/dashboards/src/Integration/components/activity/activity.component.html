@@ -16,6 +16,14 @@
       </div>
     }
     <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search integrations..."
+        [Value]="SearchQuery"
+        (ValueChange)="OnSearchValueChange($event)">
+      </mj-page-search>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -27,29 +35,6 @@
           (Reset)="ResetIntegrationFilter()">
         </mj-filter-panel>
       </mj-filter-popover>
-      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search integrations..."
-        [Value]="SearchQuery"
-        (ValueChange)="OnSearchValueChange($event)">
-      </mj-page-search>
-      @for (status of StatusOptions; track status) {
-        <mj-filter-chip
-          [Label]="status"
-          [Active]="StatusFilter === status"
-          (Clicked)="SetStatusFilter(status)">
-        </mj-filter-chip>
-      }
-      <span class="toolbar-divider" aria-hidden="true"></span>
-      @for (d of DateOptions; track d.Value) {
-        <mj-filter-chip
-          [Label]="d.Label"
-          [Active]="DateFilter === d.Value"
-          (Clicked)="SetDateFilter(d.Value)">
-        </mj-filter-chip>
-      }
     </div>
   </mj-page-header>
 

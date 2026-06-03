@@ -27,6 +27,8 @@ export class EntityVectorSyncer extends VectorBase {
   _endTime: Date;
   /** Accumulates render errors across batches so they can be reported through the progress callback */
   private _renderErrors: { RecordID: string; Message: string }[] = [];
+  /** Accumulates vector-DB upsert errors across batches so a failed upsert is reflected in the run's success flag */
+  private _upsertErrors: { RecordID: string; Message: string }[] = [];
 
   /**
    * Returns the active metadata provider — explicit override (via `this.Provider = ...`)
@@ -69,6 +71,7 @@ export class EntityVectorSyncer extends VectorBase {
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
     this._renderErrors = []; // reset for each vectorization run
+    this._upsertErrors = []; // reset for each vectorization run
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
@@ -145,6 +148,7 @@ export class EntityVectorSyncer extends VectorBase {
     let lastEmittedPct = -1;
     let dataStreamEnded = false;
     const renderErrors = this._renderErrors; // capture reference for use in Transform closure
+    const upsertErrors = this._upsertErrors; // capture reference for use in Transform closure
     const progressTracker = new Transform({
       objectMode: true,
       transform(chunk: EmbeddingData, _encoding: BufferEncoding, callback: TransformCallback) {
@@ -155,13 +159,14 @@ export class EntityVectorSyncer extends VectorBase {
 
           // Detect when all records have been processed and data stream is done
           if (dataStreamEnded && processedRecords >= totalRecordsFed) {
+            const allErrors = [...renderErrors, ...upsertErrors];
             onProgress({
               TotalRecords: totalRecordsFed,
               ProcessedRecords: processedRecords,
-              Stage: 'complete',
+              Stage: allErrors.length > 0 ? 'error' : 'complete',
               PercentComplete: 100,
               ElapsedMs: elapsed,
-              Errors: renderErrors.length > 0 ? renderErrors : undefined,
+              Errors: allErrors.length > 0 ? allErrors : undefined,
             });
           } else {
             // Throttle: only emit on 5% boundaries to avoid flooding PubSub/WebSocket
@@ -215,22 +220,43 @@ export class EntityVectorSyncer extends VectorBase {
     const elapsedSeconds = elapsedMs / 1000;
     LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${elapsedSeconds} seconds (${(elapsedSeconds / 60).toFixed(1)} minutes)`);
 
-    // Emit final 100% completion with any accumulated render errors
+    // Emit final 100% completion with any accumulated render + upsert errors.
+    // This post-pipeline emission is authoritative: by the time pipeline() resolves, every
+    // upsert batch has settled, so _upsertErrors is fully populated.
+    const allErrors = [...this._renderErrors, ...this._upsertErrors];
     if (onProgress) {
       onProgress({
         TotalRecords: totalRecordsFed,
         ProcessedRecords: processedRecords,
-        Stage: 'complete',
+        Stage: allErrors.length > 0 ? 'error' : 'complete',
         PercentComplete: 100,
         ElapsedMs: elapsedMs,
-        Errors: this._renderErrors.length > 0 ? this._renderErrors : undefined,
+        Errors: allErrors.length > 0 ? allErrors : undefined,
       });
     }
 
-    const errorSummary = this._renderErrors.length > 0
-      ? `${this._renderErrors.length} record(s) failed template rendering`
-      : '';
-    return { success: true, status: 'Complete', errorMessage: errorSummary };
+    // Reflect reality in the success flag: a run that failed every template render or every
+    // vector upsert must NOT report success. Callers that inspect `success` (KnowledgePipeline,
+    // KnowledgeAgent) already handle the false branch.
+    const success = allErrors.length === 0;
+    const errorMessage = this.buildVectorizeErrorSummary();
+    const status = success ? 'Complete' : 'CompletedWithErrors';
+    return { success, status, errorMessage };
+  }
+
+  /**
+   * Build a human-readable summary of render + upsert failures accumulated during the run,
+   * or an empty string when there were none.
+   */
+  private buildVectorizeErrorSummary(): string {
+    const parts: string[] = [];
+    if (this._renderErrors.length > 0) {
+      parts.push(`${this._renderErrors.length} record(s) failed template rendering`);
+    }
+    if (this._upsertErrors.length > 0) {
+      parts.push(`${this._upsertErrors.length} record(s) failed vector upsert`);
+    }
+    return parts.join('; ');
   }
 
   /**
@@ -481,7 +507,13 @@ export class EntityVectorSyncer extends VectorBase {
 
     const response: BaseResponse = await vectorDB.CreateRecords(vectorRecords, indexName);
     if (!response.success) {
-      LogError('Unable to save records to vector database', undefined, response.message);
+      const message = response.message || 'Unknown vector database error';
+      LogError('Unable to save records to vector database', undefined, message);
+      // Record one error per record in the failed batch so the run's success flag and the
+      // progress callback reflect the failure instead of silently reporting success.
+      for (const item of batch) {
+        this._upsertErrors.push({ RecordID: String(item.__mj_recordID ?? ''), Message: `Vector upsert failed: ${message}` });
+      }
     }
 
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));

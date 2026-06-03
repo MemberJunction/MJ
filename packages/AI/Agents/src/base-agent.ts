@@ -9747,6 +9747,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
             this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
             await this._agentRun.Save();
@@ -9777,6 +9779,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
             this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
             await this._agentRun.Save();
@@ -9868,6 +9872,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
             this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
             const ok = await this._agentRun.Save();
@@ -9907,32 +9913,38 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns Token statistics including totals and costs
      * @private
      */
-    private calculateTokenStats(): { totalTokens: number; promptTokens: number; completionTokens: number; totalCost: number } {
+    private calculateTokenStats(): { totalTokens: number; promptTokens: number; completionTokens: number; cacheReadTokens: number; cacheWriteTokens: number; totalCost: number } {
         let totalTokens = 0;
         let promptTokens = 0;
         let completionTokens = 0;
+        let cacheReadTokens = 0;
+        let cacheWriteTokens = 0;
         let totalCost = 0;
 
         // Iterate through the agent run's steps to sum up tokens
         if (this._agentRun?.Steps) {
             for (const step of this._agentRun.Steps) {
                 if (step.StepType === 'Prompt' && step.PromptRun) {
-                    // Add tokens from prompt runs
+                    // Add tokens from prompt runs (rollup fields include any nested child prompt runs)
                     totalTokens += step.PromptRun.TokensUsedRollup || 0;
-                    promptTokens += step.PromptRun.TokensPromptRollup || 0;  
+                    promptTokens += step.PromptRun.TokensPromptRollup || 0;
                     completionTokens += step.PromptRun.TokensCompletionRollup || 0;
+                    cacheReadTokens += step.PromptRun.TokensCacheReadRollup || 0;
+                    cacheWriteTokens += step.PromptRun.TokensCacheWriteRollup || 0;
                     totalCost += step.PromptRun.TotalCost || 0;
                 } else if (step.StepType === 'Sub-Agent' && step.SubAgentRun) {
                     // Add tokens from sub-agent runs (these should already be calculated recursively)
                     totalTokens += step.SubAgentRun.TotalTokensUsed || 0;
                     promptTokens += step.SubAgentRun.TotalPromptTokensUsed || 0;
                     completionTokens += step.SubAgentRun.TotalCompletionTokensUsed || 0;
+                    cacheReadTokens += step.SubAgentRun.TotalCacheReadTokensUsed || 0;
+                    cacheWriteTokens += step.SubAgentRun.TotalCacheWriteTokensUsed || 0;
                     totalCost += step.SubAgentRun.TotalCost || 0;
                 }
             }
         }
 
-        return { totalTokens, promptTokens, completionTokens, totalCost };
+        return { totalTokens, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens, totalCost };
     }
 
     /**
