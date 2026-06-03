@@ -8,6 +8,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '../types/form-types';
+import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
@@ -95,6 +96,28 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    */
   @Input() InheritedRecordPrimaryKey?: CompositeKey;
 
+  /**
+   * Container-driven hard hide. When true the panel is removed from view
+   * regardless of search state — used by the record-form container to honor
+   * `EntityFormConfig.showRelatedEntities` / `hiddenSectionKeys` /
+   * `visibleSectionKeys`. Composes with (overrides) search visibility so all
+   * existing `IsVisible`-based section counts stay correct.
+   */
+  @Input()
+  set Hidden(value: boolean) {
+    if (value !== this._hidden) {
+      this._hidden = value;
+      // Recompute visibility if content has initialized (FieldComponents present).
+      if (this.FieldComponents) {
+        this.UpdateVisibilityAndHighlighting();
+      }
+    }
+  }
+  get Hidden(): boolean {
+    return this._hidden;
+  }
+  private _hidden = false;
+
   // ---- Deprecated camelCase aliases (backward compat) ----
 
   /** @deprecated Use [SectionKey] instead */
@@ -175,8 +198,19 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return this.FormContext?.allowSectionReorder !== false;
   }
 
-  /** Whether the panel is expanded (delegates to form state) */
+  /**
+   * Whether this panel's header may collapse/expand. Driven by
+   * `FormContext.collapsibleSections`; when false the panel renders
+   * always-expanded with no toggle chevron (used by dialog/slide-in surfaces
+   * that lock sections open). Undefined / true means collapsible.
+   */
+  get Collapsible(): boolean {
+    return this.FormContext?.collapsibleSections !== false;
+  }
+
+  /** Whether the panel is expanded (delegates to form state; always true when not collapsible) */
   get Expanded(): boolean {
+    if (!this.Collapsible) return true;
     const formRef = this.Form as { IsSectionExpanded?: (key: string, defaultExpanded?: boolean) => boolean };
     return formRef?.IsSectionExpanded ? formRef.IsSectionExpanded(this.SectionKey, this.DefaultExpanded) : true;
   }
@@ -226,6 +260,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   // ---- Actions ----
 
   Toggle(): void {
+    if (!this.Collapsible) return;
     const formRef = this.Form as { SetSectionExpanded?: (key: string, expanded: boolean) => void };
     if (formRef?.SetSectionExpanded) {
       formRef.SetSectionExpanded(this.SectionKey, !this.Expanded);
@@ -396,6 +431,17 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   private UpdateVisibilityAndHighlighting(): void {
+    // Hard hide takes precedence over search state. Driven by an explicit
+    // `Hidden` input OR the form config's section-visibility rules carried on
+    // FormContext (which also reach slot-injected BaseFormPanels, since every
+    // panel receives FormContext).
+    if (this._hidden || IsFormSectionHidden(this.FormContext, this.SectionKey, this.Variant)) {
+      this.IsVisible = false;
+      this.DisplayName = EscapeHTML(this.SectionName);
+      this.cdr.markForCheck();
+      return;
+    }
+
     const searchTerm = (this.FormContext?.sectionFilter || '').toLowerCase().trim();
 
     if (!searchTerm) {

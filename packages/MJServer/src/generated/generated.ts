@@ -44300,7 +44300,7 @@ export class MJEntityField_ {
     @MaxLength(20)
     ValueListType: string;
         
-    @Field({nullable: true, description: `Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`}) 
+    @Field({nullable: true, description: `Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`}) 
     @MaxLength(50)
     ExtendedType?: string;
         
