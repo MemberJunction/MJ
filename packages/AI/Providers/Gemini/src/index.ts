@@ -4,7 +4,7 @@
 import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities, toJSONSafe } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
@@ -431,6 +431,13 @@ export class GeminiLLM extends BaseLLM {
                         index: 0
                     }],
                     usage: geminiUsage
+                },
+                // Full native Gemini response (circular-safe) for review/audit — includes
+                // usageMetadata (cachedContentTokenCount etc.) and candidate/safety details.
+                modelSpecificResponseDetails: {
+                    provider: 'google',
+                    model: modelName,
+                    raw: toJSONSafe(result)
                 },
                 errorMessage: "",
                 exception: null,

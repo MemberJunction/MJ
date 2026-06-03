@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
-    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities, toJSONSafe } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
@@ -591,7 +591,9 @@ export class AnthropicLLM extends BaseLLM {
                     cache_creation_input_tokens: cacheWriteTokens,
                     thinking_tokens: result.thinking_usage?.output_tokens,
                     thinking_budget_tokens: result.thinking_usage?.budget_tokens
-                }
+                },
+                // Full native Anthropic response (circular-safe) for review/audit.
+                raw: toJSONSafe(result)
             };
             
             return chatResult;   

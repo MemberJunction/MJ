@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, toJSONSafe } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
@@ -184,11 +184,16 @@ export class CerebrasLLM extends BaseLLM {
                 choices: choices,
                 usage: modelUsage
             },
+            modelSpecificResponseDetails: {
+                provider: 'cerebras',
+                model: chatResponse.model,
+                raw: toJSONSafe(chatResponse)
+            },
             errorMessage: "",
             exception: null,
         };
     }
-    
+
     /**
      * Create a streaming request for Cerebras
      */
