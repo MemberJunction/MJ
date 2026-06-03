@@ -63,7 +63,7 @@ export interface PipelineStage {
     [verb: string]: unknown;
 }
 
-/** Per-stage record emitted by the executor for logging into `MJ: Pipeline Run Steps`. */
+/** Per-stage record emitted by the executor; persisted in the pipeline `Tool` run-step's `OutputData`. */
 export interface PipelineStepRecord {
     index: number;
     toolName: string;
@@ -86,7 +86,7 @@ export interface PipelineExecutionResult {
     steps: PipelineStepRecord[];
     /** Agent-facing error message when the pipeline failed (never includes a piped value). */
     error?: string;
-    /** 1-based index of the failing top-level stage. */
+    /** 0-based index of the failing top-level stage; `steps[failedStepIndex]` is its record. */
     failedStepIndex?: number;
     /** Sum of intermediate output byte sizes that never reached the LLM. */
     contextBytesSaved: number;

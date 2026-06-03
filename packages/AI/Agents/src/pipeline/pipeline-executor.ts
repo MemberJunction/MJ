@@ -327,7 +327,9 @@ export class PipelineExecutor {
             finalOutput: null,
             steps: records,
             error: message,
-            failedStepIndex: zeroBasedIndex + 1,
+            // 0-based to index straight into `steps` (steps[failedStepIndex] is the failing record).
+            // The human-facing `message` above uses 1-based "stage N" since people count from 1.
+            failedStepIndex: zeroBasedIndex,
             contextBytesSaved: this.computeSaved(null),
         };
     }

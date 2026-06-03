@@ -167,8 +167,8 @@ describe('PipelineExecutor (value model)', () => {
         const e = new PipelineExecutor(registryWith(bad));
         const r = await e.Execute([{ tool: 'Run View', with: {} }, { count: true }] as PipelineStage[]);
         expect(r.success).toBe(false);
-        expect(r.failedStepIndex).toBe(1);
-        expect(r.error).toMatch(/Pipeline failed at stage 1 \(Run View\)/);
+        expect(r.failedStepIndex).toBe(0); // 0-based: indexes straight into steps[]
+        expect(r.error).toMatch(/Pipeline failed at stage 1 \(Run View\)/); // human string stays 1-based
         expect(r.error).toMatch(/tool exploded/);
     });
 
