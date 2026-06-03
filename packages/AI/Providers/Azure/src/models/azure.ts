@@ -119,13 +119,21 @@ export class AzureLLM extends BaseLLM {
         
         try {
             // Set up response format if specified
-            let responseFormat: { type: "json_object" | "text" } | undefined = undefined;
-            if (params.responseFormat) {
-                if (params.responseFormat === 'JSON') {
+            let responseFormat: Record<string, unknown> | undefined = undefined;
+            switch (params.responseFormat) {
+                case 'JSON':
                     responseFormat = { type: "json_object" };
-                } else {
+                    break;
+                case 'ModelSpecific':
+                    if (params.modelSpecificResponseFormat) {
+                        responseFormat = params.modelSpecificResponseFormat as Record<string, unknown>;
+                    }
+                    break;
+                case 'Any':
+                case 'Text':
+                case 'Markdown':
                     responseFormat = { type: "text" };
-                }
+                    break;
             }
             
             // Build request body with support for new parameters
@@ -239,13 +247,21 @@ export class AzureLLM extends BaseLLM {
         }
         
         // Set up response format if specified
-        let responseFormat: { type: "json_object" | "text" } | undefined = undefined;
-        if (params.responseFormat) {
-            if (params.responseFormat === 'JSON') {
+        let responseFormat: Record<string, unknown> | undefined = undefined;
+        switch (params.responseFormat) {
+            case 'JSON':
                 responseFormat = { type: "json_object" };
-            } else {
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    responseFormat = params.modelSpecificResponseFormat as Record<string, unknown>;
+                }
+                break;
+            case 'Any':
+            case 'Text':
+            case 'Markdown':
                 responseFormat = { type: "text" };
-            }
+                break;
         }
         
         // Build request body with support for new parameters

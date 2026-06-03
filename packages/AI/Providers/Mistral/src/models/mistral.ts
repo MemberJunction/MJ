@@ -50,10 +50,15 @@ export class MistralLLM extends BaseLLM {
         const startTime = new Date();
 
         let responseFormat: ResponseFormat | undefined = undefined;
-        if (params.responseFormat) {
-            if(params.responseFormat === 'JSON') {
+        switch (params.responseFormat) {
+            case 'JSON':
                 responseFormat = { type: "json_object" };
-            }
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    responseFormat = params.modelSpecificResponseFormat as ResponseFormat;
+                }
+                break;
         }
 
         // Convert messages to format expected by Mistral, with optional prefill
@@ -185,10 +190,17 @@ export class MistralLLM extends BaseLLM {
         // Reset streaming state for new request
         this.resetStreamingState();
         let responseFormat: ResponseFormat | undefined = undefined;
-        if (params.responseFormat === 'JSON') {
-            responseFormat = { type: "json_object" };
+        switch (params.responseFormat) {
+            case 'JSON':
+                responseFormat = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    responseFormat = params.modelSpecificResponseFormat as ResponseFormat;
+                }
+                break;
         }
-        
+
         // Convert messages to format expected by Mistral, with optional prefill
         const messages = this.MapMJMessagesToMistral(params.messages, params.assistantPrefill);
 
