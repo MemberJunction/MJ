@@ -10,6 +10,17 @@
         <mj-stat-badge [Count]="FilteredJobs.length" [Total]="Jobs.length" Label="jobs"></mj-stat-badge>
       </div>
       <div actions>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+        <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
+          <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Job</span>
+        </button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search jobs..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -21,17 +32,6 @@
             (Reset)="ResetFilters()">
           </mj-filter-panel>
         </mj-filter-popover>
-        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
-        <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
-          <i class="fa-solid fa-plus"></i> New Job
-        </button>
-      </div>
-      <div toolbar>
-        <mj-page-search
-          Placeholder="Search jobs..."
-          [Value]="SearchTerm"
-          (ValueChange)="OnSearchChange($event)">
-        </mj-page-search>
       </div>
     </mj-page-header>
     <mj-page-body>
