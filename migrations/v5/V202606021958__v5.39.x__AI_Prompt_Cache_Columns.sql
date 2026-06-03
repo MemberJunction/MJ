@@ -75,6 +75,58 @@ EXEC sp_addextendedproperty
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* ---- CodeGen-generated metadata (EntityField, base views, CRUD procs) ---- */
 
 /* SQL text to insert new entity field */
