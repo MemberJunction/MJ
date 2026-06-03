@@ -269,8 +269,11 @@ export class ValidationService {
       return; // Can't continue validation without fields
     }
 
-    // Validate fields
-    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
+    // Validate fields. Pass whether this record already exists (has a primaryKey
+    // block) so the required-field best-practice check can be limited to NEW
+    // records — an existing record already holds the value in the DB, so a
+    // missing NOT-NULL field in the file is not a problem and would only be noise.
+    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext, !!entityData.primaryKey);
 
     // Track dependencies
     this.trackEntityDependencies(entityData, entityInfo.Name, filePath);
@@ -306,6 +309,7 @@ export class ValidationService {
     entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
+    isExistingRecord: boolean = false,
   ): Promise<void> {
     const entityFields = entityInfo.Fields;
     const fieldMap = new Map(entityFields.map((f) => [f.Name, f]));
@@ -369,8 +373,13 @@ export class ValidationService {
       await this.validateFieldValue(fieldValue, fieldInfo, entityInfo, filePath, parentContext);
     }
 
-    // Check for required fields
-    if (this.options.checkBestPractices) {
+    // Check for required fields — only for NEW records. An existing record
+    // (identified by a primaryKey block) already has values persisted in the
+    // DB for any NOT-NULL field; metadata files routinely set only a subset of
+    // fields on an update, so warning about "missing" required fields there is
+    // pure noise that masks genuine warnings. New records (no primaryKey) still
+    // get the full check since their required fields must be supplied to insert.
+    if (this.options.checkBestPractices && !isExistingRecord) {
       for (const field of entityFields) {
         // Skip if field allows null or has a value already (use 'in' to handle falsy values like 0, false, "")
         if (field.AllowsNull || field.Name in fields) {

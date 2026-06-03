@@ -85,13 +85,16 @@ export type EmbeddingData = {
     VectorIndexID?: string;
 };
 
-export type VectorEmeddingData = { 
-    embedding: BaseEmbeddings; 
-    vectorDB: VectorDBBase, 
-    vectorDBClassKey: string, 
-    vectorDBAPIKey: string, 
-    embeddingDriverClass: string, 
-    embeddingAPIKey: string 
+export type VectorEmeddingData = {
+    embedding: BaseEmbeddings;
+    vectorDB: VectorDBBase,
+    vectorDBClassKey: string,
+    vectorDBAPIKey: string,
+    embeddingDriverClass: string,
+    embeddingAPIKey: string,
+    /** The AIModel's APIName (e.g. 'Xenova/gte-small') — required by some providers
+     *  (LocalEmbedding throws if absent) to identify the underlying model. */
+    embeddingModelAPIName: string,
 };
 
 /**

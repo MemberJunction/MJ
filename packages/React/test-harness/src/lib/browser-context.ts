@@ -50,7 +50,7 @@ export interface BrowserContextOptions {
  *
  * @throws if the scheme is unrecognized and no explicit `hint` is given.
  */
-export function classifyConnectEndpoint(
+export function ClassifyConnectEndpoint(
   endpoint: string,
   hint: 'cdp' | 'server' | 'auto' = 'auto'
 ): 'cdp' | 'server' {
@@ -114,7 +114,7 @@ export class BrowserManager {
     const endpoint = this.options.connect ?? process.env[CONNECT_ENV_VAR];
 
     if (endpoint) {
-      const method = classifyConnectEndpoint(endpoint, this.options.connectType);
+      const method = ClassifyConnectEndpoint(endpoint, this.options.connectType);
       this.browser = method === 'server'
         ? await chromium.connect(endpoint)
         : await chromium.connectOverCDP(endpoint);

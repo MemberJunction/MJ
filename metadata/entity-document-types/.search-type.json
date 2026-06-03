@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Search",
+      "Description": "Entity Document Type used by Provider.SearchEntity / the Search Entity action for ranked hybrid (lexical + semantic) search over an entity's records. Vectors are embedded via the EntityDocument's configured AI model and stored in MJ: Entity Record Documents.VectorJSON; SearchEntity then hybrid-blends lexical LIKE matches with the semantic ranking. One Search-typed EntityDocument per entity that should be searchable."
+    },
+    "primaryKey": {
+      "ID": "A0BB24BB-4C77-4C48-9EE5-4D873E6568B9"
+    },
+    "sync": {
+      "lastModified": "2026-06-02T13:26:49.082Z",
+      "checksum": "720185a8f6f4c35e9ed8374a3c88f5a71b49696462b1b1a8b241a9e14aef3ebd"
+    }
+  }
+]

@@ -1,0 +1,9 @@
+/*
+ * Content Sources tab styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-*` rules are global and already style this tab's markup (cards,
+ * source-detail slide-in, schedule dialog) while it renders inside the host
+ * shell. Tab-specific rules would live here; none are needed during the
+ * host-slim step.
+ */

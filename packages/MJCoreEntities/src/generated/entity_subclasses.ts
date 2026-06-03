@@ -5431,17 +5431,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The output result from the model.`),
     TokensUsed: z.number().nullable().describe(`
         * * Field Name: TokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
         * * Field Name: TokensPrompt
-        * * Display Name: Prompt Tokens
+        * * Display Name: Tokens Prompt
         * * SQL Data Type: int
         * * Description: Number of tokens in the prompt.`),
     TokensCompletion: z.number().nullable().describe(`
         * * Field Name: TokensCompletion
-        * * Display Name: Completion Tokens
+        * * Display Name: Tokens Completion
         * * SQL Data Type: int
         * * Description: Number of tokens in the completion/result.`),
     TotalCost: z.number().nullable().describe(`
@@ -5511,17 +5511,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Total Tokens (Rollup)
+        * * Display Name: Tokens Used Rollup
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Prompt Tokens (Rollup)
+        * * Display Name: Tokens Prompt Rollup
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Completion Tokens (Rollup)
+        * * Display Name: Tokens Completion Rollup
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -5571,12 +5571,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`),
     LogProbs: z.boolean().nullable().describe(`
         * * Field Name: LogProbs
-        * * Display Name: Log Probabilities
+        * * Display Name: Log Probs
         * * SQL Data Type: bit
         * * Description: Whether log probabilities were requested for this run`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probabilities
+        * * Display Name: Top Log Probs
         * * SQL Data Type: int
         * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
     DescendantCost: z.number().nullable().describe(`
@@ -5678,7 +5678,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The AI Model ID that was originally attempted before any failovers`),
     OriginalRequestStartTime: z.date().nullable().describe(`
         * * Field Name: OriginalRequestStartTime
-        * * Display Name: Original Request Start Time
+        * * Display Name: Original Start Time
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
@@ -5688,13 +5688,13 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total time spent in failover attempts in milliseconds`),
     RerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRunID
-        * * Display Name: Rerun From
+        * * Display Name: Rerun From Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
     ModelSelection: z.string().nullable().describe(`
         * * Field Name: ModelSelection
-        * * Display Name: Model Selection
+        * * Display Name: Model Selection Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`),
     Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Pending'), z.literal('Running')]).describe(`
@@ -5803,7 +5803,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Model Specific Response Details
+        * * Display Name: Model Specific Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     EffortLevel: z.number().nullable().describe(`
@@ -5832,6 +5832,16 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Assistant Prefill
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`),
+    TokensCacheRead: z.number().nullable().describe(`
+        * * Field Name: TokensCacheRead
+        * * Display Name: Tokens Cache Read
+        * * SQL Data Type: int
+        * * Description: Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.`),
+    TokensCacheWrite: z.number().nullable().describe(`
+        * * Field Name: TokensCacheWrite
+        * * Display Name: Tokens Cache Write
+        * * SQL Data Type: int
+        * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -5866,7 +5876,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RerunFromPromptRun: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRun
-        * * Display Name: Rerun From
+        * * Display Name: Rerun From Run
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
@@ -5886,7 +5896,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From
+        * * Display Name: Root Rerun From Run
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -15144,7 +15154,7 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('HTML'), z.literal('Icon'), z.literal('MSTeams'), z.literal('Markdown'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -15161,7 +15171,10 @@ export const MJEntityFieldSchema = z.object({
     *   * GeoLongitude
     *   * GeoPostalCode
     *   * GeoStateProvince
+    *   * HTML
+    *   * Icon
     *   * MSTeams
+    *   * Markdown
     *   * Other
     *   * SIP
     *   * SMS
@@ -15170,7 +15183,7 @@ export const MJEntityFieldSchema = z.object({
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-        * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`),
+        * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`),
     CodeType: z.union([z.literal('CSS'), z.literal('HTML'), z.literal('JavaScript'), z.literal('Other'), z.literal('SQL'), z.literal('TypeScript')]).nullable().describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
@@ -22367,7 +22380,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`),
     NotifyViaInApp: z.boolean().describe(`
         * * Field Name: NotifyViaInApp
-        * * Display Name: Notify Via In App
+        * * Display Name: Notify Via In-App
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`),
@@ -22412,6 +22425,12 @@ export const MJScheduledJobSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RunImmediatelyIfNeverRun: z.boolean().describe(`
+        * * Field Name: RunImmediatelyIfNeverRun
+        * * Display Name: Run Immediately If Never Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`),
     JobType: z.string().describe(`
         * * Field Name: JobType
         * * Display Name: Job Type
@@ -23643,6 +23662,17 @@ export const MJTagSynonymSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Rejected
+        * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`),
     Tag: z.string().describe(`
         * * Field Name: Tag
         * * Display Name: Tag Name
@@ -41935,7 +41965,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of tokens used (prompt + completion).
     */
@@ -41948,7 +41978,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPrompt
-    * * Display Name: Prompt Tokens
+    * * Display Name: Tokens Prompt
     * * SQL Data Type: int
     * * Description: Number of tokens in the prompt.
     */
@@ -41961,7 +41991,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletion
-    * * Display Name: Completion Tokens
+    * * Display Name: Tokens Completion
     * * SQL Data Type: int
     * * Description: Number of tokens in the completion/result.
     */
@@ -42121,7 +42151,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Total Tokens (Rollup)
+    * * Display Name: Tokens Used Rollup
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -42134,7 +42164,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Prompt Tokens (Rollup)
+    * * Display Name: Tokens Prompt Rollup
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -42147,7 +42177,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Completion Tokens (Rollup)
+    * * Display Name: Tokens Completion Rollup
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -42277,7 +42307,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: LogProbs
-    * * Display Name: Log Probabilities
+    * * Display Name: Log Probs
     * * SQL Data Type: bit
     * * Description: Whether log probabilities were requested for this run
     */
@@ -42290,7 +42320,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probabilities
+    * * Display Name: Top Log Probs
     * * SQL Data Type: int
     * * Description: Number of top log probabilities requested per token (if LogProbs is true)
     */
@@ -42552,7 +42582,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalRequestStartTime
-    * * Display Name: Original Request Start Time
+    * * Display Name: Original Start Time
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp when the original request started, before any failovers
     */
@@ -42578,7 +42608,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRunID
-    * * Display Name: Rerun From
+    * * Display Name: Rerun From Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID
@@ -42592,7 +42622,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSelection
-    * * Display Name: Model Selection
+    * * Display Name: Model Selection Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale
     */
@@ -42845,7 +42875,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Model Specific Response Details
+    * * Display Name: Model Specific Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
     */
@@ -42923,6 +42953,32 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: TokensCacheRead
+    * * Display Name: Tokens Cache Read
+    * * SQL Data Type: int
+    * * Description: Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.
+    */
+    get TokensCacheRead(): number | null {
+        return this.Get('TokensCacheRead');
+    }
+    set TokensCacheRead(value: number | null) {
+        this.Set('TokensCacheRead', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheWrite
+    * * Display Name: Tokens Cache Write
+    * * SQL Data Type: int
+    * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.
+    */
+    get TokensCacheWrite(): number | null {
+        return this.Get('TokensCacheWrite');
+    }
+    set TokensCacheWrite(value: number | null) {
+        this.Set('TokensCacheWrite', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -42996,7 +43052,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRun
-    * * Display Name: Rerun From
+    * * Display Name: Rerun From Run
     * * SQL Data Type: nvarchar(255)
     */
     get RerunFromPromptRun(): string | null {
@@ -43041,7 +43097,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From
+    * * Display Name: Root Rerun From Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
@@ -46542,6 +46598,41 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJApplicationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -57590,7 +57681,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
+ * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -67040,7 +67131,10 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * GeoLongitude
     *   * GeoPostalCode
     *   * GeoStateProvince
+    *   * HTML
+    *   * Icon
     *   * MSTeams
+    *   * Markdown
     *   * Other
     *   * SIP
     *   * SMS
@@ -67049,12 +67143,12 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-    * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
+    * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
@@ -85626,7 +85720,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyViaInApp
-    * * Display Name: Notify Via In App
+    * * Display Name: Notify Via In-App
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.
@@ -85727,6 +85821,20 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RunImmediatelyIfNeverRun
+    * * Display Name: Run Immediately If Never Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.
+    */
+    get RunImmediatelyIfNeverRun(): boolean {
+        return this.Get('RunImmediatelyIfNeverRun');
+    }
+    set RunImmediatelyIfNeverRun(value: boolean) {
+        this.Set('RunImmediatelyIfNeverRun', value);
     }
 
     /**
@@ -88993,6 +89101,25 @@ export class MJTagSynonymEntity extends BaseEntity<MJTagSynonymEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Rejected
+    * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.
+    */
+    get Status(): 'Active' | 'Pending' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Rejected') {
+        this.Set('Status', value);
     }
 
     /**
@@ -93538,6 +93665,41 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: User Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJUserApplicationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**

@@ -68,6 +68,21 @@
                 </div>
               </div>
               <div class="summary-card">
+                <div class="card-icon cache">
+                  <i class="fas fa-bolt"></i>
+                </div>
+                <div class="card-content">
+                  <h3>Prompt Cache</h3>
+                  <div class="metric-value">{{ promptMetrics.tokenUsage.totalCacheRead | number }}</div>
+                  <div class="metric-detail">
+                    <span>tokens read from cache</span>
+                    @if (promptMetrics.tokenUsage.totalCacheWrite > 0) {
+                      <span>{{ promptMetrics.tokenUsage.totalCacheWrite | number }} written</span>
+                    }
+                  </div>
+                </div>
+              </div>
+              <div class="summary-card">
                 <div class="card-icon time">
                   <i class="fas fa-clock"></i>
                 </div>
