@@ -39,7 +39,7 @@ This allows subsequent agents to access the artifact content directly from the c
 
 ## Root Cause Analysis
 
-**File**: [conversation-agent.service.ts:177-193](packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts#L177-L193)
+**File**: [conversation-agent.service.ts:177-193](../../packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts#L177-L193)
 
 The `buildAgentMessages()` method only passes `msg.Message` text content. It does NOT:
 - Query for artifacts linked to each message
@@ -190,7 +190,7 @@ const compactHistory = conversationMessages.map((msg, idx) => {
 ## Files to Modify
 
 ### Primary File
-- [conversation-agent.service.ts](packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts)
+- [conversation-agent.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts)
   - Line 177: Change signature to `async` and return `Promise<ChatMessage[]>`
   - Lines 177-193: Implement batch loading and artifact appending
   - Lines 136, 265, 329: Add `await` to all callers

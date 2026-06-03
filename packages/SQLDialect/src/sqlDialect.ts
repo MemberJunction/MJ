@@ -769,6 +769,22 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract IsNull(expr: string, fallback: string): string;
 
+    // ─── Error Classification ───────────────────────────────────────
+
+    /**
+     * Returns true if the given error represents an infrastructure-level
+     * connection failure (timeout, refused, pool closed, etc.) as opposed to
+     * a query-level error (bad SQL, constraint violation).
+     *
+     * Each dialect implements this using its driver's structured error types:
+     * - SQL Server (mssql): `error.name === 'ConnectionError'`
+     * - PostgreSQL (pg): Node.js network error codes on plain `Error`
+     *
+     * Used by GenericDatabaseProvider to re-throw connection errors from
+     * RunView/RunQuery instead of swallowing them into `{ Success: false }`.
+     */
+    abstract IsConnectionError(e: unknown): boolean;
+
     /**
      * Returns an IIF/CASE equivalent expression.
      * SQL Server: IIF(condition, trueVal, falseVal)

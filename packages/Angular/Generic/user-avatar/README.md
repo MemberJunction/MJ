@@ -99,6 +99,6 @@ const iconClass = this.avatarService.getAvatarIconClass(user);
 
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/README.md) -- Core framework
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- UserEntity
+- [@memberjunction/core](../../../MJCore/readme.md) -- Core framework
+- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- UserEntity
 - `@angular/common/http` -- HttpClient for image fetching

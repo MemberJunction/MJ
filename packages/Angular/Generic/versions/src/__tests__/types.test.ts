@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MicroViewData, FieldChangeView, SlidePanelMode } from '../lib/types';
+import type { MicroViewData, FieldChangeView } from '../lib/types';
 
 describe('MicroViewData type', () => {
   it('should be constructable with required fields', () => {
@@ -58,14 +58,5 @@ describe('FieldChangeView type', () => {
       ChangeType: 'Removed'
     };
     expect(change.ChangeType).toBe('Removed');
-  });
-});
-
-describe('SlidePanelMode type', () => {
-  it('should accept valid modes', () => {
-    const slide: SlidePanelMode = 'slide';
-    const dialog: SlidePanelMode = 'dialog';
-    expect(slide).toBe('slide');
-    expect(dialog).toBe('dialog');
   });
 });

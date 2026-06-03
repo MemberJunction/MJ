@@ -30,6 +30,8 @@ import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
+import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
@@ -85,6 +87,7 @@ export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
 export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
+export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
@@ -153,6 +156,7 @@ export * from './resolvers/FileResolver.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
 export * from './resolvers/RunTestResolver.js';
+export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
@@ -689,10 +693,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,
         pubSub,
+        globalMiddlewares: [variablesLoggingMiddleware],
       }),
     ],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
   });
+
+  // Verbose-mode-only diagnostic: name custom-resolver args that aren't metadata-bound
+  // and aren't @NoLog-marked. No-op in default config (logVariables=false).
+  auditResolversForUndecoratedArgs();
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
