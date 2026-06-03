@@ -186,15 +186,19 @@ export class OpenAILLM extends BaseLLM {
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
-        // Create ModelUsage with any available timing data
-        const usage = new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens);
-        
-        // OpenAI doesn't provide the same timing metrics as Groq,
-        // but we can check for any extended usage data
+        // Create ModelUsage normalized to the uniform ModelUsage contract.
+        // OpenAI's cache convention: `prompt_tokens` INCLUDES cached tokens, and the cached count is
+        // nested at `prompt_tokens_details.cached_tokens`. The contract requires promptTokens to be
+        // UNCACHED/net-new input ONLY, with cache reads tracked separately and DISJOINT. So we record
+        // cacheReadTokens first, then subtract it from the native prompt count (clamped at 0).
+        // OpenAI does not bill or report cache WRITES, so cacheWriteTokens stays 0. The full native
+        // prompt count is recoverable via usage.totalInputTokens (promptTokens + cacheReadTokens).
         const extendedUsage = result.usage as any;
-        if (extendedUsage.prompt_tokens_details) {
-            // Store prompt token details in usage if needed in future
-        }
+        const openAICachedTokens = extendedUsage.prompt_tokens_details?.cached_tokens ?? 0;
+        const openAINetPromptTokens = Math.max(0, (result.usage.prompt_tokens ?? 0) - openAICachedTokens);
+        const usage = new ModelUsage(openAINetPromptTokens, result.usage.completion_tokens);
+        usage.cacheReadTokens = openAICachedTokens;
+        // cacheWriteTokens intentionally left at 0 (OpenAI implicit caching has no separate write charge).
         if (extendedUsage.completion_tokens_details) {
             // Store completion token details in usage if needed in future
         }
@@ -249,6 +253,12 @@ export class OpenAILLM extends BaseLLM {
             exception: null
         } as ChatResult;
         
+        // Surface cache hit info uniformly (cacheHit driven by cache READ tokens).
+        chatResult.cacheInfo = {
+            cacheHit: openAICachedTokens > 0,
+            cachedTokenCount: openAICachedTokens
+        };
+
         // Add model-specific response details
         chatResult.modelSpecificResponseDetails = {
             provider: 'openai',
@@ -259,8 +269,8 @@ export class OpenAILLM extends BaseLLM {
             object: result.object,
             service_tier: (result as any).service_tier,
             usage_details: {
-                reasoning_tokens: extendedUsage.reasoning_tokens,
-                cached_tokens: extendedUsage.cached_tokens,
+                reasoning_tokens: extendedUsage.completion_tokens_details?.reasoning_tokens,
+                cached_tokens: openAICachedTokens,
                 prompt_tokens_details: extendedUsage.prompt_tokens_details,
                 completion_tokens_details: extendedUsage.completion_tokens_details
             }
@@ -392,7 +402,21 @@ export class OpenAILLM extends BaseLLM {
         // Handle potential null/undefined values safely
         let content = '';
         const usage = chunk?.usage || null;
-        
+
+        // Normalize the streaming usage once, to the uniform ModelUsage contract. OpenAI's
+        // `prompt_tokens` INCLUDES cached tokens; the cache-read count is nested at
+        // prompt_tokens_details.cached_tokens (present on the final usage chunk when
+        // stream_options.include_usage is set). promptTokens must be UNCACHED/net-new only, so we
+        // subtract the cache-read count (clamped at 0) and carry the cache-read count alongside.
+        const streamCacheReadTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        const streamNetPromptTokens = Math.max(0, (usage?.prompt_tokens || 0) - streamCacheReadTokens);
+        const streamUsage = usage ? {
+            promptTokens: streamNetPromptTokens,
+            completionTokens: usage.completion_tokens || 0,
+            totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+            cacheReadTokens: streamCacheReadTokens
+        } : null;
+
         // Check if chunk contains reasoning content (for o1 models)
         const delta = chunk?.choices?.[0]?.delta;
         if (delta) {
@@ -403,11 +427,7 @@ export class OpenAILLM extends BaseLLM {
                 return {
                     content: '',
                     finishReason: chunk?.choices?.[0]?.finish_reason,
-                    usage: usage ? {
-                        promptTokens: usage.prompt_tokens || 0,
-                        completionTokens: usage.completion_tokens || 0,
-                        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
-                    } : null
+                    usage: streamUsage
                 };
             } else if (delta.reasoning) {
                 this._streamingState.accumulatedThinking += delta.reasoning;
@@ -415,33 +435,25 @@ export class OpenAILLM extends BaseLLM {
                 return {
                     content: '',
                     finishReason: chunk?.choices?.[0]?.finish_reason,
-                    usage: usage ? {
-                        promptTokens: usage.prompt_tokens || 0,
-                        completionTokens: usage.completion_tokens || 0,
-                        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
-                    } : null
+                    usage: streamUsage
                 };
             }
-            
+
             // Process regular content
             const rawContent = delta.content || '';
             if (rawContent) {
                 // Add raw content to pending content for processing
                 this._streamingState.pendingContent += rawContent;
-                
+
                 // Process the pending content to extract thinking
                 content = this.processThinkingInStreamingContent();
             }
         }
-        
+
         return {
             content,
             finishReason: chunk?.choices?.[0]?.finish_reason,
-            usage: usage ? {
-                promptTokens: usage.prompt_tokens || 0,
-                completionTokens: usage.completion_tokens || 0,
-                totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
-            } : null
+            usage: streamUsage
         };
     }
 
@@ -538,16 +550,23 @@ export class OpenAILLM extends BaseLLM {
         const content = accumulatedContent || '';
         const promptTokens = usage?.promptTokens || 0;
         const completionTokens = usage?.completionTokens || 0;
-        
+        const cacheReadTokens = usage?.cacheReadTokens || 0;
+
         // Create dates (will be overridden by base class)
         const now = new Date();
-        
+
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
-        
+
         // Get thinking content from streaming state
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
-        
+
+        // promptTokens here is already normalized to UNCACHED/net-new (processStreamingChunk
+        // subtracted the cache-read count); cacheReadTokens is the disjoint cache-read subset.
+        // OpenAI does not report cache writes, so cacheWriteTokens stays 0.
+        const modelUsage = new ModelUsage(promptTokens, completionTokens);
+        modelUsage.cacheReadTokens = cacheReadTokens;
+
         // Set all properties
         result.data = {
             choices: [{
@@ -559,13 +578,17 @@ export class OpenAILLM extends BaseLLM {
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
                 index: 0
             }],
-            usage: new ModelUsage(promptTokens, completionTokens)
+            usage: modelUsage
         };
-        
+
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
-        
+        result.cacheInfo = {
+            cacheHit: cacheReadTokens > 0,
+            cachedTokenCount: cacheReadTokens
+        };
+
         return result;
     }
 

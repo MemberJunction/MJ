@@ -69,9 +69,14 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             return false;
         }
         
-        // Must have token usage to calculate (at least one token field > 0)
-        if (!this.TokensPrompt || !this.TokensCompletion || 
-            (this.TokensPrompt <= 0 && this.TokensCompletion <= 0)) {
+        // Must have token usage to calculate (at least one input or output token > 0). Input is the
+        // TOTAL input the provider processed: net-new (TokensPrompt) + cache reads + cache writes.
+        // A heavily-cached call can have TokensPrompt === 0 yet still incur input cost via cache
+        // tokens, so we gate on the total rather than net-new alone.
+        const totalInputTokens =
+            (this.TokensPrompt ?? 0) + (this.TokensCacheRead ?? 0) + (this.TokensCacheWrite ?? 0);
+        const totalCompletionTokens = this.TokensCompletion ?? 0;
+        if (totalInputTokens <= 0 && totalCompletionTokens <= 0) {
             return false;
         }
         
@@ -124,9 +129,17 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 return;
             }
             
+            // Cost must be priced on TOTAL input tokens (uncached/net-new + cache reads + cache
+            // writes). TokensPrompt now holds only the UNCACHED ("net-new") input count, with cache
+            // tokens carried separately in TokensCacheRead/TokensCacheWrite. Summing them reconstructs
+            // the gross input count the provider processed, so pricing matches today's behavior and
+            // cached tokens are not silently dropped (which would under-count cost).
+            const totalInputTokens =
+                (this.TokensPrompt ?? 0) + (this.TokensCacheRead ?? 0) + (this.TokensCacheWrite ?? 0);
+
             const normalizedCost = priceCalculator.CalculateNormalizedCost(
                 activeCost,
-                this.TokensPrompt,
+                totalInputTokens,
                 this.TokensCompletion
             );
             

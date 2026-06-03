@@ -96,9 +96,17 @@ export class ModelUsage {
     }
     
     /**
-     * Number of tokens used in the prompt/input phase.
-     * This includes all tokens from system messages, user messages, and any
-     * other context provided to the model.
+     * Number of UNCACHED ("net-new") input tokens — i.e. prompt/input tokens that were NOT served
+     * from the provider's prompt cache. This is normalized to the SAME meaning across every provider
+     * (uniform across all providers): cached tokens are never counted here.
+     *
+     * Provider adapters are responsible for normalizing into this shape:
+     *  - Anthropic already reports `input_tokens` excluding cached tokens → use as-is.
+     *  - OpenAI/Gemini/Groq/Cerebras/Fireworks include cached tokens in their prompt count →
+     *    subtract: promptTokens = prompt_tokens − cacheReadTokens (clamp at 0).
+     *
+     * The cache buckets ({@link cacheReadTokens}, {@link cacheWriteTokens}) are DISJOINT from this.
+     * Total input the provider processed = {@link totalInputTokens}.
      */
     promptTokens: number
     
@@ -139,12 +147,49 @@ export class ModelUsage {
      * This is a provider-specific timing metric that may not be available from all providers.
      */
     completionTime?: number
-    
+
     /**
-     * Calculated total number of tokens (prompt + completion).
-     * This is useful for tracking overall token usage against limits.
-     * 
-     * @returns {number} The sum of promptTokens and completionTokens
+     * Number of input tokens served from the provider's prompt cache (a cache READ / hit).
+     * These are billed at a steep discount versus normal input tokens (e.g. Anthropic ~0.1x,
+     * OpenAI ~0.5x, Gemini ~0.1x) and are the primary source of prompt-caching savings.
+     *
+     * DISJOINT from {@link promptTokens} (which is uncached/net-new only) on EVERY provider — the
+     * adapter normalizes to guarantee this. So `totalInputTokens = promptTokens + cacheReadTokens +
+     * cacheWriteTokens` holds uniformly.
+     *
+     * Optional/additive: declared optional so existing object-literal `ModelUsage` construction
+     * sites keep compiling. `new ModelUsage(...)` instances default it to 0; treat `undefined` as 0.
+     */
+    cacheReadTokens?: number = 0
+
+    /**
+     * Number of input tokens written to the provider's prompt cache (a cache WRITE / creation).
+     * Some providers charge a premium for cache writes (e.g. Anthropic ~1.25x normal input);
+     * others (OpenAI, Gemini, Groq, Cerebras, Fireworks) do not bill/report writes separately, so
+     * this stays 0. DISJOINT from {@link promptTokens} and {@link cacheReadTokens}.
+     */
+    cacheWriteTokens?: number = 0
+
+    /**
+     * Total input tokens the provider processed: uncached ({@link promptTokens}) + cache reads +
+     * cache writes. This is the figure to price at the input rate (until cache-aware per-bucket
+     * pricing is added) and equals what the provider's native "prompt token" count was before
+     * normalization. Use THIS (not promptTokens) for cost so cached tokens aren't dropped.
+     */
+    get totalInputTokens(): number {
+        return this.promptTokens + (this.cacheReadTokens ?? 0) + (this.cacheWriteTokens ?? 0);
+    }
+
+    /**
+     * Total UNCACHED tokens for the call: uncached input ({@link promptTokens}) + completion.
+     *
+     * Deliberately EXCLUDES the cache buckets so the MemberJunction invariant
+     * `TokensUsed === TokensPrompt + TokensCompletion` (enforced by AIPromptRun's CK_AIPromptRun_Tokens
+     * constraint + generated validation) continues to hold once promptTokens is net-new. The full
+     * token count INCLUDING cache is `totalInputTokens + completionTokens` — use {@link totalInputTokens}
+     * for cost so cached tokens are still billed.
+     *
+     * @returns {number} promptTokens + completionTokens
      */
     get totalTokens(): number {
         return this.promptTokens + this.completionTokens;
