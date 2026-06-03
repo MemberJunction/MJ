@@ -914,13 +914,13 @@ describe('T15: LeaseTimeoutMs is configurable and respected by tryAcquireLock', 
         const after = Date.now();
 
         // The ExecuteSQL call should have received an ExpectedCompletionAt that's
-        // ~5s past before. Engine now passes params as a named-property object
-        // (Record<string, unknown>), not an array of {Name, Value}, because the
-        // SQLServerDataProvider's named-parameter mode expects that shape.
+        // ~5s past before. Engine passes params as a positional array matching
+        // MJ's standard pattern: [jobId, token, instance, expectedCompletion].
+        // ExpectedCompletionAt is at index 3.
         const lastCall = mockBase.ProviderToUse.ExecuteSQL.mock.calls.at(-1);
-        const params = lastCall?.[1] as Record<string, unknown> | undefined;
-        expect(params?.ExpectedCompletionAt).toBeDefined();
-        const ecDate = params!.ExpectedCompletionAt as Date;
+        const params = lastCall?.[1] as unknown[] | undefined;
+        expect(params?.[3]).toBeDefined();
+        const ecDate = params![3] as Date;
         const offsetMs = ecDate.getTime() - before;
         // 5s lease ± timing jitter
         expect(offsetMs).toBeGreaterThanOrEqual(5_000);

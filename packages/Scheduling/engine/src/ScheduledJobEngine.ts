@@ -860,17 +860,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // false-positive token mismatch on every successful job completion.
         // See plans/scheduled-job-engine-decoupling.md and the migration
         // V202606022027__v5.39.x__Scheduling_Engine_Atomic_Stats_Update.sql.
+        // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
         const schema = provider.MJCoreSchemaName;
         await provider.ExecuteSQL(
             `EXEC [${schema}].[spUpdateScheduledJobStatistics] ` +
-                `@JobID=@JobID, @Success=@Success, @LastRunAt=@LastRunAt, @NextRunAt=@NextRunAt`,
-            {
-                JobID: job.ID,
-                Success: success ? 1 : 0,
-                LastRunAt: now,
-                NextRunAt: nextRun,
-            } as unknown as unknown[],
+                `@JobID=@p0, @Success=@p1, @LastRunAt=@p2, @NextRunAt=@p3`,
+            [job.ID, success ? 1 : 0, now, nextRun],
             { isMutation: true, description: 'spUpdateScheduledJobStatistics' },
             this.Base.ContextUser
         );
@@ -942,20 +938,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // which is what the @-prefixed placeholders in the EXEC require.
         // An array would be treated positionally with p0/p1 names and the
         // {Name, Value} shape would be passed as a literal object value.
-        // SQLServerDataProvider's runtime accepts a plain object for named
-        // params (request.input(key, value) per Object.entries), but the
-        // abstract IMetadataProvider.ExecuteSQL signature declares
-        // `parameters?: unknown[]`. Cast through `unknown` to bridge the gap
-        // without changing the cross-cutting abstract signature.
+        // MJ pattern: positional parameter array with @p0/@p1/... placeholders.
+        // SQLServerDataProvider binds positional params by index (request.input('p0', val)).
+        // The sproc's own parameters are bound by name via `@SprocParam=@p0` syntax.
+        // See packages/SchemaEngine/src/RuntimeSchemaManager.ts for the canonical example.
         const rows = await provider.ExecuteSQL<{ Acquired: number }>(
             `EXEC [${schema}].[spAcquireScheduledJobLock] ` +
-                `@JobID=@JobID, @Token=@Token, @Instance=@Instance, @ExpectedCompletionAt=@ExpectedCompletionAt`,
-            {
-                JobID: jobId,
-                Token: token,
-                Instance: instance,
-                ExpectedCompletionAt: expectedCompletion,
-            } as unknown as unknown[],
+                `@JobID=@p0, @Token=@p1, @Instance=@p2, @ExpectedCompletionAt=@p3`,
+            [jobId, token, instance, expectedCompletion],
             { isMutation: true, description: 'spAcquireScheduledJobLock' },
             this.Base.ContextUser
         );
@@ -978,14 +968,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async releaseLockIfTokenMatches(jobId: string, expectedToken: string): Promise<boolean> {
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
         const schema = provider.MJCoreSchemaName;
-        // Named-parameter mode — see tryAcquireLock for rationale.
+        // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
         const rows = await provider.ExecuteSQL<{ Released: number }>(
             `EXEC [${schema}].[spReleaseScheduledJobLockIfTokenMatches] ` +
-                `@JobID=@JobID, @ExpectedToken=@ExpectedToken`,
-            {
-                JobID: jobId,
-                ExpectedToken: expectedToken,
-            } as unknown as unknown[],
+                `@JobID=@p0, @ExpectedToken=@p1`,
+            [jobId, expectedToken],
             { isMutation: true, description: 'spReleaseScheduledJobLockIfTokenMatches' },
             this.Base.ContextUser
         );
