@@ -409,6 +409,18 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         return (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
     }
 
+    /**
+     * Full prompt/input token count = uncached (net) prompt PLUS the cache buckets. TokensPrompt is
+     * stored net (cache-read subtracted out by the provider-normalization layer), so on a cached run
+     * the raw field understates the real input; this reconstructs the true input the headline should
+     * show, with {@link CachedTokens} surfaced as the cached subset. Equals TokensPrompt when no cache.
+     */
+    get FullPromptTokens(): number {
+        const r = this.record;
+        if (!r) return 0;
+        return (r.TokensPrompt ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+    }
+
     /** Percentage of this run's input tokens served from the provider's prompt cache. */
     get CacheHitRatePct(): number {
         const read = this.record?.TokensCacheRead ?? 0;
