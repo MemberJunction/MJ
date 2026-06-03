@@ -985,13 +985,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         objectType: string,
         pkFieldNames: string[]
     ): ExternalRecord {
-        const externalID = pkFieldNames
-            .map(name => raw[name] != null ? String(raw[name]) : '')
-            .join('|');
-        // §4 synthetic-PK fallback: a record with NO usable PK value gets a deterministic,
-        // content-derived identity (identity hash) so PK-less tables are still syncable + dedupable
-        // — no table is left without a usable key. Stable across runs while the content is unchanged.
-        const resolvedID = externalID.replace(/\|/g, '').length > 0 ? externalID : computeContentHash(raw);
+        // §4 synthetic-PK fallback: only treat the PK as usable when EVERY component is present
+        // (a composite key with a missing part — e.g. "abc|" — is not a stable identity). When any
+        // part is missing, fall back to a deterministic content-derived identity (identity hash) so
+        // PK-less / partial-key tables are still syncable + dedupable. Stable while content is unchanged.
+        const allPkPresent = pkFieldNames.length > 0
+            && pkFieldNames.every(name => raw[name] != null && String(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => String(raw[name] ?? '')).join('|');
+        const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
         return {
             ExternalID: resolvedID,
             ObjectType: objectType,

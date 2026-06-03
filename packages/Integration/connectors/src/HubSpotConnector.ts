@@ -2047,7 +2047,10 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             return this.BuildRESTResponse(response, responseBody);
         }
 
-        throw new Error(`HubSpot API request failed after ${maxRetries} retries: ${url}`);
+        // The loop only retries on 429 (every other status returns above), so exhausting retries here
+        // means sustained 429 rate-limiting. Carry the "429 rate limit" marker so ClassifyError →
+        // RATE_LIMIT_EXCEEDED and the engine's adaptive limiter / ExtractRetryAfterMs react correctly.
+        throw new Error(`HubSpot 429 rate limit: request failed after ${maxRetries} retries (sustained throttling): ${url}`);
     }
 
     protected NormalizeResponse(

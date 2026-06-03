@@ -734,8 +734,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 break;
             }
             await RunAdaptive(layer, async (m) => {
+                if (abortSignal?.aborted) return { ok: true, throttled: false };
                 const ok = await processOne(m);
-                return { ok, throttled: !ok };
+                // A data failure (FK/validation/transform) must NOT cut the in-flight cap — only a
+                // real source throttle should, and the per-request RateLimiter already backs off on
+                // 429s. We have no clean per-map 429 signal here (fetch 429s break the loop), so we
+                // never mark `throttled` from a plain failure; concurrency only ramps UP on success.
+                return { ok, throttled: false };
             }, concController);
         }
 
@@ -936,18 +941,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * vendor's rate limit.
      */
     private async rateLimit(config: RunConfiguration): Promise<void> {
-        await this.getRateLimiter(config).Acquire(config.companyIntegration.IntegrationID);
+        await this.getRateLimiter(config).Acquire(config.companyIntegration.ID as string);
     }
 
     /**
-     * Adaptive token-bucket limiter for this integration (plan.md §7 peak-aware rate limiting),
-     * lazily created and configured from the connector's RateLimitPolicy — or, when the connector
-     * declares none, from Integration.BatchRequestWaitTime (spacing → tokens/sec). One bucket per
-     * IntegrationID, shared across the run's objects so concurrent fetches stay within the source's
-     * real limit. {@link reportRateOutcome} feeds 429s/successes back so the rate auto-tunes (AIMD).
+     * Adaptive token-bucket limiter for this company integration (plan.md §7 peak-aware rate
+     * limiting), lazily created and configured from the connector's RateLimitPolicy — or, when the
+     * connector declares none, from Integration.BatchRequestWaitTime (spacing → tokens/sec). Keyed by
+     * CompanyIntegrationID (NOT IntegrationID): source limits are per-credential, so two companies on
+     * the same vendor have independent budgets and must not share one bucket. {@link reportRateOutcome}
+     * feeds 429s/successes back so the rate auto-tunes (AIMD).
      */
     private getRateLimiter(config: RunConfiguration): RateLimiter {
-        const key = config.companyIntegration.IntegrationID;
+        const key = config.companyIntegration.ID as string;
         let rl = this._rateLimiters.get(key);
         if (!rl) {
             const policy = config.connector.RateLimitPolicy;
@@ -955,7 +961,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const tokensPerSec = policy?.TokensPerSec ?? (spacingMs > 0 ? 1000 / spacingMs : 10);
             rl = new RateLimiter({
                 TokensPerSec: tokensPerSec,
-                Burst: policy?.Burst,
+                // Floor Burst at 1 so a slow-spacing integration (fractional tokens/sec) still gets
+                // one immediate token instead of stalling ~1s on the very first request.
+                Burst: Math.max(1, policy?.Burst ?? Math.ceil(tokensPerSec)),
                 ThrottleBackoffFactor: policy?.ThrottleBackoffFactor,
             });
             this._rateLimiters.set(key, rl);
@@ -964,16 +972,26 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * Feed a fetch outcome back to the integration's adaptive limiter. No `throttledErr` = a clean
-     * response → ramp the rate up; a rate-limit error → back off (honoring the connector's parsed
-     * Retry-After). Other errors are ignored (don't ramp, don't back off).
+     * Feed a fetch/write outcome back to the company integration's adaptive limiter. No
+     * `throttledErr` = a clean response → ramp the rate up; a rate-limit error → back off (honoring
+     * the connector's parsed Retry-After). Other errors are ignored (don't ramp, don't back off).
      */
     private reportRateOutcome(config: RunConfiguration, throttledErr?: unknown): void {
-        const rl = this._rateLimiters.get(config.companyIntegration.IntegrationID);
+        const key = config.companyIntegration.ID as string;
+        const rl = this._rateLimiters.get(key);
         if (!rl) return;
-        const key = config.companyIntegration.IntegrationID;
         if (throttledErr === undefined) { rl.ReportSuccess(key); return; }
         rl.ReportThrottle(key, config.connector.ExtractRetryAfterMs(throttledErr));
+    }
+
+    /**
+     * Feed a push/CRUD result to the limiter so the WRITE path tunes the rate too (the fetch path
+     * already does): a 2xx ramps the rate up, a 429 backs it off (honoring Retry-After). Otherwise
+     * leave the rate untouched.
+     */
+    private reportRateForCrud(config: RunConfiguration, result: { Success: boolean; StatusCode?: number; ErrorMessage?: string }): void {
+        if (result.Success) { this.reportRateOutcome(config); return; }
+        if (result.StatusCode === 429) this.reportRateOutcome(config, new Error(result.ErrorMessage ?? '429 rate limit'));
     }
 
     /**
@@ -1255,18 +1273,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             currentOffset = batch.NextOffset;
             currentCursor = batch.NextCursor;
             currentAfterKey = batch.NextAfterKeyValue ?? currentAfterKey;   // §7 advance keyset position
-            // §8a: persist a resumable checkpoint after each committed batch so a crash/restart can
-            // pick back up (watermark for incremental, AfterKey/cursor for keyset/no-watermark scans)
-            // instead of restarting the whole object.
-            logger?.checkpoint(entityMap.ExternalObjectName ?? entityMap.ID, {
-                watermark: currentWatermark ?? null,
-                afterKey: currentAfterKey ?? null,
-                page: currentPage ?? null,
-                offset: currentOffset ?? null,
-                cursor: currentCursor ?? null,
-                batchIndex: batchCount,
-                recordsInMap,
-            });
+            // §8a: persist a resumable checkpoint PERIODICALLY (every 25 batches, not every batch —
+            // each emit is an fs.appendFile, so per-batch on a multi-thousand-batch object would flood
+            // the artifact) so a crash/restart can resume near where it stopped (watermark for
+            // incremental, AfterKey/cursor for keyset/no-watermark scans) rather than from scratch.
+            if (batchCount % 25 === 0) {
+                logger?.checkpoint(entityMap.ExternalObjectName ?? entityMap.ID, {
+                    watermark: currentWatermark ?? null,
+                    afterKey: currentAfterKey ?? null,
+                    page: currentPage ?? null,
+                    offset: currentOffset ?? null,
+                    cursor: currentCursor ?? null,
+                    batchIndex: batchCount,
+                    recordsInMap,
+                });
+            }
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
@@ -1584,6 +1605,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (change.Type === 'Delete' && externalID && config.connector.SupportsDelete) {
             await this.rateLimit(config);
             const delResult = await config.connector.DeleteRecord({ ...crudBase, ExternalID: externalID });
+            this.reportRateForCrud(config, delResult);
             if (!delResult.Success) {
                 if (delResult.StatusCode === 403) {
                     console.warn(`[IntegrationEngine] Skipping delete — ${delResult.ErrorMessage}`);
@@ -1617,6 +1639,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const updResult = await config.connector.UpdateRecord({
                 ...crudBase, ExternalID: externalID, Attributes: combine.attributes,
             });
+            this.reportRateForCrud(config, updResult);
             if (!updResult.Success) {
                 if (updResult.StatusCode === 403) {
                     console.warn(`[IntegrationEngine] Skipping update — ${updResult.ErrorMessage}`);
@@ -1633,6 +1656,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const createResult = await config.connector.CreateRecord({
                 ...crudBase, Attributes: externalAttributes,
             });
+            this.reportRateForCrud(config, createResult);
             if (!createResult.Success) {
                 if (createResult.StatusCode === 403) {
                     console.warn(`[IntegrationEngine] Skipping create — ${createResult.ErrorMessage}`);
@@ -2392,8 +2416,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private enforceMaxLength(value: unknown, maxLength: number | undefined, fieldName: string): unknown {
         if (typeof value !== 'string' || maxLength === undefined || value.length <= maxLength) return value;
-        console.warn(`[IntegrationEngine] Truncated '${fieldName}' ${value.length}→${maxLength} chars (exceeds column width).`);
-        return value.slice(0, maxLength);
+        // NVARCHAR width is in UTF-16 code units, so we cut at `maxLength` code units — but never
+        // mid surrogate pair (slicing between a high+low surrogate yields an invalid string). If the
+        // last kept unit is a high surrogate, drop it (lose one emoji rather than corrupt the value).
+        let cut = maxLength;
+        const lastUnit = value.charCodeAt(cut - 1);
+        if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) cut -= 1;
+        console.warn(`[IntegrationEngine] Truncated '${fieldName}' ${value.length}→${cut} code units (exceeds column width).`);
+        return value.slice(0, cut);
     }
 
     /**

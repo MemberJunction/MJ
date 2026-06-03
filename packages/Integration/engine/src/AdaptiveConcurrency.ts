@@ -176,8 +176,8 @@ interface PoolState {
 /**
  * One worker in the adaptive pool. Loops claiming items, but before claiming it
  * gates on the LIVE cap: if in-flight already meets/exceeds `controller.Cap`,
- * the worker yields a microtask and re-checks, so the active set tracks the cap
- * as AIMD shrinks or grows it. Returns when no items remain.
+ * the worker yields a MACROTASK and re-checks, so the active set tracks the cap
+ * as AIMD shrinks or grows it without starving in-flight I/O. Returns when no items remain.
  */
 async function adaptiveWorker<T>(
     items: T[],
@@ -187,8 +187,10 @@ async function adaptiveWorker<T>(
 ): Promise<void> {
     while (state.nextIndex < items.length) {
         if (state.inFlight >= controller.Cap) {
-            // Over the live cap — park this worker for a microtask and re-evaluate.
-            await Promise.resolve();
+            // Over the live cap — park on a MACROTASK (not a microtask) and re-evaluate. A bare
+            // `await Promise.resolve()` keeps the microtask queue saturated and starves the in-flight
+            // network I/O callbacks (macrotasks) → event-loop stall. setTimeout yields to I/O.
+            await new Promise<void>(resolve => setTimeout(resolve, 0));
             continue;
         }
         const i = state.nextIndex++;

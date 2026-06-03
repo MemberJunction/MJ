@@ -318,10 +318,12 @@ export class IntegrationSchemaSync {
                 dirty = true;
                 changes.push('Description');
             }
-            // §3 metadata refresh: capture the source's CURRENT watermark field — set it when empty
-            // AND update it when the source now reports a DIFFERENT one (drift, e.g. a renamed
-            // last-modified column), so incremental sync keeps tracking the right cursor over time.
-            if (srcObj.IncrementalWatermarkField && srcObj.IncrementalWatermarkField !== existing.IncrementalWatermarkField) {
+            // §3 metadata refresh: capture the source's watermark field when the stored row has none.
+            // We deliberately do NOT overwrite an already-set value on a later refresh — a watermark
+            // field may have been deliberately chosen/curated, and the "curated values win" invariant
+            // (above) applies. A genuine source-side rename is rare and handled by re-curation, not by
+            // silently clobbering the stored cursor field on every refresh.
+            if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
                 existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
                 dirty = true;
                 changes.push('IncrementalWatermarkField');
