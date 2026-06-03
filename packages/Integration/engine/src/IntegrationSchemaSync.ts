@@ -318,7 +318,10 @@ export class IntegrationSchemaSync {
                 dirty = true;
                 changes.push('Description');
             }
-            if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
+            // §3 metadata refresh: capture the source's CURRENT watermark field — set it when empty
+            // AND update it when the source now reports a DIFFERENT one (drift, e.g. a renamed
+            // last-modified column), so incremental sync keeps tracking the right cursor over time.
+            if (srcObj.IncrementalWatermarkField && srcObj.IncrementalWatermarkField !== existing.IncrementalWatermarkField) {
                 existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
                 dirty = true;
                 changes.push('IncrementalWatermarkField');

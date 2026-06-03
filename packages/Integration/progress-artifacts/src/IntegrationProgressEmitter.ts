@@ -18,6 +18,15 @@ export interface EmitterOptions {
 }
 
 /**
+ * Side-channel hook invoked for EVERY emitted event. The server layer registers this once at
+ * startup to fan events onto a live GraphQL subscription topic (plan.md §11) WITHOUT this package
+ * depending on the server (inversion of control). The durable JSONL artifact + the pollable
+ * tail query remain the source of truth; this is the additive push path. Best-effort — a throwing
+ * hook never breaks the sync or the durable write.
+ */
+export type IntegrationProgressPublishHook = (manifest: IntegrationRunManifest, event: IntegrationProgressEvent) => void;
+
+/**
  * Writes structured progress artifacts to `<rootDir>/<runID>/`:
  * - manifest.json (written once at start)
  * - progress.jsonl (append-only event stream; checkpoint events carry resumableState)
@@ -41,6 +50,16 @@ export class IntegrationProgressEmitter {
     private warnings: SyncWarning[] = [];
     private latestCheckpointSeq?: number;
     private readonly startMs = Date.now();
+    private static _publishHook?: IntegrationProgressPublishHook;
+
+    /**
+     * Register (or clear, with no arg) the global publish hook. The server registers this at startup
+     * so every emitted event also fans out to the live GraphQL subscription, in addition to the
+     * durable JSONL artifact + the pollable tail query.
+     */
+    public static SetPublishHook(hook?: IntegrationProgressPublishHook): void {
+        IntegrationProgressEmitter._publishHook = hook;
+    }
 
     constructor(
         private readonly manifest: IntegrationRunManifest,
@@ -89,6 +108,10 @@ export class IntegrationProgressEmitter {
         if (this.consoleMirror) {
             this.mirrorToConsole(event);
         }
+        // §11 push path: fan out to the live subscription via the registered hook. Best-effort —
+        // never breaks the sync or the durable write (which remain the source of truth).
+        const hook = IntegrationProgressEmitter._publishHook;
+        if (hook) { try { hook(this.manifest, event); } catch { /* publish is best-effort */ } }
         this.writeChain = this.writeChain.then(() => fs.appendFile(this.progressPath, line, 'utf-8'));
     }
 

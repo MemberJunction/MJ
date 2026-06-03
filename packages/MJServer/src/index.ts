@@ -45,6 +45,8 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ClientToolRequestManager } from '@memberjunction/ai-agents';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
@@ -635,6 +637,24 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // via the same PubSub infrastructure used for pipeline progress and cache invalidation.
   ClientToolRequestManager.Instance.SetPublishFunction(
     (topic: string, payload: Record<string, unknown>) => PubSubManager.Instance.Publish(topic, payload)
+  );
+
+  // §11: fan every integration progress event onto the live GraphQL subscription topic. The emitter
+  // (in @memberjunction/integration-progress-artifacts) stays server-agnostic; we inject the publish
+  // here so integration runs/refreshes/syncs are subscribable in addition to the durable JSONL
+  // artifact + the pollable IntegrationTailRunEvents query.
+  IntegrationProgressEmitter.SetPublishHook((manifest, event) =>
+    PublishIntegrationProgress({
+      RunID: manifest.runID,
+      Kind: manifest.runKind,
+      CompanyIntegrationID: manifest.companyIntegrationID,
+      EventType: event.eventType,
+      Seq: event.seq,
+      Message: event.message,
+      Stage: event.stage,
+      Level: event.level,
+      Data: event.data,
+    })
   );
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever

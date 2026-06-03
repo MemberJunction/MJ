@@ -115,6 +115,16 @@ export class SyncLogger {
     }
 
     /**
+     * Persist a resumable CHECKPOINT (the sync position after a committed batch) into the durable
+     * progress artifact (plan.md §8a). On crash/restart the latest checkpoint's resumableState
+     * (watermark / keyset AfterKey / cursor / batchIndex) lets the run pick back up. Best-effort —
+     * no emitter attached → no-op.
+     */
+    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        this.emitter?.checkpoint(stage, resumableState);
+    }
+
+    /**
      * Emit a non-fatal STRUCTURED WARNING. Unlike record/fetch errors (which mark the run
      * failed), a warning records a notable-but-non-fatal condition — the canonical case being a
      * second-layer/association object that fetched zero records because its parents weren't

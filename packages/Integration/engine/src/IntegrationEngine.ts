@@ -1255,6 +1255,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             currentOffset = batch.NextOffset;
             currentCursor = batch.NextCursor;
             currentAfterKey = batch.NextAfterKeyValue ?? currentAfterKey;   // §7 advance keyset position
+            // §8a: persist a resumable checkpoint after each committed batch so a crash/restart can
+            // pick back up (watermark for incremental, AfterKey/cursor for keyset/no-watermark scans)
+            // instead of restarting the whole object.
+            logger?.checkpoint(entityMap.ExternalObjectName ?? entityMap.ID, {
+                watermark: currentWatermark ?? null,
+                afterKey: currentAfterKey ?? null,
+                page: currentPage ?? null,
+                offset: currentOffset ?? null,
+                cursor: currentCursor ?? null,
+                batchIndex: batchCount,
+                recordsInMap,
+            });
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
@@ -2317,7 +2329,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private SetEntityFields(
         entity: {
             Set(fieldName: string, value: unknown): void;
-            Fields?: Array<{ Name: string; EntityFieldInfo?: { Type?: string; AllowsNull?: boolean }; Type?: string }>;
+            Fields?: Array<{ Name: string; EntityFieldInfo?: { Type?: string; AllowsNull?: boolean; MaxLength?: number }; Type?: string }>;
         },
         fields: Record<string, unknown>
     ): void {
@@ -2328,14 +2340,31 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // provider passes "" into a DECIMAL/INT/DATE column and SQL Server
         // throws "Error converting data type nvarchar to decimal".
         const typeLookup = new Map<string, string>();
+        const maxLenLookup = new Map<string, number>();
         for (const f of entity.Fields ?? []) {
             const rawType = f.EntityFieldInfo?.Type ?? f.Type;
             if (rawType) typeLookup.set(f.Name.toLowerCase(), rawType.toLowerCase());
+            const ml = f.EntityFieldInfo?.MaxLength;   // already a CHARACTER count (nvarchar bytes→chars); 0 = unlimited
+            if (typeof ml === 'number' && ml > 0) maxLenLookup.set(f.Name.toLowerCase(), ml);
         }
 
         for (const [fieldName, value] of Object.entries(fields)) {
-            entity.Set(fieldName, this.coerceIncomingValue(value, typeLookup.get(fieldName.toLowerCase())));
+            const key = fieldName.toLowerCase();
+            const coerced = this.coerceIncomingValue(value, typeLookup.get(key));
+            entity.Set(fieldName, this.enforceMaxLength(coerced, maxLenLookup.get(key), fieldName));
         }
+    }
+
+    /**
+     * §5/§10 type-driven enforcement: clamp an over-length string to the target column's MaxLength
+     * (a character count — SQLMaxLength already converts nvarchar bytes→chars) so a source value
+     * wider than the resolved column is truncated instead of failing the whole row on "value too
+     * long". Non-strings / values that fit / unlimited columns (MaxLength 0) pass through unchanged.
+     */
+    private enforceMaxLength(value: unknown, maxLength: number | undefined, fieldName: string): unknown {
+        if (typeof value !== 'string' || maxLength === undefined || value.length <= maxLength) return value;
+        console.warn(`[IntegrationEngine] Truncated '${fieldName}' ${value.length}→${maxLength} chars (exceeds column width).`);
+        return value.slice(0, maxLength);
     }
 
     /**
