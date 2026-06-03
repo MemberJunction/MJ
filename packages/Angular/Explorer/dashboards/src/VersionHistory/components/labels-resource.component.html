@@ -11,6 +11,17 @@
       </mj-stat-badge>
     </div>
     <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+      <button mjButton variant="primary" size="sm" (click)="OpenCreateDialog()">
+        <i class="fa-solid fa-plus"></i> <span class="action-btn-label">Create Label</span>
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search labels by name, description, or entity..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)">
+      </mj-page-search>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -27,17 +38,6 @@
         [ActiveKey]="ViewMode"
         (KeyChange)="SetViewMode($any($event))">
       </mj-view-toggle>
-      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
-      <button mjButton variant="primary" size="sm" (click)="OpenCreateDialog()">
-        <i class="fa-solid fa-plus"></i> Create Label
-      </button>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search labels by name, description, or entity..."
-        [Value]="SearchText"
-        (ValueChange)="OnSearchChange($event)">
-      </mj-page-search>
     </div>
   </mj-page-header>
 

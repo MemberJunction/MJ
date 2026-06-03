@@ -481,6 +481,16 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public get filterFields(): FilterFieldConfig[] {
     return [
       {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'Active', value: 'active' },
+          { text: 'Inactive', value: 'inactive' },
+        ],
+      },
+      {
         key: 'role',
         type: 'dropdown',
         label: 'Role',
@@ -497,20 +507,30 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   /** Current popover field values keyed by FilterFieldConfig.key. */
   public get filterValues(): Record<string, unknown> {
-    return { role: this.filters$.value.role };
+    return { status: this.filters$.value.status, role: this.filters$.value.role };
   }
 
-  /** Number of active filters INSIDE the popover only — drives the popover badge. */
-  public get popoverActiveFilterCount(): number {
-    return this.filters$.value.role !== '' ? 1 : 0;
+  /** Total active filters (Status + Role) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    const f = this.filters$.value;
+    return (f.status !== 'all' ? 1 : 0) + (f.role !== '' ? 1 : 0);
   }
 
   /** Apply a value change from <mj-filter-panel>. */
   public onFilterPanelChange(values: Record<string, unknown>): void {
-    const role = (values['role'] as string) ?? '';
-    this.filters$.next({ ...this.filters$.value, role });
-    this.applyFilters();
-    this.cdr.markForCheck();
+    const partial: Partial<FilterOptions> = {};
+    if ('status' in values) {
+      partial.status = (values['status'] as FilterOptions['status']) || 'all';
+    }
+    if ('role' in values) {
+      partial.role = (values['role'] as string) ?? '';
+    }
+    this.updateFilter(partial);
+  }
+
+  /** Clear all filters (Status + Role); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ status: 'all', role: '' });
   }
 
   public toggleSelectAll(): void {
