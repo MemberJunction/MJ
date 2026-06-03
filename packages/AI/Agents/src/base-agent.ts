@@ -4218,7 +4218,23 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         const registry = this.buildPipelineRegistry(params);
-        const result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
+        // The executor converts stage-level errors into a failed RESULT (it doesn't throw for those),
+        // but an unexpected throw — e.g. a tool returning a non-serializable value (BigInt/circular)
+        // that trips JSON.stringify in the executor's byte-accounting — must NEVER leave this step
+        // stuck on 'Running'. Catch it and materialize a failed result so finalize always runs and the
+        // failure surfaces as a 'Failed' step (answering "do pipeline errors show as errors?": yes).
+        let result: PipelineExecutionResult;
+        try {
+            result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
+        } catch (e) {
+            result = {
+                success: false,
+                finalOutput: null,
+                steps: [],
+                error: `Pipeline crashed: ${(e as Error)?.message ?? String(e)}`,
+                contextBytesSaved: 0,
+            };
+        }
 
         // A pipeline is ONE run-step — not a parent + a child step per stage. It runs server-side in a
         // single fast pass, so the full per-stage breakdown + totals live in this step's OutputData for
