@@ -29,6 +29,7 @@ import {
     type ExternalFieldSchema,
     type SourceSchemaInfo,
     type SourceFieldInfo,
+    type RateLimitPolicy,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -1031,6 +1032,30 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     public override get SupportsListing(): boolean { return true; }
 
     public override get IntegrationName(): string { return 'HubSpot'; }
+
+    // ─── §7 sync-efficiency contract (HubSpot = the full reference implementation) ──────────
+    // The engine consumes these for adaptive rate limiting, peak parallelization, and precise 429
+    // back-off. HubSpot's public limit is ~100-110 requests / 10s per Private App; the connector's
+    // MinRequestIntervalMs (default 100ms) is the sustained pace.
+
+    /** ~10 req/s sustained (honors MinRequestIntervalMs config) with a ~100-request burst window. */
+    public override get RateLimitPolicy(): RateLimitPolicy {
+        const interval = this.effectiveMinRequestIntervalMs;
+        return {
+            TokensPerSec: Math.max(1, Math.round(1000 / (interval > 0 ? interval : 100))),
+            Burst: 100,
+            ThrottleBackoffFactor: 0.5,
+        };
+    }
+
+    /** HubSpot rate-limits on a rolling 10-second window; on a 429 that escaped internal retries, back off ~10s. */
+    public override ExtractRetryAfterMs(error: unknown): number | undefined {
+        const msg = error instanceof Error ? error.message : String(error);
+        return /\b429\b|rate.?limit|too many requests/i.test(msg) ? 10_000 : undefined;
+    }
+
+    /** HubSpot tolerates modest object-level parallelism; the engine's AIMD controller ramps toward this, with the token-bucket as the real backstop. */
+    public override get MaxConcurrencyHint(): number { return 4; }
 
     // ─── Action Metadata ─────────────────────────────────────────────────
 
