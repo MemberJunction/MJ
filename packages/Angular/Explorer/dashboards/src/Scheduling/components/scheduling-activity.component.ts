@@ -189,6 +189,12 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
     ];
     return [
       {
+        key: 'timeRange',
+        type: 'chips',
+        label: 'Time range',
+        chipOptions: this.TimeRanges.map(r => ({ text: r.label, value: r.value }))
+      },
+      {
         key: 'statusFilter',
         type: 'dropdown',
         label: 'Status',
@@ -210,6 +216,7 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
 
   public get ActivityFilterValues(): Record<string, unknown> {
     return {
+      timeRange: this.SelectedTimeRange,
       statusFilter: this.StatusFilter,
       jobNameFilter: this.JobNameFilter
     };
@@ -217,13 +224,17 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
 
   public get ActiveFilterCount(): number {
     let count = 0;
+    if (this.SelectedTimeRange !== '7d') count++;
     if (this.StatusFilter) count++;
     if (this.JobNameFilter) count++;
     return count;
   }
 
   public OnFilterValuesChange(values: Record<string, unknown>): void {
-    const next = (values ?? {}) as { statusFilter?: string; jobNameFilter?: string };
+    const next = (values ?? {}) as { timeRange?: string; statusFilter?: string; jobNameFilter?: string };
+    if (next.timeRange && next.timeRange !== this.SelectedTimeRange) {
+      this.OnTimeRangeChange(next.timeRange as TimeRange);
+    }
     if ((next.statusFilter ?? '') !== this.StatusFilter) {
       this.OnStatusFilterChange(next.statusFilter ?? '');
     }
@@ -233,6 +244,7 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
   }
 
   public ResetFilters(): void {
+    if (this.SelectedTimeRange !== '7d') this.OnTimeRangeChange('7d');
     if (this.StatusFilter) this.OnStatusFilterChange('');
     if (this.JobNameFilter) this.OnJobNameFilterChange('');
   }
