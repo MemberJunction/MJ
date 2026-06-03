@@ -17,7 +17,7 @@ interface PromptMetrics {
   byPrompt: Map<string, { count: number; totalTime: number; avgTime: number }>;
   statusBreakdown: { success: number; failed: number; timeout: number };
   costBreakdown: { totalCost: number; byModel: Map<string, number>; byVendor: Map<string, number> };
-  tokenUsage: { totalInput: number; totalOutput: number; byModel: Map<string, { input: number; output: number }> };
+  tokenUsage: { totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; byModel: Map<string, { input: number; output: number }> };
 }
 
 interface ActionMetrics {
@@ -375,7 +375,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       byPrompt: new Map(),
       statusBreakdown: { success: 0, failed: 0, timeout: 0 },
       costBreakdown: { totalCost: 0, byModel: new Map(), byVendor: new Map() },
-      tokenUsage: { totalInput: 0, totalOutput: 0, byModel: new Map() }
+      tokenUsage: { totalInput: 0, totalOutput: 0, totalCacheRead: 0, totalCacheWrite: 0, byModel: new Map() }
     };
   }
   
@@ -459,6 +459,10 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       const outputTokens = promptRun.TokensCompletion || 0;
       metrics.tokenUsage.totalInput += inputTokens;
       metrics.tokenUsage.totalOutput += outputTokens;
+      // Provider prompt-cache tokens (read = cache hits, write = cache creation). Summed from the
+      // child prompt runs' persisted TokensCacheRead/TokensCacheWrite columns.
+      metrics.tokenUsage.totalCacheRead += promptRun.TokensCacheRead || 0;
+      metrics.tokenUsage.totalCacheWrite += promptRun.TokensCacheWrite || 0;
       
       const modelTokens = metrics.tokenUsage.byModel.get(model) || { input: 0, output: 0 };
       modelTokens.input += inputTokens;
