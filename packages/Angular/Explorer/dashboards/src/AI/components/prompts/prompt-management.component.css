@@ -831,10 +831,7 @@ as-split {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  /* Collapse the New Prompt action button to icon-only to keep the header compact. */
-  .action-btn-label {
-    display: none;
-  }
+  /* .action-btn-label hiding is owned by the shared chrome (page-header.scss). */
   .dashboard-header {
     flex-direction: column;
     gap: 16px;

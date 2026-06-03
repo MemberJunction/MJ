@@ -237,13 +237,10 @@
 }
 
 @media (max-width: 768px) {
-  /* Search grows so the icon-only Filter · sort · view controls share one line;
-     collapse the New Action / sort button labels to icon-only to keep it compact. */
+  /* Search grows so the icon-only Filter · sort · view controls share one line.
+     (.action-btn-label hiding is owned by the shared chrome — page-header.scss.) */
   mj-page-search {
     flex: 1;
-  }
-  .action-btn-label {
-    display: none;
   }
 
   .explorer-content {
