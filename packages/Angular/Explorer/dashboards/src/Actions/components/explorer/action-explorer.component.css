@@ -61,22 +61,7 @@
 .status-dot[data-status="Pending"]  { background: var(--mj-status-warning); }
 .status-dot[data-status="Disabled"] { background: var(--mj-status-error); }
 
-/* ──── Sort dropdown ──── */
-.dropdown-container {
-  position: relative;
-}
-.dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  min-width: 220px;
-  padding: 8px 0;
-}
+/* ──── Sort options (inside the Filters popover) ──── */
 .sort-option {
   display: flex;
   align-items: center;
