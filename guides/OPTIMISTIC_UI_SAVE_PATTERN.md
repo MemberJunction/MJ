@@ -51,6 +51,25 @@ OnValidated?: (entity: unknown) => void;
 - Implemented in [`BaseEntity._InnerSave`](../packages/MJCore/src/generic/baseEntity.ts); covered by
   [`baseEntity.onValidated.test.ts`](../packages/MJCore/src/__tests__/baseEntity.onValidated.test.ts).
 
+### Alternative considered: a `validated` `BaseEntityEvent` (reviewers, weigh in)
+
+MJ already has an entity event bus — `BaseEntity.RaiseEvent(...)` emits `save_started` (fires *before*
+validation) and `save` (fires *after* persist) as `BaseEntityEvent` types, and `BaseEngine.ObserveProperty`
+/ `DataChange$` consume them. The validation-passed/pre-persist moment could instead be modeled as a **new
+`'validated'` event type** on that bus, which any subscriber could observe.
+
+This proposal uses a **per-call `OnValidated` option** rather than a broadcast event, deliberately:
+
+- The optimistic-UI use case is "**this** component rendering **its** change" — a per-call callback maps
+  directly to the one save in flight. A broadcast `validated` event forces subscribers to correlate *which*
+  save fired (entity identity, re-entrancy), which is exactly the bookkeeping we're trying to remove.
+- It keeps the blast radius to the one caller that opted in, instead of waking every entity-event subscriber
+  on a hot path.
+
+The event-bus route is the more "MJ-reactive" shape and is worth a second look if a use case emerges that
+needs *other* observers (not the saver) to react at validation time. For optimistic rendering, the per-call
+option is the better fit.
+
 ---
 
 ## The decision rule (apply per callsite)
