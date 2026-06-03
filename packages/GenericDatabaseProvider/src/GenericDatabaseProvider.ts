@@ -3297,7 +3297,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds a parameter placeholder for parameterized queries.
      * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
      */
-    protected BuildParameterPlaceholder(index: number): string {
+    public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
     }
 
