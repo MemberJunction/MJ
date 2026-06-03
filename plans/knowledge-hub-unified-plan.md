@@ -11,7 +11,7 @@
 
 ## 0. How to use this plan (READ FIRST — execution protocol)
 
-This is a single, large, multi-session project broken into **5 phases** (Phase 0–4). It is designed to be executed by an AI agent across **multiple sessions**, surviving session death. Follow this protocol exactly:
+This is a single, large, multi-session project broken into **7 phases** (Phase 0–6). **Phases 0–5 are committed work; Phase 6 is optional/exploratory** (the cross-cutting UserView visualization plug-in architecture — we may or may not implement it). It is designed to be executed by an AI agent across **multiple sessions**, surviving session death. Follow this protocol exactly:
 
 1. **Orient before acting.** At the start of every session, read this entire file, then find the **first unchecked task** (`- [ ]`) in the lowest-numbered incomplete phase. That is your starting point. Do **not** skip ahead to a later phase — phases are ordered by dependency.
 2. **Work stepwise, one task at a time.** Each task has an ID (e.g. `T2.3`) and a checkbox. Complete a task fully — including its sub-steps, a successful package build, and tests (per CLAUDE.md rule #6) — before moving to the next.
@@ -77,6 +77,8 @@ The defect this plan corrects — across Classify *and* Clustering — is **logi
 | 2 | Clustering | **new `ClusteringEngine`** | extend cluster resolver | **new cluster transport helper** | **Run Cluster Analysis** | shrink resource component |
 | 3 | Setup/onboarding + seed taxonomy | `TagEngine.generateSeedTaxonomy()` (reuses Phase 2 engine) | extend | extend helper | **Generate Seed Taxonomy** | wizard (thin) |
 | 4 | Audit/analytics | analytics methods on engine | extend | extend helper | **Get Classification Analytics** | grids/charts (thin) |
+| 5 | Tag clouds + Visualize surface | **`TagCloudEngine`** (reuse `TagCoOccurrenceEngine`) | — | extend helper | **Build/Modify Visualization** | thin Visualize tab |
+| 6 *(optional)* | UserView viz plug-in arch | viz plug-in registry (core) | — | — | viz client tools | view-mode host on any UserView |
 
 ---
 
@@ -150,6 +152,14 @@ The defect this plan corrects — across Classify *and* Clustering — is **logi
 - [ ] **T2.10 — Wire cluster→agent context + (new) client tools.** Keep `SetAgentContext`; add `SetAgentClientTools` so the agent can trigger a clustering run from the UI (the dashboards table currently lists Clusters as context-only). Tools call the transport helper.
 - [ ] **T2.11 — Build, test, verify.** Build the new engine package, the transport helper, MJServer, the Action package, and the Angular packages. Unit tests: engine pipeline, `SuggestK`, vector-source adapters (mocked), transport helper (mocked GraphQL). Manual: run a clustering analysis end-to-end client-side; run one server-side via `RunClusterAnalysis`; save/load/share an analysis; invoke the Action with a mock agent/context.
 
+#### Cluster feature extensions (from Amith's KH-visualization bullets)
+> Source-bullet mapping: 2D/3D → T2.12 · multi-entity → T2.13 · save/edit/regenerate labels → T2.14 (+ existing edit/save) · build & modify client tools → T2.15. (The "view type showing those records only / for a given entity" bullets are realized in **Phase 6**.)
+
+- [ ] **T2.12 — 2D & 3D projection + renderer.** Engine supports `nComponents: 2|3`; add a WebGL 3D scatter renderer beside the existing SVG 2D one. `ClusterConfig.Dimensions: 2|3`, persisted on `MJ: Cluster Analyses`. Default stays 2D. Renderer choice = decision D6.
+- [ ] **T2.13 — Multi-entity-doc clustering.** Replace/augment the single `EntityDocumentID` with `ClusterConfig.EntityDocumentIDs: string[]`; the engine fetches + merges vectors across the chosen docs, tags each point with its source entity, and supports legend/color by entity *or* by cluster. **Validate that all selected docs share the same embedding model + dimensionality** (decision D9 / risk R7) — refuse incompatible combinations rather than produce a meaningless layout. Update the schema (T2.1) + Action params (T2.6) to arrays.
+- [ ] **T2.14 — Per-cluster label management.** Add an engine method to (re)generate the label for a *single* cluster (not just the whole result), plus UI to regenerate / edit / save one cluster's label independently. Extends T2.7 (whole-result naming) and the existing inline-edit/save.
+- [ ] **T2.15 — Cluster build/modify client tools.** Expand T2.10 beyond "trigger a run": agent tools to relabel, regenerate a single cluster's label, adjust K / re-run, and save — all routed through the transport helper / engine.
+
 ---
 
 ## Phase 3 — Setup & Onboarding (Classify) + seed taxonomy via clustering
@@ -196,28 +206,90 @@ The defect this plan corrects — across Classify *and* Clustering — is **logi
 
 ---
 
-## 5. Open Decisions (resolve before the dependent task)
+## Phase 5 — Tag Clouds & the "Visualize" surface (KH)
+
+**Why fifth:** turns the existing one-off tag cloud into a first-class visualization and reframes the KH "Clusters" tab as a broader **Visualize** surface (clusters + tag clouds + room for more). Reuses the Phase 2 clustering engine/UI and the existing `@memberjunction/ng-word-cloud` component. KH-scoped and concrete.
+
+### Ground truth
+- A reusable word-cloud component already exists: `@memberjunction/ng-word-cloud` (`MJWordCloudComponent` / `WordCloudItem`), today consumed only by the Classify Tags tab.
+- A `CreateSVGWordCloud` Action (d3-cloud) and a `TagCoOccurrenceEngine` already exist — engine-side tag/word aggregation is largely solved.
+- The KH Clusters tab is the only home for vector visualization today.
+
+### Source-bullet mapping
+"New section / rename Cluster → Visualize" → T5.1 · tag-cloud as first-class + reuse → T5.2/T5.3 · "same drilldown as clusters" → T5.4.
+
+### Tasks
+
+- [ ] **T5.1 — Rename KH "Clusters" tab → "Visualize" (host surface).** Rebrand the tab/resource as "Visualize" with an internal mode switch (Clusters | Tag Cloud | …). Update nav label, icon, agent context, and any stored tab-name preference key. Keep cluster functionality intact under the new surface.
+- [ ] **T5.2 — `TagCloudEngine` (framework-agnostic).** A thin engine that produces `WordCloudItem[]` for a given entity / content source / tag scope, reusing `TagCoOccurrenceEngine`. Expose via the transport helper; no aggregation logic in the UI (per §1: engine → transport → thin UI).
+- [ ] **T5.3 — Tag Cloud visualization in the Visualize surface.** Mount `MJWordCloudComponent` driven by `TagCloudEngine` output; scope picker (entity / content source / tag root); weight + co-occurrence sizing; reactive via the engine.
+- [ ] **T5.4 — Shared record drilldown.** Generalize the cluster point-drilldown into one reusable panel consumed by both cluster and tag-cloud selections (click a tag → records carrying that tag; click a point → that record). Same provenance/detail layout as the Phase 2/Phase 4 drilldown.
+- [ ] **T5.5 — Build/modify client tools for the Visualize surface.** Agent tools to switch mode, build a tag cloud for a scope, and open drilldowns — via the transport helper.
+- [ ] **T5.6 — Build, test, verify.** Build `TagCloudEngine`, the transport helper, and KH dashboards. Unit-test the engine; manual: switch modes, render a tag cloud for an entity, drill from a tag into records and from a cluster point into a record.
+
+> **Forward-compat note:** keep the cluster and tag-cloud components *thin and self-describing* (clear inputs + an availability check) so Phase 6 can adopt them as plug-ins without a rewrite.
+
+---
+
+## Phase 6 — UserView Visualization Plug-in Architecture (OPTIONAL / exploratory)
+
+> **Status: may-or-may-not implement.** Phases 0–5 are committed; this phase generalizes the KH Visualize surface into a **core, app-wide UserView capability**. Captured with enough detail to estimate and decide later (decision D7). Nothing here is required for Phases 0–5 to ship.
+
+**Idea:** any saved `UserView` (or entity) can expose additional visualization "modes" beyond the grid — cluster, tag cloud, timeline, map, etc. — each contributed by a **plug-in class** that declares *whether it's available* for a given view/entity. Visualization becomes a pluggable, metadata-driven extension point rather than bespoke per-feature UI.
+
+### Proposed architecture (applies the §1 doctrine)
+- **Schema:**
+  - `UserView.AdditionalVisualizationsConfig` — a new **JSONType** column (fits the existing `GridState` / `FilterState` / `SortState` JSON pattern on UserView) holding an array of per-view visualization *instances* (visualization type + that instance's config).
+  - `MJ: User View Visualizations` — a new entity for persisted visualization instances where a real record is warranted (sharing, ownership), parallel to how `MJ: Cluster Analyses` persists.
+- **Plug-in registry (core, framework-agnostic):** each visualization *type* is a class registered via `@RegisterClass` (consistent with MJ's ClassFactory plug-in model), exposing:
+  1. **`IsAvailableFor(entity / view): boolean`** — the availability predicate. Examples: **cluster** → entity has vectors + an Entity Document; **tag cloud** → entity has a tag/text field or co-occurrence data; **timeline** → entity has ≥1 date field; **map** → entity has geo fields.
+  2. display metadata (name, icon, description).
+  3. the Angular component to mount (thin, consuming its own engine/transport).
+- **View-mode host UI:** a UserView gains a mode switch (Grid | Cluster | Tag Cloud | …) populated by the registry, **filtered by each plug-in's predicate**, and configured from `AdditionalVisualizationsConfig`. "Show those records only" falls out naturally — the active view's result set is the plug-in's input.
+- **Re-home Phase 2/5 components as the first two plug-ins:** the cluster scatter and tag cloud become registry plug-ins (no rewrite if Phase 5's forward-compat note is honored), instantly available on any compatible entity/view — realizing the "view type for a given entity" bullets.
+- **Shared drilldown** (Phase 5 T5.4) is reused across all plug-ins.
+
+### Tasks (high-level; refine if/when greenlit)
+
+- [ ] **T6.1 — Schema:** `UserView.AdditionalVisualizationsConfig` (JSONType) + `MJ: User View Visualizations` entity. Migration + CodeGen.
+- [ ] **T6.2 — Plug-in registry + base class** with the `IsAvailableFor` predicate contract (core package).
+- [ ] **T6.3 — View-mode host UI** on UserView — registry-driven and predicate-gated.
+- [ ] **T6.4 — Adopt cluster + tag cloud as plug-ins** (from Phases 2/5).
+- [ ] **T6.5 — Reference third plug-in (timeline)** to prove the predicate pattern (requires ≥1 date field).
+- [ ] **T6.6 — Client tools + tests.**
+
+---
+
+## 7. Open Decisions (resolve before the dependent task)
 
 - **D1 (blocks T4.1) — Tag→prompt-run lineage & reasoning.** Add direct `AIPromptRunID` + `Reasoning` to `MJ: Content Item Tags` (recommended), add a `ContentItemTagDetail` child, or keep parsing `AIPromptRun.Result`? Recommendation: direct FK + reasoning field — cheapest correct option, kills the time-correlation heuristic.
 - **D2 (blocks T3.2) — Org-wide classification-context storage.** New single-row `MJ: Knowledge Hub Settings` entity (recommended, needs migration+CodeGen), reuse a Content-Type column, or a Knowledge-Hub-app-scoped config record? `MJ: User Settings` is per-user and disqualified.
 - **D3 (T3.4) — Seed taxonomy model.** Use the Content Type's configured model, or a separate (more capable) "taxonomy generation" model config? Taxonomy generation likely benefits from a stronger model.
 - **D4 (T2.1) — Cluster analysis sharing scope.** Owner-private with explicit share, app-wide, or role-scoped? Affects the `MJ: Cluster Analyses` schema (owner/sharing columns).
 - **D5 (phase ordering) — Confirm Phase 2 (Clustering) before Phase 3 (Setup).** Rationale: seed taxonomy (T3.4) reuses the clustering engine, and clustering is the cleanest place to set the architecture. If the team would rather ship Classify onboarding first, swap Phases 2 and 3 — but then T3.4 must either wait for the engine or ship its fallback single-prompt path first.
+- **D6 (T2.12) — 3D rendering tech.** SVG can't do 3D; pick a renderer (three.js / `regl-scatterplot` / other WebGL). New dependency decision. Keep the 2D SVG path for 2D mode.
+- **D7 (Phase 6 go/no-go) — Generalize to core UserView?** Ship visualization only as the KH "Visualize" surface (Phases 1–5), or also build the app-wide UserView plug-in architecture (Phase 6)? Phase 6 is higher-leverage but larger and touches core. Decide after Phase 5.
+- **D8 (T6.1) — Visualization config storage.** `MJ: User View Visualizations` entity vs. JSON-only on `UserView.AdditionalVisualizationsConfig` vs. hybrid (code `@RegisterClass` registry for *types* + JSON/entity for per-view *instances*). Recommendation: hybrid.
+- **D9 (T2.13) — Multi-entity embedding compatibility.** Hard-block mixing entity docs with different embedding models/dimensions (recommended for v1, with a clear UI message), or attempt per-doc projection + alignment (harder, fuzzier)?
 
 ---
 
-## 6. Risks
+## 8. Risks
 
 - **R1 — UMAP cost server-side.** UMAP/PCA on large vector sets is CPU-heavy; server-side runs (T2.4) may need a worker/queue to avoid blocking the event loop. Note thresholds; cap `MaxRecords` server-side.
 - **R2 — Determinism.** UMAP is stochastic; persisting the projected result (T2.1) is required because re-runs won't reproduce a layout. "Re-run" creates a new analysis rather than mutating one.
 - **R3 — Package layering / deps.** Keep the pure pipeline engine free of server-only deps (`VectorDBBase`, `AIPromptRunner` server bits) by injecting them via strategy interfaces, so the client bundle doesn't pull server code. Validate bundle composition.
 - **R4 — Migration + CodeGen gating.** T2.1, T3.2, T4.1 add schema; dependent TS must wait for CodeGen-generated types (rule 2b). Sequence each: migration → CodeGen → code.
 - **R5 — Kendo rename breakage (T0.3).** `.mj-kendo-*` classes are live in templates; renames must be coordinated CSS+HTML and smoke-tested, or styles silently drop.
+- **R6 — 3D performance/deps (T2.12).** A WebGL 3D scatter adds a dependency and rendering complexity; large point counts need decimation/LOD. Keep the 2D SVG path as the default.
+- **R7 — Multi-entity embedding mismatch (T2.13).** Vectors from different models/dimensions are not co-clusterable; the engine must validate and refuse incompatible combinations rather than produce meaningless layouts.
+- **R8 — Phase 6 scope creep.** The UserView plug-in architecture is cross-cutting core work; keep it firewalled as optional (Phase 6) so it can't delay Phases 0–5. Honor the Phase 5 forward-compat note to avoid rework if greenlit.
 
 ---
 
-## 7. Progress Log
+## 9. Progress Log
 
 > Append a dated entry each working session: phase/tasks touched, decisions, blockers, commit SHAs. Newest first.
 
+- **2026-06-03** — Expanded scope from Amith's KH-visualization bullets. Added cluster feature extensions to Phase 2 (T2.12 2D/3D, T2.13 multi-entity-doc clustering, T2.14 per-cluster label management, T2.15 build/modify client tools). Added **Phase 5 — Tag Clouds & the "Visualize" surface** (committed) reusing the existing `ng-word-cloud` + `TagCoOccurrenceEngine`. Added **Phase 6 — UserView Visualization Plug-in Architecture** as **optional/exploratory** (per-view `AdditionalVisualizationsConfig` JSONType + `MJ: User View Visualizations` entity + `@RegisterClass` plug-in registry with an `IsAvailableFor` predicate; cluster/tag-cloud/timeline as plug-ins). New decisions D6–D9 and risks R6–R8. Phase count now 0–6 (0–5 committed, 6 optional). No code changes yet.
 - **2026-06-02** — Plan authored. Unified the three Classify plans (audit/analytics, setup/onboarding, UX fixes) plus a new Clustering object-model phase into this single WBS. Established the Architectural Principles (§1: engine → resolver → transport helper → thin UI; Actions on top of engine for agents). Scoped Phase 0 Kendo hygiene (no live deps; ~86 stray refs/dead CSS/comments across ~25 files). No code changes yet. Open decisions D1–D5 pending. The three superseded plan files were folded in and deleted.
