@@ -107,6 +107,10 @@ export { WatermarkService } from './WatermarkService.js';
 // Content hashing — watermark-less change detection key
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 
+// Partitioned / Merkle-style hash-diff — find changed partitions cheaply when no incremental cursor exists
+export { partitionRecords, partitionRollupHash, diffPartitions } from './HashDiff.js';
+export type { PartitionDiff } from './HashDiff.js';
+
 // MostRecent conflict resolution recency comparison
 export { mostRecentWinner, parseTimestamp } from './ConflictRecency.js';
 export type { RecencyWinner } from './ConflictRecency.js';
@@ -118,6 +122,10 @@ export type { EnrichOptions, EnrichResult, DescribeFn } from './EnrichSchemaCons
 // Retry
 export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
 export type { RetryConfig } from './RetryRunner.js';
+
+// Adaptive per-key token-bucket rate limiter (peak-aware rate limiting, plan.md §7)
+export { RateLimiter } from './RateLimiter.js';
+export type { RateLimiterOptions, RateLimiterKeyState, NowFn, SleepFn } from './RateLimiter.js';
 
 // Action Metadata Generator
 export { ActionMetadataGenerator } from './ActionMetadataGenerator.js';
@@ -147,3 +155,11 @@ export type {
     ConnectorCreationPipelineOptions,
     ConnectorCreationPipelineResult,
 } from './IntegrationConnectorCreationPipeline.js';
+
+// Adaptive concurrency — AIMD controller for §7 smart peak parallelization
+export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
+export type {
+    AdaptiveConcurrencyOptions,
+    AdaptiveItemOutcome,
+    AdaptiveRunResult,
+} from './AdaptiveConcurrency.js';

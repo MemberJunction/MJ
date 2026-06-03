@@ -8,15 +8,37 @@ export type PKClassifierStrategy =
     | 'universal-convention'
     | 'naming-heuristic'
     | 'statistical'
+    | 'composite'
     | 'llm'
+    | 'synthetic'
     | 'none';
+
+/**
+ * Canonical name of the synthetic identity-hash column nominated by the
+ * synthetic-fallback tier. The framework materializes this column (an identity
+ * hash of the record) so a table that has no provable natural PK is still
+ * syncable (plan.md §4).
+ */
+export const SYNTHETIC_PK_FIELD_NAME = '__mj_integration_IdentityHash' as const;
 
 /** Result returned by SoftPKClassifier.Classify(). */
 export interface PKClassifierResult {
     /** Whether the classifier reached a confident nominee. */
     Confident: boolean;
-    /** Field name of the PK nominee, when Confident=true. */
+    /**
+     * Field name of the PK nominee, when Confident=true.
+     * - Single-column natural PK → the resolving column's name.
+     * - Synthetic fallback → SYNTHETIC_PK_FIELD_NAME.
+     * - Composite key → the first member of NomineeFields (for callers that
+     *   only read a single name); NomineeFields carries the full set.
+     */
     Nominee?: string;
+    /**
+     * Ordered set of field names that together form the key. Populated for the
+     * composite strategy (the minimal unique+stable column set). For single-column
+     * and synthetic strategies this is the one-element set matching Nominee.
+     */
+    NomineeFields?: string[];
     /** Confidence score 0..1. */
     Confidence: number;
     /** Which strategy in the cascade produced the nominee. */
@@ -49,6 +71,20 @@ export interface ClassifyOptions {
     llmInference?: LLMOneShotCallback;
     /** Confidence floor for Confident=true. Defaults to 0.7. */
     confidenceFloor?: number;
+    /**
+     * Largest column-set size the composite-key uniqueness scan will try when
+     * no single column is unique. Defaults to 3 (try 2-col then 3-col sets).
+     * Only consulted when sampleRows are present.
+     */
+    maxCompositeKeySize?: number;
+    /**
+     * When true (default), and every other tier fails to find/prove a PK, the
+     * classifier returns a Confident synthetic verdict nominating
+     * SYNTHETIC_PK_FIELD_NAME — an identity-hash column the framework
+     * materializes so NO table is left without a PK (plan.md §4). Set false to
+     * opt out and receive the honest 'none' verdict instead.
+     */
+    syntheticFallback?: boolean;
 }
 
 /** Callback shape for the one-shot LLM step. */
@@ -114,9 +150,27 @@ export class SoftPKClassifier {
                 return {
                     Confident: true,
                     Nominee: statMatch.fieldName,
+                    NomineeFields: [statMatch.fieldName],
                     Confidence: statMatch.confidence,
                     Strategy: 'statistical',
                     Reason: statMatch.reason,
+                };
+            }
+        }
+
+        // 3b) Composite uniqueness (when no single column is unique) — try minimal
+        //     2- then 3-col concatenated key sets; smallest unique+stable set wins.
+        if (opts.sampleRows && opts.sampleRows.length > 0) {
+            const maxSetSize = opts.maxCompositeKeySize ?? 3;
+            const compMatch = this.compositeUniqueness(opts.fields, opts.sampleRows, maxSetSize);
+            if (compMatch && compMatch.confidence >= floor) {
+                return {
+                    Confident: true,
+                    Nominee: compMatch.fieldNames[0],
+                    NomineeFields: compMatch.fieldNames,
+                    Confidence: compMatch.confidence,
+                    Strategy: 'composite',
+                    Reason: compMatch.reason,
                 };
             }
         }
@@ -140,6 +194,7 @@ export class SoftPKClassifier {
                         return {
                             Confident: true,
                             Nominee: llm.nominee,
+                            NomineeFields: [llm.nominee],
                             Confidence: llm.confidence,
                             Strategy: 'llm',
                             Reason: llm.reason || 'LLM one-shot classification.',
@@ -147,22 +202,39 @@ export class SoftPKClassifier {
                     }
                 }
             } catch (err) {
-                // LLM failures cascade to the 'none' verdict — never crash the pipeline
-                return {
-                    Confident: false,
-                    Confidence: 0,
-                    Strategy: 'none',
-                    Reason: `LLM inference failed: ${err instanceof Error ? err.message : String(err)}. No PK assigned.`,
-                };
+                // LLM failures never crash the pipeline. Fall through to the synthetic
+                // fallback (when enabled) so the table is still rescued; otherwise 'none'.
+                const llmFailNote = `LLM inference failed: ${err instanceof Error ? err.message : String(err)}.`;
+                return this.finalVerdict(opts, llmFailNote);
             }
         }
 
-        // 5) None — honest no-PK
+        // 5) Synthetic fallback (default) or honest no-PK.
+        return this.finalVerdict(opts);
+    }
+
+    /**
+     * Terminal tier. When syntheticFallback is on (default), nominates the
+     * synthetic identity-hash column so no table is left PK-less (plan.md §4).
+     * When off, returns the honest 'none' verdict.
+     */
+    private finalVerdict(opts: ClassifyOptions, prefix?: string): PKClassifierResult {
+        const note = prefix ? `${prefix} ` : '';
+        if (opts.syntheticFallback ?? true) {
+            return {
+                Confident: true,
+                Nominee: SYNTHETIC_PK_FIELD_NAME,
+                NomineeFields: [SYNTHETIC_PK_FIELD_NAME],
+                Confidence: 0.7,
+                Strategy: 'synthetic',
+                Reason: `${note}No natural PK proven via universal-convention, naming, statistical, composite, or LLM strategies. Falling back to a synthetic identity-hash key "${SYNTHETIC_PK_FIELD_NAME}" so the table remains syncable (plan.md §4).`,
+            };
+        }
         return {
             Confident: false,
             Confidence: 0,
             Strategy: 'none',
-            Reason: 'No confident PK candidate via universal-convention, naming, statistical, or LLM strategies. IO row persists; MJ entity not generated until a PK resolves.',
+            Reason: `${note}No confident PK candidate via universal-convention, naming, statistical, composite, or LLM strategies, and synthetic fallback is disabled. IO row persists; MJ entity not generated until a PK resolves.`,
         };
     }
 
@@ -205,7 +277,7 @@ export class SoftPKClassifier {
         const candidates: Array<{ fieldName: string; uniqueRatio: number; nullRatio: number }> = [];
         for (const f of fields) {
             const values = rows.map(r => r[f.Name]);
-            const nonNull = values.filter(v => v !== null && v !== undefined && v !== '');
+            const nonNull = values.filter(v => this.isPresent(v));
             const nullRatio = 1 - (nonNull.length / rows.length);
             if (nullRatio > 0) continue; // PK fields are non-null
             const distinct = new Set(nonNull.map(v => String(v)));
@@ -225,6 +297,87 @@ export class SoftPKClassifier {
         }
         // Multiple unique columns → ambiguous; defer to a more specific signal
         return undefined;
+    }
+
+    /**
+     * Composite-key uniqueness: when no single column uniquely identifies a row,
+     * search for the SMALLEST set of columns (size 2..maxSetSize) whose
+     * concatenated values are unique + non-null across the sample. Returns the
+     * minimal such set; among sets of equal size, the one over the fewest-
+     * distinct-but-still-unique columns wins (deterministic by field order).
+     */
+    private compositeUniqueness(
+        fields: MJIntegrationObjectFieldEntity[],
+        rows: Array<Record<string, unknown>>,
+        maxSetSize: number
+    ): { fieldNames: string[]; confidence: number; reason: string } | undefined {
+        const stable = this.stableColumns(fields, rows);
+        if (stable.length < 2) return undefined;
+        const cap = Math.min(Math.max(maxSetSize, 2), stable.length);
+        for (let size = 2; size <= cap; size++) {
+            const winner = this.firstUniqueCombination(stable, rows, size);
+            if (winner) {
+                return {
+                    fieldNames: winner,
+                    confidence: 0.8,
+                    reason: `Composite key of ${winner.length} columns [${winner.join(', ')}] is unique + non-null across ${rows.length} sample rows (no single column was unique).`,
+                };
+            }
+        }
+        return undefined;
+    }
+
+    /** Columns that are non-null across every sample row (PK members must be non-null). */
+    private stableColumns(
+        fields: MJIntegrationObjectFieldEntity[],
+        rows: Array<Record<string, unknown>>
+    ): string[] {
+        return fields
+            .filter(f => rows.every(r => this.isPresent(r[f.Name])))
+            .map(f => f.Name);
+    }
+
+    /** First combination of `size` columns whose concatenated values are all distinct. */
+    private firstUniqueCombination(
+        columns: string[],
+        rows: Array<Record<string, unknown>>,
+        size: number
+    ): string[] | undefined {
+        for (const combo of this.combinations(columns, size)) {
+            if (this.isCombinationUnique(combo, rows)) return combo;
+        }
+        return undefined;
+    }
+
+    /** Whether the concatenated values of `combo` are distinct across all rows. */
+    private isCombinationUnique(combo: string[], rows: Array<Record<string, unknown>>): boolean {
+        const seen = new Set<string>();
+        for (const r of rows) {
+            const key = combo.map(c => `${String(r[c])}`).join(' ');
+            if (seen.has(key)) return false;
+            seen.add(key);
+        }
+        return true;
+    }
+
+    /** Lazily yield all k-combinations of `items`, preserving input order. */
+    private *combinations(items: string[], k: number): Generator<string[]> {
+        const n = items.length;
+        if (k > n || k <= 0) return;
+        const idx = Array.from({ length: k }, (_, i) => i);
+        while (true) {
+            yield idx.map(i => items[i]);
+            let p = k - 1;
+            while (p >= 0 && idx[p] === n - k + p) p--;
+            if (p < 0) return;
+            idx[p]++;
+            for (let j = p + 1; j < k; j++) idx[j] = idx[j - 1] + 1;
+        }
+    }
+
+    /** A value counts as present (non-null) for PK purposes. */
+    private isPresent(v: unknown): boolean {
+        return v !== null && v !== undefined && v !== '';
     }
 
     /** Very simple singularization — sufficient for common cases (Members→Member, Companies→Companie isn't perfect but covers most). */

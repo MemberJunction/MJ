@@ -2,6 +2,7 @@ import { RunView, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { computeContentHash } from './ContentHash.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -987,8 +988,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const externalID = pkFieldNames
             .map(name => raw[name] != null ? String(raw[name]) : '')
             .join('|');
+        // §4 synthetic-PK fallback: a record with NO usable PK value gets a deterministic,
+        // content-derived identity (identity hash) so PK-less tables are still syncable + dedupable
+        // — no table is left without a usable key. Stable across runs while the content is unchanged.
+        const resolvedID = externalID.replace(/\|/g, '').length > 0 ? externalID : computeContentHash(raw);
         return {
-            ExternalID: externalID,
+            ExternalID: resolvedID,
             ObjectType: objectType,
             Fields: raw,
         };

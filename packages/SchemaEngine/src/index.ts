@@ -49,6 +49,8 @@ export type {
   SQLValidationResult,
   IRSUCodeGenRunner,
   RSUPendingWork,
+  RSUEntityNotCreated,
+  RSUCodeGenEntityVerdict,
 } from './RuntimeSchemaManager.js';
 
 // ─── Metrics & Observability ────────────────────────────────────────

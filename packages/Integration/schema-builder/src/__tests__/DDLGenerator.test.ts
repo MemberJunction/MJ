@@ -200,6 +200,29 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('ALTER COLUMN "Email" SET NOT NULL');
         });
 
+        it('Bug 5a: PostgreSQL ALTER COLUMN drops dependent views first (named-tag DO block)', () => {
+            const mod: ColumnModification = {
+                ColumnName: 'Email', OldType: 'TEXT', NewType: 'BOOLEAN', OldNullable: true, NewNullable: true,
+            };
+            const sql = gen.GenerateAlterTableAlterColumn('hubspot', 'Contact', mod, 'postgresql');
+            // A DO block that discovers + drops views depending on this table precedes the ALTER, so
+            // PG won't reject the type change with "cannot alter type of a column used by a view".
+            expect(sql).toContain('DO $mj_dropviews$');
+            expect(sql).toContain('$mj_dropviews$;');
+            expect(sql).toContain("WHERE sn.nspname = 'hubspot' AND st.relname = 'Contact'");
+            expect(sql).toContain('DROP VIEW IF EXISTS %I.%I CASCADE');
+            // The DO block comes BEFORE the ALTER.
+            expect(sql.indexOf('DO $mj_dropviews$')).toBeLessThan(sql.indexOf('ALTER COLUMN "Email" TYPE BOOLEAN'));
+        });
+
+        it('SQL Server ALTER COLUMN does NOT emit the PG view-drop block', () => {
+            const mod: ColumnModification = {
+                ColumnName: 'Email', OldType: 'NVARCHAR(100)', NewType: 'NVARCHAR(255)', OldNullable: true, NewNullable: true,
+            };
+            const sql = gen.GenerateAlterTableAlterColumn('hubspot', 'Contact', mod, 'sqlserver');
+            expect(sql).not.toContain('mj_dropviews');
+        });
+
         it('should generate PostgreSQL DROP NOT NULL when making nullable', () => {
             const mod: ColumnModification = {
                 ColumnName: 'Email',

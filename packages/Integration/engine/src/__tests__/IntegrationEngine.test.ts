@@ -155,6 +155,10 @@ function createMockConnector(fetchResult: FetchBatchResult): BaseIntegrationConn
         DiscoverFields: vi.fn<[MJCompanyIntegrationEntity, string, UserInfo], Promise<ExternalFieldSchema[]>>().mockResolvedValue([]),
         FetchChanges: vi.fn<[FetchContext], Promise<FetchBatchResult>>().mockResolvedValue(fetchResult),
         GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+        // §7/§10 contract defaults (real connectors inherit these from BaseIntegrationConnector).
+        RateLimitPolicy: null,
+        ExtractRetryAfterMs: () => undefined,
+        PostProcessRecord: (r: ExternalRecord) => r,
     } as unknown as BaseIntegrationConnector;
 }
 
@@ -442,6 +446,9 @@ describe('IntegrationEngine', () => {
                 return { Records: batch2Records, HasMore: false, NewWatermarkValue: 'wm-2' };
             }),
             GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+            RateLimitPolicy: null,
+            ExtractRetryAfterMs: () => undefined,
+            PostProcessRecord: (r: ExternalRecord) => r,
         } as unknown as BaseIntegrationConnector;
 
         const companyIntegration = createMockCompanyIntegration();

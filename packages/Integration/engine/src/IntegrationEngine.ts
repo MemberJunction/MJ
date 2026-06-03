@@ -39,6 +39,8 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { RateLimiter } from './RateLimiter.js';
+import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
@@ -520,9 +522,41 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             entityMaps,
             integration,
             connector,
-            fullSync: options?.FullSync ?? false,
+            // Explicit caller request wins; otherwise honor the integration's periodic-reconcile cadence.
+            fullSync: options?.FullSync ?? await this.resolveScheduledFullSync(companyIntegration, contextUser),
             syncDirection: options?.SyncDirection,
         };
+    }
+
+    /**
+     * Periodic full-reconcile cadence (plan §C5: "periodic full reconcile for hard deletes"). When the
+     * caller did NOT explicitly request FullSync, an integration can opt into automatic periodic full
+     * reconciles via CompanyIntegration.Configuration {"fullSyncEvery": N}: every Nth completed run
+     * (and the first) does a full fetch + orphan/delete-detection instead of a watermark-incremental
+     * pull, so hard-deletes upstream are reclaimed on a schedule without the caller tracking cadence.
+     * Zero cost when unset (no DB read); returns false on N<=1 / unset / any error (incremental — no
+     * behavior change).
+     */
+    private async resolveScheduledFullSync(companyIntegration: MJCompanyIntegrationEntity, contextUser: UserInfo): Promise<boolean> {
+        try {
+            const raw = companyIntegration.Configuration;
+            if (!raw) return false;
+            const parsed = JSON.parse(raw) as { fullSyncEvery?: number };
+            const every = Number(parsed.fullSyncEvery);
+            if (!Number.isFinite(every) || every <= 1) return false;
+            const rv = new RunView();
+            const runs = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Company Integration Runs',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegration.ID}' AND Status='Completed'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, contextUser);
+            if (!runs.Success) return false;
+            // Every Nth completed run (and the first, when the count is 0) is a full reconcile.
+            return (runs.Results.length % Math.floor(every)) === 0;
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -590,8 +624,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Per-map processing. Extracted so it can run sequentially OR concurrently within a
         // dependency layer. Aggregate mutations run when each promise resolves — atomic under
         // single-threaded async, so concurrent maps in a layer are safe.
-        const processOne = async (entityMap: ICompanyIntegrationEntityMap): Promise<void> => {
-            if (abortSignal?.aborted) return;
+        const processOne = async (entityMap: ICompanyIntegrationEntityMap): Promise<boolean> => {
+            if (abortSignal?.aborted) return true;
             const i = globalIndex++;
             const mapStartTime = Date.now();
             const direction = config.syncDirection ?? entityMap.SyncDirection ?? 'Pull';
@@ -623,6 +657,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     recordsErrored: mapResult.RecordsErrored,
                 });
                 this.checkSecondLayerEmpty(entityMap, mapResult, depGraph, processedByIoId, ioNameById, ioCategoryById, logger);
+                return mapResult.Success;
             } catch (err) {
                 const objName = entityMap.ExternalObjectName ?? entityMap.ID;
                 const errMsg = err instanceof Error ? err.message : String(err);
@@ -657,6 +692,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     RecordsSkipped: 0,
                     Duration: Date.now() - mapStartTime,
                 });
+                return false;
             }
         };
 
@@ -667,6 +703,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // parallelism via CompanyIntegration.Configuration {"syncConcurrency": N}.
         const layers = this.buildEntityMapDependencyLayers(config, logger);
         const concurrency = this.getSyncConcurrency(config);
+        // §7 smart-but-careful peak parallelization: an AIMD controller governs the in-flight cap
+        // PER LAYER — start at the configured syncConcurrency, ramp UP toward the connector's
+        // MaxConcurrencyHint on clean maps, cut on map failure. With no hint and default
+        // syncConcurrency=1, min=max=1 → strictly sequential (unchanged behavior). The per-request
+        // RateLimiter is the backstop that keeps the source within its real rate as parallelism rises.
+        const maxConcurrency = Math.max(concurrency, config.connector.MaxConcurrencyHint ?? concurrency);
+        const concController = new AdaptiveConcurrencyController({ start: concurrency, min: 1, max: maxConcurrency });
 
         // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
         // record count + the FK dependency graph, so an association/dependent object that fetches
@@ -690,7 +733,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 aggregate.ErrorMessage = 'Sync cancelled by user';
                 break;
             }
-            await this.runBounded(layer, concurrency, processOne);
+            await RunAdaptive(layer, async (m) => {
+                const ok = await processOne(m);
+                return { ok, throttled: !ok };
+            }, concController);
         }
 
         return aggregate;
@@ -869,7 +915,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /** Per-integration request-spacing chain for the rate limiter (keyed by IntegrationID → last scheduled time). */
-    private readonly _requestChains = new Map<string, Promise<number>>();
+    private readonly _rateLimiters = new Map<string, RateLimiter>();
 
     /** Minimum ms between outbound requests for this integration (Integration.BatchRequestWaitTime; 0 = disabled). */
     private getRequestSpacingMs(config: RunConfiguration): number {
@@ -890,20 +936,44 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * vendor's rate limit.
      */
     private async rateLimit(config: RunConfiguration): Promise<void> {
-        const minMs = this.getRequestSpacingMs(config);
-        if (minMs <= 0) return;
+        await this.getRateLimiter(config).Acquire(config.companyIntegration.IntegrationID);
+    }
+
+    /**
+     * Adaptive token-bucket limiter for this integration (plan.md §7 peak-aware rate limiting),
+     * lazily created and configured from the connector's RateLimitPolicy — or, when the connector
+     * declares none, from Integration.BatchRequestWaitTime (spacing → tokens/sec). One bucket per
+     * IntegrationID, shared across the run's objects so concurrent fetches stay within the source's
+     * real limit. {@link reportRateOutcome} feeds 429s/successes back so the rate auto-tunes (AIMD).
+     */
+    private getRateLimiter(config: RunConfiguration): RateLimiter {
         const key = config.companyIntegration.IntegrationID;
-        const prev = this._requestChains.get(key) ?? Promise.resolve(0);
-        const nextP = prev.then(async (lastAt) => {
-            const now = Date.now();
-            const scheduled = Math.max(now, lastAt + minMs);
-            const wait = scheduled - now;
-            if (wait > 0) await new Promise<void>(r => setTimeout(r, wait));
-            return scheduled;
-        });
-        // Keep the chain alive even if a turn rejects (it won't here, but be defensive).
-        this._requestChains.set(key, nextP.catch(() => Date.now()));
-        await nextP;
+        let rl = this._rateLimiters.get(key);
+        if (!rl) {
+            const policy = config.connector.RateLimitPolicy;
+            const spacingMs = this.getRequestSpacingMs(config);
+            const tokensPerSec = policy?.TokensPerSec ?? (spacingMs > 0 ? 1000 / spacingMs : 10);
+            rl = new RateLimiter({
+                TokensPerSec: tokensPerSec,
+                Burst: policy?.Burst,
+                ThrottleBackoffFactor: policy?.ThrottleBackoffFactor,
+            });
+            this._rateLimiters.set(key, rl);
+        }
+        return rl;
+    }
+
+    /**
+     * Feed a fetch outcome back to the integration's adaptive limiter. No `throttledErr` = a clean
+     * response → ramp the rate up; a rate-limit error → back off (honoring the connector's parsed
+     * Retry-After). Other errors are ignored (don't ramp, don't back off).
+     */
+    private reportRateOutcome(config: RunConfiguration, throttledErr?: unknown): void {
+        const rl = this._rateLimiters.get(config.companyIntegration.IntegrationID);
+        if (!rl) return;
+        const key = config.companyIntegration.IntegrationID;
+        if (throttledErr === undefined) { rl.ReportSuccess(key); return; }
+        rl.ReportThrottle(key, config.connector.ExtractRetryAfterMs(throttledErr));
     }
 
     /**
@@ -1001,6 +1071,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let currentPage: number | undefined;
         let currentOffset: number | undefined;
         let currentCursor: string | undefined;
+        let currentAfterKey: string | undefined;   // §7 keyset/seek resume position (last-seen StableOrderingKey)
         let batchCount = 0;
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
@@ -1031,6 +1102,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 CurrentPage: currentPage,
                 CurrentOffset: currentOffset,
                 CurrentCursor: currentCursor,
+                AfterKeyValue: currentAfterKey ?? null,   // §7 keyset/seek resume (connector opt-in)
             };
 
             logger?.emit('sync.fetch.batch.start', {
@@ -1047,8 +1119,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             try {
                 await this.rateLimit(config);
                 batch = await config.connector.FetchChanges(ctx);
+                this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
+                // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
+                // record values to their resolved formats before mapping + write.
+                if (batch.Records.length > 0) {
+                    batch.Records = batch.Records.map(r => config.connector.PostProcessRecord(r));
+                }
             } catch (fetchErr) {
                 const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+                // A throttle (429 / rate-limit) backs the adaptive limiter off (honoring Retry-After);
+                // other errors don't touch the rate.
+                if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') this.reportRateOutcome(config, fetchErr);
                 console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
                 logger?.emit('sync.record.error', {
                     phase: 'fetch',
@@ -1173,6 +1254,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             currentPage = batch.NextPage;
             currentOffset = batch.NextOffset;
             currentCursor = batch.NextCursor;
+            currentAfterKey = batch.NextAfterKeyValue ?? currentAfterKey;   // §7 advance keyset position
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
@@ -1209,7 +1291,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // means fetchedExternalIDs is incomplete; running deletion on it would be catastrophic.
         if (config.fullSync && fetchedExternalIDs.size > 0 && fetchCompletedCleanly) {
             await this.DeleteOrphanedRecords(
-                config.companyIntegration, entityMap, fetchedExternalIDs, result, contextUser
+                config.companyIntegration, entityMap, fetchedExternalIDs, result, contextUser, logger
             );
         }
 
@@ -1709,7 +1791,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         fetchedExternalIDs: Set<string>,
         result: SyncResult,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        logger?: SyncLogger
     ): Promise<void> {
         const rv = new RunView();
         const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
@@ -1727,6 +1810,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (orphans.length === 0) return;
 
         console.log(`[IntegrationEngine] Orphan detection for ${entityMap.ExternalObjectName}: ${orphans.length} records in MJ not found in external system`);
+        // Surface delete-detection in the structured stream (previously console-only). The orphan
+        // COUNT is already in the run counts via RecordsDeleted, but a dedicated warning makes a
+        // large/unexpected count visible over GraphQL — the early signal of an incomplete upstream
+        // fetch silently archiving live records.
+        logger?.warning(
+            entityMap.ExternalObjectName ?? entityMap.ID,
+            'ORPHANS_DETECTED',
+            `${orphans.length} record(s) exist in MJ but were not returned by the external system on this full sync — they will be archived/deleted (delete-detection). A large or unexpected count can indicate an incomplete upstream fetch, so review before trusting the deletions.`,
+            { orphanCount: orphans.length },
+        );
 
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
@@ -2177,6 +2270,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const hasField = (n: string) => fields.some(f => f.Name === n);
             if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
             if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
+            // Explicit, queryable tombstone (plan §2.5) — distinct from parsing SyncStatus='Archived'.
+            if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+            if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
             const archived = await entity.Save();
             if (!archived) {
                 const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
@@ -2366,6 +2462,38 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // PrefetchContentHashes / UpdateRecord). No-op on tables predating the column.
         if (hasField(CONTENT_HASH_COLUMN)) {
             entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
+        }
+
+        // ── Per-record sync ledger (plan §2.5) ───────────────────────────────────────
+        // The external system's version token for optimistic-concurrency on bidirectional
+        // push (detects "external changed since we last saw it"). HubSpot et al. expose this
+        // as the modified timestamp; sources with no version token leave it null (honest gap).
+        const externalVersion = record.ExternalRecord?.ModifiedAt
+            ? new Date(record.ExternalRecord.ModifiedAt).toISOString()
+            : null;
+        if (hasField('__mj_integration_ExternalVersion')) {
+            entity.Set('__mj_integration_ExternalVersion', externalVersion);
+        }
+        // The watermark value we observed for THIS record (per-record, vs the entity-map-level
+        // CompanyIntegrationSyncWatermark) — lets a record carry its own last-seen change marker.
+        if (hasField('__mj_integration_LastSeenModifiedValue')) {
+            entity.Set('__mj_integration_LastSeenModifiedValue', externalVersion);
+        }
+        // Last time this record was confirmed against the source (every successful pull-apply
+        // reconciles it). NOTE: currently updated on full AND incremental syncs; a full-only
+        // refinement (to find records unseen since the last full reconcile) is a documented follow-up.
+        if (hasField('__mj_integration_LastReconciledAt')) {
+            entity.Set('__mj_integration_LastReconciledAt', new Date().toISOString());
+        }
+        // Which side last wrote this row. This is the pull-apply path → 'Pull'. (A bidirectional
+        // push-back path sets 'Push'.) Lets conflict handling know the last writer direction.
+        if (hasField('__mj_integration_LastWriterDirection')) {
+            entity.Set('__mj_integration_LastWriterDirection', 'Pull');
+        }
+        // A live (non-deleted) record. The soft-delete path flips this to true + stamps
+        // DeletedDetectedAt — an explicit, queryable tombstone instead of parsing SyncStatus text.
+        if (hasField('__mj_integration_IsTombstoned')) {
+            entity.Set('__mj_integration_IsTombstoned', false);
         }
     }
 

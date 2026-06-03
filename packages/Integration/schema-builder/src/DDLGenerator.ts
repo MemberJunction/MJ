@@ -223,7 +223,32 @@ export class DDLGenerator {
         // implicitly cast to the new one (e.g. text → boolean). Always-valid, so emitted
         // unconditionally. Mirrors postgresqlDialect.AlterColumnDDL.
         const col = q(mod.ColumnName);
-        return `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${col} TYPE ${mod.NewType} USING ${col}::${mod.NewType},\n    ALTER COLUMN ${col} ${mod.NewNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`;
+        const alter = `ALTER TABLE ${fullTable}\n    ALTER COLUMN ${col} TYPE ${mod.NewType} USING ${col}::${mod.NewType},\n    ALTER COLUMN ${col} ${mod.NewNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`;
+        // Bug 5a: PG forbids ALTER COLUMN TYPE while a view depends on the column. RSU runs CodeGen
+        // immediately after the migration, which recreates the integration views — so we drop the
+        // dependent views here (runtime catalog discovery via a DO block) and let CodeGen rebuild
+        // them. The NAMED dollar tag ($mj_dropviews$) keeps the block intact through the $$-aware
+        // RSU migration chunker. schemaName/tableName are already ValidateIdentifier-checked above,
+        // so embedding them as literals is injection-safe.
+        const dropDependentViews =
+            `DO $mj_dropviews$\n` +
+            `DECLARE v RECORD;\n` +
+            `BEGIN\n` +
+            `  FOR v IN\n` +
+            `    SELECT DISTINCT dn.nspname AS s, dv.relname AS n\n` +
+            `    FROM pg_depend d\n` +
+            `    JOIN pg_rewrite rw ON rw.oid = d.objid\n` +
+            `    JOIN pg_class dv ON dv.oid = rw.ev_class AND dv.relkind = 'v'\n` +
+            `    JOIN pg_namespace dn ON dn.oid = dv.relnamespace\n` +
+            `    JOIN pg_class st ON st.oid = d.refobjid\n` +
+            `    JOIN pg_namespace sn ON sn.oid = st.relnamespace\n` +
+            `    WHERE sn.nspname = '${schemaName}' AND st.relname = '${tableName}' AND dv.oid <> st.oid\n` +
+            `  LOOP\n` +
+            `    EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v.s, v.n);\n` +
+            `  END LOOP;\n` +
+            `END\n` +
+            `$mj_dropviews$;`;
+        return `${dropDependentViews}\n${alter}`;
     }
 
     private StandardColumns(platform: DatabasePlatform): string[] {
@@ -235,6 +260,12 @@ export class DDLGenerator {
                 `    ${q('__mj_integration_LastSyncedSnapshot')} NVARCHAR(MAX) NULL`,
                 `    ${q('__mj_integration_SyncMessage')} NVARCHAR(MAX) NULL`,
                 `    ${q('__mj_integration_ContentHash')} NVARCHAR(64) NULL`,
+                `    ${q('__mj_integration_ExternalVersion')} NVARCHAR(255) NULL`,
+                `    ${q('__mj_integration_LastSeenModifiedValue')} NVARCHAR(255) NULL`,
+                `    ${q('__mj_integration_LastReconciledAt')} DATETIMEOFFSET NULL`,
+                `    ${q('__mj_integration_LastWriterDirection')} NVARCHAR(10) NULL`,
+                `    ${q('__mj_integration_IsTombstoned')} BIT NOT NULL DEFAULT 0`,
+                `    ${q('__mj_integration_DeletedDetectedAt')} DATETIMEOFFSET NULL`,
             ];
         }
         return [
@@ -243,6 +274,12 @@ export class DDLGenerator {
             `    ${q('__mj_integration_LastSyncedSnapshot')} TEXT NULL`,
             `    ${q('__mj_integration_SyncMessage')} TEXT NULL`,
             `    ${q('__mj_integration_ContentHash')} VARCHAR(64) NULL`,
+            `    ${q('__mj_integration_ExternalVersion')} VARCHAR(255) NULL`,
+            `    ${q('__mj_integration_LastSeenModifiedValue')} VARCHAR(255) NULL`,
+            `    ${q('__mj_integration_LastReconciledAt')} TIMESTAMPTZ NULL`,
+            `    ${q('__mj_integration_LastWriterDirection')} VARCHAR(10) NULL`,
+            `    ${q('__mj_integration_IsTombstoned')} BOOLEAN NOT NULL DEFAULT FALSE`,
+            `    ${q('__mj_integration_DeletedDetectedAt')} TIMESTAMPTZ NULL`,
         ];
     }
 }

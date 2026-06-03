@@ -36,6 +36,10 @@ const SYS_COLS = [
     '__mj_integration_SyncStatus', '__mj_integration_LastSyncedAt',
     '__mj_integration_LastSyncedSnapshot', '__mj_integration_SyncMessage',
     '__mj_integration_ContentHash',
+    // Per-record sync ledger (plan §2.5)
+    '__mj_integration_ExternalVersion', '__mj_integration_LastSeenModifiedValue',
+    '__mj_integration_LastReconciledAt', '__mj_integration_LastWriterDirection',
+    '__mj_integration_IsTombstoned', '__mj_integration_DeletedDetectedAt',
 ];
 
 // ─── Fixture: HubSpot-shaped source schema ──────────────────────────────────
