@@ -219,11 +219,10 @@ export class GeminiLLM extends BaseLLM {
             const history = tempMessages.slice(0, -1);
             const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
 
-            // Prepare the final message with system instructions prepended to the last user message
+            // The system prompt is passed via systemInstruction (below), NOT bundled into the user
+            // message — bundling put the stable prompt AFTER the variable history, defeating Gemini's
+            // implicit prompt caching. The final message is just the latest user turn's parts.
             let finalMessageParts: Part[] = [];
-            if (systemInstructionText) {
-                finalMessageParts.push({ text: systemInstructionText });
-            }
             if (lastMessage) {
                 finalMessageParts.push(...lastMessage.parts);
             }
@@ -274,18 +273,28 @@ export class GeminiLLM extends BaseLLM {
             // Ensure Gemini client is initialized
             const client = await this.ensureGeminiClient();
 
-            // Create chat with history (all messages except the last)
-            // Don't use systemInstruction parameter - we're bundling it with the user message
+            // Pass the system prompt as systemInstruction (a plain string — a string[] is invalid and
+            // was the original reason this was bundled into the message). It becomes the stable,
+            // cacheable prefix so Gemini's implicit cache can engage across turns.
+            // NOTE: @google/genai's sendMessage `config` REPLACES (not merges) the session config, so
+            // systemInstruction must ride in the per-request config (modelOptions) — that's the one
+            // that applies. We intentionally do NOT fold chatConfig (thinkingConfig) in here: that
+            // preserves the prior thinking behavior exactly (it stays on the session config) and avoids
+            // sending a thinking level some models reject.
+            const requestConfig: Record<string, unknown> = { ...modelOptions };
+            if (systemInstructionText) {
+                requestConfig.systemInstruction = systemInstructionText;
+            }
+
             const chat = client.chats.create({
                 config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
                 model: modelName,
                 history: history
             });
 
-            // Send the last message with system instructions prepended
             const result = await chat.sendMessage({
                 message: finalMessageParts,
-                config: modelOptions
+                config: requestConfig
             });
 
             // Check for blocked response or empty candidates
@@ -357,12 +366,30 @@ export class GeminiLLM extends BaseLLM {
             }
 
             const endTime = new Date();
+
+            // Gemini's cache convention: `promptTokenCount` INCLUDES cached tokens, reported
+            // separately as `cachedContentTokenCount`. Normalize to the uniform ModelUsage contract:
+            // promptTokens must be UNCACHED/net-new only, so subtract the cache-read count (clamped at
+            // 0) and record it disjointly. Gemini does not report a separate cache-write charge, so
+            // cacheWriteTokens stays 0. Full native prompt count = usage.totalInputTokens.
+            const geminiCachedTokens = result.usageMetadata?.cachedContentTokenCount ?? 0;
+            const geminiNetPromptTokens = Math.max(0, (result.usageMetadata?.promptTokenCount || 0) - geminiCachedTokens);
+            const geminiUsage = new ModelUsage(
+                geminiNetPromptTokens,
+                result.usageMetadata?.candidatesTokenCount || 0
+            );
+            geminiUsage.cacheReadTokens = geminiCachedTokens;
+
             return {
                 success: true,
                 statusText: "OK",
                 startTime: startTime,
                 endTime: endTime,
                 timeElapsed: endTime.getTime() - startTime.getTime(),
+                cacheInfo: {
+                    cacheHit: geminiCachedTokens > 0,
+                    cachedTokenCount: geminiCachedTokens
+                },
                 data: {
                     choices: [{
                         message: {
@@ -373,10 +400,7 @@ export class GeminiLLM extends BaseLLM {
                         finish_reason: finishReason || "completed",
                         index: 0
                     }],
-                    usage: new ModelUsage(
-                        result.usageMetadata?.promptTokenCount || 0,
-                        result.usageMetadata?.candidatesTokenCount || 0
-                    )
+                    usage: geminiUsage
                 },
                 errorMessage: "",
                 exception: null,
@@ -486,11 +510,10 @@ export class GeminiLLM extends BaseLLM {
         const history = tempMessages.slice(0, -1);
         const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
 
-        // Prepare the final message with system instructions prepended to the last user message
+        // System prompt is passed via systemInstruction (below), NOT bundled into the user message
+        // — bundling defeats Gemini's implicit prompt caching (stable prompt ends up after the
+        // variable history). The final message is just the latest user turn's parts.
         let finalMessageParts: Part[] = [];
-        if (systemInstructionText) {
-            finalMessageParts.push({ text: systemInstructionText });
-        }
         if (lastMessage) {
             finalMessageParts.push(...lastMessage.parts);
         }
@@ -541,18 +564,25 @@ export class GeminiLLM extends BaseLLM {
         // Ensure Gemini client is initialized
         const client = await this.ensureGeminiClient();
 
-        // Create chat with history (all messages except the last)
-        // Don't use systemInstruction parameter - we're bundling it with the user message
+        // systemInstruction (a plain string) is the stable, cacheable prefix. It must ride in the
+        // per-request config since @google/genai's sendMessage config REPLACES the session config.
+        // We do NOT fold chatConfig (thinkingConfig) in — that preserves prior thinking behavior and
+        // avoids sending a thinking level some models reject (see nonStreamingChatCompletion).
+        const requestConfig: Record<string, unknown> = { ...modelOptions };
+        if (systemInstructionText) {
+            requestConfig.systemInstruction = systemInstructionText;
+        }
+
         const chat = client.chats.create({
             config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
             model: modelName,
             history: history
         });
 
-        // Send the last message with system instructions prepended (streaming)
+        // Send the latest user message (streaming); system prompt rides in requestConfig.
         const streamResult = await chat.sendMessageStream({
             message: finalMessageParts,
-            config: modelOptions
+            config: requestConfig
         });
         
         // Return the stream for the for-await loop to work
@@ -601,13 +631,19 @@ export class GeminiLLM extends BaseLLM {
             finishReason = chunk.candidates[0].finishReason;
         }
 
-        // Extract usage from chunk if available (appears on final chunk)
+        // Extract usage from chunk if available (appears on final chunk). Normalize to the uniform
+        // ModelUsage contract: promptTokenCount INCLUDES cached, so subtract cachedContentTokenCount
+        // (clamped at 0) to get UNCACHED/net-new promptTokens; cacheReadTokens holds the disjoint
+        // cache-read subset.
         let usage = null;
         if (chunk.usageMetadata) {
+            const chunkCachedTokens = chunk.usageMetadata.cachedContentTokenCount ?? 0;
+            const chunkNetPromptTokens = Math.max(0, (chunk.usageMetadata.promptTokenCount || 0) - chunkCachedTokens);
             usage = new ModelUsage(
-                chunk.usageMetadata.promptTokenCount || 0,
+                chunkNetPromptTokens,
                 chunk.usageMetadata.candidatesTokenCount || 0
             );
+            usage.cacheReadTokens = chunkCachedTokens;
         }
 
         return {
@@ -777,6 +813,11 @@ export class GeminiLLM extends BaseLLM {
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
+        const streamCachedTokens = usage?.cacheReadTokens || 0;
+        result.cacheInfo = {
+            cacheHit: streamCachedTokens > 0,
+            cachedTokenCount: streamCachedTokens
+        };
 
         return result;
     }
