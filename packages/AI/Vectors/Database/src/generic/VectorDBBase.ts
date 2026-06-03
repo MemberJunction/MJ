@@ -135,4 +135,35 @@ export abstract class VectorDBBase {
     public BuildMetadataFilter(options: SharedIndexFilterOptions): object | undefined {
         return VectorMetadataFilter.FromOptions(options);
     }
+
+    /**
+     * Build a standard SUCCESS {@link BaseResponse}. Shared across all drivers so every
+     * provider reports results in a uniform shape.
+     *
+     * @param data - The provider-specific payload to attach to the response.
+     */
+    protected wrapSuccessResponse(data: unknown): BaseResponse {
+        return {
+            success: true,
+            message: '',
+            data,
+        };
+    }
+
+    /**
+     * Build a standard FAILURE {@link BaseResponse}.
+     *
+     * **Always** return this (never a success response) from a `catch` block — returning a
+     * success response on error silently swallows real failures and makes callers, and the
+     * vectorization pipeline, believe an operation worked when it did not.
+     *
+     * @param message - Optional human-readable error detail; falls back to a generic message.
+     */
+    protected wrapFailureResponse(message?: string): BaseResponse {
+        return {
+            success: false,
+            message: message || 'An error occurred',
+            data: null,
+        };
+    }
 }

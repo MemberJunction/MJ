@@ -6,7 +6,13 @@
     <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
          totalActions was a single inventory count; the body's KPI cards
          surface this and other metrics in their proper place. -->
-    <div actions>
+    <!-- No [actions] — this page has no primary CTA; the control bar lives in [toolbar] per §3. -->
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search actions..."
+        [Value]="searchTerm$.value"
+        (ValueChange)="onSearchChange($event)">
+      </mj-page-search>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -18,13 +24,6 @@
           (Reset)="resetFilters()">
         </mj-filter-panel>
       </mj-filter-popover>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search actions..."
-        [Value]="searchTerm$.value"
-        (ValueChange)="onSearchChange($event)">
-      </mj-page-search>
     </div>
   </mj-page-header>
 

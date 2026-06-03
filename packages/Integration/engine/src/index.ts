@@ -39,6 +39,7 @@ export type {
     CRUDContext,
     CreateRecordContext,
     UpdateRecordContext,
+    UpsertRecordContext,
     DeleteRecordContext,
     GetRecordContext,
     CRUDResult,
