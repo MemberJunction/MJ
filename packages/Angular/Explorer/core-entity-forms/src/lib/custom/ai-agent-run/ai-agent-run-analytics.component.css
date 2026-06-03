@@ -77,6 +77,10 @@
   background: var(--mj-status-warning);
 }
 
+.card-icon.cache {
+  background: var(--mj-status-info);
+}
+
 .card-content h3 {
   margin: 0 0 8px 0;
   font-size: 14px;
