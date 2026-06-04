@@ -16,6 +16,7 @@ import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { TestRunVariables, TestLogMessage, TestRunResult as EngineTestRunResult } from '@memberjunction/testing-engine-base';
 
 // ===== GraphQL Types =====
@@ -254,12 +255,17 @@ export class RunTestResolver extends ResolverBase {
         userPayload: UserPayload,
         user: UserInfo
     ): void {
+        // Keep-alive pulse so a long-running test never trips the client idle timeout.
+        // The client captures the testRunId from progress events for reconciliation.
+        const pulse = startLivenessPulse({ pubSub, sessionId: userPayload.sessionId, resolver: 'RunTestResolver' });
+
         this.executeTest(testId, verbose, environment, tags, variables, pubSub, userPayload, user)
             .catch((error: unknown) => {
                 const errorMessage = (error instanceof Error) ? error.message : 'Unknown background test execution error';
                 LogError(`🔥 Fire-and-forget test execution failed: ${errorMessage}`, undefined, error);
                 this.publishFireAndForgetError(pubSub, userPayload, testId, errorMessage);
-            });
+            })
+            .finally(() => pulse.stop());
     }
 
     /**
@@ -343,6 +349,12 @@ export class RunTestResolver extends ResolverBase {
         userPayload: UserPayload,
         user: UserInfo
     ): void {
+        // Keep-alive pulse so a long-running suite never trips the client idle timeout.
+        // (Suite reconciliation isn't wired: suite progress carries the per-test run id, not the
+        // Test Suite Run id, so the client has no handle to reconcile against — the pulse is the
+        // protection here.)
+        const pulse = startLivenessPulse({ pubSub, sessionId: userPayload.sessionId, resolver: 'RunTestResolver' });
+
         this.executeSuite(
             suiteId, verbose, environment, parallel, tags, variables,
             selectedTestIds, sequenceStart, sequenceEnd, pubSub, userPayload, user
@@ -350,7 +362,7 @@ export class RunTestResolver extends ResolverBase {
             const errorMessage = (error instanceof Error) ? error.message : 'Unknown background suite execution error';
             LogError(`🔥 Fire-and-forget suite execution failed: ${errorMessage}`, undefined, error);
             this.publishFireAndForgetSuiteError(pubSub, userPayload, suiteId, errorMessage);
-        });
+        }).finally(() => pulse.stop());
     }
 
     // ===== Result Building =====
