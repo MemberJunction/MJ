@@ -1,9 +1,12 @@
 import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
-import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
+import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
-import { FireAndForgetHelper } from "./fireAndForgetHelper";
+import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
+
+/** Mutable holder for the most recent run id observed on the PubSub stream. */
+interface RunIdRef { id?: string; }
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -311,6 +314,7 @@ export class GraphQLAIClient {
             // Enable fire-and-forget to avoid Azure proxy timeouts
             variables.fireAndForget = true;
 
+            const runIdRef: RunIdRef = {};
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
                 dataProvider: this._dataProvider,
                 mutation,
@@ -320,9 +324,11 @@ export class GraphQLAIClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
-                onMessage: params.onProgress
-                    ? (parsed) => this.forwardAgentProgress(parsed, params.onProgress!)
-                    : undefined,
+                onMessage: (parsed) => {
+                    this.captureAgentRunId(parsed, runIdRef);
+                    if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
+                },
+                onStall: () => this.reconcileAgentRun(runIdRef),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
         } catch (e) {
@@ -498,6 +504,7 @@ export class GraphQLAIClient {
             const mutation = this.buildConversationDetailMutation();
             const variables = this.prepareConversationDetailVariables(params);
 
+            const runIdRef: RunIdRef = {};
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
                 dataProvider: this._dataProvider,
                 mutation,
@@ -508,9 +515,11 @@ export class GraphQLAIClient {
                 isCompletionEvent: (parsed) =>
                     this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
-                onMessage: params.onProgress
-                    ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
-                    : undefined,
+                onMessage: (parsed) => {
+                    this.captureAgentRunId(parsed, runIdRef);
+                    if (params.onProgress) this.forwardConversationDetailProgress(parsed, params.onProgress);
+                },
+                onStall: () => this.reconcileAgentRun(runIdRef),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
         } catch (e) {
@@ -621,6 +630,59 @@ export class GraphQLAIClient {
             parsed.type === 'StreamingContent' &&
             data?.type === 'complete' &&
             data?.conversationDetailId === conversationDetailId;
+    }
+
+    // ===== Agent Run Reconciliation (idle-stall recovery) =====
+
+    /**
+     * Capture the agent run id from any PubSub message so the reconciliation hook
+     * has a handle even before progress flows. Heartbeats carry `data.runId`;
+     * progress/streaming/completion carry `data.agentRunId`. Ignores the 'unknown'
+     * placeholder used by background error events.
+     */
+    private captureAgentRunId(parsed: Record<string, unknown>, ref: RunIdRef): void {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const id = (data?.agentRunId ?? data?.runId) as string | undefined;
+        if (id && id !== 'unknown') {
+            ref.id = id;
+        }
+    }
+
+    /**
+     * Reconcile against the persisted AI Agent Run when the client idle timer
+     * expires. 'Running' means execution is genuinely in progress (keep waiting);
+     * any other status means executeAIAgent already returned (resolve from the
+     * record — recovers a completion event lost to a socket blip).
+     */
+    private async reconcileAgentRun(ref: RunIdRef): Promise<StallDecision<ExecuteAgentResult>> {
+        if (!ref.id) {
+            return 'continue'; // no handle yet — bounded by maxStallReconciles
+        }
+
+        const view = await this._dataProvider.RunView<MJAIAgentRunEntityExtended>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${ref.id}'`,
+            ResultType: 'entity_object',
+            BypassCache: true, // true DB state — server wrote this via a different provider
+        });
+
+        const run = view.Success ? view.Results?.[0] : undefined;
+        if (!run) {
+            return 'continue'; // transient read miss — bounded by maxStallReconciles
+        }
+
+        if (run.Status === 'Running') {
+            return 'continue';
+        }
+
+        const success = run.Status === 'Completed' || run.Status === 'Paused' || run.Status === 'AwaitingFeedback';
+        return {
+            resolve: {
+                success,
+                agentRun: run,
+                errorMessage: run.ErrorMessage ?? undefined,
+            } as ExecuteAgentResult,
+        };
     }
 
     // ===== Agent Result Extraction =====
