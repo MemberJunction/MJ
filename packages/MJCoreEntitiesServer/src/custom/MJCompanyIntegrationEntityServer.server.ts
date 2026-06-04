@@ -194,7 +194,7 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
 
         // Pipeline persists IO/IOF rows — refresh metadata caches so subsequent
         // reads see them without an MJAPI restart.
-        try { await new Metadata().Refresh(); } catch { /* best-effort */ }
+        try { await (provider ?? new Metadata()).Refresh(); } catch { /* best-effort */ }
         try { await IntegrationEngine.Instance.Config(true, user, provider); } catch { /* best-effort */ }
 
         LogStatus(

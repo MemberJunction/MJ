@@ -1210,7 +1210,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Refresh the metadata cache so subsequent reads see the new IO/IOF
             // rows the pipeline just wrote.  Without this the engine returns the
             // pre-pipeline snapshot until the next process bootstrap.
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             await md.Refresh();
             await IntegrationEngine.Instance.Config(true, user, provider);
 
@@ -2202,7 +2202,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
         // Refresh in-memory caches so downstream queries (object picker,
         // ApplyAll, etc.) see the just-written IO/IOF rows.
-        await new Metadata().Refresh();
+        await (provider ?? new Metadata()).Refresh();
         await IntegrationEngine.Instance.Config(true, user, provider);
 
         return {
