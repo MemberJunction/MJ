@@ -426,13 +426,13 @@ export class AgentRunner {
             // - Step 7 (media) creates new AIAgentRunMedia and ConversationDetailAttachment records —
             //   entirely separate from steps 5 and 6
             //
-            // IMPORTANT: All three MUST complete before the resolver publishes the 'complete' event,
-            // because the client reloads all conversation data from the DB when it receives that event.
-            // If any write hasn't flushed yet, the client would see stale data. Promise.all guarantees
-            // all three finish before we return.
+            // IMPORTANT: All of these MUST complete before the resolver publishes the 'complete'
+            // event, because the client reloads all conversation data from the DB when it receives
+            // that event. If any write hasn't flushed yet, the client would see stale data. They run
+            // SEQUENTIALLY (not in parallel) — see the dispatch note below the definitions.
 
-            // Step 5: Update agent response detail with final result (async)
-            const updateDetailPromise = (async () => {
+            // Step 5: Update agent response detail with final result.
+            const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
                     // Wait for any in-flight progress save to complete
                     // EnsureSaveComplete() resolves immediately if no save in progress
@@ -469,10 +469,10 @@ export class AgentRunner {
                     }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
-            })();
+            };
 
-            // Step 6: Process artifacts if requested and agent succeeded (async)
-            const processArtifactsPromise = (async () => {
+            // Step 6: Process artifacts if requested and agent succeeded.
+            const processArtifacts = async () => {
                 const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
                 if (shouldCreateArtifacts && agentResult.success && agentResult.payload) {
                     return this.ProcessAgentArtifacts(
@@ -484,10 +484,10 @@ export class AgentRunner {
                     );
                 }
                 return undefined;
-            })();
+            };
 
-            // Step 6b: Process file artifacts produced by file-generation actions (async)
-            const processFileArtifactsPromise = (async () => {
+            // Step 6b: Process file artifacts produced by file-generation actions.
+            const processFileArtifacts = async () => {
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
                     await this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
@@ -498,10 +498,10 @@ export class AgentRunner {
                         params.agent.AcceptUnregisteredFiles
                     );
                 }
-            })();
+            };
 
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
-            const saveMediaPromise = (async () => {
+            const saveMedia = async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
                     const mediaToSave = agentResult.mediaOutputs;
                     LogStatus(`Processing ${mediaToSave.length} media output(s)`);
@@ -532,17 +532,22 @@ export class AgentRunner {
                     return ids;
                 }
                 return [];
-            })();
+            };
 
-            // Wait for all three post-execution operations to complete before returning.
-            // The resolver publishes the 'complete' event after this returns, so the client
-            // is guaranteed to see all DB writes when it reloads.
-            const [, artifactInfo] = await Promise.all([
-                updateDetailPromise,
-                processArtifactsPromise,
-                processFileArtifactsPromise,
-                saveMediaPromise
-            ]);
+            // Run these post-execution DB writes SEQUENTIALLY, not concurrently. They all mutate
+            // entities through the same request-scoped provider/connection, and the file/media path
+            // (createArtifactWithVersion) wraps its writes in an explicit BeginTransaction/Commit on
+            // that shared connection. Running them in parallel let the media transaction interleave
+            // with the report path's artifact + ConversationDetailArtifact saves, so the report's
+            // junction Save intermittently failed — the throw was swallowed and the report artifact
+            // was left orphaned (no conversation-detail link), surfacing in chat as "only the image,
+            // no report." Sequential execution removes the interleave; all writes still complete
+            // before we return, so the resolver's 'complete' event still guarantees the client sees
+            // every write.
+            await updateDetail();
+            const artifactInfo = await processArtifacts();
+            await processFileArtifacts();
+            await saveMedia();
 
             return {
                 agentResult,
