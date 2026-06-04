@@ -88,6 +88,13 @@ export interface ResponseTypeInclusionRules {
      * @default true
      */
     artifactToolCalls?: boolean;
+
+    /**
+     * Include the pipeline field in the response interface.
+     * Auto-aligns with includePipelineDocs unless explicitly set.
+     * @default true
+     */
+    pipeline?: boolean;
 }
 
 /**
@@ -101,7 +108,8 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     forEach: true,
     while: true,
     scratchpad: true,
-    artifactToolCalls: true
+    artifactToolCalls: true,
+    pipeline: true
 };
 
 /**
@@ -270,6 +278,14 @@ export interface LoopAgentTypePromptParams {
      */
     includeArtifactToolsDocs?: boolean;
 
+    /**
+     * Include tool-pipeline documentation in the prompt (the `_PIPELINE_TOOLS` block).
+     * Only emitted when at least one pipeline source — an Action or artifact tool — is available.
+     * Disable for agents that should never compose pipelines.
+     * @default true
+     */
+    includePipelineDocs?: boolean;
+
     // === Content Limiting ===
 
     /**
@@ -310,6 +326,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
+    includePipelineDocs: true,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1
 };

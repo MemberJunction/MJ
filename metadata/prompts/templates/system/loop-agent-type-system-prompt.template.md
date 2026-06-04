@@ -39,9 +39,13 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
+{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
+        /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
+        pipeline?: { steps: Array<Record<string, unknown>> };
+{% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
         clientTools?: Array<{ Name: string; Params: Record<string, unknown> }>;
@@ -600,6 +604,10 @@ your visible history; just read it.
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}
+{{ _PIPELINE_TOOLS | safe }}
 {% endif %}
 
 {# ── Volatile blocks intentionally placed LAST ──────────────────────────────
