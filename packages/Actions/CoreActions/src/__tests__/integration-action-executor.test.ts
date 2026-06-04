@@ -30,13 +30,13 @@ const mockConnector = {
 const mockRunViewResults: Map<string, { Success: boolean; Results: unknown[] }> = new Map();
 
 function defaultRunViewResult(entityName: string): { Success: boolean; Results: unknown[] } {
-    if (entityName === 'Integrations') {
+    if (entityName === 'MJ: Integrations') {
         return {
             Success: true,
             Results: [{ Name: 'TestCRM', ClassName: 'TestConnector' }],
         };
     }
-    if (entityName === 'Company Integrations') {
+    if (entityName === 'MJ: Company Integrations') {
         return {
             Success: true,
             Results: [{ ID: 'ci-1', Name: 'TestCRM Default' }],
@@ -618,7 +618,7 @@ describe('IntegrationActionExecutor', () => {
 
     describe('Integration resolution', () => {
         it('should return EXECUTOR_ERROR when integration is not found', async () => {
-            mockRunViewResults.set('Integrations', { Success: true, Results: [] });
+            mockRunViewResults.set('MJ: Integrations', { Success: true, Results: [] });
             const result = await run(executor, makeParams('Get', 'contacts', 'NonExistentCRM', [
                 param('ExternalID', 'ext-1'),
             ]));
@@ -630,7 +630,7 @@ describe('IntegrationActionExecutor', () => {
 
     describe('CompanyIntegration resolution', () => {
         it('should return EXECUTOR_ERROR when no CompanyIntegration exists', async () => {
-            mockRunViewResults.set('Company Integrations', { Success: true, Results: [] });
+            mockRunViewResults.set('MJ: Company Integrations', { Success: true, Results: [] });
             const result = await run(executor, makeParams('Get', 'contacts', 'TestCRM', [
                 param('ExternalID', 'ext-1'),
             ]));
