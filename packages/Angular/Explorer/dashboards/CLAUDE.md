@@ -14,15 +14,22 @@ Every new dashboard in this package must use **`<mj-page-layout>`** + **`<mj-pag
                         single hero metric. NEVER buttons. -->
       <mj-stat-badge [Count]="filteredItems.length" [Total]="items.length" Label="items" />
     </div>
-    <div actions>  <!-- Verbs, ordered left → right: state controls
-                        (filter-popover, view-toggle) → secondary buttons
-                        (Refresh, Export) → primary CTA (rightmost).
-                        Cap: 4 items. Tab-nav goes in [toolbar], not here. -->
+    <div actions>  <!-- Secondary buttons (Refresh, Export) → the one primary
+                        CTA (rightmost). Filter + view-toggle live in the
+                        [toolbar] control bar (§3 concise model), NOT here. -->
       <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()" />
       <button mjButton variant="primary" size="sm" (click)="create()">+ New</button>
     </div>
-    <div toolbar>  <!-- Secondary row: search, filter chips, tab-nav. -->
+    <div toolbar>  <!-- Control bar: search · Filter · view. ALL filters live
+                        behind the ONE Filter button (§3 concise model) — no
+                        inline quick-filter chips, no applied-filter chip row. -->
       <mj-page-search [Value]="searchTerm" (ValueChange)="onSearch($event)" />
+      <mj-filter-popover Label="Filters" Icon="fa-solid fa-filter"
+          [ActiveCount]="activeFilterCount" [ShowClearAll]="activeFilterCount > 0"
+          (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel [Fields]="filterFields" [Values]="filterValues"
+          (ValuesChange)="onFilterValuesChange($event)" (Reset)="resetFilters()" />
+      </mj-filter-popover>
     </div>
   </mj-page-header>
   <mj-page-body>
@@ -42,16 +49,17 @@ Every new dashboard in this package must use **`<mj-page-layout>`** + **`<mj-pag
 **For pages with a section rail** (multi-section dashboards like AI Analytics, Knowledge Hub Configuration / Analytics / Tags / Classify): use **`<mj-left-nav>`** + **`<mj-left-nav-content>`** inside the body, and render a per-section **`<mj-page-header-interior>`** for section identity + section-specific controls. The outer chrome stays still as the user switches sections; only the inner card rebuilds. `<mj-left-nav>` supports both flat sections and trees (Testing Explorer is the canonical tree consumer).
 
 **Full reference:**
-- [/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome](/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome) — overview + shared component list
-- [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md) — the canonical rulebook with slot rules, filter UI decision tree, exception list
-- [/plans/chrome-slot-discipline-audit.md](/plans/chrome-slot-discipline-audit.md) — Tasks A/B/C audit log; per-page record of what was changed and why
-- [/plans/list-page-standardization.md](/plans/list-page-standardization.md) — forward-looking proposal for standardizing the list-page control set (not yet implemented)
+- [/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome](../../../../guides/DASHBOARD_BEST_PRACTICES.md#page-chrome) — overview + shared component list
+- [/plans/explorer-chrome-conventions.md](../../../../plans/explorer-chrome-conventions.md) — the canonical rulebook with slot rules, the **§3 concise filter model** (one Filter button; no inline chips / applied-chip row), exception list
+- [/plans/concise-chrome-rollout.md](../../../../plans/concise-chrome-rollout.md) — per-page checklist for migrating filter chrome to the concise model
+- [/plans/chrome-slot-discipline-audit.md](../../../../plans/chrome-slot-discipline-audit.md) — Tasks A/B/C audit log; per-page record of what was changed and why
+- [/plans/list-page-standardization.md](../../../../plans/list-page-standardization.md) — forward-looking proposal for standardizing the list-page control set (not yet implemented)
 
 ### Exception: dynamically-loaded sub-pages of a left-nav shell
 
 If your component is loaded **into** another resource's left-nav shell (Admin's `admin-container` loading the explorer-settings sub-pages, Admin → Developer Tools loading the 7 inspectors, Admin → Monitoring loading SystemDiagnostics / SQL Logging, Admin → Data & Schema loading Database Designer, etc.), do NOT wrap it in the chrome trio — the parent owns the page identity.
 
-Instead, use **`<mj-page-header-interior>`** at the top of the body (Section 10 of the conventions doc): a two-row card with `[Title]` / `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots — same slot conventions as `<mj-page-header>`, different visual shape. Primary row holds identity + meta + actions; toolbar row holds search / tab-nav / filter chips and collapses entirely when there's nothing to render. Same shared primitives as the exterior chrome (`<mj-page-search>`, `<mj-filter-popover>` + `<mj-filter-panel>`, `<mj-filter-chip>`, `<mj-refresh-button>`, `mjButton`) — one mental model, no doubled-header.
+Instead, use **`<mj-page-header-interior>`** at the top of the body (Section 10 of the conventions doc): a two-row card with `[Title]` / `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots — same slot conventions as `<mj-page-header>`, different visual shape. Primary row holds identity + meta + actions; toolbar row holds the control bar (search · Filter · view per the §3 concise model) / tab-nav and collapses entirely when there's nothing to render. Same shared primitives as the exterior chrome (`<mj-page-search>`, `<mj-filter-popover>` + `<mj-filter-panel>`, `<mj-refresh-button>`, `mjButton`) — one mental model, no doubled-header.
 
 Reference implementations cover all four Admin shells (~15 sub-pages) — copy any of them. Canonical filter-card shape: `UserManagementComponent` (`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`). Action-only chrome (no toolbar): the Dev Tools inspectors. Pattern X with internal tab nav: `SystemDiagnosticsComponent`, `APIKeysResourceComponent`.
 
@@ -106,4 +114,4 @@ Every Knowledge Hub dashboard reports its state to the AI agent and registers to
 | Vectors | TotalVectors, KPICount | (context only) |
 | Config | ActiveSection | (context only) |
 
-See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.
+See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](../../../AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.

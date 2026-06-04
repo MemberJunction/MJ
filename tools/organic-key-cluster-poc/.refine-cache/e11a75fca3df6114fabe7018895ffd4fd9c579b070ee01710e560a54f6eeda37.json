@@ -1,9 +1,0 @@
-{
-  "concept": "product_id",
-  "isUsefulOrganicKey": true,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "All columns represent the same business identifier for a product across different domains (Sales and Purchasing), allowing for cross-functional tracking of product movement and inventory demand.",
-  "outliers": [],
-  "subClusters": []
-}

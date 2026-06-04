@@ -1,9 +1,0 @@
-{
-  "concept": "order_id",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "These columns represent identifiers for distinct business domains (Purchasing vs. Sales) that typically use independent identity sequences. Matching a PurchaseOrderID to a SalesOrderID by value would create false positive relationships between unrelated procurement and sales transactions.",
-  "outliers": [],
-  "subClusters": []
-}

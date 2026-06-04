@@ -18,7 +18,7 @@ export class MJAIModelFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'modelOverview', sectionName: 'Model Overview', isExpanded: true },
             { sectionKey: 'performanceMetrics', sectionName: 'Performance Metrics', isExpanded: true },
-            { sectionKey: 'technicalSpecifications', sectionName: 'Technical Specifications', isExpanded: false },
+            { sectionKey: 'technicalSpecifications', sectionName: 'Technical Specifications', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIActions', sectionName: 'AI Actions', isExpanded: false },
             { sectionKey: 'mJAIModelActions', sectionName: 'AI Model Actions', isExpanded: false },
@@ -39,7 +39,7 @@ export class MJAIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsOriginalModelID', sectionName: 'AI Prompt Runs (Original Model)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunsOriginalModelID', sectionName: 'AI Prompt Runs (Original Model ID)', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsModelID', sectionName: 'AI Prompt Runs (Model)', isExpanded: false },
             { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },

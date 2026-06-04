@@ -1,9 +1,0 @@
-{
-  "concept": "employee_business_entity_id",
-  "isUsefulOrganicKey": true,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "All columns represent the same unique identifier for an individual employee across different functional areas (HR and Sales), making it a highly effective organic key for cross-table navigation.",
-  "outliers": [],
-  "subClusters": []
-}

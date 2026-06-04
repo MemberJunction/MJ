@@ -318,6 +318,11 @@ export class IntegrationSchemaSync {
                 dirty = true;
                 changes.push('Description');
             }
+            // §3 metadata refresh: capture the source's watermark field when the stored row has none.
+            // We deliberately do NOT overwrite an already-set value on a later refresh — a watermark
+            // field may have been deliberately chosen/curated, and the "curated values win" invariant
+            // (above) applies. A genuine source-side rename is rare and handled by re-curation, not by
+            // silently clobbering the stored cursor field on every refresh.
             if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
                 existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
                 dirty = true;
@@ -360,8 +365,8 @@ export class IntegrationSchemaSync {
             if (srcObj.Description) obj.Description = srcObj.Description;
             if (srcObj.IncrementalWatermarkField) obj.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
             obj.Status = 'Active';
-            obj.Set('IsCustom', true);
-            obj.Set('MetadataSource', 'Discovered');
+            obj.IsCustom = true;
+            obj.MetadataSource = 'Discovered';
             obj.Sequence = 999;
             const saved = await obj.Save();
             if (saved) {
@@ -512,8 +517,8 @@ export class IntegrationSchemaSync {
             field.IsReadOnly = srcField.IsReadOnly ?? false;
             field.IsUniqueKey = srcField.IsUniqueKey ?? false;
             field.Status = 'Active';
-            field.Set('IsCustom', true);
-            field.Set('MetadataSource', 'Discovered');
+            field.IsCustom = true;
+            field.MetadataSource = 'Discovered';
             field.Sequence = 999;
             if (srcField.IsForeignKey && srcField.ForeignKeyTarget) {
                 const resolvedID = resolveFK(srcField.ForeignKeyTarget);

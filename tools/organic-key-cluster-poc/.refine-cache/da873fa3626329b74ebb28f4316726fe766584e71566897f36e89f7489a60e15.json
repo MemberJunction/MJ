@@ -1,9 +1,0 @@
-{
-  "concept": "product_financial_metrics",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.98,
-  "reasoning": "StandardCost and ListPrice represent distinct financial concepts (internal cost vs. external selling price). These are quantitative measures rather than identifiers used to link or match related records across entities.",
-  "outliers": [],
-  "subClusters": []
-}

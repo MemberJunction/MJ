@@ -518,9 +518,9 @@ src/
 
 ## Related Packages
 
-- [@memberjunction/actions](../../Engine/readme.md) - Actions execution engine providing `BaseAction` and `BaseOAuthAction`
+- [@memberjunction/actions](../../Engine/README.md) - Actions execution engine providing `BaseAction` and `BaseOAuthAction`
 - [@memberjunction/actions-base](../../Base/README.md) - Base interfaces and type definitions
-- [@memberjunction/core-actions](../../CoreActions/readme.md) - Core pre-built actions (HTTP, email, AI)
+- [@memberjunction/core-actions](../../CoreActions/README.md) - Core pre-built actions (HTTP, email, AI)
 - [@memberjunction/actions-bizapps-accounting](../Accounting/README.md) - Accounting system integrations (same BizApps pattern)
 - [@memberjunction/actions-bizapps-lms](../LMS/README.md) - Learning management system integrations
 

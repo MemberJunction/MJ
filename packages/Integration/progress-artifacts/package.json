@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-progress-artifacts",
   "type": "module",
-  "version": "5.37.0",
+  "version": "5.38.0",
   "description": "Structured progress artifacts for integration runs: manifest.json + progress.jsonl (append-only with resumable checkpoints) + result.json. Generic across RSU runs, sync runs, creation pipelines, table creation. Replaces ad-hoc console.log with file-system-durable progress that survives transient failures + server restarts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/global": "5.37.0"
+    "@memberjunction/global": "5.38.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

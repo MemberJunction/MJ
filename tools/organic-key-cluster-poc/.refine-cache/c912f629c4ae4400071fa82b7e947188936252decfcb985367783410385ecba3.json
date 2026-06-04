@@ -1,9 +1,0 @@
-{
-  "concept": "modified_date",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "These are standard audit timestamps used for tracking record updates. While they share the same semantic meaning, they are not used as business identifiers to link records across tables.",
-  "outliers": [],
-  "subClusters": []
-}

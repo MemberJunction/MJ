@@ -1,9 +1,0 @@
-{
-  "concept": "employment_event_dates",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "These columns represent temporal attributes of HR events rather than business identifiers. While they share a date data type and HR context, they are not used to link or match entities across the system.",
-  "outliers": [],
-  "subClusters": []
-}

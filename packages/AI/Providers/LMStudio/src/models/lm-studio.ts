@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { LMStudioClient } from '@lmstudio/sdk';
 
 /**
@@ -164,7 +164,8 @@ export class LMStudioLLM extends BaseLLM {
             result.modelSpecificResponseDetails = {
                 provider: 'lmstudio',
                 model: params.model,
-                stats: response.stats
+                stats: response.stats,
+                raw: ToJSONSafe(response)
             };
             
             return result;

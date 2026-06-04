@@ -77,6 +77,10 @@
   background: var(--mj-status-warning);
 }
 
+.card-icon.cache {
+  background: var(--mj-status-info);
+}
+
 .card-content h3 {
   margin: 0 0 8px 0;
   font-size: 14px;
@@ -105,6 +109,11 @@
 
 .metric-detail .failed {
   color: var(--mj-status-error);
+}
+
+/* Cache card stacks its facts (caption / written / hit rate) one per line. */
+.metric-detail.cache-detail span {
+  display: block;
 }
 
 /* Analytics Panels */

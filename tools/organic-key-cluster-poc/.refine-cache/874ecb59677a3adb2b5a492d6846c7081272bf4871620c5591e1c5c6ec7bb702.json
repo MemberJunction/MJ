@@ -1,9 +1,0 @@
-{
-  "concept": "product_id",
-  "isUsefulOrganicKey": true,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "Both columns represent the same business identifier across active and archived transaction tables, allowing users to track a product's full history across storage tiers.",
-  "outliers": [],
-  "subClusters": []
-}

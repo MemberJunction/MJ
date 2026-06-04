@@ -42,6 +42,8 @@ export type SyncLogEvent =
     | 'sync.connector.built'
     | 'sync.connector.test'
     | 'sync.entity-map.start'
+    | 'sync.resume.keyset'
+    | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'
     | 'sync.fetch.batch.complete'
     | 'sync.record.decision'
@@ -55,7 +57,8 @@ export type SyncLogEvent =
     | 'sync.entity-map.complete'
     | 'sync.run.complete'
     | 'sync.run.fail'
-    | 'sync.run.cancelled';
+    | 'sync.run.cancelled'
+    | 'sync.warning';
 
 import type { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 
@@ -113,6 +116,28 @@ export class SyncLogger {
         this.emitter = emitter;
     }
 
+    /**
+     * Persist a resumable CHECKPOINT (the sync position after a committed batch) into the durable
+     * progress artifact (plan.md §8a). On crash/restart the latest checkpoint's resumableState
+     * (watermark / keyset AfterKey / cursor / batchIndex) lets the run pick back up. Best-effort —
+     * no emitter attached → no-op.
+     */
+    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        this.emitter?.checkpoint(stage, resumableState);
+    }
+
+    /**
+     * Emit a non-fatal STRUCTURED WARNING. Unlike record/fetch errors (which mark the run
+     * failed), a warning records a notable-but-non-fatal condition — the canonical case being a
+     * second-layer/association object that fetched zero records because its parents weren't
+     * available (the silent-empty). Forwarded to the durable artifact as a SyncWarning so the
+     * condition is visible over GraphQL instead of a swallowed console.warn, WITHOUT affecting
+     * run success. Goes to console.warn so it's also greppable in the tee'd log.
+     */
+    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        this.emit('sync.warning', { stage, code, message, warningData: data });
+    }
+
     public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
         const entry: SyncLogEntry = {
             ts: new Date().toISOString(),
@@ -122,10 +147,11 @@ export class SyncLogger {
             runId: this.ctx.runId ?? null,
             ...data,
         };
-        const isError = event === 'sync.run.fail' || event === 'sync.record.error';
         const line = JSON.stringify(entry);
-        if (isError) {
+        if (event === 'sync.run.fail' || event === 'sync.record.error') {
             console.error(line);
+        } else if (event === 'sync.warning') {
+            console.warn(line);
         } else {
             console.log(line);
         }
@@ -163,6 +189,14 @@ export class SyncLogger {
                 case 'sync.record.conflict':
                     emitter.emit('record.error', { stage, level: 'warn', message: 'conflict', data });
                     break;
+                case 'sync.warning':
+                    emitter.warning(
+                        typeof data.stage === 'string' ? data.stage : stage,
+                        typeof data.code === 'string' ? data.code : 'WARNING',
+                        typeof data.message === 'string' ? data.message : '',
+                        this.asRecord(data.warningData),
+                    );
+                    break;
                 case 'sync.entity-map.complete':
                     emitter.stageComplete(stage, {
                         processed: this.num(data.recordsProcessed),
@@ -192,5 +226,10 @@ export class SyncLogger {
 
     private num(v: unknown): number {
         return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+    }
+
+    /** Narrows an unknown to a plain record (or undefined) without a lazy `any` cast. */
+    private asRecord(v: unknown): Record<string, unknown> | undefined {
+        return v !== null && typeof v === 'object' ? (v as Record<string, unknown>) : undefined;
     }
 }

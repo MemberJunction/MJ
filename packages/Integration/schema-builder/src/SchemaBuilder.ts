@@ -193,6 +193,8 @@ export class SchemaBuilder {
                     APIRestarted: false,
                     GitCommitSuccess: false,
                     Steps: [],
+                    EntitiesCreated: [],
+                    EntitiesNotCreated: [],
                     ErrorMessage: `Schema generation failed: ${schemaOutput.Errors.join('; ')}`,
                     ErrorStep: 'BuildSchema',
                 },
@@ -208,6 +210,8 @@ export class SchemaBuilder {
                     APIRestarted: false,
                     GitCommitSuccess: false,
                     Steps: [{ Name: 'BuildSchema', Status: 'skipped', DurationMs: 0, Message: 'No migration SQL produced — no schema changes needed' }],
+                    EntitiesCreated: [],
+                    EntitiesNotCreated: [],
                 },
             };
         }
@@ -329,6 +333,50 @@ export class SchemaBuilder {
                 RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(64)' : 'VARCHAR(64)',
                 IsNullable: true,
                 Description: 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark (e.g. YourMembership, which re-fetches every record each sync).',
+            },
+            // ── Per-record sync ledger (plan §2.5) ──────────────────────────────────────
+            {
+                Name: '__mj_integration_ExternalVersion',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
+                IsNullable: true,
+                Description: 'The external system’s version/etag/modified token for the last-synced state, used for optimistic-concurrency (OCC) detection on bidirectional push. Null when the source exposes no version token.',
+            },
+            {
+                Name: '__mj_integration_LastSeenModifiedValue',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
+                IsNullable: true,
+                Description: 'The watermark / last-modified value observed for THIS record on the last sync (per-record, independent of the entity-map-level CompanyIntegrationSyncWatermark).',
+            },
+            {
+                Name: '__mj_integration_LastReconciledAt',
+                Type: 'datetime' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
+                IsNullable: true,
+                Description: 'Timestamp this record was last confirmed against the source system. Lets a reconcile find records not seen recently (delete-detection candidates).',
+            },
+            {
+                Name: '__mj_integration_LastWriterDirection',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(10)' : 'VARCHAR(10)',
+                IsNullable: true,
+                Description: 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
+            },
+            {
+                Name: '__mj_integration_IsTombstoned',
+                Type: 'boolean' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'BIT' : 'BOOLEAN',
+                IsNullable: false,
+                DefaultValue: platform === 'sqlserver' ? '0' : 'FALSE',
+                Description: 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
+            },
+            {
+                Name: '__mj_integration_DeletedDetectedAt',
+                Type: 'datetime' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
+                IsNullable: true,
+                Description: 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
             },
         ];
     }

@@ -136,11 +136,7 @@ export abstract class BaseLLM extends BaseModel {
                 const errorResult = new ChatResult(false, startTime, endTime);
                 errorResult.data = {
                     choices: [],
-                    usage: {
-                        promptTokens: 0,
-                        completionTokens: 0,
-                        totalTokens: 0
-                    }
+                    usage: new ModelUsage(0, 0)
                 };
                 errorResult.statusText = 'error';
                 errorResult.errorMessage = result.reason?.message || 'Unknown error';
@@ -297,11 +293,7 @@ export abstract class BaseLLM extends BaseModel {
                     const errorResult = new ChatResult(false, startTime, endTime);
                     errorResult.data = {
                         choices: [],
-                        usage: {
-                            promptTokens: 0,
-                            completionTokens: 0,
-                            totalTokens: 0
-                        }
+                        usage: new ModelUsage(0, 0)
                     };
                     errorResult.statusText = 'error';
                     errorResult.errorMessage = error?.message || 'Unknown error';

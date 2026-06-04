@@ -1,9 +1,0 @@
-{
-  "concept": "end_date",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "These columns represent temporal metadata indicating when a record's validity expires. While they share a semantic concept, they are not business identifiers used to link entities; matching records solely by a shared end date is not a standard business use case.",
-  "outliers": [],
-  "subClusters": []
-}

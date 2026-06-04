@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -28,7 +28,12 @@ import {
     IntegrationSyncOptions,
     SourceSchemaInfo,
     IntegrationSchemaSync,
-    IntegrationConnectorCreationPipeline
+    IntegrationConnectorCreationPipeline,
+    IntegrationActionGenerator
+} from "@memberjunction/integration-engine";
+import type {
+    IntegrationActionVerb,
+    GenerateIntegrationActionResult
 } from "@memberjunction/integration-engine";
 import { IntegrationEngineBase } from "@memberjunction/integration-engine-base";
 import {
@@ -192,6 +197,7 @@ class DeleteConnectionOutput {
     @Field({ nullable: true }) EntityMapsDeleted?: number;
     @Field({ nullable: true }) FieldMapsDeleted?: number;
     @Field({ nullable: true }) SchedulesDeleted?: number;
+    @Field({ nullable: true }) CredentialDeleted?: boolean;
 }
 
 // ─── Schema Evolution Output ─────────────────────────────────────────────────
@@ -375,6 +381,31 @@ class RefreshConnectorSchemaOutput {
     @Field({ nullable: true }) FailureMessage?: string;
 }
 
+// ─── Generate Integration Action (on-demand Integration-as-Actions) ─────────
+// Generates + persists a strongly-typed Action (DriverClass='IntegrationActionExecutor')
+// for one integration/object/verb (or all applicable verbs when verb is omitted) via
+// the engine's IntegrationActionGenerator. Idempotent on the deterministic Action Name
+// "<Integration> - <Verb> <DisplayName>": a matching Action is reused (AlreadyExisted=true)
+// and its params/result codes reconciled rather than duplicated.
+
+@ObjectType()
+class IntegrationGenerateActionResult {
+    @Field() Success: boolean;
+    @Field({ nullable: true }) ActionID?: string;
+    @Field({ nullable: true }) ActionName?: string;
+    @Field() AlreadyExisted: boolean;
+    @Field({ nullable: true }) Verb?: string;
+    @Field({ nullable: true }) ObjectName?: string;
+    @Field() Message: string;
+}
+
+@ObjectType()
+class IntegrationGenerateActionOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [IntegrationGenerateActionResult], { nullable: true }) Results?: IntegrationGenerateActionResult[];
+}
+
 // --- Preview Data Types ---
 
 @ObjectType()
@@ -554,6 +585,8 @@ class EntityMapInput {
     @Field({ nullable: true }) EntityID?: string;
     @Field({ nullable: true, defaultValue: 'Pull' }) SyncDirection?: string;
     @Field({ nullable: true, defaultValue: 0 }) Priority?: number;
+    /** Per-map engine config JSON (e.g. {"partitionReconcile":true,"partitionCount":256}). GQL-set so it's the source of truth. */
+    @Field({ nullable: true }) Configuration?: string;
     @Field(() => [FieldMapInput], { nullable: true }) FieldMaps?: FieldMapInput[];
 }
 
@@ -631,6 +664,8 @@ class EntityMapUpdateInput {
     @Field({ nullable: true }) SyncDirection?: string;
     @Field({ nullable: true }) Priority?: number;
     @Field({ nullable: true }) Status?: string;
+    /** Per-map engine config JSON (e.g. {"partitionReconcile":true}). GQL is the source of truth. */
+    @Field({ nullable: true }) Configuration?: string;
 }
 
 @ObjectType()
@@ -642,6 +677,8 @@ class EntityMapSummaryOutput {
     @Field({ nullable: true }) SyncDirection?: string;
     @Field({ nullable: true }) Priority?: number;
     @Field({ nullable: true }) Status?: string;
+    /** Per-map engine config JSON (partitionReconcile, etc.) so callers can read the source of truth. */
+    @Field({ nullable: true }) Configuration?: string;
 }
 
 @ObjectType()
@@ -752,6 +789,10 @@ class IntegrationRunSummaryArtifactOutput {
     @Field({ nullable: true }) LatestEventType?: string;
     @Field({ nullable: true }) LatestMessage?: string;
     @Field(() => IntegrationRunCountsOutput, { nullable: true }) Counts?: IntegrationRunCountsOutput;
+    /** Count of non-fatal warnings surfaced during the run (e.g. a second-layer object that found zero parents). Warnings never fail the run, but they make silent-empty conditions visible. */
+    @Field({ nullable: true }) WarningCount?: number;
+    /** Human-readable warnings ("[CODE] stage: message") so a tenant can see exactly what was flagged without paging the full event stream. */
+    @Field(() => [String], { nullable: true }) Warnings?: string[];
 }
 
 @ObjectType()
@@ -832,6 +873,13 @@ type EntityMapStatus = typeof VALID_ENTITY_MAP_STATUSES[number];
 
 function isValidEntityMapStatus(value: string): value is EntityMapStatus {
     return (VALID_ENTITY_MAP_STATUSES as readonly string[]).includes(value);
+}
+
+// IntegrationActionVerb is the engine-defined union ('Get'|'Create'|'Update'|'Delete'|'Search'|'List').
+const VALID_INTEGRATION_ACTION_VERBS = ['Get', 'Create', 'Update', 'Delete', 'Search', 'List'] as const;
+
+function isValidIntegrationActionVerb(value: string): value is IntegrationActionVerb {
+    return (VALID_INTEGRATION_ACTION_VERBS as readonly string[]).includes(value);
 }
 
 // ─── List Source Objects (Full-Catalog Picker) ──────────────────────────────
@@ -1195,6 +1243,91 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 RunID: 'error',
             };
         }
+    }
+
+    /**
+     * Generates + persists strongly-typed Action metadata on demand for an
+     * integration object. When `verb` is supplied, a single Action is generated
+     * for that (integration, object, verb); when omitted, all applicable verbs
+     * for the object are generated (Get/Search/List always, Create/Update/Delete
+     * only when the object supports writes).
+     *
+     * Idempotent: each generated Action is keyed on the deterministic Name
+     * "<Integration> - <Verb> <DisplayName>". An existing Action with that Name is
+     * reused (AlreadyExisted=true) and its params/result codes reconciled rather
+     * than duplicated. Generated Actions use DriverClass='IntegrationActionExecutor'
+     * and carry routing info ({IntegrationName, ObjectName, Verb}) in Action.Config_;
+     * the IntegrationActionExecutor (CoreActions) is the single runtime dispatcher.
+     */
+    @Mutation(() => IntegrationGenerateActionOutput)
+    async IntegrationGenerateAction(
+        @Arg("integrationName") integrationName: string,
+        @Arg("objectName") objectName: string,
+        @Arg("verb", { nullable: true, description: "Optional CRUD verb (Get|Create|Update|Delete|Search|List). Omit to generate all applicable verbs for the object." }) verb: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<IntegrationGenerateActionOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+
+            const generator = new IntegrationActionGenerator();
+            const results = await this.runActionGenerator(generator, integrationName, objectName, verb, user, provider);
+
+            return this.mapGenerateActionResults(results);
+        } catch (e) {
+            LogError(`IntegrationGenerateAction error: ${this.formatError(e)}`);
+            return { Success: false, Message: `Error: ${this.formatError(e)}` };
+        }
+    }
+
+    /**
+     * Drives the engine's IntegrationActionGenerator: one verb when `verb` is a
+     * valid value, all applicable verbs when it is omitted. Casts user/provider
+     * through `unknown` at the boundary — integration-engine resolves its own copy
+     * of core/core-entities, so the types are structurally identical but nominally
+     * distinct (same bridge pattern used by IntegrationRefreshConnectorSchema).
+     */
+    private async runActionGenerator(
+        generator: IntegrationActionGenerator,
+        integrationName: string,
+        objectName: string,
+        verb: string | undefined,
+        user: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<GenerateIntegrationActionResult[]> {
+        const u = user as unknown as Parameters<IntegrationActionGenerator['GenerateAction']>[3];
+        const p = provider as unknown as Parameters<IntegrationActionGenerator['GenerateAction']>[4];
+
+        if (verb != null && verb.length > 0) {
+            if (!isValidIntegrationActionVerb(verb)) {
+                throw new Error(`Invalid verb "${verb}". Must be one of: ${VALID_INTEGRATION_ACTION_VERBS.join(', ')}`);
+            }
+            const single = await generator.GenerateAction(integrationName, objectName, verb, u, p);
+            return [single];
+        }
+        return generator.GenerateActionsForObject(integrationName, objectName, u, p);
+    }
+
+    /** Maps engine GenerateIntegrationActionResult[] into the GraphQL output shape. */
+    private mapGenerateActionResults(results: GenerateIntegrationActionResult[]): IntegrationGenerateActionOutput {
+        const mapped: IntegrationGenerateActionResult[] = results.map(r => ({
+            Success: r.Success,
+            ActionID: r.ActionID,
+            ActionName: r.ActionName,
+            AlreadyExisted: r.AlreadyExisted,
+            Verb: r.Verb,
+            ObjectName: r.ObjectName,
+            Message: r.Message,
+        }));
+
+        const successCount = mapped.filter(r => r.Success).length;
+        const overallSuccess = mapped.length > 0 && mapped.every(r => r.Success);
+
+        return {
+            Success: overallSuccess,
+            Message: `Generated ${successCount}/${mapped.length} action(s)`,
+            Results: mapped,
+        };
     }
 
     /**
@@ -1813,6 +1946,69 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Per-company read-authorization check for run artifacts.
+     *
+     * Reuses MJ's established row-level-security pattern: a `RunView` on
+     * `MJ: Company Integrations` executed under the *calling user's* context.
+     * The data provider applies the same read-permission / RLS filtering it
+     * applies to every other user-context read, so the record only comes back
+     * when the caller is genuinely authorized to see that CompanyIntegration.
+     * No row returned ⇒ either the ID doesn't exist or the caller has no rights
+     * to it — in both cases we treat the caller as unauthorized.
+     *
+     * Results are memoized per call via the supplied `cache` map so a list of
+     * many runs sharing a CompanyIntegrationID incurs at most one lookup each.
+     */
+    private async userCanReadCompanyIntegration(
+        companyIntegrationID: string,
+        user: UserInfo,
+        cache: Map<string, boolean>
+    ): Promise<boolean> {
+        const cached = cache.get(companyIntegrationID);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const rv = new RunView();
+        const result = await rv.RunView<MJCompanyIntegrationEntity>({
+            EntityName: 'MJ: Company Integrations',
+            ExtraFilter: `ID='${companyIntegrationID}'`,
+            MaxRows: 1,
+            ResultType: 'simple',
+            Fields: ['ID']
+        }, user);
+
+        const authorized = result.Success && result.Results.length > 0;
+        cache.set(companyIntegrationID, authorized);
+        return authorized;
+    }
+
+    /**
+     * Authorizes the caller for a single run artifact based on the run's
+     * manifest CompanyIntegrationID. Returns true when the run is tenant-scoped
+     * and the caller is authorized for that CompanyIntegration. Returns false
+     * for tenant-scoped runs the caller may not read, OR for runs with no
+     * CompanyIntegrationID (non-tenant-scoped artifacts are not exposed through
+     * these per-company endpoints).
+     */
+    private async userCanReadRunArtifact(
+        snap: IntegrationRunSnapshot,
+        user: UserInfo,
+        cache: Map<string, boolean>
+    ): Promise<boolean> {
+        const ciID = snap.manifest.companyIntegrationID;
+        if (!ciID) {
+            return false;
+        }
+        return this.userCanReadCompanyIntegration(ciID, user, cache);
+    }
+
+    /** Standard authorization-failure message for run-artifact endpoints. */
+    private notAuthorizedForCompanyIntegrationMessage(companyIntegrationID: string): string {
+        return `Not authorized to access runs for CompanyIntegration '${companyIntegrationID}'`;
+    }
+
+    /**
      * Loads the CompanyIntegration + its parent Integration, then resolves the
      * appropriate connector via ConnectorFactory.
      *
@@ -2036,6 +2232,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<void> {
         try { await ci.Delete(); } catch (e) { LogError(`Rollback: failed to delete CompanyIntegration: ${this.formatError(e)}`); }
         try { await credential.Delete(); } catch (e) { LogError(`Rollback: failed to delete Credential: ${this.formatError(e)}`); }
+    }
+
+    /**
+     * Cascades the deletion of a CompanyIntegration's linked Credential as part of the
+     * supplied TransactionGroup, so the encrypted-credential row is removed atomically
+     * with the rest of the connection cascade (rolls back together on tg failure).
+     *
+     * Safety:
+     *  - No-op when {@link credentialID} is null/empty.
+     *  - Skips the delete when ANOTHER CompanyIntegration still references the same
+     *    CredentialID (shared credential) — only the sole referencer may delete it.
+     *
+     * @returns true if the credential was attached to the tg for deletion; false otherwise.
+     */
+    private async cascadeDeleteCredential(
+        credentialID: string | null | undefined,
+        companyIntegrationID: string,
+        tg: TransactionGroupBase,
+        rv: RunView,
+        provider: IMetadataProvider,
+        user: UserInfo
+    ): Promise<boolean> {
+        if (!credentialID) return false; // no linked credential — nothing to do
+
+        // Shared-credential safety: do not delete if any OTHER CompanyIntegration uses it.
+        const sharedResult = await rv.RunView<MJCompanyIntegrationEntity>({
+            EntityName: 'MJ: Company Integrations',
+            ExtraFilter: `CredentialID='${credentialID}' AND ID<>'${companyIntegrationID}'`,
+            ResultType: 'simple',
+            Fields: ['ID']
+        }, user);
+        if (sharedResult.Success && sharedResult.Results.length > 0) {
+            LogStatus(`IntegrationDeleteConnection: credential ${credentialID} is shared by ${sharedResult.Results.length} other connection(s); leaving it in place`);
+            return false;
+        }
+
+        const credential = await provider.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
+        const loaded = await credential.InnerLoad(CompositeKey.FromID(credentialID));
+        if (!loaded) return false; // already gone — treat as nothing to cascade
+
+        credential.TransactionGroup = tg;
+        await credential.Delete();
+        return true;
     }
 
     /**
@@ -2424,27 +2663,57 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     return { Success: false, Message: `No EntityID or EntityName for "${mapDef.ExternalObjectName}"`, Created: created };
                 }
 
-                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
-                em.NewRecord();
-                em.CompanyIntegrationID = companyIntegrationID;
-                em.ExternalObjectName = mapDef.ExternalObjectName;
-                em.EntityID = entityID;
                 const syncDir = mapDef.SyncDirection || 'Pull';
                 if (!isValidSyncDirection(syncDir)) {
                     return { Success: false, Message: `Invalid SyncDirection "${syncDir}" for "${mapDef.ExternalObjectName}". Must be one of: ${VALID_SYNC_DIRECTIONS.join(', ')}`, Created: created };
                 }
+
+                // Create-or-reuse by (connection, external object) — same idempotency rule as ApplyAll's
+                // createSingleEntityMap. A blind NewRecord() here duplicates maps on every re-apply.
+                const escapedObjectName = mapDef.ExternalObjectName.replace(/'/g, "''");
+                const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
+                    EntityName: 'MJ: Company Integration Entity Maps',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+                    OrderBy: '__mj_CreatedAt ASC',
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                    BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
+                }, user);
+
+                let em: MJCompanyIntegrationEntityMapEntity;
+                if (existingMapResult.Success && existingMapResult.Results.length > 0) {
+                    em = existingMapResult.Results[0];
+                } else {
+                    em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
+                    em.NewRecord();
+                    em.CompanyIntegrationID = companyIntegrationID;
+                    em.ExternalObjectName = mapDef.ExternalObjectName;
+                }
+                em.EntityID = entityID;
                 em.SyncDirection = syncDir;
                 em.Priority = mapDef.Priority || 0;
                 em.Status = 'Active';
+                if (mapDef.Configuration != null) em.Configuration = mapDef.Configuration;
 
                 if (!await em.Save()) {
                     return { Success: false, Message: `Failed to create map for ${mapDef.ExternalObjectName}`, Created: created };
                 }
                 const entityMapID = em.ID;
 
-                // Create field maps if provided
+                // Create field maps if provided (skip ones already mapped for this entity map)
                 if (mapDef.FieldMaps) {
+                    const existingFieldMaps = await new RunView().RunView<{ SourceFieldName: string }>({
+                        EntityName: 'MJ: Company Integration Field Maps',
+                        ExtraFilter: `EntityMapID='${entityMapID}'`,
+                        Fields: ['SourceFieldName'],
+                        ResultType: 'simple',
+                        BypassCache: true, // read committed field-map state for the idempotency skip
+                    }, user);
+                    const alreadyMapped = new Set(
+                        (existingFieldMaps.Results ?? []).map(r => (r.SourceFieldName ?? '').toLowerCase())
+                    );
                     for (const fmDef of mapDef.FieldMaps) {
+                        if (alreadyMapped.has((fmDef.SourceFieldName ?? '').toLowerCase())) continue;
                         const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
                         fm.NewRecord();
                         fm.EntityMapID = entityMapID;
@@ -2941,11 +3210,30 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return null;
         }
 
-        // Create entity map
-        const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
-        em.NewRecord();
-        em.CompanyIntegrationID = companyIntegrationID;
-        em.ExternalObjectName = obj.SourceObjectName;
+        // Create-or-reuse the entity map. Idempotency is REQUIRED here: ApplyAll is re-run on
+        // every wizard re-apply (and by the test harness on every pull). Blindly NewRecord()-ing
+        // multiplies the maps in lockstep (N applies → N duplicate maps per object), which
+        // silently corrupts the record-map 1:1 completeness gate and makes the forward sync
+        // process each object N times. Reuse the existing (connection, external object) map instead.
+        const escapedObjectName = obj.SourceObjectName.replace(/'/g, "''");
+        const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
+            EntityName: 'MJ: Company Integration Entity Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: 1,
+            ResultType: 'entity_object',
+            BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
+        }, user);
+
+        let em: MJCompanyIntegrationEntityMapEntity;
+        if (existingMapResult.Success && existingMapResult.Results.length > 0) {
+            em = existingMapResult.Results[0]; // reuse — keeps the map stable across re-applies
+        } else {
+            em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
+            em.NewRecord();
+            em.CompanyIntegrationID = companyIntegrationID;
+            em.ExternalObjectName = obj.SourceObjectName;
+        }
         em.EntityID = entityInfo.ID;
         em.SyncDirection = isValidSyncDirection(defaultSyncDirection) ? defaultSyncDirection : 'Pull';
         em.Priority = obj.SourceObjectName.startsWith('assoc_') ? 10 : 0;
@@ -2985,7 +3273,24 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 (ci: unknown, obj: string, u: unknown) => Promise<ExternalFieldSchema[]>;
             const fields = await discoverFields(companyIntegration, sourceObjectName, user);
 
+            // Idempotency (mirrors the entity-map reuse above): don't re-create field maps that
+            // already exist for this entity map, or re-applies multiply them in lockstep.
+            const existingFieldMaps = await new RunView().RunView<{ SourceFieldName: string }>({
+                EntityName: 'MJ: Company Integration Field Maps',
+                ExtraFilter: `EntityMapID='${entityMapID}'`,
+                Fields: ['SourceFieldName'],
+                ResultType: 'simple',
+                BypassCache: true, // read committed field-map state for the idempotency skip
+            }, user);
+            const alreadyMapped = new Set(
+                (existingFieldMaps.Results ?? []).map(r => (r.SourceFieldName ?? '').toLowerCase())
+            );
+
             for (const field of fields) {
+                if (alreadyMapped.has(field.Name.toLowerCase())) {
+                    fieldCount++; // already present — count it so the reported total stays stable
+                    continue;
+                }
                 const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
                 fm.NewRecord();
                 fm.EntityMapID = entityMapID;
@@ -3149,6 +3454,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
 
+            // Reject upfront if the connector is deactivated. The engine also gates this
+            // authoritatively (no run record is created), but returning Success:false here gives the
+            // client immediate, unambiguous feedback instead of an optimistic fire-and-forget that
+            // silently no-ops. IsActive is boolean|null — only an explicit false rejects (null/unset
+            // connections predating the flag are unaffected).
+            const ciProvider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const ciCheck = await ciProvider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (await ciCheck.InnerLoad(CompositeKey.FromID(companyIntegrationID)) && ciCheck.IsActive === false) {
+                return { Success: false, Message: 'Connector is deactivated (IsActive=false); sync not started' };
+            }
+
             const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[]; SyncDirection?: 'Pull' | 'Push' | 'Bidirectional' } = {};
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
@@ -3272,9 +3588,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const companyIntegration = ciResult.Results[0];
 
-            // Load the Integration entity to get the ClassName for connector resolution
+            // Load the Integration entity to get the ClassName for connector resolution.
+            // Entity is registered as 'MJ: Integrations' (the "MJ: " prefix is required — the sibling
+            // CompanyIntegration lookup above uses 'MJ: Company Integrations'); the bare 'Integrations'
+            // name is not in metadata, which dead-lettered the entire IntegrationWriteRecord (push) path.
             const integResult = await rv.RunView<MJIntegrationEntity>({
-                EntityName: 'Integrations',
+                EntityName: 'MJ: Integrations',
                 ExtraFilter: `ID='${companyIntegration.IntegrationID}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
@@ -3576,7 +3895,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'Priority ASC',
                 ResultType: 'simple',
-                Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status']
+                Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status', 'Configuration'],
+                BypassCache: true, // operational list must reflect COMMITTED state (wizard/lifecycle act on it)
             }, user);
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
@@ -3604,6 +3924,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `EntityMapID='${entityMapID}'`,
                 OrderBy: 'SourceFieldName',
                 ResultType: 'simple',
+                BypassCache: true, // operational list must reflect COMMITTED state
                 Fields: ['ID', 'EntityMapID', 'SourceFieldName', 'DestinationFieldName', 'Status']
             }, user);
 
@@ -3642,6 +3963,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     em.SyncDirection = update.SyncDirection;
                 }
                 if (update.Priority != null) em.Priority = update.Priority;
+                if (update.Configuration != null) em.Configuration = update.Configuration;
                 if (update.Status != null) {
                     if (!isValidEntityMapStatus(update.Status)) {
                         errors.push(`${update.EntityMapID}: invalid Status "${update.Status}"`);
@@ -3650,7 +3972,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     em.Status = update.Status;
                 }
 
-                if (!await em.Save()) errors.push(`${update.EntityMapID}: failed to save`);
+                if (!await em.Save()) errors.push(`${update.EntityMapID}: failed to save — ${em.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
 
             if (errors.length > 0) return { Success: false, Message: `Errors: ${errors.join('; ')}` };
@@ -3802,7 +4124,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Entity Maps',
                     ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                     ResultType: 'simple',
-                    Fields: ['ID', 'Status']
+                    Fields: ['ID', 'Status'],
+                    // Status must reflect the live state immediately after a deselect/reselect
+                    // (UpdateEntityMaps). Bypass the server RunView cache so ActiveEntityMaps never
+                    // reports a stale count right after a map's Status is toggled.
+                    BypassCache: true
                 },
                 {
                     EntityName: 'MJ: Company Integration Runs',
@@ -3810,7 +4136,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
                     ResultType: 'simple',
-                    Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords']
+                    Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords'],
+                    BypassCache: true
                 }
             ], user);
 
@@ -3893,18 +4220,50 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("limit", { defaultValue: 50 }) limit?: number,
     ): Promise<IntegrationListRunsOutput> {
         try {
-            this.getAuthenticatedUser(ctx);
+            const user = this.getAuthenticatedUser(ctx);
+
+            // When a specific connector is requested, authorize it up front so an
+            // unauthorized caller gets a clear denial rather than an empty list.
+            const authCache = new Map<string, boolean>();
+            if (companyIntegrationID) {
+                const authorized = await this.userCanReadCompanyIntegration(companyIntegrationID, user, authCache);
+                if (!authorized) {
+                    return { Success: false, Message: this.notAuthorizedForCompanyIntegrationMessage(companyIntegrationID) };
+                }
+            }
+
             const reader = new IntegrationProgressReader();
             const snaps = await reader.ListRuns({
                 companyIntegrationID,
                 runKind: runKind as IntegrationRunKind | undefined,
                 inFlightOnly: inFlightOnly ?? false,
             }, limit ?? 50);
-            return { Success: true, Message: `${snaps.length} run(s)`, Runs: snaps.map(s => this.toRunSummaryArtifact(s)) };
+
+            // Filter to only the runs the caller is authorized to read. When
+            // scoped to a single (already-authorized) connector this is a no-op;
+            // for the cross-connector listing it prevents one tenant from seeing
+            // another tenant's runs.
+            const authorizedSnaps = await this.filterAuthorizedRuns(snaps, user, authCache);
+            return { Success: true, Message: `${authorizedSnaps.length} run(s)`, Runs: authorizedSnaps.map(s => this.toRunSummaryArtifact(s)) };
         } catch (e) {
             LogError(`IntegrationListRuns error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+    }
+
+    /** Returns only the run snapshots the caller is authorized to read. */
+    private async filterAuthorizedRuns(
+        snaps: IntegrationRunSnapshot[],
+        user: UserInfo,
+        authCache: Map<string, boolean>
+    ): Promise<IntegrationRunSnapshot[]> {
+        const authorized: IntegrationRunSnapshot[] = [];
+        for (const snap of snaps) {
+            if (await this.userCanReadRunArtifact(snap, user, authCache)) {
+                authorized.push(snap);
+            }
+        }
+        return authorized;
     }
 
     /**
@@ -3917,10 +4276,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext,
     ): Promise<IntegrationRunDetailOutput> {
         try {
-            this.getAuthenticatedUser(ctx);
+            const user = this.getAuthenticatedUser(ctx);
             const reader = new IntegrationProgressReader();
             const snap = await reader.GetRun(runID);
             if (!snap) return { Success: false, Message: `Run '${runID}' not found` };
+
+            const authorized = await this.userCanReadRunArtifact(snap, user, new Map<string, boolean>());
+            if (!authorized) {
+                const ciID = snap.manifest.companyIntegrationID;
+                return {
+                    Success: false,
+                    Message: ciID
+                        ? this.notAuthorizedForCompanyIntegrationMessage(ciID)
+                        : `Not authorized to access run '${runID}'`,
+                };
+            }
+
             return {
                 Success: true,
                 Message: 'OK',
@@ -3946,10 +4317,24 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("sinceSeq", { defaultValue: 0 }) sinceSeq?: number,
     ): Promise<IntegrationRunEventsOutput> {
         try {
-            this.getAuthenticatedUser(ctx);
+            const user = this.getAuthenticatedUser(ctx);
             const reader = new IntegrationProgressReader();
             const snap = await reader.GetRun(runID);
             if (!snap) return { Success: false, Message: `Run '${runID}' not found`, LatestSeq: sinceSeq ?? 0, IsInFlight: false };
+
+            const authorized = await this.userCanReadRunArtifact(snap, user, new Map<string, boolean>());
+            if (!authorized) {
+                const ciID = snap.manifest.companyIntegrationID;
+                return {
+                    Success: false,
+                    Message: ciID
+                        ? this.notAuthorizedForCompanyIntegrationMessage(ciID)
+                        : `Not authorized to access run '${runID}'`,
+                    LatestSeq: sinceSeq ?? 0,
+                    IsInFlight: false,
+                };
+            }
+
             const events = await reader.Tail(runID, sinceSeq ?? 0);
             const latestSeq = events.length > 0 ? events[events.length - 1].seq : (sinceSeq ?? 0);
             return {
@@ -3994,6 +4379,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LatestEventType: s.latestEvent?.eventType,
             LatestMessage: s.latestEvent?.message,
             Counts: this.toCountsOutput(s.counts),
+            WarningCount: s.warningCount,
+            Warnings: s.warnings?.map(w => `[${w.code}] ${w.stage}: ${w.message}`),
         };
     }
 
@@ -4613,9 +5000,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
-            // Step 7: Delete the CompanyIntegration itself
+            // Step 7: Delete the CompanyIntegration itself FIRST, so its CredentialID FK reference
+            // is gone before we delete the Credential. (Deleting the Credential first violates the
+            // CompanyIntegration.CredentialID foreign key — the constraint is checked per-statement
+            // inside the transaction — and rolls back the entire cascade.) Capture CredentialID
+            // before Delete() since we still need it for Step 8.
+            const linkedCredentialID = ci.CredentialID;
             ci.TransactionGroup = tg;
             await ci.Delete();
+
+            // Step 8: Delete the linked Credential (encrypted-credential row) in the SAME
+            // transaction group so it commits/rolls back atomically with the cascade — now safe
+            // because the referencing CompanyIntegration delete is queued ahead of it. Skips
+            // silently when there is no CredentialID, and refuses to delete a credential still
+            // referenced by ANOTHER CompanyIntegration (shared credential).
+            const credentialDeleted = await this.cascadeDeleteCredential(
+                linkedCredentialID, companyIntegrationID, tg, rv, md, sysUser
+            );
 
             // Submit the transaction
             const submitted = await tg.Submit();
@@ -4633,6 +5034,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityMapsDeleted: entityMapsDeleted,
                 FieldMapsDeleted: fieldMapsDeleted,
                 SchedulesDeleted: schedulesDeleted,
+                CredentialDeleted: credentialDeleted,
             };
         } catch (e) {
             LogError(`IntegrationDeleteConnection error: ${e}`);

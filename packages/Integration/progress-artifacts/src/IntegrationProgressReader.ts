@@ -1,11 +1,13 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { CountsContributeToAggregate } from './types.js';
 import type {
     IntegrationProgressEvent,
     IntegrationRunFilter,
     IntegrationRunManifest,
     IntegrationRunResult,
     IntegrationRunSnapshot,
+    SyncWarning,
 } from './types.js';
 
 /**
@@ -46,6 +48,7 @@ export class IntegrationProgressReader {
         const events = await this.readProgressTail(join(runDir, 'progress.jsonl'), 1);
         const latestEvent = events[events.length - 1];
         const allCounts = await this.aggregateCountsFromTail(join(runDir, 'progress.jsonl'));
+        const warnings = await this.aggregateWarningsFromTail(join(runDir, 'progress.jsonl'));
         const eventCount = await this.countLines(join(runDir, 'progress.jsonl'));
         return {
             manifest,
@@ -54,6 +57,8 @@ export class IntegrationProgressReader {
             result,
             isInFlight: !result,
             counts: allCounts,
+            warnings: warnings.length > 0 ? warnings : undefined,
+            warningCount: warnings.length,
         };
     }
 
@@ -131,6 +136,12 @@ export class IntegrationProgressReader {
             try {
                 const ev = JSON.parse(line) as IntegrationProgressEvent;
                 if (!ev.counts) continue;
+                // Mirror the emitter's rule (CountsContributeToAggregate): only the APPLIED
+                // rollup events (`stage.complete`/`run.complete`) feed the total. The FETCHED
+                // `processed` on `records.batch.complete` is per-batch progress only and would
+                // double-count every record if summed here. Keeping the rule in one place
+                // guarantees a re-derived count matches the emitter's running aggregate.
+                if (!CountsContributeToAggregate(ev.eventType)) continue;
                 totals.processed += ev.counts.processed ?? 0;
                 totals.succeeded += ev.counts.succeeded ?? 0;
                 totals.failed += ev.counts.failed ?? 0;
@@ -138,5 +149,29 @@ export class IntegrationProgressReader {
             } catch { /* skip */ }
         }
         return totals;
+    }
+    private async aggregateWarningsFromTail(path: string): Promise<SyncWarning[]> {
+        const raw = await this.safeReadFile(path);
+        if (!raw) return [];
+        const warnings: SyncWarning[] = [];
+        for (const line of raw.split('\n')) {
+            if (!line.trim()) continue;
+            try {
+                const ev = JSON.parse(line) as IntegrationProgressEvent;
+                if (ev.eventType !== 'warning') continue;
+                warnings.push(this.warningFromEvent(ev));
+            } catch { /* skip */ }
+        }
+        return warnings;
+    }
+    /** Reconstruct a {@link SyncWarning} from a persisted `'warning'` event. */
+    private warningFromEvent(event: IntegrationProgressEvent): SyncWarning {
+        const { code, ...rest } = event.data ?? {};
+        return {
+            code: typeof code === 'string' ? code : 'UNKNOWN',
+            stage: event.stage ?? '',
+            message: event.message ?? '',
+            data: Object.keys(rest).length > 0 ? rest : undefined,
+        };
     }
 }

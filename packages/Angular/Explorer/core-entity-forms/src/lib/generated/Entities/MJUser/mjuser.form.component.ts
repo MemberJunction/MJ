@@ -18,8 +18,8 @@ export class MJUserFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'userIdentity', sectionName: 'User Identity', isExpanded: true },
             { sectionKey: 'accountSettings', sectionName: 'Account Settings', isExpanded: true },
-            { sectionKey: 'entityLinks', sectionName: 'Entity Links', isExpanded: false },
-            { sectionKey: 'employeeDetails', sectionName: 'Employee Details', isExpanded: false },
+            { sectionKey: 'entityLinks', sectionName: 'Entity Links', isExpanded: true },
+            { sectionKey: 'employeeDetails', sectionName: 'Employee Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },

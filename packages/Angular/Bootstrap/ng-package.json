@@ -23,6 +23,7 @@
     "@memberjunction/ng-explorer-settings",
     "@memberjunction/ng-file-storage",
     "@memberjunction/ng-shared",
+    "@memberjunction/tag-engine-base",
     "rxjs"
   ]
 }

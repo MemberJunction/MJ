@@ -22,6 +22,8 @@ export type IntegrationProgressEventType =
     | 'run.complete'
     /** Run terminated with failure. */
     | 'run.fail'
+    /** Run cancelled mid-flight by a user/system abort (not a failure, not a clean completion). */
+    | 'run.cancel'
     /** Run resumed from a prior checkpoint after a kill/restart. */
     | 'run.resumed'
     /** A named stage within the run started. */
@@ -36,6 +38,13 @@ export type IntegrationProgressEventType =
     | 'records.batch.complete'
     /** A single record errored within a batch. */
     | 'record.error'
+    /**
+     * A non-fatal warning surfaced during the run. Carries a structured
+     * {stage, code, message, data} payload (see {@link SyncWarning}). Distinct
+     * from `stage.error`/`record.error`: a warning never fails the run, it is
+     * aggregated separately into the result's `warnings[]` rollup.
+     */
+    | 'warning'
     /** Long-running progress with no record-level granularity. */
     | 'progress.heartbeat'
     /**
@@ -68,6 +77,42 @@ export type IntegrationProgressEventType =
 
 /** Severity levels for progress events. */
 export type IntegrationProgressLevel = 'info' | 'warn' | 'error' | 'debug';
+
+/**
+ * Whether an event's `counts` feed the run-level APPLIED aggregate
+ * ({@link IntegrationRunResult.aggregateCounts} / {@link IntegrationRunSnapshot.counts}).
+ *
+ * Two count vocabularies flow through the stream and must NOT both be summed:
+ * - `stage.complete` / `run.complete` carry the authoritative **applied** quartet
+ *   {processed,succeeded,failed,skipped} for a finished stage/run → these aggregate.
+ * - `records.batch.complete` (and `progress.heartbeat`) carry a *fetched* / in-flight
+ *   `processed` count for live per-batch progress only. The same records are reported
+ *   again — applied — by the stage rollup, so summing batch counts double-counts every
+ *   record (a 56-record sync would report processed:112). These do NOT aggregate.
+ *
+ * The emitter and the reader both call this so a re-derived count always matches the
+ * emitter's running aggregate. Centralizing the rule here keeps the two in lock-step.
+ */
+export function CountsContributeToAggregate(eventType: IntegrationProgressEventType): boolean {
+    return eventType === 'stage.complete' || eventType === 'run.complete';
+}
+
+/**
+ * A structured, non-fatal warning surfaced during an integration run. Emitted via
+ * `IntegrationProgressEmitter.warning(...)` as a `'warning'` event and aggregated by
+ * the reader into the run result's `warnings[]` rollup (with a `warningCount`).
+ * Unlike errors, warnings never fail the run.
+ */
+export interface SyncWarning {
+    /** Stable, machine-matchable warning code (e.g. 'FIELD_TRUNCATED'). */
+    code: string;
+    /** The stage that produced the warning. */
+    stage: string;
+    /** Human-readable warning message. */
+    message: string;
+    /** Optional subsystem-specific structured payload. */
+    data?: Record<string, unknown>;
+}
 
 /** A single event in the progress.jsonl stream (one line, JSON-encoded). */
 export interface IntegrationProgressEvent {
@@ -130,6 +175,10 @@ export interface IntegrationRunResult {
         skipped: number;
     };
     errors?: Array<{ stage?: string; message: string; code?: string }>;
+    /** Non-fatal warnings surfaced during the run (rollup of `'warning'` events). */
+    warnings?: SyncWarning[];
+    /** Total number of `'warning'` events emitted (length of `warnings`). */
+    warningCount?: number;
     /** When non-empty, this run is resumable: latest checkpoint event sequence. */
     resumableFromSeq?: number;
 }
@@ -143,6 +192,10 @@ export interface IntegrationRunSnapshot {
     isInFlight: boolean;
     /** Latest counts derived from the event stream. */
     counts?: NonNullable<IntegrationProgressEvent['counts']>;
+    /** Non-fatal warnings derived from the `'warning'` events in the stream. */
+    warnings?: SyncWarning[];
+    /** Total number of `'warning'` events in the stream (length of `warnings`). */
+    warningCount?: number;
 }
 
 /** Filter shape for the reader's ListRuns API. */

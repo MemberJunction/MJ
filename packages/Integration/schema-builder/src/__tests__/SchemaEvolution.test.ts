@@ -45,6 +45,13 @@ function MakeExistingTable(columns: Array<{ Name: string; SqlType: string; IsNul
         { Name: '__mj_integration_LastSyncedSnapshot', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
         { Name: '__mj_integration_SyncMessage', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
         { Name: '__mj_integration_ContentHash', SqlType: 'NVARCHAR(64)', IsNullable: true },
+        // Per-record sync ledger (plan §2.5)
+        { Name: '__mj_integration_ExternalVersion', SqlType: 'NVARCHAR(255)', IsNullable: true },
+        { Name: '__mj_integration_LastSeenModifiedValue', SqlType: 'NVARCHAR(255)', IsNullable: true },
+        { Name: '__mj_integration_LastReconciledAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
+        { Name: '__mj_integration_LastWriterDirection', SqlType: 'NVARCHAR(10)', IsNullable: true },
+        { Name: '__mj_integration_IsTombstoned', SqlType: 'BIT', IsNullable: false },
+        { Name: '__mj_integration_DeletedDetectedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
     ];
     return {
         SchemaName: 'hubspot',

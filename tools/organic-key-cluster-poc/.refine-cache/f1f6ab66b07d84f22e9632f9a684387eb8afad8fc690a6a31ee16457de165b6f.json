@@ -1,9 +1,0 @@
-{
-  "concept": "order_subtotal",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns represent the same financial concept, monetary amounts are metrics rather than identifiers; users do not typically link records based on matching currency values.",
-  "outliers": [],
-  "subClusters": []
-}

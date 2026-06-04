@@ -613,7 +613,7 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
             const response = await this.MakeHTTPRequest(
                 auth, `${baseURL}${apiPath}`, 'POST', headers, body
             );
-            return this.ParseCRUDResponse(response, 'create');
+            return this.ParseCRUDResponse(response, 'create', objectName);
         } catch (err: unknown) {
             return this.BuildCRUDError(err);
         }
@@ -1010,7 +1010,7 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     }
 
     /** Parses a CRUD operation response into a WicketCRUDResult. */
-    private ParseCRUDResponse(response: RESTResponse, operation: string): WicketCRUDResult {
+    private ParseCRUDResponse(response: RESTResponse, operation: string, objectName?: string): WicketCRUDResult {
         const success = response.Status >= 200 && response.Status < 300;
 
         if (!success) {
@@ -1026,6 +1026,13 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
         const body = response.Body as Record<string, unknown>;
         const data = body['data'] as Record<string, unknown> | undefined;
         const externalID = data?.['id'] as string | undefined;
+
+        // CREATE-ONLY: a 2xx create with no record ID is a silent record-loss bug (duplicate
+        // creates on the next sync). Fail loudly via the base helper. Update/Delete are unchanged —
+        // they legitimately may not echo an ID in the body.
+        if (operation === 'create') {
+            return this.BuildCreatedResult(externalID, response.Status, objectName ?? 'record');
+        }
 
         return {
             Success: true,

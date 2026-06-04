@@ -1,9 +1,0 @@
-{
-  "concept": "sales_primary_identifiers",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "These columns represent distinct primary keys for unrelated business entities; matching them by value would result in false positives as they belong to independent identifier sequences.",
-  "outliers": [],
-  "subClusters": []
-}

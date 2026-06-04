@@ -1,9 +1,0 @@
-{
-  "concept": "product_price",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns represent monetary costs for products, prices are quantitative measurements rather than identifiers. Matching records based on exact price values is not a reliable or standard way to link entities in a relational schema.",
-  "outliers": [],
-  "subClusters": []
-}

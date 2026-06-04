@@ -1,9 +1,0 @@
-{
-  "concept": "product_entity_identifiers",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "The cluster groups primary keys of distinct entities. While they share a naming pattern, a ProductID value does not semantically match a ProductCategoryID or ScrapReasonID value; these are independent identifier spaces.",
-  "outliers": [],
-  "subClusters": []
-}

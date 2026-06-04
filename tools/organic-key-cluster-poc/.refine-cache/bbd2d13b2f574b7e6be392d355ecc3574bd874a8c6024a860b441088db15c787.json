@@ -1,9 +1,0 @@
-{
-  "concept": "production_entity_ids",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 1,
-  "reasoning": "These are distinct primary keys for different business entities (Bill of Materials vs. Work Orders). They do not share a common value space that would allow for meaningful cross-entity matching.",
-  "outliers": [],
-  "subClusters": []
-}

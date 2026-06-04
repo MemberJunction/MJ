@@ -2,6 +2,7 @@ import { RunView, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { computeContentHash } from './ContentHash.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -301,7 +302,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const response = await this.MakeHTTPRequest(auth, url, obj.CreateMethod, headers, body);
         if (response.Status >= 200 && response.Status < 300) {
             const externalID = this.ExtractIDFromResponse(response, obj.CreateIDLocation);
-            return { Success: true, StatusCode: response.Status, ExternalID: externalID };
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
         }
         return {
             Success: false,
@@ -984,11 +985,16 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         objectType: string,
         pkFieldNames: string[]
     ): ExternalRecord {
-        const externalID = pkFieldNames
-            .map(name => raw[name] != null ? String(raw[name]) : '')
-            .join('|');
+        // §4 synthetic-PK fallback: only treat the PK as usable when EVERY component is present
+        // (a composite key with a missing part — e.g. "abc|" — is not a stable identity). When any
+        // part is missing, fall back to a deterministic content-derived identity (identity hash) so
+        // PK-less / partial-key tables are still syncable + dedupable. Stable while content is unchanged.
+        const allPkPresent = pkFieldNames.length > 0
+            && pkFieldNames.every(name => raw[name] != null && String(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => String(raw[name] ?? '')).join('|');
+        const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
         return {
-            ExternalID: externalID,
+            ExternalID: resolvedID,
             ObjectType: objectType,
             Fields: raw,
         };

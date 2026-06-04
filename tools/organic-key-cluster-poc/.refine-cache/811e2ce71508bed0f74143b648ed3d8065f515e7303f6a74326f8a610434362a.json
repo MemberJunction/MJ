@@ -1,9 +1,0 @@
-{
-  "concept": "ship_date",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns represent the semantic concept of a shipment date, matching records across purchasing and sales based on a shared date is coincidental and does not represent a logical business relationship between entities.",
-  "outliers": [],
-  "subClusters": []
-}

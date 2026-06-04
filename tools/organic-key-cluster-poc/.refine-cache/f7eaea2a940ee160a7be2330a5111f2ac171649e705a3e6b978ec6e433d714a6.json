@@ -1,9 +1,0 @@
-{
-  "concept": "line_item_total",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "While both columns represent the same semantic concept of a calculated line total, they are continuous numeric values rather than discrete identifiers. Matching records across purchasing and sales based on identical dollar amounts is not a meaningful business relationship and would result in many false-positive matches.",
-  "outliers": [],
-  "subClusters": []
-}

@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, MJRoleEntity } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
 
 interface RoleStats {
@@ -187,6 +188,43 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       this.applyFilters();
       this.cdr.markForCheck();
     }
+  }
+
+  // -- Concise chrome: one Filter popover (Type) + applied-filter chips -------
+
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'type',
+        type: 'chips',
+        label: 'Type',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'System', value: 'system' },
+          { text: 'Custom', value: 'custom' },
+        ],
+      },
+    ];
+  }
+
+  public get filterValues(): Record<string, unknown> {
+    return { type: this.filters$.value.type };
+  }
+
+  /** Total active filters (Type) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.filters$.value.type !== 'all' ? 1 : 0;
+  }
+
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    if ('type' in values) {
+      this.updateFilter({ type: (values['type'] as FilterOptions['type']) || 'all' });
+    }
+  }
+
+  /** Clear all filters (Type); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ type: 'all' });
   }
   
   public toggleRoleExpansion(roleId: string): void {

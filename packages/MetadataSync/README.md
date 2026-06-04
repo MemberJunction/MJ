@@ -195,7 +195,7 @@ The tool is intended for managing business-level metadata such as:
 - Permissions and security settings
 - Any other data that is not reflected **up** from the underlying system database catalogs
 
-For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGen/README.md).
+For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGenLib/README.md).
 
 ## Performance: Preloading and Caching During Push
 
@@ -1890,8 +1890,8 @@ Processing AI Prompts in demo/ai-prompts
 ## Dependencies
 
 This package depends on:
-- [@memberjunction/core](../MJCore/README.md) -- Core MemberJunction framework (Metadata, RunView, BaseEntity)
-- [@memberjunction/core-entities](../MJCoreEntities/README.md) -- Generated entity subclasses
+- [@memberjunction/core](../MJCore/readme.md) -- Core MemberJunction framework (Metadata, RunView, BaseEntity)
+- [@memberjunction/core-entities](../MJCoreEntities/readme.md) -- Generated entity subclasses
 - [@memberjunction/global](../MJGlobal/README.md) -- Global utilities and class factory
 - [@memberjunction/config](../Config/README.md) -- Configuration management
 - [@memberjunction/sqlserver-dataprovider](../SQLServerDataProvider/README.md) -- SQL Server data access

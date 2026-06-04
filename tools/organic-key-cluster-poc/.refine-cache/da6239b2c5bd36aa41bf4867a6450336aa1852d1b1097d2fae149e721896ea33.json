@@ -1,9 +1,0 @@
-{
-  "concept": "metadata_type_names",
-  "isUsefulOrganicKey": false,
-  "normalization": "ExactMatch",
-  "confidence": 0.95,
-  "reasoning": "These columns represent descriptive labels for distinct metadata categories (address types vs. contact roles). There is no semantic overlap in their value sets that would facilitate meaningful cross-entity record matching.",
-  "outliers": [],
-  "subClusters": []
-}

@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -217,6 +219,8 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
     <!-- ========================================
          RELATED ENTITY PANELS
@@ -697,10 +701,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Original Model) Section -->
+    <!-- AI Prompt Runs (Original Model ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsOriginalModelID"
-        SectionName="AI Prompt Runs (Original Model)"
+        SectionName="AI Prompt Runs (Original Model ID)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -846,5 +850,7 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

@@ -11,6 +11,7 @@ import type {
     IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
+    UpsertRecordContext,
     DeleteRecordContext,
     GetRecordContext,
     CRUDResult,
@@ -117,8 +118,30 @@ export interface FetchContext {
     CurrentOffset?: number;
     /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
     CurrentCursor?: string;
+    /**
+     * KEYSET / seek resume position (plan.md §7): the last-seen value of the connector's
+     * StableOrderingKey. The connector fetches `WHERE <key> > AfterKeyValue ORDER BY <key>` so a
+     * mid-stream insert/delete cannot corrupt the scan position. Engine passes it on subsequent
+     * calls (and on restart-recovery). undefined/null on the first page.
+     */
+    AfterKeyValue?: string | null;
     /** Optional list of source field names to request from the external API. When provided, the connector should limit the returned fields to this set. */
     RequestedSourceFields?: string[];
+}
+
+/**
+ * A non-fatal diagnostic a connector attaches to a fetch result so the engine surfaces it in the
+ * structured run artifact instead of letting it be a swallowed `console.warn`. The canonical use is
+ * a second-layer/association object that fetched ZERO records because its parents weren't available
+ * (not synced, unmapped, or DAG-ordered wrong) — the classic silent-empty.
+ */
+export interface FetchWarning {
+    /** Stable machine code, e.g. 'ZERO_PARENTS'. */
+    Code: string;
+    /** Human-readable explanation. */
+    Message: string;
+    /** Optional structured context (parent object name, counts, etc.). */
+    Data?: Record<string, unknown>;
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -127,12 +150,20 @@ export interface FetchBatchResult {
     Records: ExternalRecord[];
     /** Whether there are more records to fetch after this batch */
     HasMore: boolean;
+    /**
+     * Non-fatal diagnostics from this fetch (e.g. a second-layer object that found zero parents).
+     * The engine forwards each to the structured progress artifact as a SyncWarning so the
+     * silent-empty case is visible over GraphQL instead of a swallowed console.warn.
+     */
+    Warnings?: FetchWarning[];
     /** Updated watermark value after this batch */
     NewWatermarkValue?: string;
     /** Next page number to pass back via FetchContext.CurrentPage on the next call (page-based pagination) */
     NextPage?: number;
     /** Next offset to pass back via FetchContext.CurrentOffset on the next call (offset-based pagination) */
     NextOffset?: number;
+    /** Next keyset/seek position — the highest StableOrderingKey value in this batch — to pass back via FetchContext.AfterKeyValue (plan.md §7 keyset resume). */
+    NextAfterKeyValue?: string;
     /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
     NextCursor?: string;
 }
@@ -221,6 +252,20 @@ export interface DefaultIntegrationConfig {
  * Callers can interrogate a connector instance to determine which
  * operations it supports before attempting them.
  */
+/**
+ * A connector's declared rate-limit policy for the engine's adaptive token-bucket limiter
+ * (plan.md §7). The engine starts at TokensPerSec, cuts multiplicatively on a 429/limit signal,
+ * and ramps back up on sustained success (AIMD).
+ */
+export interface RateLimitPolicy {
+    /** Sustained requests/sec ceiling for this source API. */
+    TokensPerSec: number;
+    /** Burst capacity. Defaults to TokensPerSec when omitted. */
+    Burst?: number;
+    /** Multiplicative-decrease factor applied on a throttle signal (0 < f < 1). */
+    ThrottleBackoffFactor?: number;
+}
+
 export abstract class BaseIntegrationConnector {
 
     // ─── Capability Getters ──────────────────────────────────────────
@@ -235,6 +280,12 @@ export abstract class BaseIntegrationConnector {
 
     /** Whether this connector supports updating existing records in the external system. */
     public get SupportsUpdate(): boolean { return false; }
+
+    /**
+     * Whether this connector supports idempotent upserts (create-or-update keyed
+     * by a unique business property). Connectors override this AND `Upsert` to enable it.
+     */
+    public get SupportsUpsert(): boolean { return false; }
 
     /** Whether this connector supports deleting records from the external system. */
     public get SupportsDelete(): boolean { return false; }
@@ -265,6 +316,16 @@ export abstract class BaseIntegrationConnector {
      */
     public async UpdateRecord(_ctx: UpdateRecordContext): Promise<CRUDResult> {
         throw new Error(`UpdateRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Upserts a record — a single idempotent create-or-update keyed by a unique
+     * business property (e.g. email), eliminating the search-then-create race window.
+     * Override in subclasses whose external system exposes a keyed upsert primitive.
+     * Check `SupportsUpsert` before calling.
+     */
+    public async Upsert(_ctx: UpsertRecordContext): Promise<CRUDResult> {
+        throw new Error(`Upsert is not supported by ${this.constructor.name}`);
     }
 
     /**
@@ -301,6 +362,87 @@ export abstract class BaseIntegrationConnector {
     public async ListRecords(_ctx: ListContext): Promise<ListResult> {
         throw new Error(`ListRecords is not supported by ${this.constructor.name}`);
     }
+
+    /**
+     * Builds a CRUDResult for a record CREATE, failing LOUDLY when the external system returned
+     * no usable record ID. A 2xx response with an empty/undefined ID means the create did not
+     * durably produce a record we can track — returning Success:true there silently loses the
+     * record and causes duplicate creates on the next sync (the HubSpot-association class of bug,
+     * fixed in next commit 9f718a7e). This makes that failure explicit at the connector boundary.
+     */
+    protected BuildCreatedResult(externalID: string | undefined | null, statusCode: number, objectName: string): CRUDResult {
+        const id = externalID == null ? '' : String(externalID).trim();
+        if (id.length === 0) {
+            return {
+                Success: false,
+                StatusCode: statusCode,
+                ErrorMessage: `Create of "${objectName}" returned HTTP ${statusCode} but the response contained no record ID — treating as a failure to avoid silently losing the record (and duplicate creates on the next sync).`,
+            };
+        }
+        return { Success: true, StatusCode: statusCode, ExternalID: id };
+    }
+
+    // ─── §7/§10/§12 Sync-efficiency contract (composable; connector fills in) ─────────
+    // Optional hooks the universal sync engine consumes for peak-aware rate limiting, adaptive
+    // parallelism, keyset/no-watermark resume, aggressive batch writes, and type-driven
+    // post-processing. EVERY member has a safe default, so existing connectors are unaffected; a
+    // connector "fills out the contract" by overriding what its source supports (plan.md §7/§10/§12).
+
+    /**
+     * Token-bucket rate-limit policy for this connector's source API (plan.md §7 peak-aware rate
+     * limiting). `null` → the engine derives a conservative rate from Integration.BatchRequestWaitTime.
+     * Override to push to the source's real limits.
+     */
+    public get RateLimitPolicy(): RateLimitPolicy | null { return null; }
+
+    /**
+     * Parse a Retry-After / rate-limit signal out of a failed response or thrown error into
+     * milliseconds so the engine can back off precisely. Return `undefined` when the error is not a
+     * throttle (or carries no hint).
+     */
+    public ExtractRetryAfterMs(_error: unknown): number | undefined { return undefined; }
+
+    /**
+     * Highest SAFE per-layer concurrency the source tolerates (plan.md §7 peak parallelization) — the
+     * ceiling the engine's adaptive controller ramps toward. `null` → use configured syncConcurrency.
+     */
+    public get MaxConcurrencyHint(): number | null { return null; }
+
+    /**
+     * Name of a stable, monotonic ordering key (PK/identity) usable for KEYSET/seek resume on
+     * watermark-less objects (plan.md §7 — resume from last-seen key, robust to mid-stream
+     * insert/delete). `null` → keyset resume unavailable for this object.
+     */
+    public StableOrderingKey(_objectName: string): string | null { return null; }
+
+    /** Whether this connector supports batched target writes (plan.md §7 aggressive batching). */
+    public get SupportsBatchWrite(): boolean { return false; }
+
+    /** Batch-create. Default loops single-record CreateRecord, so the engine may always call the batch form. */
+    public async BatchCreateRecords(ctxs: CreateRecordContext[]): Promise<CRUDResult[]> {
+        return this.runBatchViaSingles(ctxs, c => this.CreateRecord(c));
+    }
+    /** Batch-update. Default loops single-record UpdateRecord. */
+    public async BatchUpdateRecords(ctxs: UpdateRecordContext[]): Promise<CRUDResult[]> {
+        return this.runBatchViaSingles(ctxs, c => this.UpdateRecord(c));
+    }
+    /** Batch-delete. Default loops single-record DeleteRecord. */
+    public async BatchDeleteRecords(ctxs: DeleteRecordContext[]): Promise<CRUDResult[]> {
+        return this.runBatchViaSingles(ctxs, c => this.DeleteRecord(c));
+    }
+    private async runBatchViaSingles<C>(ctxs: C[], one: (c: C) => Promise<CRUDResult>): Promise<CRUDResult[]> {
+        const out: CRUDResult[] = [];
+        for (const c of ctxs) out.push(await one(c));
+        return out;
+    }
+
+    /**
+     * Type-driven post-processing hook (plan.md §10): a connector may normalize/enforce a record's
+     * values to the resolved column formats AFTER transform/normalize and BEFORE write. Default
+     * returns the record unchanged. (Named for this system — NOT MCP, not `take`.) The engine ALSO
+     * applies target-type constraint enforcement; this is the connector-side complement.
+     */
+    public PostProcessRecord(record: ExternalRecord): ExternalRecord { return record; }
 
     // ─── Core Abstract Methods ───────────────────────────────────────
 

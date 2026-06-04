@@ -2462,6 +2462,22 @@ export abstract class BaseEntity<T = unknown> {
                         // Run registered PreSave hooks (e.g., tenant validation)
                         await this.RunPreSaveHooks();
 
+                        // Optimistic-UI hook: every pre-flight check (Validate, ValidateAsync,
+                        // PreSave hooks) has passed and the DB write is imminent. Fire the optional
+                        // OnValidated callback so a UI can render the now-known-valid change before
+                        // the persistence round-trip. A callback bug must never abort the save.
+                        // Excluded on ReplayOnly: replay bypasses validation (valResult is forced
+                        // Success above without running Validate/ValidateAsync), so the "known-valid"
+                        // guarantee the hook relies on does not hold for a replay.
+                        if (_options.OnValidated && !_options.ReplayOnly) {
+                            try {
+                                _options.OnValidated(this);
+                            }
+                            catch (cbErr: any) {
+                                LogError(`EntitySaveOptions.OnValidated callback threw (ignored): ${cbErr?.message ?? String(cbErr)}`);
+                            }
+                        }
+
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here

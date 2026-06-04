@@ -257,6 +257,32 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('p_name');
             expect(sql).toContain('p_email');
         });
+
+        it('does NOT list composite-PK columns twice in the INSERT (regression: column "x" specified more than once)', () => {
+            // A composite-PK junction (e.g. hubspot.assoc_contacts_companies) whose PK columns are
+            // caller-supplied data. buildCreateInsertStrategy prepends the PK columns explicitly; the
+            // field list must therefore EXCLUDE them, or PostgreSQL rejects the INSERT with
+            // `column "company_id" specified more than once`.
+            const entity = createMockEntity(
+                { BaseTable: 'assoc_contacts_companies', BaseTableCodeName: 'AssocContactsCompanies', SchemaName: 'hubspot', BaseView: 'vwAssoc_contacts_companies' },
+                [
+                    { ID: 'pk1', Name: 'company_id', CodeName: 'company_id', Type: 'text', Length: 0, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'contact_id', CodeName: 'contact_id', Type: 'text', Length: 0, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'd1', Name: 'association_type', CodeName: 'association_type', Type: 'text', Length: 0, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ]
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            const m = sql.match(/INSERT INTO[\s\S]*?\(([\s\S]*?)\)\s*VALUES/i);
+            expect(m).toBeTruthy();
+            const colList = m![1];
+            const count = (name: string) => (colList.match(new RegExp(`"${name}"`, 'g')) || []).length;
+            // each PK column appears EXACTLY once (the bug emitted them twice)
+            expect(count('company_id')).toBe(1);
+            expect(count('contact_id')).toBe(1);
+            // and they are still present (not stripped out entirely)
+            expect(colList).toContain('"company_id"');
+            expect(colList).toContain('"contact_id"');
+        });
     });
 
     describe('generateCRUDUpdate', () => {

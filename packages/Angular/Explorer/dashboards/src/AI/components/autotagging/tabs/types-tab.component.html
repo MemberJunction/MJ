@@ -1,0 +1,56 @@
+<mj-page-header-interior
+    Title="Content Types"
+    Subtitle="Configure AI tagging rules per content category">
+  <div actions>
+    <button mjButton variant="primary" size="sm" (click)="onAddType()">
+      <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add Type</span>
+    </button>
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+  <div class="at-main-area">
+    <div class="at-page-body">
+      <div class="at-ct-grid">
+        @for (card of ContentTypeCards; track card.ID) {
+          <div class="at-ct-card">
+            <div class="at-ct-card-header">
+              <span class="at-ct-card-name">{{ card.Name }}</span>
+              <span class="at-ct-card-model">{{ card.AIModelName }}</span>
+            </div>
+            <div class="at-ct-field">
+              <span class="at-ct-field-label">Description</span>
+              <span class="at-ct-field-value">{{ card.Description || '—' }}</span>
+            </div>
+            <div class="at-ct-field">
+              <span class="at-ct-field-label">Sources Using</span>
+              <span class="at-ct-field-value">{{ card.SourcesUsing }}</span>
+            </div>
+            <div class="at-ct-field">
+              <span class="at-ct-field-label">Items Tagged</span>
+              <span class="at-ct-field-value">{{ formatNumber(card.ItemsTagged) }}</span>
+            </div>
+            <div class="at-ct-tag-range">
+              <i class="fa-solid fa-tags"></i>
+              <span>{{ card.MinTags }}</span>
+              <div class="at-ct-tag-range-bar">
+                <div class="at-ct-tag-range-fill" [style.left.%]="card.RangeLeftPct" [style.right.%]="card.RangeRightPct"></div>
+              </div>
+              <span>{{ card.MaxTags }}</span>
+              <span class="at-ct-range-suffix">tags/item</span>
+            </div>
+            <div class="at-source-card-actions" style="margin-top: 10px;">
+              <button class="at-source-action-btn" (click)="onEditType(card)"><i class="fa-solid fa-pen"></i> Edit</button>
+            </div>
+          </div>
+        }
+        <!-- Add Content Type Card -->
+        <div class="at-add-type-card" (click)="onAddType()">
+          <i class="fa-solid fa-plus-circle"></i>
+          <span style="font-size: 0.85rem; font-weight: 600;">Add Content Type</span>
+          <span style="font-size: 0.72rem;">Configure tagging rules</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</mj-page-body-interior>
