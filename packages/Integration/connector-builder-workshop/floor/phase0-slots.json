@@ -584,7 +584,7 @@
       "phaseRef": "§1 Environment Setup & Bring-up",
       "tier": "T10",
       "applicability": "always",
-      "dualDialect": true,
+      "dualDialect": false,
       "requires": "Empty DB provisioned; mj migrate -> mj sync push -> mj codegen (in order) on this branch; mjapi + mjexplorer built and started; GQL API key obtained WITHOUT reading/exposing it (§0); initial Company record created.",
       "evidence": "Per-step NL statement + JSON (migrate/sync/codegen exit summaries, server-up confirmation, Company row id) + pass/fail."
     },
@@ -594,7 +594,7 @@
       "phaseRef": "§2 Phase A — Integration & Metadata",
       "tier": "T10",
       "applicability": "always",
-      "dualDialect": true,
+      "dualDialect": false,
       "requires": "Create CompanyIntegration record; link credential + connection-test via the broker (never expose the value, §0); RefreshMetadata pulls all custom tables, custom columns (on existing + custom tables), absent table metadata, and watermark info; LLM/statistics PK-inference runs per hard-key IO with results in additionalSchemaInfo.json; ApplyAllBatch over all selectable tables; subscription output inspected; structured end-of-phase report produced.",
       "evidence": "NL + JSON for each: connection-test result, RefreshMetadata diff (tables/columns/watermark), PK-classify verdicts, ApplyAllBatch map counts, the structured Phase-A report + pass/fail."
     },
@@ -604,7 +604,7 @@
       "phaseRef": "§3 Phase B — Sync Testing (2^N matrix)",
       "tier": "T10",
       "applicability": "always-skeleton-applicable-cells",
-      "dualDialect": true,
+      "dualDialect": false,
       "requires": "The combinatorial 2^N matrix; run every APPLICABLE cell — never shortcut, but a pull-only connector logs its push/bidirectional cells as skipped-with-reason, a no-watermark connector substitutes content-hash/keyset for the watermark cell. Sub-phases run in order 3.1->3.8.",
       "subPhases": [
         { "id": "E2E.PhaseB.3_1", "order": 1, "ref": "3.1 Change detection & efficiency", "requires": "watermark-first then full/rest pass + no-watermark path; timestamp-watermark incremental; content-hash/Merkle actually avoids redundant work; keyset pagination — restart the API mid-sync and confirm from logs it resumes." },
@@ -624,7 +624,7 @@
       "phaseRef": "§4 Phase C — Value Handling",
       "tier": "T10",
       "applicability": "always",
-      "dualDialect": true,
+      "dualDialect": false,
       "requires": "Records of different value types map and persist correctly without throwing.",
       "evidence": "NL + JSON per value-type case + pass/fail."
     },
@@ -644,7 +644,7 @@
       "phaseRef": "§6 Observability & Reporting (continuous)",
       "tier": "T10",
       "applicability": "always-continuous",
-      "dualDialect": true,
+      "dualDialect": false,
       "requires": "Structured logs captured throughout EVERY phase (not at the end). The final report carries, per test: NL statement of what was tested + result, corresponding JSON payloads, clear pass/fail. This is the per-test evidence contract every other phase's cells must satisfy.",
       "evidence": "The livePhaseLog itself: each entry { phaseId, order, nl, json, status:'pass'|'fail'|'skip', skipReason? }."
     },
@@ -654,7 +654,7 @@
       "phaseRef": "§7 Deliverables — dual-dialect",
       "tier": "T10",
       "applicability": "always",
-      "dualDialect": true,
+      "dualDialect": false,
       "requires": "Run the ENTIRE applicable suite again on Postgres — all of it. Ensure all SQL that may land shows up; build the SQL-Server<->Postgres concept mapping; both DB test suites exist as DISTINCT artifacts. UUID comparisons via UUIDsEqual (SQL Server upper- vs Postgres lower-case). Production-parity note: results should hold for production SQL Server + production Postgres on Azure/AWS — flag anything that wouldn't.",
       "evidence": "Two distinct dialect artifacts (sqlserver + postgres), the concept-mapping doc, and per-phase pass/fail proving every applicable phase ran on BOTH dialects."
     }

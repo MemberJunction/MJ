@@ -94,9 +94,20 @@ Every per-connector harness MUST follow the canonical **"Integration Major Enhan
 
 The harness runs the **applicable subset** of each phase: a pull-only connector skips Phase B's push/bidirectional cells (3.2) and §5 if no generation action; a connector with **no watermark** exercises the content-hash/keyset axes of 3.1 in place of the watermark cell. **But the phase skeleton + ordering is FIXED** — you may not reorder phases or drop a whole phase. **Any skipped phase/cell MUST be logged with a `skipReason`** (a `livePhaseLog` entry with `status:'skip'` and a non-empty `skipReason`); silent omission is a `floor-check` failure. Determine applicability from the frozen contract's capability flags (`SupportsWrite`, `SupportsIncrementalSync`, generation-action availability), not from convenience.
 
-### Dual-dialect (§7) is MANDATORY
+### Dialect policy (§7) — Postgres-PRIMARY (per connector, SQL Server SKIPPED)
 
-Every phase marked `dualDialect:true` in `e2eLivePhases` runs once on **SQL Server** and then identically on **Postgres** — every assertion on BOTH. The two runs are DISTINCT artifacts; the harness also emits the SQL-Server↔Postgres concept mapping. UUID comparisons go through `UUIDsEqual`. Flag anything that wouldn't hold on production Azure/AWS SQL Server + Postgres. A `dualDialect` phase proven on only one dialect is a `floor-check` failure (`e2e-dual-dialect-missing`).
+**Per connector, run the live suite on PostgreSQL ONLY.** SQL Server is **SKIPPED** for the per-connector loop — do not stand up a second SQL Server run for a connector change. Why PG-only is the *sufficient* proof:
+
+- MJ migrations are authored in **SQL Server dialect** and `mj migrate` **auto-converts** them to Postgres at build time — there is no separately-authored PG schema to validate per connector.
+- The **integration framework is static**. Connectors are the daily work; the framework's DDL/CRUD plumbing is not changing under a connector PR, so it does not need re-proving on both dialects every time.
+- **Postgres is the STRICTER dialect** — dependent-view protection on column-type evolution, UUID lowercasing, composite-PK CRUD, transaction-abort-on-error. If a connector's sync proves out on Postgres it holds on SQL Server; the converse is **not** guaranteed — which is exactly why PG is the one to run. PG-only is sufficient and saves real wall-clock time.
+- UUID comparisons still go through `UUIDsEqual` (PG lower-cases). SQL Server remains an **explicit opt-in** for a **framework-level** change that could differ by dialect (DDL generation, CRUD shape, type mapping) — it is **NOT** part of the per-connector loop. (PG migration conversion is a build-time safety-net, not the per-connector problem statement.)
+
+`e2eLivePhases` phases are therefore `dualDialect:false` (Postgres-only); `floor-check`'s `e2e-dual-dialect-missing` rule only fires if a phase is explicitly re-marked `dualDialect:true` for a framework-level dual run.
+
+### Run connector E2E with advancedGen OFF (keyless-safe)
+
+Connector E2E runs with **advancedGeneration OFF**. In `mj.config.cjs` set `advancedGeneration: { enableAdvancedGeneration: false, batchSize: 15 }` **and RESTART MJAPI** — the in-process CodeGen reads this flag at **MJAPI startup**, so an already-running server will not pick it up (you'll see `Invalid Vertex AI credentials` keep climbing). **Why required:** `enableAdvancedGeneration` **defaults to `true`**; in a keyless test env the `ApplyAll`/in-process CodeGen would call a credential-less AI model, throw `Invalid Vertex AI credentials`, and **sink the entire CodeGen** — failing the run for a reason unrelated to the connector. **Why correct, not a hack:** advancedGen is an **optional AI enrichment that does not affect connectors** — sync, CRUD, associations, idempotency are **identical** with it off. advancedGen-ON correctness (advancedGen + Postgres — the SaaS product target) is proven **separately in the keyed/broker env**, never gated into a per-connector run.
 
 ### Per-phase structured output (§6) — the `livePhaseLog` the floor reads
 
