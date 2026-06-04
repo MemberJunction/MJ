@@ -17092,7 +17092,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Primary key`),
     IntegrationObjectID: z.string().describe(`
         * * Field Name: IntegrationObjectID
-        * * Display Name: Integration Object
+        * * Display Name: Integration Object ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to the IntegrationObject this field belongs to`),
@@ -17155,7 +17155,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Whether this field is part of the object primary key`),
     IsUniqueKey: z.boolean().describe(`
         * * Field Name: IsUniqueKey
-        * * Display Name: Is Unique Key
+        * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether values must be unique across all records`),
@@ -17233,11 +17233,11 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
-        * * Display Name: Integration Object Name
+        * * Display Name: Integration Object
         * * SQL Data Type: nvarchar(255)`),
     RelatedIntegrationObject: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObject
-        * * Display Name: Related Object Name
+        * * Display Name: Related Integration Object Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -57904,7 +57904,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -72161,7 +72161,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IntegrationObjectID
-    * * Display Name: Integration Object
+    * * Display Name: Integration Object ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to the IntegrationObject this field belongs to
@@ -72320,7 +72320,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsUniqueKey
-    * * Display Name: Is Unique Key
+    * * Display Name: Is Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether values must be unique across all records
@@ -72488,7 +72488,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IntegrationObject
-    * * Display Name: Integration Object Name
+    * * Display Name: Integration Object
     * * SQL Data Type: nvarchar(255)
     */
     get IntegrationObject(): string {
@@ -72497,7 +72497,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObject
-    * * Display Name: Related Object Name
+    * * Display Name: Related Integration Object Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedIntegrationObject(): string | null {

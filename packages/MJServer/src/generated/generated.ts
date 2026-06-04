@@ -32942,7 +32942,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.` })
+@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
