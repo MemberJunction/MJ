@@ -12,6 +12,7 @@ import {
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled,
+    LocalCacheManager,
     RunView,
     type DatabaseProviderBase
 } from '@memberjunction/core';
@@ -888,6 +889,34 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             { isMutation: true, description: 'spUpdateScheduledJobStatistics' },
             this.Base.ContextUser
         );
+
+        // Direct SQL bypasses BaseEntity.Save(), so it skips the save event that
+        // would normally drive LocalCacheManager invalidation. Without this call,
+        // any cached RunView for 'MJ: Scheduled Jobs' (e.g., the Scheduling
+        // Dashboard's filtered views) would keep showing stale RunCount /
+        // SuccessCount / NextRunAt until the cache TTL expired.
+        //
+        // We use full invalidation rather than in-place upsert (UpsertSingleEntity)
+        // because the dashboard reads through filtered/sorted views — MJ can't
+        // safely patch those in JS (it would need to evaluate the SQL filter to
+        // know whether the updated row still belongs in each cached result).
+        //
+        // See guides/CACHING_AND_PUBSUB_GUIDE.md and CLAUDE.md §"Server-Side
+        // Caching" — `BypassCache: true` is the documented opposite escape hatch
+        // for readers; this is the producer-side counterpart.
+        //
+        // Wrapped in try/catch: cache invalidation is best-effort observability
+        // hygiene, not load-bearing for job execution. If LocalCacheManager throws
+        // (e.g., uninitialized in a test environment, transient storage error),
+        // the stats UPDATE has already persisted — the worst case is one cached
+        // dashboard view stays stale until its TTL.
+        try {
+            if (LocalCacheManager.Instance.IsInitialized) {
+                await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Scheduled Jobs');
+            }
+        } catch (cacheError) {
+            this.logError('Cache invalidation after stats update failed (non-fatal)', cacheError);
+        }
     }
 
     /**

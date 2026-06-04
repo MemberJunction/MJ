@@ -35,6 +35,14 @@ vi.mock('os', () => ({
 
 // Captured by individual tests to assert log content (probe warnings, sweep lines).
 const logErrorMock = vi.fn();
+
+// Cache-invalidation mock surface — toggle init flag + assert invalidation calls per test.
+const mockCacheState = { initialized: false, throwOnInvalidate: false };
+const mockInvalidateEntityCaches = vi.fn(async (_entityName: string) => {
+    if (mockCacheState.throwOnInvalidate) {
+        throw new Error('Mock cache invalidation failure');
+    }
+});
 const logStatusMock = vi.fn();
 
 vi.mock('@memberjunction/core', () => {
@@ -78,6 +86,22 @@ vi.mock('@memberjunction/core', () => {
                     return { Success: true, Results: [] };
                 }
                 return next;
+            }
+        },
+        // Cache-invalidation surface. Engine calls IsInitialized first; if false,
+        // skips the invalidation (matches production-init semantics).
+        //
+        // Both members are accessed lazily (getters / closure-wrapped call) to
+        // dodge the vitest mock-hoisting trap: vi.mock() factories are hoisted
+        // above any top-level `const`, so direct references like
+        // `InvalidateEntityCaches: mockInvalidateEntityCaches` evaluate before
+        // the const is initialized and throw a ReferenceError at module load.
+        LocalCacheManager: {
+            Instance: {
+                get IsInitialized() {
+                    return mockCacheState.initialized;
+                },
+                InvalidateEntityCaches: (entityName: string) => mockInvalidateEntityCaches(entityName)
             }
         }
     };
@@ -307,6 +331,11 @@ beforeEach(() => {
     (mockBase.ScheduledJobTypes as Array<Record<string, unknown>>).push({ ID: 'type-1', DriverClass: 'TestDriver' });
     logErrorMock.mockClear();
     logStatusMock.mockClear();
+    // Reset cache state — default to uninitialized so tests that don't care about
+    // cache invalidation behave as production does on first boot.
+    mockCacheState.initialized = false;
+    mockCacheState.throwOnInvalidate = false;
+    mockInvalidateEntityCaches.mockClear();
 
     // Re-install mock implementations — vi.clearAllMocks() wipes them.
     mockBase.ProviderToUse.ExecuteSQL.mockImplementation(async () => {
@@ -1061,5 +1090,90 @@ describe('T19: Permission probe warns when EXECUTE grant is missing', () => {
         // Must not throw
         // @ts-expect-error: private method
         await expect(engine.probeLockSprocPermissions()).resolves.toBeUndefined();
+    });
+});
+
+// ============================================================================
+// T22: Cache invalidation after stats sproc (GH PR #2750 audit follow-up)
+//
+// The stats sproc updates ScheduledJob rows via direct SQL, bypassing
+// BaseEntity.Save() — which means the BaseEntity 'save' event never fires,
+// LocalCacheManager.syncLocalCacheForConfig is never invoked, and any cached
+// RunView for 'MJ: Scheduled Jobs' (e.g., the Scheduling Dashboard's filtered
+// views) keeps showing stale RunCount/SuccessCount/NextRunAt until cache TTL.
+//
+// Fix: engine explicitly calls LocalCacheManager.InvalidateEntityCaches after
+// the stats sproc fires. These tests pin that behavior and the safety net
+// around it.
+//
+// Mirrors the precedent in IntegrationDiscoveryResolver:3489 (mj sync push →
+// sprocs → explicit InvalidateEntityCaches for 'MJ: Integration Objects' /
+// 'MJ: Integration Object Fields').
+// ============================================================================
+
+describe('T22: Cache invalidation after stats sproc', () => {
+    it('invalidates MJ: Scheduled Jobs cache when LocalCacheManager is initialized', async () => {
+        const engine = SchedulingEngine.Instance;
+        const job = makeJob({ Name: 'CacheInvalidationJob' });
+        mockBase.ScheduledJobs = [job];
+
+        mockCacheState.initialized = true;
+        mockPluginFactory = () => ({
+            Execute: vi.fn().mockResolvedValue({ Success: true, Details: {} })
+        });
+        // acquire(1) → release(1). Stats sproc consumes the default queue-empty fallback.
+        queueAcquireRelease([1], [1]);
+
+        await engine.ExecuteScheduledJobs(mockUser as never);
+
+        // The invalidation must be called exactly once per job execution and target
+        // the exact entity name the dashboard reads.
+        expect(mockInvalidateEntityCaches).toHaveBeenCalledTimes(1);
+        expect(mockInvalidateEntityCaches).toHaveBeenCalledWith('MJ: Scheduled Jobs');
+    });
+
+    it('skips invalidation when LocalCacheManager is not initialized', async () => {
+        const engine = SchedulingEngine.Instance;
+        const job = makeJob({ Name: 'NoCacheJob' });
+        mockBase.ScheduledJobs = [job];
+
+        // Default already — explicit for documentation.
+        mockCacheState.initialized = false;
+        mockPluginFactory = () => ({
+            Execute: vi.fn().mockResolvedValue({ Success: true, Details: {} })
+        });
+        queueAcquireRelease([1], [1]);
+
+        await engine.ExecuteScheduledJobs(mockUser as never);
+
+        // The IsInitialized guard protects against calling invalidation in environments
+        // where the cache manager was never set up (e.g., scripts using the engine
+        // outside MJAPI's full bootstrap).
+        expect(mockInvalidateEntityCaches).not.toHaveBeenCalled();
+    });
+
+    it('logs but does not throw when cache invalidation itself fails', async () => {
+        const engine = SchedulingEngine.Instance;
+        const job = makeJob({ Name: 'CacheFailJob' });
+        mockBase.ScheduledJobs = [job];
+
+        mockCacheState.initialized = true;
+        mockCacheState.throwOnInvalidate = true;
+        mockPluginFactory = () => ({
+            Execute: vi.fn().mockResolvedValue({ Success: true, Details: {} })
+        });
+        queueAcquireRelease([1], [1]);
+
+        // Execution must complete cleanly even if cache invalidation throws. Cache
+        // hygiene is best-effort observability — never load-bearing for job semantics.
+        const runs = await engine.ExecuteScheduledJobs(mockUser as never);
+
+        expect(runs.length).toBe(1);
+        expect(mockInvalidateEntityCaches).toHaveBeenCalledTimes(1);
+        // The failure should have surfaced as a logged error (not a thrown exception).
+        const cacheErrorLog = logErrorMock.mock.calls.find(call =>
+            String(call?.[0] ?? '').includes('Cache invalidation after stats update failed')
+        );
+        expect(cacheErrorLog).toBeDefined();
     });
 });
