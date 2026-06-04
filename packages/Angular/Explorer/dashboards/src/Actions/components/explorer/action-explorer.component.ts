@@ -57,7 +57,6 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     approvalStatuses: [],
     hasExecutions: null
   };
-  public ShowSortDropdown = false;
 
   public SelectedCategoryId = 'all';
   public NewCategoryParentId: string | null = null;
@@ -415,7 +414,6 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
   public setSortField(field: SortField): void {
     this.StateService.setSortField(field);
-    this.ShowSortDropdown = false;
   }
 
   public toggleStatus(status: string): void {
@@ -446,27 +444,10 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.clearFilters();
   }
 
-  public hasActiveFilters(): boolean {
-    return this.StateService.hasActiveFilters();
-  }
-
   /** Active filter count for the popover badge — counts only Status + Type
    *  (searchTerm has its own search input, not part of the popover). */
   public get StatusTypeFilterCount(): number {
     return this.Filters.statuses.length + this.Filters.types.length;
-  }
-
-  public toggleSortDropdown(): void {
-    this.ShowSortDropdown = !this.ShowSortDropdown;
-  }
-
-  public getSortLabel(): string {
-    const option = this.SortOptions.find(o => o.field === this.SortField);
-    return option?.label || 'Sort';
-  }
-
-  public getSortIcon(): string {
-    return this.SortDirection === 'asc' ? 'fa-solid fa-arrow-up-short-wide' : 'fa-solid fa-arrow-down-wide-short';
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

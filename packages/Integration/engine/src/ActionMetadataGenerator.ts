@@ -24,6 +24,12 @@ export interface IntegrationObjectInfo {
     Description?: string;
     /** Whether the connector supports writing to this object */
     SupportsWrite: boolean;
+    /**
+     * The unique business property to upsert this object by (e.g. 'email' for HubSpot
+     * contacts). When set, the connector's Upsert verb defaults to keying on this property.
+     * Optional — objects without a natural upsert key omit it.
+     */
+    UpsertKey?: string;
     /** Fields on this object */
     Fields: IntegrationFieldInfo[];
     /**

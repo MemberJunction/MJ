@@ -22,7 +22,7 @@ interface CategoryViewModel {
       <mj-page-header Title="List Categories" Icon="fa-solid fa-tags">
         <div actions>
           <button mjButton variant="primary" size="sm" (click)="createCategory()">
-            <i class="fa-solid fa-plus"></i> New Category
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Category</span>
           </button>
         </div>
       </mj-page-header>

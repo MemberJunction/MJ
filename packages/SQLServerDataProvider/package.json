@@ -29,6 +29,7 @@
     "@memberjunction/ai": "5.38.0",
     "@memberjunction/ai-provider-bundle": "5.38.0",
     "@memberjunction/ai-vector-dupe": "5.38.0",
+    "@memberjunction/ai-vectordb": "5.38.0",
     "@memberjunction/aiengine": "5.38.0",
     "@memberjunction/core": "5.38.0",
     "@memberjunction/core-entities": "5.38.0",
