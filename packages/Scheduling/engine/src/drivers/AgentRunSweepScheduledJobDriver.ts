@@ -35,7 +35,7 @@ export class AgentRunSweepScheduledJobDriver extends BaseScheduledJob {
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
         // A scheduled maintenance sweep is a server-global task, so the global default provider is
         // the correct source here (not a per-request/per-tenant provider).
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider; // global-provider-ok: scheduled maintenance sweep is a server-global task, not per-request/per-tenant
         if (!(provider instanceof DatabaseProviderBase)) {
             return { Success: false, ErrorMessage: 'AgentRunSweep: no database provider available' };
         }

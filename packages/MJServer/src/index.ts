@@ -942,8 +942,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
   // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
   // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) {
-    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser)
+  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
   }
 
