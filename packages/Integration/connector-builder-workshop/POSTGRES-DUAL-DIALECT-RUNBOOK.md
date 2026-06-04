@@ -69,6 +69,20 @@ PGPASSWORD=Claude2Pg99 psql -h localhost -p 5433 -U mj_admin -d MJ_Workbench_PG 
   # plus the existing ENCRYPTION_KEY / MJ_API_KEY already in this file
   ```
 
+> **🚨 advancedGen gate — REQUIRED on any keyless env, or `ApplyAll` will fail.** `ApplyAll` triggers an
+> in-process CodeGen whose OPTIONAL AI "advanced generation" step **defaults to ON** (`enableAdvancedGeneration`
+> defaults to `true` in the CodeGen config schema). With **no AI credentials** that step calls a keyless model,
+> throws `Invalid Vertex AI credentials`, and **sinks the whole CodeGen → `ApplyAll`/Phase-A fail**. The agent
+> almost never has live AI keys, so on a keyless run you MUST, in `mj.config.cjs`:
+> ```js
+> advancedGeneration: { enableAdvancedGeneration: false, batchSize: 15 },
+> ```
+> **then RESTART the MJAPI** — the in-process CodeGen reads this config at MJAPI startup, so editing it without a
+> restart changes nothing (you'll see `Invalid Vertex AI credentials` keep climbing in the MJAPI log). Core
+> entity/SP/view generation is unaffected; only AI enrichment is skipped. Verify: after the restart, a fresh
+> `pull-ref` ApplyAll completes (`11/0`) with **zero** new `Invalid Vertex AI credentials` lines. Only keep
+> advancedGen ON where real AI keys are present (the keyed/broker MJAPI).
+
 ## 3. §1 bring-up — the exact order (run verbatim, on this branch)
 
 ```bash
