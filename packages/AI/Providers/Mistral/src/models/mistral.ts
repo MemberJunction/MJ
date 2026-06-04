@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ErrorAnalyzer } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
 
@@ -165,7 +165,8 @@ export class MistralLLM extends BaseLLM {
             model: chatResponse.model,
             id: chatResponse.id,
             object: chatResponse.object,
-            created: chatResponse.created
+            created: chatResponse.created,
+            raw: ToJSONSafe(chatResponse)
         };
         
         return chatResult;

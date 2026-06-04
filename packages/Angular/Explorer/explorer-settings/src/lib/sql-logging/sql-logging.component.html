@@ -21,7 +21,7 @@
         (click)="openStartSessionDialog()"
         [attr.aria-label]="'Start new SQL logging session' + (activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5) ? ' (maximum sessions reached)' : '')">
         <i class="fa-solid fa-play" aria-hidden="true"></i>
-        Start New Session
+        <span class="mj-action-label">Start New Session</span>
       </button>
     }
   </div>

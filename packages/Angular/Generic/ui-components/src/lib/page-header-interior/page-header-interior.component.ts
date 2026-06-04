@@ -163,6 +163,8 @@ import { Component, Input } from '@angular/core';
       display: flex;
       flex-wrap: wrap;
       align-items: center;
+      /* Right-aligned control bar on desktop; mobile block resets to flex-start. */
+      justify-content: flex-end;
       gap: var(--mj-space-3);
       padding: var(--mj-space-3) var(--mj-space-4);
       border-top: 1px solid var(--mj-border-subtle);
@@ -234,6 +236,40 @@ import { Component, Input } from '@angular/core';
     /* No .mj-btn reset here. Buttons projected into the chrome inherit the
        mjButton directive's global styles from button.scss — see "Button Styling"
        in packages/Angular/CLAUDE.md. */
+
+    /* Mobile compaction. On a phone the parent shell's rail already names the
+       section, so the interior card becomes a pure control surface: no outer
+       margin (flush to the body), no title/subtitle, action buttons collapse to
+       icons, and the toolbar control bar stays on one line (scrolls instead of
+       wrapping). */
+    @media (max-width: 768px) {
+      :host {
+        margin: 0;
+      }
+      .mj-page-header-interior__title,
+      .mj-page-header-interior__subtitle {
+        display: none;
+      }
+      /* Action buttons go icon-only — consumers wrap their button text in
+         <span class="mj-action-label"> so it can hide here without touching the
+         mjButton directive's own styles. */
+      :host ::ng-deep .mj-page-header-interior__actions .mj-action-label {
+        display: none;
+      }
+      /* Toolbar stays a single row on mobile. Mirrors the :has() rule above
+         (same specificity, later in source so it wins). */
+      :host ::ng-deep .mj-page-header-interior__row--toolbar:has(> [toolbar] > *) {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        /* Left-aligned on mobile (search grows to fill). */
+        justify-content: flex-start;
+      }
+      /* Search grows so Filter + view sit at the trailing edge of the bar. */
+      :host ::ng-deep .mj-page-header-interior__row--toolbar mj-page-search {
+        flex: 1;
+        min-width: 0;
+      }
+    }
   `]
 })
 export class MJPageHeaderInteriorComponent {

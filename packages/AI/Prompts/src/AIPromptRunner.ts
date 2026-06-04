@@ -1074,14 +1074,20 @@ export class AIPromptRunner {
     // Calculate total tokens and costs from all parallel executions
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
+    let totalCacheReadTokens = 0;
+    let totalCacheWriteTokens = 0;
     let totalCost = 0;
     let hasCost = false;
-    
+
     for (const result of successfulResults) {
       const usage = result.modelResult?.data?.usage;
       if (usage) {
         totalPromptTokens += usage.promptTokens || 0;
         totalCompletionTokens += usage.completionTokens || 0;
+        // Sum cache tokens across every attempt — each was a real provider call, so the billed
+        // cache usage is the sum, not the selected result's alone (which feeds the non-rollup field).
+        totalCacheReadTokens += usage.cacheReadTokens || 0;
+        totalCacheWriteTokens += usage.cacheWriteTokens || 0;
         if (usage.cost !== undefined) {
           totalCost += usage.cost;
           hasCost = true;
@@ -1141,6 +1147,8 @@ export class AIPromptRunner {
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
     consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
+    consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
+    consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
     if (hasCost) {
       consolidatedPromptRun.TotalCost = totalCost;
     }
@@ -5221,6 +5229,8 @@ export class AIPromptRunner {
       promptRun.TokensPromptRollup = promptRun.TokensPrompt;
       promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
       promptRun.TokensUsedRollup = promptRun.TokensUsed;
+      promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
+      promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
       if (promptRun.Cost !== undefined) {
         promptRun.TotalCost = promptRun.Cost;
       }

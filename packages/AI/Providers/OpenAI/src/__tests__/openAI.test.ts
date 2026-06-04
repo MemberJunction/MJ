@@ -153,6 +153,15 @@ describe('OpenAILLM', () => {
         });
     });
 
+    describe('getProviderRequestExtras', () => {
+        const callMethod = (): Record<string, unknown> =>
+            (instance as ReturnType<typeof Object.create>)['getProviderRequestExtras']({});
+
+        it('returns no extras for plain OpenAI (subclasses override to add provider params)', () => {
+            expect(callMethod()).toEqual({});
+        });
+    });
+
     describe('supportsReasoningViaSystemPrompt', () => {
         const callMethod = (modelName: string): boolean => {
             return (instance as ReturnType<typeof Object.create>)['supportsReasoningViaSystemPrompt'](modelName);

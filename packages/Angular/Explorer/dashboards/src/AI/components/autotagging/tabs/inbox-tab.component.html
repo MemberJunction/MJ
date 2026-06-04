@@ -10,9 +10,9 @@
   <div actions>
     <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
       @if (IsLoading) {
-        <i class="fa-solid fa-spinner fa-spin"></i> Refreshing…
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
       } @else {
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
       }
     </button>
   </div>
