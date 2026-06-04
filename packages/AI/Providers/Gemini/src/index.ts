@@ -258,8 +258,18 @@ export class GeminiLLM extends BaseLLM {
             // Create the model and then chat
             const modelOptions: Record<string, any> = {
                 temperature: params.temperature || 0.5,
-                responseType: params.responseFormat,
             };
+
+            switch (params.responseFormat) {
+                case 'JSON':
+                    modelOptions.responseMimeType = 'application/json';
+                    break;
+                case 'ModelSpecific':
+                    if (params.modelSpecificResponseFormat) {
+                        Object.assign(modelOptions, params.modelSpecificResponseFormat);
+                    }
+                    break;
+            }
 
             // Add supported parameters
             if (params.topP != null) {
@@ -568,8 +578,18 @@ export class GeminiLLM extends BaseLLM {
         // Create the model and then chat
         const modelOptions: Record<string, any> = {
             temperature: params.temperature || 0.5,
-            responseType: params.responseFormat,
         };
+
+        switch (params.responseFormat) {
+            case 'JSON':
+                modelOptions.responseMimeType = 'application/json';
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
+                }
+                break;
+        }
 
         // Add supported parameters
         if (params.topP != null) {
