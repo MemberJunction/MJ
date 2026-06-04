@@ -459,6 +459,28 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract BatchSeparator(): string;
 
     /**
+     * Splits an oversized SQL batch into individual statements on `;`+EOL
+     * boundaries so a caller (e.g. the RSU migration executor) can re-group
+     * them into smaller chunks that each fit under a client request timeout.
+     *
+     * Base implementation = the naive `split(/;\s*\n/g)` semantics: split on a
+     * `;` followed by optional inline whitespace and a newline, trim each
+     * fragment, drop empties, and ensure each returned statement ends with `;`.
+     * This is correct for SQL Server (no dollar-quoted blocks).
+     *
+     * PostgreSQL overrides this with a dollar-quote-aware split that never
+     * tears apart `DO $$ … $$` / `$tag$ … $tag$` blocks whose bodies
+     * legitimately contain `;`+newline.
+     */
+    SplitStatements(batch: string): string[] {
+        return batch
+            .split(/;\s*\n/g)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+            .map((s) => (s.endsWith(';') ? s : s + ';'));
+    }
+
+    /**
      * Returns SQL to check if a database object exists.
      * @param objectType - "TABLE", "VIEW", "FUNCTION", "PROCEDURE", "TRIGGER"
      * @param schema - Schema name

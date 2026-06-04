@@ -193,8 +193,6 @@ export class SchemaBuilder {
                     APIRestarted: false,
                     GitCommitSuccess: false,
                     Steps: [],
-                    EntitiesCreated: [],
-                    EntitiesNotCreated: [],
                     ErrorMessage: `Schema generation failed: ${schemaOutput.Errors.join('; ')}`,
                     ErrorStep: 'BuildSchema',
                 },
@@ -210,8 +208,6 @@ export class SchemaBuilder {
                     APIRestarted: false,
                     GitCommitSuccess: false,
                     Steps: [{ Name: 'BuildSchema', Status: 'skipped', DurationMs: 0, Message: 'No migration SQL produced — no schema changes needed' }],
-                    EntitiesCreated: [],
-                    EntitiesNotCreated: [],
                 },
             };
         }

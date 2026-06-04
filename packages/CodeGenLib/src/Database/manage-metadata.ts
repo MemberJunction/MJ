@@ -2545,14 +2545,7 @@ export class ManageMetadataBase {
       if (entityFilter) {
          scopedEntityIDs = this.resolveEntityNamesToIDs(entityFilter);
          if (scopedEntityIDs.length === 0) {
-            // Brand-new entities under RSU exist in the DB but not yet in the in-memory
-            // cache, so resolveEntityNamesToIDs() returns []. The field-scan steps are
-            // correctly skipped (their EntityField rows were created by the prior
-            // unfiltered pass), but the soft PK/FK config is config-driven and MUST still
-            // run — otherwise freshly-created connector entities are left with zero
-            // primary keys and CRUD generation fails.
-            logStatus(`      manageEntityFields: entityFilter (${entityFilter.length} names) resolved to 0 IDs — skipping Pass 2 field-sync, still applying config-driven soft PK/FK`);
-            await this.applySoftPKFKConfigAndRefresh(pool);
+            logStatus(`      manageEntityFields: entityFilter (${entityFilter.length} names) resolved to 0 IDs — skipping Pass 2`);
             return true;
          }
       }
@@ -2608,11 +2601,22 @@ export class ManageMetadataBase {
       }
       logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
-      // Apply soft PK/FK configuration (config-driven) + refresh metadata so the
-      // downstream SQL/TypeScript generation picks up the new PK/FK flags.
+      // Apply soft PK/FK configuration if config file exists
       const stepConfigStartTime: Date = new Date();
-      await this.applySoftPKFKConfigAndRefresh(pool);
+      if (! await this.applySoftPKFKConfig(pool)) {
+         logError('Error applying soft PK/FK configuration');
+      }
       logStatus(`      Applied soft PK/FK configuration in ${(new Date().getTime() - stepConfigStartTime.getTime()) / 1000} seconds`);
+
+      // CRITICAL: Refresh metadata to pick up soft PK/FK flags
+      // Without this, downstream SQL and TypeScript generation will fail
+      // because entity.Fields and entity.PrimaryKeys won't reflect the updated flags
+      if (configInfo.additionalSchemaInfo) {
+         logStatus('      Refreshing metadata after applying soft PK/FK configuration...');
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+         await md.Refresh();
+         logStatus('      Metadata refresh complete');
+      }
 
       // IS-A parent field sync: create/update virtual EntityField records for parent chain fields
       // Must run AFTER metadata refresh so it sees current soft PK/FK flags
@@ -2720,30 +2724,6 @@ export class ManageMetadataBase {
       catch (e) {
          logError(e as string);
          return false;
-      }
-   }
-
-   /**
-    * Applies the config-driven soft PK/FK metadata then refreshes the in-memory
-    * metadata so downstream SQL/TypeScript generation observes the new flags.
-    * Kept separate from the entity-name-filtered field-sync because the soft
-    * PK/FK config is keyed on SchemaName+BaseTable (NOT the entity-name filter),
-    * so it must run even when a scoped manageEntityFields pass resolves to zero
-    * cache IDs — the brand-new-entity case under RSU, where the entity already
-    * exists in the DB but the in-memory metadata cache is still stale.
-    */
-   private async applySoftPKFKConfigAndRefresh(pool: CodeGenConnection): Promise<void> {
-      if (! await this.applySoftPKFKConfig(pool)) {
-         logError('Error applying soft PK/FK configuration');
-      }
-      // Refresh metadata to pick up soft PK/FK flags — without this, downstream
-      // SQL and TypeScript generation fail because entity.Fields/PrimaryKeys
-      // won't reflect the updated flags.
-      if (configInfo.additionalSchemaInfo) {
-         logStatus('      Refreshing metadata after applying soft PK/FK configuration...');
-         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-         await md.Refresh();
-         logStatus('      Metadata refresh complete');
       }
    }
 

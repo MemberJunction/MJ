@@ -95,54 +95,6 @@ class RSUConfig {
 
 const rsuConfig = new RSUConfig();
 
-/**
- * Splits an oversized SQL batch into individual statements on `;`+EOL boundaries — but NEVER inside
- * a PostgreSQL dollar-quoted block (`$$ … $$` or `$tag$ … $tag$`), whose body legitimately contains
- * `;`+newline (DO blocks, PL/pgSQL function bodies, the integration view-drop guard). A naive
- * `split(/;\s*\n/g)` tears those apart. Outside dollar blocks the boundary semantics mirror the
- * prior regex (`;` then optional inline whitespace then a newline). Each returned statement ends
- * with `;`. Exported for unit testing.
- */
-export function splitSqlStatementsDollarAware(batch: string): string[] {
-  const statements: string[] = [];
-  let current = '';
-  let dollarTag: string | null = null;   // active dollar-quote tag (e.g. '$$' or '$fn$'), or null
-  const isTagChar = (c: string) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c === '_';
-  for (let i = 0; i < batch.length; i++) {
-    const ch = batch[i];
-    if (ch === '$') {
-      // Scan a dollar-quote tag: `$` [A-Za-z0-9_]* `$`.
-      let j = i + 1;
-      while (j < batch.length && isTagChar(batch[j])) j++;
-      if (batch[j] === '$') {
-        const tag = batch.slice(i, j + 1);
-        if (dollarTag === null) dollarTag = tag;          // entering a dollar-quoted block
-        else if (dollarTag === tag) dollarTag = null;     // matching close → exiting
-        current += tag;
-        i = j;
-        continue;
-      }
-    }
-    if (ch === ';' && dollarTag === null) {
-      // Boundary = `;` then optional spaces/tabs/CR then a newline — only OUTSIDE a dollar block.
-      let j = i + 1;
-      while (j < batch.length && (batch[j] === ' ' || batch[j] === '\t' || batch[j] === '\r')) j++;
-      if (j < batch.length && batch[j] === '\n') {
-        current += ';';
-        const trimmed = current.trim();
-        if (trimmed.length > 0) statements.push(trimmed);
-        current = '';
-        i = j;   // skip the inline whitespace; the loop's i++ steps past the newline
-        continue;
-      }
-    }
-    current += ch;
-  }
-  const tail = current.trim();
-  if (tail.length > 0) statements.push(tail);
-  return statements.map(s => (s.endsWith(';') ? s : s + ';'));
-}
-
 // ─── Pipeline Input/Output Types ─────────────────────────────────────
 
 /**
@@ -189,30 +141,6 @@ export interface RSUPipelineStep {
 }
 
 /**
- * One entity that CodeGen declined to create, paired with the reason it was
- * skipped (e.g. "No primary key found" for an integration table that has no
- * soft PK configured).
- */
-export interface RSUEntityNotCreated {
-  /** Name of the entity/table that could not be created. */
-  name: string;
-  /** Human-readable reason CodeGen skipped this entity. */
-  reason: string;
-}
-
-/**
- * Verdict from the CodeGen / manage-metadata step describing which entities
- * were created during a run and which were skipped (and why). Returned by an
- * IRSUCodeGenRunner that implements RunInProcessWithResult.
- */
-export interface RSUCodeGenEntityVerdict {
-  /** Names of entities CodeGen created in this run. */
-  EntitiesCreated: string[];
-  /** Entities CodeGen could not create, each with a reason. */
-  EntitiesNotCreated: RSUEntityNotCreated[];
-}
-
-/**
  * Result of a full RSU pipeline run.
  */
 export interface RSUPipelineResult {
@@ -220,20 +148,6 @@ export interface RSUPipelineResult {
   BranchName?: string;
   MigrationFilePath?: string;
   EntitiesProcessed?: number;
-  /**
-   * Names of entities CodeGen successfully created during this run. Populated
-   * from the CodeGen / manage-metadata "new entity" verdict when the injected
-   * CodeGen runner reports it (via RunInProcessWithResult); empty array when the
-   * verdict is unavailable (e.g. the runner only implements RunInProcess, or no
-   * migration succeeded).
-   */
-  EntitiesCreated: string[];
-  /**
-   * Entities CodeGen could NOT create, each paired with a reason (typically a
-   * missing primary key on an integration table). Populated from the CodeGen
-   * verdict when available; empty array otherwise.
-   */
-  EntitiesNotCreated: RSUEntityNotCreated[];
   APIRestarted: boolean;
   GitCommitSuccess: boolean;
   Steps: RSUPipelineStep[];
@@ -269,12 +183,6 @@ interface PostMigrationResult {
   ApiRestarted: boolean;
   GitCommitSuccess: boolean;
   BranchName?: string;
-  /**
-   * CodeGen's created-vs-skipped entity verdict, when the injected runner
-   * reported it. Undefined when CodeGen was skipped (no successful migration)
-   * or the runner only implements RunInProcess.
-   */
-  CodeGenVerdict?: RSUCodeGenEntityVerdict;
   /**
    * Whether the run-wide CodeGen step succeeded. Undefined when CodeGen was
    * skipped (no successful migration). When FALSE the migrations executed but
@@ -340,18 +248,6 @@ export interface RSUStatus {
 export interface IRSUCodeGenRunner {
   /** Run CodeGen in-process. Returns true on success. */
   RunInProcess(skipDatabaseGeneration?: boolean): Promise<boolean>;
-
-  /**
-   * Optional richer entry point: run CodeGen in-process and report which
-   * entities were created vs skipped (and why). Implementations that can
-   * surface the manage-metadata "new entity" list and the no-PK skip verdict
-   * should provide this so the RSU pipeline can populate EntitiesCreated /
-   * EntitiesNotCreated. Returns `Success` plus the verdict.
-   *
-   * When a runner does NOT implement this, RSU falls back to RunInProcess and
-   * leaves the entity arrays empty — behavior is otherwise unchanged.
-   */
-  RunInProcessWithResult?(skipDatabaseGeneration?: boolean): Promise<{ Success: boolean; Verdict?: RSUCodeGenEntityVerdict }>;
 }
 
 // ─── Schema Protection ───────────────────────────────────────────────
@@ -426,8 +322,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   private _isRunning = false;
   private _ddlProvider: DatabaseProviderBase | null = null;
   private _codeGenRunner: IRSUCodeGenRunner | null = null;
-  /** CodeGen's created-vs-skipped entity verdict from the most recent runCodeGen() call. */
-  private _lastCodeGenVerdict: RSUCodeGenEntityVerdict | null = null;
   private _codeGenOutputPaths: string[] = [];
   private _additionalSchemaInfoPath: string | null = null;
   private _outOfSync = false;
@@ -724,11 +618,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map((r) => r.Input)), sharedSteps);
 
     const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
-    // Capture CodeGen's created-vs-skipped verdict (set by runCodeGen when the
-    // injected runner reports it) so it can flow into per-caller results.
-    if (this._lastCodeGenVerdict) {
-      result.CodeGenVerdict = this._lastCodeGenVerdict;
-    }
     // Thread the CodeGen success/failure into the post-migration result. A migration
     // can ExecuteMigration:success yet leave its entity with NO spCreate/spUpdate procs
     // if RunCodeGen failed — after which a sync silently skips the entity with
@@ -787,11 +676,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const codeGenFailed = postResult.CodeGenSucceeded === false;
     this._lastRunResult = successfulItems.length > 0 && !codeGenFailed ? 'success' : 'failed';
 
-    // CodeGen's verdict is run-wide (one CodeGen pass covers the whole batch),
-    // so every per-caller result shares the same created/not-created arrays.
-    const entitiesCreated = postResult.CodeGenVerdict?.EntitiesCreated ?? [];
-    const entitiesNotCreated = postResult.CodeGenVerdict?.EntitiesNotCreated ?? [];
-
     const results: RSUPipelineResult[] = itemResults.map((item) => {
       const allSteps = [...sharedSteps, ...item.Steps];
       // A migration that executed but whose run-wide CodeGen failed is NOT a success —
@@ -800,8 +684,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       const result: RSUPipelineResult = {
         Success: item.Success && successfulItems.length > 0 && !codeGenFailed,
         MigrationFilePath: item.FilePath,
-        EntitiesCreated: [...entitiesCreated],
-        EntitiesNotCreated: [...entitiesNotCreated],
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
         BranchName: postResult.BranchName,
@@ -1142,7 +1024,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       // Split on statement-ending `;` (preserve the `;`) and re-group — but NEVER inside a
       // PostgreSQL dollar-quoted block (DO $$…$$ / function bodies / the integration view-drop
       // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
-      const statements = splitSqlStatementsDollarAware(batch);
+      // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
+      // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
+      const statements = GetDialect(this.Platform).SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
@@ -1175,34 +1059,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    *
    * Override via RSU_CODEGEN_COMMAND env var for custom setups.
    */
-  /**
-   * Invoke the injected CodeGen runner in-process. Prefers the richer
-   * RunInProcessWithResult (capturing the created-vs-skipped entity verdict);
-   * falls back to RunInProcess when the runner doesn't implement it.
-   * Returns CodeGen success.
-   */
-  private async runInProcessCodeGen(runner: IRSUCodeGenRunner): Promise<boolean> {
-    if (runner.RunInProcessWithResult) {
-      const result = await runner.RunInProcessWithResult(false);
-      if (result.Verdict) {
-        this._lastCodeGenVerdict = result.Verdict;
-        const created = result.Verdict.EntitiesCreated.length;
-        const notCreated = result.Verdict.EntitiesNotCreated.length;
-        this.rsuLog(`CodeGen verdict — created: ${created}, not created: ${notCreated}`);
-      }
-      return result.Success;
-    }
-    return runner.RunInProcess(false);
-  }
-
   private async runCodeGen(): Promise<boolean> {
-    // Fresh verdict for this run; populated only when the runner reports one.
-    this._lastCodeGenVerdict = null;
-
     // Prefer in-process CodeGen runner if injected (no child process, no filesystem deps)
     if (this._codeGenRunner) {
       this.rsuLog('Running CodeGen in-process');
-      const success = await this.runInProcessCodeGen(this._codeGenRunner);
+      const success = await this._codeGenRunner.RunInProcess(false);
       if (!success) {
         throw new RSUError('CODEGEN', 'In-process CodeGen failed');
       }
@@ -1891,8 +1752,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const failMsg = steps.find((s) => s.Name === failedStep && s.Status === 'failed')?.Message ?? `Failed at ${failedStep}`;
     return {
       Success: false,
-      EntitiesCreated: [],
-      EntitiesNotCreated: [],
       APIRestarted: false,
       GitCommitSuccess: false,
       Steps: [...steps],

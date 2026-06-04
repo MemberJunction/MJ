@@ -28,19 +28,7 @@
       "titleBar.activeForeground": "#FFFFFF",
       "titleBar.inactiveBackground": "#74BBE899",
       "titleBar.inactiveForeground": "#FFFFFF99"
-    },
-    "activityBar.activeBackground": "#214174",
-    "activityBar.background": "#214174",
-    "activityBar.foreground": "#e7e7e7",
-    "activityBar.inactiveForeground": "#e7e7e799",
-    "activityBarBadge.background": "#c7386f",
-    "activityBarBadge.foreground": "#e7e7e7",
-    "commandCenter.border": "#e7e7e799",
-    "sash.hoverBorder": "#214174",
-    "titleBar.activeBackground": "#162b4c",
-    "titleBar.activeForeground": "#e7e7e7",
-    "titleBar.inactiveBackground": "#162b4c99",
-    "titleBar.inactiveForeground": "#e7e7e799"
+    }
   },
   "peacock.color": "#162B4C",
   "typescript.tsdk": "node_modules/typescript/lib",

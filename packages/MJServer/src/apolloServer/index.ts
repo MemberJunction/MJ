@@ -30,6 +30,10 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
  */
 const integrationOperationTracer: ApolloServerPlugin = {
   async requestDidStart(requestCtx) {
+    // Off by default — the plugin stays registered but emits nothing unless the
+    // MJ_INTEGRATION_TRACE debug flag is explicitly set. Avoids logging on every
+    // request in normal operation.
+    if (process.env.MJ_INTEGRATION_TRACE !== 'true') return undefined;
     const opName = requestCtx.request.operationName ?? 'anonymous';
     const query = requestCtx.request.query ?? '';
     // Lightweight match — fire only for operations that touch an Integration
