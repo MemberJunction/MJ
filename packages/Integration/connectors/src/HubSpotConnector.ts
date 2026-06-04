@@ -17,6 +17,7 @@ import {
     type CRUDResult,
     type CreateRecordContext,
     type UpdateRecordContext,
+    type UpsertRecordContext,
     type DeleteRecordContext,
     type GetRecordContext,
     type SearchContext,
@@ -106,6 +107,9 @@ const HUBSPOT_OBJECTS: IntegrationObjectInfo[] = [
     {
         Name: 'contacts', DisplayName: 'Contact',
         Description: 'A person or lead in HubSpot CRM', SupportsWrite: true,
+        // Contacts upsert by email — the natural unique key. Drives the idempotent Upsert verb,
+        // which defines the contact-create collision race (409 Contact already exists) out of existence.
+        UpsertKey: 'email',
         Fields: [
             { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact email address' },
             { Name: 'firstname', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact first name' },
@@ -1029,6 +1033,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     public override get SupportsCreate(): boolean { return true; }
     public override get SupportsUpdate(): boolean { return true; }
+    public override get SupportsUpsert(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
     public override get SupportsSearch(): boolean { return true; }
     public override get SupportsListing(): boolean { return true; }
@@ -1702,6 +1707,70 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
+     * Idempotently creates-or-updates a record keyed by a unique business property
+     * (default: the object's `UpsertKey` metadata, e.g. 'email' for contacts).
+     *
+     * Uses HubSpot's batch/upsert endpoint with a batch of one. This is the ONLY HubSpot
+     * single-call idempotent path verified against the live API: the single-record
+     * PATCH .../{id}?idProperty=email does NOT create-on-missing (returns 404), while
+     * POST .../batch/upsert creates-on-missing and updates-on-existing with a 2xx (no 409).
+     * A batch of one sidesteps the documented batch caveats (whole-batch-409 on concurrent
+     * batches, no partial upserts) that only bite multi-input batches.
+     *
+     * This *defines the error out of existence*: a search-then-create sequence has a window in
+     * which a concurrent writer can create the same email-keyed contact, yielding
+     * `409 Contact already exists`. Rather than catch and special-case that 409, the single keyed
+     * upsert removes the window entirely — the collision is no longer a condition the caller (or
+     * this code) ever has to handle.
+     */
+    public override async Upsert(ctx: UpsertRecordContext): Promise<CRUDResult> {
+        const idProperty = ctx.IDProperty ?? this.GetUpsertKey(ctx.ObjectName);
+        if (!idProperty) {
+            return {
+                Success: false,
+                StatusCode: 400,
+                ErrorMessage: `[HubSpot] Upsert on '${ctx.ObjectName}' has no upsert key — set ctx.IDProperty or declare UpsertKey in object metadata`,
+            };
+        }
+
+        const idValue = ctx.Attributes[idProperty];
+        if (idValue == null || String(idValue).length === 0) {
+            return {
+                Success: false,
+                StatusCode: 400,
+                ErrorMessage: `[HubSpot] Upsert on '${ctx.ObjectName}' is missing a value for the upsert key '${idProperty}' in Attributes`,
+            };
+        }
+
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/batch/upsert`;
+
+        // Batch of one: id is the upsert-key value; properties carry the full record.
+        const body = { inputs: [{ idProperty, id: String(idValue), properties: ctx.Attributes }] };
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+
+        // Never trust a bare 2xx — the batch envelope can report per-input errors with a 2xx.
+        const batchError = this.GetBatchUpsertError(response);
+        if (batchError) {
+            return {
+                Success: false,
+                StatusCode: response.Status,
+                ErrorMessage: `[HubSpot] Upsert on ${ctx.ObjectName}: ${batchError}`,
+            };
+        }
+
+        const upserted = (response.Body as { results?: Array<{ id?: unknown }> }).results?.[0];
+        return {
+            Success: true,
+            ExternalID: String(upserted?.id ?? ''),
+            StatusCode: response.Status,
+        };
+    }
+
+    /**
      * Deletes (archives) a record in HubSpot by ExternalID.
      * Routes association objects to the v4 batch/archive endpoint instead of v3 objects.
      */
@@ -2007,6 +2076,42 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }
         if (!body?.results || body.results.length === 0) {
             return `HubSpot returned no association results (2xx but nothing linked)`;
+        }
+        return null;
+    }
+
+    /**
+     * Validates a v3 batch/upsert response BODY (not just the HTTP status). HubSpot's batch
+     * envelope can return a 2xx while reporting per-input failures via `numErrors`/`errors`,
+     * an incomplete `status`, or an empty `results` array. Returns null when the upsert
+     * genuinely produced a record; otherwise a human-readable error. Mirrors the
+     * GetAssociationBatchError precedent — never trust a bare 2xx on a batch endpoint.
+     */
+    private GetBatchUpsertError(response: RESTResponse): string | null {
+        if (response.Status < 200 || response.Status >= 300) {
+            const b = response.Body as Record<string, unknown> | undefined;
+            return b?.['message'] ? String(b['message']) : `HTTP ${response.Status}`;
+        }
+        const body = response.Body as {
+            status?: string;
+            results?: Array<{ id?: unknown }>;
+            errors?: Array<{ message?: string }>;
+            numErrors?: number;
+        } | undefined;
+
+        if (body?.numErrors || (body?.errors && body.errors.length > 0)) {
+            return body.errors?.[0]?.message ?? `HubSpot reported ${body?.numErrors ?? body?.errors?.length} upsert error(s)`;
+        }
+        if (body?.status && body.status !== 'COMPLETE') {
+            return `upsert batch status was '${body.status}', expected 'COMPLETE'`;
+        }
+        if (!body?.results || body.results.length === 0) {
+            return `HubSpot returned no upsert results (2xx but nothing written)`;
+        }
+        // A 2xx result with no usable id means the write didn't really land — reporting success here
+        // would hand the caller an empty ExternalID and silently break any later lookup keyed on it.
+        if (body.results[0]?.id == null || String(body.results[0].id).length === 0) {
+            return `HubSpot upsert result is missing an object id (2xx but no id to link)`;
         }
         return null;
     }
@@ -3177,6 +3282,15 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     private GetObjectFieldNames(objectName: string): string[] {
         const obj = HUBSPOT_OBJECTS.find(o => o.Name === objectName);
         return obj ? obj.Fields.map(f => f.Name) : [];
+    }
+
+    /**
+     * Returns the configured upsert key (unique business property to match on) for an
+     * object from HUBSPOT_OBJECTS metadata, or undefined if the object declares none.
+     * Used by Upsert to default the idProperty when the caller doesn't override it.
+     */
+    private GetUpsertKey(objectName: string): string | undefined {
+        return HUBSPOT_OBJECTS.find(o => o.Name === objectName)?.UpsertKey;
     }
 
     /**

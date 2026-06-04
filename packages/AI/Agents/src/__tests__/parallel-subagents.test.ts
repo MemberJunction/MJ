@@ -271,6 +271,47 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
                 'save-2-started'
             ]);
         });
+
+        it('chains create→finalize on the same instance even when the ID is assigned mid-INSERT (regression: steps stuck at Running)', async () => {
+            // Reproduces the real bug: a brand-new step has an EMPTY ID at create; its INSERT Save()
+            // assigns the ID (client-side) and then awaits the network. A fast finalize then queues an
+            // UPDATE while that INSERT is still in flight. Keyed by ID, create (id='') and finalize
+            // (id='assigned') land in different buckets → the chain breaks → the UPDATE races ahead of
+            // the INSERT and is lost (row stuck at Running). Keyed by the instance, the chain holds.
+            let resolveInsert!: (v: boolean) => void;
+            const insertGate = new Promise<boolean>((r) => { resolveInsert = r; });
+            const callOrder: string[] = [];
+
+            const stepEntity = new MockStepEntity(''); // empty ID at create time
+            let callCount = 0;
+            stepEntity.Save = async () => {
+                callCount++;
+                if (callCount === 1) {
+                    stepEntity.ID = 'assigned-uuid'; // INSERT assigns the ID, then blocks (in flight)
+                    callOrder.push('insert-started');
+                    await insertGate;
+                    callOrder.push('insert-ended');
+                    return true;
+                }
+                callOrder.push('update-started');
+                return true;
+            };
+
+            agent.testQueueStepSave(stepEntity);   // create — ID is ''
+            await Promise.resolve();               // let the INSERT Save() start + assign the ID
+            agent.testQueueStepSave(stepEntity);   // finalize — ID is now 'assigned-uuid'
+
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            // UPDATE must wait for the INSERT to finish, despite the ID having changed between queues.
+            expect(callOrder).toEqual(['insert-started']);
+
+            resolveInsert(true);
+            await Promise.all(agent.getPendingSaves());
+
+            expect(callOrder).toEqual(['insert-started', 'insert-ended', 'update-started']);
+        });
     });
 
     describe('Parallel Sub-Agent Execution Loop', () => {
