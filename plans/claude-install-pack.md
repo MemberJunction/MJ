@@ -644,7 +644,7 @@ PINNED (a specific MJ release):
 
 | Command | Why ship | Source file in this repo | Notes |
 |---|---|---|---|
-| `/init` | One-stop "rebuild my CLAUDE.md from the pack" — useful if user accidentally deletes managed block | NEW for the pack | Calls `mj install:claude` under the hood |
+| `/refresh-pack` | One-stop "rebuild my CLAUDE.md from the pack" — useful if user accidentally deletes managed block. Renamed from `/init` to avoid collision with Claude Code's built-in `/init` for project initialization. | NEW for the pack | Calls `mj install:claude` under the hood |
 | `/commit` | Generic "commit only what's staged" command — already user-friendly | `.claude/commands/commit.md` | Ship as-is |
 | `/create-pr` | Standard PR-creation command | `.claude/commands/create-pr.md` | Lightly edit to drop "to next" assumption — let user configure base branch |
 | `/update-pr` | Update existing PR | `.claude/commands/update-pr.md` | Ship as-is |

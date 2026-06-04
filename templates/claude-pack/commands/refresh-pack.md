@@ -3,7 +3,7 @@ description: Re-install the MJ Claude Pack into the current directory. Use this 
 mj-pack-version: 5.1.0
 ---
 
-# Initialize / refresh the MJ Claude Pack
+# Refresh the MJ Claude Pack
 
 Re-install the MemberJunction Claude Pack into the current directory. This
 is the recovery command — use it when:

@@ -34,14 +34,14 @@
       "sha256": "ad456f44dc8c2a1698b7398431cf8dafd2b225c3d11c3c6e504247b5344f7ace"
     },
     {
-      "path": ".claude/commands/init.md",
-      "bytes": 3780,
-      "sha256": "860339ff170768e88e74e5a50c4a2b452b73f3dad122566695a8d9401412c734"
-    },
-    {
       "path": ".claude/commands/new-branch.md",
       "bytes": 5354,
       "sha256": "ef2abccf510f34144cd47b0a726320d991c9545b6dd8fd256f4b5b1346fda3c7"
+    },
+    {
+      "path": ".claude/commands/refresh-pack.md",
+      "bytes": 3767,
+      "sha256": "dcd1e1da388525301f015ab2d4fb75f3bb682f7d3416e9bf5bfce72092f26ce5"
     },
     {
       "path": ".claude/commands/save-plan-new-pr.md",
