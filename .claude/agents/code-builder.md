@@ -15,6 +15,16 @@ Per ADR-001, there is no deterministic generator, no ConnectorSpec, no LLM_COMPL
 
 The `TransformRecord` protected hook (also v5.39.x) sits between `NormalizeResponse` and `ToExternalRecord`. Override it when the vendor returns records with stripping needs (Salesforce `attributes`), empty-string-vs-null coercion (some date fields), or per-record reshaping. Default is identity.
 
+## Sync-efficiency hooks — override on evidence, every one has a safe default
+
+Beyond CRUD, `BaseIntegrationConnector` exposes the §7/§10 sync-efficiency surface (full list + signatures in `connector-code-conventions.md` → "Sync-efficiency contract"). These are OPTIONAL — the engine works if you override none — so add them ONLY where the frozen contract carries evidence the source supports them; otherwise leave the default and the engine degrades gracefully. An override is a *claim* the source supports the capability; back it with contract evidence or don't write it.
+
+- **Honor the typed schema.** The IOF type bounds (`Length`/`Precision`/`Scale`/`DefaultValue`) the extractor emitted flow into the generated columns — you don't write coercion for them, but never widen a typed column to a stringly-typed catch-all in connector code, and respect `IsReadOnly` on write. Clean typing is set upstream; don't undo it here.
+- **`StableOrderingKey(objectName)`** — return the keyset hint the extractor emitted for no-watermark objects; `null` otherwise.
+- **`RateLimitPolicy` / `ExtractRetryAfterMs(error)` / `MaxConcurrencyHint`** — populate from the rate-limit facts the extractor captured into `Configuration`; in `ExtractRetryAfterMs`, parse the vendor's actual `Retry-After` / `X-RateLimit-*` shape.
+- **`SupportsBatchWrite` + `BatchCreateRecords`/`BatchUpdateRecords`/`BatchDeleteRecords`** — override ONLY when the vendor has real batch endpoints; the defaults loop the single-record path, so skipping these never breaks correctness, it only forgoes throughput.
+- **`PostProcessRecord(record)`** — connector-specific value normalization (e.g. flattening an association's `{from,to}` shape) only; leave dialect/type coercion to the engine's write layer.
+
 ## Goal
 
 Write `packages/Integration/connectors/src/<Name>Connector.ts` (or `connectors-registry/<vendor>/src/<Name>Connector.ts` for workshop builds) such that:

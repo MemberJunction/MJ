@@ -57,6 +57,27 @@ const TIER_RESULT_SCHEMA = {
         status: { enum: ['green', 'red', 'skipped'] },
         failures: { type: 'array' },
         durationMs: { type: 'integer' },
+        // T10/T11 only: the ordered live-e2e phase evidence (§1→§7 of the canonical
+        // test plan). Each entry records one phase/sub-phase/cell the harness ran, in
+        // order, with the dual NL+JSON+pass/fail evidence floor-check enforces against
+        // `e2eLivePhases` in floor/phase0-slots.json. `dialect` distinguishes the
+        // mandatory SQL Server vs Postgres runs (§7).
+        livePhaseLog: {
+            type: 'array',
+            items: {
+                type: 'object',
+                required: ['phaseId', 'order', 'status'],
+                properties: {
+                    phaseId: { type: 'string' },     // e.g. 'E2E.PhaseB.3_1'
+                    order: { type: 'integer' },      // matches e2eLivePhases declared order
+                    dialect: { enum: ['sqlserver', 'postgres'] },
+                    nl: { type: 'string' },          // natural-language statement of what was tested + result
+                    json: {},                        // scrubbed IntegrationGetRun / DB counts / progress.jsonl evidence
+                    status: { enum: ['pass', 'fail', 'skip'] },
+                    skipReason: { type: 'string' },  // REQUIRED when status==='skip' (no silent omission)
+                },
+            },
+        },
     },
 };
 
@@ -114,7 +135,7 @@ for (const t of tiers) {
     }
     phase(`${t.tier}_${t.label}`);
     const result = await agent(
-        `Run ${t.tier} (${t.label}) for connector ${args?.connectorName ?? '(?)'} of vendor ${args?.vendor ?? '(?)'}.\n${t.cred ? `CREDENTIAL REFERENCE (OPAQUE; DO NOT READ): ${args?.credentialReference}\nInvoke via mcp-mj-test-runner; subprocess reads credential bytes; results return without them.` : 'No credentials required.'}\n\nReturn { tier, label, status: 'green'|'red', failures? }. On red, classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
+        `Run ${t.tier} (${t.label}) for connector ${args?.connectorName ?? '(?)'} of vendor ${args?.vendor ?? '(?)'}.\n${t.cred ? `CREDENTIAL REFERENCE (OPAQUE; DO NOT READ): ${args?.credentialReference}\nInvoke via mcp-mj-test-runner; subprocess reads credential bytes; results return without them.\n\nHARD CONTRACT — this is the live-e2e tier: drive the connector through the live e2e harness running the ORDERED §1→§7 phase skeleton declared in floor/phase0-slots.json \`e2eLivePhases\` VERBATIM and IN ORDER (env bring-up → Phase A → Phase B 2^N matrix [3.1→3.8] → Phase C → §5 generation-action/agents → §6 observability → §7 dual-dialect SQL Server THEN Postgres). Run the APPLICABLE subset for this connector's capabilities; any skipped phase/cell MUST carry a logged \`skipReason\`. Return \`livePhaseLog\`: one entry per phase/sub-phase/cell you ran (and per dialect for dualDialect phases) = { phaseId, order, dialect, nl, json, status:'pass'|'fail'|'skip', skipReason? }, with NL + JSON + explicit pass/fail per §6. floor-check rejects the run if any applicable phase is missing, reordered, unevidenced, silently-skipped, or proven on only one dialect.` : 'No credentials required.'}\n\nReturn { tier, label, status: 'green'|'red', failures?${t.cred ? ', livePhaseLog' : ''} }. On red, classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
         // testing-agent owns the read-only ladder runs.
         { agentType: 'testing-agent', schema: TIER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
     );

@@ -68,6 +68,19 @@ If `SupportsCreate=true`, the IO MUST have non-null `CreateAPIPath` + `CreateMet
 
 The IO column `IncrementalWatermarkField` (NEW in v5.39.x) names the vendor-side cursor/timestamp field. If `SupportsIncrementalSync=true`, `IncrementalWatermarkField` MUST be set; bijection floor-check enforces.
 
+## Sync-efficiency contract — OPTIONAL hooks, fill what the source supports
+
+The universal sync engine consumes a set of OPTIONAL connector hooks on `BaseIntegrationConnector` for peak-aware throughput, no-watermark resume, bounded typing, and clean target writes (framework §7/§10). **Every hook has a safe default — a connector that overrides none still works.** You "fill out the contract" only where the vendor *documents/supports* the capability; everywhere else leave the default and the engine degrades gracefully. Provable-only still applies: override a hook only on evidence, never on a guess. This is how a connector graduates from "syncs" to "syncs efficiently, at scale, with no issues" — add the hooks as discovery surfaces the capability, not up front.
+
+- **Bounded typing (the NVARCHAR(MAX) problem).** Surface *every* field, and in `DiscoverFields` populate `ExternalFieldSchema.MaxLength` / `Precision` / `Scale` / `DefaultValue` whenever the source reports them, so the schema builder emits a bounded column instead of MAX. Where the source doesn't state a size, leave it `null` so the builder sizes it *generously* — err larger; a roomy bounded column beats a truncating tight one, and both beat MAX. "Provable" only forbids *inventing* a constraint the source doesn't have; it never means drop a field or size it stingily — get everything, size it comfortably.
+- **Keyset / no-watermark resume.** Override `StableOrderingKey(objectName)` to name a stable, monotonic ordering column (usually the PK) for objects that have *no* incremental watermark. The engine resumes a scan from the last-seen key (`FetchContext.AfterKeyValue` → return `FetchBatchResult.NextAfterKeyValue`), robust to mid-stream insert/delete. Return `null` where no stable key exists — keyset resume is simply unavailable, not an error.
+- **Peak-aware rate limiting.** Override the `RateLimitPolicy` getter (`{TokensPerSec, Burst?, ThrottleBackoffFactor?}`) with the source's documented limits and `ExtractRetryAfterMs(error)` to parse a Retry-After / limit header into ms. The engine runs an AIMD token bucket; with no policy it derives a conservative rate. Override `MaxConcurrencyHint` with the highest safe per-layer concurrency the source tolerates.
+- **Aggressive batching.** If the API has batch endpoints, set `SupportsBatchWrite=true` and override `BatchCreateRecords` / `BatchUpdateRecords` / `BatchDeleteRecords`. Defaults loop the single-record methods, so the engine may always call the batch form — overriding only buys throughput, never correctness.
+- **Type-enforcement post-process.** Override `PostProcessRecord(record)` to normalize a record's values to the resolved column formats AFTER transform/normalize and BEFORE write (the connector-side complement to the engine's target-type enforcement). Default returns the record unchanged. (This is THIS system's hook — not MCP, not `take`.)
+- **Surface silent-empties.** When a fetch returns zero records for a structural reason (e.g. a second-layer/association object whose parents weren't available), attach a `FetchWarning` to `FetchBatchResult.Warnings` so the engine reports it in the run artifact instead of a swallowed `console.warn`.
+
+None of these gate shipping a connector — they're the difference between a connector that technically works and one that syncs cleanly under real volume on both SQL Server and Postgres targets.
+
 ## Connector creation pipeline (D1)
 
 The canonical flow connector → integration is `IntegrationConnectorCreationPipeline` from `@memberjunction/integration-engine`:
