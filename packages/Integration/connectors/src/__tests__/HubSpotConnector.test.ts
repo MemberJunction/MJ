@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { FetchContext, FetchBatchResult, RESTResponse, RESTAuthContext, CreateRecordContext } from '@memberjunction/integration-engine';
+import type { FetchContext, FetchBatchResult, RESTResponse, RESTAuthContext, CreateRecordContext, UpsertRecordContext } from '@memberjunction/integration-engine';
 import { HubSpotConnector } from '../HubSpotConnector.js';
 
 // --- Association write tests (mock only the HTTP transport boundary) ---
@@ -44,6 +44,16 @@ class TestHubSpotConnector extends HubSpotConnector {
 /** Builds a CreateRecordContext for an association object with the given FK attributes. */
 function assocCreateCtx(objectName: string, attributes: Record<string, unknown>): CreateRecordContext {
     return { CompanyIntegration: {}, ContextUser: {}, ObjectName: objectName, Attributes: attributes };
+}
+
+/** Builds an UpsertRecordContext for a CRM object (e.g. contacts) with the given attributes. */
+function upsertCtx(objectName: string, attributes: Record<string, unknown>, idProperty?: string): UpsertRecordContext {
+    return { CompanyIntegration: {}, ContextUser: {}, ObjectName: objectName, Attributes: attributes, IDProperty: idProperty };
+}
+
+/** Convenience: a single canned batch/upsert response body that HubSpot returns for one input. */
+function batchUpsertBody(id: string) {
+    return { status: 'COMPLETE', results: [{ id, properties: {} }] };
 }
 
 describe('HubSpotConnector association create (request shape)', () => {
@@ -185,6 +195,108 @@ describe('HubSpotConnector association delete', () => {
         const body = req.body as { inputs: Array<{ from: { id: string }; to: { id: string } }> };
         expect(body.inputs[0].from.id).toBe('999'); // deal is the wire 'from'
         expect(body.inputs[0].to.id).toBe('111');   // contact is the wire 'to'
+    });
+});
+
+// --- Idempotent contact upsert (idProperty=email) ---
+// HubSpot's single-record PATCH .../{email}?idProperty=email does NOT create-on-missing
+// (verified live: 404). The idempotent path is POST .../batch/upsert with a batch-of-one,
+// which creates-on-missing and updates-on-existing without a 409 (verified live: 200, then 200).
+describe('HubSpotConnector contact upsert (idProperty)', () => {
+    it('issues ONE call to .../batch/upsert with idProperty=email — no separate search-then-create', async () => {
+        const connector = new TestHubSpotConnector();
+        connector.Responses.push({ Status: 201, Body: batchUpsertBody('225903727925') } as RESTResponse);
+
+        const result = await connector.Upsert(upsertCtx('contacts', { email: 'contact@example.com', firstname: 'Test', lastname: 'Contact' }));
+
+        // The whole point: exactly one wire call, so there is no gap for a concurrent writer to race into.
+        expect(connector.Captured).toHaveLength(1);
+        const req = connector.Captured[0];
+        expect(req.method).toBe('POST');
+        expect(req.url).toContain('/crm/v3/objects/contacts/batch/upsert');
+        const body = req.body as { inputs: Array<{ idProperty: string; id: string; properties: Record<string, unknown> }> };
+        expect(body.inputs).toHaveLength(1);
+        expect(body.inputs[0].idProperty).toBe('email');
+        expect(body.inputs[0].id).toBe('contact@example.com');
+        expect(body.inputs[0].properties).toMatchObject({ email: 'contact@example.com', firstname: 'Test', lastname: 'Contact' });
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('225903727925');
+    });
+
+    it('an already-existing email returns 200 (update), NOT 409 — the race is defined out of existence', async () => {
+        const connector = new TestHubSpotConnector();
+        // HubSpot's response when the email already exists: batch/upsert UPDATES it and returns 2xx with the existing id.
+        // (Live-verified: 1st upsert 200, 2nd upsert 200 — no 409.)
+        connector.Responses.push({ Status: 200, Body: batchUpsertBody('225903727925') } as RESTResponse);
+
+        const result = await connector.Upsert(upsertCtx('contacts', { email: 'contact@example.com', firstname: 'Test', lastname: 'Contact' }));
+
+        // With search-then-create this path was a 409 (a concurrent writer fills the gap between the
+        // search and the create); with the single idempotent batch/upsert it is a normal 200 update.
+        // The collision is no longer a condition that can produce an error.
+        expect(result.Success).toBe(true);
+        expect(result.StatusCode).toBe(200);
+        expect(result.ExternalID).toBe('225903727925');
+        // Still exactly one wire call — no search precedes it.
+        expect(connector.Captured).toHaveLength(1);
+    });
+
+    it('a real failure (401) still surfaces as CRUDResult.Success=false — errors are not swallowed', async () => {
+        const connector = new TestHubSpotConnector();
+        connector.Responses.push({ Status: 401, Body: { message: 'Authentication credentials not found' } } as RESTResponse);
+
+        const result = await connector.Upsert(upsertCtx('contacts', { email: 'contact@example.com' }));
+
+        // Only the duplicate case is benign; genuine failures stay loud.
+        expect(result.Success).toBe(false);
+        expect(result.StatusCode).toBe(401);
+        expect(result.ErrorMessage).toContain('Authentication credentials not found');
+    });
+
+    it('a 2xx batch envelope reporting numErrors surfaces as failure — never trust a bare 2xx', async () => {
+        const connector = new TestHubSpotConnector();
+        // HubSpot can return 2xx while reporting per-input errors in the batch envelope.
+        connector.Responses.push({
+            Status: 200,
+            Body: { status: 'COMPLETE', results: [], errors: [{ message: 'Property "email" is invalid' }], numErrors: 1 },
+        } as RESTResponse);
+
+        const result = await connector.Upsert(upsertCtx('contacts', { email: 'not-an-email' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('is invalid');
+    });
+
+    it('a 2xx with a result that has no id surfaces as failure — never report success with an empty ExternalID', async () => {
+        const connector = new TestHubSpotConnector();
+        // Degenerate-but-2xx: a result object exists but carries no usable id. Reporting Success here
+        // with ExternalID='' would silently break any later lookup keyed on the returned id.
+        connector.Responses.push({ Status: 200, Body: { status: 'COMPLETE', results: [{ properties: {} }] } } as RESTResponse);
+
+        const result = await connector.Upsert(upsertCtx('contacts', { email: 'contact@example.com' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ExternalID ?? '').not.toBe('225903727925'); // no fabricated id
+    });
+
+    it('CreateRecord on a duplicate email returns 409 — the behavior Upsert replaces (contrast anchor)', async () => {
+        const connector = new TestHubSpotConnector();
+        // Documents the bug permanently: plain create on an already-existing email collides.
+        connector.Responses.push({
+            Status: 409,
+            Body: { message: 'Contact already exists. Existing ID: 225903727925' },
+        } as RESTResponse);
+
+        const result = await connector.CreateRecord(assocCreateCtx('contacts', { email: 'contact@example.com', firstname: 'Test' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.StatusCode).toBe(409);
+        // Pin the endpoint: CreateRecord for a CRM object MUST hit v3/objects (the create-only path that 409s),
+        // NOT batch/upsert. Otherwise this contrast anchor would silently pass even if create regressed to upsert.
+        expect(connector.Captured).toHaveLength(1);
+        expect(connector.Captured[0].url).toContain('/crm/v3/objects/contacts');
+        expect(connector.Captured[0].url).not.toContain('batch/upsert');
     });
 });
 

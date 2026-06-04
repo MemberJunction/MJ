@@ -394,6 +394,28 @@ export interface UpdateRecordContext extends CRUDContext {
     Relationships?: Record<string, unknown>;
 }
 
+/**
+ * Context for upserting a record in an external system — a single idempotent
+ * create-or-update keyed by a unique business property (not the system PK).
+ *
+ * Upsert exists to define create-then-update race conditions out of existence:
+ * a search-then-create sequence has a window in which a concurrent writer can
+ * create the same record, producing a duplicate-key conflict (e.g. HubSpot
+ * `409 Contact already exists`). A single keyed upsert call has no such window.
+ */
+export interface UpsertRecordContext extends CRUDContext {
+    /** Field values for the record (must include the upsert-key property's value) */
+    Attributes: Record<string, unknown>;
+    /**
+     * The unique business property to match on (e.g. 'email' for HubSpot contacts).
+     * Optional override; when omitted, the connector resolves a per-object default
+     * from its own metadata. Connectors that cannot resolve a default MUST fail loudly.
+     */
+    IDProperty?: string;
+    /** Optional relationship data */
+    Relationships?: Record<string, unknown>;
+}
+
 /** Context for deleting a record from an external system */
 export interface DeleteRecordContext extends CRUDContext {
     /** External ID of the record to delete */
