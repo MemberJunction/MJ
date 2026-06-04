@@ -210,6 +210,12 @@ async function tailBatchEvents(gql, runID, maxPolls = 100000) {
 
 /** Triggers a sync via the harness's race-free path and tails its batch stream. */
 async function runSyncWithBatches(gql, ciid, opts) {
+    // Snapshot the newest run BEFORE triggering so a fast sync that COMPLETES before we can observe it
+    // in-flight is still resolvable — the same race-free fallback the shared harness's triggerAndResolveRun
+    // uses. Without it, a small/fast portal (advancedGen off + already-synced data) raced to "no RunID and
+    // no in-flight run" and crashed this phase (ratelimit.error).
+    const beforeRuns = (await gql(GQL.listRuns, { ciid, inFlightOnly: false, limit: 1 })).IntegrationListRuns;
+    const beforeID = beforeRuns?.Runs?.[0]?.RunID ?? null;
     const started = (await gql(GQL.startSync, {
         ciid, fullSync: opts.fullSync ?? false, syncDirection: opts.syncDirection ?? 'Pull',
         entityMapIDs: opts.entityMapIDs ?? null,
@@ -219,8 +225,14 @@ async function runSyncWithBatches(gql, ciid, opts) {
     if (!runID) {
         const runs = (await gql(GQL.listRuns, { ciid, inFlightOnly: true, limit: 1 })).IntegrationListRuns;
         runID = runs?.Runs?.[0]?.RunID;
-        if (!runID) throw new Error('Could not resolve run id after StartSync (no RunID and no in-flight run)');
     }
+    if (!runID) {
+        // Fast-completion fallback: the most-recent run, as long as it's newer than the pre-trigger snapshot.
+        const recent = (await gql(GQL.listRuns, { ciid, inFlightOnly: false, limit: 1 })).IntegrationListRuns;
+        const recentID = recent?.Runs?.[0]?.RunID ?? null;
+        if (recentID && recentID !== beforeID) runID = recentID;
+    }
+    if (!runID) throw new Error('Could not resolve run id after StartSync (no RunID and no in-flight run)');
     return tailBatchEvents(gql, runID, opts.maxPolls ?? 100000);
 }
 
