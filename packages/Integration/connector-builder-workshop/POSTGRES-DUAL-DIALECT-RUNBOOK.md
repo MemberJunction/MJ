@@ -1,11 +1,14 @@
-# Postgres Dual-Dialect Runbook — standing up PG + running the §7 connector E2E
+# Postgres Runbook — standing up PG + running the connector E2E
 
-> The `testing-agent` runs the canonical §1→§7 live E2E (`connector-test-conventions.md` +
-> `floor/phase0-slots.json` `e2eLivePhases`) on **two** dialects. SQL Server is the default;
-> **§7 re-runs the entire applicable suite on Postgres** and `floor-check` rejects the run if any
-> `dualDialect:true` phase is proven on only one dialect (`e2e-dual-dialect-missing`). This is the
-> exact, no-discovery-required path to get Postgres up and prove the Postgres half. Everything the
-> migration needs is converted automatically — you do **not** author PG SQL by hand.
+> **Dialect policy (per `connector-test-conventions.md` §7): Postgres-PRIMARY. The per-connector
+> loop runs the canonical §1→§7 live E2E on Postgres ONLY — SQL Server is SKIPPED.** The framework is
+> authored in SQL Server dialect and auto-converts to Postgres at run time; the framework is static
+> while connectors are the daily work; and PG is the stricter dialect, so a connector green on
+> Postgres holds on SQL Server. SQL Server is an explicit opt-in reserved for *framework*-level
+> changes, not connector builds. `floor/phase0-slots.json` carries `dualDialect:false`, so
+> `floor-check` requires the Postgres `livePhaseLog` and does **not** demand a SQL Server twin.
+> Everything the migration needs is converted automatically — you do **not** author PG SQL by hand.
+> This is the exact, no-discovery-required path to get Postgres up and prove the connector.
 
 ## 0. The one thing that makes PG "free": automatic conversion
 
@@ -90,7 +93,9 @@ PGPASSWORD=Claude2Pg99 psql -h localhost -p 5433 -U mj_admin -d MJ_Workbench_PG 
 npx mj migrate          # converts SQLServer migrations → PG and applies them
 npx mj sync push        # seeds metadata (incl. the connector's Integration/IntegrationObject rows)
 npx mj codegen          # PG-aware: __mj entity classes + DB objects on Postgres
-# build + start the keyed MJAPI/MJExplorer (operator launches MJAPI WITH the LLM keys; you never read them)
+# build + start MJAPI/MJExplorer with advancedGen OFF (§2 gate) — connector E2E is keyless, so NO LLM
+#   keys are needed; advancedGen does not affect connectors. (advancedGen+PG is proven separately in
+#   the keyed/broker env.) restart MJAPI after flipping the config so the in-process CodeGen picks it up.
 # obtain the GQL API key WITHOUT reading/exposing it (§0), then create the initial Company record
 ```
 Gotcha (same as the integration framework's PG runs): a fresh PG DB has `__mj` but **no per-connector dest
@@ -104,11 +109,10 @@ then on every phase runs in **reference mode** against that `CIID` — no secret
 seed/broker mechanics are identical across dialects; only `HS_LIVE_PLATFORM=postgresql` and the DB-direct
 PG creds change.
 
-## 5. Run §1→§7 on Postgres — and emit the dual-dialect evidence
+## 5. Run §1→§7 on Postgres — and emit the phase evidence
 
-Run the same per-connector live harness you ran on SQL Server with the platform + PG DB-direct creds
-swapped in (the harness drives everything through the MJ GraphQL API; the DB-direct creds are only your
-*assertion* reads):
+Run the per-connector live harness on Postgres (the harness drives everything through the MJ GraphQL API;
+the DB-direct creds are only your *assertion* reads):
 ```bash
 export PGH=localhost PGP=5433 PGU=mj_admin PGW=Claude2Pg99 PGD=MJ_Workbench_PG
 env HS_LIVE_GRAPHQL_URL=http://localhost:4001/ HS_LIVE_PLATFORM=postgresql HS_LIVE_CIID=$CIID \
@@ -116,11 +120,11 @@ env HS_LIVE_GRAPHQL_URL=http://localhost:4001/ HS_LIVE_PLATFORM=postgresql HS_LI
     node -r dotenv/config packages/Integration/connectors/test/<vendor>-live-harness.mjs
 ```
 
-For **every** `e2eLivePhases` entry with `dualDialect:true`, your `testing-agent` T10/T11 result MUST carry a
-`livePhaseLog` entry with `dialect:'postgres'` **in addition to** the `sqlserver` one — same `phaseId`/`order`,
-each with NL + JSON + pass/fail. `floor-check` reads both and fails the run on `e2e-dual-dialect-missing` if a
-`dualDialect` phase appears for only one dialect. Assert **outcomes** (ground-truth counts, second-layer
-non-empty, record-map 1:1), never `Status==='Success'` (the silent-fail rule).
+For **every** `e2eLivePhases` entry, your `testing-agent` T10/T11 result MUST carry a `livePhaseLog` entry
+with `dialect:'postgres'` — same `phaseId`/`order`, each with NL + JSON + pass/fail. `floor-check` fails the
+run on `e2e-phase-missing` / `e2e-skip-without-reason` if an applicable phase has no Postgres evidence.
+Assert **outcomes** (ground-truth counts, second-layer non-empty, record-map 1:1), never `Status==='Success'`
+(the silent-fail rule). SQL Server is not run for connectors, so no `sqlserver` twin is required or expected.
 
 ## 6. Postgres-specific gotchas (the only real deltas vs SQL Server)
 
@@ -141,7 +145,9 @@ non-empty, record-map 1:1), never `Status==='Success'` (the silent-fail rule).
 
 ## 7. What "Postgres-proven" means
 
-A connector is dual-dialect green only when the **same applicable §1→§7 subset** ran on both SQL Server and
-Postgres, each `dualDialect` phase has a `postgres` `livePhaseLog` entry with real outcome evidence, and
-`floor-check` reports no `e2e-dual-dialect-missing` / `e2e-phase-missing` / `e2e-skip-without-reason`. Until
-then the Postgres half is unproven and the connector cannot graduate.
+A connector is green only when the applicable §1→§7 subset ran on **Postgres**, every applicable
+`e2eLivePhases` phase has a `postgres` `livePhaseLog` entry with real outcome evidence, and `floor-check`
+reports no `e2e-phase-missing` / `e2e-skip-without-reason`. SQL Server is intentionally skipped for
+connectors (framework auto-conversion + PG being the stricter dialect cover it); a SQL Server run is only
+required when a *framework*-level change is in scope. Until the Postgres evidence is complete the connector
+cannot graduate.
