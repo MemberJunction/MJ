@@ -3,26 +3,31 @@ import { GetGlobalObjectStore, ShutdownRegistry } from '@memberjunction/global';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 
-/** Predictable T-SQL-flavored dialect so we can assert on the generated SQL. */
+/** Predictable T-SQL-flavored dialect so we can assert on the generated SQL. The watchdog now
+ *  reaches the DB only through stored procs (writes) + the base view (reads), so the proc-call
+ *  builder is the key piece to mock. */
 const mockDialect = {
     QuoteIdentifier: (n: string) => `[${n}]`,
     QuoteSchema: (s: string, o: string) => `[${s}].[${o}]`,
     QuoteStringLiteral: (v: string) => `'${v.replace(/'/g, "''")}'`,
     CurrentTimestampUTC: () => 'GETUTCDATE()',
     Coalesce: (a: string, b: string) => `COALESCE(${a}, ${b})`,
+    ProcedureCallSyntax: (schema: string, name: string, params: string[]) => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
 };
 
 interface MockProvider {
     Dialect: typeof mockDialect;
-    EntityByName: (name: string) => { SchemaName: string; BaseTable: string } | undefined;
+    EntityByName: (name: string) => { SchemaName: string; BaseTable: string; BaseView: string } | undefined;
     ExecuteSQL: ReturnType<typeof vi.fn>;
 }
 
-function makeProvider(resolveTable = true): MockProvider {
+function makeProvider(resolveEntity = true): MockProvider {
     return {
         Dialect: mockDialect,
         EntityByName: (name: string) =>
-            resolveTable && name === 'MJ: AI Agent Runs' ? { SchemaName: '__mj', BaseTable: 'AIAgentRun' } : undefined,
+            resolveEntity && name === 'MJ: AI Agent Runs'
+                ? { SchemaName: '__mj', BaseTable: 'AIAgentRun', BaseView: 'vwAIAgentRuns' }
+                : undefined,
         ExecuteSQL: vi.fn().mockResolvedValue([]),
     };
 }
@@ -49,48 +54,44 @@ describe('AgentRunWatchdog', () => {
     });
 
     describe('SweepOrphanedRuns', () => {
-        it('returns 0 and issues no UPDATE when no runs are stale', async () => {
+        it('calls the sweep proc and returns 0 when it reports no stale runs', async () => {
             const p = makeProvider();
-            p.ExecuteSQL.mockResolvedValueOnce([]); // scan finds nothing
+            p.ExecuteSQL.mockResolvedValueOnce([{ RunsFailed: 0 }]);
 
             const failed = await AgentRunWatchdog.SweepOrphanedRuns(asProvider(p), mockUser);
 
             expect(failed).toBe(0);
-            // Only the scan ran — no UPDATE.
             expect(p.ExecuteSQL).toHaveBeenCalledTimes(1);
-            expect(String(p.ExecuteSQL.mock.calls[0][0])).toMatch(/^SELECT/);
+            expect(String(p.ExecuteSQL.mock.calls[0][0])).toContain('spSweepStaleAIAgentRuns');
         });
 
-        it('force-fails stale Running runs and returns the count', async () => {
+        it('returns the count of force-failed runs reported by the proc', async () => {
             const p = makeProvider();
-            p.ExecuteSQL
-                .mockResolvedValueOnce([{ ID: RUN_A }, { ID: RUN_B }]) // scan
-                .mockResolvedValueOnce([]); // update
+            p.ExecuteSQL.mockResolvedValueOnce([{ RunsFailed: 2 }]);
 
             const failed = await AgentRunWatchdog.SweepOrphanedRuns(asProvider(p), mockUser);
 
             expect(failed).toBe(2);
-            expect(p.ExecuteSQL).toHaveBeenCalledTimes(2);
-            const updateSql = String(p.ExecuteSQL.mock.calls[1][0]);
-            expect(updateSql).toMatch(/UPDATE \[__mj\]\.\[AIAgentRun\]/);
-            expect(updateSql).toContain("[Status] = 'Failed'");
-            expect(updateSql).toContain("[Status] = 'Running'"); // never touches non-Running rows
-            expect(updateSql).toContain('[LastHeartbeatAt] <'); // staleness predicate
+            // One atomic proc call — no separate scan + update.
+            expect(p.ExecuteSQL).toHaveBeenCalledTimes(1);
+            const sql = String(p.ExecuteSQL.mock.calls[0][0]);
+            expect(sql).toContain('[__mj].[spSweepStaleAIAgentRuns]');
         });
 
-        it('returns 0 (and does not throw) when the table cannot be resolved from metadata', async () => {
+        it('returns 0 (and does not throw) when the entity cannot be resolved from metadata', async () => {
             const p = makeProvider(false);
             const failed = await AgentRunWatchdog.SweepOrphanedRuns(asProvider(p), mockUser);
             expect(failed).toBe(0);
             expect(p.ExecuteSQL).not.toHaveBeenCalled();
         });
 
-        it('honors a custom stale threshold in the failure reason', async () => {
+        it('passes a custom stale threshold to the proc', async () => {
             const p = makeProvider();
-            p.ExecuteSQL.mockResolvedValueOnce([{ ID: RUN_A }]).mockResolvedValueOnce([]);
+            p.ExecuteSQL.mockResolvedValueOnce([{ RunsFailed: 1 }]);
             await AgentRunWatchdog.SweepOrphanedRuns(asProvider(p), mockUser, { staleThresholdMinutes: 17 });
-            const updateSql = String(p.ExecuteSQL.mock.calls[1][0]);
-            expect(updateSql).toContain('17 minute(s)');
+            const sql = String(p.ExecuteSQL.mock.calls[0][0]);
+            expect(sql).toContain('spSweepStaleAIAgentRuns');
+            expect(sql).toContain('17'); // threshold passed as the proc argument
         });
     });
 
@@ -110,20 +111,19 @@ describe('AgentRunWatchdog', () => {
             expect(names).toContain('AgentRunWatchdog');
         });
 
-        it('stamps a DB-clock heartbeat for tracked runs on the timer', async () => {
+        it('stamps a heartbeat for tracked runs via the heartbeat proc on the timer', async () => {
             const p = makeProvider();
             const wd = AgentRunWatchdog.Instance;
             wd.Track(RUN_A, asProvider(p), mockUser);
 
             await vi.advanceTimersByTimeAsync(30_000);
 
-            const heartbeatCall = p.ExecuteSQL.mock.calls.find(c => /SET \[LastHeartbeatAt\] = GETUTCDATE\(\)/.test(String(c[0])));
+            const heartbeatCall = p.ExecuteSQL.mock.calls.find(c => /spStampAIAgentRunHeartbeat/.test(String(c[0])));
             expect(heartbeatCall).toBeTruthy();
             expect(String(heartbeatCall![0])).toContain(`'${RUN_A}'`);
-            expect(String(heartbeatCall![0])).toContain("[Status] = 'Running'");
         });
 
-        it('cancels in-flight runs and clears the set on Shutdown', async () => {
+        it('cancels in-flight runs via the cancel proc and clears the set on Shutdown', async () => {
             const p = makeProvider();
             const wd = AgentRunWatchdog.Instance;
             wd.Track(RUN_A, asProvider(p), mockUser);
@@ -132,7 +132,7 @@ describe('AgentRunWatchdog', () => {
             await wd.Shutdown();
 
             expect(wd.TrackedCount).toBe(0);
-            const cancelCall = p.ExecuteSQL.mock.calls.find(c => /\[Status\] = 'Cancelled'/.test(String(c[0])));
+            const cancelCall = p.ExecuteSQL.mock.calls.find(c => /spCancelAIAgentRun/.test(String(c[0])));
             expect(cancelCall).toBeTruthy();
             expect(String(cancelCall![0])).toContain(`'${RUN_A}'`);
         });

@@ -26,11 +26,18 @@ const DEFAULT_CONFIG: AgentRunWatchdogConfig = {
 };
 
 /** Matches a canonical UUID. Tracked IDs come from provider-generated PKs, but we validate
- *  before ever interpolating into SQL so the IN-list can never become an injection vector. */
+ *  before ever interpolating into SQL so a proc argument can never become an injection vector. */
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /** The one MJ entity whose runs this watchdog guards. */
 const AGENT_RUN_ENTITY = 'MJ: AI Agent Runs';
+
+/** Dedicated maintenance stored procedures (see the watchdog sprocs migration). The runtime DB
+ *  user has EXECUTE on these + SELECT on the base view, but no direct table access — so all of
+ *  the watchdog's writes go through these procs and its reads go through the view. */
+const SP_HEARTBEAT = 'spStampAIAgentRunHeartbeat';
+const SP_SWEEP = 'spSweepStaleAIAgentRuns';
+const SP_CANCEL = 'spCancelAIAgentRun';
 
 /**
  * Process-wide watchdog that guarantees no `AIAgentRun` is left stuck in `Status='Running'`
@@ -40,17 +47,21 @@ const AGENT_RUN_ENTITY = 'MJ: AI Agent Runs';
  * across multiple MJAPI instances behind a load balancer (no instance trusts its own clock):
  *
  * 1. **Heartbeat** — while a run is in flight, the owning process stamps `LastHeartbeatAt`
- *    every {@link AgentRunWatchdogConfig.heartbeatIntervalMs}. Liveness is *proven*, never assumed.
+ *    every {@link AgentRunWatchdogConfig.heartbeatIntervalMs} via {@link SP_HEARTBEAT}.
  * 2. **Sweep** — {@link SweepOrphanedRuns} force-fails any `Running` run whose heartbeat has
- *    gone stale. Run once on boot (closes restart-orphans) and on a timer (closes mid-life
- *    orphans). The `UPDATE ... WHERE Status='Running' AND <stale>` is atomic and idempotent,
- *    so concurrent sweeps from multiple instances are harmless.
+ *    gone stale, via {@link SP_SWEEP} (one atomic, set-based `UPDATE … WHERE Status='Running'
+ *    AND <stale>` inside the proc — so concurrent sweeps from multiple instances are harmless
+ *    and a run another instance is still heart-beating can't be caught mid-sweep). Run once on
+ *    boot (closes restart-orphans) and on a timer (closes mid-life orphans).
  * 3. **Graceful shutdown** — on SIGTERM/SIGINT (via {@link ShutdownRegistry}) this process marks
- *    the runs *it* owns `Cancelled`, closing the deploy case instantly without waiting for staleness.
+ *    the runs *it* owns `Cancelled` via {@link SP_CANCEL}, closing the deploy case instantly.
  *
- * Every statement filters `Status='Running'` only — `Paused` and `AwaitingFeedback` are
- * legitimately-not-progressing states and are never touched. All SQL is built through the
- * provider's {@link SQLDialect}, so it runs unmodified on SQL Server and PostgreSQL.
+ * Every proc filters `Status='Running'` only — `Paused` and `AwaitingFeedback` are
+ * legitimately-not-progressing states and are never touched. The watchdog accesses the DB only
+ * through these stored procedures (writes) and the base view (reads) — never the base table —
+ * so it works as the regular runtime DB user, not just the elevated CodeGen user. Proc calls are
+ * built through the provider's {@link Dialect.ProcedureCallSyntax}, so they run on SQL Server and
+ * PostgreSQL unchanged.
  */
 export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements IShutdownable {
     private _config: AgentRunWatchdogConfig = DEFAULT_CONFIG;
@@ -106,39 +117,38 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * IShutdownable: on graceful shutdown, mark every run this process still owns as `Cancelled`
-     * so it doesn't linger as a phantom `Running` row until the next sweep. Idempotent and
-     * never throws — a failed cancel just falls through to the staleness sweep later.
+     * (via {@link SP_CANCEL}) so it doesn't linger as a phantom `Running` row until the next sweep.
+     * Idempotent and never throws — a failed cancel just falls through to the staleness sweep later.
      */
     public async Shutdown(): Promise<void> {
         this.stopTimers();
-        const ids = this.trackedIdList();
+        const ids = this.trackedIds();
         this._trackedRuns.clear();
-        if (!ids || !this._provider) {
+        if (!ids.length || !this._provider) {
+            return;
+        }
+        const schema = AgentRunWatchdog.schemaOf(this._provider);
+        if (!schema) {
             return;
         }
         const d = this._provider.Dialect;
-        const table = this.resolveTable(this._provider);
-        if (!table) {
-            return;
-        }
-        const reason = d.QuoteStringLiteral('[watchdog] Run orphaned by graceful process shutdown');
-        const sql =
-            `UPDATE ${table} SET ${d.QuoteIdentifier('Status')} = 'Cancelled', ` +
-            `${d.QuoteIdentifier('CompletedAt')} = ${d.CurrentTimestampUTC()}, ` +
-            `${d.QuoteIdentifier('ErrorMessage')} = ${d.Coalesce(d.QuoteIdentifier('ErrorMessage'), reason)} ` +
-            `WHERE ${d.QuoteIdentifier('Status')} = 'Running' AND ${d.QuoteIdentifier('ID')} IN (${ids});`;
-        try {
-            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, this._contextUser ?? undefined);
-        } catch (err) {
-            LogError(`AgentRunWatchdog.Shutdown failed to cancel in-flight run(s): ${err instanceof Error ? err.message : String(err)}`);
+        for (const id of ids) {
+            const sql = d.ProcedureCallSyntax(schema, SP_CANCEL, [d.QuoteStringLiteral(id)]) + ';';
+            try {
+                await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, this._contextUser ?? undefined);
+            } catch (err) {
+                LogError(`AgentRunWatchdog.Shutdown failed to cancel run ${id}: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 
     /**
      * Force-fail any `Running` agent run whose liveness heartbeat has gone stale (or that never
-     * beat and was started long ago). Safe to run on every boot and on a timer, on every instance:
-     * the predicate is staleness-based (never "fail all Running"), so it cannot touch a run that a
-     * healthy instance is still heart-beating. Returns the number of rows failed.
+     * beat and was started long ago), via the dedicated {@link SP_SWEEP} proc. The proc does the
+     * whole thing as one atomic, set-based `UPDATE` and returns the count, so it's safe to run on
+     * every boot and on a timer, on every instance: the predicate is staleness-based (never "fail
+     * all Running") and re-evaluated at write time, so it cannot touch a run a healthy instance is
+     * still heart-beating. Returns the number of rows failed.
      */
     public static async SweepOrphanedRuns(
         provider: DatabaseProviderBase,
@@ -146,35 +156,21 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         config?: Partial<AgentRunWatchdogConfig>,
     ): Promise<number> {
         const threshold = config?.staleThresholdMinutes ?? DEFAULT_CONFIG.staleThresholdMinutes;
-        const table = AgentRunWatchdog.resolveTableStatic(provider);
-        if (!table) {
-            LogError('AgentRunWatchdog.SweepOrphanedRuns: could not resolve the AIAgentRun table from metadata; skipping sweep');
+        const schema = AgentRunWatchdog.schemaOf(provider);
+        if (!schema) {
+            LogError('AgentRunWatchdog.SweepOrphanedRuns: could not resolve the AIAgentRun schema from metadata; skipping sweep');
             return 0;
         }
         const d = provider.Dialect;
-        // The cutoff is computed in JS and compared against DB-clock heartbeats. The only skew is
-        // sweeper-process-vs-DB (NTP-synced, sub-second) against a minutes-wide threshold — immaterial.
-        // Heartbeats themselves stay DB-clock, so heartbeats from different instances never disagree.
-        const cutoffIso = new Date(Date.now() - threshold * 60_000).toISOString();
-        const predicate = AgentRunWatchdog.stalePredicate(d, cutoffIso);
         try {
-            // Count first (dialect-portable) so the log line is accurate without relying on
-            // @@ROWCOUNT / RETURNING, which differ across platforms.
-            const matches = await provider.ExecuteSQL<{ ID: string }>(
-                `SELECT ${d.QuoteIdentifier('ID')} FROM ${table} WHERE ${predicate};`,
-                undefined, { description: 'AgentRunWatchdog stale-run scan' }, contextUser);
-            const failCount = Array.isArray(matches) ? matches.length : 0;
-            if (failCount === 0) {
-                return 0;
+            // The proc runs the atomic UPDATE on the DB clock and returns RunsFailed.
+            const sql = d.ProcedureCallSyntax(schema, SP_SWEEP, [String(Math.trunc(threshold))]) + ';';
+            const rows = await provider.ExecuteSQL<{ RunsFailed: number }>(
+                sql, undefined, { isMutation: true, description: 'AgentRunWatchdog stale-run sweep' }, contextUser);
+            const failCount = (Array.isArray(rows) && rows[0] && typeof rows[0].RunsFailed === 'number') ? rows[0].RunsFailed : 0;
+            if (failCount > 0) {
+                LogStatus(`[AgentRunWatchdog] Swept ${failCount} orphaned agent run(s) -> Failed (no heartbeat for >${threshold}m)`);
             }
-            const reason = d.QuoteStringLiteral(`[watchdog] Run force-failed: no liveness heartbeat for over ${threshold} minute(s) (owning process presumed dead)`);
-            const update =
-                `UPDATE ${table} SET ${d.QuoteIdentifier('Status')} = 'Failed', ` +
-                `${d.QuoteIdentifier('CompletedAt')} = ${d.CurrentTimestampUTC()}, ` +
-                `${d.QuoteIdentifier('ErrorMessage')} = ${d.Coalesce(d.QuoteIdentifier('ErrorMessage'), reason)} ` +
-                `WHERE ${predicate};`;
-            await provider.ExecuteSQL(update, undefined, { isMutation: true, description: 'AgentRunWatchdog stale-run sweep' }, contextUser);
-            LogStatus(`[AgentRunWatchdog] Swept ${failCount} orphaned agent run(s) -> Failed (no heartbeat for >${threshold}m)`);
             return failCount;
         } catch (err) {
             LogError(`AgentRunWatchdog.SweepOrphanedRuns failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -183,17 +179,6 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     }
 
     // ----- internals -------------------------------------------------------------------------
-
-    /** The shared `Status='Running' AND <heartbeat stale>` predicate used by scan + update. */
-    private static stalePredicate(d: Dialect, cutoffIso: string): string {
-        const cutoff = d.QuoteStringLiteral(cutoffIso);
-        const hb = d.QuoteIdentifier('LastHeartbeatAt');
-        const started = d.QuoteIdentifier('StartedAt');
-        return (
-            `${d.QuoteIdentifier('Status')} = 'Running' AND (` +
-            `${hb} < ${cutoff} OR (${hb} IS NULL AND ${started} < ${cutoff}))`
-        );
-    }
 
     /** Start the heartbeat + sweep timers and register for graceful shutdown, exactly once. */
     private ensureStarted(): void {
@@ -230,24 +215,28 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         }
     }
 
-    /** Stamp LastHeartbeatAt for every run this process is guarding. Never throws (runs on a timer). */
+    /** Stamp LastHeartbeatAt for every run this process is guarding, via {@link SP_HEARTBEAT}.
+     *  Never throws (runs on a timer); a per-run failure is logged and the rest still beat. */
     private async heartbeat(): Promise<void> {
-        const ids = this.trackedIdList();
-        if (!ids || !this._provider) {
+        if (!this._provider) {
+            return;
+        }
+        const ids = this.trackedIds();
+        if (!ids.length) {
+            return;
+        }
+        const schema = AgentRunWatchdog.schemaOf(this._provider);
+        if (!schema) {
             return;
         }
         const d = this._provider.Dialect;
-        const table = this.resolveTable(this._provider);
-        if (!table) {
-            return;
-        }
-        const sql =
-            `UPDATE ${table} SET ${d.QuoteIdentifier('LastHeartbeatAt')} = ${d.CurrentTimestampUTC()} ` +
-            `WHERE ${d.QuoteIdentifier('Status')} = 'Running' AND ${d.QuoteIdentifier('ID')} IN (${ids});`;
-        try {
-            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, this._contextUser ?? undefined);
-        } catch (err) {
-            LogError(`AgentRunWatchdog heartbeat failed: ${err instanceof Error ? err.message : String(err)}`);
+        for (const id of ids) {
+            const sql = d.ProcedureCallSyntax(schema, SP_HEARTBEAT, [d.QuoteStringLiteral(id)]) + ';';
+            try {
+                await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, this._contextUser ?? undefined);
+            } catch (err) {
+                LogError(`AgentRunWatchdog heartbeat failed for run ${id}: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 
@@ -262,21 +251,22 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * Drop any tracked run that is no longer `Running` so the in-memory set can't grow unbounded
-     * over a long-lived process. A single SELECT of the still-running subset; the rest are pruned.
+     * over a long-lived process. A single SELECT (against the base VIEW — the runtime user has no
+     * table access) of the still-running subset; the rest are pruned.
      */
     private async pruneTerminalRuns(): Promise<void> {
         const ids = this.trackedIdList();
         if (!ids || !this._provider) {
             return;
         }
-        const d = this._provider.Dialect;
-        const table = this.resolveTable(this._provider);
-        if (!table) {
+        const view = AgentRunWatchdog.viewOf(this._provider);
+        if (!view) {
             return;
         }
+        const d = this._provider.Dialect;
         try {
             const rows = await this._provider.ExecuteSQL<{ ID: string }>(
-                `SELECT ${d.QuoteIdentifier('ID')} FROM ${table} ` +
+                `SELECT ${d.QuoteIdentifier('ID')} FROM ${view} ` +
                 `WHERE ${d.QuoteIdentifier('Status')} = 'Running' AND ${d.QuoteIdentifier('ID')} IN (${ids});`,
                 undefined, { ignoreLogging: true, description: 'AgentRunWatchdog tracked-set prune' }, this._contextUser ?? undefined);
             const stillRunning = new Set<string>();
@@ -297,24 +287,29 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         }
     }
 
+    /** Validated, lowercased UUIDs this process is guarding (for per-run proc calls). */
+    private trackedIds(): string[] {
+        return Array.from(this._trackedRuns).filter(id => UUID_RE.test(id));
+    }
+
     /** Comma-joined, quoted, validated UUID list for an `ID IN (...)` clause, or '' if none. */
     private trackedIdList(): string {
-        return Array.from(this._trackedRuns)
-            .filter(id => UUID_RE.test(id))
-            .map(id => `'${id}'`)
-            .join(',');
+        return this.trackedIds().map(id => `'${id}'`).join(',');
     }
 
-    private resolveTable(provider: DatabaseProviderBase): string | null {
-        return AgentRunWatchdog.resolveTableStatic(provider);
-    }
-
-    private static resolveTableStatic(provider: DatabaseProviderBase): string | null {
+    /** Schema that owns the AIAgentRun objects (for qualifying proc calls), or null if unresolved. */
+    private static schemaOf(provider: DatabaseProviderBase): string | null {
         const entity = provider.EntityByName(AGENT_RUN_ENTITY);
-        if (!entity || !entity.BaseTable) {
+        return entity?.SchemaName || null;
+    }
+
+    /** Fully-qualified, dialect-quoted base VIEW for AIAgentRun reads, or null if unresolved. */
+    private static viewOf(provider: DatabaseProviderBase): string | null {
+        const entity = provider.EntityByName(AGENT_RUN_ENTITY);
+        if (!entity || !entity.BaseView) {
             return null;
         }
         const d = provider.Dialect;
-        return entity.SchemaName ? d.QuoteSchema(entity.SchemaName, entity.BaseTable) : d.QuoteIdentifier(entity.BaseTable);
+        return entity.SchemaName ? d.QuoteSchema(entity.SchemaName, entity.BaseView) : d.QuoteIdentifier(entity.BaseView);
     }
 }
