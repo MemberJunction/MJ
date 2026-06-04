@@ -37,6 +37,7 @@
     "@memberjunction/generic-database-provider": "5.38.0",
     "@memberjunction/global": "5.38.0",
     "@memberjunction/integration-engine": "5.38.0",
+    "@memberjunction/integration-pk-classifier": "5.38.0",
     "@memberjunction/skip-types": "5.38.0",
     "@memberjunction/sql-converter": "5.38.0",
     "@memberjunction/sql-dialect": "5.38.0",
