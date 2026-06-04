@@ -11,6 +11,7 @@ import type {
     IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
+    UpsertRecordContext,
     DeleteRecordContext,
     GetRecordContext,
     CRUDResult,
@@ -213,6 +214,12 @@ export abstract class BaseIntegrationConnector {
     /** Whether this connector supports updating existing records in the external system. */
     public get SupportsUpdate(): boolean { return false; }
 
+    /**
+     * Whether this connector supports idempotent upserts (create-or-update keyed
+     * by a unique business property). Connectors override this AND `Upsert` to enable it.
+     */
+    public get SupportsUpsert(): boolean { return false; }
+
     /** Whether this connector supports deleting records from the external system. */
     public get SupportsDelete(): boolean { return false; }
 
@@ -242,6 +249,16 @@ export abstract class BaseIntegrationConnector {
      */
     public async UpdateRecord(_ctx: UpdateRecordContext): Promise<CRUDResult> {
         throw new Error(`UpdateRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Upserts a record — a single idempotent create-or-update keyed by a unique
+     * business property (e.g. email), eliminating the search-then-create race window.
+     * Override in subclasses whose external system exposes a keyed upsert primitive.
+     * Check `SupportsUpsert` before calling.
+     */
+    public async Upsert(_ctx: UpsertRecordContext): Promise<CRUDResult> {
+        throw new Error(`Upsert is not supported by ${this.constructor.name}`);
     }
 
     /**

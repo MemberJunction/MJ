@@ -390,6 +390,32 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         if (!tokens) return '-';
         return tokens.toLocaleString();
     }
+
+    /**
+     * Total tokens the provider actually processed = uncached (TokensUsed = prompt+completion) PLUS
+     * the cache buckets. TokensUsed alone excludes cache by design, so a heavily-cached run looks
+     * tiny; this is the real throughput figure for the headline. Equals TokensUsed when no caching.
+     */
+    get TotalTokensProcessed(): number {
+        const r = this.record;
+        if (!r) return 0;
+        return (r.TokensUsed ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+    }
+
+    /** Sum of cache read + write tokens for this run (the cached portion of TotalTokensProcessed). */
+    get CachedTokens(): number {
+        const r = this.record;
+        if (!r) return 0;
+        return (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+    }
+
+    /** Percentage of this run's input tokens served from the provider's prompt cache. */
+    get CacheHitRatePct(): number {
+        const read = this.record?.TokensCacheRead ?? 0;
+        const write = this.record?.TokensCacheWrite ?? 0;
+        const totalInput = (this.record?.TokensPrompt ?? 0) + read + write;
+        return totalInput > 0 ? (read / totalInput) * 100 : 0;
+    }
     
     getRunTypeIcon(runType: string | null): string {
         switch (runType) {

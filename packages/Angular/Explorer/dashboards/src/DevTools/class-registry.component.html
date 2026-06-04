@@ -6,10 +6,10 @@
         Subtitle="Every class registered with @RegisterClass">
         <div actions>
             <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand all groups">
-                <i class="fa-solid fa-expand" aria-hidden="true"></i> Expand
+                <i class="fa-solid fa-expand" aria-hidden="true"></i> <span class="mj-action-label">Expand</span>
             </button>
             <button mjButton variant="secondary" size="sm" (click)="CollapseAll()" title="Collapse all groups">
-                <i class="fa-solid fa-compress" aria-hidden="true"></i> Collapse
+                <i class="fa-solid fa-compress" aria-hidden="true"></i> <span class="mj-action-label">Collapse</span>
             </button>
             <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
             <button mjButton
@@ -18,7 +18,7 @@
                     (click)="OnCopy()"
                     [title]="CopyConfirmed ? 'Copied' : 'Copy as JSON'">
                 <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed" aria-hidden="true"></i>
-                {{ CopyConfirmed ? 'Copied' : 'Copy' }}
+                <span class="mj-action-label">{{ CopyConfirmed ? 'Copied' : 'Copy' }}</span>
             </button>
         </div>
     </mj-page-header-interior>

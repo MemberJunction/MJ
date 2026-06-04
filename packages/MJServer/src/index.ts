@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -47,7 +47,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { ClientToolRequestManager } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -936,6 +936,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (resumeUser) {
     IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
       .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
+  }
+
+  // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
+  // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
+  // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
+  // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
+  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) {
+    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser)
+      .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
   }
 
   // Set up graceful shutdown handlers

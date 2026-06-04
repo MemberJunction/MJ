@@ -111,6 +111,11 @@
   color: var(--mj-status-error);
 }
 
+/* Cache card stacks its facts (caption / written / hit rate) one per line. */
+.metric-detail.cache-detail span {
+  display: block;
+}
+
 /* Analytics Panels */
 .analytics-panel {
   padding: 15px;
