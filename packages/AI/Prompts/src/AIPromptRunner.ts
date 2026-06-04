@@ -3454,6 +3454,14 @@ export class AIPromptRunner {
       // Apply response format from prompt settings
       if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
         chatParams.responseFormat = prompt.ResponseFormat //as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+
+        if (prompt.ModelSpecificResponseFormat) {
+          try {
+            chatParams.modelSpecificResponseFormat = JSON.parse(prompt.ModelSpecificResponseFormat);
+          } catch (e) {
+            console.warn(`AIPromptRunner: failed to parse ModelSpecificResponseFormat on prompt ${prompt.Name}; ignoring`, e);
+          }
+        }
       } else {
         // if chatParams.responseFormat is not set or set to Any, stay silent on response format
         chatParams.responseFormat = undefined;
