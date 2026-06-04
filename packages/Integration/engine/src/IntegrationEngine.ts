@@ -177,6 +177,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             EntityName: 'MJ: Company Integration Runs',
             ExtraFilter: `Status='In Progress'`,
             ResultType: 'entity_object',
+            BypassCache: true, // resume must see the live in-progress runs, not a stale cache
         }, contextUser);
 
         if (!orphanedRuns.Success || orphanedRuns.Results.length === 0) {
@@ -515,23 +516,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<RunConfiguration> {
         const rv = new RunView();
 
+        // BypassCache on ALL three: this loads the live configuration a sync is about to ACT on — the
+        // CompanyIntegration toggles, the per-entity-map Configuration (partitionReconcile/Merkle, sync
+        // direction, priority), and the connector mapping. A sync MUST decide from committed state, never a
+        // stale filtered cache. Without this, a config the caller just wrote (e.g. enabling partition
+        // reconcile) is invisible to the very next run on a dialect whose filtered-cache invalidation lags
+        // (observed: PG read the pre-toggle entity map → fell to the Timestamp path → never wrote the
+        // ChangeToken rollup snapshot, while SQL Server saw the fresh config). Same committed-state rule as
+        // the match/record-map/idempotency reads.
         const [ciResult, entityMapsResult, integrationsResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ID='${companyIntegrationID}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
+                BypassCache: true,
             },
             {
                 EntityName: 'MJ: Company Integration Entity Maps',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND SyncEnabled=1 AND Status='Active'`,
                 OrderBy: 'Priority ASC',
                 ResultType: 'entity_object',
+                BypassCache: true,
             },
             {
                 EntityName: 'MJ: Integrations',
                 ExtraFilter: '',
                 ResultType: 'entity_object',
+                BypassCache: true,
             },
         ], contextUser);
 
@@ -589,6 +601,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 ExtraFilter: `CompanyIntegrationID='${companyIntegration.ID}' AND Status='Completed'`,
                 Fields: ['ID'],
                 ResultType: 'simple',
+                BypassCache: true, // full-vs-incremental decision needs the true completed-run count
             }, contextUser);
             if (!runs.Success) return false;
             // Every Nth completed run (and the first, when the count is 0) is a full reconcile.
@@ -1730,6 +1743,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
             ResultType: 'simple',
+            BypassCache: true, // write-back targets the committed external-id mapping
         }, contextUser);
 
         const externalID = mapResult.Success && mapResult.Results.length > 0
@@ -2016,6 +2030,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 `AND EntityID='${entityMap.EntityID}'`,
             Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
             ResultType: 'simple',
+            BypassCache: true, // orphan-sweep compares against committed record-map state
         }, contextUser);
 
         if (!mapResult.Success) return;
@@ -2120,6 +2135,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
             OrderBy: 'Priority ASC',
             ResultType: 'entity_object',
+            BypassCache: true, // field maps drive value mapping; a sync must see freshly-applied maps
         }, contextUser);
 
         return result.Success ? result.Results : [];
@@ -3011,6 +3027,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             Fields: ['ID'],
             MaxRows: 1,
             ResultType: 'simple',
+            BypassCache: true, // upsert-by-identity: a stale miss here re-creates a duplicate record map
         }, contextUser);
 
         if (existing.Success && existing.Results.length > 0) {
