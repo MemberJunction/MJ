@@ -724,6 +724,12 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         this.extractSparkline(trends, 'errors'),
         kpis.errorRate, this.previousKpis?.errorRate ?? null,
         'down-is-good', 'var(--mj-status-error)'
+      ),
+      this.buildKpiCard(
+        'Cache Hit Rate', (kpis.cacheHitRate * 100).toFixed(1) + '%',
+        this.extractSparkline(trends, 'tokens'),
+        kpis.cacheHitRate, this.previousKpis?.cacheHitRate ?? null,
+        'up-is-good', 'var(--mj-status-info)'
       )
     ];
   }

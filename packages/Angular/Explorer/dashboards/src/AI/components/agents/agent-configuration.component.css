@@ -658,22 +658,8 @@ as-split {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-    padding: 16px 20px;
-  }
-
-  .header-info {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .header-controls {
-    justify-content: center;
-  }
-
+  /* Header chrome (incl. .action-btn-label collapse) is owned by the shared
+     <mj-page-header> — page-header.scss. No per-component header rules here. */
   .agents-grid {
     grid-template-columns: 1fr;
     gap: 16px;

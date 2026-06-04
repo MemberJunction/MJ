@@ -323,6 +323,26 @@ export type AgentClientToolInvocation = {
 };
 
 /**
+ * A single stage of an Agent Pipeline: an object with exactly one verb key + its args. Either a
+ * capability (`{ tool, with?, pipeInto? }`), a pure operator (`{ where: "..." }`,
+ * `{ select: [...] }`, `{ sort, first, last, count, distinct, flatten, jsonpath, lines, grep,
+ * head, tail }`), or a control construct (`{ map: { as, do } }`, `{ let: { name, value } }`).
+ * Structured JSON values flow between stages; the server validates the precise shape.
+ */
+export interface AgentPipelineStage {
+    [verb: string]: unknown;
+}
+
+/**
+ * An Agent Pipeline emitted by the agent: a server-side dataflow whose stages run sequentially,
+ * each stage's structured value feeding the next. Only the FINAL stage's value is returned to the
+ * agent — intermediate values never enter the context window.
+ */
+export interface AgentPipelineRequest {
+    steps: AgentPipelineStage[];
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -506,6 +526,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * Processed inline (zero turn cost) alongside payload and scratchpad changes.
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
+    /**
+     * A tool pipeline from the agent's response. Chains tool invocations server-side so
+     * intermediate outputs never enter the context window — only the final step's output is
+     * returned to the agent. Processed inline (zero turn cost) alongside artifact tool calls.
+     */
+    pipeline?: AgentPipelineRequest;
     /**
      * Media outputs to promote to the agent's final outputs.
      * When set, these media items will be added to the agent's mediaOutputs collection

@@ -22,7 +22,7 @@
     @if (MainTab === 'keys' && CurrentView === 'overview' && UserCanCreateKeys) {
       <button mjButton variant="primary" size="sm" (click)="openCreateDialog()" aria-label="Generate a new API key">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
-        Generate New Key
+        <span class="mj-action-label">Generate New Key</span>
       </button>
     }
   </div>
