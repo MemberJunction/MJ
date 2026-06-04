@@ -132,13 +132,12 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             return;
         }
         const d = this._provider.Dialect;
-        for (const id of ids) {
-            const sql = d.ProcedureCallSyntax(schema, SP_CANCEL, [d.QuoteStringLiteral(id)]) + ';';
-            try {
-                await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, this._contextUser ?? undefined);
-            } catch (err) {
-                LogError(`AgentRunWatchdog.Shutdown failed to cancel run ${id}: ${err instanceof Error ? err.message : String(err)}`);
-            }
+        // One batched round-trip (one EXEC per id, newline-separated) rather than a call per run.
+        const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_CANCEL, ids);
+        try {
+            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, this._contextUser ?? undefined);
+        } catch (err) {
+            LogError(`AgentRunWatchdog.Shutdown failed to cancel runs [${ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -230,13 +229,12 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             return;
         }
         const d = this._provider.Dialect;
-        for (const id of ids) {
-            const sql = d.ProcedureCallSyntax(schema, SP_HEARTBEAT, [d.QuoteStringLiteral(id)]) + ';';
-            try {
-                await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, this._contextUser ?? undefined);
-            } catch (err) {
-                LogError(`AgentRunWatchdog heartbeat failed for run ${id}: ${err instanceof Error ? err.message : String(err)}`);
-            }
+        // One batched round-trip (one EXEC per id, newline-separated) rather than a call per run.
+        const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_HEARTBEAT, ids);
+        try {
+            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, this._contextUser ?? undefined);
+        } catch (err) {
+            LogError(`AgentRunWatchdog heartbeat failed for runs [${ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -290,6 +288,16 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     /** Validated, lowercased UUIDs this process is guarding (for per-run proc calls). */
     private trackedIds(): string[] {
         return Array.from(this._trackedRuns).filter(id => UUID_RE.test(id));
+    }
+
+    /**
+     * Build a single batched SQL string of one proc call per id, newline-separated, so a set of
+     * per-run writes goes to the DB as one round-trip instead of N. Each id is already a validated
+     * UUID and is quoted as a string literal before interpolation. Runs unchanged on SQL Server and
+     * PostgreSQL because the call form comes from {@link Dialect.ProcedureCallSyntax}.
+     */
+    private static buildProcBatch(d: Dialect, schema: string, proc: string, ids: string[]): string {
+        return ids.map(id => d.ProcedureCallSyntax(schema, proc, [d.QuoteStringLiteral(id)]) + ';').join('\n');
     }
 
     /** Comma-joined, quoted, validated UUID list for an `ID IN (...)` clause, or '' if none. */

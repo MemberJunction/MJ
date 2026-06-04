@@ -123,6 +123,23 @@ describe('AgentRunWatchdog', () => {
             expect(String(heartbeatCall![0])).toContain(`'${RUN_A}'`);
         });
 
+        it('batches multiple tracked runs into a single heartbeat round-trip (one EXEC per id)', async () => {
+            const p = makeProvider();
+            const wd = AgentRunWatchdog.Instance;
+            wd.Track(RUN_A, asProvider(p), mockUser);
+            wd.Track(RUN_B, asProvider(p), mockUser);
+
+            await vi.advanceTimersByTimeAsync(30_000);
+
+            const heartbeatCalls = p.ExecuteSQL.mock.calls.filter(c => /spStampAIAgentRunHeartbeat/.test(String(c[0])));
+            // One batched statement for both runs — not one call per run.
+            expect(heartbeatCalls.length).toBe(1);
+            const sql = String(heartbeatCalls[0][0]);
+            expect(sql).toContain(`'${RUN_A}'`);
+            expect(sql).toContain(`'${RUN_B}'`);
+            expect(sql).toContain('\n');
+        });
+
         it('cancels in-flight runs via the cancel proc and clears the set on Shutdown', async () => {
             const p = makeProvider();
             const wd = AgentRunWatchdog.Instance;
