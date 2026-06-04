@@ -2466,7 +2466,10 @@ export abstract class BaseEntity<T = unknown> {
                         // PreSave hooks) has passed and the DB write is imminent. Fire the optional
                         // OnValidated callback so a UI can render the now-known-valid change before
                         // the persistence round-trip. A callback bug must never abort the save.
-                        if (_options.OnValidated) {
+                        // Excluded on ReplayOnly: replay bypasses validation (valResult is forced
+                        // Success above without running Validate/ValidateAsync), so the "known-valid"
+                        // guarantee the hook relies on does not hold for a replay.
+                        if (_options.OnValidated && !_options.ReplayOnly) {
                             try {
                                 _options.OnValidated(this);
                             }

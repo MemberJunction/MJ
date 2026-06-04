@@ -129,6 +129,20 @@ describe('EntitySaveOptions.OnValidated', () => {
         expect(saveSpy).not.toHaveBeenCalled();
     });
 
+    it('does NOT fire OnValidated on a ReplayOnly save (replay bypasses validation)', async () => {
+        const { entity, saveSpy } = createSaveableEntity();
+        const onValidated = vi.fn();
+
+        // ReplayOnly forces validation success WITHOUT running Validate/ValidateAsync, so the
+        // hook's "known-valid" guarantee doesn't hold — it must be skipped even though the
+        // persist still proceeds.
+        const ok = await entity.Save(opts({ OnValidated: onValidated, ReplayOnly: true }));
+
+        expect(ok).toBe(true);
+        expect(onValidated).not.toHaveBeenCalled();   // skipped on replay
+        expect(saveSpy).toHaveBeenCalledTimes(1);     // ...but the replay still persists
+    });
+
     it('swallows a throwing OnValidated so a UI bug can never abort the persist', async () => {
         const { entity, saveSpy } = createSaveableEntity();
         const onValidated = vi.fn(() => { throw new Error('UI render blew up'); });
