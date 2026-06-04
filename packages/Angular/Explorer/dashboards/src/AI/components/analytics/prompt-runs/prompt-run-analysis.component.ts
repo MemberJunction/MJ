@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { cacheHitRate } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
@@ -29,6 +30,8 @@ interface PromptRunRecord {
     TokensUsed: number | null;
     TokensPrompt: number | null;
     TokensCompletion: number | null;
+    TokensCacheRead: number | null;
+    TokensCacheWrite: number | null;
     ExecutionTimeMS: number | null;
     ModelID: string | null;
     Model: string | null;
@@ -47,6 +50,7 @@ interface PromptRunStats {
     SuccessRate: number;
     P95LatencySeconds: number;
     TotalCost: number;
+    CacheHitRate: number;
 }
 
 interface ChartBucket {
@@ -68,13 +72,13 @@ interface StatusBreakdownItem extends BreakdownItem {
     cssClass: string;
 }
 
-type ChartMetric = 'volume' | 'cost' | 'tokens';
+type ChartMetric = 'volume' | 'cost' | 'tokens' | 'cacheHit';
 type SortField = 'RunAt' | 'Prompt' | 'Model' | 'Status' | 'ExecutionTimeMS' | 'TokensUsed' | 'Cost';
 type SortDirection = 'asc' | 'desc';
 
 const FIELDS = [
     'ID', 'RunAt', 'CompletedAt', 'Status', 'Success', 'Cost', 'TotalCost',
-    'TokensUsed', 'TokensPrompt', 'TokensCompletion', 'ExecutionTimeMS',
+    'TokensUsed', 'TokensPrompt', 'TokensCompletion', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS',
     'ModelID', 'Model', 'AgentID', 'Agent', 'PromptID', 'Prompt', 'ErrorMessage'
 ];
 
@@ -119,6 +123,10 @@ const PAGE_SIZE = 25;
                 <div class="stat-card">
                     <div class="stat-label">Total Cost</div>
                     <div class="stat-value">{{ FormatCurrency(Stats.TotalCost, 2) }}</div>
+                </div>
+                <div class="stat-card" title="Share of input tokens served from the provider's prompt cache">
+                    <div class="stat-label">Cache Hit Rate</div>
+                    <div class="stat-value">{{ Stats.CacheHitRate * 100 | number:'1.1-1' }}%</div>
                 </div>
             </div>
 
@@ -240,7 +248,7 @@ const PAGE_SIZE = 25;
                                     <td><span class="model-tag">{{ run.Model ?? 'N/A' }}</span></td>
                                     <td><span class="status-pill" [class]="GetStatusClass(run.Status)">{{ run.Status }}</span></td>
                                     <td class="cell-number">{{ FormatDuration(run.ExecutionTimeMS) }}</td>
-                                    <td class="cell-number">{{ run.TokensUsed != null ? (run.TokensUsed | number) : '-' }}</td>
+                                    <td class="cell-number" title="Total tokens processed, including cached input">{{ run.TokensUsed != null ? (TrueTotalTokens(run) | number) : '-' }}</td>
                                     <td class="cell-number">{{ FormatCurrency(run.Cost, 4) }}</td>
                                 </tr>
                             }
@@ -813,6 +821,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         { key: 'volume', label: 'By Volume' },
         { key: 'cost', label: 'By Cost' },
         { key: 'tokens', label: 'By Tokens' },
+        { key: 'cacheHit', label: 'By Cache Hit %' },
     ];
 
     readonly TableColumns: { field: SortField; label: string; sortable: boolean }[] = [
@@ -935,7 +944,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             r.Model ?? '',
             r.Status,
             r.ExecutionTimeMS?.toString() ?? '',
-            r.TokensUsed?.toString() ?? '',
+            this.TrueTotalTokens(r).toString(),
             r.Cost?.toString() ?? ''
         ]);
         const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -970,6 +979,9 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     public FormatChartValue(value: number): string {
         if (this.ActiveChartMetric === 'cost') {
             return '$' + value.toFixed(2);
+        }
+        if (this.ActiveChartMetric === 'cacheHit') {
+            return value.toFixed(0) + '%';
         }
         if (value >= 1000) {
             return (value / 1000).toFixed(1) + 'k';
@@ -1036,18 +1048,31 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         return filtered;
     }
 
+    /**
+     * Total tokens the model processed for a run, INCLUDING cached input. TokensUsed excludes the
+     * cache buckets by design, so a heavily-cached run looks tiny; this is the true throughput.
+     */
+    public TrueTotalTokens(run: PromptRunRecord): number {
+        return (run.TokensUsed ?? 0) + (run.TokensCacheRead ?? 0) + (run.TokensCacheWrite ?? 0);
+    }
+
     private computeStats(runs: PromptRunRecord[]): PromptRunStats {
         const total = runs.length;
         if (total === 0) {
-            return { TotalRuns: 0, AvgCost: 0, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0 };
+            return { TotalRuns: 0, AvgCost: 0, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0, CacheHitRate: 0 };
         }
 
         const totalCost = this.sumNullable(runs, r => r.Cost);
-        const totalTokens = this.sumNullable(runs, r => r.TokensUsed);
+        const totalTokens = runs.reduce((sum, r) => sum + this.TrueTotalTokens(r), 0);
         const latencies = this.collectNonNull(runs, r => r.ExecutionTimeMS);
         const avgLatencyMs = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
         const successCount = runs.filter(r => r.Status === 'Completed').length;
         const p95 = this.percentile(latencies, 95);
+        const cacheHit = cacheHitRate({
+            uncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
+            cacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
+            cacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
+        });
 
         return {
             TotalRuns: total,
@@ -1057,6 +1082,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             SuccessRate: (successCount / total) * 100,
             P95LatencySeconds: p95 / 1000,
             TotalCost: totalCost,
+            CacheHitRate: cacheHit,
         };
     }
 
@@ -1069,13 +1095,15 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         const rangeMs = now.getTime() - cutoff.getTime();
         const bucketMs = rangeMs / bucketCount;
 
-        const buckets: { label: string; total: number; start: Date; end: Date }[] = [];
+        const buckets: { label: string; total: number; cacheRead: number; inputForHit: number; start: Date; end: Date }[] = [];
         for (let i = 0; i < bucketCount; i++) {
             const start = new Date(cutoff.getTime() + i * bucketMs);
             const end = new Date(cutoff.getTime() + (i + 1) * bucketMs);
             buckets.push({
                 label: this.formatBucketLabel(start),
                 total: 0,
+                cacheRead: 0,
+                inputForHit: 0,
                 start,
                 end,
             });
@@ -1086,6 +1114,15 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             const idx = Math.min(Math.floor((runTime - cutoff.getTime()) / bucketMs), bucketCount - 1);
             if (idx >= 0 && idx < bucketCount) {
                 buckets[idx].total += this.getChartMetricValue(run);
+                // Cache hit-rate is a ratio, not a sum — accumulate the components and divide below.
+                buckets[idx].cacheRead += run.TokensCacheRead ?? 0;
+                buckets[idx].inputForHit += (run.TokensPrompt ?? 0) + (run.TokensCacheRead ?? 0) + (run.TokensCacheWrite ?? 0);
+            }
+        }
+
+        if (this.ActiveChartMetric === 'cacheHit') {
+            for (const b of buckets) {
+                b.total = b.inputForHit > 0 ? (b.cacheRead / b.inputForHit) * 100 : 0;
             }
         }
 
@@ -1103,7 +1140,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     private getChartMetricValue(run: PromptRunRecord): number {
         switch (this.ActiveChartMetric) {
             case 'cost': return run.Cost ?? 0;
-            case 'tokens': return run.TokensUsed ?? 0;
+            case 'tokens': return this.TrueTotalTokens(run);
             default: return 1; // volume = count
         }
     }

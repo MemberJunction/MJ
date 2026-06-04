@@ -7593,6 +7593,12 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     CompanyID?: string;
         
+    @Field(() => Int, {nullable: true, description: `Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`}) 
+    TotalCacheReadTokensUsed?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`}) 
+    TotalCacheWriteTokensUsed?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7814,6 +7820,12 @@ export class CreateMJAIAgentRunInput {
     @Field({ nullable: true })
     CompanyID: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TotalCacheReadTokensUsed: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCacheWriteTokensUsed: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7955,6 +7967,12 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     CompanyID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCacheReadTokensUsed?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCacheWriteTokensUsed?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12243,6 +12261,12 @@ export class MJAIModelCost_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).`}) 
+    CacheReadPricePerUnit?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`}) 
+    CacheWritePricePerUnit?: number;
+        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -12305,6 +12329,12 @@ export class CreateMJAIModelCostInput {
     @Field({ nullable: true })
     Comments: string | null;
 
+    @Field(() => Float, { nullable: true })
+    CacheReadPricePerUnit: number | null;
+
+    @Field(() => Float, { nullable: true })
+    CacheWritePricePerUnit: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -12353,6 +12383,12 @@ export class UpdateMJAIModelCostInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    CacheReadPricePerUnit?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    CacheWritePricePerUnit?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15236,6 +15272,18 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`}) 
     AssistantPrefill?: string;
         
+    @Field(() => Int, {nullable: true, description: `Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.`}) 
+    TokensCacheRead?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`}) 
+    TokensCacheWrite?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`}) 
+    TokensCacheReadRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`}) 
+    TokensCacheWriteRollup?: number;
+        
     @Field() 
     @MaxLength(255)
     Prompt: string;
@@ -15563,6 +15611,18 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     AssistantPrefill: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TokensCacheRead: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWrite: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheReadRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWriteRollup: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -15821,6 +15881,18 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     AssistantPrefill?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheRead?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWrite?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheReadRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWriteRollup?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

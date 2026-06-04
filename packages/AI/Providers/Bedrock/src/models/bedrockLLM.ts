@@ -140,38 +140,52 @@ export class BedrockLLM extends BaseLLM {
       const response = await this._client.send(command);
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
       
-      // Parse response body based on model provider
+      // Parse response body based on model provider.
+      // cacheReadTokens / cacheWriteTokens default to 0; only Anthropic-on-Bedrock reports caching.
       let content = '';
-      let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-      
+      let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+
       if (modelId.startsWith('anthropic.')) {
         content = responseBody.content?.[0]?.text || '';
+        // Anthropic-style usage: input_tokens EXCLUDES cached tokens, so it is already the net-new
+        // (uncached) prompt count — assign through. Cache reads/writes are reported separately and
+        // are DISJOINT from input_tokens.
         tokenUsage = {
           promptTokens: responseBody.usage?.input_tokens || 0,
           completionTokens: responseBody.usage?.output_tokens || 0,
-          totalTokens: (responseBody.usage?.input_tokens || 0) + (responseBody.usage?.output_tokens || 0)
+          totalTokens: (responseBody.usage?.input_tokens || 0) + (responseBody.usage?.output_tokens || 0),
+          cacheReadTokens: responseBody.usage?.cache_read_input_tokens || 0,
+          cacheWriteTokens: responseBody.usage?.cache_creation_input_tokens || 0
         };
       } else if (modelId.startsWith('ai21.')) {
         content = responseBody.completions?.[0]?.data?.text || '';
+        // AI21 via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.prompt_tokens || 0,
           completionTokens: responseBody.completion_tokens || 0,
-          totalTokens: (responseBody.prompt_tokens || 0) + (responseBody.completion_tokens || 0)
+          totalTokens: (responseBody.prompt_tokens || 0) + (responseBody.completion_tokens || 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       } else if (modelId.startsWith('amazon.titan-')) {
         content = responseBody.results?.[0]?.outputText || '';
+        // Titan via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.inputTextTokenCount || 0,
           completionTokens: responseBody.outputTextTokenCount || 0,
-          totalTokens: (responseBody.inputTextTokenCount || 0) + (responseBody.outputTextTokenCount || 0)
+          totalTokens: (responseBody.inputTextTokenCount || 0) + (responseBody.outputTextTokenCount || 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       } else if (modelId.startsWith('meta.')) {
         content = responseBody.generation || '';
-        // Llama models via Bedrock may not provide token counts
+        // Llama models via Bedrock may not provide token counts, and report no cache info.
         tokenUsage = {
           promptTokens: 0,
           completionTokens: 0,
-          totalTokens: 0
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       }
       
@@ -187,6 +201,10 @@ export class BedrockLLM extends BaseLLM {
         index: 0
       }];
       
+      const usage = new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens);
+      usage.cacheReadTokens = tokenUsage.cacheReadTokens;
+      usage.cacheWriteTokens = tokenUsage.cacheWriteTokens;
+
       return {
         success: true,
         statusText: "OK",
@@ -195,8 +213,9 @@ export class BedrockLLM extends BaseLLM {
         timeElapsed: endTime.getTime() - startTime.getTime(),
         data: {
           choices: choices,
-          usage: new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens)
+          usage
         },
+        cacheInfo: { cacheHit: tokenUsage.cacheReadTokens > 0, cachedTokenCount: tokenUsage.cacheReadTokens },
         errorMessage: "",
         exception: null,
       };
@@ -330,10 +349,14 @@ export class BedrockLLM extends BaseLLM {
       }
       
       if (chunkData.usage) {
+        // Anthropic-style: input_tokens already EXCLUDES cached tokens (net-new). Cache
+        // reads/writes are reported separately and are DISJOINT from input_tokens.
         usage = new ModelUsage(
           chunkData.usage.input_tokens || 0,
           chunkData.usage.output_tokens || 0
         );
+        usage.cacheReadTokens = chunkData.usage.cache_read_input_tokens || 0;
+        usage.cacheWriteTokens = chunkData.usage.cache_creation_input_tokens || 0;
       }
     }
     
@@ -359,6 +382,7 @@ export class BedrockLLM extends BaseLLM {
     const result = new ChatResult(true, now, now);
     
     // Set all properties
+    const finalUsage: ModelUsage = usage || new ModelUsage(0, 0);
     result.data = {
       choices: [{
         message: {
@@ -368,9 +392,12 @@ export class BedrockLLM extends BaseLLM {
         finish_reason: lastChunk?.finishReason || 'stop',
         index: 0
       }],
-      usage: usage || new ModelUsage(0, 0)
+      usage: finalUsage
     };
-    
+
+    const cacheRead = finalUsage.cacheReadTokens ?? 0;
+    result.cacheInfo = { cacheHit: cacheRead > 0, cachedTokenCount: cacheRead };
+
     result.statusText = 'success';
     result.errorMessage = null;
     result.exception = null;

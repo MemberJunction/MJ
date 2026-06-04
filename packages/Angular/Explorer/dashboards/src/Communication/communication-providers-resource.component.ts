@@ -24,7 +24,7 @@ interface ProviderCardData {
         Subtitle="Manage your messaging service integrations">
         <div actions>
           <button mjButton variant="primary" size="sm" (click)="addNewProvider()">
-            <i class="fa-solid fa-plus"></i> Add Provider
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">Add Provider</span>
           </button>
         </div>
       </mj-page-header>

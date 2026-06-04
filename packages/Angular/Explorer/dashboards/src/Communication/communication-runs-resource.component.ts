@@ -15,7 +15,7 @@ import { RunView } from '@memberjunction/core';
         Subtitle="Bulk communication run history">
         <div actions>
           <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
-            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
+            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> <span class="action-btn-label">Refresh</span>
           </button>
         </div>
       </mj-page-header>
