@@ -125,7 +125,7 @@ Then open your browser to `http://localhost:4201` (or whatever port you configur
 If you use Claude Code (the CLI or VS Code extension), the installer ships a curated MemberJunction context bundle that lands in your project automatically:
 
 - A `CLAUDE.md` at the project root with MJ-specific guidance (entity patterns, RunView idioms, common pitfalls)
-- An `.claude/commands/` folder with slash commands tailored to MJ workflows (e.g. `/new-branch`, `/create-pr`, `/debug-agent-run`, `/init`)
+- An `.claude/commands/` folder with slash commands tailored to MJ workflows (e.g. `/new-branch`, `/create-pr`, `/debug-agent-run`, `/refresh-pack`)
 - A `.claude/skills/` folder with reusable skill definitions
 - A `.claude/mj/` managed bundle that the pack updater uses to keep itself current
 

@@ -106,7 +106,7 @@ seems convenient.
 **Don't.** The right workflow:
 
 1. Write the migration
-2. Apply it (`mj migrate`)
+2. Apply it (`mj migrate --dir ./migrations`)
 3. Run `mj codegen` to regenerate the entity types
 4. Now write the code that uses the new field — with full type safety
 

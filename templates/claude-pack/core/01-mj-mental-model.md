@@ -209,7 +209,7 @@ Two reasons to extend (not rewrite):
 
 ## A short cheat sheet of "what goes where"
 
-- **Add a new column to an entity?** Migration → `mj migrate` → `mj codegen`
+- **Add a new column to an entity?** Migration → `mj migrate --dir ./migrations` → `mj codegen`
   → write code against the new typed property.
 - **Add a new entity?** Same flow; CodeGen creates the class, stored procs,
   and form for you.

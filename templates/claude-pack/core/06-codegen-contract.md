@@ -60,8 +60,10 @@ adding a column or entity:
 # 1. Author the migration
 vi migrations/v5/V202611150930__v5.34.x__Add_OrderPriority.sql
 
-# 2. Apply it
-mj migrate
+# 2. Apply it. `--dir ./migrations` tells the CLI to run the migrations
+#    you just wrote (without it, `mj migrate` fetches MJ-core migrations
+#    from GitHub at the version pinned by `mjRepoVersion`).
+mj migrate --dir ./migrations
 
 # 3. Regenerate the typed code
 mj codegen
@@ -126,7 +128,7 @@ contains the metadata updates (Entity rows, EntityField rows, sp_addextendedprop
 descriptions, refreshed stored procs) that match your new schema.
 
 You commit that file alongside your migration. Other developers will pick
-it up next time they `mj migrate`.
+it up next time they `mj migrate --dir ./migrations`.
 
 ## The mental model
 
@@ -149,7 +151,7 @@ to understand why. Don't try to "fix" the generated file — fix the input.
 ## The day-1 checklist
 
 - [ ] Never edit anything in a `generated/` folder
-- [ ] When adding a column: migration → `mj migrate` → `mj codegen` → write code
+- [ ] When adding a column: migration → `mj migrate --dir ./migrations` → `mj codegen` → write code
 - [ ] If a typed property is missing, run CodeGen instead of reaching for `.Set()`
 - [ ] Commit the `CodeGen_Run_*.sql` migration that follows from your schema change
 - [ ] When customizing forms, extend the generated class with `@RegisterClass` — don't fork the generated file

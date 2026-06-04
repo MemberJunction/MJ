@@ -5,7 +5,7 @@
 "@memberjunction/codegen-lib": patch
 ---
 
-Add MJ Claude Pack — a curated bundle of `CLAUDE.md` guidance, slash commands, and skills that ships with every MemberJunction install for users of Claude Code.
+Add MJ Claude Pack: a curated bundle of `CLAUDE.md` guidance, slash commands, and skills that ships with every MemberJunction install for users of Claude Code.
 
 New CLI commands:
 
@@ -20,7 +20,7 @@ New public API:
 - `@memberjunction/integration-engine` exports `ActionGenerationRunner`, `deriveFileName`, and merge helpers. The internal connector regeneration script now uses these too, so MJ-internal and downstream users share the same code path.
 - `@memberjunction/installer` exports `FileSystemAdapter.ReadBytes()` for binary file reads (used by the pack doctor's hash checks).
 
-The pack is shipped via three paths: (1) bundled into the MJ distribution ZIP at release time, (2) installed via `mj install:claude` against a remote fetch from `raw.githubusercontent.com`, (3) refreshed via the SessionStart hook helper that nags when a newer version is available.
+The pack is shipped via three paths: (1) auto-included in `mj install` and `mj bundle` via the `DistributionAssembler` sparse-checkout (replaces the legacy bootstrap-ZIP injection retired by PR #2725; opt out with `--no-claude-pack`), (2) installed onto an existing project via `mj install:claude` against a remote fetch from `raw.githubusercontent.com`, (3) refreshed via the SessionStart hook helper that nags when a newer version is available.
 
 **Two post-M10 follow-ups from end-to-end testing against a real distribution install:**
 

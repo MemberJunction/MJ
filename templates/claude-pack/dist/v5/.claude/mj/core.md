@@ -262,7 +262,7 @@ Two reasons to extend (not rewrite):
 
 ## A short cheat sheet of "what goes where"
 
-- **Add a new column to an entity?** Migration → `mj migrate` → `mj codegen`
+- **Add a new column to an entity?** Migration → `mj migrate --dir ./migrations` → `mj codegen`
   → write code against the new typed property.
 - **Add a new entity?** Same flow; CodeGen creates the class, stored procs,
   and form for you.
@@ -905,7 +905,7 @@ seems convenient.
 **Don't.** The right workflow:
 
 1. Write the migration
-2. Apply it (`mj migrate`)
+2. Apply it (`mj migrate --dir ./migrations`)
 3. Run `mj codegen` to regenerate the entity types
 4. Now write the code that uses the new field — with full type safety
 
@@ -1127,8 +1127,10 @@ adding a column or entity:
 # 1. Author the migration
 vi migrations/v5/V202611150930__v5.34.x__Add_OrderPriority.sql
 
-# 2. Apply it
-mj migrate
+# 2. Apply it. `--dir ./migrations` tells the CLI to run the migrations
+#    you just wrote (without it, `mj migrate` fetches MJ-core migrations
+#    from GitHub at the version pinned by `mjRepoVersion`).
+mj migrate --dir ./migrations
 
 # 3. Regenerate the typed code
 mj codegen
@@ -1193,7 +1195,7 @@ contains the metadata updates (Entity rows, EntityField rows, sp_addextendedprop
 descriptions, refreshed stored procs) that match your new schema.
 
 You commit that file alongside your migration. Other developers will pick
-it up next time they `mj migrate`.
+it up next time they `mj migrate --dir ./migrations`.
 
 ## The mental model
 
@@ -1216,7 +1218,7 @@ to understand why. Don't try to "fix" the generated file — fix the input.
 ## The day-1 checklist
 
 - [ ] Never edit anything in a `generated/` folder
-- [ ] When adding a column: migration → `mj migrate` → `mj codegen` → write code
+- [ ] When adding a column: migration → `mj migrate --dir ./migrations` → `mj codegen` → write code
 - [ ] If a typed property is missing, run CodeGen instead of reaching for `.Set()`
 - [ ] Commit the `CodeGen_Run_*.sql` migration that follows from your schema change
 - [ ] When customizing forms, extend the generated class with `@RegisterClass` — don't fork the generated file
@@ -1385,8 +1387,9 @@ Before committing any migration:
 - [ ] Multiple ADDs to the same table consolidated into one `ALTER TABLE`?
 - [ ] Every non-PK / non-FK column has an `sp_addextendedproperty` description?
 - [ ] Reference-data seeds use mj-sync, not SQL `INSERT`?
-- [ ] Ran `mj migrate` + `mj codegen` locally and committed the resulting
-      `CodeGen_Run_*.sql` file?
+- [ ] Ran `mj migrate --dir ./migrations` + `mj codegen` locally and committed
+      the resulting `CodeGen_Run_*.sql` file? (Without `--dir`, `mj migrate`
+      fetches MJ-core migrations from GitHub instead of running yours.)
 
 Get this right and migrations are boring — exactly what they should be.
 

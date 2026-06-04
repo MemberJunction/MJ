@@ -160,7 +160,8 @@ Before committing any migration:
 - [ ] Multiple ADDs to the same table consolidated into one `ALTER TABLE`?
 - [ ] Every non-PK / non-FK column has an `sp_addextendedproperty` description?
 - [ ] Reference-data seeds use mj-sync, not SQL `INSERT`?
-- [ ] Ran `mj migrate` + `mj codegen` locally and committed the resulting
-      `CodeGen_Run_*.sql` file?
+- [ ] Ran `mj migrate --dir ./migrations` + `mj codegen` locally and committed
+      the resulting `CodeGen_Run_*.sql` file? (Without `--dir`, `mj migrate`
+      fetches MJ-core migrations from GitHub instead of running yours.)
 
 Get this right and migrations are boring — exactly what they should be.

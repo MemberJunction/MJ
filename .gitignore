@@ -188,8 +188,9 @@ plans/.memory-leak-snapshots/
 demo/
 openspec/
 
-# Claude Pack ships its built output in the repo: the bootstrap ZIP copies
-# dist/v{MAJOR}/ verbatim, and the claude-pack.yml CI workflow runs
+# Claude Pack ships its built output in the repo: `mj install` and `mj bundle`
+# pull `dist/v{MAJOR}/` verbatim into a fresh install via the sparse-checkout
+# `DistributionAssembler`, and the claude-pack.yml CI workflow runs
 # `git diff --exit-code` against it to catch stale-relative-to-source dist
 # commits. The blanket `dist/` ignore above would silently hide both, so
 # explicitly un-ignore this one subtree.
