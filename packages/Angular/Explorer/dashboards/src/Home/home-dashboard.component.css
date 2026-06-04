@@ -1582,16 +1582,13 @@
 
 /* Mobile */
 @media (max-width: 768px) {
-  .home-dashboard {
-    height: auto;
-    min-height: 100%;
-    overflow: visible;
-  }
-
+  /* Keep the fixed-height + scroll contract on mobile (matches desktop and the
+     shared <mj-page-layout>/<mj-page-body> primitives). Overriding to
+     height:auto / overflow:visible breaks .main-content's flex:1 scroll inside
+     the fixed-height shell, leaving the page non-scrollable. */
   .main-content {
     padding: 20px;
     padding-bottom: 100px; /* Space for FAB button */
-    overflow: visible;
   }
 
   .home-header {

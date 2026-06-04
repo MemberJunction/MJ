@@ -114,67 +114,105 @@ If you reach for a click target, it belongs in `[actions]` or `[toolbar]`.
 
 ### `[actions]` — "What can I change / what do I do?"
 
-Page-level controls and buttons. **Cap: 4 items.** If you need more, consolidate
-into a `<mj-filter-popover>` or move secondary state into `[toolbar]`.
+Action buttons only. **Under the concise model (§3), the `<mj-filter-popover>` and
+`<mj-view-toggle>` do NOT live here — they move into the `[toolbar]` control bar
+next to search.** `[actions]` keeps just:
 
 **Ordering, left → right:**
 
-1. **State controls** (modify the view): `<mj-filter-popover>`, `<mj-view-toggle>`,
-   auto-refresh toggle
-2. **Secondary action buttons**: `Refresh`, `Export`
-3. **Primary action button** (rightmost): `New X`, `Save`, `Create`
+1. **Secondary action buttons**: `Refresh`, `Export`
+2. **Primary action button** (rightmost): `New X`, `Save`, `Create`
 
 ```
-[ filter-popover ] [ view-toggle ] | [ Refresh ] | [ New Item ]
-   └── state/modifiers ──────────┘ └─ buttons ─┘  └─ primary ─┘
+[ Refresh ] [ Export ] | [ New Item ]
+   └─ secondary ─────┘   └─ primary ─┘
 ```
+
+(The `search · Filter · view` control bar lives in `[toolbar]` — see §2 `[toolbar]` and §3.)
 
 Notes:
 - Primary-rightmost in page chrome is **intentional** and inverse to dialog footer
   convention (primary-leftmost). Page chrome is exploratory; dialogs are imperative.
-- `Refresh` is a button, so it goes **after** view-toggle / filter-popover, not
-  before. State-then-action reading flow.
 - Only ONE primary action per page. If you have two equally important actions,
   reconsider the design.
+- Older pages still place Filter/view in `[actions]` (the pre-concise convention);
+  migrating them = relocating both into `[toolbar]`. See the rollout tracker.
 
 ### `[toolbar]` — "How do I find what I'm looking at?"
 
 Second row, full width. Filtering and search. **Optional** — pages with no filtering
 omit this slot entirely.
 
-**Ordering, left → right:**
+**Ordering, left → right (the `search · Filter · view` control bar):**
 
-1. `<mj-page-search>` — always first if present
-2. Quick-filter chips: `<mj-filter-chip>` for time-range, multi-select status, or
-   small toggle sets (cap: ~5 chips)
-3. Active-filter chips (when filter-popover applies filters → shown here for
-   one-click clear)
+1. `<mj-page-search>` — always first if present (persistent; never a filter field)
+2. `<mj-filter-popover>` "Filters" button — the **single** entry point for ALL
+   filters (see §3). Inline `<mj-filter-chip>` quick-filter groups are
+   **superseded** — fold them into the popover's `<mj-filter-panel>`.
+3. `<mj-view-toggle>` — optional, trailing the Filter button.
 
 ❌ Not permitted in `[toolbar]`:
-- Buttons (Refresh, primary actions) — those go in `[actions]`
-- Inline `<select>` dropdowns — use a `<mj-filter-popover>` in `[actions]` instead
-- View-toggles — those go in `[actions]`
+- Buttons other than the Filter popover (Refresh, primary actions) — those go in `[actions]`
+- Inline `<select>` dropdowns — put them in the `<mj-filter-panel>` instead
+- Inline quick-filter chip groups or an "applied filters" chip row — superseded by the one Filter button (§3)
 
 ---
 
-## 3. Filter UI decision tree
+## 3. Filter UI — the concise model (one Filter button)
 
-When you have a filter that doesn't fit in `[toolbar]` as a chip group, **pick one
-control style and stick with it.** Mixed inline `<select>` dropdowns are not
-permitted — every page has eventually been retrofitted away from them, so don't
-ship new ones.
+**Canonical as of the concise-chrome migration. This SUPERSEDES the older split
+of "inline quick-filter chips in `[toolbar]` + popover in `[actions]`."** Do not
+ship new inline `<mj-filter-chip>` quick-filter groups, and do not add an
+"applied filters" chip row (that approach was prototyped and removed).
 
-| Filter cardinality | Filter UI | Slot |
-|---|---|---|
-| 2–5 multi-select options (e.g., Status: Active/Pending/Disabled) | `<mj-filter-chip>` group | `[toolbar]` |
-| Time-range (24h / 7d / 30d / 90d) | `<mj-filter-chip>` group | `[toolbar]` |
-| 1 single-select dropdown with ≤10 options | `<mj-filter-popover>` containing `<mj-filter-panel>` with `type: 'dropdown'` | `[actions]` |
-| 2+ filters of any kind | `<mj-filter-popover>` containing `<mj-filter-panel>` | `[actions]` |
-| Filterable / searchable long list (e.g., Job names) | `<mj-filter-popover>` with `filterable: true` dropdown | `[actions]` |
+- **One entry point.** ALL of a page's filters live inside a single
+  `<mj-filter-popover Label="Filters" Icon="fa-solid fa-filter">` →
+  `<mj-filter-panel [Fields]>`. The popover's **active-count badge** is how the
+  user sees "N filters on"; they open it to change them or hit **Clear all**.
+  There is **no separate applied-filter chip row** — the badge + the panel carry
+  the state.
+- **Search is persistent**, living in the control bar via `<mj-page-search>` —
+  it's wayfinding, never a filter field.
+- **The control bar reads `search · Filter · view`** and sits in `[toolbar]`.
+  The page's one primary CTA stays in `[actions]`. The bar is **right-aligned on
+  desktop, left-aligned on mobile** (where search grows to fill) — handled by the
+  shared header primitives, no per-page CSS.
 
-**Why the popover for multi-filter pages:** keeps `[actions]` from getting crowded.
-The popover surfaces an active-count badge, and a `[ShowClearAll]` mechanism for
-resetting state.
+Field types inside the panel (`FilterFieldConfig.type`):
+
+| Filter kind | `type` |
+|---|---|
+| single-select small set (e.g. Status: All / Active / Inactive) | `'chips'` |
+| multi-select set | `'chips'` with `multi: true` (value is an array) |
+| dropdown (use `filterable: true` for long lists) | `'dropdown'` |
+| free text | `'text'` |
+
+**Period / time-range selectors fold in too.** A 24h / 7d / 30d (or date-range)
+selector goes inside the Filter popover as a `type: 'chips'` field — NOT a
+visible inline chip group. (Scheduling Activity & Integration Activity do this.)
+The only current holdout is **AI Analytics**, whose bespoke per-section
+`analytics-filter-bar` keeps its time-range chips — flagged for standardization,
+not a pattern to copy.
+
+### Two archetypes
+- **Top-level page** (no left-nav): `<mj-page-header>` IS the chrome — identity +
+  primary CTA + the `search · Filter · view` control bar in its `[toolbar]`. (Lists.)
+- **Nav-shell sub-page** (left-nav + interior chrome): `<mj-page-header-interior>`
+  hosts the same control bar; the rail's active item is the identity. (Identity &
+  Access sub-pages.)
+
+### Mobile (free from the shared primitives — no per-page work)
+- `<mj-filter-popover>` docks as a **bottom sheet** at ≤700px; its trigger goes
+  **icon-only** (the count badge remains).
+- `<mj-left-nav>` becomes an off-canvas **drawer** / section-switcher at ≤700px
+  (item descriptions hidden in the drawer).
+- `<mj-page-header>` (≤768px): hides icon + subtitle, title xl→lg, primary row
+  stays one row. `<mj-page-header-interior>` (≤768px): drops the outer margin,
+  hides title + subtitle, action buttons go icon-only (wrap each label in
+  `<span class="mj-action-label">`), toolbar stays one row. `<mj-refresh-button>`
+  is icon-only at ≤768px.
+
+**Rollout tracker:** [/plans/concise-chrome-rollout.md](concise-chrome-rollout.md).
 
 ---
 
@@ -355,12 +393,11 @@ import {
 
 Things this document does NOT yet take a position on — flag here when you hit them:
 
-- **`<mj-view-toggle>` in `[actions]` vs. `[toolbar]`**: Currently `[actions]`. If a
-  pattern emerges where `[actions]` overflows, we may need to relocate.
-- **Multi-select dropdowns in filter-popover**: `<mj-filter-panel>` currently
-  supports single-select dropdowns. If we hit a case where the filter is genuinely
-  multi-select and won't fit as chips (>5 options), add a new field type to
-  filter-field rather than improvising.
+- ~~**`<mj-view-toggle>` in `[actions]` vs. `[toolbar]`**~~ — RESOLVED by the concise
+  model (§3): the view-toggle lives in the `[toolbar]` control bar (`search · Filter · view`).
+- ~~**Multi-select dropdowns in filter-popover**~~ — RESOLVED: `<mj-filter-panel>`
+  gained `type: 'chips'` + `multi: true` (value is an array). Use a multi-select
+  chip group inside the one Filter popover; no inline chips, no new field type needed.
 - **Sort UI**: No canonical control yet. Most pages either don't sort, or sort via
   table headers. If a card-grid page needs explicit sort UI, the choice between
   small button + cycling label vs. dropdown vs. chip group is undecided.
