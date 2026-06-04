@@ -35,7 +35,7 @@ npm run claude-pack:build
 
 This regenerates `dist/v{MAJOR}/` for the MJ major version derived from the
 root `package.json`. The committed `dist/` is the **single source of truth**
-for what ships in the bootstrap ZIP and what `mj update:claude` fetches over
+for what `mj install` lays down at scaffold time and what `mj update:claude` fetches over
 the wire.
 
 CI fails if the committed `dist/` is stale relative to its sources, so always
@@ -128,11 +128,12 @@ rather than warn — the pack is optional and we don't nag opt-outs.
 
 The only files outside `templates/claude-pack/` that consume the pack are:
 
-- `CreateMJDistribution.js` — copies `dist/v{MAJOR}/` into the bootstrap ZIP at release time.
+- `packages/MJInstaller/src/distribution/DistributionAssembler.ts` — ships `dist/v{MAJOR}/` into a fresh `mj install` via the `'claudePack'` mapping kind (M11). Auto-discovers the highest-numbered `v{N}/`. Replaces the legacy bootstrap-ZIP injection that lived in `CreateMJDistribution.js` pre-PR-#2725.
+- `packages/MJInstaller/src/distribution/createBundle.ts` — same pack inclusion for `mj bundle` (offline / air-gapped installs). Both honor `--no-claude-pack` for opt-out.
 - `packages/MJCLI/src/commands/install/claude.ts` — fetches and merges the pack into a user's repo.
 - `packages/MJCLI/src/commands/update/claude.ts` — same but for refresh-time.
 - `packages/MJInstaller/src/diagnostics/ClaudePackDoctor.ts` — runs `mj doctor`'s six pack-integrity checks. Knows the MANIFEST shape and the managed-block regex; check it if you change either.
-- `packages/MJInstaller/src/phases/ScaffoldPhase.ts` — emits an info/warn log when the bootstrap ZIP carries a pack into a fresh install.
+- `packages/MJInstaller/src/phases/ScaffoldPhase.ts` — emits an info/warn log via `reportClaudePack()` when the sparse-checkout assembly carries (or omits) a pack in a fresh install. Threads `--no-claude-pack` through to the assembler.
 - `.github/workflows/claude-pack.yml` — CI gate that fails if `dist/` is stale.
 
 If you change pack semantics, check all of these call sites.

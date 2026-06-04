@@ -34,7 +34,7 @@ MemberJunction).
 - **`.claude/commands/`** — 19 slash commands ready for use in any MJ
   project: `commit`, `update-pr`, `clean-branch`, `save-plan-new-pr`,
   `add-ai-model`, `debug-agent-run`, `generate-integration-actions`,
-  `new-branch`, `create-pr`, `init`, and all 9 speckit.* commands
+  `new-branch`, `create-pr`, `refresh-pack`, and all 9 speckit.* commands
   (`specify`, `plan`, `clarify`, `tasks`, `taskstoissues`, `analyze`,
   `checklist`, `implement`, `constitution`).
 - **`.claude/skills/playwright-cli/SKILL.md`** — browser automation skill
@@ -50,12 +50,16 @@ MemberJunction).
 
 ### Distribution
 
-- Ships inside `MemberJunction_Code_Bootstrap.zip` produced by
-  `CreateMJDistribution.js` at MJ release time — every new install
-  receives the pack automatically.
+- Ships via `mj install` at scaffold time —
+  `packages/MJInstaller/src/distribution/DistributionAssembler.ts` includes
+  `templates/claude-pack/dist/v{MAJOR}/` in the sparse-checkout layout (M11;
+  replaces the legacy bootstrap-ZIP injection that lived in
+  `CreateMJDistribution.js` pre-PR-#2725). Every new install receives the
+  pack automatically; opt out with `mj install --no-claude-pack`.
+- Also bundled by `mj bundle` for offline / air-gapped installs (`mj bundle
+  --no-claude-pack` to exclude).
 - Can be installed or refreshed on an existing project via
-  `mj install:claude` / `mj update:claude` (added in
-  `@memberjunction/cli` 5.34.x).
+  `mj install:claude` / `mj update:claude` (added with this pack release).
 
 ### Tooling shipped alongside
 
