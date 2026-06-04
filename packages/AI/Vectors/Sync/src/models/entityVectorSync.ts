@@ -710,7 +710,9 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorDBAPIKey: string = (await this.ResolveVectorDBAPIKey(vectorDBEntity)) || '';
 
     const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, aiModelEntity.DriverClass, embeddingAPIKey);
-    const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDBEntity.ClassKey, vectorDBAPIKey);
+    // Pass a sentinel when there's no key so the base ctor's non-empty requirement is satisfied
+    // for colocated providers (which authenticate via the borrowed host connection, not a key).
+    const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDBEntity.ClassKey, vectorDBAPIKey || 'colocated');
 
     if (!embedding) {
       throw Error(`Failed to create Embeddings instance for AI Model ${aiModelEntity.DriverClass}`);
@@ -718,6 +720,14 @@ export class EntityVectorSyncer extends VectorBase {
 
     if (!vectorDB) {
       throw Error(`Failed to create Vector Database instance for ${vectorDBEntity.ClassKey}`);
+    }
+
+    // Colocated providers (e.g. PgVectorColocated) store vectors in the application's own DB.
+    // Wire in the active data-provider connection; they need no API key. External providers
+    // (Pinecone/Qdrant) still require a key — enforce that here, after instantiation.
+    vectorDB.TryWireColocatedHost(this.Provider);
+    if (!vectorDB.SupportsColocatedQuery && !vectorDBAPIKey) {
+      throw Error(`No API Key found for Vector Database ${vectorDBEntity.ClassKey}`);
     }
 
     LogStatus(`Using vector database ${vectorDBEntity.Name} and AI Model ${aiModelEntity.Name}`);

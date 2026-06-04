@@ -1,8 +1,8 @@
 {
-  "name": "@memberjunction/ai-vectordb",
+  "name": "@memberjunction/ai-vectors-sqlserver",
   "type": "module",
   "version": "5.38.0",
-  "description": "MemberJunction: AI Vector Database Module",
+  "description": "SQL Server 2025 native VECTOR implementation for AI Vector Database (colocated)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -11,15 +11,14 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/ai-vectordb": "5.38.0",
     "@memberjunction/core": "5.38.0",
     "@memberjunction/global": "5.38.0",
-    "@memberjunction/sql-dialect": "5.38.0",
     "dotenv": "^17.2.4"
   },
   "devDependencies": {
