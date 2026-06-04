@@ -17,6 +17,7 @@ rejects any run that omits a required primitive or weakens its declared paramete
 | `amendment-review` | Dynamic mutations route through AST diff classification; gate-weakening rejected. |
 | `verification-ladder` | T0..T12; cannot ascend without lower rungs green; failures classified via `SyncErrorCode`. |
 | `floor-check` | Final structural gate: bijection slots filled + verified + manifest declarations met. |
+| `scrub-fixture` | Vendor-record outputs cross the result boundary credential- and PII-free — deterministic (no LLM), structure preserved, every redaction reported by path. Backs floor-check's "scrubbed IntegrationGetRun" evidence rule. |
 
 ## Authoring rules (per plan §13a)
 
