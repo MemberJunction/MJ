@@ -43,7 +43,7 @@ write — so the UI renders only once the change is known to be valid, while sti
 
 ```typescript
 // EntitySaveOptions
-OnValidated?: (entity: unknown) => void;
+OnValidated?: (entity: BaseEntity) => void;
 ```
 
 - Fires exactly once, only when the save will proceed (skipped for not-dirty / `ReplayOnly` / failed validation).
@@ -78,9 +78,10 @@ at validation time — and even then, PreSave hooks may already suffice.
 - **Naming.** `OnValidated` fires after `Validate`, `ValidateAsync`, **and** PreSave hooks — i.e. "all
   pre-flight gating passed, persist imminent." `OnPrePersist` would be more literal; `OnValidated` is kept for
   friendliness since validation is the common case. The JSDoc states the exact firing point.
-- **`(entity: unknown)` typing.** The parameter is `unknown` because `EntitySaveOptions` lives in
-  `interfaces.ts`, which `BaseEntity` imports — typing it as `BaseEntity` would be a circular reference. In
-  practice callers close over their own entity reference and ignore the parameter (as `PinMessage` does).
+- **`(entity: BaseEntity)` typing.** `interfaces.ts` already imports `BaseEntity` (it's used in the
+  `Save`/`Load`/`Delete` signatures in the same file), so typing the parameter as `BaseEntity` adds no new
+  cycle — it's the existing pattern. Callers typically close over their own entity reference and ignore the
+  parameter anyway (as `PinMessage` does).
 
 ---
 

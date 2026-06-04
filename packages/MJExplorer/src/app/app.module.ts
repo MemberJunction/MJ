@@ -40,6 +40,7 @@ import { InteractionType } from '@azure/msal-browser';
 // Project stuff
 //***********************************************************
 import { AppComponent } from './app.component';
+import { OnValidatedDemoComponent } from './onvalidated-demo.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
 import { environment } from '../environments/environment';
 
@@ -83,7 +84,10 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     MJExplorerAppModule.forRoot(environment),
 
     // App-specific modules
-    GeneratedFormsModule
+    GeneratedFormsModule,
+
+    // Standalone demo overlay (PR #2745 — OnValidated live demo)
+    OnValidatedDemoComponent
   ],
   providers: [
     SharedService,
