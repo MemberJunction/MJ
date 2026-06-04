@@ -720,6 +720,7 @@ Each command and skill file gets a frontmatter line `mj-pack-version: 5.1.0`. `m
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "__mj_managed": {
     "version": "5.1.0",
+    "mjMajor": "5",
     "keys": ["permissions.allow", "hooks.SessionStart", "env.MJ_CLAUDE_PACK"]
   },
   "permissions": {
