@@ -503,7 +503,18 @@ export class AnthropicLLM extends BaseLLM {
                     budget_tokens: thinkingBudget
                 };
             }
-            
+
+            switch (params.responseFormat) {
+                case 'JSON':
+                    console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent. Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
+                    break;
+                case 'ModelSpecific':
+                    if (params.modelSpecificResponseFormat) {
+                        Object.assign(createParams, params.modelSpecificResponseFormat);
+                    }
+                    break;
+            }
+
             const stream = this.AnthropicClient.messages.stream(createParams).on('text', (chunk: any) => {
                 // too noisy to log this -- console.log('stream chunk', chunk);
             });;
@@ -708,7 +719,18 @@ export class AnthropicLLM extends BaseLLM {
                 budget_tokens: params.reasoningBudgetTokens
             };
         }
-        
+
+        switch (params.responseFormat) {
+            case 'JSON':
+                console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent. Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    Object.assign(createParams, params.modelSpecificResponseFormat);
+                }
+                break;
+        }
+
         return this.AnthropicClient.messages.create(createParams);
     }
     
