@@ -992,9 +992,16 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
             }
             const body = (resp.Body ?? {}) as Record<string, unknown>;
             const newIdRaw = body['Id'] ?? body['id'] ?? externalID;
+            const newId = newIdRaw != null ? String(newIdRaw) : undefined;
+            // CREATE-ONLY: a 2xx create with no usable record ID is a silent record-loss bug
+            // (duplicate creates next sync). Fail loudly via the base helper. Update/Delete keep
+            // their existing semantics — they legitimately may not echo an ID.
+            if (method === 'POST') {
+                return this.BuildCreatedResult(newId, resp.Status, objectName);
+            }
             return {
                 Success: true,
-                ExternalID: newIdRaw != null ? String(newIdRaw) : undefined,
+                ExternalID: newId,
                 StatusCode: resp.Status,
             };
         } catch (err: unknown) {

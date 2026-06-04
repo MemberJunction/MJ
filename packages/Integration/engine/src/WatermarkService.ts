@@ -27,6 +27,14 @@ export class WatermarkService {
             OrderBy: 'LastSyncAt DESC',
             MaxRows: 1,
             ResultType: 'entity_object',
+            // A watermark is created then re-read within the same sync run (and across ApplyAll retries).
+            // A cache-stale null here makes the load-or-create path (Update / SaveKeysetPosition /
+            // SavePartitionRollups) blind-INSERT a duplicate, which violates UNIQUE(EntityMapID,Direction).
+            // On PostgreSQL that aborts the whole transaction ("current transaction is aborted"), failing the
+            // entire batch — SQL Server only dodged it via faster CodeGen (single ApplyAll, no second create).
+            // Bypass the cache so the load-or-create always sees true DB state. Watermarks are tiny + few per
+            // run, so the extra read is negligible against the correctness it buys.
+            BypassCache: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;
@@ -248,6 +256,18 @@ export class WatermarkService {
 
         const saved = await watermark.Save();
         if (!saved) {
+            // Idempotent recovery: UNIQUE(EntityMapID,Direction) means a concurrent/retried create may have
+            // already inserted the row (the load-or-create callers Load-then-create; under a true race both
+            // can Load null). Rather than throw — which on PostgreSQL leaves the transaction aborted and sinks
+            // the whole batch — re-read the now-committed row and update it in place. Falls through to the
+            // error only if no row materialized (a genuine save failure, not a duplicate).
+            const existing = await this.Load(entityMapID, contextUser, direction);
+            if (existing) {
+                existing.WatermarkValue = value;
+                existing.WatermarkType = watermarkType;
+                existing.LastSyncAt = new Date();
+                if (await existing.Save()) return;
+            }
             const err = watermark.LatestResult?.Message || 'Unknown error';
             throw new Error(`Failed to create watermark for EntityMapID=${entityMapID}: ${err}`);
         }

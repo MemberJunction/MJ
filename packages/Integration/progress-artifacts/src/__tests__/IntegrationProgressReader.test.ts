@@ -105,6 +105,35 @@ describe('IntegrationProgressReader', () => {
             const snap = await reader.GetRun('run-counts');
             expect(snap?.counts).toEqual({ processed: 10, succeeded: 9, failed: 1, skipped: 2 });
         });
+
+        it('re-derives the applied total without double-counting fetched batch.complete events', async () => {
+            // The reader must apply the SAME applied-vs-fetched rule as the emitter so a
+            // re-derived count matches. batch.complete(processed:56) + stage.complete(processed:56)
+            // must aggregate to 56, NOT 112.
+            const emitter = makeEmitter('run-nodouble');
+            emitter.emit('records.batch.complete', { stage: 'contacts', counts: { processed: 56 } });
+            emitter.stageComplete('contacts', { processed: 56, succeeded: 56, failed: 0, skipped: 0 });
+            await emitter.flush();
+
+            const snap = await reader.GetRun('run-nodouble');
+            expect(snap?.counts).toEqual({ processed: 56, succeeded: 56, failed: 0, skipped: 0 });
+        });
+
+        it('reader re-aggregation matches the emitter result.aggregateCounts exactly', async () => {
+            const emitter = makeEmitter('run-match');
+            emitter.emit('records.batch.start', { stage: 'contacts' });
+            emitter.emit('records.batch.complete', { stage: 'contacts', counts: { processed: 30 } });
+            emitter.emit('records.batch.complete', { stage: 'contacts', counts: { processed: 26 } });
+            emitter.heartbeat('contacts', 'tick', { processed: 56 });
+            emitter.stageComplete('contacts', { processed: 56, succeeded: 50, failed: 4, skipped: 2 });
+            await emitter.complete();
+
+            const snap = await reader.GetRun('run-match');
+            // result.json is written by the emitter; reader re-derives counts from the stream.
+            // The two must agree.
+            expect(snap?.counts).toEqual(snap?.result?.aggregateCounts);
+            expect(snap?.counts).toEqual({ processed: 56, succeeded: 50, failed: 4, skipped: 2 });
+        });
     });
 
     describe('warnings rollup + warningCount', () => {

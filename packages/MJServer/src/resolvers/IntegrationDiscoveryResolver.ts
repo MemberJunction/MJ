@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -28,7 +28,12 @@ import {
     IntegrationSyncOptions,
     SourceSchemaInfo,
     IntegrationSchemaSync,
-    IntegrationConnectorCreationPipeline
+    IntegrationConnectorCreationPipeline,
+    IntegrationActionGenerator
+} from "@memberjunction/integration-engine";
+import type {
+    IntegrationActionVerb,
+    GenerateIntegrationActionResult
 } from "@memberjunction/integration-engine";
 import { IntegrationEngineBase } from "@memberjunction/integration-engine-base";
 import {
@@ -192,6 +197,7 @@ class DeleteConnectionOutput {
     @Field({ nullable: true }) EntityMapsDeleted?: number;
     @Field({ nullable: true }) FieldMapsDeleted?: number;
     @Field({ nullable: true }) SchedulesDeleted?: number;
+    @Field({ nullable: true }) CredentialDeleted?: boolean;
 }
 
 // ─── Schema Evolution Output ─────────────────────────────────────────────────
@@ -373,6 +379,31 @@ class RefreshConnectorSchemaOutput {
     @Field(() => [RefreshConnectorSchemaPKVerdictOutput], { nullable: true }) PKVerdicts?: RefreshConnectorSchemaPKVerdictOutput[];
     @Field(() => [String], { nullable: true }) UnresolvedObjects?: string[];
     @Field({ nullable: true }) FailureMessage?: string;
+}
+
+// ─── Generate Integration Action (on-demand Integration-as-Actions) ─────────
+// Generates + persists a strongly-typed Action (DriverClass='IntegrationActionExecutor')
+// for one integration/object/verb (or all applicable verbs when verb is omitted) via
+// the engine's IntegrationActionGenerator. Idempotent on the deterministic Action Name
+// "<Integration> - <Verb> <DisplayName>": a matching Action is reused (AlreadyExisted=true)
+// and its params/result codes reconciled rather than duplicated.
+
+@ObjectType()
+class IntegrationGenerateActionResult {
+    @Field() Success: boolean;
+    @Field({ nullable: true }) ActionID?: string;
+    @Field({ nullable: true }) ActionName?: string;
+    @Field() AlreadyExisted: boolean;
+    @Field({ nullable: true }) Verb?: string;
+    @Field({ nullable: true }) ObjectName?: string;
+    @Field() Message: string;
+}
+
+@ObjectType()
+class IntegrationGenerateActionOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [IntegrationGenerateActionResult], { nullable: true }) Results?: IntegrationGenerateActionResult[];
 }
 
 // --- Preview Data Types ---
@@ -844,6 +875,13 @@ function isValidEntityMapStatus(value: string): value is EntityMapStatus {
     return (VALID_ENTITY_MAP_STATUSES as readonly string[]).includes(value);
 }
 
+// IntegrationActionVerb is the engine-defined union ('Get'|'Create'|'Update'|'Delete'|'Search'|'List').
+const VALID_INTEGRATION_ACTION_VERBS = ['Get', 'Create', 'Update', 'Delete', 'Search', 'List'] as const;
+
+function isValidIntegrationActionVerb(value: string): value is IntegrationActionVerb {
+    return (VALID_INTEGRATION_ACTION_VERBS as readonly string[]).includes(value);
+}
+
 // ─── List Source Objects (Full-Catalog Picker) ──────────────────────────────
 // Returns every object the source system exposes (e.g. all ~1,800 Salesforce
 // sobjects), merged with any existing IntegrationObject metadata so the UI
@@ -1205,6 +1243,91 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 RunID: 'error',
             };
         }
+    }
+
+    /**
+     * Generates + persists strongly-typed Action metadata on demand for an
+     * integration object. When `verb` is supplied, a single Action is generated
+     * for that (integration, object, verb); when omitted, all applicable verbs
+     * for the object are generated (Get/Search/List always, Create/Update/Delete
+     * only when the object supports writes).
+     *
+     * Idempotent: each generated Action is keyed on the deterministic Name
+     * "<Integration> - <Verb> <DisplayName>". An existing Action with that Name is
+     * reused (AlreadyExisted=true) and its params/result codes reconciled rather
+     * than duplicated. Generated Actions use DriverClass='IntegrationActionExecutor'
+     * and carry routing info ({IntegrationName, ObjectName, Verb}) in Action.Config_;
+     * the IntegrationActionExecutor (CoreActions) is the single runtime dispatcher.
+     */
+    @Mutation(() => IntegrationGenerateActionOutput)
+    async IntegrationGenerateAction(
+        @Arg("integrationName") integrationName: string,
+        @Arg("objectName") objectName: string,
+        @Arg("verb", { nullable: true, description: "Optional CRUD verb (Get|Create|Update|Delete|Search|List). Omit to generate all applicable verbs for the object." }) verb: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<IntegrationGenerateActionOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+
+            const generator = new IntegrationActionGenerator();
+            const results = await this.runActionGenerator(generator, integrationName, objectName, verb, user, provider);
+
+            return this.mapGenerateActionResults(results);
+        } catch (e) {
+            LogError(`IntegrationGenerateAction error: ${this.formatError(e)}`);
+            return { Success: false, Message: `Error: ${this.formatError(e)}` };
+        }
+    }
+
+    /**
+     * Drives the engine's IntegrationActionGenerator: one verb when `verb` is a
+     * valid value, all applicable verbs when it is omitted. Casts user/provider
+     * through `unknown` at the boundary — integration-engine resolves its own copy
+     * of core/core-entities, so the types are structurally identical but nominally
+     * distinct (same bridge pattern used by IntegrationRefreshConnectorSchema).
+     */
+    private async runActionGenerator(
+        generator: IntegrationActionGenerator,
+        integrationName: string,
+        objectName: string,
+        verb: string | undefined,
+        user: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<GenerateIntegrationActionResult[]> {
+        const u = user as unknown as Parameters<IntegrationActionGenerator['GenerateAction']>[3];
+        const p = provider as unknown as Parameters<IntegrationActionGenerator['GenerateAction']>[4];
+
+        if (verb != null && verb.length > 0) {
+            if (!isValidIntegrationActionVerb(verb)) {
+                throw new Error(`Invalid verb "${verb}". Must be one of: ${VALID_INTEGRATION_ACTION_VERBS.join(', ')}`);
+            }
+            const single = await generator.GenerateAction(integrationName, objectName, verb, u, p);
+            return [single];
+        }
+        return generator.GenerateActionsForObject(integrationName, objectName, u, p);
+    }
+
+    /** Maps engine GenerateIntegrationActionResult[] into the GraphQL output shape. */
+    private mapGenerateActionResults(results: GenerateIntegrationActionResult[]): IntegrationGenerateActionOutput {
+        const mapped: IntegrationGenerateActionResult[] = results.map(r => ({
+            Success: r.Success,
+            ActionID: r.ActionID,
+            ActionName: r.ActionName,
+            AlreadyExisted: r.AlreadyExisted,
+            Verb: r.Verb,
+            ObjectName: r.ObjectName,
+            Message: r.Message,
+        }));
+
+        const successCount = mapped.filter(r => r.Success).length;
+        const overallSuccess = mapped.length > 0 && mapped.every(r => r.Success);
+
+        return {
+            Success: overallSuccess,
+            Message: `Generated ${successCount}/${mapped.length} action(s)`,
+            Results: mapped,
+        };
     }
 
     /**
@@ -2112,6 +2235,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Cascades the deletion of a CompanyIntegration's linked Credential as part of the
+     * supplied TransactionGroup, so the encrypted-credential row is removed atomically
+     * with the rest of the connection cascade (rolls back together on tg failure).
+     *
+     * Safety:
+     *  - No-op when {@link credentialID} is null/empty.
+     *  - Skips the delete when ANOTHER CompanyIntegration still references the same
+     *    CredentialID (shared credential) — only the sole referencer may delete it.
+     *
+     * @returns true if the credential was attached to the tg for deletion; false otherwise.
+     */
+    private async cascadeDeleteCredential(
+        credentialID: string | null | undefined,
+        companyIntegrationID: string,
+        tg: TransactionGroupBase,
+        rv: RunView,
+        provider: IMetadataProvider,
+        user: UserInfo
+    ): Promise<boolean> {
+        if (!credentialID) return false; // no linked credential — nothing to do
+
+        // Shared-credential safety: do not delete if any OTHER CompanyIntegration uses it.
+        const sharedResult = await rv.RunView<MJCompanyIntegrationEntity>({
+            EntityName: 'MJ: Company Integrations',
+            ExtraFilter: `CredentialID='${credentialID}' AND ID<>'${companyIntegrationID}'`,
+            ResultType: 'simple',
+            Fields: ['ID']
+        }, user);
+        if (sharedResult.Success && sharedResult.Results.length > 0) {
+            LogStatus(`IntegrationDeleteConnection: credential ${credentialID} is shared by ${sharedResult.Results.length} other connection(s); leaving it in place`);
+            return false;
+        }
+
+        const credential = await provider.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
+        const loaded = await credential.InnerLoad(CompositeKey.FromID(credentialID));
+        if (!loaded) return false; // already gone — treat as nothing to cascade
+
+        credential.TransactionGroup = tg;
+        await credential.Delete();
+        return true;
+    }
+
+    /**
      * Snapshots the current credential Values for a given credential ID so they can be restored on rollback.
      */
     private async snapshotCredentialValues(
@@ -2497,15 +2663,33 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     return { Success: false, Message: `No EntityID or EntityName for "${mapDef.ExternalObjectName}"`, Created: created };
                 }
 
-                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
-                em.NewRecord();
-                em.CompanyIntegrationID = companyIntegrationID;
-                em.ExternalObjectName = mapDef.ExternalObjectName;
-                em.EntityID = entityID;
                 const syncDir = mapDef.SyncDirection || 'Pull';
                 if (!isValidSyncDirection(syncDir)) {
                     return { Success: false, Message: `Invalid SyncDirection "${syncDir}" for "${mapDef.ExternalObjectName}". Must be one of: ${VALID_SYNC_DIRECTIONS.join(', ')}`, Created: created };
                 }
+
+                // Create-or-reuse by (connection, external object) — same idempotency rule as ApplyAll's
+                // createSingleEntityMap. A blind NewRecord() here duplicates maps on every re-apply.
+                const escapedObjectName = mapDef.ExternalObjectName.replace(/'/g, "''");
+                const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
+                    EntityName: 'MJ: Company Integration Entity Maps',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+                    OrderBy: '__mj_CreatedAt ASC',
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                    BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
+                }, user);
+
+                let em: MJCompanyIntegrationEntityMapEntity;
+                if (existingMapResult.Success && existingMapResult.Results.length > 0) {
+                    em = existingMapResult.Results[0];
+                } else {
+                    em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
+                    em.NewRecord();
+                    em.CompanyIntegrationID = companyIntegrationID;
+                    em.ExternalObjectName = mapDef.ExternalObjectName;
+                }
+                em.EntityID = entityID;
                 em.SyncDirection = syncDir;
                 em.Priority = mapDef.Priority || 0;
                 em.Status = 'Active';
@@ -2516,9 +2700,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
                 const entityMapID = em.ID;
 
-                // Create field maps if provided
+                // Create field maps if provided (skip ones already mapped for this entity map)
                 if (mapDef.FieldMaps) {
+                    const existingFieldMaps = await new RunView().RunView<{ SourceFieldName: string }>({
+                        EntityName: 'MJ: Company Integration Field Maps',
+                        ExtraFilter: `EntityMapID='${entityMapID}'`,
+                        Fields: ['SourceFieldName'],
+                        ResultType: 'simple',
+                        BypassCache: true, // read committed field-map state for the idempotency skip
+                    }, user);
+                    const alreadyMapped = new Set(
+                        (existingFieldMaps.Results ?? []).map(r => (r.SourceFieldName ?? '').toLowerCase())
+                    );
                     for (const fmDef of mapDef.FieldMaps) {
+                        if (alreadyMapped.has((fmDef.SourceFieldName ?? '').toLowerCase())) continue;
                         const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
                         fm.NewRecord();
                         fm.EntityMapID = entityMapID;
@@ -3015,11 +3210,30 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return null;
         }
 
-        // Create entity map
-        const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
-        em.NewRecord();
-        em.CompanyIntegrationID = companyIntegrationID;
-        em.ExternalObjectName = obj.SourceObjectName;
+        // Create-or-reuse the entity map. Idempotency is REQUIRED here: ApplyAll is re-run on
+        // every wizard re-apply (and by the test harness on every pull). Blindly NewRecord()-ing
+        // multiplies the maps in lockstep (N applies → N duplicate maps per object), which
+        // silently corrupts the record-map 1:1 completeness gate and makes the forward sync
+        // process each object N times. Reuse the existing (connection, external object) map instead.
+        const escapedObjectName = obj.SourceObjectName.replace(/'/g, "''");
+        const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
+            EntityName: 'MJ: Company Integration Entity Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: 1,
+            ResultType: 'entity_object',
+            BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
+        }, user);
+
+        let em: MJCompanyIntegrationEntityMapEntity;
+        if (existingMapResult.Success && existingMapResult.Results.length > 0) {
+            em = existingMapResult.Results[0]; // reuse — keeps the map stable across re-applies
+        } else {
+            em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
+            em.NewRecord();
+            em.CompanyIntegrationID = companyIntegrationID;
+            em.ExternalObjectName = obj.SourceObjectName;
+        }
         em.EntityID = entityInfo.ID;
         em.SyncDirection = isValidSyncDirection(defaultSyncDirection) ? defaultSyncDirection : 'Pull';
         em.Priority = obj.SourceObjectName.startsWith('assoc_') ? 10 : 0;
@@ -3059,7 +3273,24 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 (ci: unknown, obj: string, u: unknown) => Promise<ExternalFieldSchema[]>;
             const fields = await discoverFields(companyIntegration, sourceObjectName, user);
 
+            // Idempotency (mirrors the entity-map reuse above): don't re-create field maps that
+            // already exist for this entity map, or re-applies multiply them in lockstep.
+            const existingFieldMaps = await new RunView().RunView<{ SourceFieldName: string }>({
+                EntityName: 'MJ: Company Integration Field Maps',
+                ExtraFilter: `EntityMapID='${entityMapID}'`,
+                Fields: ['SourceFieldName'],
+                ResultType: 'simple',
+                BypassCache: true, // read committed field-map state for the idempotency skip
+            }, user);
+            const alreadyMapped = new Set(
+                (existingFieldMaps.Results ?? []).map(r => (r.SourceFieldName ?? '').toLowerCase())
+            );
+
             for (const field of fields) {
+                if (alreadyMapped.has(field.Name.toLowerCase())) {
+                    fieldCount++; // already present — count it so the reported total stays stable
+                    continue;
+                }
                 const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
                 fm.NewRecord();
                 fm.EntityMapID = entityMapID;
@@ -3223,6 +3454,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
 
+            // Reject upfront if the connector is deactivated. The engine also gates this
+            // authoritatively (no run record is created), but returning Success:false here gives the
+            // client immediate, unambiguous feedback instead of an optimistic fire-and-forget that
+            // silently no-ops. IsActive is boolean|null — only an explicit false rejects (null/unset
+            // connections predating the flag are unaffected).
+            const ciProvider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const ciCheck = await ciProvider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (await ciCheck.InnerLoad(CompositeKey.FromID(companyIntegrationID)) && ciCheck.IsActive === false) {
+                return { Success: false, Message: 'Connector is deactivated (IsActive=false); sync not started' };
+            }
+
             const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[]; SyncDirection?: 'Pull' | 'Push' | 'Bidirectional' } = {};
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
@@ -3346,9 +3588,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const companyIntegration = ciResult.Results[0];
 
-            // Load the Integration entity to get the ClassName for connector resolution
+            // Load the Integration entity to get the ClassName for connector resolution.
+            // Entity is registered as 'MJ: Integrations' (the "MJ: " prefix is required — the sibling
+            // CompanyIntegration lookup above uses 'MJ: Company Integrations'); the bare 'Integrations'
+            // name is not in metadata, which dead-lettered the entire IntegrationWriteRecord (push) path.
             const integResult = await rv.RunView<MJIntegrationEntity>({
-                EntityName: 'Integrations',
+                EntityName: 'MJ: Integrations',
                 ExtraFilter: `ID='${companyIntegration.IntegrationID}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
@@ -3650,7 +3895,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'Priority ASC',
                 ResultType: 'simple',
-                Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status', 'Configuration']
+                Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status', 'Configuration'],
+                BypassCache: true, // operational list must reflect COMMITTED state (wizard/lifecycle act on it)
             }, user);
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
@@ -3678,6 +3924,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `EntityMapID='${entityMapID}'`,
                 OrderBy: 'SourceFieldName',
                 ResultType: 'simple',
+                BypassCache: true, // operational list must reflect COMMITTED state
                 Fields: ['ID', 'EntityMapID', 'SourceFieldName', 'DestinationFieldName', 'Status']
             }, user);
 
@@ -3725,7 +3972,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     em.Status = update.Status;
                 }
 
-                if (!await em.Save()) errors.push(`${update.EntityMapID}: failed to save`);
+                if (!await em.Save()) errors.push(`${update.EntityMapID}: failed to save — ${em.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
 
             if (errors.length > 0) return { Success: false, Message: `Errors: ${errors.join('; ')}` };
@@ -3877,7 +4124,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Entity Maps',
                     ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                     ResultType: 'simple',
-                    Fields: ['ID', 'Status']
+                    Fields: ['ID', 'Status'],
+                    // Status must reflect the live state immediately after a deselect/reselect
+                    // (UpdateEntityMaps). Bypass the server RunView cache so ActiveEntityMaps never
+                    // reports a stale count right after a map's Status is toggled.
+                    BypassCache: true
                 },
                 {
                     EntityName: 'MJ: Company Integration Runs',
@@ -3885,7 +4136,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
                     ResultType: 'simple',
-                    Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords']
+                    Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords'],
+                    BypassCache: true
                 }
             ], user);
 
@@ -4748,9 +5000,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
-            // Step 7: Delete the CompanyIntegration itself
+            // Step 7: Delete the CompanyIntegration itself FIRST, so its CredentialID FK reference
+            // is gone before we delete the Credential. (Deleting the Credential first violates the
+            // CompanyIntegration.CredentialID foreign key — the constraint is checked per-statement
+            // inside the transaction — and rolls back the entire cascade.) Capture CredentialID
+            // before Delete() since we still need it for Step 8.
+            const linkedCredentialID = ci.CredentialID;
             ci.TransactionGroup = tg;
             await ci.Delete();
+
+            // Step 8: Delete the linked Credential (encrypted-credential row) in the SAME
+            // transaction group so it commits/rolls back atomically with the cascade — now safe
+            // because the referencing CompanyIntegration delete is queued ahead of it. Skips
+            // silently when there is no CredentialID, and refuses to delete a credential still
+            // referenced by ANOTHER CompanyIntegration (shared credential).
+            const credentialDeleted = await this.cascadeDeleteCredential(
+                linkedCredentialID, companyIntegrationID, tg, rv, md, sysUser
+            );
 
             // Submit the transaction
             const submitted = await tg.Submit();
@@ -4768,6 +5034,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityMapsDeleted: entityMapsDeleted,
                 FieldMapsDeleted: fieldMapsDeleted,
                 SchedulesDeleted: schedulesDeleted,
+                CredentialDeleted: credentialDeleted,
             };
         } catch (e) {
             LogError(`IntegrationDeleteConnection error: ${e}`);

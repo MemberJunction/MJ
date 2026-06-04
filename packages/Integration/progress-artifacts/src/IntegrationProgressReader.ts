@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { CountsContributeToAggregate } from './types.js';
 import type {
     IntegrationProgressEvent,
     IntegrationRunFilter,
@@ -135,6 +136,12 @@ export class IntegrationProgressReader {
             try {
                 const ev = JSON.parse(line) as IntegrationProgressEvent;
                 if (!ev.counts) continue;
+                // Mirror the emitter's rule (CountsContributeToAggregate): only the APPLIED
+                // rollup events (`stage.complete`/`run.complete`) feed the total. The FETCHED
+                // `processed` on `records.batch.complete` is per-batch progress only and would
+                // double-count every record if summed here. Keeping the rule in one place
+                // guarantees a re-derived count matches the emitter's running aggregate.
+                if (!CountsContributeToAggregate(ev.eventType)) continue;
                 totals.processed += ev.counts.processed ?? 0;
                 totals.succeeded += ev.counts.succeeded ?? 0;
                 totals.failed += ev.counts.failed ?? 0;

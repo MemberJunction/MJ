@@ -193,10 +193,19 @@ export class DDLGenerator {
         const nullable = column.IsNullable ? 'NULL' : 'NOT NULL';
         const defaultExpr = column.DefaultValue != null ? ` DEFAULT ${column.DefaultValue}` : '';
 
+        // Idempotency guard — re-applying after a partial/interrupted run (or any re-sync) must not
+        // fail because the column already exists. SQL Server has no `ADD COLUMN IF NOT EXISTS`, so we
+        // gate with a single-statement IF over sys.columns (no BEGIN/END, so RSU's ';\n' batch chunker
+        // can't split it — same shape as GuardExtendedProperty). Postgres has native IF NOT EXISTS.
         if (platform === 'sqlserver') {
-            return `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+            const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+            return (
+                `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
+                `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
+                `AND name = N'${column.TargetColumnName}')\n${addStmt}`
+            );
         }
-        return `ALTER TABLE ${fullTable}\n    ADD COLUMN ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+        return `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
     }
 
     /**

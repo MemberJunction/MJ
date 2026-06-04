@@ -275,6 +275,18 @@ interface PostMigrationResult {
    * or the runner only implements RunInProcess.
    */
   CodeGenVerdict?: RSUCodeGenEntityVerdict;
+  /**
+   * Whether the run-wide CodeGen step succeeded. Undefined when CodeGen was
+   * skipped (no successful migration). When FALSE the migrations executed but
+   * CodeGen did NOT — so the affected entities may have no stored procedures
+   * (e.g. CODEGEN_DB creds that don't match the target DB platform, or a build
+   * that isn't present), and a sync would silently skip them with
+   * SchemaNotGenerated. A connector must NOT report success when its CodeGen
+   * failed, so this flows into each per-caller result's Success.
+   */
+  CodeGenSucceeded?: boolean;
+  /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
+  CodeGenError?: string;
 }
 
 /**
@@ -717,6 +729,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     if (this._lastCodeGenVerdict) {
       result.CodeGenVerdict = this._lastCodeGenVerdict;
     }
+    // Thread the CodeGen success/failure into the post-migration result. A migration
+    // can ExecuteMigration:success yet leave its entity with NO spCreate/spUpdate procs
+    // if RunCodeGen failed — after which a sync silently skips the entity with
+    // SchemaNotGenerated (the connector looks "created" but isn't functional). Surface
+    // it so buildPerCallerResults FAILS the connector instead of passing silently.
+    result.CodeGenSucceeded = !!codegenOk;
+    if (!codegenOk) {
+      result.CodeGenError =
+        sharedSteps.find((s) => s.Name === 'RunCodeGen' && s.Status === 'failed')?.Message ??
+        'CodeGen failed after a successful migration — entities may be missing stored procedures/views';
+    }
     if (codegenOk) {
       const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
       if (compileOk) {
@@ -759,7 +782,10 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     postResult: PostMigrationResult,
   ): RSUPipelineBatchResult {
     this._lastRunAt = new Date();
-    this._lastRunResult = successfulItems.length > 0 ? 'success' : 'failed';
+    // A run-wide CodeGen failure means the migrations applied but the entities may have
+    // no stored procedures — treat the run as failed, not success.
+    const codeGenFailed = postResult.CodeGenSucceeded === false;
+    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed ? 'success' : 'failed';
 
     // CodeGen's verdict is run-wide (one CodeGen pass covers the whole batch),
     // so every per-caller result shares the same created/not-created arrays.
@@ -768,8 +794,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const results: RSUPipelineResult[] = itemResults.map((item) => {
       const allSteps = [...sharedSteps, ...item.Steps];
+      // A migration that executed but whose run-wide CodeGen failed is NOT a success —
+      // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
+      const codeGenFailedThisCaller = codeGenFailed && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed,
         MigrationFilePath: item.FilePath,
         EntitiesCreated: [...entitiesCreated],
         EntitiesNotCreated: [...entitiesNotCreated],
@@ -777,8 +806,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         GitCommitSuccess: postResult.GitCommitSuccess,
         BranchName: postResult.BranchName,
         Steps: allSteps,
-        ErrorMessage: item.Error,
-        ErrorStep: item.Error ? item.Steps.find((s) => s.Status === 'failed')?.Name : undefined,
+        ErrorMessage: codeGenFailedThisCaller ? postResult.CodeGenError ?? item.Error : item.Error,
+        ErrorStep: codeGenFailedThisCaller
+          ? 'RunCodeGen'
+          : item.Error
+            ? item.Steps.find((s) => s.Status === 'failed')?.Name
+            : undefined,
       };
 
       this.writeAuditLog(item.Input, result).catch((err) => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));

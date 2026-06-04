@@ -147,12 +147,24 @@ function tryParse(s) {
 
 /** Triggers a sync and resolves the run id race-free (StartSync.RunID can be null). */
 export async function triggerAndResolveRun(gql, ciid, { fullSync = false, syncDirection, entityMapIDs } = {}) {
+    // Snapshot the latest run BEFORE we trigger, so a newer one is unambiguously "this run".
+    const beforeRuns = (await gql(GQL.listRuns, { ciid, inFlightOnly: false, limit: 1 })).IntegrationListRuns;
+    const beforeID = beforeRuns?.Runs?.[0]?.RunID ?? null;
+
     const started = expectGqlSuccess('StartSync',
         (await gql(GQL.startSync, { ciid, fullSync, syncDirection: syncDirection ?? null, entityMapIDs: entityMapIDs ?? null })).IntegrationStartSync);
     if (started.RunID) return started.RunID;
-    // Race-free fallback: the in-flight run for this connector.
-    const runs = (await gql(GQL.listRuns, { ciid, inFlightOnly: true, limit: 1 })).IntegrationListRuns;
-    const id = runs?.Runs?.[0]?.RunID;
+
+    // Fallback 1: the in-flight run for this connector.
+    const inflight = (await gql(GQL.listRuns, { ciid, inFlightOnly: true, limit: 1 })).IntegrationListRuns;
+    let id = inflight?.Runs?.[0]?.RunID;
+    // Fallback 2: a fast sync (e.g. advancedGen off + already-synced data) can COMPLETE before we
+    // can observe it in-flight. Take the most-recent run as long as it's newer than the pre-trigger one.
+    if (!id) {
+        const recent = (await gql(GQL.listRuns, { ciid, inFlightOnly: false, limit: 1 })).IntegrationListRuns;
+        const recentID = recent?.Runs?.[0]?.RunID ?? null;
+        if (recentID && recentID !== beforeID) id = recentID;
+    }
     if (!id) throw new Error('Could not resolve run id after StartSync (no RunID and no in-flight run)');
     return id;
 }

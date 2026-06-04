@@ -122,6 +122,54 @@ describe('WatermarkService', () => {
         });
     });
 
+    describe('idempotency (cache-bypass read + create recovery)', () => {
+        it('Load reads true DB state (BypassCache) so a just-written watermark is never missed', async () => {
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            await service.Load('em-1', mockContextUser);
+
+            // Stale-cached null here is what made the load-or-create blind-INSERT a duplicate
+            // (UNIQUE(EntityMapID,Direction)) and abort the PG transaction. Reads must bypass cache.
+            expect(mockRunViewFn).toHaveBeenCalledWith(
+                expect.objectContaining({ BypassCache: true }),
+                mockContextUser
+            );
+        });
+
+        it('recovers by updating the existing row when create collides on UNIQUE(EntityMapID,Direction)', async () => {
+            // Update's first Load sees no row -> takes the create path; the create then "collides"
+            // (Save=false) because a concurrent/retried run already inserted it. createWatermark must
+            // re-read and update in place rather than throw (which on PG leaves the txn aborted).
+            const existing = createMockWatermark('em-dup', 'old');
+            mockRunViewFn
+                .mockResolvedValueOnce({ Success: true, Results: [] })          // Update.Load -> none
+                .mockResolvedValueOnce({ Success: true, Results: [existing] }); // recovery Load -> exists
+
+            const failingNew = createMockWatermark('em-dup', null);
+            (failingNew.Save as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+            mockGetEntityObjectFn.mockResolvedValue(failingNew);
+
+            await expect(service.Update('em-dup', 'new-value', mockContextUser)).resolves.toBeUndefined();
+
+            // did NOT throw — instead the pre-existing row was updated in place
+            expect(existing.WatermarkValue).toBe('new-value');
+            expect(existing.Save).toHaveBeenCalled();
+        });
+
+        it('still throws when create fails AND no row materialized (a genuine save failure)', async () => {
+            mockRunViewFn
+                .mockResolvedValueOnce({ Success: true, Results: [] })  // Update.Load -> none
+                .mockResolvedValueOnce({ Success: true, Results: [] }); // recovery Load -> still none
+
+            const failingNew = createMockWatermark('em-genuine', null);
+            (failingNew.Save as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+            mockGetEntityObjectFn.mockResolvedValue(failingNew);
+
+            await expect(service.Update('em-genuine', 'v', mockContextUser))
+                .rejects.toThrow('Failed to create watermark');
+        });
+    });
+
     describe('SaveKeysetPosition (§8a keyset resume)', () => {
         it('should mark an existing watermark as a Cursor resume position and persist the after-key', async () => {
             const mockWatermark = createMockWatermark('em-1', '2024-01-01T00:00:00Z');

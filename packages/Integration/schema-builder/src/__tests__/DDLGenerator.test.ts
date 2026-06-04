@@ -158,19 +158,23 @@ describe('DDLGenerator', () => {
     });
 
     describe('GenerateAlterTableAddColumn', () => {
-        it('should generate SQL Server ADD column', () => {
+        it('should generate SQL Server ADD column guarded by IF NOT EXISTS (idempotent re-apply)', () => {
             const col = MakeColumn({ TargetColumnName: 'Phone', TargetSqlType: 'NVARCHAR(50)', IsNullable: true });
             const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'sqlserver');
             expect(sql).toContain('ALTER TABLE [hubspot].[Contact]');
             expect(sql).toContain('ADD [Phone] NVARCHAR(50) NULL');
             expect(sql).not.toContain('ADD COLUMN');
+            // Idempotency guard: re-applying after a partial run must not throw "column already exists" (SQL Server 2705).
+            expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.columns');
+            expect(sql).toContain("OBJECT_ID(N'[hubspot].[Contact]')");
+            expect(sql).toContain("name = N'Phone'");
         });
 
-        it('should generate PostgreSQL ADD COLUMN', () => {
+        it('should generate PostgreSQL ADD COLUMN with native IF NOT EXISTS (idempotent re-apply)', () => {
             const col = MakeColumn({ TargetColumnName: 'Phone', TargetSqlType: 'VARCHAR(50)', IsNullable: true });
             const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'postgresql');
             expect(sql).toContain('ALTER TABLE "hubspot"."Contact"');
-            expect(sql).toContain('ADD COLUMN "Phone" VARCHAR(50) NULL');
+            expect(sql).toContain('ADD COLUMN IF NOT EXISTS "Phone" VARCHAR(50) NULL');
         });
     });
 

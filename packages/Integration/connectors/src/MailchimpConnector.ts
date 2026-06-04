@@ -849,9 +849,16 @@ export class MailchimpConnector extends BaseRESTIntegrationConnector {
             const response = await this.MakeHTTPRequest(auth, url, method, this.BuildHeaders(auth), body ?? undefined);
             if (response.Status >= 200 && response.Status < 300) {
                 const created = response.Body as Record<string, unknown>;
+                const externalID = created?.['id'] == null ? undefined : String(created['id']);
+                // CREATE-ONLY: a 2xx create with no record ID is a silent record-loss bug (duplicate
+                // creates on the next sync). Fail loudly via the base helper. Update/Delete keep their
+                // existing semantics — they legitimately may not echo an ID in the body.
+                if (operation === 'CreateRecord') {
+                    return this.BuildCreatedResult(externalID, response.Status, objectName);
+                }
                 return {
                     Success: true,
-                    ExternalID: String(created?.['id'] ?? ''),
+                    ExternalID: externalID ?? '',
                     StatusCode: response.Status,
                 };
             }

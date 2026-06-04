@@ -436,7 +436,8 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         const r = await this.MakeHTTPRequest(auth, url, 'POST', headers, payload);
         if (r.Status >= 200 && r.Status < 300) {
             const body = r.Body as Record<string, unknown>;
-            return { Success: true, ExternalID: String(body['key'] ?? ''), StatusCode: r.Status };
+            const newKey = body['key'] == null ? undefined : String(body['key']);
+            return this.BuildCreatedResult(newKey, r.Status, ctx.ObjectName);
         }
         return { Success: false, ExternalID: '', StatusCode: r.Status, ErrorMessage: `Create failed: ${r.Status}` };
     }

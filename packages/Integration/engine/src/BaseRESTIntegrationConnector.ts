@@ -302,7 +302,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const response = await this.MakeHTTPRequest(auth, url, obj.CreateMethod, headers, body);
         if (response.Status >= 200 && response.Status < 300) {
             const externalID = this.ExtractIDFromResponse(response, obj.CreateIDLocation);
-            return { Success: true, StatusCode: response.Status, ExternalID: externalID };
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
         }
         return {
             Success: false,

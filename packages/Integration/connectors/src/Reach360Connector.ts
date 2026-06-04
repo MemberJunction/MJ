@@ -605,7 +605,7 @@ export class Reach360Connector extends BaseRESTIntegrationConnector {
             }
             const body = (resp.Body ?? {}) as Record<string, unknown>;
             const id = body['id'] != null ? String(body['id']) : (route.fallbackID ?? '');
-            return { Success: true, ExternalID: id, StatusCode: resp.Status };
+            return this.BuildCreatedResult(id, resp.Status, ctx.ObjectName);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             return { Success: false, ErrorMessage: `Reach360 CreateRecord failed: ${message}`, StatusCode: 500 };

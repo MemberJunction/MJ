@@ -37,6 +37,13 @@ function makeLegacyRunner(): IRSUCodeGenRunner {
   };
 }
 
+/** CodeGen runner that FAILS — RunInProcess returns false, so runCodeGen throws. */
+function makeFailingRunner(): IRSUCodeGenRunner {
+  return {
+    RunInProcess: async () => false,
+  };
+}
+
 describe('RuntimeSchemaManager — entity created/not-created verdict', () => {
   const originalEnv = { ...process.env };
   let workDir: string;
@@ -94,6 +101,30 @@ describe('RuntimeSchemaManager — entity created/not-created verdict', () => {
 
     expect(result.EntitiesCreated).toEqual(['hubspot.Contact', 'hubspot.Company']);
     expect(result.EntitiesNotCreated).toEqual([{ name: 'hubspot.Note', reason: 'No primary key found' }]);
+  });
+
+  it('FAILS the connector (Success=false, ErrorStep=RunCodeGen) when RunCodeGen fails after a successful migration', async () => {
+    // Regression for the silent-success bug: a migration can ExecuteMigration:success yet
+    // RunCodeGen:failed (e.g. CODEGEN_DB creds that do not match the target DB platform),
+    // leaving the entity with NO spCreate/spUpdate procs — after which a sync silently
+    // skips it with SchemaNotGenerated. The connector must report FAILURE, not success.
+    const rsm = RuntimeSchemaManager.Instance;
+    rsm.SetDDLProvider(makeMockDDLProvider() as never);
+    rsm.SetCodeGenRunner(makeFailingRunner());
+
+    const result = await rsm.RunPipeline({
+      MigrationSQL: 'CREATE TABLE [hubspot].[Contact] (ID UNIQUEIDENTIFIER NOT NULL);',
+      Description: 'codegen-fail test',
+      AffectedTables: ['hubspot.Contact'],
+      SkipGitCommit: true,
+      SkipRestart: true,
+    });
+
+    expect(result.Steps.find((s) => s.Name === 'ExecuteMigration')?.Status).toBe('success');
+    expect(result.Steps.find((s) => s.Name === 'RunCodeGen')?.Status).toBe('failed');
+    expect(result.Success).toBe(false);
+    expect(result.ErrorStep).toBe('RunCodeGen');
+    expect(result.ErrorMessage).toBeTruthy();
   });
 
   it('reports a skipped (no-PK) entity with its reason', async () => {

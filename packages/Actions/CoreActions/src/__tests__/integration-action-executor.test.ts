@@ -13,12 +13,14 @@ import type {
 const mockConnector = {
     SupportsCreate: true,
     SupportsUpdate: true,
+    SupportsUpsert: true,
     SupportsDelete: true,
     SupportsSearch: true,
     SupportsListing: true,
     GetRecord: vi.fn(),
     CreateRecord: vi.fn(),
     UpdateRecord: vi.fn(),
+    Upsert: vi.fn(),
     DeleteRecord: vi.fn(),
     SearchRecords: vi.fn(),
     ListRecords: vi.fn(),
@@ -150,6 +152,7 @@ describe('IntegrationActionExecutor', () => {
         // Restore capability flags
         mockConnector.SupportsCreate = true;
         mockConnector.SupportsUpdate = true;
+        mockConnector.SupportsUpsert = true;
         mockConnector.SupportsDelete = true;
         mockConnector.SupportsSearch = true;
         mockConnector.SupportsListing = true;
@@ -180,6 +183,93 @@ describe('IntegrationActionExecutor', () => {
             const result = await run(executor, p as MockRunActionParams);
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('EXECUTOR_ERROR');
+        });
+    });
+
+    // ─── Generic Catch-All (no Config_, routing from params) ─────────
+
+    describe('Generic catch-all mode', () => {
+        function genericParams(inputParams: MockActionParam[]): MockRunActionParams {
+            // No Action.Config_ — routing comes from ActionParams.
+            return { Action: {}, ContextUser: { ID: 'user-1' }, Params: inputParams, Filters: [] };
+        }
+
+        it('should route from ActionParams when Config_ is absent', async () => {
+            mockConnector.GetRecord.mockResolvedValue({
+                ExternalID: 'ext-1', ObjectType: 'contacts', Fields: { email: 'a@test.com' },
+            } as ExternalRecord);
+
+            const result = await run(executor, genericParams([
+                param('IntegrationName', 'TestCRM'),
+                param('ObjectName', 'contacts'),
+                param('Verb', 'Get'),
+                param('ExternalID', 'ext-1'),
+            ]));
+
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+            const ctx = mockConnector.GetRecord.mock.calls[0][0];
+            expect(ctx.ObjectName).toBe('contacts');
+            expect(ctx.ExternalID).toBe('ext-1');
+        });
+
+        it('should resolve routing params case-insensitively', async () => {
+            mockConnector.GetRecord.mockResolvedValue({
+                ExternalID: 'ext-2', ObjectType: 'contacts', Fields: {},
+            } as ExternalRecord);
+
+            const result = await run(executor, genericParams([
+                param('integrationname', 'TestCRM'),
+                param('objectname', 'contacts'),
+                param('verb', 'Get'),
+                param('externalid', 'ext-2'),
+            ]));
+            expect(result.Success).toBe(true);
+        });
+
+        it('should NOT leak routing params into Create attributes', async () => {
+            mockConnector.CreateRecord.mockResolvedValue({ Success: true, ExternalID: 'new-1', StatusCode: 201 } as CRUDResult);
+
+            await run(executor, genericParams([
+                param('IntegrationName', 'TestCRM'),
+                param('ObjectName', 'contacts'),
+                param('Verb', 'Create'),
+                param('email', 'new@test.com'),
+            ]));
+
+            const ctx = mockConnector.CreateRecord.mock.calls[0][0];
+            expect(ctx.Attributes).toEqual({ email: 'new@test.com' });
+            expect(ctx.Attributes).not.toHaveProperty('IntegrationName');
+            expect(ctx.Attributes).not.toHaveProperty('ObjectName');
+            expect(ctx.Attributes).not.toHaveProperty('Verb');
+        });
+
+        it('should error when neither Config_ nor routing params are present', async () => {
+            const result = await run(executor, genericParams([]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('EXECUTOR_ERROR');
+            expect(result.Message).toContain('Action.Config_ is required');
+        });
+
+        it('should still honor Config_ when present (params ignored for routing)', async () => {
+            mockConnector.GetRecord.mockResolvedValue({
+                ExternalID: 'ext-9', ObjectType: 'deals', Fields: {},
+            } as ExternalRecord);
+
+            // Config_ says deals/Get; conflicting routing params must be ignored.
+            const p: MockRunActionParams = {
+                Action: { Config_: JSON.stringify({ IntegrationName: 'TestCRM', ObjectName: 'deals', Verb: 'Get' }) },
+                ContextUser: { ID: 'user-1' },
+                Params: [
+                    param('ObjectName', 'contacts'),
+                    param('Verb', 'Delete'),
+                    param('ExternalID', 'ext-9'),
+                ],
+                Filters: [],
+            };
+            const result = await run(executor, p);
+            expect(result.Success).toBe(true);
+            expect(mockConnector.GetRecord.mock.calls[0][0].ObjectName).toBe('deals');
         });
     });
 
@@ -315,6 +405,73 @@ describe('IntegrationActionExecutor', () => {
             const callCtx = mockConnector.UpdateRecord.mock.calls[0][0];
             expect(callCtx.ExternalID).toBe('ext-1');
             expect(callCtx.Attributes).toEqual({ email: 'changed@test.com', firstname: 'Changed' });
+        });
+    });
+
+    // ─── Upsert Verb ────────────────────────────────────────────────
+
+    describe('Upsert verb', () => {
+        it('should return SUCCESS with ExternalID on successful upsert', async () => {
+            mockConnector.Upsert.mockResolvedValue({ Success: true, ExternalID: 'up-123', StatusCode: 200 } as CRUDResult);
+
+            const result = await run(executor, makeParams('Upsert', 'contacts', 'TestCRM', [
+                param('email', 'up@example.com'),
+                param('firstname', 'Up'),
+            ]));
+
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+            const idOut = result.Params?.find(p => p.Name === 'ExternalID' && p.Type === 'Output');
+            expect(idOut?.Value).toBe('up-123');
+        });
+
+        it('should return UPSERT_FAILED when connector fails', async () => {
+            mockConnector.Upsert.mockResolvedValue({ Success: false, ErrorMessage: 'Bad request', StatusCode: 400 } as CRUDResult);
+
+            const result = await run(executor, makeParams('Upsert', 'contacts', 'TestCRM', [
+                param('email', 'bad@example.com'),
+            ]));
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('UPSERT_FAILED');
+            expect(result.Message).toContain('Bad request');
+        });
+
+        it('should return NOT_SUPPORTED when connector does not support upsert', async () => {
+            mockConnector.SupportsUpsert = false;
+            const result = await run(executor, makeParams('Upsert', 'contacts', 'TestCRM', [
+                param('email', 'test@test.com'),
+            ]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('NOT_SUPPORTED');
+        });
+
+        it('should pass IDProperty and Attributes correctly, excluding IDProperty from attributes', async () => {
+            mockConnector.Upsert.mockResolvedValue({ Success: true, ExternalID: 'up-1', StatusCode: 200 } as CRUDResult);
+
+            await run(executor, makeParams('Upsert', 'contacts', 'TestCRM', [
+                param('IDProperty', 'email'),
+                param('email', 'key@test.com'),
+                param('firstname', 'Keyed'),
+            ]));
+
+            const callCtx = mockConnector.Upsert.mock.calls[0][0];
+            expect(callCtx.IDProperty).toBe('email');
+            expect(callCtx.ObjectName).toBe('contacts');
+            expect(callCtx.Attributes).toEqual({ email: 'key@test.com', firstname: 'Keyed' });
+            expect(callCtx.Attributes).not.toHaveProperty('IDProperty');
+        });
+
+        it('should pass undefined IDProperty when not provided', async () => {
+            mockConnector.Upsert.mockResolvedValue({ Success: true, ExternalID: 'up-2', StatusCode: 201 } as CRUDResult);
+
+            await run(executor, makeParams('Upsert', 'contacts', 'TestCRM', [
+                param('email', 'noprop@test.com'),
+            ]));
+
+            const callCtx = mockConnector.Upsert.mock.calls[0][0];
+            expect(callCtx.IDProperty).toBeUndefined();
+            expect(callCtx.Attributes).toEqual({ email: 'noprop@test.com' });
         });
     });
 

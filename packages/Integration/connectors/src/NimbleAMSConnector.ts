@@ -378,7 +378,8 @@ export class NimbleAMSConnector extends BaseRESTIntegrationConnector {
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, ctx.Attributes);
         if (response.Status >= 200 && response.Status < 300) {
             const body = response.Body as Record<string, unknown>;
-            return { Success: true, ExternalID: String(body['id'] ?? ''), StatusCode: response.Status };
+            const newID = body['id'] == null ? undefined : String(body['id']);
+            return this.BuildCreatedResult(newID, response.Status, ctx.ObjectName);
         }
         return this.BuildCRUDError(response, 'CreateRecord', ctx.ObjectName);
     }

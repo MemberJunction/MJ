@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { CountsContributeToAggregate } from './types.js';
 import type {
     IntegrationProgressEvent,
     IntegrationProgressEventType,
@@ -87,7 +88,15 @@ export class IntegrationProgressEmitter {
             ...partial,
         };
         if (eventType === 'checkpoint') this.latestCheckpointSeq = event.seq;
-        if (partial.counts) {
+        // Count accumulation — applied vs. fetched distinction (see counts shape in types.ts).
+        // `stage.complete` (and the terminal `run.complete`) carry the authoritative APPLIED
+        // quartet {processed,succeeded,failed,skipped} for a finished stage/run. By contrast,
+        // `records.batch.complete` carries a FETCHED `processed` count for live per-batch
+        // progress only — the SAME records are later reported again, applied, in `stage.complete`.
+        // Summing both double-counts every record (a 56-record sync would report 112). So only
+        // the applied-rollup events feed the run-level aggregate; batch/heartbeat counts stay in
+        // the stream for progress bars but are NOT summed here.
+        if (partial.counts && CountsContributeToAggregate(eventType)) {
             this.aggregateCounts.processed += partial.counts.processed ?? 0;
             this.aggregateCounts.succeeded += partial.counts.succeeded ?? 0;
             this.aggregateCounts.failed += partial.counts.failed ?? 0;
@@ -198,6 +207,21 @@ export class IntegrationProgressEmitter {
         await this.writeTerminal({
             success: false,
             exitReason: code === 'budget-exhausted' ? 'budget-exhausted' : 'failed',
+        });
+    }
+
+    /**
+     * Terminate the run as CANCELLED (a user/system abort stopped it mid-flight, not a failure and not a
+     * clean completion). Emits exitReason='aborted' so a cancelled run is distinguishable from one that
+     * finished — the persisted CompanyIntegrationRun has no 'Cancelled' status, so the artifact's
+     * ExitReason is the GQL-visible signal that the run was stopped early (partial state is still durable).
+     */
+    public async cancel(message?: string): Promise<void> {
+        if (this.terminated) return;
+        this.emit('run.cancel', { message: message ?? 'Sync cancelled by user', level: 'warn' });
+        await this.writeTerminal({
+            success: false,
+            exitReason: 'aborted',
         });
     }
 

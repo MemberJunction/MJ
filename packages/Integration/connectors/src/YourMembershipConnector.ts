@@ -3391,11 +3391,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
         if (response.Status >= 200 && response.Status < 300) {
             const created = response.Body as Record<string, unknown>;
-            return {
-                Success: true,
-                ExternalID: String(created['Id'] ?? created['ID'] ?? created['ProfileID'] ?? ''),
-                StatusCode: response.Status,
-            };
+            const externalID = String(created['Id'] ?? created['ID'] ?? created['ProfileID'] ?? '');
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
         }
 
         return this.BuildYMCRUDErrorResult(response, 'CreateRecord', ctx.ObjectName);

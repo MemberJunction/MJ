@@ -22,6 +22,8 @@ export type IntegrationProgressEventType =
     | 'run.complete'
     /** Run terminated with failure. */
     | 'run.fail'
+    /** Run cancelled mid-flight by a user/system abort (not a failure, not a clean completion). */
+    | 'run.cancel'
     /** Run resumed from a prior checkpoint after a kill/restart. */
     | 'run.resumed'
     /** A named stage within the run started. */
@@ -75,6 +77,25 @@ export type IntegrationProgressEventType =
 
 /** Severity levels for progress events. */
 export type IntegrationProgressLevel = 'info' | 'warn' | 'error' | 'debug';
+
+/**
+ * Whether an event's `counts` feed the run-level APPLIED aggregate
+ * ({@link IntegrationRunResult.aggregateCounts} / {@link IntegrationRunSnapshot.counts}).
+ *
+ * Two count vocabularies flow through the stream and must NOT both be summed:
+ * - `stage.complete` / `run.complete` carry the authoritative **applied** quartet
+ *   {processed,succeeded,failed,skipped} for a finished stage/run → these aggregate.
+ * - `records.batch.complete` (and `progress.heartbeat`) carry a *fetched* / in-flight
+ *   `processed` count for live per-batch progress only. The same records are reported
+ *   again — applied — by the stage rollup, so summing batch counts double-counts every
+ *   record (a 56-record sync would report processed:112). These do NOT aggregate.
+ *
+ * The emitter and the reader both call this so a re-derived count always matches the
+ * emitter's running aggregate. Centralizing the rule here keeps the two in lock-step.
+ */
+export function CountsContributeToAggregate(eventType: IntegrationProgressEventType): boolean {
+    return eventType === 'stage.complete' || eventType === 'run.complete';
+}
 
 /**
  * A structured, non-fatal warning surfaced during an integration run. Emitted via

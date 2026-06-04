@@ -363,6 +363,25 @@ export abstract class BaseIntegrationConnector {
         throw new Error(`ListRecords is not supported by ${this.constructor.name}`);
     }
 
+    /**
+     * Builds a CRUDResult for a record CREATE, failing LOUDLY when the external system returned
+     * no usable record ID. A 2xx response with an empty/undefined ID means the create did not
+     * durably produce a record we can track — returning Success:true there silently loses the
+     * record and causes duplicate creates on the next sync (the HubSpot-association class of bug,
+     * fixed in next commit 9f718a7e). This makes that failure explicit at the connector boundary.
+     */
+    protected BuildCreatedResult(externalID: string | undefined | null, statusCode: number, objectName: string): CRUDResult {
+        const id = externalID == null ? '' : String(externalID).trim();
+        if (id.length === 0) {
+            return {
+                Success: false,
+                StatusCode: statusCode,
+                ErrorMessage: `Create of "${objectName}" returned HTTP ${statusCode} but the response contained no record ID — treating as a failure to avoid silently losing the record (and duplicate creates on the next sync).`,
+            };
+        }
+        return { Success: true, StatusCode: statusCode, ExternalID: id };
+    }
+
     // ─── §7/§10/§12 Sync-efficiency contract (composable; connector fills in) ─────────
     // Optional hooks the universal sync engine consumes for peak-aware rate limiting, adaptive
     // parallelism, keyset/no-watermark resume, aggressive batch writes, and type-driven

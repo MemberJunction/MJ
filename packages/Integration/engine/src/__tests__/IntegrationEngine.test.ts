@@ -271,7 +271,7 @@ describe('IntegrationEngine', () => {
         }
     });
 
-    it('rolls back the whole batch when any record fails (batched atomicity)', async () => {
+    it('isolates a single failing record: good siblings commit, only the poison record errors', async () => {
         const records = createMockRecords(3);
         const connector = createMockConnector({
             Records: records,
@@ -304,7 +304,6 @@ describe('IntegrationEngine', () => {
             { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
         ]);
 
-        let createCallCount = 0;
         mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
             const entityName = params['EntityName'] as string;
             if (entityName === 'MJ: Company Integration Field Maps') {
@@ -323,18 +322,28 @@ describe('IntegrationEngine', () => {
             if (entityName === 'MJ: Company Integration Sync Watermarks') {
                 return { Success: true, Results: [] };
             }
-            // Record map lookups — no matches
+            // Record map lookups — no matches (all creates)
             return { Success: true, Results: [] };
         });
 
-        // Make the second entity.Save() fail
+        // Make ONLY the record whose mapped Name is 'Contact 2' fail to Save. We key on the
+        // record's own field value (not call order) so the per-record fallback's re-apply pass
+        // fails the SAME record both times — proving failure isolation by record identity, not
+        // by transaction position.
+        const savedNames: string[] = [];
         const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
         const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
-        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => {
-            createCallCount++;
-            const entity = createMockEntity({ ID: `id-${createCallCount}` });
-            if (createCallCount === 2) {
-                entity.Save.mockResolvedValue(false);
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async (entityName: string) => {
+            const entity = createMockEntity({});
+            if (entityName === 'Contacts') {
+                entity.Save = vi.fn().mockImplementation(async () => {
+                    const name = entity._data['Name'] as string;
+                    if (name === 'Contact 2') {
+                        return false; // poison record
+                    }
+                    savedNames.push(name);
+                    return true;
+                });
             }
             return entity;
         });
@@ -345,17 +354,179 @@ describe('IntegrationEngine', () => {
 
         try {
             const result = await orchestrator.RunSync('ci-1', contextUser);
-            // With batched atomicity, a single failing record rolls back every record in
-            // the batch. All 3 records are reported as errored with the same failure
-            // message, and no creates are committed.
+            // Per-record isolation: when the batch transaction fails on the poison record,
+            // the engine degrades to per-record transactions. The two good records (Contact 1
+            // and Contact 3) are committed/created; only Contact 2 errors. RecordsProcessed
+            // still equals the chunk size (3 — the run invariant is preserved).
             expect(result.RecordsProcessed).toBe(3);
-            expect(result.RecordsErrored).toBe(3);
-            expect(result.RecordsCreated).toBe(0);
-            expect(result.Errors.length).toBe(3);
-            expect(result.Errors.every(e => e.ErrorMessage.startsWith('Batch rolled back:'))).toBe(true);
+            expect(result.RecordsCreated).toBe(2);
+            expect(result.RecordsErrored).toBe(1);
+            expect(result.Errors.length).toBe(1);
+            // The error carries the REAL per-record cause + identity — not a single batch-wide
+            // 'Batch rolled back' message smeared across every record.
+            expect(result.Errors[0].ExternalID).toBe('ext-2');
+            expect(result.Errors[0].ChangeType).toBe('Create');
+            expect(result.Errors[0].ErrorMessage).not.toContain('Batch rolled back');
+            expect(result.Errors[0].ErrorMessage).toContain('Failed to create Contacts record');
+            // The good records were actually saved (committed) — exactly Contact 1 and Contact 3.
+            expect(savedNames).toContain('Contact 1');
+            expect(savedNames).toContain('Contact 3');
+            expect(savedNames).not.toContain('Contact 2');
         } finally {
             ConnectorFactory.Resolve = resolveOrig;
             MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+
+    it('a poison record in the middle of a chunk does not sink its siblings', async () => {
+        // Five records; the middle one (Contact 3) fails Save. The other four must still create.
+        const records = createMockRecords(5);
+        const connector = createMockConnector({
+            Records: records,
+            HasMore: false,
+        });
+
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'Test',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                }],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name',
+                        DestinationFieldName: 'Name',
+                        TransformPipeline: null,
+                        IsKeyField: false,
+                        Status: 'Active',
+                        Priority: 0,
+                    }],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async (entityName: string) => {
+            const entity = createMockEntity({});
+            if (entityName === 'Contacts') {
+                entity.Save = vi.fn().mockImplementation(async () =>
+                    (entity._data['Name'] as string) !== 'Contact 3');
+            }
+            return entity;
+        });
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser);
+            expect(result.RecordsProcessed).toBe(5);
+            expect(result.RecordsCreated).toBe(4);
+            expect(result.RecordsErrored).toBe(1);
+            expect(result.Errors.length).toBe(1);
+            expect(result.Errors[0].ExternalID).toBe('ext-3');
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+
+    it('does not start a sync (and creates no run) when the connector is deactivated (IsActive=false)', async () => {
+        const records = createMockRecords(1);
+        const connector = createMockConnector({
+            Records: records,
+            HasMore: false,
+        });
+
+        // CompanyIntegration with IsActive=false (strongly-typed property on the mock).
+        const companyIntegration = {
+            Get: vi.fn((field: string) => {
+                if (field === 'ID') return 'ci-1';
+                if (field === 'Configuration') return '{}';
+                return null;
+            }),
+            ID: 'ci-1',
+            IntegrationID: 'int-1',
+            Integration: 'Test',
+            Configuration: '{}',
+            IsActive: false,
+        } as unknown as MJCompanyIntegrationEntity;
+
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'Test',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                }],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser);
+            // The engine-level IsActive gate aborts gracefully: a structured failure result,
+            // no run row created (no entity object for 'MJ: Company Integration Runs'), and a
+            // clear deactivated message.
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('deactivated');
+            expect(result.RunID).toBeUndefined();
+            expect(result.RecordsProcessed).toBe(0);
+            expect(result.RecordsCreated).toBe(0);
+            // The connector must never have been asked to fetch.
+            expect(connector.FetchChanges).not.toHaveBeenCalled();
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
         }
     });
 

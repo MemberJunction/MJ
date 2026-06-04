@@ -301,6 +301,86 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
 
+    // Set up CodeGen-credentialed provider + in-process CodeGen runner for RSU (PostgreSQL).
+    // Without this, RuntimeSchemaManager has no injected runner and falls back to spawning a
+    // child-process CodeGen. On Postgres that child path is slow, its output is buffered (so
+    // progress is unobservable), and a non-responding advancedGen AI pass hangs it indefinitely
+    // — which leaves association/junction CRUD functions un-regenerated and blocks the sync.
+    // Running in-process keeps CodeGen inside the MJAPI event loop where it is observable and
+    // bounded by advanced_generation's per-call timeout + circuit breaker. Mirrors the SQL
+    // Server path below (the runner is required for BOTH platforms).
+    const pgCodegenUser = process.env.CODEGEN_DB_USERNAME;
+    const pgCodegenPass = process.env.CODEGEN_DB_PASSWORD;
+    if (pgCodegenUser && pgCodegenPass) {
+      try {
+        const codegenPgPool = new pg.default.Pool({
+          host: pgHost,
+          port: pgPort,
+          user: pgCodegenUser,
+          password: pgCodegenPass,
+          database: pgDatabase,
+          max: 10,
+        });
+        const codegenTestClient = await codegenPgPool.connect();
+        await codegenTestClient.query('SELECT 1');
+        codegenTestClient.release();
+
+        const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        const codegenPgConfigData = new PostgreSQLProviderConfigData(
+          { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgCodegenUser, Password: pgCodegenPass },
+          mj_core_schema,
+          cacheRefreshInterval / 1000, // ms → seconds
+        );
+        const codegenPgProvider = new PostgreSQLDataProvider();
+        await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
+        RuntimeSchemaManager.Instance.SetDDLProvider(codegenPgProvider);
+        console.log('RSU DDL provider initialized with CodeGen credentials (PostgreSQL).');
+
+        // Set up in-process CodeGen runner for RSU
+        try {
+          const { RunCodeGenBase } = await import('@memberjunction/codegen-lib');
+          const { PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib/dist/Database/providers/postgresql/PostgreSQLCodeGenConnection.js');
+
+          const codegenConnection = new PostgreSQLCodeGenConnection(codegenPgPool);
+          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+
+          const codegenDataSource = {
+            provider: codegenPgProvider,
+            connection: codegenConnection,
+            currentUser: codegenCurrentUser,
+            connectionInfo: `${pgHost}:${pgPort}/${pgDatabase} (CodeGen)`,
+          };
+
+          const runObject = MJGlobal.Instance.ClassFactory.CreateInstance(RunCodeGenBase) as InstanceType<typeof RunCodeGenBase>;
+
+          const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+          RuntimeSchemaManager.Instance.SetCodeGenRunner({
+            RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
+          });
+          console.log('RSU in-process CodeGen runner initialized (PostgreSQL).');
+
+          // Inject CodeGen output paths for targeted git staging
+          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const cgConfig = initializeConfig(rsuWorkDir);
+          const outputPaths = (cgConfig.output ?? []).map((o: { directory: string }) => o.directory);
+          RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
+          console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
+
+          // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
+          // `additionalSchemaInfo`), or RSU writes soft PKs to its own default path while
+          // CodeGen reads a different one and skips integration tables with "No primary key found".
+          if (cgConfig.additionalSchemaInfo) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(cgConfig.additionalSchemaInfo);
+            console.log(`RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
+          }
+        } catch (codegenErr) {
+          console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
+        }
+      } catch (err) {
+        console.warn(`RSU DDL provider setup failed (PostgreSQL; RSU will fall back to default provider): ${(err as Error).message}`);
+      }
+    }
+
     const md = new Metadata(); // global-provider-ok: bootstrap
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
   } else {

@@ -152,6 +152,49 @@ describe('IntegrationProgressEmitter', () => {
                 skipped: 1,
             });
         });
+
+        it('does NOT double-count: a fetched batch.complete + applied stage.complete yields the applied total once', async () => {
+            // Regression for the GQL double-count bug: records.batch.complete carries a FETCHED
+            // processed count for live progress, stage.complete carries the APPLIED quartet. Only
+            // the applied rollup must feed aggregateCounts — summing both reported processed:112
+            // for a 56-record sync.
+            const emitter = makeEmitter();
+            emitter.emit('records.batch.complete', { stage: 'contacts', counts: { processed: 56 } });
+            emitter.stageComplete('contacts', { processed: 56, succeeded: 56, failed: 0, skipped: 0 });
+            await emitter.complete();
+
+            const result = await readResult('run-1');
+            expect(result.aggregateCounts).toEqual({
+                processed: 56,
+                succeeded: 56,
+                failed: 0,
+                skipped: 0,
+            });
+        });
+
+        it('still emits the fetched batch.complete event into the stream (for progress bars)', async () => {
+            // The per-batch progress event must remain in the stream with its fetched processed —
+            // only the run-level aggregate excludes it.
+            const emitter = makeEmitter();
+            emitter.emit('records.batch.complete', { stage: 'contacts', counts: { processed: 56 } });
+            await emitter.flush();
+
+            const events = await readEvents('run-1');
+            const batch = events.find(e => e.eventType === 'records.batch.complete');
+            expect(batch).toBeDefined();
+            expect(batch?.counts?.processed).toBe(56);
+        });
+
+        it('ignores heartbeat counts in the aggregate (in-flight progress, not applied)', async () => {
+            const emitter = makeEmitter();
+            emitter.heartbeat('contacts', 'fetching', { processed: 30 });
+            emitter.heartbeat('contacts', 'fetching', { processed: 56 });
+            emitter.stageComplete('contacts', { processed: 56, succeeded: 56, failed: 0, skipped: 0 });
+            await emitter.complete();
+
+            const result = await readResult('run-1');
+            expect(result.aggregateCounts?.processed).toBe(56);
+        });
     });
 
     describe('warnings rollup + warningCount in result.json', () => {
@@ -190,6 +233,55 @@ describe('IntegrationProgressEmitter', () => {
             expect(result.warnings?.[0].code).toBe('W1');
             // the failure itself lands in errors, not warnings
             expect(result.errors?.some(e => e.message === 'boom')).toBe(true);
+        });
+    });
+
+    describe('terminal exitReason', () => {
+        it('complete() writes success=true / exitReason=completed', async () => {
+            const emitter = makeEmitter();
+            await emitter.complete('done');
+            const result = await readResult('run-1');
+            expect(result.success).toBe(true);
+            expect(result.exitReason).toBe('completed');
+        });
+
+        it('fail() writes success=false / exitReason=failed', async () => {
+            const emitter = makeEmitter();
+            await emitter.fail('boom');
+            const result = await readResult('run-1');
+            expect(result.success).toBe(false);
+            expect(result.exitReason).toBe('failed');
+        });
+
+        it('fail() with the budget-exhausted code writes exitReason=budget-exhausted', async () => {
+            const emitter = makeEmitter();
+            await emitter.fail('out of budget', 'budget-exhausted');
+            const result = await readResult('run-1');
+            expect(result.exitReason).toBe('budget-exhausted');
+        });
+
+        it('cancel() writes success=false / exitReason=aborted and emits a run.cancel event', async () => {
+            const emitter = makeEmitter();
+            await emitter.cancel('Sync cancelled by user');
+
+            const result = await readResult('run-1');
+            expect(result.success).toBe(false);
+            expect(result.exitReason).toBe('aborted');
+
+            const events = await readEvents('run-1');
+            expect(events.some(e => e.eventType === 'run.cancel')).toBe(true);
+            // a cancel is a warning, not an error — it must NOT land in the errors rollup
+            expect(result.errors).toBeUndefined();
+        });
+
+        it('cancel() is a no-op after the run already terminated', async () => {
+            const emitter = makeEmitter();
+            await emitter.complete('done');
+            await emitter.cancel('too late');
+
+            const result = await readResult('run-1');
+            // the first terminal write wins — still completed, not overwritten by the late cancel
+            expect(result.exitReason).toBe('completed');
         });
     });
 });

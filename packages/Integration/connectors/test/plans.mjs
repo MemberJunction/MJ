@@ -10,6 +10,8 @@
  */
 import { HubSpotConnector } from '@memberjunction/integration-connectors';
 import { runLiveTest, GQL } from './gql-live-harness.mjs';
+import { runMatrixReadonly } from './gql-matrix-harness.mjs';
+import { runLifecycleOps, runDeleteCascade } from './gql-lifecycle-harness.mjs';
 import { makeGqlClient, makeHubspotTotal, makeDbClient, resolveSetupIds } from './gql-live-adapters.mjs';
 
 const HUBSPOT_API_BASE = 'https://api.hubapi.com';
@@ -160,7 +162,7 @@ export async function hubspotTier2Assoc({ token }, scrub) {
  *   HS_LIVE_RUN_ID        optional stable run marker (default live_<timestamp>)
  *   HS_LIVE_WRITE_OBJECT  object for the backward CRUD round-trip (default contacts; Users refused)
  */
-function liveCfgFromEnv() {
+export function liveCfgFromEnv() {
     const env = process.env;
     const runId = env.HS_LIVE_RUN_ID || `live_${Date.now()}`;
     return {
@@ -187,7 +189,9 @@ function liveCfgFromEnv() {
         },
         writeObject: env.HS_LIVE_WRITE_OBJECT || 'contacts',
         // A recognizable, runId-stamped contact in standard fields (no custom property needed).
-        writeAttributes: { email: `mj-live-${runId}@memberjunction-livetest.invalid`, firstname: 'MJ', lastname: `Live ${runId}` },
+        // example.com is RFC-2606 reserved (never deliverable) yet a VALID email format — HubSpot rejects the
+        // .invalid TLD on create, so the test contact uses a format the vendor accepts while staying obviously test.
+        writeAttributes: { email: `mj-live-${runId}@example.com`, firstname: 'MJ', lastname: `Live ${runId}` },
         writeUpdateAttributes: { jobtitle: `updated-${runId}` },
     };
 }
@@ -210,6 +214,71 @@ async function runLivePlan(values, scrub, allowWrite) {
     const fullCfg = { ...cfg, ...ids, token: values.token };
     const result = await runLiveTest({ gql, db, hubspotTotal }, fullCfg, allowWrite);
     return result; // the runner's scrubDeep redacts every secret value from this result
+}
+
+/**
+ * READ-ONLY 2^N matrix entrypoint (reference mode, token-free): builds the same DB + GQL clients as
+ * runLivePlan, resolves the seeded CIID from cfg.companyIntegrationID (HS_LIVE_CIID), and runs the
+ * mechanics matrix (idempotency / content-hash, watermark + fallback, Merkle reconcile, DAG order).
+ * No HUBSPOT_API_KEY secret is declared → token-free; the server decrypts the credential internally.
+ * writes:false — it only re-syncs (Pull) + reads the DB / event stream / MJAPI log; it never deletes
+ * the seeded connection or its maps (only toggles + resets ONE map's Configuration for the Merkle cell).
+ */
+export async function hubspotMatrixReadonlyGQL(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (the runner scrubs the returned result)
+    const cfg = liveCfgFromEnv();
+    if (!cfg.companyIntegrationID) {
+        return { ok: false, error: 'hubspot-matrix-readonly requires HS_LIVE_CIID (reference mode) — none set' };
+    }
+    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    const ids = await resolveSetupIds(db, cfg);
+    const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
+    const fullCfg = {
+        ...cfg, ...ids,
+        destSchema: process.env.HS_LIVE_DEST_SCHEMA || 'hubspot',
+        mjapiLogPath: process.env.HS_LIVE_MJAPI_LOG || '/tmp/mjapi-4000.log',
+    };
+    // runMatrixReadonly closes the db in its finally; the runner's scrubDeep redacts secrets from the result.
+    return runMatrixReadonly({ gql, db }, fullCfg);
+}
+
+/**
+ * NON-DESTRUCTIVE §15 LIFECYCLE entrypoint (reference mode, token-free): builds the same DB + GQL
+ * clients as hubspotMatrixReadonlyGQL, resolves the seeded CIID from cfg.companyIntegrationID
+ * (HS_LIVE_CIID), and runs the lifecycle ops (deactivate-enforcement, deselect/reselect, cancel-status,
+ * read-only op smoke). It operates on the seeded REUSABLE connection and RESTORES every mutation
+ * (reactivate, re-activate the deals map) so the connection stays reusable. No HUBSPOT_API_KEY secret
+ * is declared → token-free; the server decrypts the credential internally. writes:false externally —
+ * it only re-syncs (Pull) + reads DB/status; it never deletes the seeded connection or its maps.
+ */
+export async function hubspotLifecycleGQL(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (the runner scrubs the returned result)
+    const cfg = liveCfgFromEnv();
+    if (!cfg.companyIntegrationID) {
+        return { ok: false, error: 'hubspot-lifecycle requires HS_LIVE_CIID (reference mode) — none set' };
+    }
+    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    const ids = await resolveSetupIds(db, cfg);
+    const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
+    const fullCfg = { ...cfg, ...ids };
+    // runLifecycleOps closes the db in its finally; the runner's scrubDeep redacts secrets from the result.
+    return runLifecycleOps({ gql, db }, fullCfg);
+}
+
+/**
+ * DESTRUCTIVE §15 DELETE-CASCADE entrypoint (reference mode, token-free): deletes the connection at
+ * cfg.companyIntegrationID — which MUST be a DISPOSABLE throwaway CIID, NEVER the main seeded one — and
+ * asserts the cascade's DESIRED completeness (credential deleted, CI row deleted, children cleaned).
+ * writes:true as a SAFETY belt: it is destructive to MJ rows, so the broker REFUSES it unless the job
+ * explicitly passes allowWrite:true. No HUBSPOT_API_KEY secret is declared → token-free.
+ */
+export async function hubspotDeleteCascadeGQL(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (the runner scrubs the returned result)
+    const cfg = liveCfgFromEnv();
+    if (!cfg.companyIntegrationID) {
+        return { ok: false, error: 'hubspot-delete-cascade requires HS_LIVE_CIID (the DISPOSABLE throwaway CIID) — none set' };
+    }
+    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    const fullCfg = { ...cfg };
+    // runDeleteCascade closes the db in its finally; the runner's scrubDeep redacts secrets from the result.
+    return runDeleteCascade({ gql: makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken }), db }, fullCfg);
 }
 
 /**
@@ -255,9 +324,16 @@ export async function hubspotLiveMatrixGQL(values, scrub) {
  */
 export async function hubspotSeedConnectionGQL(values, scrub) {
     const cfg = liveCfgFromEnv();
-    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    // GQL-only path: when all setup IDs are provided (HS_LIVE_*_ID), the seed doesn't need a direct DB
+    // connection to resolve them — skip it. This lets the seed run through a credential channel that holds the
+    // vendor token + MJ system key but NOT the target DB password (e.g. seeding a Postgres connection from a
+    // broker pointed at SQL Server). CreateConnection writes to the DB via the TARGET MJAPI's own connection.
+    const haveAllIds = !!(cfg.companyID && cfg.integrationID && cfg.credentialTypeID);
+    const db = haveAllIds ? null : await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
     try {
-        const ids = await resolveSetupIds(db, cfg);
+        const ids = haveAllIds
+            ? { companyID: cfg.companyID, integrationID: cfg.integrationID, credentialTypeID: cfg.credentialTypeID }
+            : await resolveSetupIds(db, cfg);
         const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
         const input = {
             CompanyID: ids.companyID, IntegrationID: ids.integrationID, CredentialTypeID: ids.credentialTypeID,
@@ -273,6 +349,53 @@ export async function hubspotSeedConnectionGQL(values, scrub) {
             schemaRefresh: conn?.SchemaRefresh ?? null,
             next: 'Set HS_LIVE_CIID=<companyIntegrationID> and run hubspot-live-pull-ref (token-free).',
         };
+    } finally { if (db && db.close) await db.close(); }
+}
+
+/**
+ * SETUP step (faithful, GraphQL — not a raw DB insert): creates an MJ Company via the live MJAPI so the
+ * connection has a Company to attach to. Mirrors the plan.md "create a company record" step. writes:false
+ * externally (it only writes one MJ row through the app, makes no external/vendor call). Returns the new
+ * Company ID to hand back as HS_LIVE_COMPANY_ID for hubspot-seed-connection.
+ */
+export async function setupCompanyGQL(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry
+    const cfg = liveCfgFromEnv();
+    const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
+    const name = process.env.HS_LIVE_COMPANY_NAME || `MJ E2E Test Co (${cfg.runId})`;
+    const mutation = `mutation($input: CreateMJCompanyInput!) { CreateMJCompany(input: $input) { ID Name } }`;
+    const res = await gql(mutation, { input: { Name: name, Description: 'Throwaway company for the live HubSpot integration E2E test' } });
+    const created = res?.CreateMJCompany;
+    return {
+        ok: !!created?.ID,
+        companyID: created?.ID,
+        name: created?.Name,
+        next: 'Set HS_LIVE_COMPANY_ID=<companyID> and run hubspot-seed-connection.',
+    };
+}
+
+/**
+ * Maintenance (DB-only, no external calls, no token): clear the HubSpot dest tables so a forward sync
+ * starts from a clean slate — lets the record-map 1:1 completeness assertion test a fresh create path
+ * rather than a re-sync over rows left by a prior (possibly interrupted) run. Deletes ROWS only; never
+ * drops tables, never touches users/owners or any non-hubspot schema.
+ */
+export async function hubspotCleanData(values, scrub) {
+    const cfg = liveCfgFromEnv();
+    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    const pg = cfg.platform === 'postgresql';
+    const destSchema = process.env.HS_LIVE_DEST_SCHEMA || 'hubspot';
+    const T = (n) => pg ? `"${destSchema}"."${n}"` : `[${destSchema}].[${n}]`;
+    const tables = (process.env.HS_LIVE_CLEAN_TABLES || 'contacts,companies,deals,assoc_contacts_companies')
+        .split(',').map(s => s.trim()).filter(Boolean);
+    const out = { ok: false, platform: cfg.platform, destSchema, cleaned: {} };
+    try {
+        // assoc first (it references the parents), then parents — DELETE (not TRUNCATE) to tolerate any soft refs.
+        for (const t of tables) {
+            try { await db.rows(`DELETE FROM ${T(t)}`); out.cleaned[t] = 'deleted'; }
+            catch (e) { out.cleaned[t] = scrub(`skip: ${e instanceof Error ? e.message : String(e)}`); }
+        }
+        out.ok = true;
+        return out;
     } finally { if (db.close) await db.close(); }
 }
 
@@ -317,10 +440,17 @@ export const PLANS = {
     },
     // Diagnostic (DB read-only): resolve the IDs the GQL sync needs.
     'hubspot-diag': { secrets: { dbPassword: 'DB_PASSWORD' }, run: hubspotDiagGQL, writes: false },
+    // Maintenance (DB-only): clear HubSpot dest rows for a clean forward run. writes:false (no external mutation).
+    'hubspot-clean-data': { secrets: { dbPassword: 'DB_PASSWORD' }, run: hubspotCleanData, writes: false },
     // ── "Use it, never read it" reference-mode plans ───────────────────────────────────────────────
     // SEED (run once by someone holding the token): encrypts the token into the DB Credential and
     // returns the CompanyIntegrationID. writes:false externally (CreateConnection only reads HubSpot to
     // introspect). The token enters ONLY this step's process, never the agent's.
+    // SETUP company (faithful GraphQL create of one MJ Company row) — writes:false externally (no vendor call).
+    'setup-company': {
+        secrets: { mjSystemKey: 'MJ_API_KEY' },
+        run: setupCompanyGQL, writes: false,
+    },
     'hubspot-seed-connection': {
         secrets: { token: 'HUBSPOT_API_KEY', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: hubspotSeedConnectionGQL, writes: false,
@@ -336,5 +466,29 @@ export const PLANS = {
     'hubspot-live-matrix-ref': {
         secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: hubspotLiveMatrixGQL, writes: true,
+    },
+    // READ-ONLY 2^N mechanics matrix (token-free reference mode): idempotency/content-hash skip,
+    // timestamp watermark + fallback save, opt-in Merkle reconcile, and DAG parent-before-child order.
+    // writes:false externally — only re-syncs (Pull) + reads DB/events/log; never deletes the seeded
+    // connection or maps (the Merkle cell toggles ONE map's Configuration and resets it in cleanup).
+    'hubspot-matrix-readonly': {
+        secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: hubspotMatrixReadonlyGQL, writes: false,
+    },
+    // §15 LIFECYCLE ops (token-free reference mode, NON-DESTRUCTIVE): deactivate-enforcement,
+    // deselect/reselect entity maps, cancel-status, and the read-only op smoke. Operates on the seeded
+    // REUSABLE CIID and restores all mutated state (reactivate, re-activate deals). writes:false — it
+    // only re-syncs (Pull) + reads DB/status; it never deletes the seeded connection or its maps.
+    'hubspot-lifecycle': {
+        secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: hubspotLifecycleGQL, writes: false,
+    },
+    // §15 DELETE-CASCADE (token-free reference mode, DESTRUCTIVE): deletes the THROWAWAY CIID at
+    // HS_LIVE_CIID and asserts the cascade (credential deleted, CI row deleted, children cleaned).
+    // writes:true as a SAFETY belt — destructive to MJ rows → the broker REFUSES it unless the job
+    // passes allowWrite:true. NEVER point HS_LIVE_CIID at the main seeded connection for this plan.
+    'hubspot-delete-cascade': {
+        secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: hubspotDeleteCascadeGQL, writes: true,
     },
 };

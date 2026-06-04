@@ -108,6 +108,12 @@ export type FormLayoutResult = {
  */
 export class AdvancedGeneration {
     private _promptRunner: AIPromptRunner;
+    // Circuit breaker for an unresponsive AI endpoint within a single CodeGen run. Each advancedGen
+    // LLM call is bounded by withTimeout(); after N consecutive timeouts the breaker opens and all
+    // remaining advancedGen calls skip IMMEDIATELY (degrade to no-enrichment) so the run can't burn
+    // N×timeout per remaining entity and blow the RSU CodeGen cap. A success closes the breaker.
+    private _aiConsecutiveTimeouts = 0;
+    private _aiBreakerOpen = false;
 
     constructor() {
         // NOTE: do NOT construct a Metadata instance here. It was previously held in an
@@ -158,8 +164,22 @@ export class AdvancedGeneration {
     ): Promise<AIPromptRunResult<T>> {
         const startMs = Date.now();
         const promptName = params.prompt?.Name ?? 'unknown';
+        // Breaker open: a prior streak of timeouts proved the AI endpoint is unresponsive this run.
+        // Skip immediately (caller graceful-fallbacks) rather than wait out another full timeout.
+        if (this._aiBreakerOpen) {
+            throw new Error(`AdvancedGeneration AI breaker open — skipping '${promptName}' (AI endpoint unresponsive this run)`);
+        }
         try {
-            const result = await this._promptRunner.ExecutePrompt<T>(params);
+            // Bound each advancedGen LLM call. Without this, a model that never responds hangs the
+            // ENTIRE CodeGen run indefinitely (observed on Postgres: the RunCodeGen child sat at 0% CPU
+            // for 27+ minutes, blocking ApplyAll/the whole RSU pipeline). On timeout we throw, which the
+            // per-feature callers already catch and degrade from (graceful fallback to null) — so a slow/
+            // dead AI endpoint skips enrichment for that entity instead of wedging the build. advancedGen
+            // still runs fully whenever the model responds within the budget.
+            // Configurable via CODEGEN_AI_TIMEOUT_MS (default 180s/call).
+            const aiTimeoutMs = parseInt(process.env.CODEGEN_AI_TIMEOUT_MS || '180000', 10);
+            const result = await this.withTimeout(this._promptRunner.ExecutePrompt<T>(params), aiTimeoutMs, promptName);
+            this._aiConsecutiveTimeouts = 0; // a responsive call closes the breaker
             // Record telemetry for this LLM call. Entity attribution falls back to the
             // entityPhase in processEntityAdvancedGeneration via CodeGenReporter's
             // _currentEntity. No-op if no run is active.
@@ -175,9 +195,37 @@ export class AdvancedGeneration {
             });
             return result;
         } catch (error) {
+            if (String(error).includes('timed out after')) {
+                this._aiConsecutiveTimeouts++;
+                const threshold = parseInt(process.env.CODEGEN_AI_BREAKER_THRESHOLD || '2', 10);
+                if (this._aiConsecutiveTimeouts >= threshold && !this._aiBreakerOpen) {
+                    this._aiBreakerOpen = true;
+                    LogError(`AdvancedGeneration: ${this._aiConsecutiveTimeouts} consecutive AI timeouts — opening breaker; skipping advancedGen enrichment for the rest of this CodeGen run (degraded, not hung).`);
+                }
+            }
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;
         }
+    }
+
+    /**
+     * Races a promise against a timeout so a hung dependency (e.g. a non-responding LLM endpoint)
+     * can never wedge the CodeGen run forever. On timeout the returned promise rejects; the hung
+     * underlying promise is abandoned (orphaned, cleaned up on child-process exit). The timer is
+     * cleared as soon as the underlying promise settles so a fast call adds no lingering handle.
+     */
+    private withTimeout<R>(p: Promise<R>, ms: number, label: string): Promise<R> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<R>((_resolve, reject) => {
+            timer = setTimeout(
+                () => reject(new Error(`AdvancedGeneration LLM call '${label}' timed out after ${ms}ms`)),
+                ms
+            );
+        });
+        return Promise.race([
+            p.finally(() => { if (timer) clearTimeout(timer); }),
+            timeout,
+        ]);
     }
 
     /**

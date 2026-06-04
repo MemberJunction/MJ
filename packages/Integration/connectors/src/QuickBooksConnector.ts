@@ -515,7 +515,7 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
             const body = response.Body as Record<string, Record<string, unknown>>;
             const created = body[ctx.ObjectName];
             const id = created ? String(created['Id'] ?? '') : '';
-            return { Success: true, ExternalID: id, StatusCode: response.Status };
+            return this.BuildCreatedResult(id, response.Status, ctx.ObjectName);
         } catch (err: unknown) {
             return this.BuildCRUDError(err, 'CreateRecord', ctx.ObjectName);
         }
