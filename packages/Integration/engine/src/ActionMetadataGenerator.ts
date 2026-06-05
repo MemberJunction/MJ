@@ -3,7 +3,7 @@
  * metadata — IntegrationObjects and IntegrationObjectFields.
  *
  * For each supported object, this generator emits one action per CRUD verb
- * (Get, Create, Update, Delete, Search, List) with strongly-typed ActionParams
+ * (Get, Create, Update, Delete, Upsert, Search, List) with strongly-typed ActionParams
  * derived from the object's fields.
  *
  * Output is designed to be written directly to /metadata/ for `mj sync push`.
@@ -12,7 +12,7 @@
 // ─── Types ───────────────────────────────────────────────────────────
 
 /** CRUD verb that an integration action can dispatch to */
-type IntegrationActionVerb = 'Get' | 'Create' | 'Update' | 'Delete' | 'Search' | 'List';
+type IntegrationActionVerb = 'Get' | 'Create' | 'Update' | 'Delete' | 'Upsert' | 'Search' | 'List';
 
 /** Simplified representation of an integration object for generation */
 export interface IntegrationObjectInfo {
@@ -152,11 +152,12 @@ export class ActionMetadataGenerator {
         // Get — always generated
         actions.push(this.BuildGetAction(config, obj, displayName));
 
-        // Create/Update/Delete — only if object supports write
+        // Create/Update/Delete/Upsert — only if object supports write
         if (obj.SupportsWrite) {
             actions.push(this.BuildCreateAction(config, obj, displayName));
             actions.push(this.BuildUpdateAction(config, obj, displayName));
             actions.push(this.BuildDeleteAction(config, obj, displayName));
+            actions.push(this.BuildUpsertAction(config, obj, displayName));
         }
 
         // Search — if configured
@@ -216,6 +217,34 @@ export class ActionMetadataGenerator {
 
         return this.BuildAction(config, obj, 'Create', displayName,
             `Creates a new ${displayName} record in ${config.IntegrationName}`,
+            params
+        );
+    }
+
+    private BuildUpsertAction(
+        config: ActionGeneratorConfig,
+        obj: IntegrationObjectInfo,
+        displayName: string
+    ): ActionRecord {
+        const idPropertyDesc = obj.UpsertKey
+            ? `The unique field used to match an existing ${displayName} record (defaults to "${obj.UpsertKey}")`
+            : `The unique field used to match an existing ${displayName} record (connector default if omitted)`;
+        const params: ActionParamRecord[] = [
+            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.BuildSystemParam('IDProperty', 'Input', false, idPropertyDesc),
+        ];
+
+        // Input params for writable fields
+        for (const field of obj.Fields) {
+            if (field.IsReadOnly || field.IsPrimaryKey) continue;
+            params.push(this.FieldToInputParam(field, false)); // None required — upsert may match an existing record
+        }
+
+        // Output
+        params.push(this.BuildSystemParam('ExternalID', 'Output', false, `The external ID of the created or updated ${displayName} record`));
+
+        return this.BuildAction(config, obj, 'Upsert', displayName,
+            `Creates or updates a ${displayName} in ${config.IntegrationName} (idempotent upsert keyed on a natural ID)`,
             params
         );
     }
@@ -399,7 +428,7 @@ export class ActionMetadataGenerator {
         if (verb === 'Get') {
             codes.push({ fields: { ActionID: '@parent:ID', ResultCode: 'NOT_FOUND', IsSuccess: false, Description: 'Record not found' } });
         }
-        if (verb === 'Create' || verb === 'Update' || verb === 'Delete') {
+        if (verb === 'Create' || verb === 'Update' || verb === 'Delete' || verb === 'Upsert') {
             codes.push({ fields: { ActionID: '@parent:ID', ResultCode: `${verb.toUpperCase()}_FAILED`, IsSuccess: false, Description: `${verb} operation failed` } });
             codes.push({ fields: { ActionID: '@parent:ID', ResultCode: 'NOT_SUPPORTED', IsSuccess: false, Description: `${verb} not supported by this connector` } });
         }

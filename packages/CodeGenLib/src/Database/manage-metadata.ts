@@ -2782,9 +2782,9 @@ export class ManageMetadataBase {
             if (primaryKeys.length > 0) {
                for (const pk of primaryKeys) {
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
-                                    ${this.qi('IsPrimaryKey')} = 1,
-                                    ${this.qi('IsSoftPrimaryKey')} = 1
+                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                                    ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
+                                    ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
 
@@ -2812,10 +2812,10 @@ export class ManageMetadataBase {
                   const relatedEntityId = relatedEntityResult.recordset[0].ID;
 
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
+                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
                                     ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
                                     ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
-                                    ${this.qi('IsSoftForeignKey')} = 1
+                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
 
@@ -3184,7 +3184,7 @@ export class ManageMetadataBase {
                const namingOptions = configInfo.entityNaming?.normalizeFieldNames !== false ? this.getEntityNamingOptions() : undefined;
                const sDisplayName = stripTrailingChars(createDisplayName(field.Name, namingOptions), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
+                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
                }
             }
