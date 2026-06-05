@@ -24,8 +24,8 @@ import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { readdirSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { MetadataFileStore } from './MetadataFileStore.js';
 import {
     IntegrationObjectSchema,
@@ -37,6 +37,33 @@ import {
 
 const REGISTRY_ROOT = process.env.MJ_CONNECTORS_REGISTRY ?? resolve(process.cwd(), 'packages/Integration/connectors-registry');
 const store = new MetadataFileStore(REGISTRY_ROOT);
+
+// ── Trace logging ────────────────────────────────────────────────────────
+// Every tool call + outcome is appended as one JSONL line so a build run is
+// fully traceable (MCP calls are otherwise a black box). Failures here are
+// swallowed — logging must never break a tool call.
+const TRACE_LOG = process.env.MJ_MCP_LOG ?? resolve(process.cwd(), 'logs/mcp-trace.jsonl');
+function traceLog(rec: Record<string, unknown>): void {
+    try {
+        mkdirSync(dirname(TRACE_LOG), { recursive: true });
+        appendFileSync(TRACE_LOG, JSON.stringify({ ts: new Date().toISOString(), server: 'mj-metadata', ...rec }) + '\n');
+    } catch { /* never let logging break a tool call */ }
+}
+// Safe, credential-free summary of a call's args (names/keys only, no payloads).
+function summarizeArgs(a: Record<string, unknown>): Record<string, unknown> {
+    const s: Record<string, unknown> = {};
+    if (typeof a?.connector === 'string') s.connector = a.connector;
+    if (typeof a?.ioName === 'string') s.ioName = a.ioName;
+    const io = a?.io as Record<string, unknown> | undefined;
+    if (io && typeof io.Name === 'string') s.io = io.Name;
+    const iof = a?.iof as Record<string, unknown> | undefined;
+    if (iof && typeof iof.Name === 'string') s.iof = iof.Name;
+    const fields = a?.fields as Record<string, unknown> | undefined;
+    if (fields) s.fieldKeys = Object.keys(fields);
+    const entry = a?.entry as Record<string, unknown> | undefined;
+    if (entry) s.entryKeys = Object.keys(entry);
+    return s;
+}
 
 const server = new Server(
     { name: 'mj-metadata', version: '5.34.1' },
@@ -117,11 +144,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     ],
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    const a = args as Record<string, unknown>;
+type ToolResult = { content: { type: string; text: string }[]; isError?: boolean };
 
-    try {
+async function handleTool(name: string, a: Record<string, unknown>): Promise<ToolResult> {
+    {
         switch (name) {
             case 'read_integration': {
                 const file = store.ReadIntegration(a.connector as string);
@@ -161,8 +187,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
         }
     }
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    const a = args as Record<string, unknown>;
+    const summary = summarizeArgs(a);
+    traceLog({ phase: 'call', tool: name, ...summary });
+    try {
+        const out = await handleTool(name, a);
+        traceLog({ phase: 'result', tool: name, ok: !out.isError, ...summary });
+        return out;
+    }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        traceLog({ phase: 'error', tool: name, error: message, ...summary });
         return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
     }
 });

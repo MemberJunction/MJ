@@ -15,8 +15,20 @@ import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { RunTierRequestSchema } from './types.js';
 import { RunTier } from './tierRunner.js';
+
+// Trace logging — every tier call + outcome as one JSONL line. NEVER logs the
+// credential file path or bytes. Logging failures are swallowed.
+const TRACE_LOG = process.env.MJ_MCP_LOG ?? resolve(process.cwd(), 'logs/mcp-trace.jsonl');
+function traceLog(rec: Record<string, unknown>): void {
+    try {
+        mkdirSync(dirname(TRACE_LOG), { recursive: true });
+        appendFileSync(TRACE_LOG, JSON.stringify({ ts: new Date().toISOString(), server: 'mj-test-runner', ...rec }) + '\n');
+    } catch { /* never let logging break a tool call */ }
+}
 
 const server = new Server(
     { name: 'mj-test-runner', version: '5.34.1' },
@@ -62,9 +74,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name !== 'run_tier') {
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
+    const a = (args ?? {}) as Record<string, unknown>;
+    // Trace: Connector + Tier only; NEVER the credential file path or bytes.
+    traceLog({ phase: 'call', tool: 'run_tier', connector: a.Connector, tier: a.Tier, credentialFilePresent: typeof a.CredentialFilePath === 'string' });
     try {
         const parsed = RunTierRequestSchema.parse(args);
         const result = await RunTier(parsed);
+        traceLog({ phase: 'result', tool: 'run_tier', connector: result.Connector, tier: result.Tier, status: result.Status, durationMs: result.DurationMs });
         // SECURITY: scrub any field that might carry credential bytes before returning.
         // Result types are designed to NOT include such fields; defense in depth.
         const safe = {
@@ -79,8 +95,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: JSON.stringify(safe, null, 2) }] };
     }
     catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        traceLog({ phase: 'error', tool: 'run_tier', connector: a.Connector, tier: a.Tier, error: message });
         return {
-            content: [{ type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+            content: [{ type: 'text', text: `Error: ${message}` }],
             isError: true,
         };
     }
