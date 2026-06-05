@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mj-metadata": {
+      "command": "node",
+      "args": ["packages/MCP/mj-metadata/dist/server.js"]
+    },
+    "mj-test-runner": {
+      "command": "node",
+      "args": ["packages/MCP/mj-test-runner/dist/server.js"]
+    }
+  }
+}

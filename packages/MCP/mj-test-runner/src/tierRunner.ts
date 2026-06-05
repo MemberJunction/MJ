@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { RunTierRequest, TierResult } from './types.js';
+import { ValidateInvariants } from './invariants.js';
 
 /** Portion of a {@link TierResult} produced by an individual tier handler. */
 type TierHandlerResult = Omit<TierResult, 'Tier' | 'Connector' | 'DurationMs'>;
@@ -95,13 +96,19 @@ function runStaticValidation(connector: string): TierHandlerResult {
     };
 }
 
+/**
+ * T1 structural invariants. Runs the four deterministic checks inline (the
+ * `npx mj-validate-invariants` bin never existed — the retired
+ * `connector-validator` package's invariants moved into this tier per
+ * `.claude/agents/testing-agent.md` §T1).
+ */
 function runInvariantValidator(connector: string): TierHandlerResult {
-    const result = spawnSync('npx', ['mj-validate-invariants', connector], { cwd: process.cwd(), encoding: 'utf-8' });
+    const result = ValidateInvariants(connector, REGISTRY_ROOT);
     return {
-        Status: result.status === 0 ? 'Pass' : 'Fail',
-        Output: result.stdout,
-        Errors: result.stderr ? [result.stderr] : [],
-        Details: tryParseJSON(result.stdout),
+        Status: result.Status,
+        Output: result.Output,
+        Errors: result.Errors,
+        Details: result.Details,
     };
 }
 
@@ -157,13 +164,4 @@ function runAuthenticatedEndpoint(connector: string, credentialFilePath?: string
         Errors: ['T8 authenticated endpoint runner stubbed in Phase 0 (security contract present; runner deferred)'],
         Details: { connector, credentialFilePresent: true },
     };
-}
-
-function tryParseJSON(s: string): Record<string, unknown> | undefined {
-    try {
-        return JSON.parse(s) as Record<string, unknown>;
-    }
-    catch {
-        return undefined;
-    }
 }
