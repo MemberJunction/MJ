@@ -72,6 +72,33 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private static readonly HIGH_FREQUENCY_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
 
     // ========================================================================
+    // HEARTBEAT LEASE RENEWAL (added in v5.39 — see
+    // plans/scheduled-job-engine-heartbeat-lease.md, GH #2749)
+    // ========================================================================
+
+    /**
+     * Heartbeat throttle window. A `context.heartbeat()` call is a no-op until
+     * this much wall-clock has elapsed since the last EFFECTIVE beat, so a
+     * driver can call it on every loop iteration without hammering the DB.
+     */
+    private static readonly HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+
+    /**
+     * Lease length applied on each effective beat (`now + this`). One minute
+     * larger than HEARTBEAT_INTERVAL_MS so a healthy on-schedule job never lets
+     * its lease lapse, while a job that STOPS beating is reclaimable ~1 min
+     * after the window it missed.
+     *
+     * Deliberately INDEPENDENT of `_leaseTimeoutMs`: heartbeating intentionally
+     * SHORTENS the effective reclaim window (6 min vs. the default 10 min
+     * acquire-time lease). That trade — a tighter reclaim window in exchange for
+     * plugin-driven liveness — is the entire point of #2749. Coverage is
+     * continuous: the 10-min initial lease comfortably outlasts the 5-min wait
+     * to the first effective beat, which extends the lease to ~11 min, etc.
+     */
+    private static readonly HEARTBEAT_LEASE_MS = 6 * 60 * 1000;
+
+    // ========================================================================
     // DECOUPLING STATE (added in v5.39 — see plans/scheduled-job-engine-decoupling.md)
     // ========================================================================
 
@@ -517,7 +544,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             if (this.isJobDue(job, evalTime)) {
                 console.log(`    ✓ Job is due, attempting to acquire lock...`);
                 try {
-                    const lockResult = await this.tryAcquireLock(job.ID);
+                    const lockResult = await this.tryAcquireLock(job.ID, job.MaxRuntimeMinutes);
                     if (!lockResult.acquired) {
                         if (job.ConcurrencyMode === 'Queue') {
                             this.log(`Job ${job.Name} is locked, queueing (ConcurrencyMode=Queue)`);
@@ -568,7 +595,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             throw new Error(`Scheduled job ${jobId} not found or not active`);
         }
 
-        const lockResult = await this.tryAcquireLock(job.ID);
+        const lockResult = await this.tryAcquireLock(job.ID, job.MaxRuntimeMinutes);
         if (!lockResult.acquired) {
             throw new Error(`Could not acquire lock for job ${jobId} — held by another holder`);
         }
@@ -634,7 +661,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 continue;
             }
 
-            const lockResult = await this.tryAcquireLock(job.ID);
+            const lockResult = await this.tryAcquireLock(job.ID, job.MaxRuntimeMinutes);
             if (!lockResult.acquired) {
                 if (job.ConcurrencyMode === 'Queue') {
                     await this.createQueuedJobRun(job, contextUser);
@@ -754,11 +781,19 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             // Console log job start
             console.log(`  ▶️  Starting: ${job.Name}`);
 
+            // Build the opt-in, self-throttling heartbeat closure (GH #2749).
+            // Captures lockToken and a per-execution lastHeartbeatMs. A plugin
+            // that makes forward progress calls context.heartbeat() to push its
+            // lease forward; a hung plugin stops beating and the existing sweep
+            // reclaims its slot. See plans/scheduled-job-engine-heartbeat-lease.md.
+            const heartbeat = this.createHeartbeat(job.ID, lockToken);
+
             // Build execution context
             const context: ScheduledJobExecutionContext = {
                 Schedule: job,
                 Run: run,
-                ContextUser: contextUser
+                ContextUser: contextUser,
+                heartbeat
             };
 
             // Execute the job via plugin
@@ -970,16 +1005,28 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * Operates only on lock columns; never mutates the shared entity in
      * this.ScheduledJobs. Caller passes jobId (string), not the entity object.
      *
+     * @param maxRuntimeMinutes - Optional per-job lease override (GH #2749). When
+     *        set and positive, the initial lease is max(default, override) — so
+     *        it only ever EXTENDS the acquire-time lease, never shrinks it.
      * @returns { acquired: true, token } on success; { acquired: false } otherwise.
      * @private
      */
-    private async tryAcquireLock(jobId: string): Promise<{ acquired: boolean; token?: string }> {
+    private async tryAcquireLock(
+        jobId: string,
+        maxRuntimeMinutes?: number | null
+    ): Promise<{ acquired: boolean; token?: string }> {
         // uuidv4 (cryptographic) — Math.random()-based GUIDs would risk collision
         // between concurrent engine instances and break the lost-mutex protection
         // that releaseLockIfTokenMatches relies on (token identity = execution identity).
         const token = uuidv4();
         const instance = this.getInstanceIdentifier();
-        const expectedCompletion = new Date(Date.now() + this._leaseTimeoutMs);
+        // MaxRuntimeMinutes only EXTENDS the default lease, never shrinks it —
+        // a per-job override below the default would just weaken protection.
+        const overrideMs = maxRuntimeMinutes != null && maxRuntimeMinutes > 0
+            ? maxRuntimeMinutes * 60_000
+            : 0;
+        const leaseMs = Math.max(this._leaseTimeoutMs, overrideMs);
+        const expectedCompletion = new Date(Date.now() + leaseMs);
 
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
         const schema = provider.MJCoreSchemaName;
@@ -1030,6 +1077,94 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             );
         }
         return released;
+    }
+
+    /**
+     * Atomically extend (renew) a lock's lease via spExtendScheduledJobLease,
+     * IF AND ONLY IF the current DB token still matches expectedToken. This is
+     * the heartbeat primitive (GH #2749): a healthy job pushes its
+     * ExpectedCompletionAt forward so the sweep doesn't reclaim its slot.
+     *
+     * Token-checked like releaseLockIfTokenMatches — a stale holder whose lease
+     * was already reclaimed by a fresh holder must NOT be able to renew the
+     * fresh holder's lock (lost-mutex protection).
+     *
+     * @returns true if the lease was extended, false on token mismatch /
+     *          already released.
+     * @private
+     */
+    private async extendLeaseIfTokenMatches(
+        jobId: string,
+        expectedToken: string,
+        newExpectedCompletionAt: Date
+    ): Promise<boolean> {
+        const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+        const schema = provider.MJCoreSchemaName;
+        // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
+        const rows = await provider.ExecuteSQL<{ Extended: number }>(
+            `EXEC [${schema}].[spExtendScheduledJobLease] ` +
+                `@JobID=@p0, @ExpectedToken=@p1, @NewExpectedCompletionAt=@p2`,
+            [jobId, expectedToken, newExpectedCompletionAt],
+            { isMutation: true, description: 'spExtendScheduledJobLease' },
+            this.Base.ContextUser
+        );
+
+        return rows?.[0]?.Extended === 1;
+    }
+
+    /**
+     * Build the per-execution heartbeat closure handed to a plugin via
+     * `context.heartbeat` (GH #2749). See the TSDoc on
+     * `ScheduledJobExecutionContext.heartbeat` for the plugin-facing contract.
+     *
+     * The returned function is:
+     *   - **No-op in Concurrent mode** — when lockToken is null there's no lock
+     *     to extend.
+     *   - **Self-throttling** — an effective beat (DB write) happens at most once
+     *     per HEARTBEAT_INTERVAL_MS regardless of call frequency. lastHeartbeatMs
+     *     is closed over and seeded to "now" so the first effective beat waits a
+     *     full interval (the initial acquire-time lease already covers that gap).
+     *   - **Best-effort, never-throws** — any error (token mismatch logged as a
+     *     handoff; a thrown ExecuteSQL) is swallowed + logged. A renewal failure
+     *     must never fault the actual job.
+     *
+     * @private
+     */
+    private createHeartbeat(jobId: string, lockToken: string | null): () => Promise<void> {
+        // Concurrent mode (no lock): hand back a cheap no-op so plugins can call
+        // context.heartbeat() unconditionally without special-casing.
+        if (!lockToken) {
+            return async () => { /* no lock to extend */ };
+        }
+
+        let lastHeartbeatMs = Date.now();
+
+        return async () => {
+            try {
+                const now = Date.now();
+                if (now - lastHeartbeatMs < SchedulingEngine.HEARTBEAT_INTERVAL_MS) {
+                    return; // throttled — not yet time for an effective beat
+                }
+                lastHeartbeatMs = now;
+
+                const newExpected = new Date(now + SchedulingEngine.HEARTBEAT_LEASE_MS);
+                const extended = await this.extendLeaseIfTokenMatches(jobId, lockToken, newExpected);
+                if (!extended) {
+                    // Token mismatch — our lease was reclaimed and the slot handed
+                    // off. The plugin keeps running (we can't abort it here), but
+                    // its concurrency slot now belongs to another holder; the
+                    // end-of-run release will likewise no-op. Don't throw.
+                    this.log(
+                        `[heartbeat] Lease for job ${jobId.substring(0, 8)} was NOT extended ` +
+                        `(token mismatch — slot reclaimed by another holder). Plugin continues ` +
+                        `but its slot has been handed off.`
+                    );
+                }
+            } catch (error) {
+                // Best-effort renewal must never fault the job.
+                this.logError(`[heartbeat] Lease renewal failed for job ${jobId.substring(0, 8)} (non-fatal)`, error);
+            }
+        };
     }
 
     /**

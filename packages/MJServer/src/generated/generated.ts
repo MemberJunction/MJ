@@ -7599,6 +7599,9 @@ each time the agent processes a prompt step.`})
     @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`}) 
     TotalCacheWriteTokensUsed?: number;
         
+    @Field({nullable: true, description: `Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`}) 
+    LastHeartbeatAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7826,6 +7829,9 @@ export class CreateMJAIAgentRunInput {
     @Field(() => Int, { nullable: true })
     TotalCacheWriteTokensUsed: number | null;
 
+    @Field({ nullable: true })
+    LastHeartbeatAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7973,6 +7979,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalCacheWriteTokensUsed?: number | null;
+
+    @Field({ nullable: true })
+    LastHeartbeatAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -65861,6 +65870,9 @@ export class MJScheduledJob_ {
     @Field(() => Boolean, {description: `When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`}) 
     RunImmediatelyIfNeverRun: boolean;
         
+    @Field(() => Int, {nullable: true, description: `Optional per-job override for the acquire-time lock lease length, in minutes. When set and positive, the engine uses max(default lease, MaxRuntimeMinutes) as the initial ExpectedCompletionAt — so it only ever EXTENDS the default lease, never shrinks it. Intended for jobs whose work is a single long-running call that cannot heartbeat mid-flight (e.g. one slow synchronous action). Jobs that heartbeat via the plugin opt-in pattern do not need this. NULL = use the engine default lease (LeaseTimeoutMinutes). See plans/scheduled-job-engine-heartbeat-lease.md (GH #2749).`}) 
+    MaxRuntimeMinutes?: number;
+        
     @Field() 
     @MaxLength(100)
     JobType: string;
@@ -65967,6 +65979,9 @@ export class CreateMJScheduledJobInput {
     @Field(() => Boolean, { nullable: true })
     RunImmediatelyIfNeverRun?: boolean;
 
+    @Field(() => Int, { nullable: true })
+    MaxRuntimeMinutes: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -66057,6 +66072,9 @@ export class UpdateMJScheduledJobInput {
 
     @Field(() => Boolean, { nullable: true })
     RunImmediatelyIfNeverRun?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxRuntimeMinutes?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

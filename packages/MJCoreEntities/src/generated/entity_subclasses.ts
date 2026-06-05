@@ -3030,6 +3030,11 @@ each time the agent processes a prompt step.`),
         * * Display Name: Cache Write Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
+    LastHeartbeatAt: z.date().nullable().describe(`
+        * * Field Name: LastHeartbeatAt
+        * * Display Name: Last Heartbeat At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Details
@@ -22413,7 +22418,7 @@ export const MJScheduledJobSchema = z.object({
         * * Default Value: newsequentialid()`),
     JobTypeID: z.string().describe(`
         * * Field Name: JobTypeID
-        * * Display Name: Job Type ID
+        * * Display Name: Job Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Job Types (vwScheduledJobTypes.ID)`),
     Name: z.string().describe(`
@@ -22467,7 +22472,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Job-type specific configuration stored as JSON. Schema is defined by the ScheduledJobType plugin. For Agents: includes AgentID, StartingPayload, InitialMessage, etc. For Actions: includes ActionID and parameter mappings.`),
     OwnerUserID: z.string().nullable().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User ID
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.`),
@@ -22513,7 +22518,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Whether to send notifications when the job fails. Defaults to true for alerting on failures.`),
     NotifyUserID: z.string().nullable().describe(`
         * * Field Name: NotifyUserID
-        * * Display Name: Notify User ID
+        * * Display Name: Notify User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.`),
@@ -22576,6 +22581,11 @@ export const MJScheduledJobSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`),
+    MaxRuntimeMinutes: z.number().nullable().describe(`
+        * * Field Name: MaxRuntimeMinutes
+        * * Display Name: Max Runtime Minutes
+        * * SQL Data Type: int
+        * * Description: Optional per-job override for the acquire-time lock lease length, in minutes. When set and positive, the engine uses max(default lease, MaxRuntimeMinutes) as the initial ExpectedCompletionAt — so it only ever EXTENDS the default lease, never shrinks it. Intended for jobs whose work is a single long-running call that cannot heartbeat mid-flight (e.g. one slow synchronous action). Jobs that heartbeat via the plugin opt-in pattern do not need this. NULL = use the engine default lease (LeaseTimeoutMinutes). See plans/scheduled-job-engine-heartbeat-lease.md (GH #2749).`),
     JobType: z.string().describe(`
         * * Field Name: JobType
         * * Display Name: Job Type
@@ -35311,6 +35321,19 @@ each time the agent processes a prompt step.
     }
     set TotalCacheWriteTokensUsed(value: number | null) {
         this.Set('TotalCacheWriteTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: LastHeartbeatAt
+    * * Display Name: Last Heartbeat At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.
+    */
+    get LastHeartbeatAt(): Date | null {
+        return this.Get('LastHeartbeatAt');
+    }
+    set LastHeartbeatAt(value: Date | null) {
+        this.Set('LastHeartbeatAt', value);
     }
 
     /**
@@ -85914,7 +85937,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: JobTypeID
-    * * Display Name: Job Type ID
+    * * Display Name: Job Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Scheduled Job Types (vwScheduledJobTypes.ID)
     */
@@ -86040,7 +86063,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User ID
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.
@@ -86150,7 +86173,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyUserID
-    * * Display Name: Notify User ID
+    * * Display Name: Notify User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.
@@ -86293,6 +86316,19 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     }
     set RunImmediatelyIfNeverRun(value: boolean) {
         this.Set('RunImmediatelyIfNeverRun', value);
+    }
+
+    /**
+    * * Field Name: MaxRuntimeMinutes
+    * * Display Name: Max Runtime Minutes
+    * * SQL Data Type: int
+    * * Description: Optional per-job override for the acquire-time lock lease length, in minutes. When set and positive, the engine uses max(default lease, MaxRuntimeMinutes) as the initial ExpectedCompletionAt — so it only ever EXTENDS the default lease, never shrinks it. Intended for jobs whose work is a single long-running call that cannot heartbeat mid-flight (e.g. one slow synchronous action). Jobs that heartbeat via the plugin opt-in pattern do not need this. NULL = use the engine default lease (LeaseTimeoutMinutes). See plans/scheduled-job-engine-heartbeat-lease.md (GH #2749).
+    */
+    get MaxRuntimeMinutes(): number | null {
+        return this.Get('MaxRuntimeMinutes');
+    }
+    set MaxRuntimeMinutes(value: number | null) {
+        this.Set('MaxRuntimeMinutes', value);
     }
 
     /**
