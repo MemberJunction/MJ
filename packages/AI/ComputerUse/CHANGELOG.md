@@ -1,5 +1,21 @@
 # @memberjunction/computer-use
 
+## 5.39.0
+
+### Patch Changes
+
+- f1e52fa: Propagate external Playwright/CDP attach support up through ComputerUse and MJComputerUse. Adds optional `Connect` / `ConnectType` / `ReuseExistingContext` fields to `BrowserConfig`, threads attach mode through both `PlaywrightBrowserAdapter` and `HeadlessBrowserEngine`, and exposes the same three fields on `ComputerUseTestConfig` so test-driver configs can declare attach mode declaratively. Ownership tracking ensures `Close()`/`Shutdown()` never tear down a browser or context the caller owns. All fields are optional — existing callers are unaffected.
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

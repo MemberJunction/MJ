@@ -1,5 +1,94 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.39.0
+
+### Patch Changes
+
+- 7dfacc7: Add support for storing and querying embeddings inside the application's own database instead of a separate vector service. `VectorDBBase` gains an `IColocatedVectorHost` adapter (implemented by the PostgreSQL and SQL Server data providers) and a `ColocatedQuery` API; the new `PgVectorColocated` provider does vector + keyword (RRF) search in one statement, and the new `@memberjunction/ai-vectors-sqlserver` package adds a SQL Server 2025 native `VECTOR` provider with sibling-table and entity-column storage modes. `VectorSearchProvider` and `EntityVectorSyncer` route these indexes through the borrowed connection.
+- Updated dependencies [26761b8]
+- Updated dependencies [3d4510c]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [0bef51b]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [8c39dd9]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [315ff4d]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/ai-agents@5.39.0
+  - @memberjunction/scheduling-engine@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectors-pgvector@5.39.0
+  - @memberjunction/ai-vectors-sqlserver@5.39.0
+  - @memberjunction/search-engine@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/core-actions@5.39.0
+  - @memberjunction/core-entities-server@5.39.0
+  - @memberjunction/ai-gemini@5.39.0
+  - @memberjunction/ai-anthropic@5.39.0
+  - @memberjunction/ai-azure@5.39.0
+  - @memberjunction/ai-bedrock@5.39.0
+  - @memberjunction/ai-cerebras@5.39.0
+  - @memberjunction/ai-fireworks@5.39.0
+  - @memberjunction/ai-groq@5.39.0
+  - @memberjunction/ai-openai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/ai-openrouter@5.39.0
+  - @memberjunction/react-linter@5.39.0
+  - @memberjunction/ai-form-builder@5.39.0
+  - @memberjunction/actions-apollo@5.39.0
+  - @memberjunction/actions-bizapps-accounting@5.39.0
+  - @memberjunction/actions-bizapps-crm@5.39.0
+  - @memberjunction/actions-bizapps-formbuilders@5.39.0
+  - @memberjunction/actions-bizapps-lms@5.39.0
+  - @memberjunction/actions-bizapps-social@5.39.0
+  - @memberjunction/scheduling-actions@5.39.0
+  - @memberjunction/ai-agent-manager@5.39.0
+  - @memberjunction/testing-engine@5.39.0
+  - @memberjunction/tag-engine-base@5.39.0
+  - @memberjunction/ai-recommendations-rex@5.39.0
+  - @memberjunction/ai-reranker@5.39.0
+  - @memberjunction/ai-vectors-memory@5.39.0
+  - @memberjunction/ai-vectors-pinecone@5.39.0
+  - @memberjunction/ai-vectors-qdrant@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/communication-types@5.39.0
+  - @memberjunction/content-autotagging@5.39.0
+  - @memberjunction/doc-utils@5.39.0
+  - @memberjunction/encryption@5.39.0
+  - @memberjunction/data-context-server@5.39.0
+  - @memberjunction/queue@5.39.0
+  - @memberjunction/storage@5.39.0
+  - @memberjunction/scheduling-engine-base@5.39.0
+  - @memberjunction/templates@5.39.0
+  - @memberjunction/geo-core@5.39.0
+  - @memberjunction/ai-provider-bundle@5.39.0
+  - @memberjunction/ai-vertex@5.39.0
+  - @memberjunction/ai-betty-bot@5.39.0
+  - @memberjunction/ai-blackforestlabs@5.39.0
+  - @memberjunction/ai-cohere@5.39.0
+  - @memberjunction/ai-elevenlabs@5.39.0
+  - @memberjunction/ai-heygen@5.39.0
+  - @memberjunction/ai-inception@5.39.0
+  - @memberjunction/ai-lmstudio@5.39.0
+  - @memberjunction/ai-llamacpp@5.39.0
+  - @memberjunction/ai-local-embeddings@5.39.0
+  - @memberjunction/ai-minimax@5.39.0
+  - @memberjunction/ai-mistral@5.39.0
+  - @memberjunction/ai-ollama@5.39.0
+  - @memberjunction/ai-zhipu@5.39.0
+  - @memberjunction/ai-xai@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes
