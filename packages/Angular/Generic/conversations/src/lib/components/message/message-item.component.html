@@ -110,14 +110,13 @@
           </div>
         }
 
-        <!-- Artifact Message Cards — a message can carry several (e.g. report + infographic).
-             Ordered content-first, media last by the list component. -->
-        @for (a of artifacts; track a.version.ID) {
-          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact(a)">
+        <!-- Artifact Message Card -->
+        @if (hasArtifact && artifact && artifactVersion) {
+          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
             <mj-artifact-message-card
-              [artifactId]="a.artifact.ID"
-              [artifact]="a.artifact"
-              [artifactVersion]="a.version"
+              [artifactId]="artifact.ID"
+              [artifact]="artifact"
+              [artifactVersion]="artifactVersion"
               [currentUser]="currentUser"
               (actionPerformed)="onArtifactActionPerformed($event)">
             </mj-artifact-message-card>

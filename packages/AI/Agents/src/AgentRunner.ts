@@ -521,10 +521,23 @@ export class AgentRunner {
                     // artifact). Writing artifacts directly removes the deprecated-entity dependency
                     // and the redundant dual-write. Uses the same createArtifactWithVersion helper
                     // that ProcessFileArtifacts uses, keeping artifact creation logic in one place.
-                    if (agentResponseDetailId) {
+                    //
+                    // Suppress standalone artifacts for media already embedded in the report
+                    // payload (e.g. the research agent inlines its infographic as a base64 <img>
+                    // in report.html). Without this, the same image surfaces twice — once inside
+                    // the report and once as its own artifact card. Media NOT found in the payload
+                    // (e.g. Sage → Generate Image, where the image IS the deliverable) still gets a
+                    // standalone artifact. Note: SaveAgentRunMedia above is intentionally run over
+                    // the FULL list — the bytes are always retained for audit/lineage regardless.
+                    const payloadStr = agentResult.payload ? JSON.stringify(agentResult.payload) : '';
+                    const mediaForArtifacts = payloadStr
+                        ? mediaToSave.filter(m => !this.isMediaEmbeddedInPayload(m, payloadStr))
+                        : mediaToSave;
+
+                    if (agentResponseDetailId && mediaForArtifacts.length > 0) {
                         await this.CreateMediaArtifacts(
                             agentResponseDetailId,
-                            mediaToSave,
+                            mediaForArtifacts,
                             contextUser,
                             md
                         );
@@ -1113,6 +1126,48 @@ export class AgentRunner {
     }
 
     // ── Media artifact creation ─────────────────────────────────────────────────
+
+    /**
+     * Determines whether a media output's bytes are already embedded inside the agent's
+     * output payload (which is serialized into the report artifact by
+     * {@link ProcessAgentArtifacts}).
+     *
+     * WHY: agents like the research agent write a report (e.g. `report.html`) that inlines
+     * a generated image as a base64 data URL (`<img src="data:image/png;base64,…">`). That
+     * same image ALSO arrives on `agentResult.mediaOutputs`, so creating a standalone media
+     * artifact for it would duplicate the image — once inside the report, once as its own
+     * card. When the media is provably embedded in the payload we skip the standalone
+     * artifact. Media that is NOT in the payload (e.g. Sage → Generate Image, where the
+     * image is the deliverable) is left alone and still persists as its own artifact.
+     *
+     * The check is purely in-memory (no DB query): we look for a representative chunk of the
+     * media's base64 bytes inside the already-serialized payload string. base64 blobs are
+     * large, so matching a fixed-length prefix is both cheap and robust against the payload
+     * wrapping the data in a `data:<mime>;base64,` prefix.
+     *
+     * @param media - The media output under consideration
+     * @param payloadStr - The agent payload pre-serialized via JSON.stringify (caller-cached)
+     * @returns true if the media bytes appear in the payload, false otherwise
+     */
+    private isMediaEmbeddedInPayload(media: MediaOutput, payloadStr: string): boolean {
+        if (!payloadStr || !media.data) {
+            return false;
+        }
+
+        // Strip any data-URL prefix so the needle is raw base64 — the payload may store the
+        // image either as a bare base64 string or wrapped in a data URL; the base64 body is
+        // common to both forms.
+        const rawBase64 = media.data.replace(/^data:[^;]+;base64,/, '');
+
+        // A fixed-length prefix is plenty to identify a specific base64 blob without scanning
+        // the entire (potentially multi-MB) string for an exact full-length match.
+        const needle = rawBase64.slice(0, 256);
+        if (needle.length === 0) {
+            return false;
+        }
+
+        return payloadStr.includes(needle);
+    }
 
     /**
      * Creates `MJ: Artifact` + `MJ: Artifact Version` + `MJ: Conversation Detail Artifact`

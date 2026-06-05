@@ -14,10 +14,10 @@ import {
   AfterViewInit,
   AfterViewChecked
 } from '@angular/core';
-import { MJConversationDetailEntity, MJConversationEntity, RatingJSON, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MessageItemComponent, MessageAttachment, MessageArtifact } from './message-item.component';
+import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -208,8 +208,32 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.userAvatarMap = this.userAvatarMap;
           instance.isLastMessage = (index === messages.length - 1); // Update last message flag
 
-          // Resolve and assign ALL artifacts for this message (content first, media last).
-          this.loadAndAssignArtifacts(instance, existing.changeDetectorRef, this.artifactMap.get(message.ID));
+          // Get artifact from lazy-loading map
+          const artifactList = this.artifactMap.get(message.ID);
+          // Use LAST artifact (most recent) instead of first for display
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
+
+          // Trigger lazy load and set properties
+          if (lastArtifact) {
+            // Lazy load in background - don't block UI
+            Promise.all([
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
+            ]).then(([artifact, version]) => {
+              instance.artifact = artifact;
+              instance.artifactVersion = version;
+              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+              existing.changeDetectorRef.detectChanges();
+              this.cdRef.detectChanges();
+            }).catch(err => {
+              console.error('Failed to lazy-load artifact:', err);
+            });
+          } else {
+            instance.artifact = undefined;
+            instance.artifactVersion = undefined;
+          }
 
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
@@ -241,8 +265,29 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.userAvatarMap = this.userAvatarMap;
           instance.isLastMessage = (index === messages.length - 1); // Mark last message
 
-          // Resolve and assign ALL artifacts for this message (content first, media last).
-          this.loadAndAssignArtifacts(instance, componentRef.changeDetectorRef, this.artifactMap.get(message.ID));
+          // Get artifact from lazy-loading map
+          const artifactList = this.artifactMap.get(message.ID);
+          // Use LAST artifact (most recent) instead of first for display
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
+
+          // Trigger lazy load and set properties
+          if (lastArtifact) {
+            // Lazy load in background - don't block UI
+            Promise.all([
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
+            ]).then(([artifact, version]) => {
+              instance.artifact = artifact;
+              instance.artifactVersion = version;
+              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+              componentRef.changeDetectorRef.detectChanges();
+              this.cdRef.detectChanges();
+            }).catch(err => {
+              console.error('Failed to lazy-load artifact:', err);
+            });
+          }
 
           // Pass agent run from map (loaded once per conversation)
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
@@ -295,67 +340,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.cdRef.reattach();
       this.cdRef.detectChanges();
     }
-  }
-
-  /**
-   * Lazily resolves every artifact linked to a message and assigns them to the message
-   * component as inline cards, ordered content-first / media-last.
-   *
-   * A message can legitimately carry several artifacts — e.g. a Research run produces a
-   * written report AND an infographic that is both embedded in the report and persisted as a
-   * standalone Image artifact. Rather than picking one "winner" (which let the image hide the
-   * report), we render them all. Each artifact resolves independently so a single failed load
-   * doesn't blank the rest.
-   */
-  private loadAndAssignArtifacts(
-    instance: MessageItemComponent,
-    childCdr: ChangeDetectorRef,
-    artifactList: LazyArtifactInfo[] | undefined
-  ): void {
-    const ordered = this.orderArtifactsForDisplay(artifactList);
-    if (ordered.length === 0) {
-      instance.artifacts = [];
-      return;
-    }
-    // Resolve all in the background — don't block the UI.
-    Promise.all(
-      ordered.map(info =>
-        Promise.all([info.getArtifact(), info.getVersion()])
-          .then(([artifact, version]) => ({ artifact, version }) as MessageArtifact)
-          .catch(err => {
-            console.error('Failed to lazy-load artifact:', err);
-            return null;
-          })
-      )
-    ).then(resolved => {
-      instance.artifacts = resolved.filter((a): a is MessageArtifact => a !== null);
-      childCdr.detectChanges();
-      this.cdRef.detectChanges();
-    });
-  }
-
-  /**
-   * Orders a message's artifacts content-first, media (image/audio/video) last, preserving the
-   * original relative order within each group. Keeps the primary deliverable (report, data,
-   * document) at the top of the stack of inline cards.
-   */
-  private orderArtifactsForDisplay(artifactList: LazyArtifactInfo[] | undefined): LazyArtifactInfo[] {
-    if (!artifactList || artifactList.length === 0) {
-      return [];
-    }
-    const content = artifactList.filter(a => !this.isMediaArtifact(a));
-    const media = artifactList.filter(a => this.isMediaArtifact(a));
-    return [...content, ...media];
-  }
-
-  /**
-   * True when the artifact's type resolves to an image/audio/video content type. Degrades to
-   * false (treated as content) when the type can't be resolved — e.g. the metadata engine hasn't
-   * loaded yet — which is a safe default for ordering.
-   */
-  private isMediaArtifact(info: LazyArtifactInfo): boolean {
-    const contentType = ArtifactMetadataEngine.Instance.FindArtifactType(info.artifactType)?.ContentType ?? '';
-    return /^(image|audio|video)\//i.test(contentType);
   }
 
   /**

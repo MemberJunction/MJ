@@ -47,16 +47,6 @@ export interface MessageAttachment {
 }
 
 /**
- * A fully-loaded artifact + version pair to render as an inline card on a message.
- * A message can carry several (e.g. a research report plus a generated infographic),
- * so the list component resolves and orders them, then hands the array down here.
- */
-export interface MessageArtifact {
-  artifact: MJArtifactEntity;
-  version: MJArtifactVersionEntity;
-}
-
-/**
  * Component for displaying a single message in a conversation
  * Follows the dynamic rendering pattern from skip-chat for optimal performance
  * This component is created dynamically via ViewContainerRef.createComponent()
@@ -76,8 +66,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public currentUser!: UserInfo;
   @Input() public allMessages!: MJConversationDetailEntity[];
   @Input() public isProcessing: boolean = false;
-  /** All artifacts to render as inline cards, pre-ordered by the list (content first, media last). */
-  @Input() public artifacts: MessageArtifact[] = [];
+  @Input() public artifact?: MJArtifactEntity;
+  @Input() public artifactVersion?: MJArtifactVersionEntity;
   @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
@@ -676,14 +666,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get hasArtifact(): boolean {
-    return this.artifacts.length > 0;
+    return !!this.artifactVersion;
   }
 
   /**
-   * Check if a given artifact is a system-only artifact (drives per-card styling).
+   * Check if the artifact is a system-only artifact
    */
-  public isSystemArtifact(a: MessageArtifact): boolean {
-    return a.artifact?.Visibility === 'System Only';
+  public get isSystemArtifact(): boolean {
+    return this.artifact?.Visibility === 'System Only';
   }
 
   /**
@@ -907,6 +897,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public onRetryClick(): void {
     if (!this.isProcessing && this.messageStatus === 'Error') {
       this.retryClicked.emit(this.message);
+    }
+  }
+
+  public onArtifactClick(): void {
+    if (this.hasArtifact && this.artifact) {
+      this.artifactClicked.emit({
+        artifactId: this.artifact.ID,
+        versionId: this.artifactVersion?.ID
+      });
     }
   }
 
