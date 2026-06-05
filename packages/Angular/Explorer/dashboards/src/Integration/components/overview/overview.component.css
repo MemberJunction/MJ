@@ -195,6 +195,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 .section-heading h3 {
@@ -212,6 +214,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* Don't let the button shrink/overflow the heading row on narrow widths. */
+  flex-shrink: 0;
+  box-sizing: border-box;
   padding: 6px 14px;
   border: 1px solid var(--mj-border-default);
   border-radius: 8px;
@@ -235,9 +240,14 @@
 }
 
 .pipeline-card {
+  position: relative;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   border-radius: 12px;
+  /* Clip children to the card's rounded border so footer buttons (.btn-sync)
+     and any flush-edge content can't poke past the rounded corners. box-shadow
+     is drawn outside the border-box, so the hover shadow below is unaffected. */
+  overflow: hidden;
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.2s, transform 0.2s;
@@ -434,6 +444,9 @@
 .card-footer {
   display: flex;
   justify-content: flex-end;
+  /* min-width:0 lets the footer shrink so its button is bounded by the card's
+     content box and can't be pushed past the right/bottom padding edge. */
+  min-width: 0;
   padding-top: 4px;
   border-top: 1px solid var(--mj-border-subtle);
 }
@@ -442,6 +455,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* Keep the button bounded by its container so it stays inside the card. */
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 5px 12px;
   border: 1px solid var(--mj-border-default);
   border-radius: 6px;

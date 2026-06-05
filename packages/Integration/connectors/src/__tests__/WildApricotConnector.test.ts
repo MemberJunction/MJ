@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { RESTResponse, RESTAuthContext, CreateRecordContext } from '@memberjunction/integration-engine';
 import { WildApricotConnector } from '../WildApricotConnector.js';
 
 // Smoke tests — verifies the connector's basic identity + capability surface.
@@ -53,4 +54,50 @@ describe('WildApricotConnector (smoke)', () => {
         });
     });
 
+});
+
+/**
+ * Test connector that overrides the auth + HTTP transport seams so CreateRecord runs end-to-end
+ * down to the BuildCreatedResult boundary without credentials or a real network call.
+ */
+class TestWildApricotConnector extends WildApricotConnector {
+    public NextResponse: RESTResponse = { Status: 200, Body: {}, Headers: {} };
+
+    protected override async Authenticate(): Promise<RESTAuthContext> {
+        return { Token: 'test-token', BaseUrl: 'https://api.test/v2/accounts/1' };
+    }
+
+    protected override async MakeHTTPRequest(): Promise<RESTResponse> {
+        return this.NextResponse;
+    }
+}
+
+function createCtx(objectName: string, attributes: Record<string, unknown>): CreateRecordContext {
+    return { CompanyIntegration: {}, ContextUser: {}, ObjectName: objectName, Attributes: attributes };
+}
+
+// Regression guard for the silent record-loss bug (HubSpot-association class, base helper
+// BuildCreatedResult): a 2xx create whose response body carries no record id must fail loudly,
+// not return Success:true and lose the record (duplicate creates on the next sync). The shared
+// executeMutation path applies this ONLY to POST (create) — PUT/DELETE keep their semantics.
+describe('WildApricotConnector create (response id validation)', () => {
+    it('returns Success=false on a 2xx create whose body has no Id', async () => {
+        const connector = new TestWildApricotConnector();
+        connector.NextResponse = { Status: 200, Body: {}, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx('contacts', { FirstName: 'Ada' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('no record ID');
+    });
+
+    it('returns Success=true with the ExternalID when the body carries an Id', async () => {
+        const connector = new TestWildApricotConnector();
+        connector.NextResponse = { Status: 200, Body: { Id: 555 }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx('contacts', { FirstName: 'Ada' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('555');
+    });
 });

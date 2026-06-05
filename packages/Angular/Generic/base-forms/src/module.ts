@@ -19,8 +19,9 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { MJSafeRichHtmlPipe } from '@memberjunction/ng-shared-generic';
+import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
+import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -53,7 +54,8 @@ import { InteractiveFormComponent } from './lib/interactive-form/interactive-for
     MjIsaRelatedCardComponent,
     MjIsaRelatedPanelComponent,
     FormPanelSlotComponent,
-    InteractiveFormComponent
+    InteractiveFormComponent,
+    MjEntityFormHostComponent
   ],
   imports: [
     CommonModule,
@@ -65,7 +67,8 @@ import { InteractiveFormComponent } from './lib/interactive-form/interactive-for
     MJReactModule,
     MarkdownModule,
     CodeEditorModule,
-    MJSafeRichHtmlPipe
+    MJSafeRichHtmlPipe,
+    SharedGenericModule
   ],
   exports: [
     MjFormToolbarComponent,
@@ -78,7 +81,8 @@ import { InteractiveFormComponent } from './lib/interactive-form/interactive-for
     MjIsaRelatedCardComponent,
     MjIsaRelatedPanelComponent,
     FormPanelSlotComponent,
-    InteractiveFormComponent
+    InteractiveFormComponent,
+    MjEntityFormHostComponent
   ]
 })
 export class BaseFormsModule { }

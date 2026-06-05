@@ -16,6 +16,7 @@ vi.mock('@lmstudio/sdk', () => {
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
+  ToJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v))),
 }));
 
 vi.mock('@memberjunction/ai', () => {

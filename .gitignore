@@ -99,7 +99,15 @@ packages/MJExplorer/src/environments/environment.ts
 Schema Files/
 /docs/
 SQL Scripts/generated/
+**/SQL Scripts/generated/
 *.old
+
+# Generated/derived caches that must never be committed. The root-anchored patterns
+# above missed these nested paths, so CodeGen SQL output + tool caches leaked into git once.
+**/.embed-cache/
+**/.refine-cache/
+**/connectors-registry/*/cache/
+**/connectors-registry/*/runs/
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql
 SQL Scripts/internal_only/BC CDP Create missing ContactCompanyIntegration and AccountCompanyIntegration records.sql
 SQL Scripts/internal_only/BC CDP GRANT DBO permissions.sql
@@ -186,4 +194,12 @@ Demos/sample-skip-code-fix-prompt.json
 # Per-run artifacts from /audit-memory-leaks
 plans/.memory-leak-snapshots/
 demo/
+
+# Integration run progress artifacts — durable JSONL streams written at runtime by
+# IntegrationProgressEmitter to <cwd>/logs/integration-runs (sync runs, connector
+# creation, RSU). Runtime output, never committed.
+**/logs/integration-runs/
+
+# Credential broker runtime mailbox (job/result files — never committed)
+**/.cred-mailbox/
 openspec/

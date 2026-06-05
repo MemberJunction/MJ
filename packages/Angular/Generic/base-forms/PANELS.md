@@ -1,3 +1,8 @@
+<!-- For the overall forms architecture (tabs / dialogs / slide-ins, the form
+host, EntityFormConfig, generated vs interactive forms), see
+/guides/FORMS_ARCHITECTURE_GUIDE.md. This doc covers ONE piece of it: adding
+panels to a form via the slot system. -->
+
 # BaseFormPanel: dynamic slot-based form extensions
 
 Add panels to entity edit forms WITHOUT replacing the generated form. Panels
