@@ -45,7 +45,10 @@ The following MUST have a provenance OR code-evidence entry. Without it, `verify
 - `Name`, `APIPath`, `PaginationType`
 - `SupportsPagination`, `SupportsIncrementalSync`, `SupportsWrite`
 - `IncrementalWatermarkField` (REQUIRED when `SupportsIncrementalSync=true`)
-- `Create/Update/Delete{APIPath, Method, BodyShape, BodyKey, IDLocation}` per capability flag set
+- Per-operation write columns, per capability flag set:
+  - Create (when `SupportsCreate`): `CreateAPIPath`, `CreateMethod`, `CreateBodyShape` (`flat|wrapped|literal`), `CreateBodyKey` (required when `wrapped`), `CreateIDLocation` (`body|header|n/a|path`)
+  - Update (when `SupportsUpdate`): `UpdateAPIPath`, `UpdateMethod`, `UpdateBodyShape`, `UpdateBodyKey`, `UpdateIDLocation`
+  - Delete (when `SupportsDelete`): `DeleteAPIPath`, `DeleteMethod` (the verb — NOT assumed `DELETE`), `DeleteIDLocation`. Delete has NO BodyShape/BodyKey.
 - `Status`
 
 **MJ: Integration Object Fields row:**

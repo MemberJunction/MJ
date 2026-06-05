@@ -27,6 +27,9 @@ rejects any run that omits a required primitive or weakens its declared paramete
   `resumeFromRunId`). Stamp at result-write time; pass timestamps via `args`.
 - Outputs that reference vendor records strip credentials + PII (scrub-fixture).
 
-These stubs declare the shape (description + meta + I/O schemas) so the planner can
-reference them by name and the floor-check can verify presence. Concrete
-implementations land iteratively during the learning phase (§9 of the agentic plan).
+Each primitive declares its shape (description + meta + I/O schemas) so the planner
+can reference it by name and the floor-check can verify presence — AND executes its
+guarantees. `verification-ladder` drives the real `mj-test-runner` T0..T8 tiers
+(every rung's verdict is the runner's verbatim result), and `scrub-fixture`
+performs the deterministic credential/PII redaction. Refinements continue
+iteratively during the learning phase (§9 of the agentic plan).

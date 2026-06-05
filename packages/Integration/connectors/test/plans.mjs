@@ -13,6 +13,9 @@ import { runLiveTest, GQL } from './gql-live-harness.mjs';
 import { runMatrixReadonly } from './gql-matrix-harness.mjs';
 import { runLifecycleOps, runDeleteCascade } from './gql-lifecycle-harness.mjs';
 import { makeGqlClient, makeHubspotTotal, makeDbClient, resolveSetupIds } from './gql-live-adapters.mjs';
+import { runConnectorE2E } from './connector-e2e-harness.mjs';
+import { buildMock, deltaPassesFromManifest, objectsFromManifest } from './connector-e2e-adapters.mjs';
+import { resolve as pathResolve } from 'node:path';
 
 const HUBSPOT_API_BASE = 'https://api.hubapi.com';
 const stubUser = { ID: 'cred-test-user', Email: 'test@example.com', Name: 'Cred Test' };
@@ -399,6 +402,150 @@ export async function hubspotCleanData(values, scrub) {
     } finally { if (db.close) await db.close(); }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CONNECTOR-AGNOSTIC e2e plan (mock + live) — runs the REAL engine for ANY connector
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the connector-agnostic e2e config from env + a base live cfg. NON-secret only.
+ * Env vars (NEW; reuses all HS_LIVE_* DB/GQL coordinates from liveCfgFromEnv):
+ *   E2E_CONNECTOR        registry connector dir name (e.g. 'propfuel') — required
+ *   E2E_MODE             'mock' (credential-free, default) | 'live' (credentialed)
+ *   E2E_FIXTURES_DIR     absolute path to the connector's `fixtures/` dir (mock mode).
+ *                        Default: <this test dir>/fixtures/<connector>/fixtures
+ *   E2E_INTEGRATION      MJ Integration NAME to resolve the IntegrationID by (e.g. 'PropFuel')
+ *   E2E_SCHEMA           destination schema for verification override (else metadata-resolved)
+ *   E2E_PLATFORM         'sqlserver' | 'postgresql' (falls back to HS_LIVE_PLATFORM)
+ *   E2E_OBJECTS          comma-sep source objects (else taken from the fixtures Objects[])
+ *   E2E_TLS_CERT/E2E_TLS_KEY  PEM paths for HTTPS-MITM proxy mode (hardcoded-base connectors)
+ */
+function connectorE2eCfgFromEnv() {
+    const env = process.env;
+    const base = liveCfgFromEnv();
+    const here = pathResolve(new URL('.', import.meta.url).pathname);
+    const connector = env.E2E_CONNECTOR;
+    const mode = (env.E2E_MODE === 'live') ? 'live' : 'mock';
+    const fixturesDir = env.E2E_FIXTURES_DIR || pathResolve(here, 'fixtures', String(connector || ''), 'fixtures');
+    return {
+        ...base,
+        connector,
+        mode,
+        fixturesDir,
+        integrationName: env.E2E_INTEGRATION || base.integrationID || connector,
+        platform: env.E2E_PLATFORM || base.platform,
+        schema: env.E2E_SCHEMA || undefined,
+        objectsOverride: (env.E2E_OBJECTS || '').split(',').map(s => s.trim()).filter(Boolean),
+        tls: { cert: env.E2E_TLS_CERT, key: env.E2E_TLS_KEY },
+    };
+}
+
+/**
+ * Create a connection with an optional Configuration patch (used by mock ORIGIN mode to
+ * seed the connector's config-driven BaseURL at the local mock), via the SAME public
+ * IntegrationCreateConnection op the live harness uses — no core change. Returns the CIID.
+ *
+ * @param {(q:string,v:object)=>Promise<object>} gql
+ * @param {object} ids   { companyID, integrationID, credentialTypeID }
+ * @param {object} opts  { credentialName, credentialValues (object), configuration (object) }
+ */
+async function createConnectionWithConfig(gql, ids, opts) {
+    const input = {
+        CompanyID: ids.companyID,
+        IntegrationID: ids.integrationID,
+        CredentialTypeID: ids.credentialTypeID,
+        CredentialName: opts.credentialName,
+        CredentialValues: JSON.stringify(opts.credentialValues ?? {}),
+        ...(opts.configuration ? { Configuration: JSON.stringify(opts.configuration) } : {}),
+    };
+    const conn = (await gql(GQL.createConnection, { input, testConnection: false, runSchemaRefresh: true })).IntegrationCreateConnection;
+    if (!conn?.Success || !conn.CompanyIntegrationID) {
+        throw new Error(`CreateConnection failed: ${conn?.Message ?? 'no payload'}`);
+    }
+    return { ciid: conn.CompanyIntegrationID, credentialID: conn.CredentialID, schemaRefresh: conn.SchemaRefresh ?? null };
+}
+
+/**
+ * CONNECTOR-AGNOSTIC e2e driver. Boots the mock (mock mode) or uses the live vendor,
+ * stands up a real connection (seeding the mock origin into Configuration for config-driven
+ * connectors), then runs the real engine end-to-end (ApplyAll → StartSync → tail → DB verify
+ * incl. delta create/update/delete + idempotent re-run). Reuses gql-live-harness phases.
+ *
+ * Secrets (live mode only): dbPassword + mjSystemKey + (token OR pre-seeded CIID). Mock mode
+ * declares NO vendor secret — credential-free by construction.
+ */
+async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (runner scrubs result)
+    const cfg = connectorE2eCfgFromEnv();
+    if (!cfg.connector) return { ok: false, error: 'connector-e2e requires E2E_CONNECTOR (registry connector dir name)' };
+
+    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
+
+    // Build the mock (mock mode boots the fixtures-replaying server; live mode is inert).
+    const mock = await buildMock({ mode: cfg.mode, fixturesDir: cfg.fixturesDir, tls: cfg.tls });
+
+    try {
+        // Resolve the setup IDs (IntegrationID by name; Company/CredType from cfg).
+        const ids = await resolveSetupIds(db, { ...cfg, integrationID: cfg.integrationID, platform: cfg.platform });
+        const integrationID = ids.integrationID || await db.resolveId(
+            cfg.platform === 'postgresql'
+                ? `SELECT "ID" FROM "${cfg.mjSchema}"."Integration" WHERE "Name" = $1 LIMIT 1`
+                : `SELECT TOP 1 ID FROM [${cfg.mjSchema}].[Integration] WHERE Name = @n`,
+            cfg.platform === 'postgresql' ? [cfg.integrationName] : { n: cfg.integrationName });
+        const setupIds = { companyID: cfg.companyID, integrationID, credentialTypeID: cfg.credentialTypeID };
+
+        // Objects: explicit override > fixtures Objects[] (mock) > cfg default list.
+        const objects = cfg.objectsOverride.length ? cfg.objectsOverride
+            : (cfg.mode === 'mock' ? objectsFromManifest(mock.manifest) : cfg.objects);
+        if (!objects.length) throw new Error('connector-e2e: no objects to apply (set E2E_OBJECTS or provide fixtures Objects[])');
+
+        // Stand up the connection. Mock mode seeds the mock origin/file path + any extra static
+        // config into Configuration so a config-driven connector reaches the mock with NO real
+        // credential. Proxy-mode (hardcoded base) gets no config patch (redirect is via the
+        // MJAPI-process proxy — see proxyEnvExpected in the result). Live mode uses the real token.
+        let ciid, credentialID = null;
+        if (cfg.companyIntegrationID) {
+            ciid = cfg.companyIntegrationID; // reference mode (pre-seeded; live or a prepared mock connection)
+        } else {
+            const credentialValues = cfg.mode === 'mock'
+                ? { ...(mock.manifest?.Configuration ?? {}), ...(mock.configPatch ?? {}) } // dummy + mock redirect
+                : { apiKey: values.token };
+            const configuration = cfg.mode === 'mock'
+                ? { ...(mock.manifest?.Configuration ?? {}), ...(mock.configPatch ?? {}) }
+                : undefined;
+            const created = await createConnectionWithConfig(gql, setupIds, {
+                credentialName: `e2e-${cfg.connector}-${cfg.runId}`,
+                credentialValues, configuration,
+            });
+            ciid = created.ciid; credentialID = created.credentialID;
+        }
+
+        const fullCfg = {
+            ...cfg,
+            companyIntegrationID: ciid,
+            objects,
+            integrationID,
+            credentialID,
+            deltaPasses: cfg.mode === 'mock' ? deltaPassesFromManifest(mock.manifest) : [],
+        };
+
+        const result = await runConnectorE2E({ gql, db, mock }, fullCfg, allowWrite);
+        // Surface the mock wiring summary so an operator/agent can confirm the redirect path.
+        result.mockWiring = cfg.mode === 'mock'
+            ? { kind: mock.kind, baseURL: mock.baseURL ?? null, proxyURL: mock.proxyURL ?? null, tlsRequired: mock.tlsRequired ?? false, proxyEnvExpected: mock.proxyEnvExpected ?? null, fixtureWarnings: mock.warnings ?? [] }
+            : { mode: 'live' };
+        return result;
+    } catch (e) {
+        try { if (mock?.close) await mock.close(); } catch { /* best-effort */ }
+        try { if (db.close) await db.close(); } catch { /* best-effort */ }
+        return { ok: false, mode: cfg.mode, connector: cfg.connector, error: String(e?.stack ?? e?.message ?? e) };
+    }
+}
+
+/** Mock-mode (credential-free) e2e — writes:false (read-only from vendor; DB writes are into our own schema). */
+export async function connectorE2EMock(values, scrub) { return connectorE2EPlan(values, scrub, false); }
+/** Live-mode (credentialed) e2e — writes:false by default; backward CRUD only with allowWrite (live + flag). */
+export async function connectorE2ELive(values, scrub) { return connectorE2EPlan(values, scrub, false); }
+
 /**
  * Registry: task name → { secrets (logicalName→ENV_VAR default), run, writes }.
  *
@@ -411,8 +558,75 @@ export async function hubspotCleanData(values, scrub) {
  *
  * The job's secretEnvNames may override the env-var names per deployment.
  */
+/**
+ * PropFuel data-export feed — READ-ONLY live validation. writes:false.
+ * Calls ONLY GET /dataexport/<acct>/list and GET /dataexport/<acct>/download/<file>.
+ * It NEVER calls POST /ack (ack removes a file from the queue = a mutation). Proves the
+ * token + endpoints + file shape against the live demo without touching client data.
+ * The token enters ONLY the broker process; the agent never sees it. Returns scrubbed
+ * structure (file/record COUNTS + field KEY names only — never record values/PII).
+ */
+export async function propfuelReadonly({ token }, scrub) {
+    const acct = '2019'; // demo account id (embedded in the data-export path)
+    const base = `https://app.propfuel.com/dataexport/${acct}`;
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const out = { ok: false, plan: 'propfuel-readonly', accountId: acct, steps: {} };
+
+    // 1) list files (read-only)
+    let listResp;
+    try { listResp = await fetch(`${base}/list`, { method: 'GET', headers }); }
+    catch (e) { out.steps.list = { error: scrub(e instanceof Error ? e.message : String(e)) }; return out; }
+    const listText = await listResp.text();
+    let files = [];
+    try { const j = JSON.parse(listText); files = Array.isArray(j) ? j : (j.files ?? j.data ?? []); } catch { /* non-json body */ }
+    const names = (Array.isArray(files) ? files : []).map(f => String(typeof f === 'string' ? f : (f.file ?? f.name ?? f))).sort();
+    out.steps.list = { status: listResp.status, fileCount: names.length, sample: names.slice(0, 5) };
+    if (listResp.status < 200 || listResp.status >= 300) { out.steps.list.body = scrub(listText.slice(0, 300)); return out; }
+    if (!names.length) { out.ok = true; out.note = 'connected; export queue currently empty'; return out; }
+
+    // 2) download the OLDEST file (chronological by leading microtime) — read-only, NO ack
+    const first = names[0];
+    let dlResp;
+    try { dlResp = await fetch(`${base}/download/${encodeURIComponent(first)}`, { method: 'GET', headers }); }
+    catch (e) { out.steps.download = { error: scrub(e instanceof Error ? e.message : String(e)) }; return out; }
+    const dlText = await dlResp.text();
+    let records = [];
+    try { const j = JSON.parse(dlText); records = Array.isArray(j) ? j : (j.data ?? j.records ?? []); } catch { /* */ }
+    out.steps.download = {
+        status: dlResp.status,
+        file: first,
+        dataType: (first.split('-').slice(1).join('-') || '').replace(/\.json$/, ''),
+        recordCount: Array.isArray(records) ? records.length : 0,
+        recordKeys: (Array.isArray(records) && records.length && typeof records[0] === 'object') ? Object.keys(records[0]).slice(0, 40) : [],
+    };
+    // DELIBERATELY no POST /ack — acking deletes the file (mutation). Read-only only.
+    out.ok = dlResp.status >= 200 && dlResp.status < 300;
+    return out;
+}
+
 export const PLANS = {
+    // ── CONNECTOR-AGNOSTIC full e2e (real engine) — replaces per-vendor hardcoding ──────────────────
+    // MOCK mode (credential-free): a local mock-vendor server replays E2E_CONNECTOR's fixtures.json;
+    // the SAME real pipeline runs (CreateConnection → ApplyAll builds tables → StartSync runs the real
+    // IntegrationEngine → tail → DB verify incl. delta create/update/delete + idempotent re-run). NO
+    // vendor secret is declared (credential-free by construction). writes:false ALWAYS — read-only from
+    // the vendor; the DB writes are into our OWN destination schema (the point of the test), and mock
+    // mode never declares a secret. Set E2E_CONNECTOR + E2E_MODE=mock (default) + the HS_LIVE_* DB/GQL
+    // coordinates. Works for ANY connector shape by reading the discovered objects + the fixtures.
+    'connector-e2e': {
+        secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: connectorE2EMock, writes: false,
+    },
+    // LIVE mode (credentialed): identical pipeline + DB verification against the REAL vendor. Credential
+    // arrives ONLY via the broker mailbox, READ-ONLY, never acked. token (E2E_MODE=live, no pre-seeded
+    // CIID) OR pre-seeded HS_LIVE_CIID (token-free reference). writes:false (forward/read path only).
+    'connector-e2e-live': {
+        secrets: { token: 'CONNECTOR_API_KEY', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: connectorE2ELive, writes: false,
+    },
     'hubspot-tier1': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier1, writes: false },
+    // PropFuel data-export feed — read-only (GET list + GET download; NEVER ack). Safe vs live data.
+    'propfuel-readonly': { secrets: { token: 'PROPFUEL_TOKEN' }, run: propfuelReadonly, writes: false },
     // Tier-2 association read-only proof (no DB, no mutation) — real contacts/companies +
     // the v4 batch/read association endpoint. Safe against live data.
     'hubspot-tier2-assoc': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier2Assoc, writes: false },

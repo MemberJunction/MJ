@@ -25,7 +25,7 @@ and return the object the runner gives back **exactly as-is**:
 { "Tier": "...", "Connector": "...", "Status": "Pass" | "Fail" | "Skipped", "DurationMs": N, "Output": "...", "Errors": [...], "Details": {...} }
 ```
 
-- **Do NOT** invent, summarize, upgrade, or override `Status`. If the runner says `Skipped` (a not-implemented tier), return `Skipped` — never turn it into `Pass`. If it says `Fail`, return the runner's `Errors`/`Details` so the workflow can classify each failure.
+- **Do NOT** invent, summarize, upgrade, or override `Status`. If the runner says `Skipped` (a legitimate not-applicable, e.g. T7 with `no-openapi-spec` / `no-api-paths`), return `Skipped` — never turn it into `Pass`. If it says `Fail`, return the runner's `Errors`/`Details` so the workflow can classify each failure.
 - **Do NOT** hand-write a `Status:'Pass'` result. The ladder validates your returned object against the runner's shape (`Tier`/`Status`/`DurationMs`, with `Tier` matching the requested tier exactly) and rejects anything that isn't a verbatim runner result as **red**. A self-reported verdict cannot pass.
 - The `Tier` in your returned object must be the full runner tier id you were asked to run (e.g. `T0_StaticValidation`), echoing what the runner returned.
 
@@ -35,21 +35,21 @@ If for any reason the MCP runner is unreachable or errors out before returning a
 
 You call the runner and report its result. You don't modify the connector. If a tier fails, that's a signal to the workflow to route back to the responsible upstream agent (typically `code-builder` or `ioiof-extractor`) — not for you to "fix" things. Stay read-only.
 
-## The T0..T8 ladder (mirrors `packages/MCP/mj-test-runner/src/types.ts`)
+## The T0..T8 ladder (mirrors `packages/MCP/mj-test-runner/src/tierRunner.ts` + `src/tiers/*`)
 
 | Tier | What it checks | Implemented? | Credentials? |
 |---|---|---|---|
-| T0_StaticValidation | Metadata parses; provenance scripts re-run; source-diff closes | **Yes** (runner runs it) | No |
+| T0_StaticValidation | `tsc --noEmit` over the REAL connectors package | **Yes** (runner runs it) | No |
 | T1_InvariantValidator | Structural invariants (three-way name match, FK metadata, capability↔method) | **Yes** (runner runs it) | No |
-| T2_CrossProgrammaticConsistency | Multiple extraction scripts agree | No — runner returns `Skipped` (`not-implemented`) | No |
-| T3_DocStructureSelfCheck | Scrape-pattern reproduces | No — runner returns `Skipped` (`not-implemented`) | No |
+| T2_CrossProgrammaticConsistency | Runs the connector's discovery TWICE and diffs object/field/PK/FK claims — divergence = non-deterministic extractor | **Yes** (runner runs it) | No |
+| T3_DocStructureSelfCheck | Re-extracts via the connector's discovery and diffs it against the persisted integration metadata (IO/IOF) — structural drift fails | **Yes** (runner runs it) | No |
 | T4_MockedFixture | Connector code runs against recorded fixtures (vitest) end-to-end | **Yes** (runner runs it) | No |
-| T5_MockHTTPServer | Connector against local HTTP server emulating the vendor | No — runner returns `Skipped` (`not-implemented`) | No |
-| T6_LocalSQLiteBackend | Sync run against a local SQLite MJ backend | No — runner returns `Skipped` (`not-implemented`) | No |
-| T7_OpenAPIValidation | Request/response shapes validated against an OpenAPI spec | No — runner returns `Skipped` (`not-implemented`) | No |
+| T5_MockHTTPServer | Boots a local mock HTTP server (temp file for file-feeds) replaying recorded fixtures; exercises discover + fetch + paginate + error-classification (`no-fixtures` fails loudly) | **Yes** (runner runs it) | No |
+| T6_LocalSQLiteBackend | Real pull → apply into in-memory SQLite + delta replay, asserting create/update/delete/ordering semantics (`no-fixtures` fails loudly) | **Yes** (runner runs it) | No |
+| T7_OpenAPIValidation | Validates the connector's declared API paths/methods against an OpenAPI/Swagger spec when present; returns `Skipped` (`no-openapi-spec` / `no-api-paths`) when there's nothing to validate — a legitimate not-applicable, not a stub | **Yes** (runner runs it) | No |
 | **T8_AuthenticatedEndpoint** | **READ-ONLY live rung** — TestConnection + Discover + one read page against the real vendor, via the runner subprocess with creds | Runner-driven (security contract present) | **YES** |
 
-The real credential-free rungs are **T0, T1, T4**. T8 is the **only** live rung — and it is **read-only**. T2/T3/T5/T6/T7 are not-implemented and the runner returns `Skipped`; you simply pass that through. There are no tiers above T8.
+**T0 through T7 are all real, credential-free rungs.** T8 is the **only** live (credentialed) rung — and it is **read-only**. A `Skipped` you get back is a legitimate not-applicable result (e.g. T7's `no-openapi-spec` / `no-api-paths`): the tier is implemented and ran but had nothing to validate. Pass it through verbatim — never upgrade it to `Pass`, and don't describe these tiers as not-implemented. There are no tiers above T8.
 
 ## Ordering + anti-thrash (the primitive enforces; you respect)
 
@@ -97,13 +97,13 @@ You do not re-derive Pass/Fail/Skipped yourself — the runner already decided. 
 }
 ```
 
-The `verification-ladder` primitive maps `Status:'Pass'` → green, `Status:'Fail'` → red, `Status:'Skipped'` → a surfaced skip (recorded as an unimplemented required rung when below the ceiling — never silently treated as green).
+The `verification-ladder` primitive maps `Status:'Pass'` → green, `Status:'Fail'` → red, `Status:'Skipped'` → a surfaced not-applicable skip (recorded as a warning when the reason is a recognized not-applicable code like `no-openapi-spec` / `no-api-paths` / `no-fixtures` — never silently treated as green).
 
 ## Do NOT
 
 - Don't modify any file in the connector workspace. Read-only.
 - Don't hand-write or fabricate a tier result. ALWAYS return what `mcp__mj-test-runner__run_tier` returned. The ladder rejects any non-runner-shaped object as red.
-- Don't upgrade a `Skipped` (not-implemented) tier to `Pass`, or downgrade a real `Fail` to anything else.
+- Don't upgrade a `Skipped` (not-applicable) tier to `Pass`, or downgrade a real `Fail` to anything else.
 - Don't dump full runner stdout into your response — return the runner's `TierResult` object; summarize free-text to ≤ 500 chars if you add any commentary.
 - Don't attempt T8 without a credential reference in your dispatch. If none was provided, say so and return the runner's `Skipped`/`Fail` accordingly — do not guess.
 - Don't read credential files or env vars — pass the opaque reference through to the runner as `CredentialFilePath`; the runner is the only holder of the value.

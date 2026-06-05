@@ -54,8 +54,10 @@ connector-builder-workshop/
 
 ## Status: skeleton
 
-Initial scaffolding. Primitives are stubs declaring their schemas + structural
-guarantees. Planner + reviewer prompts are seeded from Gap 1 / Gap 2 specs.
+Initial scaffolding. The primitives are implemented — each one declares its
+schemas + structural guarantees AND executes them (e.g. `verification-ladder`
+drives the real `mj-test-runner` T0..T8 tiers, `scrub-fixture` performs the
+redaction). Planner + reviewer prompts are seeded from Gap 1 / Gap 2 specs.
 First end-to-end dry run targets **HubSpot ground truth** (its current code +
 metadata fed as input; the workshop attempts to produce something equivalent).
 No PR is opened from this branch.

@@ -6,20 +6,31 @@
 import { z } from 'zod';
 
 /**
- * Identifier for a single test tier. Covers T0–T8 (no T9–T12).
+ * Identifier for a single test tier. Covers T0–T8 (no T9–T12). EVERY tier is
+ * implemented — none are stubs.
  *
  * REAL tiers (run against the real `packages/Integration/connectors` package):
  * - `T0_StaticValidation`   — `tsc --noEmit` over the real connectors package.
  * - `T1_InvariantValidator` — deterministic structural-invariant checks (see {@link ./invariants}).
+ * - `T2_CrossProgrammaticConsistency` — runs the connector's discovery twice and diffs the
+ *   object/field/PK/FK claims; divergence → Fail. CREDENTIAL-FREE.
+ * - `T3_DocStructureSelfCheck` — re-extracts via the connector's discovery and asserts the
+ *   structured output is stable against persisted integration metadata; drift → Fail. CREDENTIAL-FREE.
  * - `T4_MockedFixture`      — `vitest run <ClassName>` over the connector's real test file.
+ * - `T5_MockHTTPServer`     — boots a `node:http` server (or temp file for a file-feed connector)
+ *   serving the connector's recorded fixtures, points the connector at it, and runs
+ *   DiscoverObjects + FetchChanges for every object; no fixtures → Fail (`no-fixtures`). CREDENTIAL-FREE.
+ * - `T6_LocalSQLiteBackend` — pulls via FetchChanges against the mock/fixtures and applies into a
+ *   `node:sqlite` DB, asserting create/update/delete/ordering semantics; no fixtures → Fail. CREDENTIAL-FREE.
+ * - `T7_OpenAPIValidation`  — validates the connector's declared API paths against an OpenAPI spec
+ *   when one exists; no spec → `Skipped` (`no-openapi-spec`, a legitimate not-applicable). CREDENTIAL-FREE.
  * - `T8_AuthenticatedEndpoint` — **READ-ONLY live**. Instantiates the connector and runs
  *   only non-mutating ops (TestConnection, DiscoverObjects, one FetchChanges page). There is
  *   NO write/bidirectional tier and NO `allowWrite`; the live tier never Creates/Updates/Deletes.
  *
- * NOT-IMPLEMENTED tiers: `T2`/`T3`/`T5`/`T6`/`T7` return `Status: 'Skipped'` and carry a
- * `'<Tier> not-implemented'` entry in {@link TierResult.Errors} (see {@link NOT_IMPLEMENTED_REASON})
- * so the ladder can refuse to treat the skip as a pass. This is distinct from a legitimately
- * not-applicable skip, which would carry no such marker.
+ * Every tier returns an HONEST status: `Pass`/`Fail` with the specific missing input, or
+ * `Skipped` with a real not-applicable reason (e.g. `no-openapi-spec`). No tier returns a
+ * `not-implemented` stub.
  */
 export type TierID =
     | 'T0_StaticValidation'
@@ -33,10 +44,11 @@ export type TierID =
     | 'T8_AuthenticatedEndpoint';
 
 /**
- * Canonical reason token a not-yet-implemented tier embeds in its `Errors` array, e.g.
- * `'T5_MockHTTPServer not-implemented'`. The ladder MUST scan for this token and refuse to
- * count such a `Skipped` result as a pass. A skip WITHOUT this token means the tier was
- * legitimately not applicable to the connector.
+ * Canonical `not-implemented` marker token. NO tier emits this anymore — every tier is
+ * implemented and returns an honest `Pass`/`Fail`/`Skipped(real-reason)` status. The
+ * constant is retained as a defensive sentinel: the ladder MAY still scan for it and treat
+ * any `Skipped` result carrying it as red, so a future stub can never masquerade as a pass.
+ * A legitimately not-applicable skip (e.g. `no-openapi-spec`) never carries this token.
  */
 export const NOT_IMPLEMENTED_REASON = 'not-implemented';
 

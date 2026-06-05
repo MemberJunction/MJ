@@ -4,11 +4,13 @@
  *
  * Exposes one tool — `run_tier` — that runs a named test tier against a
  * connector. T0/T4 type-check / unit-test the REAL connectors package; T1 runs
- * deterministic structural invariants; T2/T3/T5/T6/T7 are not-implemented
- * (Skipped + `'<Tier> not-implemented'` marker). T8 is a READ-ONLY LIVE test —
- * the only tier that touches credentials; that happens INSIDE this subprocess
- * and the credential bytes never leave it. T8 performs only non-mutating ops
- * (TestConnection / DiscoverObjects / one FetchChanges page) — never write.
+ * deterministic structural invariants; T2/T3/T5/T6/T7 are REAL credential-free
+ * deep tiers (cross-pass discovery consistency, doc self-check against persisted
+ * metadata, mock-HTTP replay, SQLite round-trip create/update/delete, and
+ * OpenAPI-spec validation). T8 is a READ-ONLY LIVE test — the only tier that
+ * touches credentials; that happens INSIDE this subprocess and the credential
+ * bytes never leave it. T8 performs only non-mutating ops (TestConnection /
+ * DiscoverObjects / one FetchChanges page) — never write.
  *
  * @see INTEGRATION-AGENT-TODO.md §2.19.3
  */
@@ -42,7 +44,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         {
             name: 'run_tier',
-            description: 'Run a connector test tier (T0-T8). T0/T4 run tsc/vitest against the real connectors package; T1 runs structural invariants; T2/T3/T5/T6/T7 are not-implemented (Skipped with a not-implemented marker). T8 is a READ-ONLY live test (TestConnection/DiscoverObjects/one FetchChanges page — never write); for T8 only, supply CredentialFilePath. The credential file is read inside this subprocess and its bytes never leave it.',
+            description: 'Run a connector test tier (T0-T8). T0/T4 run tsc/vitest against the real connectors package; T1 runs structural invariants. T2/T3/T5/T6/T7 are REAL, credential-free deep tiers: T2 cross-pass discovery consistency, T3 doc self-check against persisted metadata, T5 mock-HTTP replay of recorded fixtures, T6 SQLite round-trip proving create/update/delete semantics, T7 OpenAPI-spec validation (Skipped only when the connector has no spec/no API paths — a legitimate not-applicable, not a stub). T8 is a READ-ONLY live test (TestConnection/DiscoverObjects/one FetchChanges page — never write); for T8 only, supply CredentialFilePath. The credential file is read inside this subprocess and its bytes never leave it.',
             inputSchema: {
                 type: 'object',
                 properties: {

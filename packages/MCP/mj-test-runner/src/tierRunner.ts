@@ -1,52 +1,63 @@
 /**
- * Per-tier test runner. Each tier dispatches to a separate handler.
+ * Per-tier test runner. Each tier dispatches to a separate handler. Every tier
+ * is REAL — there are no `not-implemented` stubs:
+ *
+ *   - T0 `tsc --noEmit` + T4 `vitest run <ClassName>` over the REAL connectors package.
+ *   - T1 deterministic structural invariants (see {@link ./invariants}).
+ *   - T2 cross-programmatic consistency, T3 doc-structure self-check, T5 mock-HTTP
+ *     server, T6 local-SQLite backend — all CREDENTIAL-FREE and SHAPE-AGNOSTIC
+ *     (driven through the connector's abstract methods; REST + file-feed alike).
+ *     Implemented in `./tiers/*`.
+ *   - T7 OpenAPI validation — `Skipped` (`no-openapi-spec`) when not applicable.
+ *   - T8 READ-ONLY live (the only tier that touches credentials).
  *
  * **CRITICAL SECURITY INVARIANT**: credential file paths are read INSIDE this
- * subprocess only. They are NEVER returned in the tool result, never logged,
+ * subprocess only (T8). They are NEVER returned in the tool result, never logged,
  * never written to a file the agent can read. The agent sees Pass/Fail and
  * non-secret error messages (counts, status codes, object names); it never sees
- * credential bytes.
+ * credential bytes. The offline tiers (T2/T3/T5/T6/T7) never receive credentials.
  *
- * **LADDER CWD**: the real tiers (T0 tsc, T4 vitest, T8 live) run against the
- * REAL connectors package `packages/Integration/connectors` — NOT a registry
- * mirror — so they exercise the shipping connector code. The registry root is
- * still used to resolve per-connector metadata (ClassName) and the T1 invariant
- * inputs.
+ * **LADDER CWD**: the tiers that instantiate or build the connector (T0 tsc, T4
+ * vitest, T2/T3/T5/T6 child runners, T8 live) run against the REAL connectors
+ * package `packages/Integration/connectors` — NOT a registry mirror — so they
+ * exercise the shipping connector code. The registry root resolves per-connector
+ * metadata (ClassName), fixtures, OpenAPI specs, and the T1 invariant inputs.
  *
  * **LIVE TESTING IS READ-ONLY ONLY**. T8 may ONLY do non-mutating operations:
  * `TestConnection`, `DiscoverObjects`, and ONE `FetchChanges` page. It never
- * Creates/Updates/Deletes/upserts/pushes. There is no write/bidirectional tier
- * and no `allowWrite` switch.
+ * Creates/Updates/Deletes/upserts/pushes. The offline tiers run against mocks /
+ * SQLite and likewise never mutate any real external system. There is no
+ * write/bidirectional tier and no `allowWrite` switch.
  *
  * @see INTEGRATION-AGENT-TODO.md §2.19.2
+ * @see ./tiers/childRunner.ts (shared offline-tier infrastructure)
  */
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { existsSync, readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { NOT_IMPLEMENTED_REASON } from './types.js';
 import type { RunTierRequest, TierResult } from './types.js';
 import { ValidateInvariants } from './invariants.js';
+import {
+    REGISTRY_ROOT,
+    REPO_ROOT,
+    CONNECTORS_PKG_DIR,
+    CONNECTORS_SRC_DIR,
+    resolveConnectorIdentity as resolveConnectorIdentityShared,
+    resolveTsxBin,
+    type ConnectorIdentity,
+} from './tiers/childRunner.js';
+import { runT2CrossConsistency } from './tiers/t2CrossConsistency.js';
+import { runT3DocSelfCheck } from './tiers/t3DocSelfCheck.js';
+import { runT5MockHttp } from './tiers/t5MockHttp.js';
+import { runT6Sqlite } from './tiers/t6Sqlite.js';
+import { runT7OpenApi } from './tiers/t7OpenApi.js';
 
 /** Portion of a {@link TierResult} produced by an individual tier handler. */
 type TierHandlerResult = Omit<TierResult, 'Tier' | 'Connector' | 'DurationMs'>;
 
 /** Fields populated up-front before a tier handler runs. */
 type TierResultBase = Pick<TierResult, 'Tier' | 'Connector' | 'DurationMs'>;
-
-const REGISTRY_ROOT = process.env.MJ_CONNECTORS_REGISTRY ?? resolve(process.cwd(), 'packages/Integration/connectors-registry');
-
-/**
- * Repo root, derived from the registry root per the shared LADDER CWD convention
- * (`connectors-registry` → Integration → packages → repo root).
- */
-const REPO_ROOT = resolve(REGISTRY_ROOT, '..', '..', '..');
-
-/** The REAL connectors package the ladder's tsc / vitest / live tiers run against. */
-const CONNECTORS_PKG_DIR = resolve(REPO_ROOT, 'packages', 'Integration', 'connectors');
-
-/** Connector `.ts` source lives here (`<ClassName>.ts`). */
-const CONNECTORS_SRC_DIR = resolve(CONNECTORS_PKG_DIR, 'src');
 
 /** Sentinel prefix the live-runner child emits on the single stdout line that carries its result. */
 const LIVE_RESULT_SENTINEL = '__MJ_T8_RESULT__';
@@ -72,17 +83,17 @@ export async function RunTier(request: RunTierRequest): Promise<TierResult> {
             case 'T1_InvariantValidator':
                 return finish(base, runInvariantValidator(request.Connector), start);
             case 'T2_CrossProgrammaticConsistency':
-                return finish(base, notImplemented('T2_CrossProgrammaticConsistency', request.Connector), start);
+                return finish(base, withIdentity(request.Connector, (id) => runT2CrossConsistency(request.Connector, id)), start);
             case 'T3_DocStructureSelfCheck':
-                return finish(base, notImplemented('T3_DocStructureSelfCheck', request.Connector), start);
+                return finish(base, withIdentity(request.Connector, (id) => runT3DocSelfCheck(request.Connector, id)), start);
             case 'T4_MockedFixture':
                 return finish(base, runMockedFixture(request.Connector), start);
             case 'T5_MockHTTPServer':
-                return finish(base, notImplemented('T5_MockHTTPServer', request.Connector), start);
+                return finish(base, withIdentity(request.Connector, (id) => runT5MockHttp(request.Connector, id)), start);
             case 'T6_LocalSQLiteBackend':
-                return finish(base, notImplemented('T6_LocalSQLiteBackend', request.Connector), start);
+                return finish(base, withIdentity(request.Connector, (id) => runT6Sqlite(request.Connector, id)), start);
             case 'T7_OpenAPIValidation':
-                return finish(base, notImplemented('T7_OpenAPIValidation', request.Connector), start);
+                return finish(base, withIdentity(request.Connector, (id) => runT7OpenApi(request.Connector, id)), start);
             case 'T8_AuthenticatedEndpoint':
                 return finish(base, runReadOnlyLive(request.Connector, request.CredentialFilePath), start);
             default:
@@ -111,18 +122,22 @@ function finish(base: TierResultBase, r: TierHandlerResult, start: number): Tier
 }
 
 /**
- * Build the standard `Skipped` result for a tier that is not yet implemented. The
- * `Errors` array carries the canonical `'<Tier> not-implemented'` token so the
- * ladder refuses to treat the skip as a pass (distinct from a legitimately
- * not-applicable skip, which carries no such token).
+ * Resolve the connector's class/source identity once, then invoke a tier handler
+ * with it. When the connector class can't be resolved, return a single honest
+ * `Fail` (not a silent skip) so the missing input is visible — the offline tiers
+ * all need to instantiate or read the connector.
  */
-function notImplemented(tier: string, connector: string): TierHandlerResult {
-    return {
-        Status: 'Skipped',
-        Output: '',
-        Errors: [`${tier} ${NOT_IMPLEMENTED_REASON}`],
-        Details: { connector, reason: NOT_IMPLEMENTED_REASON },
-    };
+function withIdentity(connector: string, handler: (identity: ConnectorIdentity) => TierHandlerResult): TierHandlerResult {
+    const identity = resolveConnectorIdentityShared(connector);
+    if (!identity) {
+        return {
+            Status: 'Fail',
+            Output: '',
+            Errors: [`Could not resolve a connector class for "${connector}" (no registry ClassName and no matching <name>Connector.ts under ${CONNECTORS_SRC_DIR}).`],
+            Details: { connector },
+        };
+    }
+    return handler(identity);
 }
 
 // ── Tier handlers ────────────────────────────────────────────────────
@@ -171,7 +186,7 @@ function runMockedFixture(connector: string): TierHandlerResult {
     if (!existsSync(CONNECTORS_PKG_DIR)) {
         return { Status: 'Fail', Output: '', Errors: [`Connectors package missing: ${CONNECTORS_PKG_DIR}`] };
     }
-    const identity = resolveConnectorIdentity(connector);
+    const identity = resolveConnectorIdentityShared(connector);
     if (!identity) {
         return {
             Status: 'Fail',
@@ -238,7 +253,7 @@ function runReadOnlyLive(connector: string, credentialFilePath?: string): TierHa
         return { Status: 'Fail', Output: '', Errors: ['T8 credential file does not exist on disk'] };
     }
 
-    const identity = resolveConnectorIdentity(connector);
+    const identity = resolveConnectorIdentityShared(connector);
     if (!identity) {
         return {
             Status: 'Fail',
@@ -410,99 +425,9 @@ function scrubLine(line: string): string {
 }
 
 // ── Connector identity resolution ────────────────────────────────────
-
-/** Resolved connector identity used by the T4 + T8 tiers. */
-interface ConnectorIdentity {
-    /** The connector class name, e.g. `HubSpotConnector`. */
-    ClassName: string;
-    /** Absolute path to `<ClassName>.ts` in the real connectors package. */
-    SourcePath: string;
-    /** The canonical integration name from registry metadata, if known. */
-    IntegrationName?: string;
-}
-
-/**
- * Resolve a registry connector name (e.g. `hubspot`) to its connector class +
- * source path in the REAL connectors package. Strategy:
- *   1. PRIMARY — read `fields.ClassName` / `fields.Name` from the connector's
- *      registry integration-metadata file (same candidate paths the T1 invariants use).
- *   2. FALLBACK — case-insensitively match `<connector>Connector.ts` against the
- *      actual files in the connectors `src/` dir (covers registry entries with no
- *      metadata file, e.g. a partially-built connector).
- *
- * @returns the resolved identity, or `null` if no connector class can be found
- */
-function resolveConnectorIdentity(connector: string): ConnectorIdentity | null {
-    const fromMeta = readClassNameFromRegistry(connector);
-    if (fromMeta?.ClassName) {
-        const sourcePath = resolve(CONNECTORS_SRC_DIR, `${fromMeta.ClassName}.ts`);
-        if (existsSync(sourcePath)) {
-            return { ClassName: fromMeta.ClassName, SourcePath: sourcePath, IntegrationName: fromMeta.IntegrationName };
-        }
-    }
-
-    const matchedFile = findConnectorSourceByName(connector);
-    if (matchedFile) {
-        return {
-            ClassName: matchedFile.replace(/\.ts$/, ''),
-            SourcePath: resolve(CONNECTORS_SRC_DIR, matchedFile),
-            IntegrationName: fromMeta?.IntegrationName,
-        };
-    }
-    return null;
-}
-
-/** Minimal registry-metadata read of `fields.ClassName` + `fields.Name`. */
-interface RegistryIdentity {
-    ClassName?: string;
-    IntegrationName?: string;
-}
-
-/**
- * Read the connector's integration-metadata file from the registry and pull out
- * `fields.ClassName` + `fields.Name`. Tries the same candidate paths as the T1
- * invariant loader and normalises an array-wrapped root (mj-sync push convention).
- */
-function readClassNameFromRegistry(connector: string): RegistryIdentity | null {
-    const connectorDir = resolve(REGISTRY_ROOT, connector);
-    const candidates = [
-        resolve(connectorDir, 'metadata/integrations', `.${connector}.json`),
-        resolve(connectorDir, 'metadata/integrations', `.${connector}.integration.json`),
-        resolve(connectorDir, 'metadata/integrations', connector, `.${connector}.integration.json`),
-        resolve(connectorDir, `.${connector}.integration.json`),
-        resolve(connectorDir, `.${connector}.json`),
-    ];
-    for (const path of candidates) {
-        if (!existsSync(path)) continue;
-        try {
-            const raw = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
-            const root = Array.isArray(raw) ? raw[0] : raw;
-            const fields = (root as { fields?: { ClassName?: unknown; Name?: unknown } } | undefined)?.fields;
-            const className = typeof fields?.ClassName === 'string' ? fields.ClassName : undefined;
-            const name = typeof fields?.Name === 'string' ? fields.Name : undefined;
-            if (className || name) return { ClassName: className, IntegrationName: name };
-        } catch {
-            // Malformed metadata — fall through to the filename fallback.
-        }
-    }
-    return null;
-}
-
-/**
- * Case-insensitively find `<connector>Connector.ts` among the real connectors
- * source files (e.g. `yourmembership` → `YourMembershipConnector.ts`).
- */
-function findConnectorSourceByName(connector: string): string | undefined {
-    if (!existsSync(CONNECTORS_SRC_DIR)) return undefined;
-    const target = `${connector}connector.ts`.toLowerCase();
-    return readdirSync(CONNECTORS_SRC_DIR).find((f) => f.toLowerCase() === target);
-}
-
-/** Locate the `tsx` runner under the repo-root `node_modules/.bin`. */
-function resolveTsxBin(): string | null {
-    const bin = resolve(REPO_ROOT, 'node_modules', '.bin', 'tsx');
-    return existsSync(bin) ? bin : null;
-}
+// Resolution (registry ClassName → `<ClassName>.ts`, with a filename fallback)
+// and the `tsx` bin locator now live in `./tiers/childRunner.ts` so every tier
+// shares one implementation. T4/T8 below use the imported `resolveConnectorIdentity`.
 
 /**
  * Source of the short-lived child runner executed via `tsx`. Written to a temp

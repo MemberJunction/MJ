@@ -1,0 +1,56 @@
+{
+  "_comment": "SAMPLE credential-free fixtures for the PropFuel connector — a CONFIG-DRIVEN REST connector (its BaseURL comes from CompanyIntegration.Configuration/credential, so mock mode runs in clean ORIGIN mode: no proxy, no TLS). This file is the SINGLE canonical fixtures manifest consumed by BOTH the offline tiers (mj-test-runner t5MockHttp / t6Sqlite — point MJ_CONNECTORS_REGISTRY at packages/Integration/connectors/test/fixtures) AND the real-engine connector-e2e harness (connector-e2e-harness.mjs via connector-e2e-adapters.buildMock). Shape matches mj-test-runner src/tiers/fixtures.ts. Routes mirror the connector's real endpoints: GET {BaseURL}/contacts?limit&offset&updated_since etc.",
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "ApiKey": "mock-dummy-not-a-real-secret"
+  },
+  "Routes": [
+    {
+      "Path": "/contacts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        { "id": "c1", "email": "ada@example.com",  "name": "Ada Lovelace",   "updated_at": "2026-01-01T00:00:00Z" },
+        { "id": "c2", "email": "alan@example.com", "name": "Alan Turing",    "updated_at": "2026-01-02T00:00:00Z" },
+        { "id": "c3", "email": "grace@example.com","name": "Grace Hopper",   "updated_at": "2026-01-03T00:00:00Z" }
+      ]
+    },
+    {
+      "Path": "/campaigns",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        { "id": "cmp1", "name": "Welcome",  "updated_at": "2026-01-01T00:00:00Z" },
+        { "id": "cmp2", "name": "Renewal",  "updated_at": "2026-01-02T00:00:00Z" }
+      ]
+    }
+  ],
+  "Objects": [
+    { "Name": "Contacts",  "OrderingField": "updated_at" },
+    { "Name": "Campaigns", "OrderingField": "updated_at" }
+  ],
+  "DeltaPasses": [
+    {
+      "_comment": "Delta over Contacts: c1 stays, c2 is UPDATED (name change), c3 is DELETED (dropped from the feed AND reported via ExpectedDeletes), c4 is CREATED. Re-serving /contacts with the new state lets the real engine compute create/update/delete on the next sync.",
+      "Object": "Contacts",
+      "Routes": [
+        {
+          "Path": "/contacts",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            { "id": "c1", "email": "ada@example.com",   "name": "Ada Lovelace",          "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "c2", "email": "alan@example.com",  "name": "Alan M. Turing",        "updated_at": "2026-02-01T00:00:00Z" },
+            { "id": "c4", "email": "edsger@example.com","name": "Edsger Dijkstra",       "updated_at": "2026-02-02T00:00:00Z" }
+          ]
+        }
+      ],
+      "ExpectedPresent": ["c1", "c2", "c4"],
+      "ExpectedUpdates": [
+        { "ExternalID": "c2", "Field": "name", "Value": "Alan M. Turing" }
+      ],
+      "ExpectedDeletes": ["c3"]
+    }
+  ]
+}

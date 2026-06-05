@@ -8,17 +8,37 @@
 // Status==='Pass'. An LLM that hand-writes JSON cannot fake the runner's shape,
 // so a fabricated "green" is rejected as malformed and treated as red.
 //
-// Tier reality (mirrors the runner — packages/MCP/mj-test-runner/src/types.ts):
-//   - T0_StaticValidation, T1_InvariantValidator, T4_MockedFixture are the real
-//     credential-free rungs.
+// Tier reality (mirrors the runner — packages/MCP/mj-test-runner/src/tierRunner.ts
+// + src/tiers/*). T0..T7 are ALL real, credential-free rungs; T8 is the only
+// live (credentialed) one:
+//   - T0_StaticValidation — tsc --noEmit over the REAL connectors package.
+//   - T1_InvariantValidator — deterministic structural invariants.
+//   - T2_CrossProgrammaticConsistency — runs the connector's discovery TWICE and
+//     diffs the object/field/PK/FK claims; divergence = non-deterministic extractor.
+//   - T3_DocStructureSelfCheck — re-extracts via the connector's discovery and
+//     diffs it against the persisted integration metadata (IO/IOF); structural
+//     drift fails.
+//   - T4_MockedFixture — the connector's vitest suite against recorded fixtures.
+//   - T5_MockHTTPServer — boots a local mock HTTP server (or temp file for a
+//     file-feed) that replays recorded fixtures, then exercises discover + fetch +
+//     paginate + error-classification. Fails loudly with `no-fixtures` if absent.
+//   - T6_LocalSQLiteBackend — real pull → apply into in-memory SQLite, replays
+//     delta passes, and asserts create/update/delete/ordering semantics. Fails
+//     loudly with `no-fixtures` if absent.
+//   - T7_OpenAPIValidation — validates the connector's declared API paths/methods
+//     against an OpenAPI/Swagger spec when one exists; returns Status:'Skipped'
+//     with reason `no-openapi-spec`/`no-api-paths` when there is nothing to
+//     validate (a legitimate not-applicable, NOT a stub).
 //   - T8_AuthenticatedEndpoint is the ONLY live rung — and it is READ-ONLY
 //     (TestConnection + Discover + one read page). No writes, no bidirectional,
 //     no push, no 2^N matrix, no dual-dialect.
-//   - T2/T3/T5/T6/T7 exist but are not-implemented: the runner returns
-//     Status:'Skipped'. A not-implemented skip below the ceiling does NOT count as
-//     a pass — it is surfaced as a `skipped` rung and recorded in
-//     `unimplementedRequiredRungs` so the overall result notes the gap rather than
-//     fabricating green.
+//
+// A Status:'Skipped' is now a LEGITIMATE not-applicable result (T7's
+// `no-openapi-spec`/`no-api-paths`), not a not-implemented stub. The runtime reads
+// the actual reason from the runner's Errors/Details: an allowed-skip reason
+// (no-openapi-spec / no-api-paths / no-fixtures) is surfaced as a non-blocking
+// warning (NOT a pass, NOT a failure, NOT "unimplemented"); a Skip with any other
+// reason is treated as a genuine capability gap.
 //
 // Anti-thrash invariant: if a higher rung fails on something a lower rung could
 // have caught, that's a gate-placement bug — add the check at the lower rung, do
@@ -43,21 +63,21 @@
 //     tierResults: Array<{tier, label, status: 'green'|'red'|'skipped', failures?, skipReason?, durationMs?}>,
 //     achievedTier: string,                       // highest green rung
 //     classifiedFailures: Array<{tier, code, locus}>,
-//     unimplementedRequiredRungs: Array<{tier, label, reason}>,  // skipped-not-implemented rungs below the ceiling
+//     skippedRungs: Array<{tier, label, reason}>,  // not-applicable skips (e.g. no-openapi-spec) — warnings, not gaps
 //   }
 
 export const meta = {
     name: 'verification-ladder',
-    description: 'T0..T8 staged verification via mcp-mj-test-runner. Every rung verdict is the runner\'s VERBATIM run_tier result (not self-report); a rung is green only if Status===Pass and the runner shape is present. T8 is the only live rung and is READ-ONLY. T2/T3/T5/T6/T7 are not-implemented (Skipped). Strict in-order gating; failures classify via SyncErrorCode/ClassifyError.',
+    description: 'T0..T8 staged verification via mcp-mj-test-runner. Every rung verdict is the runner\'s VERBATIM run_tier result (not self-report); a rung is green only if Status===Pass and the runner shape is present. T0..T7 are all real, credential-free rungs (T2 cross-pass discovery consistency, T3 doc self-check vs persisted metadata, T5 mock-HTTP replay, T6 SQLite create/update/delete round-trip, T7 OpenAPI validation). T8 is the only live rung and is READ-ONLY. A Skipped result is a legitimate not-applicable (e.g. T7 no-openapi-spec) surfaced as a warning, not a gap. Strict in-order gating; failures classify via SyncErrorCode/ClassifyError.',
     phases: [
-        { title: 'T0_StaticValidation', detail: 'Metadata parses; provenance scripts re-run; source-diff closes' },
+        { title: 'T0_StaticValidation', detail: 'tsc --noEmit over the real connectors package' },
         { title: 'T1_InvariantValidator', detail: 'Structural invariants (three-way name match, FK metadata, capability↔method)' },
-        { title: 'T2_CrossProgrammaticConsistency', detail: 'Not implemented — runner returns Skipped' },
-        { title: 'T3_DocStructureSelfCheck', detail: 'Not implemented — runner returns Skipped' },
+        { title: 'T2_CrossProgrammaticConsistency', detail: 'Real: runs the connector\'s discovery twice and diffs object/field/PK/FK claims — divergence = non-deterministic extractor' },
+        { title: 'T3_DocStructureSelfCheck', detail: 'Real: re-extracts via the connector\'s discovery and diffs it against persisted integration metadata — structural drift fails' },
         { title: 'T4_MockedFixture', detail: 'Connector code against recorded fixtures (vitest)' },
-        { title: 'T5_MockHTTPServer', detail: 'Not implemented — runner returns Skipped' },
-        { title: 'T6_LocalSQLiteBackend', detail: 'Not implemented — runner returns Skipped' },
-        { title: 'T7_OpenAPIValidation', detail: 'Not implemented — runner returns Skipped' },
+        { title: 'T5_MockHTTPServer', detail: 'Real: boots a local mock HTTP server (temp file for file-feeds) replaying recorded fixtures; exercises discover + fetch + paginate + error-classification (no-fixtures fails loudly)' },
+        { title: 'T6_LocalSQLiteBackend', detail: 'Real: pull→apply into in-memory SQLite + delta replay, asserting create/update/delete/ordering semantics (no-fixtures fails loudly)' },
+        { title: 'T7_OpenAPIValidation', detail: 'Real: validates declared API paths/methods against an OpenAPI/Swagger spec when present; Skipped (no-openapi-spec / no-api-paths) when there is nothing to validate' },
         { title: 'T8_AuthenticatedEndpoint', detail: 'READ-ONLY live rung — TestConnection + Discover + one read page. The only credential-required rung.' },
     ],
 };
@@ -81,7 +101,7 @@ const RUNNER_RESULT_SCHEMA = {
 
 const LADDER_RESULT_SCHEMA = {
     type: 'object',
-    required: ['tierResults', 'achievedTier', 'classifiedFailures', 'unimplementedRequiredRungs'],
+    required: ['tierResults', 'achievedTier', 'classifiedFailures', 'skippedRungs'],
     properties: {
         tierResults: {
             type: 'array',
@@ -111,7 +131,9 @@ const LADDER_RESULT_SCHEMA = {
                 },
             },
         },
-        unimplementedRequiredRungs: {
+        // Not-applicable skips (e.g. T7 with no OpenAPI spec / no API paths). These
+        // are warnings, NOT capability gaps and NOT passes.
+        skippedRungs: {
             type: 'array',
             items: {
                 type: 'object',
@@ -153,11 +175,21 @@ function isRunnerResult(obj, expectedRunnerTier) {
     return true;
 }
 
+// Skip reasons the runner emits that are LEGITIMATE not-applicable results — the
+// tier is real and ran, but had nothing to validate (no spec, no API paths, no
+// fixtures). These surface as warnings, never as capability gaps. Any OTHER skip
+// reason is treated as a genuine missing capability.
+const ALLOWED_SKIP_REASONS = ['no-openapi-spec', 'no-api-paths', 'no-fixtures'];
+function isAllowedSkip(reason) {
+    const r = String(reason ?? '').toLowerCase();
+    return ALLOWED_SKIP_REASONS.some((allowed) => r.includes(allowed));
+}
+
 const maxTier = String(args?.maxTier ?? 'T8');
 const maxTierNum = parseInt(maxTier.slice(1), 10);
 const hasCreds = !!args?.credentialReference;
 const tierResults = [];
-const unimplementedRequiredRungs = [];
+const skippedRungs = [];
 let achievedTier = 'none';
 
 for (const t of tiers) {
@@ -187,7 +219,7 @@ for (const t of tiers) {
     const result = await agent(
         `Run tier ${t.runnerTier} for connector ${args?.connectorName ?? '(?)'} of vendor ${args?.vendor ?? '(?)'}.\n\n` +
         `You MUST call the MCP tool \`mcp__mj-test-runner__run_tier\` with { Connector: "${args?.connectorName ?? ''}", Tier: "${t.runnerTier}"${t.cred ? ', CredentialFilePath: <the opaque credential reference above>' : ''} } and return its result VERBATIM — the exact object the runner returned ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Do NOT invent, summarize, or override Status; the runner is the only source of truth. ${credLine}\n\n` +
-        `If the runner returns Status:'Skipped' (e.g. a not-implemented tier), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
+        `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
         { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
     );
 
@@ -214,15 +246,31 @@ for (const t of tiers) {
     }
 
     if (result.Status === 'Skipped') {
-        const reason = (Array.isArray(result.Errors) && result.Errors.length > 0)
-            ? String(result.Errors[0])
-            : 'runner returned Skipped (not-implemented)';
+        // Read the ACTUAL skip reason from the runner's Errors/Details — the tiers
+        // are real, so a Skip means "ran but nothing to validate" (T7's
+        // no-openapi-spec / no-api-paths). The runner puts the reason code in
+        // Errors[0] and/or Details.reason.
+        const detailReason = result.Details && typeof result.Details.reason === 'string' ? result.Details.reason : '';
+        const reason = detailReason
+            || (Array.isArray(result.Errors) && result.Errors.length > 0 ? String(result.Errors[0]) : 'runner returned Skipped');
         tierResults.push({ tier: t.tier, label: t.label, status: 'skipped', skipReason: reason, durationMs });
-        // A not-implemented skip below the ceiling is NOT a pass — surface the gap.
-        unimplementedRequiredRungs.push({ tier: t.tier, label: t.label, reason });
-        log(`${t.tier} skipped (not-implemented): ${reason}. Recorded as an unimplemented required rung; does NOT count as green.`);
-        // Skips do not break the ascent — a not-yet-built rung shouldn't block a
-        // higher rung that the runner CAN run — but it also never advances achievedTier.
+
+        if (isAllowedSkip(reason)) {
+            // Legitimate not-applicable: the tier is implemented and ran, but had
+            // nothing to validate (no spec / no API paths / no fixtures). Surface as
+            // a warning — NOT a pass, NOT a failure, NOT an unimplemented gap.
+            skippedRungs.push({ tier: t.tier, label: t.label, reason });
+            log(`${t.tier} skipped — not applicable for this connector (${reason}). Surfaced as a warning; does NOT count as green, does NOT block the ascent.`);
+        } else {
+            // An unexpected skip reason indicates a genuine missing capability — treat
+            // it as a hard gap (red) rather than silently passing through.
+            tierResults[tierResults.length - 1].status = 'red';
+            tierResults[tierResults.length - 1].failures = [{ code: 'capability-gap', locus: `${t.runnerTier}`, summary: `runner skipped with an unrecognized reason: ${reason}` }];
+            log(`${t.tier} skipped with an unrecognized reason (${reason}) — treating as a capability gap (red).`);
+            break;
+        }
+        // Allowed skips do not break the ascent — a not-applicable rung shouldn't
+        // block a higher rung the runner CAN run — but they never advance achievedTier.
         continue;
     }
 
@@ -241,4 +289,4 @@ const classifiedFailures = tierResults
     .filter((r) => r.status === 'red')
     .flatMap((r) => (r.failures ?? []).map((f) => ({ tier: r.tier, code: f.code ?? 'unknown', locus: f.locus ?? 'unknown' })));
 
-return { tierResults, achievedTier, classifiedFailures, unimplementedRequiredRungs };
+return { tierResults, achievedTier, classifiedFailures, skippedRungs };

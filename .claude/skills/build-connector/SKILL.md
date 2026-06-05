@@ -20,25 +20,73 @@ Models are imperfect at any single step. The framework's mechanism for convergin
 ## Invocation
 
 ```
-/build-connector <vendor-name> [--credentials <path>] [--budget <tokens>] [--max-tier <T0..T12>]
+/build-connector <vendor-name> [--context <path-or-inline>] [--budget <tokens>] [--max-tier <T0..T8>]
 ```
 
+There is **no `--credentials` flag** — a credential is NEVER passed as a path to the agent. Live testing is selected via the Step 0 **[A]** intake and the credential is held only by the broker (the agent submits a read-only job and gets scrubbed results back). Max live tier is **T8** (read-only); there is no T9–T12.
+
 Examples:
-- `/build-connector hubspot` — runs through T0..T9 (no live API).
-- `/build-connector hubspot --credentials ~/.mj-credentials/hubspot.json` — adds T10/T11 (live).
+- `/build-connector hubspot` — no context; discovers from public sources only.
+- `/build-connector propfuel --context ./propfuel-api.md` — **provide vendor docs / API spec / sample payloads / data-model notes / connection info as a Tier-1 authoritative source.**
 - `/build-connector hubspot --max-tier T4` — workshop dry-run at the mocked-fixture ceiling.
+
+**You can always provide context.** `--context` may be a file, a directory, or inline text pasted with the command. Whatever you give is the highest-priority source the agent builds from. If you don't pass `--context`, Step 0 still asks you for any — both providing-context and not are always available, every connector.
 
 ## Concrete invocation procedure (the skill's runbook)
 
-### Step 0 — workspace bootstrap
+### Step 0 — Context, credential & sandbox intake (MANDATORY — ALWAYS FIRST, every connector)
+
+**Before you run start-run.mjs, the planner, or ANY stage, you MUST (a) ingest any user-provided context, then (b) prompt the user for the run/credential choice and WAIT for their reply.** Do not proceed on assumptions. Non-skippable for every `/build-connector`.
+
+**0a — Context ingest (always offered).**
+- If `--context <path-or-inline>` was passed, read it (a file, every file in a dir, or pasted inline text).
+- Then ASK regardless: *"Any context to provide before I build <vendor>? — vendor API docs, OpenAPI/Postman, sample payloads, data-model quirks (e.g. which records get updated or deleted), connection/base-URL info. Paste it or give a path. Optional, but it's the highest-priority source I build from; without it I rely on public discovery only."*
+- Save everything provided into `packages/Integration/connectors-registry/<vendor>/sources/`. The `source-auditor` + `ioiof-extractor` MUST treat user-provided context as **Tier-1 authoritative**, ranked above public discovery.
+- Context is OPTIONAL — proceed once the user answers (including "none"). Both "I gave context" and "I gave none" are always valid.
+
+**0b — Credential & sandbox.**
+
+1. **Detect the isolation posture:**
+   - In a sandbox/container? `test -f /.dockerenv` (or grep `/proc/1/cgroup` for `docker|containerd|kubepods`).
+   - Broker reachable? `$MJ_CRED_MAILBOX` set AND that dir exists.
+   - `isolated = container OR broker-mailbox-present`.
+
+2. **Ask the user verbatim, then STOP and wait for A or B:**
+
+   > Before I build **<vendor>**, how do you want to test it?
+   > **[A] LIVE** — you provide a credential; I test against the real API **READ-ONLY** (TestConnection + discover + one read page — never create/update/delete/ack).
+   > **[B] CREDENTIAL-FREE** — no credential; build + validate at the mock ceiling (T4). No live calls.
+   >
+   > **Sandbox/isolation: `<YES — in the workbench container / broker mailbox present>` or `<NO — running on the host as you>`.**
+   >
+   > If you choose **[A]**, the credential is held by a **SEPARATE OS user** so that NO process running as you — any CC session, host or container — can ever read its value. It is unreadable by OS permissions, not by my good behavior. One-time setup (you run these; I cannot and must not):
+   > 1. Create the broker user: `sudo sysadminctl -addUser mjbroker -fullName "MJ Broker"`
+   > 2. Store the token so ONLY `mjbroker` can read it — entered via a **silent prompt** (no shell history, no `ps` exposure; never put the token as a command argument):
+   >    `sudo -u mjbroker bash -lc 'umask 077; mkdir -p ~/.mj; read -rsp "<ENVVAR>: " T; printf "<ENVVAR>=%s\n" "$T" > ~/.mj/<vendor>.env; chmod 600 ~/.mj/<vendor>.env; unset T; echo saved'`
+   >    (It prompts for the token; you paste it once, it's written to the `600` file and cleared from memory. Do NOT use `printf '<ENVVAR>=<token>'` with the token inline — that leaks it to history/`ps`.)
+   > 3. Shared mailbox (holds ONLY jobs + scrubbed results, never secrets): `sudo mkdir -p /Users/Shared/mj-mailbox/jobs /Users/Shared/mj-mailbox/results; sudo chmod -R 1777 /Users/Shared/mj-mailbox`
+   > 4. Launch the broker AS `mjbroker`: `sudo -u mjbroker bash -lc 'set -a; . ~/.mj/<vendor>.env; set +a; cd <repo>; MJ_CRED_MAILBOX=/Users/Shared/mj-mailbox node packages/Integration/connectors/test/credential-broker.mjs'`
+   > 5. (Container) mount the mailbox into `claude-dev`: add `- /Users/Shared/mj-mailbox:/workspace/mj-mailbox` to its volumes and set `MJ_CRED_MAILBOX=/workspace/mj-mailbox`.
+   > 6. Verify the wall — as YOUR user run `cat ~mjbroker/.mj/<vendor>.env` → it MUST print `Permission denied`.
+   >
+   > Then tell me the broker is up. I submit `{ "task": "<vendor>-readonly" }` to the mailbox and receive ONLY the scrubbed result. I use the credential's outcome; I can never read its value.
+   >
+   > Reply **A** or **B**.
+
+3. **Branch on the reply (do not proceed until you have it):**
+   - **[B]** → set `maxTier=T4`, no `credentialReference`. Continue to bootstrap.
+   - **[A]** → the credential MUST come via the **separate-user broker** (or the container with the mailbox mounted) — **NEVER a same-user file path** (a local CC session running as the user could read that). Confirm the broker is up by round-tripping ONE read-only job through the mailbox (a scrubbed result comes back); only then continue, with the live read-only tier (T8) sourced via the broker. **NEVER** run a write/bidirectional/ack tier — live testing is READ-ONLY ONLY, every connector. If the separate-user broker isn't set up yet, give the user the step-1..6 runbook above and WAIT — do NOT fall back to a credential file the agent's own user can read.
+
+`<ENVVAR>` = the connector's credential env-var name (e.g. `PROPFUEL_TOKEN`); `<vendor>-readonly` = the connector's read-only broker plan in `packages/Integration/connectors/test/plans.mjs`.
+
+### Step 1 — workspace bootstrap
 
 Run the workspace provisioner:
 ```bash
 node packages/Integration/connector-builder-workshop/scripts/start-run.mjs \
   --vendor <vendor-name> \
-  [--credential-reference <path>] \
   [--budget <tokens>] \
-  [--max-tier <T0..T12>]
+  [--max-tier <T0..T8>]
 ```
 
 Capture its stdout JSON. This blob contains `runID`, `workspaceDir`, `planPath`, `manifestPath`, `specDigestPath`, `slotsPath`, `corpusEntries`. All subsequent stages reference these paths.
@@ -83,7 +131,7 @@ Reviewer's default verdict is `rejected`. On `approved` / `approved-with-amendme
 Invoke the workflow script via the `Workflow` tool with `scriptPath` pointing to the planner's emitted file at `packages/Integration/connector-builder-workshop/plans/<vendor>.workflow.js`. Pass `args` containing:
 - `vendor` — the vendor name.
 - `runID` — from Step 0's stdout.
-- `credentialReference` — opaque path, or `null` for credential-free runs.
+- `liveCredential` — for an [A] run: the separate-user broker is up and a read-only job round-trips via the mailbox (**no credential path is EVER passed into the workflow** — the live tier sources it only through the broker). For a [B] run: absent/`null` (credential-free).
 - `manifestPath` — path to the planner's manifest (the script reads it).
 - `slotsPath` — `packages/Integration/connector-builder-workshop/floor/phase0-slots.json`.
 - `maxTier` — the realistic verification ceiling.
@@ -114,6 +162,25 @@ Mechanical fixes (singular-vs-plural FK target naming, missing co-grouped `Delet
 After the Workflow returns, read the final `floor-check` verdict:
 - `pass: true` → write `SuperCoordinatorReport.{json,md}` to `connectors-registry/<vendor>/` + announce success to the user. NO commit, NO PR (per MJ Rule #1; explicit user approval each time).
 - `pass: false` → surface the structural failures. Route back through the planner amendment loop (one round); if it still fails, escalate.
+
+### Teardown — clear the environment (MANDATORY at the END of EVERY run, pass or fail)
+
+After reporting the verdict you MUST present cleanup so no credential or run state lingers. Show the user the relevant block verbatim:
+
+**If this was an [A] live run (broker used):**
+> Run finished — clear the environment:
+> 1. Stop the broker: `sudo -u mjbroker pkill -f credential-broker.mjs` (or Ctrl-C in its terminal).
+> 2. Destroy the token: `sudo -u mjbroker bash -lc 'rm -f ~/.mj/<vendor>.env && rmdir ~/.mj 2>/dev/null'`.
+> 3. Clear the mailbox (results are scrubbed, but wipe it): `rm -rf /Users/Shared/mj-mailbox/jobs/* /Users/Shared/mj-mailbox/results/* /Users/Shared/mj-mailbox/done/* 2>/dev/null`.
+> 4. Stop + clean the Docker workbench: `cd docker/workbench && docker compose down` (add `-v` to also drop the data volumes for a clean slate). If you added the `- /Users/Shared/mj-mailbox:/workspace/mj-mailbox` mount for this run, remove that line.
+> 5. Wipe this run's scratch: `rm -rf packages/Integration/connectors-registry/<vendor>/runs/<runID>/test-data`.
+> 6. (Optional, if `mjbroker` was one-off) remove the user: `sudo sysadminctl -deleteUser mjbroker`.
+> Verify clean: `pgrep -fl credential-broker.mjs` → no output, and `ls /Users/Shared/mj-mailbox/jobs /Users/Shared/mj-mailbox/results` → empty.
+
+**If this was a [B] credential-free run:**
+> Run finished — `cd docker/workbench && docker compose down` if you started the workbench. Nothing credential-related to clear.
+
+A build is NOT "done" until the user has the teardown for whatever they stood up — never skip it.
 
 ## Pre-flight
 
