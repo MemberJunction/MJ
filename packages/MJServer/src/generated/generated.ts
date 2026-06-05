@@ -7593,6 +7593,12 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     CompanyID?: string;
         
+    @Field(() => Int, {nullable: true, description: `Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`}) 
+    TotalCacheReadTokensUsed?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`}) 
+    TotalCacheWriteTokensUsed?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7814,6 +7820,12 @@ export class CreateMJAIAgentRunInput {
     @Field({ nullable: true })
     CompanyID: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TotalCacheReadTokensUsed: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCacheWriteTokensUsed: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7955,6 +7967,12 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     CompanyID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCacheReadTokensUsed?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCacheWriteTokensUsed?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12243,6 +12261,12 @@ export class MJAIModelCost_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).`}) 
+    CacheReadPricePerUnit?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`}) 
+    CacheWritePricePerUnit?: number;
+        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -12305,6 +12329,12 @@ export class CreateMJAIModelCostInput {
     @Field({ nullable: true })
     Comments: string | null;
 
+    @Field(() => Float, { nullable: true })
+    CacheReadPricePerUnit: number | null;
+
+    @Field(() => Float, { nullable: true })
+    CacheWritePricePerUnit: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -12353,6 +12383,12 @@ export class UpdateMJAIModelCostInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    CacheReadPricePerUnit?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    CacheWritePricePerUnit?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15236,6 +15272,18 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`}) 
     AssistantPrefill?: string;
         
+    @Field(() => Int, {nullable: true, description: `Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.`}) 
+    TokensCacheRead?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`}) 
+    TokensCacheWrite?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`}) 
+    TokensCacheReadRollup?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`}) 
+    TokensCacheWriteRollup?: number;
+        
     @Field() 
     @MaxLength(255)
     Prompt: string;
@@ -15563,6 +15611,18 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     AssistantPrefill: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TokensCacheRead: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWrite: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheReadRollup: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWriteRollup: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -15821,6 +15881,18 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     AssistantPrefill?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheRead?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWrite?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheReadRollup?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensCacheWriteRollup?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44228,7 +44300,7 @@ export class MJEntityField_ {
     @MaxLength(20)
     ValueListType: string;
         
-    @Field({nullable: true, description: `Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`}) 
+    @Field({nullable: true, description: `Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`}) 
     @MaxLength(50)
     ExtendedType?: string;
         
@@ -49627,6 +49699,10 @@ export class MJIntegrationObjectField_ {
     @Field(() => Boolean, {description: `When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
     IsCustom: boolean;
         
+    @Field({description: `Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`}) 
+    @MaxLength(20)
+    MetadataSource: string;
+        
     @Field() 
     @MaxLength(255)
     IntegrationObject: string;
@@ -49708,6 +49784,9 @@ export class CreateMJIntegrationObjectFieldInput {
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
 
+    @Field({ nullable: true })
+    MetadataSource?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -49783,6 +49862,9 @@ export class UpdateMJIntegrationObjectFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
+
+    @Field({ nullable: true })
+    MetadataSource?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -49963,6 +50045,59 @@ export class MJIntegrationObject_ {
     @Field(() => Boolean, {description: `When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
     IsCustom: boolean;
         
+    @Field({nullable: true, description: `HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.`}) 
+    CreateAPIPath?: string;
+        
+    @Field({nullable: true, description: `HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.`}) 
+    @MaxLength(20)
+    CreateMethod?: string;
+        
+    @Field({nullable: true, description: `Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).`}) 
+    @MaxLength(50)
+    CreateBodyShape?: string;
+        
+    @Field({nullable: true, description: `Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`}) 
+    @MaxLength(100)
+    CreateBodyKey?: string;
+        
+    @Field({nullable: true, description: `Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).`}) 
+    @MaxLength(20)
+    CreateIDLocation?: string;
+        
+    @Field({nullable: true, description: `HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.`}) 
+    UpdateAPIPath?: string;
+        
+    @Field({nullable: true, description: `HTTP method for update (typically PATCH or PUT).`}) 
+    @MaxLength(20)
+    UpdateMethod?: string;
+        
+    @Field({nullable: true, description: `Request body shape for update: flat | wrapped | literal. See CreateBodyShape.`}) 
+    @MaxLength(50)
+    UpdateBodyShape?: string;
+        
+    @Field({nullable: true, description: `Wrapper key for update body when UpdateBodyShape=wrapped.`}) 
+    @MaxLength(100)
+    UpdateBodyKey?: string;
+        
+    @Field({nullable: true, description: `For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`}) 
+    @MaxLength(20)
+    UpdateIDLocation?: string;
+        
+    @Field({nullable: true, description: `HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`}) 
+    DeleteAPIPath?: string;
+        
+    @Field({nullable: true, description: `For delete: where the target record ID is located — typically 'path'.`}) 
+    @MaxLength(20)
+    DeleteIDLocation?: string;
+        
+    @Field({nullable: true, description: `Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`}) 
+    @MaxLength(255)
+    IncrementalWatermarkField?: string;
+        
+    @Field({description: `Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`}) 
+    @MaxLength(20)
+    MetadataSource: string;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -50043,6 +50178,48 @@ export class CreateMJIntegrationObjectInput {
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
 
+    @Field({ nullable: true })
+    CreateAPIPath: string | null;
+
+    @Field({ nullable: true })
+    CreateMethod: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyShape: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyKey: string | null;
+
+    @Field({ nullable: true })
+    CreateIDLocation: string | null;
+
+    @Field({ nullable: true })
+    UpdateAPIPath: string | null;
+
+    @Field({ nullable: true })
+    UpdateMethod: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyShape: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyKey: string | null;
+
+    @Field({ nullable: true })
+    UpdateIDLocation: string | null;
+
+    @Field({ nullable: true })
+    DeleteAPIPath: string | null;
+
+    @Field({ nullable: true })
+    DeleteIDLocation: string | null;
+
+    @Field({ nullable: true })
+    IncrementalWatermarkField: string | null;
+
+    @Field({ nullable: true })
+    MetadataSource?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -50115,6 +50292,48 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
+
+    @Field({ nullable: true })
+    CreateAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    CreateMethod?: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyShape?: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyKey?: string | null;
+
+    @Field({ nullable: true })
+    CreateIDLocation?: string | null;
+
+    @Field({ nullable: true })
+    UpdateAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    UpdateMethod?: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyShape?: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyKey?: string | null;
+
+    @Field({ nullable: true })
+    UpdateIDLocation?: string | null;
+
+    @Field({ nullable: true })
+    DeleteAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    DeleteIDLocation?: string | null;
+
+    @Field({ nullable: true })
+    IncrementalWatermarkField?: string | null;
+
+    @Field({ nullable: true })
+    MetadataSource?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -69630,6 +69849,10 @@ export class MJTagSynonym_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`}) 
+    @MaxLength(20)
+    Status: string;
+        
     @Field() 
     @MaxLength(255)
     Tag: string;
@@ -69653,6 +69876,9 @@ export class CreateMJTagSynonymInput {
     @Field({ nullable: true })
     Source?: string;
 
+    @Field({ nullable: true })
+    Status?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69674,6 +69900,9 @@ export class UpdateMJTagSynonymInput {
 
     @Field({ nullable: true })
     Source?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

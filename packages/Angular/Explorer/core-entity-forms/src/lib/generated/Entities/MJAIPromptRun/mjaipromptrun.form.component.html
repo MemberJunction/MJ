@@ -213,7 +213,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ErrorDetails"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -297,7 +297,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StopSequences"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -501,6 +501,38 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CompletionTime"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCacheRead"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCacheWrite"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCacheReadRollup"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TokensCacheWriteRollup"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"

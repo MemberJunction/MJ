@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
 
@@ -161,21 +161,39 @@ export class CerebrasLLM extends BaseLLM {
          
          
         const usage = chatResponse.usage as ChatCompletion.ChatCompletionResponse.Usage
+        // OpenAI-compatible cache reporting (if Cerebras enables prompt caching for the model): the
+        // cache-read count is nested at prompt_tokens_details.cached_tokens and is INCLUDED in
+        // prompt_tokens. Normalize to the uniform ModelUsage contract: promptTokens must be
+        // UNCACHED/net-new only, so subtract the cache-read count (clamped at 0) and record it
+        // disjointly. Cerebras does not bill cache writes separately, so cacheWriteTokens stays 0.
+        const cerebrasCached = (usage as { prompt_tokens_details?: { cached_tokens?: number } }).prompt_tokens_details?.cached_tokens ?? 0;
+        const cerebrasNetPromptTokens = Math.max(0, (usage.prompt_tokens ?? 0) - cerebrasCached);
+        const modelUsage = new ModelUsage(cerebrasNetPromptTokens, usage.completion_tokens);
+        modelUsage.cacheReadTokens = cerebrasCached;
         return {
             success: true,
             statusText: "OK",
             startTime: startTime,
             endTime: endTime,
             timeElapsed: endTime.getTime() - startTime.getTime(),
+            cacheInfo: {
+                cacheHit: cerebrasCached > 0,
+                cachedTokenCount: cerebrasCached
+            },
             data: {
                 choices: choices,
-                usage: new ModelUsage(usage.prompt_tokens, usage.completion_tokens)
+                usage: modelUsage
+            },
+            modelSpecificResponseDetails: {
+                provider: 'cerebras',
+                model: chatResponse.model,
+                raw: ToJSONSafe(chatResponse)
             },
             errorMessage: "",
             exception: null,
         };
     }
-    
+
     /**
      * Create a streaming request for Cerebras
      */

@@ -1,0 +1,410 @@
+<!-- ══════ SLIDE-IN FORM OVERLAY ══════ -->
+@if (FormMode !== 'none') {
+    <div class="at-slide-overlay" (click)="CloseForm()"></div>
+    <div class="at-slide-panel" [style.width.px]="PanelWidth">
+        <!-- Left-edge drag handle: the panel slides in from the right, so its
+             resizable edge is the LEFT. Dragging left widens the panel. -->
+        <div class="cls-resize-handle" (mousedown)="StartResize($event)"
+             role="separator" aria-orientation="vertical" aria-label="Resize panel"></div>
+        <div class="at-slide-header">
+            <h3>
+                @if (FormMode === 'add-source') { Add Content Source }
+                @else if (FormMode === 'edit-source') { Edit Content Source }
+                @else if (FormMode === 'add-type') { Add Content Type }
+                @else if (FormMode === 'edit-type') { Edit Content Type }
+            </h3>
+            <button class="at-slide-close" aria-label="Close form" (click)="CloseForm()"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <div class="at-slide-body">
+
+            <!-- Source form -->
+            @if (FormMode === 'add-source' || FormMode === 'edit-source') {
+                <!-- ══════ SOURCE ══════ -->
+                <div class="cls-section cls-section--first">
+                    <div class="cls-section-title"><i class="fa-solid fa-database"></i> Source</div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Name</label>
+                    <input type="text" class="at-form-input" [(ngModel)]="FormSourceName" placeholder="Source name">
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Source Type</label>
+                    <select class="at-form-select" [(ngModel)]="FormSourceTypeID">
+                        <option value="">Select source type...</option>
+                        @for (opt of SourceTypeOptions; track opt.ID) {
+                            <option [value]="opt.ID">{{ opt.Name }}</option>
+                        }
+                    </select>
+                </div>
+                <!-- Content Type + File Type: hidden for Entity source type -->
+                @if (SelectedSourceTypeRequiresContentType) {
+                    <div class="at-form-group">
+                        <label class="at-form-label">Content Type</label>
+                        <select class="at-form-select" [(ngModel)]="FormContentTypeID">
+                            <option value="">Select content type...</option>
+                            @for (opt of ContentTypeOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">File Type</label>
+                        <select class="at-form-select" [(ngModel)]="FormFileTypeID">
+                            <option value="">Select file type...</option>
+                            @for (opt of FileTypeOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <!-- Dynamic source-type-specific fields from ConfigurationObject.RequiredFields -->
+                @for (field of SelectedSourceTypeFields; track field.Key) {
+                    @if (!field.DependsOnField || FormSourceSpecificConfig[field.DependsOnField]) {
+                        @if (!field.ShowOnlyIfMultiple || GetDependentOptions(field).length > 1) {
+                            <div class="at-form-group">
+                                <label class="at-form-label">{{ field.Label }} @if (field.Required) { <span class="at-required">*</span> }</label>
+                                @switch (field.Type) {
+                                    @case ('url') {
+                                        <input type="url" class="at-form-input" [(ngModel)]="FormSourceSpecificConfig[field.Key]"
+                                               [placeholder]="field.Description || 'https://...'">
+                                    }
+                                    @case ('path') {
+                                        <input type="text" class="at-form-input" [(ngModel)]="FormSourceSpecificConfig[field.Key]"
+                                               [placeholder]="field.Description || '/path/to/...'">
+                                    }
+                                    @case ('text') {
+                                        <input type="text" class="at-form-input" [(ngModel)]="FormSourceSpecificConfig[field.Key]"
+                                               [placeholder]="field.Description || ''" [value]="field.DefaultValue || ''">
+                                    }
+                                    @case ('entity-picker') {
+                                        <select class="at-form-select" [(ngModel)]="FormSourceSpecificConfig[field.Key]"
+                                                (ngModelChange)="OnSourceFieldChanged(field.Key)">
+                                            <option value="">Select entity...</option>
+                                            @for (opt of EntitiesWithDocuments; track opt.ID) {
+                                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                                            }
+                                        </select>
+                                    }
+                                    @case ('entity-doc-picker') {
+                                        <select class="at-form-select" [(ngModel)]="FormSourceSpecificConfig[field.Key]">
+                                            @for (opt of GetDependentOptions(field); track opt.ID) {
+                                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                                            }
+                                        </select>
+                                    }
+                                    @case ('storage-provider-picker') {
+                                        <select class="at-form-select" [(ngModel)]="FormSourceSpecificConfig[field.Key]">
+                                            <option value="">Select provider...</option>
+                                            @for (opt of StorageProviderOptions; track opt) {
+                                                <option [value]="opt">{{ opt }}</option>
+                                            }
+                                        </select>
+                                    }
+                                    @case ('dropdown') {
+                                        <select class="at-form-select" [(ngModel)]="FormSourceSpecificConfig[field.Key]">
+                                            <option value="">Select...</option>
+                                            @for (opt of field.Options || []; track opt.Value) {
+                                                <option [value]="opt.Value">{{ opt.Label }}</option>
+                                            }
+                                        </select>
+                                    }
+                                }
+                                @if (field.Description) {
+                                    <span class="at-form-hint">{{ field.Description }}</span>
+                                }
+                            </div>
+                        }
+                    }
+                }
+                </div><!-- /Source section -->
+
+                <!-- ══════ EMBEDDING & VECTORS ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title"><i class="fa-solid fa-cubes"></i> Embedding &amp; Vectors</div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Embedding Model Override</label>
+                        <mj-tree-dropdown
+                            [BranchConfig]="EmbeddingVendorBranch"
+                            [LeafConfig]="EmbeddingModelsLeaf"
+                            SelectionMode="single"
+                            SelectableTypes="leaf"
+                            Placeholder="Use system default"
+                            [Clearable]="true"
+                            [Value]="ToCompositeKey(FormSourceEmbeddingModelID)"
+                            (ValueChange)="FormSourceEmbeddingModelID = FromCompositeKey($event)">
+                        </mj-tree-dropdown>
+                        <span class="at-form-hint">Overrides Content Type default</span>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Vector Index Override</label>
+                        <select class="at-form-select" [(ngModel)]="FormSourceVectorIndexID">
+                            <option value="">Use system default</option>
+                            @for (opt of VectorIndexOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                        <span class="at-form-hint">Overrides Content Type default</span>
+                    </div>
+                </div><!-- /Embedding & Vectors section -->
+
+                <!-- ══════ CLASSIFICATION (full config parity, in-app) ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title">
+                        <i class="fa-solid fa-sliders"></i> Classification
+                        <button mjButton variant="flat" size="sm" class="cls-eff-toggle"
+                                (click)="ToggleEffectiveValues()">
+                            <i class="fa-solid" [class.fa-eye]="!ShowEffectiveValues" [class.fa-eye-slash]="ShowEffectiveValues"></i>
+                            {{ ShowEffectiveValues ? 'Hide effective values' : 'Show effective values' }}
+                        </button>
+                    </div>
+
+                    <div class="cls-config">
+                            <!-- Taxonomy mode cards -->
+                            <div class="at-form-group">
+                                <label class="at-form-label">Taxonomy mode</label>
+                                <div class="cls-mode-grid">
+                                    @for (m of TaxonomyModes; track m.value) {
+                                        <div class="cls-mode-card" [class.selected]="CurrentMode === m.value"
+                                             (click)="SetMode(m.value)">
+                                            <i class="fa-solid {{ m.icon }} cls-mode-ic"></i>
+                                            <div class="cls-mode-nm">{{ m.label }}</div>
+                                            <div class="cls-mode-best">{{ m.bestFor }}</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Tag root -->
+                            <div class="at-form-group">
+                                <label class="at-form-label">Tag root</label>
+                                <select class="at-form-select" [(ngModel)]="TagRootIDValue">
+                                    <option value="">(none / whole taxonomy)</option>
+                                    @for (opt of TagRootOptions; track opt.ID) {
+                                        <option [value]="opt.ID">{{ opt.Name }}</option>
+                                    }
+                                </select>
+                                <span class="at-form-hint">Restricts the LLM's visible taxonomy + auto-grow target. Leave blank for the full taxonomy.</span>
+                            </div>
+
+                            <!-- Thresholds + gradient band -->
+                            <div class="at-form-group">
+                                <label class="at-form-label">Confidence thresholds</label>
+                                <div class="cls-threshold-pair">
+                                    <div class="cls-slider-grid">
+                                        <div class="cls-slider-field">
+                                            <span class="cls-slider-cap">Match (auto-apply) <strong>{{ MatchThresholdValue | number: '1.2-2' }}</strong></span>
+                                            <input type="range" class="cls-slider" min="0.50" max="1.00" step="0.01"
+                                                   [ngModel]="MatchThresholdValue" (ngModelChange)="MatchThresholdValue = $event">
+                                        </div>
+                                        <div class="cls-slider-field">
+                                            <span class="cls-slider-cap">Suggest (route to inbox) <strong>{{ SuggestThresholdValue | number: '1.2-2' }}</strong></span>
+                                            <input type="range" class="cls-slider" min="0.50" max="1.00" step="0.01"
+                                                   [ngModel]="SuggestThresholdValue" (ngModelChange)="SuggestThresholdValue = $event">
+                                        </div>
+                                    </div>
+                                    <div class="cls-band" aria-hidden="true"></div>
+                                    @if (ThresholdValidationMessage) {
+                                        <div class="cls-validation"><i class="fa-solid fa-circle-exclamation"></i> {{ ThresholdValidationMessage }}</div>
+                                    } @else {
+                                        <div class="cls-band-legend">
+                                            <span class="cls-band-key reject">reject / new</span>
+                                            <span class="cls-band-key review">review (inbox)</span>
+                                            <span class="cls-band-key apply">auto-apply</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Toggles -->
+                            <div class="cls-toggle-row">
+                                <div class="cls-toggle-label">
+                                    <span class="t">Share full taxonomy with the LLM</span>
+                                    <span class="d">When on, the LLM prompt includes the visible taxonomy. Larger taxonomies → higher token cost.</span>
+                                </div>
+                                <mj-switch [(ngModel)]="ShareTaxonomyValue"></mj-switch>
+                            </div>
+                            <div class="cls-toggle-row">
+                                <div class="cls-toggle-label">
+                                    <span class="t">Vectorize new content</span>
+                                    <span class="d">When off, this source skips vectorization (the classifier still runs).</span>
+                                </div>
+                                <mj-switch [(ngModel)]="EnableVectorizationValue"></mj-switch>
+                            </div>
+                    </div><!-- /cls-config -->
+
+                    <!-- Effective-values panel — inline + conditional (no longer a floating aside) -->
+                    @if (ShowEffectiveValues) {
+                        <div class="cls-aside">
+                            <h5 class="cls-aside-title">Effective values</h5>
+                            @for (row of EffectiveValues; track row.label) {
+                                <div class="cls-eff-row">
+                                    <span class="cls-eff-label">{{ row.label }}</span>
+                                    <span class="cls-eff-value">{{ row.value }}
+                                        <span class="cls-eff-origin" [class.override]="row.origin === 'source override'">{{ row.origin }}</span>
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div><!-- /Classification section -->
+
+                <!-- ══════ RUN BUDGETS ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title"><i class="fa-solid fa-gauge"></i> Run budgets</div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Max items per run</label>
+                        <input type="number" min="0" class="at-form-input"
+                               [(ngModel)]="FormMaxItemsPerRun" placeholder="unlimited">
+                        <span class="at-form-hint">
+                            Caps the number of content items handed to the LLM. Skipped (unchanged) items don't count.
+                            Paused work resumes on the next run.
+                        </span>
+                    </div>
+
+                    <div class="cls-budget-grid">
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max new tags / run</label>
+                            <input type="number" min="0" class="at-form-input"
+                                   [ngModel]="MaxNewTagsPerRunValue ?? ''" (ngModelChange)="MaxNewTagsPerRunValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">across all items</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max new tags / item</label>
+                            <input type="number" min="0" class="at-form-input"
+                                   [ngModel]="MaxNewTagsPerItemValue ?? ''" (ngModelChange)="MaxNewTagsPerItemValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">extras → suggestions</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max tokens / run</label>
+                            <input type="number" min="0" class="at-form-input"
+                                   [ngModel]="MaxTokensPerRunValue ?? ''" (ngModelChange)="MaxTokensPerRunValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">across all LLM calls</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Max cost / run (USD)</label>
+                            <input type="number" min="0" step="0.01" class="at-form-input"
+                                   [ngModel]="MaxCostPerRunValue ?? ''" (ngModelChange)="MaxCostPerRunValue = $event"
+                                   placeholder="unlimited">
+                            <span class="at-form-hint">$ stops the run</span>
+                        </div>
+                    </div>
+                </div><!-- /Run budgets section -->
+
+                @if (IsWebsiteSourceTypeSelected) {
+                    <!-- ══════ CRAWL SETTINGS (website source only) ══════ -->
+                    <div class="cls-section">
+                        <div class="cls-section-title"><i class="fa-solid fa-spider"></i> Crawl settings</div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">Crawl depth</label>
+                            <input type="number" min="0" max="10" step="1" class="at-form-input"
+                                   [(ngModel)]="FormMaxDepth" placeholder="2 (default)">
+                            <span class="at-form-hint">
+                                Recursion ceiling for in-domain links. <code>0</code> = just the start URL.
+                                <code>2</code> (default) = root + sections + content pages.
+                            </span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">
+                                <input type="checkbox" [(ngModel)]="FormCrawlSitesInLowerLevelDomain">
+                                Crawl sites in lower-level domain
+                            </label>
+                            <span class="at-form-hint">When on (default), the depth-aware recursive crawler runs. Turn off to crawl only the seed page.</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">
+                                <input type="checkbox" [(ngModel)]="FormCrawlOtherSitesInTopLevelDomain">
+                                Crawl other sites in top-level domain
+                            </label>
+                            <span class="at-form-hint">When on, also adds sibling-path URLs found on the seed page. Off by default to avoid accidental fan-out.</span>
+                        </div>
+                    </div><!-- /Crawl settings section -->
+                }
+
+                <div class="at-form-actions">
+                    <button class="at-action-btn at-primary-btn" (click)="SaveSource()" [disabled]="FormSaving">
+                        @if (FormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving... }
+                        @else { <i class="fa-solid fa-check"></i> Save }
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseForm()">Cancel</button>
+                </div>
+
+                @if (FormMode === 'edit-source' && EditingSourceID) {
+                    <div class="at-form-advanced-link">
+                        <a href="javascript:void(0)" (click)="OpenAdvancedSourceSettings()">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            Open advanced settings — URL pattern, root URL, &amp; full entity form
+                        </a>
+                        <span class="at-form-hint">The key classifier knobs (taxonomy mode, thresholds, tag root, budgets) are now editable inline above.</span>
+                    </div>
+                }
+            }
+
+            <!-- Content Type form -->
+            @if (FormMode === 'add-type' || FormMode === 'edit-type') {
+                <div class="at-form-group">
+                    <label class="at-form-label">Name</label>
+                    <input type="text" class="at-form-input" [(ngModel)]="FormTypeName" placeholder="Content type name">
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Description</label>
+                    <textarea class="at-form-textarea" [(ngModel)]="FormTypeDescription" rows="3" placeholder="Description..."></textarea>
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">AI Model (for tagging)</label>
+                    <mj-tree-dropdown
+                        [BranchConfig]="AIModelVendorBranch"
+                        [LeafConfig]="AllModelsLeaf"
+                        SelectionMode="single"
+                        SelectableTypes="leaf"
+                        Placeholder="Select AI model..."
+                        [Clearable]="true"
+                        [Value]="ToCompositeKey(FormTypeAIModelID)"
+                        (ValueChange)="FormTypeAIModelID = FromCompositeKey($event)">
+                    </mj-tree-dropdown>
+                </div>
+                <div class="at-form-row">
+                    <div class="at-form-group" style="flex: 1;">
+                        <label class="at-form-label">Min Tags</label>
+                        <input type="number" class="at-form-input" [(ngModel)]="FormTypeMinTags" min="0">
+                    </div>
+                    <div class="at-form-group" style="flex: 1;">
+                        <label class="at-form-label">Max Tags</label>
+                        <input type="number" class="at-form-input" [(ngModel)]="FormTypeMaxTags" min="1">
+                    </div>
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Embedding Model</label>
+                    <mj-tree-dropdown
+                        [BranchConfig]="EmbeddingVendorBranch"
+                        [LeafConfig]="EmbeddingModelsLeaf"
+                        SelectionMode="single"
+                        SelectableTypes="leaf"
+                        Placeholder="Use system default"
+                        [Clearable]="true"
+                        [Value]="ToCompositeKey(FormTypeEmbeddingModelID)"
+                        (ValueChange)="FormTypeEmbeddingModelID = FromCompositeKey($event)">
+                    </mj-tree-dropdown>
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Vector Index</label>
+                    <select class="at-form-select" [(ngModel)]="FormTypeVectorIndexID">
+                        <option value="">Use system default</option>
+                        @for (opt of VectorIndexOptions; track opt.ID) {
+                            <option [value]="opt.ID">{{ opt.Name }}</option>
+                        }
+                    </select>
+                </div>
+                <div class="at-form-actions">
+                    <button class="at-action-btn at-primary-btn" (click)="SaveContentType()" [disabled]="FormSaving">
+                        @if (FormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving... }
+                        @else { <i class="fa-solid fa-check"></i> Save }
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseForm()">Cancel</button>
+                </div>
+            }
+        </div>
+    </div>
+}

@@ -22,13 +22,13 @@
     <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
     @if (HasUnsavedChanges) {
       <button mjButton variant="secondary" size="sm" (click)="DiscardChanges()" [disabled]="IsSaving">
-        <i class="fa-solid fa-rotate-left"></i> Discard
+        <i class="fa-solid fa-rotate-left"></i> <span class="mj-action-label">Discard</span>
       </button>
       <button mjButton variant="primary" size="sm" (click)="SaveChanges()" [disabled]="IsSaving">
         @if (IsSaving) {
-          <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+          <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Saving...</span>
         } @else {
-          <i class="fa-solid fa-floppy-disk"></i> Save Changes
+          <i class="fa-solid fa-floppy-disk"></i> <span class="mj-action-label">Save Changes</span>
         }
       </button>
     }

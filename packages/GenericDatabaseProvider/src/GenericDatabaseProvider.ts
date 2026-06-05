@@ -901,6 +901,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Detects infrastructure-level connection errors (timeout, refused, pool closed)
+     * as opposed to query-level errors (bad SQL, constraint violations).
+     * Delegates to the dialect's driver-specific error classification, with a
+     * fallback for POOL_CLOSED errors thrown by our own code.
+     */
+    protected isConnectionError(e: unknown): boolean {
+        // Dialect-specific check (mssql ConnectionError, pg network codes, etc.)
+        if (this.getDialect()?.IsConnectionError(e)) return true;
+
+        // Our own pool-closed errors are not dialect-specific
+        if (e instanceof Error) {
+            const code = (e as { code?: string }).code ?? '';
+            if (code === 'POOL_CLOSED') return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Returns the batch separator token for the underlying database platform by delegating to
      * the SQLDialect instance returned by `getDialect()`.
      * SQL Server → `'GO'`, PostgreSQL → `''` (no separator needed).
@@ -1700,6 +1719,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 AggregateExecutionTime: aggregateExecutionTime,
             } as RunViewResult<T>;
         } catch (e) {
+            // Re-throw infrastructure errors (connection timeout, pool closed, etc.)
+            // so callers can distinguish "database is unreachable" from "query returned
+            // no results." Only query-level errors are safe to return as { Success: false }.
+            if (this.isConnectionError(e)) {
+                throw e;
+            }
+
             const exceptionStopTime = new Date();
             LogError(e);
             return {
@@ -2768,6 +2794,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 CacheHit: false
             };
         } catch (e) {
+            if (this.isConnectionError(e)) {
+                throw e;
+            }
+
             LogError(e);
             const errorMessage = e instanceof Error ? e.message : String(e);
             return {
@@ -3815,7 +3845,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let queryVector: number[] | null = null;
         try {
             if (embeddingAIModelId) {
-                const model = AIEngine.Instance.Models.find(m => m.ID === embeddingAIModelId);
+                const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingAIModelId));
                 if (!model) {
                     LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
                     return [];

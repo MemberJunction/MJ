@@ -1,0 +1,186 @@
+<mj-page-header-interior
+    Title="Suggestions Inbox"
+    Subtitle="Review classifications that landed in the ambiguous band">
+  <div meta>
+    <span class="ci-status-pill" [class.ci-status-pill-active]="PendingCount > 0">
+      <i class="fa-solid fa-inbox"></i>
+      {{ PendingCount }} pending
+    </span>
+  </div>
+  <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
+      } @else {
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+      }
+    </button>
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+  <div class="at-main-area">
+    @if (IsLoading) {
+      <div class="at-page-body">
+        <mj-loading text="Loading suggestions…"></mj-loading>
+      </div>
+    } @else {
+      <div class="ci-inbox">
+
+        <!-- ── (1) FILTER RAIL ── -->
+        <div class="ci-col ci-filter">
+          <h5>By reason</h5>
+          <a class="ci-filter-link" [class.ci-active]="ReasonFilter === ''" (click)="SetReasonFilter('')">
+            All <span class="ci-n">{{ TotalLoadedCount }}</span>
+          </a>
+          @for (rc of ReasonCounts; track rc.Reason) {
+            <a class="ci-filter-link" [class.ci-active]="ReasonFilter === rc.Reason" (click)="SetReasonFilter(rc.Reason)">
+              {{ rc.Label }} <span class="ci-n">{{ rc.Count }}</span>
+            </a>
+          }
+
+          <h5 class="ci-section-gap">Status</h5>
+          @for (st of StatusOptions; track st) {
+            <a class="ci-filter-link" [class.ci-active]="StatusFilter === st" (click)="SetStatusFilter(st)">
+              {{ st }}
+            </a>
+          }
+
+          <h5 class="ci-section-gap">Scope</h5>
+          <a class="ci-filter-link" [class.ci-active]="IncludeHealthReasons" (click)="ToggleHealthReasons()">
+            <span><i class="fa-solid fa-heart-pulse"></i> Include health reasons</span>
+            <i class="fa-solid" [class.fa-toggle-on]="IncludeHealthReasons" [class.fa-toggle-off]="!IncludeHealthReasons"></i>
+          </a>
+        </div>
+
+        <!-- ── (2) SUGGESTION LIST ── -->
+        <div class="ci-col ci-list">
+          @if (FilteredSuggestions.length === 0) {
+            <div class="at-empty-state">
+              <i class="fa-solid fa-check-circle"></i>
+              <p>No {{ StatusFilter | lowercase }} suggestions{{ ReasonFilter ? ' for this reason' : '' }}.</p>
+            </div>
+          } @else {
+            @for (s of FilteredSuggestions; track s.ID) {
+              <div class="ci-row" [class.ci-sel]="Selected?.ID === s.ID" (click)="SelectSuggestion(s)">
+                <div class="ci-row-top">
+                  <span class="ci-row-name">"{{ s.ProposedName }}"</span>
+                  <span class="ci-row-ago">{{ formatShortDate(s.__mj_CreatedAt + '') }}</span>
+                </div>
+                <div class="ci-row-reason">
+                  <span class="ci-pill" [class]="'ci-pill-' + ReasonPill(s.Reason)">{{ ReasonLabel(s.Reason) }}</span>
+                  @if (s.BestMatchTag) {
+                    <span class="ci-row-match">≈ <b>{{ s.BestMatchTag }}</b> · {{ FormatScore(s.BestMatchScore) }}</span>
+                  }
+                </div>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- ── (3) READING PANE ── -->
+        <div class="ci-col ci-read">
+          @if (!Selected) {
+            <div class="at-empty-state">
+              <i class="fa-solid fa-hand-pointer"></i>
+              <p>Select a suggestion to review it.</p>
+            </div>
+          } @else {
+            <div class="ci-read-head">
+              <div>
+                <div class="ci-read-source">
+                  Source · {{ Selected.SourceContentSource ?? 'Unknown source' }}
+                </div>
+                <h4 class="ci-read-title">"{{ Selected.ProposedName }}"</h4>
+              </div>
+              <span class="ci-pill ci-pill-lg" [class]="'ci-pill-' + ReasonPill(Selected.Reason)">
+                <i class="fa-solid fa-triangle-exclamation"></i> {{ ReasonLabel(Selected.Reason) }}
+              </span>
+            </div>
+
+            <div class="ci-kv">
+              <div class="ci-k">Proposed parent</div>
+              <div class="ci-v">{{ Selected.ProposedParent ?? '— (root)' }}</div>
+
+              <div class="ci-k">Best match</div>
+              <div class="ci-v">
+                @if (Selected.BestMatchTag) {
+                  {{ Selected.BestMatchTag }} <span class="ci-muted">(existing tag)</span>
+                } @else {
+                  <span class="ci-muted">No close match</span>
+                }
+              </div>
+
+              @if (Selected.SourceContentItem) {
+                <div class="ci-k">From content item</div>
+                <div class="ci-v ci-link">{{ Selected.SourceContentItem }}</div>
+              }
+
+              @if (Selected.SourceText) {
+                <div class="ci-k">Source text</div>
+                <div class="ci-v ci-source-text">{{ Selected.SourceText }}</div>
+              }
+            </div>
+
+            <!-- Threshold band visualization -->
+            @if (Selected.BestMatchScore != null) {
+              <div class="ci-band">
+                <h5>Match confidence vs thresholds</h5>
+                <div class="ci-bandbar">
+                  <div class="ci-bandmark" [style.left.%]="ScorePct(SuggestThreshold)"></div>
+                  <div class="ci-bandmark-label" [style.left.%]="ScorePct(SuggestThreshold)">Suggest {{ FormatScore(SuggestThreshold) }}</div>
+                  <div class="ci-bandmark" [style.left.%]="ScorePct(MatchThreshold)"></div>
+                  <div class="ci-bandmark-label" [style.left.%]="ScorePct(MatchThreshold)">Match {{ FormatScore(MatchThreshold) }}</div>
+                  <div class="ci-bandscore" [style.left.%]="ScorePct(Selected.BestMatchScore)">{{ FormatScore(Selected.BestMatchScore) }}</div>
+                </div>
+                <div class="ci-bandlabels">
+                  <span>reject / new</span>
+                  <span>review band</span>
+                  <span>auto-apply</span>
+                </div>
+              </div>
+            }
+
+            <!-- Merge target picker -->
+            <div class="ci-merge-picker">
+              <label class="ci-merge-label">Merge target</label>
+              <mj-combobox
+                  [Data]="TagOptions"
+                  TextField="Label"
+                  ValueField="ID"
+                  [ValuePrimitive]="true"
+                  [Filterable]="true"
+                  Placeholder="Choose a tag to merge into…"
+                  [ngModel]="MergeTargetID"
+                  (ValueChange)="OnMergeTargetChange($event)">
+              </mj-combobox>
+            </div>
+
+            <!-- Reviewer note -->
+            <div class="ci-note">
+              <label class="ci-merge-label">Reviewer note (optional)</label>
+              <textarea class="mj-textarea ci-note-input" rows="2"
+                  placeholder="Why this decision…"
+                  [(ngModel)]="ReviewerNotes"></textarea>
+            </div>
+
+            <!-- Action bar: confirm/primary actions LEFT, reject RIGHT -->
+            <div class="ci-actbar">
+              <button mjButton variant="success" size="sm" (click)="MergeIntoExisting()"
+                      [disabled]="IsActing || !MergeTargetID">
+                <i class="fa-solid fa-code-merge"></i> Merge into "{{ MergeTargetLabel || '…' }}"
+              </button>
+              <button mjButton variant="primary" size="sm" (click)="ApproveAsNewTag()" [disabled]="IsActing">
+                <i class="fa-solid fa-plus"></i> Approve as new tag
+              </button>
+              <span class="ci-actbar-spacer"></span>
+              <button mjButton variant="danger" size="sm" (click)="Reject()" [disabled]="IsActing">
+                <i class="fa-solid fa-xmark"></i> Reject
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</mj-page-body-interior>

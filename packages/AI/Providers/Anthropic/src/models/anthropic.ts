@@ -3,7 +3,30 @@ import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/m
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
+
+/**
+ * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
+ * and the volatile (per-turn) content begins. The adapter places an Anthropic `cache_control`
+ * breakpoint at each marker (caching everything before it) and removes the marker from the text the
+ * model sees. Without a marker the whole block is cached as before.
+ *
+ * Why it's needed: Anthropic only caches up to an explicit breakpoint and read-hits require the new
+ * request to match a cached prefix AT a breakpoint. If volatile content (date/scratchpad/payload)
+ * sits at the end of the system prompt and the only breakpoint is at the very end, the cached
+ * segment includes the volatile bytes, so every turn misses and rewrites. Putting the marker between
+ * the stable instructions and the volatile tail makes the stable prefix a reusable cache segment.
+ *
+ * Providers that cache the longest common prefix automatically (OpenAI, Gemini) don't need this;
+ * they should strip the marker from outgoing content.
+ */
+export const ANTHROPIC_CACHE_BREAKPOINT = '<<<MJ_CACHE_BREAKPOINT>>>';
+
+/** Anthropic allows at most 4 cache_control breakpoints per request. */
+const MAX_CACHE_BREAKPOINTS = 4;
+
+/** A minimal Anthropic text content block, optionally carrying an ephemeral cache breakpoint. */
+type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
@@ -15,11 +38,22 @@ export class AnthropicLLM extends BaseLLM {
         inThinkingBlock: boolean;
         pendingContent: string;
         thinkingComplete: boolean;
+        // Token usage accumulated across stream events. Anthropic reports input + cache tokens on
+        // the `message_start` event and the (cumulative) output token count on `message_delta`, so
+        // we accumulate here rather than relying on any single chunk carrying the full picture.
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheWriteTokens: number;
     } = {
         accumulatedThinking: '',
         inThinkingBlock: false,
         pendingContent: '',
-        thinkingComplete: false
+        thinkingComplete: false,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0
     };
 
     constructor(apiKey: string) {
@@ -67,19 +101,50 @@ export class AnthropicLLM extends BaseLLM {
      * @param enableCaching Whether to enable caching
      * @returns Array of formatted content blocks for Anthropic API
      */
+    /**
+     * Turn a text string into one or more Anthropic text blocks, honoring any
+     * {@link ANTHROPIC_CACHE_BREAKPOINT} markers it contains.
+     *
+     * - No marker: a single text block, with `cache_control` iff `cacheLastSegment` is true
+     *   (preserves the historical "cache the whole block" behavior).
+     * - With marker(s): split on the marker into segments. Every segment BEFORE a marker gets a
+     *   `cache_control` breakpoint (so the stable prefix is cached); the final segment is left
+     *   uncached unless `cacheLastSegment` is true. The marker text itself is removed. Breakpoints
+     *   are capped at {@link MAX_CACHE_BREAKPOINTS}.
+     */
+    private pushTextBlocks(out: AnthropicTextBlock[], text: string, enableCaching: boolean, cacheLastSegment: boolean): void {
+        if (!text.includes(ANTHROPIC_CACHE_BREAKPOINT)) {
+            const block: AnthropicTextBlock = { type: "text", text };
+            if (enableCaching && cacheLastSegment) {
+                block.cache_control = { type: "ephemeral" };
+            }
+            out.push(block);
+            return;
+        }
+
+        // A marker explicitly defines the cacheable boundary: everything before each marker is the
+        // stable prefix (gets a breakpoint), everything after the LAST marker is volatile and is
+        // never cached — regardless of `cacheLastSegment`. (cacheLastSegment only governs the
+        // no-marker case above.)
+        const segments = text.split(ANTHROPIC_CACHE_BREAKPOINT);
+        let breakpointsUsed = 0;
+        for (let i = 0; i < segments.length; i++) {
+            const isFinalSegment = i === segments.length - 1;
+            const block: AnthropicTextBlock = { type: "text", text: segments[i] };
+            if (enableCaching && !isFinalSegment && breakpointsUsed < MAX_CACHE_BREAKPOINTS) {
+                block.cache_control = { type: "ephemeral" };
+                breakpointsUsed++;
+            }
+            out.push(block);
+        }
+    }
+
     private formatContentWithCaching(content: ChatMessageContent, enableCaching: boolean = true): any[] {
         const formattedBlocks: any[] = [];
 
         if (typeof content === 'string') {
-            // Simple string content - wrap in text block
-            const textBlock: any = {
-                type: "text",
-                text: content
-            };
-            if (enableCaching) {
-                textBlock.cache_control = { type: "ephemeral" };
-            }
-            formattedBlocks.push(textBlock);
+            // Simple string content - wrap in text block(s), honoring cache-breakpoint markers.
+            this.pushTextBlocks(formattedBlocks, content, enableCaching, true);
         } else if (Array.isArray(content)) {
             // Process array of content blocks
             for (let i = 0; i < content.length; i++) {
@@ -87,15 +152,8 @@ export class AnthropicLLM extends BaseLLM {
                 const isLastBlock = i === content.length - 1;
 
                 if (block.type === 'text') {
-                    const textBlock: any = {
-                        type: "text",
-                        text: block.content
-                    };
-                    // Apply caching only to the last block
-                    if (enableCaching && isLastBlock) {
-                        textBlock.cache_control = { type: "ephemeral" };
-                    }
-                    formattedBlocks.push(textBlock);
+                    // Apply caching only to the last block (markers within the text add their own).
+                    this.pushTextBlocks(formattedBlocks, block.content, enableCaching, isLastBlock);
                 } else if (block.type === 'image_url') {
                     // Convert to Anthropic's image format
                     const imageBlock = this.formatImageBlock(block);
@@ -445,7 +503,18 @@ export class AnthropicLLM extends BaseLLM {
                     budget_tokens: thinkingBudget
                 };
             }
-            
+
+            switch (params.responseFormat) {
+                case 'JSON':
+                    console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent. Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
+                    break;
+                case 'ModelSpecific':
+                    if (params.modelSpecificResponseFormat) {
+                        Object.assign(createParams, params.modelSpecificResponseFormat);
+                    }
+                    break;
+            }
+
             const stream = this.AnthropicClient.messages.stream(createParams).on('text', (chunk: any) => {
                 // too noisy to log this -- console.log('stream chunk', chunk);
             });;
@@ -475,9 +544,19 @@ export class AnthropicLLM extends BaseLLM {
                 content = content.trim();
             }
             
-            // Create ModelUsage with cost information if available
+            // Create ModelUsage with prompt-cache token breakdown.
+            // Anthropic's usage convention: `input_tokens` ALREADY EXCLUDES cached tokens, which are
+            // reported separately as `cache_read_input_tokens` (cache hits) and
+            // `cache_creation_input_tokens` (cache writes). So we map straight through with no
+            // subtraction — promptTokens stays "uncached input only", cache buckets are disjoint.
+            // (The previous code read a non-existent `cached_tokens` field, so cache usage was never
+            // captured.)
+            const cacheReadTokens = result.usage.cache_read_input_tokens ?? 0;
+            const cacheWriteTokens = result.usage.cache_creation_input_tokens ?? 0;
             const usage = new ModelUsage(result.usage.input_tokens, result.usage.output_tokens);
-            
+            usage.cacheReadTokens = cacheReadTokens;
+            usage.cacheWriteTokens = cacheWriteTokens;
+
             const chatResult: ChatResult = {
                 data: {
                     choices: [
@@ -502,14 +581,13 @@ export class AnthropicLLM extends BaseLLM {
                 exception: ''
             };
             
-            // Add cache metadata if available
-            if (result.usage.cached_tokens !== undefined) {
-                chatResult.cacheInfo = {
-                    cacheHit: result.usage.cached_tokens > 0,
-                    cachedTokenCount: result.usage.cached_tokens
-                };
-            }
-            
+            // Surface cache hit info (cacheHit is driven by cache READ tokens, not writes —
+            // a write-only first turn is not a "hit").
+            chatResult.cacheInfo = {
+                cacheHit: cacheReadTokens > 0,
+                cachedTokenCount: cacheReadTokens
+            };
+
             // Add model-specific response details
             chatResult.modelSpecificResponseDetails = {
                 provider: 'anthropic',
@@ -520,10 +598,13 @@ export class AnthropicLLM extends BaseLLM {
                 stopReason: result.stop_reason,
                 stopSequence: result.stop_sequence,
                 usage: {
-                    cached_tokens: result.usage.cached_tokens,
+                    cache_read_input_tokens: cacheReadTokens,
+                    cache_creation_input_tokens: cacheWriteTokens,
                     thinking_tokens: result.thinking_usage?.output_tokens,
                     thinking_budget_tokens: result.thinking_usage?.budget_tokens
-                }
+                },
+                // Full native Anthropic response (circular-safe) for review/audit.
+                raw: ToJSONSafe(result)
             };
             
             return chatResult;   
@@ -560,7 +641,11 @@ export class AnthropicLLM extends BaseLLM {
             accumulatedThinking: '',
             inThinkingBlock: false,
             pendingContent: '',
-            thinkingComplete: false
+            thinkingComplete: false,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0
         };
     }
     
@@ -634,7 +719,18 @@ export class AnthropicLLM extends BaseLLM {
                 budget_tokens: params.reasoningBudgetTokens
             };
         }
-        
+
+        switch (params.responseFormat) {
+            case 'JSON':
+                console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent. Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    Object.assign(createParams, params.modelSpecificResponseFormat);
+                }
+                break;
+        }
+
         return this.AnthropicClient.messages.create(createParams);
     }
     
@@ -648,7 +744,23 @@ export class AnthropicLLM extends BaseLLM {
     } {
         let content = '';
         let finishReason = undefined;
-        
+
+        // Capture token usage from stream events. `message_start` carries input + cache token
+        // counts; `message_delta` carries the cumulative output token count. We accumulate into
+        // streaming state so the final result reflects the full breakdown regardless of which
+        // chunk was last. (cache_read/cache_creation are disjoint from input_tokens, matching the
+        // non-streaming path and the ModelUsage normalization contract.)
+        if (chunk && chunk.type === 'message_start' && chunk.message?.usage) {
+            const u = chunk.message.usage;
+            this._streamingState.inputTokens = u.input_tokens ?? 0;
+            this._streamingState.outputTokens = u.output_tokens ?? 0;
+            this._streamingState.cacheReadTokens = u.cache_read_input_tokens ?? 0;
+            this._streamingState.cacheWriteTokens = u.cache_creation_input_tokens ?? 0;
+        }
+        if (chunk && chunk.type === 'message_delta' && chunk.usage?.output_tokens != null) {
+            this._streamingState.outputTokens = chunk.usage.output_tokens;
+        }
+
         // Check for thinking_delta event (Anthropic specific)
         if (chunk && chunk.type === 'thinking_delta' && chunk.delta && 'text' in chunk.delta) {
             // Directly accumulate thinking content
@@ -774,20 +886,30 @@ export class AnthropicLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // Handle possible null/undefined values
+        // Handle possible null/undefined values. Token usage is read from streaming state, which
+        // accumulated input/output/cache counts across the message_start + message_delta events
+        // (the `usage` param from the base loop only reflects the last chunk that carried usage and
+        // is unreliable for the full breakdown).
         const content = accumulatedContent || '';
-        const promptTokens = usage?.promptTokens || 0;
-        const completionTokens = usage?.completionTokens || 0;
-        
+        const promptTokens = this._streamingState.inputTokens;
+        const completionTokens = this._streamingState.outputTokens;
+        const cacheReadTokens = this._streamingState.cacheReadTokens;
+        const cacheWriteTokens = this._streamingState.cacheWriteTokens;
+
         // Create dates (will be overridden by base class)
         const now = new Date();
-        
+
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
-        
+
         // Get thinking content from streaming state
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
-        
+
+        // promptTokens stays "uncached input only"; cache buckets are disjoint (see ModelUsage).
+        const modelUsage = new ModelUsage(promptTokens, completionTokens);
+        modelUsage.cacheReadTokens = cacheReadTokens;
+        modelUsage.cacheWriteTokens = cacheWriteTokens;
+
         // Set all properties
         result.data = {
             choices: [{
@@ -799,21 +921,18 @@ export class AnthropicLLM extends BaseLLM {
                 finish_reason: 'stop',
                 index: 0
             }],
-            usage: new ModelUsage(promptTokens, completionTokens)
+            usage: modelUsage
         };
-        
+
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
-        
-        // Add cache info if available
-        if (usage?.cached_tokens !== undefined || lastChunk?.usage?.cached_tokens !== undefined) {
-            const cachedTokens = usage?.cached_tokens || lastChunk?.usage?.cached_tokens || 0;
-            result.cacheInfo = {
-                cacheHit: cachedTokens > 0,
-                cachedTokenCount: cachedTokens
-            };
-        }
+
+        // Cache hit is driven by cache READ tokens (a write-only first turn is not a hit).
+        result.cacheInfo = {
+            cacheHit: cacheReadTokens > 0,
+            cachedTokenCount: cacheReadTokens
+        };
         
         return result;
     }

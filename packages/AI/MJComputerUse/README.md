@@ -48,6 +48,7 @@ This package is Layer 2 of MJ's Computer Use capabilities - it requires the base
 - **Composite Scoring**: Weighted oracle results for test evaluation
 - **Configuration Validation**: Comprehensive pre-execution checks
 - **Timeout Support**: Graceful cancellation with configurable limits
+- **External-Browser Attach**: Share one Chrome/Playwright server across all parallel workers via the test config's `connect` field — see **[External Browser Attach Guide](../ComputerUse/docs/EXTERNAL_BROWSER_ATTACH.md)**
 
 ### 📋 Test Oracles
 - **Goal Completion Oracle**: Validates FinalJudgeVerdict with confidence thresholds

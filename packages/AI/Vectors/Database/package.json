@@ -19,6 +19,7 @@
   "dependencies": {
     "@memberjunction/core": "5.38.0",
     "@memberjunction/global": "5.38.0",
+    "@memberjunction/sql-dialect": "5.38.0",
     "dotenv": "^17.2.4"
   },
   "devDependencies": {

@@ -239,6 +239,10 @@ export class MatchEngine {
             Fields: ['EntityRecordID'],
             MaxRows: 1,
             ResultType: 'simple',
+            // CRITICAL: this lookup decides CREATE vs UPDATE for an incoming record. It MUST read
+            // committed state — a cached null (from a lookup made before this record's map existed)
+            // would make a re-sync of a changed record wrongly CREATE → duplicate-key on the dest.
+            BypassCache: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;

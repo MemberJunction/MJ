@@ -34,21 +34,11 @@ import type { VersionInfo } from '../models/VersionInfo.js';
 /** Base URL for all GitHub REST API calls. */
 const GITHUB_API_BASE = 'https://api.github.com';
 
-/** Base URL for raw file access on GitHub (CDN-served, not rate-limited). */
-const GITHUB_RAW_BASE = 'https://github.com';
-
-/**
- * Relative path within the repo to the pre-built bootstrap distribution ZIP.
- * Contains only MJAPI, MJExplorer, GeneratedEntities, and GeneratedActions —
- * all other @memberjunction/* packages come from npm.
- */
-const BOOTSTRAP_ZIP_PATH = 'Distributions/MemberJunction_Code_Bootstrap.zip';
-
 /**
  * Maximum time (in milliseconds) to wait for a download to complete before
  * aborting. Set to 15 minutes — the full monorepo zipball is ~500 MB,
- * so slower connections need extra time. Distribution ZIP is ~70 MB and
- * finishes much faster.
+ * so slower connections need extra time. Only `monorepo` mode downloads a
+ * zip; `distribution` mode sparse-fetches and assembles the source instead.
  */
 const DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -154,22 +144,15 @@ export class GitHubReleaseProvider {
   /** GitHub repository name. */
   private repo: string;
 
-  /** Installation mode — controls which download URL is used. */
-  private mode: 'distribution' | 'monorepo';
-
   /**
    * Create a new GitHubReleaseProvider.
    *
    * @param owner - GitHub organization or user (default: `"MemberJunction"`)
    * @param repo - Repository name (default: `"MJ"`)
-   * @param mode - Install mode (default: `"distribution"`). Controls download URL:
-   *   `"distribution"` uses the bootstrap ZIP (~70 MB, app packages only),
-   *   `"monorepo"` uses the full source codeload ZIP (~500 MB).
    */
-  constructor(owner: string = REPO_OWNER, repo: string = REPO_NAME, mode: 'distribution' | 'monorepo' = 'distribution') {
+  constructor(owner: string = REPO_OWNER, repo: string = REPO_NAME) {
     this.owner = owner;
     this.repo = repo;
-    this.mode = mode;
   }
 
   // ---------------------------------------------------------------------------
@@ -382,7 +365,7 @@ export class GitHubReleaseProvider {
    * @returns Mapped {@link VersionInfo}.
    */
   private mapRelease(release: GitHubRelease): VersionInfo {
-    const downloadUrl = this.findZipAsset(release);
+    const downloadUrl = this.codeloadZipUrl(release.tag_name);
     const notesExcerpt = release.body
       ? release.body.slice(0, 500) + (release.body.length > 500 ? '...' : '')
       : undefined;
@@ -398,50 +381,13 @@ export class GitHubReleaseProvider {
   }
 
   /**
-   * Get the download URL for a release based on the install mode.
-   *
-   * - **Distribution** (default): Uses the pre-built bootstrap ZIP (~70 MB) from the
-   *   repo's raw CDN. Contains only MJAPI, MJExplorer, GeneratedEntities/Actions.
-   * - **Monorepo**: Uses the codeload CDN ZIP (~500 MB) with the full source.
-   *
-   * Both URLs are CDN-served and not subject to the GitHub API rate limit.
-   *
-   * @param release - Raw GitHub Release response.
-   * @returns Download URL for the release archive.
-   */
-  private findZipAsset(release: GitHubRelease): string {
-    return this.downloadUrlForTag(release.tag_name);
-  }
-
-  /**
-   * Build the download URL for a given tag based on the current install mode.
-   */
-  private downloadUrlForTag(tag: string): string {
-    if (this.mode === 'monorepo') {
-      return this.codeloadZipUrl(tag);
-    }
-    return this.bootstrapDownloadUrl(tag);
-  }
-
-  /**
-   * Build the URL for the pre-built bootstrap distribution ZIP.
-   *
-   * This file lives in the repo at `Distributions/MemberJunction_Code_Bootstrap.zip`
-   * and is committed per release tag. It's ~70 MB (vs ~500 MB for the full repo),
-   * returns a `Content-Length` header, and is served from GitHub's raw content CDN.
-   *
-   * @param tag - Git tag name (e.g., `"v5.9.0"`).
-   * @returns Direct download URL for the bootstrap ZIP.
-   */
-  private bootstrapDownloadUrl(tag: string): string {
-    return `${GITHUB_RAW_BASE}/${this.owner}/${this.repo}/raw/refs/tags/${tag}/${BOOTSTRAP_ZIP_PATH}`;
-  }
-
-  /**
    * Build a direct codeload CDN URL for downloading the full repo as a ZIP.
    *
    * GitHub's `codeload.github.com` endpoint serves source archives directly
-   * from CDN, bypassing the API rate limit.
+   * from CDN, bypassing the API rate limit. This is the archive `monorepo`
+   * mode downloads; `distribution` mode ignores {@link VersionInfo.DownloadUrl}
+   * and sparse-fetches + assembles the source instead, so this URL is a
+   * generic full-repo reference there.
    *
    * @param tag - Git tag name (e.g., `"v5.9.0"`).
    * @returns Direct codeload download URL.
@@ -520,7 +466,7 @@ export class GitHubReleaseProvider {
       Name: tagName,
       ReleaseDate: new Date(commitData.commit.committer.date),
       Prerelease: false,
-      DownloadUrl: this.downloadUrlForTag(tagName),
+      DownloadUrl: this.codeloadZipUrl(tagName),
       Notes: undefined,
     };
   }
@@ -544,7 +490,7 @@ export class GitHubReleaseProvider {
       Name: tag,
       ReleaseDate: new Date(),
       Prerelease: false,
-      DownloadUrl: this.downloadUrlForTag(tag),
+      DownloadUrl: this.codeloadZipUrl(tag),
       Notes: undefined,
     };
   }
@@ -565,7 +511,7 @@ export class GitHubReleaseProvider {
       Name: tag.name,
       ReleaseDate: commitDate,
       Prerelease: false,
-      DownloadUrl: this.downloadUrlForTag(tag.name),
+      DownloadUrl: this.codeloadZipUrl(tag.name),
       Notes: undefined,
     };
   }

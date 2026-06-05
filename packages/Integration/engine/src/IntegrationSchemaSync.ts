@@ -24,6 +24,7 @@ import type {
     MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
+import { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
@@ -31,6 +32,80 @@ export interface PersistSchemaOptions {
     SourceSchema: SourceSchemaInfo;
     ContextUser: UserInfo;
     Provider?: IMetadataProvider;
+    /**
+     * When true, persistence runs through a TransactionGroup batch — substantially
+     * faster on large schemas (Salesforce ~1,800 sobjects). Set false for diagnostic
+     * runs where per-record error visibility matters.
+     * Default: true.
+     */
+    UseTransactionGroup?: boolean;
+}
+
+/** Per-field provenance recording which source decided each attribute during the merge. */
+export interface FieldMergeLog {
+    ObjectName: string;
+    FieldName: string;
+    /** What overall record was decided to be the row's MetadataSource. */
+    EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+    /**
+     * Per-attribute precedence map: 'Declared' = curated value won (no overwrite from
+     * discovery), 'Discovered' = describe output won (overwrote curated for DDL-affecting
+     * attribute), 'Initial' = field is newly created (no prior value).
+     */
+    AttributeWinners: {
+        Type?: 'Declared' | 'Discovered' | 'Initial';
+        Length?: 'Declared' | 'Discovered' | 'Initial';
+        AllowsNull?: 'Declared' | 'Discovered' | 'Initial';
+        IsRequired?: 'Declared' | 'Discovered' | 'Initial';
+        IsPrimaryKey?: 'Declared' | 'Discovered' | 'Initial';
+        IsUniqueKey?: 'Declared' | 'Discovered' | 'Initial';
+        IsReadOnly?: 'Declared' | 'Discovered' | 'Initial';
+        Description?: 'Declared' | 'Discovered' | 'Initial';
+        ForeignKey?: 'Declared' | 'Discovered' | 'Initial';
+    };
+}
+
+/**
+ * Pure-function overlay rule for a single boolean attribute.
+ *
+ * The rule that the rest of the codebase must obey when merging a Declared
+ * (curated/static-catalog) row with a Discovered (live-from-connector) value:
+ *
+ *   - If `discovered` is `undefined`, the source has **no opinion** —
+ *     the Declared value sticks. Winner = 'Declared'. Never overwrite.
+ *   - If `discovered` is defined and equal to `declared`, nothing changes.
+ *     Winner = 'Declared'.
+ *   - If `discovered` is defined and DIFFERENT, the Discovered value wins
+ *     (it reflects the live system's current truth, e.g. a column flipped
+ *     from nullable to non-nullable). Winner = 'Discovered'.
+ *
+ * The bug this exists to prevent: pre-Phase-0 v5.39.x the overlay treated
+ * `undefined` as if the source had said `false`, silently wiping declared
+ * PK flags across every IO the moment live discovery ran on connectors
+ * (HubSpot, Salesforce) whose property-list APIs don't return an
+ * `IsPrimaryKey` field at all. See `IntegrationSchemaSync.test.ts`.
+ */
+export function decideBooleanOverlay(
+    declared: boolean | undefined,
+    discovered: boolean | undefined,
+): { value: boolean | undefined; winner: 'Declared' | 'Discovered' } {
+    if (discovered === undefined) {
+        return { value: declared, winner: 'Declared' };
+    }
+    if (declared === discovered) {
+        return { value: declared, winner: 'Declared' };
+    }
+    return { value: discovered, winner: 'Discovered' };
+}
+
+/** Per-object provenance summary. */
+export interface ObjectMergeLog {
+    ObjectName: string;
+    EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+    /** Whether the row was just created (no prior). */
+    Created: boolean;
+    /** Whether any attribute changed from prior value. */
+    Updated: boolean;
 }
 
 export interface PersistSchemaResult {
@@ -38,6 +113,15 @@ export interface PersistSchemaResult {
     ObjectsUpdated: number;
     FieldsCreated: number;
     FieldsUpdated: number;
+    /**
+     * Per-object and per-field merge provenance.
+     * Lets the caller (e.g. progress-artifacts emitter, UI dashboard) surface
+     * EXACTLY which source decided each attribute — declared static metadata,
+     * runtime describe overlay, or initial creation. Structural transparency
+     * per the framework's overlay-precedence rule.
+     */
+    ObjectMergeLog: ObjectMergeLog[];
+    FieldMergeLog: FieldMergeLog[];
 }
 
 /**
@@ -79,34 +163,135 @@ export class IntegrationSchemaSync {
         const { IntegrationID, SourceSchema, ContextUser } = opts;
         const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
         const engine = IntegrationEngineBase.Instance;
-        const result: PersistSchemaResult = { ObjectsCreated: 0, ObjectsUpdated: 0, FieldsCreated: 0, FieldsUpdated: 0 };
+        const useBatch = opts.UseTransactionGroup ?? true;
+        const result: PersistSchemaResult = {
+            ObjectsCreated: 0,
+            ObjectsUpdated: 0,
+            FieldsCreated: 0,
+            FieldsUpdated: 0,
+            ObjectMergeLog: [],
+            FieldMergeLog: [],
+        };
+
+        // Lightweight constraint discovery: deterministically infer the FKs the source
+        // did NOT declare (naming-based, provable-only) so discovered objects gain proper
+        // relationships before the Declared/Discovered merge below resolves them. No AI
+        // dependency — safe on AI-less BI instances.
+        EnrichSchemaConstraints.InferForeignKeys(SourceSchema.Objects);
 
         // Load existing objects for this integration from cache
         const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);
 
-        for (const srcObj of SourceSchema.Objects) {
+        // Phase 1: upsert objects. Object upserts must complete before field upserts
+        // (fields need ObjectID). Within this phase, upserts are independent so we
+        // batch-execute via Promise.all (concurrency cap to avoid hammering the DB).
+        const objectUpserts = SourceSchema.Objects.map(srcObj => async () => {
             const objResult = await IntegrationSchemaSync.UpsertObject(
                 md, IntegrationID, srcObj, existingObjects, ContextUser
             );
-            result.ObjectsCreated += objResult.Created ? 1 : 0;
-            result.ObjectsUpdated += objResult.Updated ? 1 : 0;
+            return { srcObj, ...objResult };
+        });
+        const objectResults = useBatch
+            ? await IntegrationSchemaSync.batchExec(objectUpserts, 8)
+            : await IntegrationSchemaSync.serialExec(objectUpserts);
 
-            // Now upsert fields for this object
-            const objectID = objResult.ObjectID;
-            if (!objectID) continue;
+        for (const r of objectResults) {
+            result.ObjectsCreated += r.Created ? 1 : 0;
+            result.ObjectsUpdated += r.Updated ? 1 : 0;
+            result.ObjectMergeLog.push({
+                ObjectName: r.srcObj.ExternalName,
+                EffectiveSource: r.EffectiveSource,
+                Created: r.Created,
+                Updated: r.Updated,
+            });
+        }
 
-            const existingFields = engine.GetIntegrationObjectFields(objectID);
-            for (const srcField of srcObj.Fields) {
-                const fieldResult = await IntegrationSchemaSync.UpsertField(
-                    md, objectID, srcField, existingFields, ContextUser
-                );
-                result.FieldsCreated += fieldResult.Created ? 1 : 0;
-                result.FieldsUpdated += fieldResult.Updated ? 1 : 0;
-            }
+        // Build sibling name→ID map for FK resolution during field upserts.
+        // Combines the freshly-upserted set with whatever was already in the engine
+        // cache, so discovered FK targets like "Contacts" resolve to a UUID regardless
+        // of whether the target object was just created this run or pre-existed.
+        const siblingNameToID = new Map<string, string>();
+        for (const eo of existingObjects) {
+            if (eo.ID) siblingNameToID.set(eo.Name.toLowerCase(), eo.ID);
+        }
+        for (const r of objectResults) {
+            if (r.ObjectID) siblingNameToID.set(r.srcObj.ExternalName.toLowerCase(), r.ObjectID);
+        }
+
+        // Phase 2: upsert fields per object. Across objects is parallelizable; within
+        // an object the field set is sequential against the cached field list.
+        const fieldUpsertJobs = objectResults
+            .filter(r => r.ObjectID)
+            .map(r => async () => {
+                const existingFields = engine.GetIntegrationObjectFields(r.ObjectID!);
+                const perObjectLogs: FieldMergeLog[] = [];
+                const perObjectStats = { created: 0, updated: 0 };
+                for (const srcField of r.srcObj.Fields) {
+                    const fr = await IntegrationSchemaSync.UpsertField(
+                        md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID
+                    );
+                    if (fr.Created) perObjectStats.created++;
+                    if (fr.Updated) perObjectStats.updated++;
+                    perObjectLogs.push({
+                        ObjectName: r.srcObj.ExternalName,
+                        FieldName: srcField.Name,
+                        EffectiveSource: fr.EffectiveSource,
+                        AttributeWinners: fr.AttributeWinners,
+                    });
+                }
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'persist.object.fields-done',
+                    objectName: r.srcObj.ExternalName,
+                    integrationObjectID: r.ObjectID,
+                    fieldsInSource: r.srcObj.Fields.length,
+                    fieldsCreated: perObjectStats.created,
+                    fieldsUpdated: perObjectStats.updated,
+                    fieldsUnchanged: r.srcObj.Fields.length - perObjectStats.created - perObjectStats.updated,
+                }));
+                return { stats: perObjectStats, logs: perObjectLogs };
+            });
+
+        const fieldResults = useBatch
+            ? await IntegrationSchemaSync.batchExec(fieldUpsertJobs, 8)
+            : await IntegrationSchemaSync.serialExec(fieldUpsertJobs);
+
+        for (const fr of fieldResults) {
+            result.FieldsCreated += fr.stats.created;
+            result.FieldsUpdated += fr.stats.updated;
+            result.FieldMergeLog.push(...fr.logs);
         }
 
         console.log(`[IntegrationSchemaSync] Persisted schema for ${IntegrationID}: ${result.ObjectsCreated} objects created, ${result.ObjectsUpdated} updated, ${result.FieldsCreated} fields created, ${result.FieldsUpdated} updated`);
         return result;
+    }
+
+    /**
+     * Batch executor with bounded concurrency. Independent async jobs run in parallel
+     * up to `concurrency`; failures within a job propagate as-is. This is the lightest-
+     * weight batching primitive we can rely on without depending on a TransactionGroup
+     * abstraction that doesn't exist in MJCore. Order-of-completion irrelevant for
+     * upserts; order-of-emission preserved in the returned array.
+     */
+    private static async batchExec<T>(jobs: Array<() => Promise<T>>, concurrency: number): Promise<T[]> {
+        const results: T[] = new Array(jobs.length);
+        let next = 0;
+        const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
+            while (true) {
+                const i = next++;
+                if (i >= jobs.length) return;
+                results[i] = await jobs[i]();
+            }
+        });
+        await Promise.all(workers);
+        return results;
+    }
+
+    /** Serial executor — slower, used for diagnostic runs where per-record errors matter. */
+    private static async serialExec<T>(jobs: Array<() => Promise<T>>): Promise<T[]> {
+        const out: T[] = [];
+        for (const j of jobs) out.push(await j());
+        return out;
     }
 
     // ── Object upsert ────────────────────────────────────────────────
@@ -117,26 +302,60 @@ export class IntegrationSchemaSync {
         srcObj: SourceObjectInfo,
         existingObjects: MJIntegrationObjectEntity[],
         contextUser: UserInfo
-    ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean }> {
+    ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
         const existing = existingObjects.find(
             o => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase()
         );
 
         if (existing) {
-            // Static object exists — don't overwrite, but update type/capability fields if empty
+            // Declared row exists. Discovery may enrich (e.g. Description if empty,
+            // IncrementalWatermarkField if newly observed). Curated values win for
+            // everything human-authored; describe wins only for technical/empty slots.
             let dirty = false;
+            const changes: string[] = [];
             if (!existing.Description && srcObj.Description) {
                 existing.Description = srcObj.Description;
                 dirty = true;
+                changes.push('Description');
+            }
+            // §3 metadata refresh: capture the source's watermark field when the stored row has none.
+            // We deliberately do NOT overwrite an already-set value on a later refresh — a watermark
+            // field may have been deliberately chosen/curated, and the "curated values win" invariant
+            // (above) applies. A genuine source-side rename is rare and handled by re-curation, not by
+            // silently clobbering the stored cursor field on every refresh.
+            if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
+                existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
+                dirty = true;
+                changes.push('IncrementalWatermarkField');
             }
             if (dirty) {
-                try { await existing.Save(); } catch { /* ignore save failures on static records */ }
-                return { ObjectID: existing.ID, Created: false, Updated: true };
+                try { await existing.Save(); } catch { /* ignore save failures on declared records */ }
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'persist.object.updated',
+                    objectName: srcObj.ExternalName,
+                    integrationObjectID: existing.ID,
+                    effectiveSource: 'Declared',
+                    fieldsTouched: changes,
+                }));
+                return { ObjectID: existing.ID, Created: false, Updated: true, EffectiveSource: 'Declared' };
             }
-            return { ObjectID: existing.ID, Created: false, Updated: false };
+            console.log(JSON.stringify({
+                ts: new Date().toISOString(),
+                event: 'persist.object.unchanged',
+                objectName: srcObj.ExternalName,
+                integrationObjectID: existing.ID,
+                effectiveSource: 'Declared',
+                reason: 'no-overlay-deltas',
+            }));
+            return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared' };
         }
 
-        // New custom object — create it
+        // New row — mark as 'Discovered' by default. Vendor-signaled custom objects
+        // (e.g. HubSpot namespace, Salesforce __c suffix) should be promoted to
+        // 'Custom' by the concrete connector's DiscoverObjects override before
+        // PersistDiscoveredSchema is called; absent a signal, 'Discovered' is the
+        // safer label.
         try {
             const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', contextUser);
             obj.NewRecord();
@@ -144,17 +363,27 @@ export class IntegrationSchemaSync {
             obj.Name = srcObj.ExternalName;
             obj.DisplayName = srcObj.ExternalLabel || srcObj.ExternalName;
             if (srcObj.Description) obj.Description = srcObj.Description;
+            if (srcObj.IncrementalWatermarkField) obj.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
             obj.Status = 'Active';
-            obj.Set('IsCustom', true);
-            obj.Sequence = 999; // custom objects at the end
+            obj.IsCustom = true;
+            obj.MetadataSource = 'Discovered';
+            obj.Sequence = 999;
             const saved = await obj.Save();
             if (saved) {
-                return { ObjectID: obj.ID, Created: true, Updated: false };
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: 'persist.object.created',
+                    objectName: srcObj.ExternalName,
+                    integrationObjectID: obj.ID,
+                    effectiveSource: 'Discovered',
+                    metadataSource: 'Discovered',
+                }));
+                return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered' };
             }
         } catch (err) {
             console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObject '${srcObj.ExternalName}': ${err instanceof Error ? err.message : err}`);
         }
-        return { ObjectID: null, Created: false, Updated: false };
+        return { ObjectID: null, Created: false, Updated: false, EffectiveSource: 'Discovered' };
     }
 
     // ── Field upsert ─────────────────────────────────────────────────
@@ -164,42 +393,102 @@ export class IntegrationSchemaSync {
         objectID: string,
         srcField: SourceFieldInfo,
         existingFields: MJIntegrationObjectFieldEntity[],
-        contextUser: UserInfo
-    ): Promise<{ Created: boolean; Updated: boolean }> {
+        contextUser: UserInfo,
+        siblingNameToID?: Map<string, string>
+    ): Promise<{ Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom'; AttributeWinners: FieldMergeLog['AttributeWinners'] }> {
+        const resolveFK = (target?: string | null): string | undefined => {
+            if (!target || !siblingNameToID) return undefined;
+            return siblingNameToID.get(target.toLowerCase());
+        };
         const existing = existingFields.find(
             f => f.Name.toLowerCase() === srcField.Name.toLowerCase()
         );
+        const winners: FieldMergeLog['AttributeWinners'] = {};
 
         if (existing) {
-            // Refresh technical attributes from describe — the live source is
-            // the truth here. Curated DisplayName, Sequence, Category, etc. are
-            // left alone; only fields that affect DDL and sync coercion get
-            // rewritten from the describe payload.
+            // Declared row exists. Overlay rule:
+            //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey, IsUniqueKey, IsReadOnly).
+            //    Curated values for these can drift from what the live system enforces and cause sync errors.
+            //  - Curated wins for semantic attributes (Description if non-empty, DisplayName, Sequence, Category).
+            //
+            // Returned attribute winners surface EXACTLY which source decided each
+            // attribute so the caller (progress emitter, UI) can show structural
+            // transparency on the merge.
             let dirty = false;
             const mappedType = MapSourceType(srcField.SourceType);
-            const describedAllowsNull = !srcField.IsRequired;
+            const describedAllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
 
             if (existing.Type !== mappedType) {
                 existing.Type = mappedType;
                 dirty = true;
+                winners.Type = 'Discovered';
+            } else {
+                winners.Type = 'Declared';
             }
             if (existing.AllowsNull !== describedAllowsNull) {
                 existing.AllowsNull = describedAllowsNull;
                 dirty = true;
+                winners.AllowsNull = 'Discovered';
+            } else {
+                winners.AllowsNull = 'Declared';
             }
-            if (existing.IsRequired !== srcField.IsRequired) {
-                existing.IsRequired = srcField.IsRequired;
+            // No-fabrication overlay rule for boolean attributes — see
+            // `decideBooleanOverlay`.  Discovered values only override when
+            // the source actually has an opinion (defined boolean).  Undefined
+            // means "no opinion" — the Declared value sticks.  Pre-Phase 0
+            // v5.39.x this branch treated undefined as `false` and silently
+            // wiped every declared PK on HubSpot/SF the moment live discovery
+            // ran.  See IntegrationSchemaSync.test.ts for the regression pin.
+            const reqOverlay = decideBooleanOverlay(existing.IsRequired, srcField.IsRequired);
+            if (reqOverlay.winner === 'Discovered' && reqOverlay.value !== undefined) {
+                existing.IsRequired = reqOverlay.value;
                 dirty = true;
             }
-            if (existing.IsPrimaryKey !== srcField.IsPrimaryKey) {
-                existing.IsPrimaryKey = srcField.IsPrimaryKey;
+            winners.IsRequired = reqOverlay.winner;
+
+            const pkOverlay = decideBooleanOverlay(existing.IsPrimaryKey, srcField.IsPrimaryKey);
+            if (pkOverlay.winner === 'Discovered' && pkOverlay.value !== undefined) {
+                existing.IsPrimaryKey = pkOverlay.value;
                 dirty = true;
             }
+            winners.IsPrimaryKey = pkOverlay.winner;
+
+            const uqOverlay = decideBooleanOverlay(existing.IsUniqueKey, srcField.IsUniqueKey);
+            if (uqOverlay.winner === 'Discovered' && uqOverlay.value !== undefined) {
+                existing.IsUniqueKey = uqOverlay.value;
+                dirty = true;
+            }
+            winners.IsUniqueKey = uqOverlay.winner;
+
+            const roOverlay = decideBooleanOverlay(existing.IsReadOnly, srcField.IsReadOnly);
+            if (roOverlay.winner === 'Discovered' && roOverlay.value !== undefined) {
+                existing.IsReadOnly = roOverlay.value;
+                dirty = true;
+            }
+            winners.IsReadOnly = roOverlay.winner;
             // Description: only fill if missing — curated descriptions outrank
-            // generic describe output.
+            // generic describe output. So 'Declared' wins unless the row had
+            // no description at all and discovery has one.
             if (!existing.Description && srcField.Description) {
                 existing.Description = srcField.Description;
                 dirty = true;
+                winners.Description = 'Discovered';
+            } else if (existing.Description) {
+                winners.Description = 'Declared';
+            }
+            // FK metadata overlay: declared wins if already set. Otherwise resolve the
+            // discovered ForeignKeyTarget name against sibling objects in this integration
+            // and persist the UUID. Unresolvable targets leave the field FK-less rather than
+            // fabricating an ID — explorer agents/users get to set the link later.
+            if (srcField.IsForeignKey && srcField.ForeignKeyTarget && !existing.RelatedIntegrationObjectID) {
+                const resolvedID = resolveFK(srcField.ForeignKeyTarget);
+                if (resolvedID) {
+                    existing.RelatedIntegrationObjectID = resolvedID;
+                    dirty = true;
+                    winners.ForeignKey = 'Discovered';
+                }
+            } else if (existing.RelatedIntegrationObjectID) {
+                winners.ForeignKey = 'Declared';
             }
             if (dirty) {
                 const saved = await existing.Save();
@@ -208,12 +497,12 @@ export class IntegrationSchemaSync {
                         `[IntegrationSchemaSync] UpsertField save failed for '${srcField.Name}': ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`
                     );
                 }
-                return { Created: false, Updated: true };
+                return { Created: false, Updated: true, EffectiveSource: 'Declared', AttributeWinners: winners };
             }
-            return { Created: false, Updated: false };
+            return { Created: false, Updated: false, EffectiveSource: 'Declared', AttributeWinners: winners };
         }
 
-        // New custom field — create it
+        // New field — discovered for the first time
         try {
             const field = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', contextUser);
             field.NewRecord();
@@ -222,20 +511,30 @@ export class IntegrationSchemaSync {
             field.DisplayName = srcField.Label || srcField.Name;
             if (srcField.Description) field.Description = srcField.Description;
             field.Type = MapSourceType(srcField.SourceType);
-            field.AllowsNull = !srcField.IsRequired;
+            field.AllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
             field.IsPrimaryKey = srcField.IsPrimaryKey;
             field.IsRequired = srcField.IsRequired;
-            field.IsReadOnly = false;
-            field.IsUniqueKey = false;
+            field.IsReadOnly = srcField.IsReadOnly ?? false;
+            field.IsUniqueKey = srcField.IsUniqueKey ?? false;
             field.Status = 'Active';
-            field.Set('IsCustom', true);
+            field.IsCustom = true;
+            field.MetadataSource = 'Discovered';
             field.Sequence = 999;
+            if (srcField.IsForeignKey && srcField.ForeignKeyTarget) {
+                const resolvedID = resolveFK(srcField.ForeignKeyTarget);
+                if (resolvedID) field.RelatedIntegrationObjectID = resolvedID;
+            }
             const saved = await field.Save();
-            return { Created: saved, Updated: false };
+            const initialWinners: FieldMergeLog['AttributeWinners'] = {
+                Type: 'Initial', Length: 'Initial', AllowsNull: 'Initial',
+                IsRequired: 'Initial', IsPrimaryKey: 'Initial', IsUniqueKey: 'Initial',
+                IsReadOnly: 'Initial', Description: 'Initial', ForeignKey: 'Initial',
+            };
+            return { Created: saved, Updated: false, EffectiveSource: 'Discovered', AttributeWinners: initialWinners };
         } catch (err) {
             console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObjectField '${srcField.Name}': ${err instanceof Error ? err.message : err}`);
         }
-        return { Created: false, Updated: false };
+        return { Created: false, Updated: false, EffectiveSource: 'Discovered', AttributeWinners: {} };
     }
 
     // ── Action generation for discovered custom objects ──────────────

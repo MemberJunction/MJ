@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import type { RESTResponse, RESTAuthContext, CreateRecordContext } from '@memberjunction/integration-engine';
+import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import { SharePointConnector } from '../SharePointConnector.js';
 
 // Smoke tests — verifies the connector's basic identity + capability surface.
@@ -53,4 +55,65 @@ describe('SharePointConnector (smoke)', () => {
         });
     });
 
+});
+
+// --- CreateRecord ID-presence tests (mock only the HTTP transport boundary) ---
+//
+// Mirrors the HubSpot silent-failure guard: a 2xx create whose Graph response
+// body carries NO `id` must return Success:false (via BuildCreatedResult),
+// because returning Success:true there silently loses the record and causes
+// duplicate creates on the next sync.
+
+/**
+ * Test connector that overrides the HTTP transport boundary (MakeHTTPRequest),
+ * short-circuits auth (Authenticate), and stubs object-metadata resolution
+ * (GetCachedObject) so CreateRecord runs end-to-end without the engine cache.
+ */
+class TestSharePointConnector extends SharePointConnector {
+    /** Canned response returned by the next MakeHTTPRequest call. */
+    public NextResponse: RESTResponse = { Status: 201, Body: {}, Headers: {} };
+
+    protected override async Authenticate(): Promise<RESTAuthContext> {
+        return { Token: 'test-token', BaseUrl: 'https://graph.microsoft.com/v1.0' } as RESTAuthContext & { BaseUrl: string };
+    }
+
+    protected override GetCachedObject(): MJIntegrationObjectEntity {
+        // BuildCRUDUrl only reads APIPath off the object; a flat path needs no template resolution.
+        return { APIPath: 'items' } as MJIntegrationObjectEntity;
+    }
+
+    protected override async MakeHTTPRequest(): Promise<RESTResponse> {
+        return this.NextResponse;
+    }
+}
+
+function createCtx(): CreateRecordContext {
+    return {
+        CompanyIntegration: { IntegrationID: 'test-integration' },
+        ContextUser: {},
+        ObjectName: 'Lists',
+        Attributes: { Title: 'New Item' },
+    };
+}
+
+describe('SharePointConnector.CreateRecord ID validation', () => {
+    it('returns Success=false on a 2xx whose body carries no id', async () => {
+        const connector = new TestSharePointConnector();
+        connector.NextResponse = { Status: 201, Body: { displayName: 'New Item' }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('no record ID');
+    });
+
+    it('returns Success=true with ExternalID when the body carries an id', async () => {
+        const connector = new TestSharePointConnector();
+        connector.NextResponse = { Status: 201, Body: { id: 'sp-item-7' }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx());
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('sp-item-7');
+    });
 });

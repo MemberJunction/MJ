@@ -19,6 +19,7 @@ import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from '.
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
+import { AngularConfigManager } from './angular-config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -93,9 +94,10 @@ export interface OrchestratorContext {
  * 10. Update package.json files
  * 11. Run npm install
  * 12. Update server config (dynamicPackages in mj.config.cjs)
- * 13. Update client imports (open-app-bootstrap.generated.ts)
- * 14. Execute hooks (postInstall)
- * 15. Finalize status to 'Active'
+ * 13. Update angular.json prebundle excludes (prevents Vite singleton duplication)
+ * 14. Update client imports (open-app-bootstrap.generated.ts)
+ * 15. Execute hooks (postInstall)
+ * 16. Finalize status to 'Active'
  */
 export async function InstallApp(options: InstallOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
@@ -234,15 +236,18 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 13: Flip status to Active BEFORE regenerating the client bootstrap,
+    // Step 13: Update angular.json prebundle excludes
+    HandleAngularPrebundleExcludes(manifest, context);
+
+    // Step 14: Flip status to Active BEFORE regenerating the client bootstrap,
     // so the regen reads the new status and emits enabled imports.
     Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
     await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
 
-    // Step 14: Update client imports (reads current app status from DB)
+    // Step 15: Update client imports (reads current app status from DB)
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 15: Execute hooks
+    // Step 16: Execute hooks
     if (manifest.hooks?.postInstall) {
       Callbacks?.OnProgress?.('Hooks', 'Running postInstall hook...');
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
@@ -489,7 +494,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 8: Update app record first (including Status: Active) so the
+    // Step 8: Update angular.json prebundle excludes (handles new scopes in upgraded manifest)
+    HandleAngularPrebundleExcludes(manifest, context);
+
+    // Step 9: Update app record first (including Status: Active) so the
     // bootstrap regen below reads the final status from the DB.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
@@ -497,10 +505,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       Status: 'Active',
     });
 
-    // Step 9: Regenerate client imports
+    // Step 10: Regenerate client imports
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 10: Execute hooks
+    // Step 11: Execute hooks
     if (manifest.hooks?.postUpgrade) {
       Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
       await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
@@ -598,11 +606,19 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
     }
 
-    // Steps 3-5: Remove config, client bootstrap, and package refs (parallel — all write to different files)
+    // Steps 3-6: Remove config, client bootstrap, angular.json excludes, and package refs
+    // (parallel where they write to different files)
     Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
+
+    // Collect other installed apps' manifests so we don't remove shared prebundle excludes
+    const otherApps = (await ListInstalledApps(context.ContextUser))
+      .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
+    const otherManifests = otherApps.map(a => JSON.parse(a.ManifestJSON) as MJAppManifest);
+
     await Promise.all([
       Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
       Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
+      Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
       HandleClientBootstrapRegeneration(context),
       Promise.resolve(
         RemoveAppPackages({
@@ -1005,6 +1021,51 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   }
 
   return { Success: true };
+}
+
+/**
+ * Adds the app's npm scope(s) to angular.json's prebundle.exclude so Vite
+ * serves them as raw ES modules instead of inlining them into prebundled chunks.
+ * This prevents duplicate Angular DI singletons caused by module duplication.
+ *
+ * Non-fatal: if angular.json doesn't exist or the update fails, a warning is
+ * emitted but the install/upgrade continues — the app will still work in
+ * production builds, just the dev server may have the singleton bug.
+ */
+function HandleAngularPrebundleExcludes(manifest: MJAppManifest, context: OrchestratorContext): void {
+  const manager = new AngularConfigManager(context.RepoRoot, context.ClientPackagePath);
+  if (!manager.Load()) {
+    return; // angular.json not found — not an error, skip silently
+  }
+
+  manager.AddPrebundleExcludes(manifest);
+
+  const result = manager.Save();
+  if (!result.Success) {
+    context.Callbacks?.OnWarn?.(
+      'Config',
+      `Failed to update angular.json prebundle excludes: ${result.ErrorMessage}. ` +
+      `You may need to manually add the app's npm scope to prebundle.exclude in angular.json.`
+    );
+  } else if (result.Changes && result.Changes.length > 0) {
+    context.Callbacks?.OnProgress?.('Config', `Updated angular.json: ${result.Changes.join('; ')}`);
+  }
+}
+
+/**
+ * Removes an app's prebundle exclude patterns from angular.json during app removal.
+ * Only removes patterns not still needed by other installed apps.
+ */
+function HandleAngularPrebundleExcludeRemoval(
+  manifest: MJAppManifest,
+  otherManifests: MJAppManifest[],
+  context: OrchestratorContext,
+): void {
+  const manager = new AngularConfigManager(context.RepoRoot, context.ClientPackagePath);
+  if (!manager.Load()) return;
+
+  manager.RemovePrebundleExcludes(manifest, otherManifests);
+  manager.Save();
 }
 
 /**

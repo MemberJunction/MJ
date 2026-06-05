@@ -36,6 +36,32 @@ function MakeTargetConfig(columns: TargetColumnConfig[]): TargetTableConfig {
 }
 
 function MakeExistingTable(columns: Array<{ Name: string; SqlType: string; IsNullable: boolean }>): ExistingTableInfo {
+    // Real mirror tables always carry the standard __mj_integration_* columns. Include them so
+    // EnsureStandardColumns is a no-op for these source-diff tests; tests for the backfill behavior
+    // pass an existing table that omits them on purpose.
+    const standard = [
+        { Name: '__mj_integration_SyncStatus', SqlType: 'NVARCHAR(50)', IsNullable: false },
+        { Name: '__mj_integration_LastSyncedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
+        { Name: '__mj_integration_LastSyncedSnapshot', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
+        { Name: '__mj_integration_SyncMessage', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
+        { Name: '__mj_integration_ContentHash', SqlType: 'NVARCHAR(64)', IsNullable: true },
+        // Per-record sync ledger (plan §2.5)
+        { Name: '__mj_integration_ExternalVersion', SqlType: 'NVARCHAR(255)', IsNullable: true },
+        { Name: '__mj_integration_LastSeenModifiedValue', SqlType: 'NVARCHAR(255)', IsNullable: true },
+        { Name: '__mj_integration_LastReconciledAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
+        { Name: '__mj_integration_LastWriterDirection', SqlType: 'NVARCHAR(10)', IsNullable: true },
+        { Name: '__mj_integration_IsTombstoned', SqlType: 'BIT', IsNullable: false },
+        { Name: '__mj_integration_DeletedDetectedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
+    ];
+    return {
+        SchemaName: 'hubspot',
+        TableName: 'Contact',
+        Columns: [...columns, ...standard].map(c => ({ ...c, MaxLength: null, Precision: null, Scale: null })),
+    };
+}
+
+/** Existing table that LACKS the new standard sync columns (e.g. created before they existed). */
+function MakeLegacyExistingTable(columns: Array<{ Name: string; SqlType: string; IsNullable: boolean }>): ExistingTableInfo {
     return {
         SchemaName: 'hubspot',
         TableName: 'Contact',
@@ -127,6 +153,26 @@ describe('SchemaEvolution', () => {
 
             const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
             expect(diff.AddedColumns).toHaveLength(0);
+        });
+
+        it('should ALTER-add missing standard __mj_integration_* columns to a legacy table', () => {
+            const target = MakeTargetConfig([
+                { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
+            ]);
+            // Legacy table has only SyncStatus + LastSyncedAt — missing the snapshot + message cols.
+            const existing = MakeLegacyExistingTable([
+                { Name: 'Email', SqlType: 'NVARCHAR(255)', IsNullable: true },
+                { Name: '__mj_integration_SyncStatus', SqlType: 'NVARCHAR(50)', IsNullable: false },
+                { Name: '__mj_integration_LastSyncedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            const added = diff.AddedColumns.map(c => c.TargetColumnName);
+            expect(added).toContain('__mj_integration_LastSyncedSnapshot');
+            expect(added).toContain('__mj_integration_SyncMessage');
+            // Already-present standard columns are NOT re-added.
+            expect(added).not.toContain('__mj_integration_SyncStatus');
+            expect(added).not.toContain('__mj_integration_LastSyncedAt');
         });
     });
 

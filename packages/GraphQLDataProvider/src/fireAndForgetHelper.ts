@@ -3,12 +3,33 @@ import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { Subscription } from "rxjs";
 
 /**
- * Timeout for fire-and-forget operations (15 minutes).
- * Long-running operations like AI agent execution or test suites
- * can take significant time. This is a safety net — if no completion
- * event arrives within this window, the client stops waiting.
+ * Idle timeout for fire-and-forget operations (12 minutes).
+ *
+ * This is an *inactivity* window, not an absolute cap: it resets every time a
+ * message (progress, streaming, liveness pulse, completion) arrives for the
+ * operation. The server emits a liveness pulse every ~5 minutes while the
+ * operation runs, so as long as the work is alive the timer never fires. It
+ * only expires when the server has gone genuinely silent — at which point the
+ * optional reconciliation hook decides whether the operation is dead or still
+ * running.
  */
-const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
+const DEFAULT_IDLE_TIMEOUT_MS = 12 * 60 * 1000;
+
+/**
+ * Maximum number of consecutive idle-timeout reconciliations that may return
+ * 'continue' before we give up. Bounds the wait when a run record is stuck in a
+ * non-terminal status but no live signal is arriving (e.g. a dead socket).
+ */
+const DEFAULT_MAX_STALL_RECONCILES = 6;
+
+/**
+ * Decision returned by the {@link FireAndForgetConfig.onStall} hook when the
+ * client idle timer expires:
+ * - `'continue'` — the operation is still running; keep waiting (re-arms the timer).
+ * - `{ resolve }` — the operation finished (e.g. completion event was lost); resolve with this result.
+ * - `{ reject }` — the operation failed/died; reject with this error.
+ */
+export type StallDecision<TResult> = 'continue' | { resolve: TResult } | { reject: Error };
 
 /**
  * Configuration for a fire-and-forget GraphQL mutation execution.
@@ -62,8 +83,19 @@ export interface FireAndForgetConfig<TResult> {
      */
     onMessage?: (parsed: Record<string, unknown>) => void;
 
-    /** Timeout in milliseconds (default: 15 minutes) */
+    /**
+     * Optional reconciliation hook invoked when the idle timer expires (no message
+     * received within the idle window) or the PubSub stream drops. Should query the
+     * authoritative server-side run record and return a {@link StallDecision}.
+     * When omitted, an idle expiry rejects with a timeout message (legacy behavior).
+     */
+    onStall?: () => Promise<StallDecision<TResult>>;
+
+    /** Idle timeout in milliseconds — resets on activity (default: 12 minutes) */
     timeoutMs?: number;
+
+    /** Max consecutive 'continue' reconciliations before giving up (default: 6) */
+    maxStallReconciles?: number;
 
     /** Custom timeout error message */
     timeoutErrorMessage?: string;
@@ -78,6 +110,14 @@ export interface FireAndForgetConfig<TResult> {
     operationLabel?: string;
 }
 
+/** Internal resettable inactivity timer. */
+interface IdleTimer {
+    /** (Re)start the countdown. */
+    reset(): void;
+    /** Cancel the countdown. */
+    clear(): void;
+}
+
 /**
  * Centralized utility for executing long-running GraphQL mutations using
  * the fire-and-forget pattern. This avoids Azure's ~230s HTTP proxy timeout
@@ -88,8 +128,11 @@ export interface FireAndForgetConfig<TResult> {
  * 1. Subscribes to PubSub updates for the current session
  * 2. Sends the mutation with `fireAndForget: true`
  * 3. Server validates, starts background work, returns ACK immediately
- * 4. Client waits for a matching completion event via WebSocket
- * 5. Resolves the promise with the result from the completion event
+ * 4. Client waits for a matching completion event via WebSocket, kept alive by
+ *    an idle timer that resets on every message (including the server's ~5min
+ *    liveness pulse)
+ * 5. On idle expiry or stream drop, an optional reconciliation hook checks the
+ *    authoritative run record to decide resolve / continue / reject
  *
  * ## Usage:
  * ```typescript
@@ -112,35 +155,84 @@ export class FireAndForgetHelper {
 
     /**
      * Execute a long-running mutation using fire-and-forget pattern.
-     * Returns when the server publishes a matching completion event via PubSub.
+     * Returns when the server publishes a matching completion event via PubSub,
+     * or when the reconciliation hook resolves/rejects after an idle stall.
      */
     public static async Execute<TResult>(
         config: FireAndForgetConfig<TResult>
     ): Promise<TResult> {
         const label = config.operationLabel ?? config.mutationFieldName;
+        const idleMs = config.timeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+        const maxStalls = config.maxStallReconciles ?? DEFAULT_MAX_STALL_RECONCILES;
+
         let subscription: Subscription | undefined;
-        let completionTimeoutId: ReturnType<typeof setTimeout> | undefined;
+        let settled = false;
+        let stallCount = 0;
+
+        const { promise, resolve, reject } = FireAndForgetHelper.createCompletionPromise<TResult>();
+
+        // settle helpers guarantee we resolve/reject exactly once and always clear the timer
+        const finish = (fn: () => void): void => {
+            if (settled) return;
+            settled = true;
+            idleTimer.clear();
+            fn();
+        };
+        const settleResolve = (value: TResult) => finish(() => resolve(value));
+        const settleReject = (error: Error) => finish(() => reject(error));
+
+        // Invoked when the idle window elapses or the stream drops.
+        const onStall = async (): Promise<void> => {
+            if (settled) return;
+
+            if (!config.onStall) {
+                settleReject(new Error(FireAndForgetHelper.timeoutMessage(config.timeoutErrorMessage, idleMs)));
+                return;
+            }
+
+            let decision: StallDecision<TResult>;
+            try {
+                LogStatus(`[FireAndForget:${label}] Idle window elapsed, reconciling against server run record`);
+                decision = await config.onStall();
+            } catch (e) {
+                settleReject(e as Error);
+                return;
+            }
+            if (settled) return; // a message may have arrived while awaiting reconciliation
+
+            if (decision === 'continue') {
+                if (++stallCount > maxStalls) {
+                    settleReject(new Error(
+                        `The operation is still reported as running but no signal has arrived after ${stallCount} checks. ` +
+                        `Please refresh the page to check the latest status.`
+                    ));
+                } else {
+                    idleTimer.reset();
+                }
+            } else if ('resolve' in decision) {
+                LogStatus(`[FireAndForget:${label}] Reconciliation recovered a completed run`);
+                settleResolve(decision.resolve);
+            } else {
+                settleReject(decision.reject);
+            }
+        };
+
+        const idleTimer = FireAndForgetHelper.createIdleTimer(idleMs, () => { void onStall(); });
 
         try {
-            // Create a promise that resolves when the completion event arrives
-            const { promise, resolve, reject } = FireAndForgetHelper.createCompletionPromise<TResult>();
+            idleTimer.reset();
 
-            // Set up safety timeout
-            completionTimeoutId = FireAndForgetHelper.setupTimeout(
-                reject, config.timeoutMs, config.timeoutErrorMessage
-            );
-
-            // Subscribe to PubSub and wire up completion detection
-            subscription = FireAndForgetHelper.subscribeToPubSub(
-                config, resolve, completionTimeoutId
-            );
+            subscription = FireAndForgetHelper.subscribeToPubSub(config, {
+                onActivity: () => { stallCount = 0; idleTimer.reset(); },
+                onCompletion: (value) => settleResolve(value),
+                onStreamEnd: () => { void onStall(); },
+            });
 
             // Execute the mutation (server returns immediately in fire-and-forget mode)
             const ackResult = await FireAndForgetHelper.executeMutation(config);
 
-            // Check if server accepted
             if (!config.validateAck(ackResult)) {
-                if (completionTimeoutId) clearTimeout(completionTimeoutId);
+                idleTimer.clear();
                 const errorMsg = (ackResult as Record<string, unknown>)?.errorMessage as string
                     ?? 'Server rejected the request';
                 LogError(`[FireAndForget:${label}] Server rejected: ${errorMsg}`);
@@ -149,16 +241,14 @@ export class FireAndForgetHelper {
 
             LogStatus(`[FireAndForget:${label}] Server accepted, waiting for completion via WebSocket`);
 
-            // Wait for the completion event
             return await promise;
 
         } catch (e) {
-            if (completionTimeoutId) clearTimeout(completionTimeoutId);
             const error = e as Error;
             LogError(`[FireAndForget:${label}] Error: ${error.message}`);
             throw e;
         } finally {
-            if (completionTimeoutId) clearTimeout(completionTimeoutId);
+            idleTimer.clear();
             if (subscription) {
                 subscription.unsubscribe();
             }
@@ -183,53 +273,72 @@ export class FireAndForgetHelper {
     }
 
     /**
-     * Sets up a safety timeout that rejects the promise if no completion arrives.
+     * Creates a resettable inactivity timer. `reset()` (re)starts the countdown;
+     * `onExpire` fires if the countdown completes without another reset.
      */
-    private static setupTimeout(
-        reject: (reason: Error) => void,
-        timeoutMs?: number,
-        timeoutErrorMessage?: string
-    ): ReturnType<typeof setTimeout> {
-        const timeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
-        const message = timeoutErrorMessage ??
-            'The operation may still be running on the server but the client timed out after 15 minutes. ' +
-            'Please refresh the page to check the latest status.';
-
-        return setTimeout(() => {
-            reject(new Error(message));
-        }, timeout);
+    private static createIdleTimer(ms: number, onExpire: () => void): IdleTimer {
+        let id: ReturnType<typeof setTimeout> | undefined;
+        return {
+            reset: () => {
+                if (id) clearTimeout(id);
+                id = setTimeout(onExpire, ms);
+            },
+            clear: () => {
+                if (id) clearTimeout(id);
+                id = undefined;
+            },
+        };
     }
 
     /**
-     * Subscribes to PubSub and wires up message handling + completion detection.
+     * Builds the idle-timeout error message used when no reconciliation hook is provided.
+     */
+    private static timeoutMessage(custom: string | undefined, idleMs: number): string {
+        const minutes = Math.round(idleMs / 60000);
+        return custom ??
+            `The operation may still be running on the server but the client received no updates for ${minutes} minutes. ` +
+            'Please refresh the page to check the latest status.';
+    }
+
+    /**
+     * Subscribes to PubSub and wires up message handling, idle-timer resets, and
+     * completion detection. Stream end/error triggers reconciliation.
      */
     private static subscribeToPubSub<TResult>(
         config: FireAndForgetConfig<TResult>,
-        resolveCompletion: (value: TResult) => void,
-        completionTimeoutId: ReturnType<typeof setTimeout>
+        handlers: {
+            onActivity: () => void;
+            onCompletion: (value: TResult) => void;
+            onStreamEnd: () => void;
+        }
     ): Subscription {
         const sessionId = config.dataProvider.sessionId;
         const label = config.operationLabel ?? config.mutationFieldName;
 
         return config.dataProvider.PushStatusUpdates(sessionId)
-            .subscribe((message: string) => {
-                try {
-                    const parsed = JSON.parse(message) as Record<string, unknown>;
+            .subscribe({
+                next: (message: string) => {
+                    // Any inbound message means the server is alive — reset the idle timer.
+                    handlers.onActivity();
+                    try {
+                        const parsed = JSON.parse(message) as Record<string, unknown>;
 
-                    // Forward all messages to the optional handler (for progress, etc.)
-                    if (config.onMessage) {
-                        config.onMessage(parsed);
-                    }
+                        if (config.onMessage) {
+                            config.onMessage(parsed);
+                        }
 
-                    // Check if this is the completion event we're waiting for
-                    if (config.isCompletionEvent(parsed)) {
-                        clearTimeout(completionTimeoutId);
-                        LogStatus(`[FireAndForget:${label}] Completion event received`);
-                        resolveCompletion(config.extractResult(parsed));
+                        if (config.isCompletionEvent(parsed)) {
+                            LogStatus(`[FireAndForget:${label}] Completion event received`);
+                            handlers.onCompletion(config.extractResult(parsed));
+                        }
+                    } catch (e) {
+                        console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
                     }
-                } catch (e) {
-                    console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
-                }
+                },
+                // Stream dropping mid-operation is itself a "we've gone silent" signal —
+                // reconcile immediately rather than waiting out the full idle window.
+                error: () => handlers.onStreamEnd(),
+                complete: () => handlers.onStreamEnd(),
             });
     }
 

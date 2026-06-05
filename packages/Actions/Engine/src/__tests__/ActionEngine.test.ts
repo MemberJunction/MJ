@@ -36,6 +36,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             return { GetEntityObject: vi.fn().mockResolvedValue(mockLogEntity) };
         }),
         LogError: vi.fn(),
+        LogErrorEx: vi.fn(),
         LogStatus: vi.fn(),
         LogStatusEx: vi.fn(),
         LogVerbose: vi.fn(),
@@ -178,7 +179,7 @@ vi.mock('@memberjunction/actions-base', () => {
 // ============================================================================
 import { ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
-import { Metadata, LogError } from '@memberjunction/core';
+import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 
 // ============================================================================
@@ -506,7 +507,7 @@ describe('ActionEngineServer', () => {
             const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Action blew up');
-            expect(LogError).toHaveBeenCalled();
+            expect(LogErrorEx).toHaveBeenCalled();
         });
 
         it('should use Action.Name when DriverClass is not provided', async () => {

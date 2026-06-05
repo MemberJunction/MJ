@@ -1207,6 +1207,15 @@
 
 /* ══════ RESPONSIVE ══════ */
 
+/* <mj-left-nav> collapses to a full-width top bar at ≤700px; stack the root
+   layout vertically so the content pane sits below it instead of being
+   squeezed to zero width in the flex row. */
+@media (max-width: 700px) {
+    .at-dashboard {
+        flex-direction: column;
+    }
+}
+
 @media (max-width: 1100px) {
     .at-pipeline-layout {
         flex-direction: column;
