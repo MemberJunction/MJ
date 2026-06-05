@@ -36,8 +36,14 @@ export class DDLGenerator {
 
   /**
    * Generate a full CREATE TABLE statement.
+   *
+   * @param options.IfNotExists - When true, emit an idempotent, single-statement CREATE
+   *   (and re-run-safe descriptions) so applying the migration twice — or against a table
+   *   that physically exists but has no MJ entity yet — does not collide. Off by default to
+   *   preserve the exact output for callers (e.g. the AI schema designer) that expect a bare
+   *   CREATE TABLE. The integration Create-Tables path opts in.
    */
-  GenerateCreateTable(def: TableDefinition, platform: DatabasePlatform): string {
+  GenerateCreateTable(def: TableDefinition, platform: DatabasePlatform, options?: { IfNotExists?: boolean }): string {
     ValidateIdentifier(def.SchemaName, 'schema');
     ValidateIdentifier(def.TableName, 'table');
 
@@ -85,9 +91,11 @@ export class DDLGenerator {
     }
 
     const body = lines.join(',\n');
-    const createTable = `CREATE TABLE ${fullTable} (\n${body}\n);`;
+    const createTable = options?.IfNotExists
+      ? d.CreateTableIfAbsent(fullTable, body)
+      : `CREATE TABLE ${fullTable} (\n${body}\n);`;
 
-    const descStatements = this.GenerateDescriptions(def, d);
+    const descStatements = this.GenerateDescriptions(def, d, options?.IfNotExists);
     if (descStatements.length > 0) {
       return createTable + '\n\n' + descStatements.join('\n\n');
     }
@@ -97,18 +105,24 @@ export class DDLGenerator {
 
   /**
    * Generate description metadata for table + columns.
+   * @param idempotent - When true, emit re-run-safe variants (guarded so re-adding an
+   *   existing description does not error). Default false preserves the original output.
    */
-  GenerateDescriptions(def: TableDefinition, dialect: SQLDialect): string[] {
+  GenerateDescriptions(def: TableDefinition, dialect: SQLDialect, idempotent = false): string[] {
     const statements: string[] = [];
     const allColumns = [...def.Columns, ...(def.AdditionalColumns ?? [])];
 
     if (def.Description) {
-      statements.push(dialect.CommentOnObject('TABLE', def.SchemaName, def.TableName, def.Description) + ';');
+      statements.push(idempotent
+        ? dialect.CommentOnObjectIfAbsent('TABLE', def.SchemaName, def.TableName, def.Description)
+        : dialect.CommentOnObject('TABLE', def.SchemaName, def.TableName, def.Description) + ';');
     }
 
     for (const col of allColumns) {
       if (col.Description) {
-        statements.push(dialect.CommentOnColumn(def.SchemaName, def.TableName, col.Name, col.Description));
+        statements.push(idempotent
+          ? dialect.CommentOnColumnIfAbsent(def.SchemaName, def.TableName, col.Name, col.Description)
+          : dialect.CommentOnColumn(def.SchemaName, def.TableName, col.Name, col.Description));
       }
     }
 

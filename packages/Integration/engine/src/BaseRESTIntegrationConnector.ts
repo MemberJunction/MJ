@@ -2,6 +2,7 @@ import { RunView, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { computeContentHash } from './ContentHash.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -9,7 +10,17 @@ import {
     type FetchContext,
     type FetchBatchResult,
 } from './BaseIntegrationConnector.js';
-import type { ExternalRecord, SourceSchemaInfo, SourceObjectInfo, SourceRelationshipInfo } from './types.js';
+import type {
+    ExternalRecord,
+    SourceSchemaInfo,
+    SourceObjectInfo,
+    SourceRelationshipInfo,
+    CreateRecordContext,
+    UpdateRecordContext,
+    DeleteRecordContext,
+    GetRecordContext,
+    CRUDResult,
+} from './types.js';
 
 // ─── REST-specific types ─────────────────────────────────────────────
 
@@ -59,6 +70,16 @@ interface PaginatedFetchResult {
     NextPage?: number;
     NextOffset?: number;
     NextCursor?: string;
+}
+
+/** One template variable resolved to its parent IntegrationObject + FK field. */
+interface ResolvedTemplateVar {
+    /** The `{var}` placeholder name as it appears in APIPath. */
+    templateVar: string;
+    /** The field name to tag fetched child records with (the resolved parent ID). */
+    fkFieldName: string;
+    /** The parent IntegrationObject this var resolves to. */
+    parentObjectID: string;
 }
 
 /** Maximum number of pages to fetch before stopping (safety limit to prevent infinite loops) */
@@ -147,6 +168,27 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         auth: RESTAuthContext
     ): string;
 
+    /**
+     * Optional per-record CUSTOMIZATION hook called between NormalizeResponse
+     * (vendor envelope-stripping) and ToExternalRecord (composite-PK assembly).
+     *
+     * Distinct from NormalizeResponse — that strips the vendor's response envelope
+     * to expose individual records. This hook is for vendor-specific record-level
+     * customization the standard pipeline shouldn't carry: nested-field flattening,
+     * empty-string→null coercion for date columns, computed fields, removing vendor
+     * metadata blobs (e.g. Salesforce 'attributes'), etc.
+     *
+     * Default is identity (no transform). Override only when a concrete connector
+     * needs vendor-specific shape changes.
+     */
+    protected TransformRecord(
+        raw: Record<string, unknown>,
+        _obj: MJIntegrationObjectEntity,
+        _fields: MJIntegrationObjectFieldEntity[]
+    ): Record<string, unknown> {
+        return raw;
+    }
+
     // ── BaseIntegrationConnector implementations ─────────────────────
 
     /**
@@ -225,6 +267,215 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         return this.FetchFlat(auth, baseURL, obj, fields, ctx);
     }
 
+    // ── Generic metadata-driven CRUD ─────────────────────────────────
+    //
+    // These implementations read per-operation columns from IntegrationObject
+    // (CreateAPIPath/Method/BodyShape/BodyKey/IDLocation, Update*, Delete*) and
+    // execute generically. Concrete connectors should only override when the API
+    // is genuinely idiosyncratic (multi-step writes, custom body envelopes that
+    // don't fit flat/wrapped, etc.) — the metadata-driven path handles the
+    // common case for ~all REST connectors and removes the duplicate write logic
+    // that previously lived in every concrete class.
+    //
+    // Null-capability honesty: if a metadata column is null, the corresponding
+    // verb is NOT supported via the generic path. SupportsCreate/Update/Delete
+    // capability getters on BaseIntegrationConnector should be overridden to
+    // reflect the actual column population.
+
+    /** Generic create: reads CreateAPIPath/Method/BodyShape/BodyKey/IDLocation from the IO row. */
+    public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.CreateAPIPath || !obj.CreateMethod) {
+            throw new Error(
+                `CreateRecord not supported for "${ctx.ObjectName}": ` +
+                `CreateAPIPath / CreateMethod not configured on IntegrationObject. ` +
+                `Either populate metadata or override CreateRecord in the concrete connector.`
+            );
+        }
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        const url = this.BuildFullURL(baseURL, obj.CreateAPIPath);
+        const body = this.BuildOperationBody(ctx.Attributes, obj.CreateBodyShape, obj.CreateBodyKey);
+        const response = await this.MakeHTTPRequest(auth, url, obj.CreateMethod, headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            const externalID = this.ExtractIDFromResponse(response, obj.CreateIDLocation);
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on create`,
+        };
+    }
+
+    /** Generic update: reads UpdateAPIPath/Method/BodyShape/BodyKey/IDLocation from the IO row. */
+    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.UpdateAPIPath || !obj.UpdateMethod) {
+            throw new Error(
+                `UpdateRecord not supported for "${ctx.ObjectName}": ` +
+                `UpdateAPIPath / UpdateMethod not configured on IntegrationObject.`
+            );
+        }
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        const url = this.BuildFullURL(
+            baseURL,
+            this.SubstituteIDInPath(obj.UpdateAPIPath, ctx.ExternalID, obj.UpdateIDLocation)
+        );
+        const body = this.BuildOperationBody(ctx.Attributes, obj.UpdateBodyShape, obj.UpdateBodyKey);
+        const response = await this.MakeHTTPRequest(auth, url, obj.UpdateMethod, headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on update`,
+        };
+    }
+
+    /** Generic delete: reads DeleteAPIPath/DeleteMethod/DeleteIDLocation from the IO row. */
+    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.DeleteAPIPath || !obj.DeleteMethod) {
+            throw new Error(
+                `DeleteRecord not supported for "${ctx.ObjectName}": ` +
+                `DeleteAPIPath / DeleteMethod not configured on IntegrationObject.`
+            );
+        }
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        const url = this.BuildFullURL(
+            baseURL,
+            this.SubstituteIDInPath(obj.DeleteAPIPath, ctx.ExternalID, obj.DeleteIDLocation)
+        );
+        const response = await this.MakeHTTPRequest(auth, url, obj.DeleteMethod, headers);
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on delete`,
+        };
+    }
+
+    /** Generic get-one: hits APIPath/{ID} via GET. Override if API uses non-standard get shape. */
+    public override async GetRecord(ctx: GetRecordContext): Promise<ExternalRecord | null> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        const fields = this.GetCachedFields(obj.ID);
+        const auth = await this.Authenticate(ci, contextUser);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const headers = this.BuildHeaders(auth);
+        // Reuse UpdateAPIPath when present (typically same as get-one path); fall back to APIPath + /{id}
+        const getPath = obj.UpdateAPIPath
+            ? this.SubstituteIDInPath(obj.UpdateAPIPath, ctx.ExternalID, obj.UpdateIDLocation)
+            : `${obj.APIPath.replace(/\/+$/, '')}/${encodeURIComponent(ctx.ExternalID)}`;
+        const url = this.BuildFullURL(baseURL, getPath);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status === 404) return null;
+        if (response.Status < 200 || response.Status >= 300) {
+            throw new Error(
+                `GetRecord failed for "${ctx.ObjectName}" id "${ctx.ExternalID}": HTTP ${response.Status}`
+            );
+        }
+        const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
+        if (records.length === 0) return null;
+        const transformed = this.TransformRecord(records[0], obj, fields);
+        return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields));
+    }
+
+    // ── CRUD helpers ─────────────────────────────────────────────────
+
+    /**
+     * Build the operation request body per BodyShape:
+     *  - 'flat'    → body = attributes verbatim
+     *  - 'wrapped' → body = { [BodyKey]: attributes }
+     *  - 'literal' → connector should have overridden the operation; fall back to flat as safety net
+     *  - null      → default to flat (most common shape)
+     */
+    protected BuildOperationBody(
+        attributes: Record<string, unknown>,
+        bodyShape: string | null,
+        bodyKey: string | null
+    ): unknown {
+        if (bodyShape === 'wrapped' && bodyKey) {
+            return { [bodyKey]: attributes };
+        }
+        return attributes;
+    }
+
+    /**
+     * Substitute the ExternalID into a URL path template at runtime. Path templates
+     * may use {ID}, {id}, or {ExternalID} as the placeholder; for symmetry with
+     * FetchChanges template-var handling, any unsubstituted {var} in the template
+     * is left in place (caller's responsibility to ensure consistency).
+     *
+     * For IDLocation='body' or 'header' the ID is not substituted into the path
+     * (caller must handle separately); we just return the raw path.
+     */
+    protected SubstituteIDInPath(
+        path: string,
+        externalID: string,
+        idLocation: string | null
+    ): string {
+        if (idLocation && idLocation !== 'path') return path;
+        const encoded = encodeURIComponent(externalID);
+        return path
+            .replace(/\{ID\}/g, encoded)
+            .replace(/\{id\}/g, encoded)
+            .replace(/\{ExternalID\}/g, encoded);
+    }
+
+    /** Best-effort error message extraction from a vendor response. Override for vendor-specific shapes. */
+    protected ExtractErrorMessage(response: RESTResponse): string | undefined {
+        if (!response.Body || typeof response.Body !== 'object') return undefined;
+        const b = response.Body as Record<string, unknown>;
+        if (typeof b.message === 'string') return b.message;
+        if (typeof b.error === 'string') return b.error;
+        if (b.errors && Array.isArray(b.errors) && b.errors.length > 0) {
+            return JSON.stringify(b.errors);
+        }
+        return undefined;
+    }
+
+    /** Extract the new record's external ID from a create response per IDLocation. */
+    protected ExtractIDFromResponse(response: RESTResponse, idLocation: string | null): string | undefined {
+        // Default: parse from response body — most APIs return the new object with its ID at root
+        if (!idLocation || idLocation === 'body') {
+            if (response.Body && typeof response.Body === 'object') {
+                const b = response.Body as Record<string, unknown>;
+                // Try common ID field names; concrete connectors can override for vendor-specific shapes
+                for (const k of ['id', 'ID', 'Id', 'externalID', 'ExternalID']) {
+                    if (typeof b[k] === 'string' || typeof b[k] === 'number') return String(b[k]);
+                }
+            }
+            return undefined;
+        }
+        if (idLocation === 'header') {
+            // Location header is the most common; concrete connectors override for non-standard headers
+            const loc = response.Headers?.['location'] ?? response.Headers?.['Location'];
+            if (typeof loc === 'string') {
+                const m = loc.match(/[/=]([^/?&#]+)$/);
+                return m ? m[1] : loc;
+            }
+            return undefined;
+        }
+        return undefined;
+    }
+
     // ── Flat fetch (no template variables) ───────────────────────────
 
     /**
@@ -242,7 +493,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
 
         return {
-            Records: result.Records.map(r => this.ToExternalRecord(r, ctx.ObjectName, pkFieldNames)),
+            Records: result.Records.map(r => this.ToExternalRecord(
+                this.TransformRecord(r, obj, fields),
+                ctx.ObjectName,
+                pkFieldNames
+            )),
             HasMore: result.HasMore,
             NextPage: result.NextPage,
             NextOffset: result.NextOffset,
@@ -253,9 +508,16 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     // ── Per-parent fetch (template variables) ────────────────────────
 
     /**
-     * Fetches records from a template-variable endpoint by iterating over parent records.
-     * Identifies the parent object from FK field metadata, loads parent IDs from the
-     * local database, then fetches child records per parent.
+     * Fetches records from a template-variable endpoint, generalized to MULTI-LEVEL
+     * (nested / chained) paths such as `/orgs/{OrgID}/depts/{DeptID}/employees`.
+     *
+     * Each `{var}` is resolved to a parent IntegrationObject; the engine then walks the
+     * FK dependency graph in path order (outermost first), loading each level's parent
+     * IDs — filtered by the OUTER parent via FK when one links them (true nested
+     * semantics, avoids a cartesian 404 storm), or unfiltered when the vars are
+     * independent — substituting them into the path until it is flat, then fetching.
+     * This is the connector-side realization of the topological traversal the engine
+     * already uses for sync ORDER. A single-var path behaves exactly as before.
      */
     private async FetchWithTemplateVars(
         auth: RESTAuthContext,
@@ -265,99 +527,141 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         templateVars: string[],
         ctx: FetchContext
     ): Promise<FetchBatchResult> {
-        const parentInfo = this.ResolveParentInfo(fields, templateVars, ctx.CompanyIntegration.IntegrationID);
-        if (!parentInfo) {
-            console.warn(
-                `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template variables ` +
-                `[${templateVars.join(', ')}] could not be resolved to a parent object.`
-            );
-            return { Records: [], HasMore: false };
+        const resolutions: ResolvedTemplateVar[] = [];
+        const seenParents = new Set<string>();
+        for (const tVar of templateVars) {
+            const info = this.ResolveParentForVar(fields, tVar, ctx.CompanyIntegration.IntegrationID);
+            if (!info) {
+                console.warn(
+                    `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template variable ` +
+                    `{${tVar}} could not be resolved to a parent object.`
+                );
+                return { Records: [], HasMore: false };
+            }
+            // Cycle guard: a parent chain that revisits an object is a metadata error —
+            // name the offending edge instead of looping forever.
+            if (seenParents.has(info.parentObjectID)) {
+                console.warn(
+                    `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template-var dependency ` +
+                    `cycle at {${tVar}} → a parent object already present in the chain.`
+                );
+                return { Records: [], HasMore: false };
+            }
+            seenParents.add(info.parentObjectID);
+            resolutions.push(info);
         }
 
-        const parentIDs = await this.LoadParentIDs(parentInfo.parentObjectID, ctx.ContextUser);
         const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
-        const allRecords: ExternalRecord[] = [];
-
-        for (const parentID of parentIDs) {
-            const resolvedPath = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, parentID);
-            const fullURL = this.BuildFullURL(baseURL, resolvedPath);
-            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
-
-            const tagged = result.Records.map(r => {
-                r[parentInfo.fkFieldName] = parentID;
-                return this.ToExternalRecord(r, ctx.ObjectName, pkFieldNames);
-            });
-
-            allRecords.push(...tagged);
-        }
-
-        return { Records: allRecords, HasMore: false };
+        const out: ExternalRecord[] = [];
+        await this.DescendTemplateVars(auth, baseURL, obj, fields, resolutions, 0, obj.APIPath, {}, [], ctx, pkFieldNames, out);
+        return { Records: out, HasMore: false };
     }
 
     /**
-     * Resolves which template variable maps to which FK field + parent object.
+     * Recursive descent over the ordered template-var resolutions, one layer per level.
      *
-     * Resolution strategy (in order):
-     * 1. Explicit: FK field with RelatedIntegrationObjectID that matches a template var name
-     * 2. PK fallback: finds a sibling integration object whose primary key field name
-     *    matches the template var, allowing resolution without explicit FK metadata
-     *
-     * Returns null if no match is found by either strategy.
+     * Each layer's records are constrained to the valid SUBSET of the combinations of
+     * ALL prior layers: this level's parent is filtered by an FK to EVERY prior-layer
+     * parent it links to (AND-combined). A prior layer this parent has no FK to leaves
+     * that axis unconstrained (cartesian). So `outerStack` carries every prior layer's
+     * (objectID, idValue) — not just the immediate parent — which is what makes a
+     * layer-2 endpoint depending on both layer-0 and layer-1 prune correctly. At the leaf
+     * (all vars substituted) it fetches with pagination and tags each record with the
+     * resolved parent FK values.
      */
-    private ResolveParentInfo(
+    private async DescendTemplateVars(
+        auth: RESTAuthContext,
+        baseURL: string,
+        obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
-        templateVars: string[],
+        resolutions: ResolvedTemplateVar[],
+        level: number,
+        path: string,
+        fkTags: Record<string, string>,
+        outerStack: Array<{ objectID: string; idValue: string }>,
+        ctx: FetchContext,
+        pkFieldNames: string[],
+        out: ExternalRecord[]
+    ): Promise<void> {
+        if (level >= resolutions.length) {
+            const fullURL = this.BuildFullURL(baseURL, path);
+            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+            for (const r of result.Records) {
+                for (const [k, v] of Object.entries(fkTags)) r[k] = v;
+                const transformed = this.TransformRecord(r, obj, fields);
+                out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
+            }
+            return;
+        }
+
+        const res = resolutions[level];
+        // Prune to the valid subset: one AND-filter per prior layer this parent has an FK to.
+        const filters: Array<{ column: string; value: string }> = [];
+        for (const prior of outerStack) {
+            const fkCol = this.FindFKColumnToParent(res.parentObjectID, prior.objectID);
+            if (fkCol) filters.push({ column: fkCol, value: prior.idValue });
+        }
+        const parentIDs = await this.LoadParentIDs(res.parentObjectID, ctx.ContextUser, filters);
+
+        for (const parentID of parentIDs) {
+            const nextPath = this.SubstituteTemplateVars(path, res.templateVar, parentID);
+            const nextTags = { ...fkTags, [res.fkFieldName]: parentID };
+            await this.DescendTemplateVars(
+                auth, baseURL, obj, fields, resolutions, level + 1, nextPath, nextTags,
+                [...outerStack, { objectID: res.parentObjectID, idValue: parentID }],
+                ctx, pkFieldNames, out
+            );
+        }
+    }
+
+    /**
+     * Resolves a SINGLE template variable to its parent object + FK field.
+     *
+     * Strategy (in order):
+     * 1. Explicit: an FK field (RelatedIntegrationObjectID) whose name matches the var.
+     * 2. PK fallback: a sibling integration object whose primary-key field name matches
+     *    the var (e.g. {ProfileID} → the Members object whose PK field is "ProfileID"),
+     *    allowing resolution without explicit FK metadata.
+     *
+     * Returns null when neither strategy matches.
+     */
+    private ResolveParentForVar(
+        fields: MJIntegrationObjectFieldEntity[],
+        templateVar: string,
         integrationID: string
-    ): { templateVar: string; fkFieldName: string; parentObjectID: string } | null {
-        // Strategy 1: Explicit FK field with RelatedIntegrationObjectID
+    ): ResolvedTemplateVar | null {
+        const tVarLower = templateVar.toLowerCase();
+
+        // Strategy 1: explicit FK field whose name matches this var.
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
-
-            for (const tVar of templateVars) {
-                if (field.Name.toLowerCase().includes(tVar.toLowerCase())) {
-                    return {
-                        templateVar: tVar,
-                        fkFieldName: field.Name,
-                        parentObjectID: field.RelatedIntegrationObjectID,
-                    };
-                }
+            if (field.Name.toLowerCase().includes(tVarLower)) {
+                return { templateVar, fkFieldName: field.Name, parentObjectID: field.RelatedIntegrationObjectID };
             }
         }
 
-        // Strategy 2: Match template var against PK fields of sibling objects
-        return this.ResolveParentByPKMatch(templateVars, integrationID);
-    }
-
-    /**
-     * Fallback resolution: finds a sibling integration object whose primary key
-     * field name matches one of the template variables (case-insensitive).
-     * E.g., {ProfileID} matches Members object which has PK field "ProfileID".
-     */
-    private ResolveParentByPKMatch(
-        templateVars: string[],
-        integrationID: string
-    ): { templateVar: string; fkFieldName: string; parentObjectID: string } | null {
+        // Strategy 2: sibling object whose PK field name equals this var.
         const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
-
-        for (const tVar of templateVars) {
-            const tVarLower = tVar.toLowerCase();
-
-            for (const sibling of siblingObjects) {
-                const siblingFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID);
-                const pkField = siblingFields.find(f => f.IsPrimaryKey);
-                if (!pkField) continue;
-
-                if (pkField.Name.toLowerCase() === tVarLower) {
-                    return {
-                        templateVar: tVar,
-                        fkFieldName: tVar, // Use the template var name as the FK field name
-                        parentObjectID: sibling.ID,
-                    };
-                }
+        for (const sibling of siblingObjects) {
+            const siblingFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID);
+            const pkField = siblingFields.find(f => f.IsPrimaryKey);
+            if (pkField && pkField.Name.toLowerCase() === tVarLower) {
+                return { templateVar, fkFieldName: templateVar, parentObjectID: sibling.ID };
             }
         }
 
         return null;
+    }
+
+    /**
+     * Finds the FK column on `innerObjectID` that points at `outerObjectID` — used to
+     * filter a child level by its parent in a nested path. Returns null when no FK links
+     * them, in which case that level loads unfiltered (independent vars / cartesian).
+     */
+    private FindFKColumnToParent(innerObjectID: string, outerObjectID: string): string | null {
+        const innerFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(innerObjectID);
+        const fk = innerFields.find(f => f.RelatedIntegrationObjectID && UUIDsEqual(f.RelatedIntegrationObjectID, outerObjectID));
+        return fk ? fk.Name : null;
     }
 
     /**
@@ -367,7 +671,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     private async LoadParentIDs(
         parentObjectID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        filters?: Array<{ column: string; value: string }>
     ): Promise<string[]> {
         // Use engine cache for metadata lookups
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
@@ -394,9 +699,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         }
 
         const entityName = entityMapResult.Results[0].Entity;
+        // Constrain to the rows satisfying every prior-layer FK (AND). Bare identifiers →
+        // the PG provider auto-quotes them; values are single-quote-escaped.
+        const extraFilter = filters && filters.length > 0
+            ? filters.map(f => `${f.column}='${String(f.value).replace(/'/g, "''")}'`).join(' AND ')
+            : undefined;
         const idResult = await rv.RunView<Record<string, unknown>>({
             EntityName: entityName,
             Fields: [pkFieldName],
+            ExtraFilter: extraFilter,
             ResultType: 'simple',
         }, contextUser);
 
@@ -674,11 +985,16 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         objectType: string,
         pkFieldNames: string[]
     ): ExternalRecord {
-        const externalID = pkFieldNames
-            .map(name => raw[name] != null ? String(raw[name]) : '')
-            .join('|');
+        // §4 synthetic-PK fallback: only treat the PK as usable when EVERY component is present
+        // (a composite key with a missing part — e.g. "abc|" — is not a stable identity). When any
+        // part is missing, fall back to a deterministic content-derived identity (identity hash) so
+        // PK-less / partial-key tables are still syncable + dedupable. Stable while content is unchanged.
+        const allPkPresent = pkFieldNames.length > 0
+            && pkFieldNames.every(name => raw[name] != null && String(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => String(raw[name] ?? '')).join('|');
+        const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
         return {
-            ExternalID: externalID,
+            ExternalID: resolvedID,
             ObjectType: objectType,
             Fields: raw,
         };

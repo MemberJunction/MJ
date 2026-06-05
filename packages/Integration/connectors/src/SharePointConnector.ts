@@ -409,7 +409,7 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
             const response = await this.MakeHTTPRequest(auth, url, 'POST', this.BuildHeaders(auth), ctx.Attributes);
             this.ValidateResponse(response, url);
             const body = response.Body as { id?: string };
-            return { Success: true, ExternalID: String(body.id ?? ''), StatusCode: response.Status };
+            return this.BuildCreatedResult(body.id, response.Status, ctx.ObjectName);
         } catch (err: unknown) {
             return this.BuildCRUDError(err, 'CreateRecord', ctx.ObjectName);
         }

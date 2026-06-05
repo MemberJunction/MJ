@@ -71,6 +71,7 @@
     "@memberjunction/global": "5.38.0",
     "@memberjunction/graphql-dataprovider": "5.38.0",
     "@memberjunction/integration-engine": "5.38.0",
+    "@memberjunction/integration-progress-artifacts": "5.38.0",
     "@memberjunction/integration-schema-builder": "5.38.0",
     "@memberjunction/interactive-component-types": "5.38.0",
     "@memberjunction/lists": "5.38.0",
@@ -96,6 +97,8 @@
     "@memberjunction/testing-engine": "5.38.0",
     "@memberjunction/testing-engine-base": "5.38.0",
     "@memberjunction/version-history": "5.38.0",
+    "@octokit/auth-app": "^7.1.5",
+    "@octokit/rest": "^21.1.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "9.0.10",
@@ -128,14 +131,12 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
-    "@octokit/auth-app": "^7.1.5",
-    "@octokit/rest": "^21.1.1",
     "zod": "~3.24.4"
   },
   "devDependencies": {
     "pkgroll": "2.23.0",
-    "vitest": "^3.1.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
   },
   "repository": {
     "type": "git",

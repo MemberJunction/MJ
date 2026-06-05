@@ -356,15 +356,20 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
 
         const obj = PROPFUEL_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
+        return obj.Fields.map(f => {
+            const fkTarget = this.ResolveForeignKeyTarget(f.Name, f.Description);
+            return {
+                Name: f.Name,
+                Label: f.DisplayName,
+                Description: f.Description,
+                DataType: f.Type,
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.IsPrimaryKey,
+                IsReadOnly: f.IsReadOnly,
+                IsForeignKey: fkTarget !== null,
+                ForeignKeyTarget: fkTarget,
+            };
+        });
     }
 
     private InferFieldsFromSample(sample: Record<string, unknown>, objectName: string): ExternalFieldSchema[] {
@@ -373,6 +378,7 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
 
         return Object.entries(sample).map(([key, value]) => {
             const overlay = staticMap.get(key.toLowerCase());
+            const fkTarget = this.ResolveForeignKeyTarget(key, overlay?.Description);
             return {
                 Name: key,
                 Label: overlay?.DisplayName ?? key,
@@ -381,9 +387,40 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
                 IsRequired: overlay?.IsRequired ?? false,
                 IsUniqueKey: overlay?.IsPrimaryKey ?? false,
                 IsReadOnly: overlay?.IsReadOnly ?? true,
-                IsForeignKey: overlay?.Description?.startsWith('FK') ?? false,
+                IsForeignKey: fkTarget !== null,
+                ForeignKeyTarget: fkTarget,
             };
         });
+    }
+
+    /**
+     * Resolves a foreign-key target purely from this connector's OWN declared metadata.
+     *
+     * A field is treated as a FK only when its name ends in `_id` and the `<sibling>`
+     * stem (singular/plural-aware) matches the external Name of ANOTHER object this
+     * connector actually declares in PROPFUEL_OBJECTS — e.g. `contact_id` → "Contacts",
+     * `campaign_id` → "Campaigns". The declared `FK → X` field Description must agree
+     * with the resolved sibling; if it doesn't, the field is not treated as a FK.
+     * Returns the sibling object's external Name, or null when nothing is provable.
+     */
+    private ResolveForeignKeyTarget(fieldName: string, description?: string): string | null {
+        const lower = fieldName.toLowerCase();
+        if (!lower.endsWith('_id') || lower === 'id') return null;
+
+        const stem = lower.slice(0, -'_id'.length); // e.g. "contact", "campaign"
+        const target = PROPFUEL_OBJECTS.find(o => {
+            const name = o.Name.toLowerCase();
+            // singular/plural-aware match against a sibling object's external name
+            return name === stem || name === `${stem}s` || `${name}s` === stem || name === stem.replace(/y$/, 'ies');
+        });
+        if (!target) return null;
+
+        // Honor the declared `FK → X` description when present — it must name this sibling.
+        if (description && /^fk\s*→/i.test(description.trim())) {
+            const declaredTarget = description.replace(/^fk\s*→\s*/i, '').trim().toLowerCase();
+            if (declaredTarget && declaredTarget !== target.Name.toLowerCase()) return null;
+        }
+        return target.Name;
     }
 
     private InferType(value: unknown): string {

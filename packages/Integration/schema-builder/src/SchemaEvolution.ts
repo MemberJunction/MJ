@@ -38,7 +38,12 @@ export class SchemaEvolution {
         // Standard columns to ignore in the diff (managed by Schema Builder / CodeGen)
         const standardCols = new Set(['id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
                                        '__mj_createdat', '__mj_updatedat',
-                                       '__mj_integration_syncstatus', '__mj_integration_lastsyncedat']);
+                                       '__mj_integration_syncstatus', '__mj_integration_lastsyncedat',
+                                       '__mj_integration_lastsyncedsnapshot', '__mj_integration_syncmessage',
+                                       '__mj_integration_contenthash',
+                                       '__mj_integration_externalversion', '__mj_integration_lastseenmodifiedvalue',
+                                       '__mj_integration_lastreconciledat', '__mj_integration_lastwriterdirection',
+                                       '__mj_integration_istombstoned', '__mj_integration_deleteddetectedat']);
 
         const added: TargetColumnConfig[] = [];
         const modified: ColumnModification[] = [];
@@ -91,7 +96,38 @@ export class SchemaEvolution {
             }
         }
 
+        // Ensure the standard __mj_integration_* columns exist on EXISTING tables. The diff above
+        // skips standard columns (they're in `standardCols`), so a table created before a standard
+        // column was introduced would never get it. ALTER-add any that are missing — otherwise the
+        // engine's writes to a missing column silently no-op (hasField guard).
+        added.push(...this.EnsureStandardColumns(existing, platform));
+
         return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed, Warnings: warnings };
+    }
+
+    /**
+     * Returns the standard __mj_integration_* columns MISSING from an existing mirror table,
+     * as ALTER-ADD configs. New tables get these in CREATE TABLE (DDLGenerator.StandardColumns);
+     * existing tables created before a column was added get it ALTER-ed in here.
+     */
+    private EnsureStandardColumns(existing: ExistingTableInfo, platform: DatabasePlatform): TargetColumnConfig[] {
+        const have = new Set(existing.Columns.map(c => c.Name.toLowerCase()));
+        const isSql = platform === 'sqlserver';
+        const std: TargetColumnConfig[] = [
+            { SourceFieldName: '__mj_integration_SyncStatus', TargetColumnName: '__mj_integration_SyncStatus', TargetSqlType: isSql ? 'NVARCHAR(50)' : 'VARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: "'Active'" },
+            { SourceFieldName: '__mj_integration_LastSyncedAt', TargetColumnName: '__mj_integration_LastSyncedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_LastSyncedSnapshot', TargetColumnName: '__mj_integration_LastSyncedSnapshot', TargetSqlType: isSql ? 'NVARCHAR(MAX)' : 'TEXT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_SyncMessage', TargetColumnName: '__mj_integration_SyncMessage', TargetSqlType: isSql ? 'NVARCHAR(MAX)' : 'TEXT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_ContentHash', TargetColumnName: '__mj_integration_ContentHash', TargetSqlType: isSql ? 'NVARCHAR(64)' : 'VARCHAR(64)', IsNullable: true, MaxLength: 64, Precision: null, Scale: null, DefaultValue: null },
+            // Per-record sync ledger (plan §2.5)
+            { SourceFieldName: '__mj_integration_ExternalVersion', TargetColumnName: '__mj_integration_ExternalVersion', TargetSqlType: isSql ? 'NVARCHAR(255)' : 'VARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_LastSeenModifiedValue', TargetColumnName: '__mj_integration_LastSeenModifiedValue', TargetSqlType: isSql ? 'NVARCHAR(255)' : 'VARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_LastReconciledAt', TargetColumnName: '__mj_integration_LastReconciledAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_LastWriterDirection', TargetColumnName: '__mj_integration_LastWriterDirection', TargetSqlType: isSql ? 'NVARCHAR(10)' : 'VARCHAR(10)', IsNullable: true, MaxLength: 10, Precision: null, Scale: null, DefaultValue: null },
+            { SourceFieldName: '__mj_integration_IsTombstoned', TargetColumnName: '__mj_integration_IsTombstoned', TargetSqlType: isSql ? 'BIT' : 'BOOLEAN', IsNullable: false, MaxLength: null, Precision: null, Scale: null, DefaultValue: isSql ? '0' : 'FALSE' },
+            { SourceFieldName: '__mj_integration_DeletedDetectedAt', TargetColumnName: '__mj_integration_DeletedDetectedAt', TargetSqlType: isSql ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+        ];
+        return std.filter(c => !have.has(c.TargetColumnName.toLowerCase()));
     }
 
     /**
