@@ -1112,9 +1112,10 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (3 classes)
+// @memberjunction/scheduling-engine (4 classes)
 import {
     ActionScheduledJobDriver,
+    AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
 } from '@memberjunction/scheduling-engine';
@@ -1953,6 +1954,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SlackMessagingExtension,
     TeamsMessagingExtension,
     ActionScheduledJobDriver,
+    AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     AgentEvalDriver,
@@ -1967,7 +1969,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 818;
+export const CLASS_REGISTRATIONS_COUNT = 819;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
