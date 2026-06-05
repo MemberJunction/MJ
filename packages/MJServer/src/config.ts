@@ -227,6 +227,67 @@ const feedbackGithubSettingsSchema = z.object({
   categoryLabels: z.record(z.string()).optional(),
   severityLabels: z.record(z.string()).optional(),
   assignees: z.array(z.string()).optional(),
+  /**
+   * Shared secret used to verify GitHub webhook signatures (X-Hub-Signature-256).
+   * Required to enable the feedback notification webhook endpoint. Configure the
+   * same value here and in the GitHub repository's webhook settings.
+   * Can also be supplied via the GITHUB_FEEDBACK_WEBHOOK_SECRET env var.
+   */
+  webhookSecret: z.string().optional(),
+});
+
+const feedbackEmailsSettingsSchema = z.object({
+  /**
+   * Master switch for outbound feedback emails (confirmation, status
+   * changes, new comments). Defaults to FALSE so apps that adopt the
+   * feedback component aren't forced into the email subsystem — they
+   * must opt in by setting this to true and configuring a provider.
+   * When false the SubmitFeedback resolver still records tracking rows
+   * but skips email sends, and the webhook handler short-circuits.
+   */
+  enabled: z.boolean().optional().default(false),
+  /**
+   * Sender address used for all feedback emails. Should be an address
+   * that has been verified with the configured provider (e.g., a SendGrid
+   * Sender Identity). Can be overridden by the FEEDBACK_EMAIL_FROM env var.
+   */
+  fromAddress: z.string().optional(),
+  /**
+   * Human-friendly application name used in email subject lines, the
+   * header bar, and the footer (e.g., "Acme Portal"). Lets a deployment
+   * brand its notifications without hardcoding "MemberJunction". Falls
+   * back to the submission's appName field, then to "MemberJunction".
+   */
+  appName: z.string().optional(),
+  /**
+   * CSS hex color used for the email's header bar, the title-card accent
+   * border, and other branded touches. Lets each deploying app theme
+   * emails to match its own brand. Defaults to MJ brand blue.
+   */
+  accentColor: z.string().optional().default('#264FAF'),
+  /**
+   * Name of the registered CommunicationEngine provider used to send feedback
+   * emails. Must match a provider name in the `MJ: Communication Providers`
+   * entity (e.g., "SendGrid", "MS Graph", "Gmail"). Defaults to "SendGrid".
+   */
+  providerName: z.string().optional().default('SendGrid'),
+  /**
+   * Name of the message type within the chosen provider to use. Must match
+   * a message-type name configured on the provider. Defaults to "Email" to
+   * match the convention used by NotificationEngine (the canonical email
+   * caller in MJ) and the message type registered by default in MJ databases.
+   */
+  messageTypeName: z.string().optional().default('Email'),
+  /**
+   * Marker that maintainers can prefix a GitHub issue comment with to keep
+   * that specific comment out of the submitter's inbox. Useful for
+   * maintainer-to-maintainer discussion on a feedback issue (implementation
+   * notes, triage debate, etc.) without leaking it via the notification
+   * email. Matched case-insensitively against the comment's leading
+   * non-whitespace text. Defaults to "[internal]" — set to an empty string
+   * to disable the feature.
+   */
+  internalCommentMarker: z.string().optional().default('[internal]'),
 });
 
 const feedbackSettingsSchema = z.object({
@@ -234,6 +295,22 @@ const feedbackSettingsSchema = z.object({
   enabled: z.boolean().optional().default(true),
   /** Optional GitHub-specific settings used by the feedback resolver. */
   github: feedbackGithubSettingsSchema.optional(),
+  /**
+   * Optional outbound-email settings used to notify submitters about the
+   * status of their feedback (confirmation on creation, status changes,
+   * new comments). See feedbackEmailsSettingsSchema for field-level docs.
+   * Opt-in: defaults to disabled so apps adopting the feedback component
+   * aren't forced into the email subsystem.
+   */
+  emails: feedbackEmailsSettingsSchema.optional(),
+  /**
+   * Optional fallback contact (typically a support email address) surfaced
+   * in the feedback success dialog when the emails subsystem is disabled or
+   * the submitter didn't provide an email. Gives submitters a way to follow
+   * up when they have no automatic notification channel. Leave unset to show
+   * only the bare-bones "issue logged" confirmation in those cases.
+   */
+  fallbackContact: z.string().optional(),
 });
 
 const configInfoSchema = z.object({
@@ -302,6 +379,7 @@ export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
+export type FeedbackEmailsSettingsConfig = z.infer<typeof feedbackEmailsSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 

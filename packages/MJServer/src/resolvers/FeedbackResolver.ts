@@ -1,7 +1,17 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { MJUserFeedbackSubmissionEntity } from '@memberjunction/core-entities';
+import { GetReadWriteProvider } from '../util.js';
+import {
+  sendFeedbackEmail,
+  escapeHtml,
+  getFeedbackAppName,
+  getFeedbackAccentColor,
+  wrapInEmailShell,
+  buildIssueTitleCard,
+} from '../feedback/feedbackEmail.js';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { z } from 'zod';
@@ -91,7 +101,11 @@ export class SubmitFeedbackInput {
 }
 
 /**
- * Response type for feedback submission
+ * Response type for feedback submission. Includes both the GitHub issue
+ * reference and the email-notification state so the client's success dialog
+ * can tailor its messaging:
+ *   - If EmailWillBeSent, show "You'll get email updates at {EmailSentTo}".
+ *   - Otherwise, optionally surface FallbackContact ("For questions, contact …").
  */
 @ObjectType()
 export class FeedbackResponseType {
@@ -106,6 +120,32 @@ export class FeedbackResponseType {
 
   @Field({ nullable: true })
   Error?: string;
+
+  /**
+   * True when the resolver has queued a confirmation email to the submitter
+   * (emails subsystem enabled AND submitter provided a non-empty email). The
+   * client uses this to decide whether to show the "you'll get an email"
+   * message in the success dialog.
+   */
+  @Field({ nullable: true })
+  EmailWillBeSent?: boolean;
+
+  /**
+   * The address the confirmation email was queued to. Echoed back so the
+   * dialog can display it to the submitter ("...at jane@example.com").
+   * Null when no email will be sent.
+   */
+  @Field({ nullable: true })
+  EmailSentTo?: string;
+
+  /**
+   * Optional support/contact handle (typically an email address) configured
+   * via feedbackSettings.fallbackContact. Shown by the success dialog when
+   * no email notification will be sent, giving the submitter a way to
+   * follow up out-of-band. Null when no fallback is configured.
+   */
+  @Field({ nullable: true })
+  FallbackContact?: string;
 }
 
 /**
@@ -310,10 +350,28 @@ export class FeedbackResolver {
 
       LogStatus(`Feedback submitted: Issue #${issue.number} created`);
 
+      // Persist a tracking row + send the confirmation email. Fire-and-forget:
+      // the GitHub issue is already created, so a failure here must not roll back
+      // the user-visible success. The helper has its own try/catch and logs errors.
+      if (submission.email) {
+        void this.recordSubmissionAndNotify(submission, issue, config, ctx);
+      }
+
+      // Reflect the email-notification state back to the client so the success
+      // dialog can show "you'll get an email" vs. the fallback messaging. We
+      // know an email will be queued iff the emails subsystem is enabled AND
+      // the submitter provided one — match the same gate the helper uses.
+      const emailsEnabled = configInfo.feedbackSettings?.emails?.enabled === true;
+      const emailWillBeSent = emailsEnabled && !!submission.email;
+      const fallbackContact = configInfo.feedbackSettings?.fallbackContact ?? null;
+
       return {
         Success: true,
         IssueNumber: issue.number,
         IssueUrl: issue.html_url,
+        EmailWillBeSent: emailWillBeSent,
+        EmailSentTo: emailWillBeSent ? submission.email : null,
+        FallbackContact: emailWillBeSent ? null : fallbackContact,
       };
     } catch (error) {
       LogError('Error submitting feedback', undefined, error);
@@ -877,6 +935,147 @@ Step 2 — SEVERITY. Strictly follow these rules:
       '```',
       '</details>',
     ].join('\n');
+  }
+
+  // ============================================================================
+  // Notification & tracking — persist the submission and email the submitter
+  // ============================================================================
+
+  /**
+   * Persist a UserFeedbackSubmission tracking row and send the confirmation
+   * email. Best-effort: any failure is logged but never thrown. The caller
+   * intentionally runs this fire-and-forget after the GitHub issue is created.
+   *
+   * The row is what later lets the webhook handler map a GitHub issue event
+   * (status change, new comment) back to the original submitter's email.
+   */
+  private async recordSubmissionAndNotify(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    config: FeedbackConfig,
+    ctx: AppContext
+  ): Promise<void> {
+    try {
+      const contextUser = ctx.userPayload?.userRecord;
+      const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+      const saved = await this.saveFeedbackSubmissionRow(submission, issue, config, contextUser, provider);
+      if (!saved) return; // saveFeedbackSubmissionRow already logged the failure
+
+      await this.sendConfirmationEmail(submission, issue, contextUser);
+    } catch (err) {
+      LogError('Feedback follow-up (tracking row + email) failed', undefined, err);
+    }
+  }
+
+  /**
+   * Insert a UserFeedbackSubmission row that maps the GitHub issue back to
+   * the submitter's email address. Returns true if the row saved, false
+   * otherwise (after logging the underlying entity error).
+   */
+  private async saveFeedbackSubmissionRow(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    config: FeedbackConfig,
+    contextUser: UserInfo | undefined,
+    provider?: IMetadataProvider
+  ): Promise<boolean> {
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJUserFeedbackSubmissionEntity>(
+      'MJ: User Feedback Submissions',
+      contextUser
+    );
+    row.UserID = submission.userId ?? null;
+    row.Email = submission.email!;
+    row.Name = submission.name ?? null;
+    row.GitHubOwner = config.owner;
+    row.GitHubRepo = config.repo;
+    row.IssueNumber = issue.number;
+    row.IssueTitle = submission.title;
+    row.IssueURL = issue.html_url;
+    row.Category = submission.category ?? null;
+    row.Severity = submission.severity ?? null;
+
+    if (!(await row.Save())) {
+      LogError(
+        `Failed to save UserFeedbackSubmission for issue #${issue.number}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Send the "we got your feedback" confirmation email to the submitter.
+   * Delegates the actual send to the shared sendFeedbackEmail helper so the
+   * webhook handler and this resolver share one code path for provider
+   * lookup, error logging, and config resolution.
+   */
+  private async sendConfirmationEmail(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    contextUser: UserInfo | undefined
+  ): Promise<void> {
+    const appName = getFeedbackAppName(submission.appName);
+    await sendFeedbackEmail({
+      to: submission.email!,
+      subject: `[${appName}] Feedback received: #${issue.number} ${submission.title}`,
+      textBody: this.buildConfirmationEmailText(submission, issue, appName),
+      htmlBody: this.buildConfirmationEmailHtml(submission, issue, appName),
+      contextUser,
+    });
+  }
+
+  /**
+   * Plain-text body for the confirmation email. Self-contained so private-repo
+   * recipients (who cannot view the GitHub issue) have full context from the
+   * email alone.
+   */
+  private buildConfirmationEmailText(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    appName: string
+  ): string {
+    const greeting = submission.name ? `Hi ${submission.name},` : 'Hi,';
+    return [
+      greeting,
+      '',
+      `Thanks for your feedback on ${appName}. We've logged it as issue #${issue.number}:`,
+      '',
+      `    ${submission.title}`,
+      '',
+      `You'll get follow-up emails from this address whenever the issue's status changes or a maintainer comments. There's nothing more to do on your end — we just wanted you to know it's being tracked.`,
+      '',
+      `— The ${appName} team`,
+    ].join('\n');
+  }
+
+  /**
+   * HTML body for the confirmation email. Wraps the content in the shared
+   * branded email shell so layout/colors stay consistent across confirmation,
+   * status-change, and new-comment emails.
+   */
+  private buildConfirmationEmailHtml(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    appName: string
+  ): string {
+    const safeName = submission.name ? escapeHtml(submission.name) : '';
+    const safeAppName = escapeHtml(appName);
+    const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
+    const accentColor = getFeedbackAccentColor();
+    const titleCard = buildIssueTitleCard({
+      issueNumber: issue.number,
+      title: submission.title,
+      accentColor,
+    });
+
+    const bodyHtml = `
+<p style="margin: 0 0 16px 0;">${greeting}</p>
+<p style="margin: 0 0 8px 0;">Thanks for your feedback on <strong>${safeAppName}</strong>. We've logged it as issue <strong>#${issue.number}</strong>:</p>
+${titleCard}
+<p style="margin: 24px 0 0 0;">You'll get follow-up emails from this address whenever the issue's status changes or a maintainer comments. There's nothing more to do on your end — we just wanted you to know it's being tracked.</p>`.trim();
+
+    return wrapInEmailShell({ appName, accentColor, bodyHtml });
   }
 
   /**

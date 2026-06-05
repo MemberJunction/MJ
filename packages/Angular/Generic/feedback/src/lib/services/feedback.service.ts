@@ -39,6 +39,9 @@ const SUBMIT_FEEDBACK_MUTATION = gql`
       IssueNumber
       IssueUrl
       Error
+      EmailWillBeSent
+      EmailSentTo
+      FallbackContact
     }
   }
 `;
@@ -165,7 +168,10 @@ export class FeedbackService {
       success: data.Success,
       issueNumber: data.IssueNumber,
       issueUrl: data.IssueUrl,
-      error: data.Error
+      error: data.Error,
+      emailWillBeSent: data.EmailWillBeSent,
+      emailSentTo: data.EmailSentTo,
+      fallbackContact: data.FallbackContact,
     };
   }
 
@@ -297,6 +303,9 @@ interface SubmitFeedbackResult {
     IssueNumber?: number;
     IssueUrl?: string;
     Error?: string;
+    EmailWillBeSent?: boolean;
+    EmailSentTo?: string;
+    FallbackContact?: string;
   };
 }
 

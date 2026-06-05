@@ -50,6 +50,7 @@
     "@memberjunction/api-keys": "5.39.0",
     "@memberjunction/auth-providers": "5.39.0",
     "@memberjunction/codegen-lib": "5.39.0",
+    "@memberjunction/communication-engine": "5.39.0",
     "@memberjunction/communication-ms-graph": "5.39.0",
     "@memberjunction/communication-sendgrid": "5.39.0",
     "@memberjunction/communication-types": "5.39.0",
@@ -123,10 +124,12 @@
     "jsonwebtoken": "9.0.3",
     "jwks-rsa": "^3.2.2",
     "lru-cache": "^11.2.5",
+    "marked": "^17.0.1",
     "mssql": "^12.2.0",
     "pg": "^8.13.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "^7.8.2",
+    "sanitize-html": "^2.17.4",
     "type-graphql": "2.0.0-beta.3",
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
@@ -134,6 +137,7 @@
     "zod": "~3.24.4"
   },
   "devDependencies": {
+    "@types/sanitize-html": "^2.16.0",
     "pkgroll": "2.23.0",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"
