@@ -192,31 +192,40 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const runID = run.ID;
 
             try {
-                // Find which entity maps already completed in this run
-                const detailsResult = await rv.RunView<{ EntityID: string }>({
+                // Find which entity MAPS already completed SUCCESSFULLY in this run. We correlate
+                // by EntityMapID (parsed from the detail's RecordID, stamped by CreateRunDetail),
+                // not EntityID — two maps can target the same MJ Entity, so keying on EntityID
+                // could skip a still-pending sibling map. We also require IsSuccess=1: a map that
+                // completed WITH errors (RecordsErrored>0, no throw) must be re-attempted on resume,
+                // otherwise its errored records are silently abandoned.
+                const detailsResult = await rv.RunView<{ RecordID: string; IsSuccess: boolean }>({
                     EntityName: 'MJ: Company Integration Run Details',
                     ExtraFilter: `CompanyIntegrationRunID='${runID}'`,
-                    Fields: ['EntityID'],
+                    Fields: ['RecordID', 'IsSuccess'],
                     ResultType: 'simple',
                 }, contextUser);
 
-                const completedEntityIDs = new Set<string>();
+                const completedMapIDs = new Set<string>();
                 if (detailsResult.Success) {
                     for (const d of detailsResult.Results) {
-                        completedEntityIDs.add(d.EntityID.toLowerCase());
+                        if (!d.IsSuccess) continue; // completed-with-errors → re-attempt on resume
+                        const m = /^EntityMap:([0-9a-fA-F-]+)\|/.exec(d.RecordID ?? '');
+                        // Parse-miss falls open (map treated as not-completed → re-runs): at worst a
+                        // redundant idempotent re-sync, never a silent skip.
+                        if (m) completedMapIDs.add(m[1].toLowerCase());
                     }
                 }
 
                 console.log(
                     `[IntegrationEngine] Resuming run ${runID.substring(0, 8)}... ` +
                     `for ${companyIntegrationID.substring(0, 8)}... ` +
-                    `(${completedEntityIDs.size} entity maps already completed)`
+                    `(${completedMapIDs.size} entity maps already completed)`
                 );
 
-                // Load config and filter to only remaining entity maps
+                // Load config and filter to only remaining entity maps (by map ID)
                 const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
                 const remainingMaps = config.entityMaps.filter(
-                    em => !completedEntityIDs.has((em.EntityID).toLowerCase())
+                    em => !completedMapIDs.has(em.ID.toLowerCase())
                 );
 
                 if (remainingMaps.length === 0) {
@@ -409,7 +418,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (result.RecordsErrored > 0) {
                 result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
             }
-            await this.FinalizeRun(run, result, contextUser, onNotification);
+            await this.FinalizeRun(run, result, contextUser, onNotification, abortSignal?.aborted);
             const summary = this.buildSyncResultBody(config.companyIntegration.Integration, result);
             logger.emit('sync.run.complete', {
                 success: result.Success && result.RecordsErrored === 0,
@@ -598,7 +607,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const rv = new RunView();
             const runs = await rv.RunView<{ ID: string }>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegration.ID}' AND Status='Completed'`,
+                // 'Success' is the only terminal "this run actually completed a reconcile" state the
+                // engine ever writes (FinalizeRun / the resume path). The CompanyIntegrationRun Status
+                // value list is Pending/In Progress/Success/Failed (no 'Completed'), so filtering on a
+                // value the engine never writes made this count ALWAYS 0 → every scheduled run forced
+                // to a full sync (0 % every === 0). 'Success' restores the intended 1-in-N cadence.
+                ExtraFilter: `CompanyIntegrationID='${companyIntegration.ID}' AND Status='Success'`,
                 Fields: ['ID'],
                 ResultType: 'simple',
                 BypassCache: true, // full-vs-incremental decision needs the true completed-run count
@@ -1562,18 +1576,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return this.EmptyResult();
         }
 
-        let latestChangeAt: string | null = null;
+        // Watermark safety: the push watermark must never advance PAST a record that FAILED to
+        // push, or the next incremental push (which filters ChangedAt > watermark, strictly) would
+        // permanently exclude that record and silently drop the local change. We therefore clamp the
+        // advance strictly BELOW the earliest-failing record's ChangedAt — tracked by VALUE, not
+        // array position, because the dedup that produces changedRecords does not guarantee the
+        // carried ChangedAt is monotonic with order. ISO-8601 ChangedAt strings compare correctly
+        // lexicographically, matching the SQL `ChangedAt > '...'` filter in LoadChangedMJRecords.
+        let firstErrorChangeAt: string | null = null; // min ChangedAt among failed pushes
+        const successfulChangeAts: string[] = [];
 
         for (const change of changedRecords) {
             result.RecordsProcessed++;
             try {
                 await this.PushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser, logger);
-                if (change.ChangedAt && (!latestChangeAt || change.ChangedAt > latestChangeAt)) {
-                    latestChangeAt = change.ChangedAt;
-                }
+                if (change.ChangedAt) successfulChangeAts.push(change.ChangedAt);
             } catch (err) {
                 const errMsg = err instanceof Error ? err.message : String(err);
                 result.RecordsErrored++;
+                if (change.ChangedAt && (!firstErrorChangeAt || change.ChangedAt < firstErrorChangeAt)) {
+                    firstErrorChangeAt = change.ChangedAt; // earliest failure gates the watermark
+                }
                 result.Errors.push({
                     ExternalID: change.RecordID,
                     ChangeType: change.Type as 'Create' | 'Update' | 'Delete' | 'Skip',
@@ -1583,6 +1606,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     ExternalRecord: { ExternalID: change.RecordID, ObjectType: entityMap.ExternalObjectName, Fields: {} },
                 });
             }
+        }
+
+        // Advance only to the MAX successful ChangedAt that is strictly BEFORE the earliest failure,
+        // so any failed record (and anything at/after its timestamp) is re-selected next pass. If the
+        // earliest (or only) change failed, latestChangeAt stays null → the watermark is not advanced
+        // at all, guaranteeing retry. A success sharing an identical ChangedAt with a failure is also
+        // re-selected next pass (strict `>` keeps the watermark below that timestamp) — harmless, a
+        // re-push of an unchanged record is idempotent via the existing record-map/dirty-flag path.
+        let latestChangeAt: string | null = null;
+        for (const at of successfulChangeAts) {
+            if (firstErrorChangeAt && at >= firstErrorChangeAt) continue;
+            if (!latestChangeAt || at > latestChangeAt) latestChangeAt = at;
         }
 
         // Update push watermark
@@ -2286,15 +2321,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // existing dirty-flag path runs unchanged.
             const precheckHashes = await this.PrefetchContentHashes(batch, contextUser);
 
+            // PKs of records the content-hash fast path skipped this batch — still present and
+            // confirmed-unchanged on the source. Collected so we can refresh LastReconciledAt for
+            // all of them in ONE set-based touch after the batch (instead of a frozen-forever stamp).
+            let reconciledSkipIds: string[] = [];
+
             await provider.BeginTransaction();
             try {
                 for (const record of batch) {
                     result.RecordsProcessed++;
-                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes);
+                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
                 }
                 await provider.CommitTransaction();
             } catch (err) {
                 await provider.RollbackTransaction();
+                // The batch transaction rolled back; the skip-IDs collected during the failed attempt
+                // never committed. Reset and let the per-record retry re-collect only what commits.
+                reconciledSkipIds = [];
 
                 // Roll back the in-memory counters that ApplySingleRecord bumped inside the failed batch
                 result.RecordsProcessed = batchStartProcessed;
@@ -2314,9 +2357,62 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // Degrade to per-record application so the failure isolates to the poison
                 // record(s) and every good record in this batch still commits.
                 await this.applyRecordsIndividually(
-                    batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes
+                    batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds
                 );
             }
+
+            // After the batch settles (committed, or per-record retried), refresh
+            // LastReconciledAt for every content-hash-skipped row in ONE set-based touch.
+            // Best-effort — a touch failure must never break the sync.
+            if (reconciledSkipIds.length > 0) {
+                await this.TouchLastReconciledAt(entityMap, reconciledSkipIds, contextUser, logger);
+            }
+        }
+    }
+
+    /**
+     * Refreshes __mj_integration_LastReconciledAt = now for a set of records that the content-hash
+     * fast path skipped (present + confirmed-unchanged on the source). Issues ONE set-based UPDATE
+     * for the whole skip set so the optimization isn't defeated by per-row writes. No-op (and never
+     * throws) when the entity lacks the column, has a composite PK, or the UPDATE fails — best-effort,
+     * mirroring PrefetchContentHashes. Keeps the column's "last confirmed present" semantics honest so
+     * future unseen-since-last-reconcile logic can't misclassify a still-present unchanged record.
+     */
+    private async TouchLastReconciledAt(
+        entityMap: ICompanyIntegrationEntityMap,
+        recordIds: string[],
+        contextUser: UserInfo,
+        logger?: SyncLogger
+    ): Promise<void> {
+        try {
+            const md = this.ProviderToUse;
+            const entityInfo = md.EntityByName(entityMap.Entity ?? '');
+            if (!entityInfo) return;
+            const RECONCILED_COLUMN = '__mj_integration_LastReconciledAt';
+            if (!entityInfo.Fields.some(f => f.Name === RECONCILED_COLUMN)) return;
+            const pkFields = entityInfo.PrimaryKeys ?? [];
+            if (pkFields.length !== 1) return; // single-PK set-based touch only
+            if (!entityInfo.SchemaName || !entityInfo.BaseTable) return;
+
+            const provider = md as DatabaseProviderBase;
+            const dialect = provider.Dialect;
+            const table = `${dialect.QuoteIdentifier(entityInfo.SchemaName)}.${dialect.QuoteIdentifier(entityInfo.BaseTable)}`;
+            const col = dialect.QuoteIdentifier(RECONCILED_COLUMN);
+            const pk = dialect.QuoteIdentifier(pkFields[0].Name);
+            const uniqueIds = Array.from(new Set(recordIds));
+            const inList = uniqueIds.map(id => dialect.QuoteStringLiteral(String(id))).join(',');
+            const now = dialect.QuoteStringLiteral(new Date().toISOString());
+            const sql = `UPDATE ${table} SET ${col} = ${now} WHERE ${pk} IN (${inList})`;
+            await provider.ExecuteSQL(sql, undefined, undefined, contextUser);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[IntegrationEngine] LastReconciledAt touch skipped for ${entityMap.ExternalObjectName}: ${msg}`);
+            // Best-effort: surface in the structured stream as a non-fatal warning (a touch failure
+            // must never break the sync). Uses the existing 'sync.warning' channel.
+            logger?.warning('reconcile', 'LAST_RECONCILED_TOUCH_FAILED', msg, {
+                externalObjectName: entityMap.ExternalObjectName,
+                count: recordIds.length,
+            });
         }
     }
 
@@ -2342,7 +2438,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         logger: SyncLogger | undefined,
-        precheckHashes: Map<string, string> | undefined
+        precheckHashes: Map<string, string> | undefined,
+        reconciledSkipIds?: string[]
     ): Promise<void> {
         const provider = this.ProviderToUse as DatabaseProviderBase;
 
@@ -2350,7 +2447,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             await provider.BeginTransaction();
             try {
                 result.RecordsProcessed++;
-                await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes);
+                await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
                 await provider.CommitTransaction();
             } catch (recErr) {
                 await provider.RollbackTransaction();
@@ -2397,7 +2494,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         logger?: SyncLogger,
-        precheckHashes?: Map<string, string>
+        precheckHashes?: Map<string, string>,
+        reconciledSkipIds?: string[]
     ): Promise<void> {
         logger?.emit('sync.record.decision', {
             externalId: record.ExternalRecord.ExternalID,
@@ -2422,7 +2520,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 break;
             }
             case 'Update':
-                await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes);
+                await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds);
                 break;
             case 'Delete': {
                 const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
@@ -2563,7 +2661,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
         contextUser: UserInfo,
-        precheckHashes?: Map<string, string>
+        precheckHashes?: Map<string, string>,
+        reconciledSkipIds?: string[]
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
@@ -2583,6 +2682,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const stored = precheckHashes.get(record.MatchedMJRecordID);
             if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
+                // The record IS still present and confirmed-unchanged on the source — but skipping
+                // the write here means SetStandardIntegrationFields never runs, so __mj_integration_
+                // LastReconciledAt would freeze at first-sync time. Record the PK so the batch can
+                // refresh LastReconciledAt in ONE set-based touch (keeps the skip optimization while
+                // keeping the column's "last confirmed present" semantics honest for future
+                // unseen-since-last-reconcile logic). No per-row write — see TouchLastReconciledAt.
+                if (reconciledSkipIds) reconciledSkipIds.push(record.MatchedMJRecordID);
                 return;
             }
         }
@@ -3065,11 +3171,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         detail.NewRecord();
         detail.CompanyIntegrationRunID = run.ID;
         detail.EntityID = entityMap.EntityID;
-        detail.RecordID = `Processed:${result.RecordsProcessed}`;
+        // Stamp the EntityMapID (NOT just the EntityID) into the free-form RecordID so resume
+        // can correlate completion per entity MAP. Two distinct maps can target the same MJ Entity
+        // (CompanyIntegrationEntityMap has no unique (CompanyIntegrationID, EntityID) constraint),
+        // so keying resume on EntityID alone could wrongly skip a second still-pending map sharing
+        // that entity. Format: 'EntityMap:<id>|Processed:<n>'. ResumeOrphanedSyncs parses this.
+        detail.RecordID = `EntityMap:${entityMap.ID}|Processed:${result.RecordsProcessed}`;
         detail.Action = result.RecordsCreated > 0 ? 'INSERT' : 'UPDATE';
         detail.IsSuccess = result.RecordsErrored === 0;
 
-        await detail.Save();
+        const detailSaved = await detail.Save();
+        if (!detailSaved) {
+            console.warn(
+                `[IntegrationEngine] Failed to save run detail for entity map ${entityMap.ID}: ` +
+                `${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`
+            );
+        }
     }
 
     /**
@@ -3119,15 +3236,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         run: MJCompanyIntegrationRunEntity,
         result: SyncResult,
         _contextUser: UserInfo,
-        onNotification?: OnNotificationCallback
+        onNotification?: OnNotificationCallback,
+        aborted?: boolean
     ): Promise<void> {
         run.EndedAt = new Date();
         run.TotalRecords = result.RecordsProcessed;
-        run.Status = result.RecordsErrored > 0 ? 'Failed' : 'Success';
-        if (result.Errors.length > 0) {
-            run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
+        // A user/system-cancelled run must NOT be recorded as 'Success' — that hides the
+        // cancellation in run history (indistinguishable from a clean completion) and is wrong
+        // for any downstream cadence/health logic. Until a first-class 'Cancelled' status value
+        // exists on CompanyIntegrationRun (Status value list is Pending/In Progress/Success/Failed),
+        // finalize an aborted run as 'Failed' with an explicit ErrorLog. The durable progress
+        // artifact additionally carries exitReason='aborted' (see finalizeSyncProgress) so a stopped
+        // run stays distinguishable from a real failure over GraphQL.
+        if (aborted) {
+            run.Status = 'Failed';
+            run.ErrorLog = result.ErrorMessage ?? 'Sync cancelled by user';
+        } else {
+            run.Status = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+            if (result.Errors.length > 0) {
+                run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
+            }
         }
-        await run.Save();
+        const saved = await run.Save();
+        if (!saved) {
+            console.warn(
+                `[IntegrationEngine] Failed to finalize run ${run.ID}: ` +
+                `${run.LatestResult?.CompleteMessage ?? 'unknown error'}`
+            );
+        }
 
         if (onNotification) {
             const notification = this.buildCompletionNotification(run, result);
