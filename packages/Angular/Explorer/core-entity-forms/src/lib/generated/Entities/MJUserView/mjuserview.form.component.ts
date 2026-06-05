@@ -21,6 +21,7 @@ export class MJUserViewFormComponent extends BaseFormComponent {
             { sectionKey: 'viewDefinitionSettings', sectionName: 'View Definition & Settings', isExpanded: true },
             { sectionKey: 'filteringSmartSearch', sectionName: 'Filtering & Smart Search', isExpanded: true },
             { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJEntityRelationships', sectionName: 'Entity Relationships', isExpanded: false },

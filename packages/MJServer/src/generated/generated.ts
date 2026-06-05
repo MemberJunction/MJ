@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -7599,6 +7599,9 @@ each time the agent processes a prompt step.`})
     @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`}) 
     TotalCacheWriteTokensUsed?: number;
         
+    @Field({nullable: true, description: `Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`}) 
+    LastHeartbeatAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7826,6 +7829,9 @@ export class CreateMJAIAgentRunInput {
     @Field(() => Int, { nullable: true })
     TotalCacheWriteTokensUsed: number | null;
 
+    @Field({ nullable: true })
+    LastHeartbeatAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7973,6 +7979,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalCacheWriteTokensUsed?: number | null;
+
+    @Field({ nullable: true })
+    LastHeartbeatAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15352,6 +15361,9 @@ export class MJAIPromptRun_ {
     @Field(() => [MJAIResultCache_])
     MJAIResultCache_PromptRunIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
+    @Field(() => [MJContentItemTag_])
+    MJContentItemTags_AIPromptRunIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
+    
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
@@ -15995,6 +16007,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIResultCaches')} WHERE ${provider.QuoteIdentifier('PromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Result Cache', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItemTag_])
+    async MJContentItemTags_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -19817,9 +19839,9 @@ export class MJApplicationSetting_ {
     @MaxLength(36)
     ID: string;
         
-    @Field() 
+    @Field({nullable: true, description: `Foreign key to Application. When NULL the row is a GLOBAL setting that applies across all applications; when set, the setting is scoped to that single application. Resolution should prefer an app-scoped row over the global fallback for the same Name.`}) 
     @MaxLength(36)
-    ApplicationID: string;
+    ApplicationID?: string;
         
     @Field() 
     @MaxLength(100)
@@ -19837,9 +19859,9 @@ export class MJApplicationSetting_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    Application: string;
+    Application?: string;
         
 }
 
@@ -19852,7 +19874,7 @@ export class CreateMJApplicationSettingInput {
     ID?: string;
 
     @Field({ nullable: true })
-    ApplicationID?: string;
+    ApplicationID: string | null;
 
     @Field({ nullable: true })
     Name?: string;
@@ -19877,7 +19899,7 @@ export class UpdateMJApplicationSettingInput {
     ID: string;
 
     @Field({ nullable: true })
-    ApplicationID?: string;
+    ApplicationID?: string | null;
 
     @Field({ nullable: true })
     Name?: string;
@@ -23782,6 +23804,445 @@ export class MJAuthorizationResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Authorizations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Cluster Analysis
+//****************************************************************************
+@ObjectType({ description: `A saved cluster analysis: the configuration, computed metrics, and projected 2D/3D layout of a clustering run over an entity\'s embedding vectors. First-class, queryable, and shareable — replaces the prior approach of stashing analyses in a User Settings JSON blob / browser localStorage. Owner-private; explicit shares are recorded in ResourcePermission against the "Cluster Analysis" ResourceType.` })
+export class MJClusterAnalysis_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name for this saved analysis (e.g. "Members by skill embedding — June").`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional longer description of what this analysis explores and how to interpret it.`}) 
+    Description?: string;
+        
+    @Field({description: `Foreign key to the User who owns this analysis. The owner has full control; other users gain access only via explicit ResourcePermission share rows (owner-private sharing model).`}) 
+    @MaxLength(36)
+    UserID: string;
+        
+    @Field({nullable: true, description: `Foreign key to the primary Entity whose records were clustered. Drives drilldown (click a point -> open that record) and view-type qualification. Nullable for analyses not bound to a single entity; the full source definition (including multi-document selections) lives in Configuration.`}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({description: `Clustering algorithm used: KMeans, DBSCAN, or Hierarchical. Stored as a top-level column for filtering/reporting; the full parameter set is captured in Configuration.`}) 
+    @MaxLength(50)
+    Algorithm: string;
+        
+    @Field({nullable: true, description: `JSON snapshot of the configuration this analysis was run with: algorithm parameters (k / epsilon / minPoints), distance metric, the Entity Document ID(s) supplying the vectors, max record count, any record filter, and whether LLM cluster naming was requested. A complete, self-describing record of how to interpret (or re-run) the analysis.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.`}) 
+    Metrics?: string;
+        
+    @Field({nullable: true, description: `JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.`}) 
+    ProjectedPoints?: string;
+        
+    @Field({nullable: true, description: `JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.`}) 
+    ViewportState?: string;
+        
+    @Field({description: `Lifecycle status of the analysis run: Pending (queued / running), Complete (results available), or Failed (run errored; see Metrics/Configuration for diagnostics).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field(() => [MJClusterAnalysisCluster_])
+    MJClusterAnalysisClusters_ClusterAnalysisIDArray: MJClusterAnalysisCluster_[]; // Link to MJClusterAnalysisClusters
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis
+//****************************************************************************
+@InputType()
+export class CreateMJClusterAnalysisInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    Algorithm?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    Metrics: string | null;
+
+    @Field({ nullable: true })
+    ProjectedPoints: string | null;
+
+    @Field({ nullable: true })
+    ViewportState: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis
+//****************************************************************************
+@InputType()
+export class UpdateMJClusterAnalysisInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    Algorithm?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    Metrics?: string | null;
+
+    @Field({ nullable: true })
+    ProjectedPoints?: string | null;
+
+    @Field({ nullable: true })
+    ViewportState?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Cluster Analysis
+//****************************************************************************
+@ObjectType()
+export class RunMJClusterAnalysisViewResult {
+    @Field(() => [MJClusterAnalysis_])
+    Results: MJClusterAnalysis_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJClusterAnalysis_)
+export class MJClusterAnalysisResolver extends ResolverBase {
+    @Query(() => RunMJClusterAnalysisViewResult)
+    async RunMJClusterAnalysisViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisViewResult)
+    async RunMJClusterAnalysisViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisViewResult)
+    async RunMJClusterAnalysisDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Cluster Analysis';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJClusterAnalysis_, { nullable: true })
+    async MJClusterAnalysis(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJClusterAnalysis_ | null> {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Cluster Analysis', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJClusterAnalysisCluster_])
+    async MJClusterAnalysisClusters_ClusterAnalysisIDArray(@Root() mjclusteranalysis_: MJClusterAnalysis_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis Clusters', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ClusterAnalysisID')}='${mjclusteranalysis_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis Clusters', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJClusterAnalysis_)
+    async CreateMJClusterAnalysis(
+        @Arg('input', () => CreateMJClusterAnalysisInput) input: CreateMJClusterAnalysisInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Cluster Analysis', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJClusterAnalysis_)
+    async UpdateMJClusterAnalysis(
+        @Arg('input', () => UpdateMJClusterAnalysisInput) input: UpdateMJClusterAnalysisInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Cluster Analysis', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJClusterAnalysis_)
+    async DeleteMJClusterAnalysis(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Cluster Analysis', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@ObjectType({ description: `One named cluster within a saved ClusterAnalysis. Holds the cluster\'s label (LLM-generated or user-edited), member count, and display color, so labels can be regenerated or hand-edited per cluster without re-running the whole analysis.` })
+export class MJClusterAnalysisCluster_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the parent ClusterAnalysis. Cluster rows are deleted with their analysis (cascade).`}) 
+    @MaxLength(36)
+    ClusterAnalysisID: string;
+        
+    @Field(() => Int, {description: `Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.`}) 
+    ClusterIndex: number;
+        
+    @Field({nullable: true, description: `Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.`}) 
+    @MaxLength(255)
+    Label?: string;
+        
+    @Field(() => Int, {description: `Number of records (points) assigned to this cluster.`}) 
+    MemberCount: number;
+        
+    @Field({nullable: true, description: `Color used to render this cluster in the scatter visualization (e.g. a hex string or token reference).`}) 
+    @MaxLength(20)
+    Color?: string;
+        
+    @Field(() => Boolean, {description: `True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.`}) 
+    IsUserEdited: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    ClusterAnalysis: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@InputType()
+export class CreateMJClusterAnalysisClusterInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ClusterAnalysisID?: string;
+
+    @Field(() => Int, { nullable: true })
+    ClusterIndex?: number;
+
+    @Field({ nullable: true })
+    Label: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MemberCount?: number;
+
+    @Field({ nullable: true })
+    Color: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsUserEdited?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@InputType()
+export class UpdateMJClusterAnalysisClusterInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ClusterAnalysisID?: string;
+
+    @Field(() => Int, { nullable: true })
+    ClusterIndex?: number;
+
+    @Field({ nullable: true })
+    Label?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MemberCount?: number;
+
+    @Field({ nullable: true })
+    Color?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsUserEdited?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@ObjectType()
+export class RunMJClusterAnalysisClusterViewResult {
+    @Field(() => [MJClusterAnalysisCluster_])
+    Results: MJClusterAnalysisCluster_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJClusterAnalysisCluster_)
+export class MJClusterAnalysisClusterResolver extends ResolverBase {
+    @Query(() => RunMJClusterAnalysisClusterViewResult)
+    async RunMJClusterAnalysisClusterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisClusterViewResult)
+    async RunMJClusterAnalysisClusterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisClusterViewResult)
+    async RunMJClusterAnalysisClusterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Cluster Analysis Clusters';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJClusterAnalysisCluster_, { nullable: true })
+    async MJClusterAnalysisCluster(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJClusterAnalysisCluster_ | null> {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis Clusters', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Cluster Analysis Clusters', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJClusterAnalysisCluster_)
+    async CreateMJClusterAnalysisCluster(
+        @Arg('input', () => CreateMJClusterAnalysisClusterInput) input: CreateMJClusterAnalysisClusterInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Cluster Analysis Clusters', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJClusterAnalysisCluster_)
+    async UpdateMJClusterAnalysisCluster(
+        @Arg('input', () => UpdateMJClusterAnalysisClusterInput) input: UpdateMJClusterAnalysisClusterInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Cluster Analysis Clusters', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJClusterAnalysisCluster_)
+    async DeleteMJClusterAnalysisCluster(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Cluster Analysis Clusters', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -29646,6 +30107,13 @@ export class MJContentItemTag_ {
     @MaxLength(36)
     TagID?: string;
         
+    @Field({nullable: true, description: `Foreign key to the AI Prompt Run that produced this tag, populated by the autotagging pipeline at tag-creation time. Provides a direct, reliable edge from a tag back to the exact extraction run, replacing the previous fragile time-correlation heuristic. Nullable for tags created outside the LLM pipeline (e.g. manual tagging) or backfilled rows.`}) 
+    @MaxLength(36)
+    AIPromptRunID?: string;
+        
+    @Field({nullable: true, description: `The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.`}) 
+    Reasoning?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     Item?: string;
@@ -29653,6 +30121,10 @@ export class MJContentItemTag_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Tag_Virtual?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIPromptRun?: string;
         
 }
 
@@ -29675,6 +30147,12 @@ export class CreateMJContentItemTagInput {
 
     @Field({ nullable: true })
     TagID: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    Reasoning: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -29700,6 +30178,12 @@ export class UpdateMJContentItemTagInput {
 
     @Field({ nullable: true })
     TagID?: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    Reasoning?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40592,6 +41076,9 @@ export class MJEntity_ {
     @Field(() => [MJEntityFormOverride_])
     MJEntityFormOverrides_EntityIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
     
+    @Field(() => [MJClusterAnalysis_])
+    MJClusterAnalysis_EntityIDArray: MJClusterAnalysis_[]; // Link to MJClusterAnalysis
+    
 }
 
 //****************************************************************************
@@ -41646,6 +42133,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJClusterAnalysis_])
+    async MJClusterAnalysis_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -77552,6 +78049,10 @@ export class MJUserView_ {
     @Field({nullable: true, description: `JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`}) 
     DisplayState?: string;
         
+    @Field({nullable: true, description: `Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.`}) 
+    @MaxLength(36)
+    ViewTypeID?: string;
+        
     @Field() 
     @MaxLength(100)
     UserName: string;
@@ -77658,6 +78159,9 @@ export class CreateMJUserViewInput {
     @Field({ nullable: true })
     DisplayState: string | null;
 
+    @Field({ nullable: true })
+    ViewTypeID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -77730,6 +78234,9 @@ export class UpdateMJUserViewInput {
 
     @Field({ nullable: true })
     DisplayState?: string | null;
+
+    @Field({ nullable: true })
+    ViewTypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -78256,6 +78763,9 @@ export class MJUser_ {
     
     @Field(() => [MJEntityFormOverride_])
     MJEntityFormOverrides_UserIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
+    @Field(() => [MJClusterAnalysis_])
+    MJClusterAnalysis_UserIDArray: MJClusterAnalysis_[]; // Link to MJClusterAnalysis
     
 }
 
@@ -79409,6 +79919,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJClusterAnalysis_])
+    async MJClusterAnalysis_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -80872,6 +81392,236 @@ export class MJVersionLabelResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Version Labels', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: View Types
+//****************************************************************************
+@ObjectType({ description: `Registry of available view types (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...) for the entity-viewer plugin system. Each row binds a logical view to its renderer and (optionally) its configuration prop-sheet, so adding a new way to visualize records is a metadata row plus a registered driver class — no change to the host viewer. Whether a given view type is offered for a given entity is decided at runtime by the driver\'s availability predicate (e.g. Timeline needs a date field, Map needs geocoding, Cluster needs an Entity Document with vectors).` })
+export class MJViewType_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({description: `User-facing label shown in the view-mode switcher (e.g. "Tag Cloud").`}) 
+    @MaxLength(255)
+    DisplayName: string;
+        
+    @Field({nullable: true, description: `Optional description of what the view type does and when it is useful.`}) 
+    Description?: string;
+        
+    @Field({description: `Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.`}) 
+    @MaxLength(255)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.`}) 
+    @MaxLength(255)
+    PropertySheetDriverClass?: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class shown next to the view type in the mode switcher (e.g. "fa-solid fa-diagram-project").`}) 
+    @MaxLength(100)
+    Icon?: string;
+        
+    @Field(() => Int, {description: `Display order of the view type in the mode switcher (ascending).`}) 
+    Sequence: number;
+        
+    @Field(() => Boolean, {description: `When 0, the view type is registered but hidden from users (e.g. disabled or under development).`}) 
+    IsActive: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, the view type exposes a configuration prop-sheet (see PropertySheetDriverClass) and the host shows a settings affordance for it; when 0, the view type renders with no user-editable options.`}) 
+    SupportsConfiguration: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJUserView_])
+    MJUserViews_ViewTypeIDArray: MJUserView_[]; // Link to MJUserViews
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: View Types
+//****************************************************************************
+@InputType()
+export class CreateMJViewTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    PropertySheetDriverClass: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsConfiguration?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: View Types
+//****************************************************************************
+@InputType()
+export class UpdateMJViewTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    PropertySheetDriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsConfiguration?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: View Types
+//****************************************************************************
+@ObjectType()
+export class RunMJViewTypeViewResult {
+    @Field(() => [MJViewType_])
+    Results: MJViewType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJViewType_)
+export class MJViewTypeResolver extends ResolverBase {
+    @Query(() => RunMJViewTypeViewResult)
+    async RunMJViewTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJViewTypeViewResult)
+    async RunMJViewTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJViewTypeViewResult)
+    async RunMJViewTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: View Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJViewType_, { nullable: true })
+    async MJViewType(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJViewType_ | null> {
+        this.CheckUserReadPermissions('MJ: View Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwViewTypes')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: View Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: View Types', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJUserView_])
+    async MJUserViews_ViewTypeIDArray(@Root() mjviewtype_: MJViewType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Views', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserViews')} WHERE ${provider.QuoteIdentifier('ViewTypeID')}='${mjviewtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Views', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJViewType_)
+    async CreateMJViewType(
+        @Arg('input', () => CreateMJViewTypeInput) input: CreateMJViewTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: View Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJViewType_)
+    async UpdateMJViewType(
+        @Arg('input', () => UpdateMJViewTypeInput) input: UpdateMJViewTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: View Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJViewType_)
+    async DeleteMJViewType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: View Types', key, options, provider, userPayload, pubSub);
     }
     
 }

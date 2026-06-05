@@ -3030,6 +3030,11 @@ each time the agent processes a prompt step.`),
         * * Display Name: Cache Write Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
+    LastHeartbeatAt: z.date().nullable().describe(`
+        * * Field Name: LastHeartbeatAt
+        * * Display Name: Last Heartbeat At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Details
@@ -7236,11 +7241,12 @@ export const MJApplicationSettingSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    ApplicationID: z.string().describe(`
+    ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
         * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)`),
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to Application. When NULL the row is a GLOBAL setting that applies across all applications; when set, the setting is scoped to that single application. Resolution should prefer an app-scoped row over the global fallback for the same Name.`),
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
@@ -7264,7 +7270,7 @@ export const MJApplicationSettingSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
@@ -8535,6 +8541,161 @@ export const MJAuthorizationSchema = z.object({
 });
 
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Cluster Analysis
+ */
+export const MJClusterAnalysisSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name for this saved analysis (e.g. "Members by skill embedding — June").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of what this analysis explores and how to interpret it.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the User who owns this analysis. The owner has full control; other users gain access only via explicit ResourcePermission share rows (owner-private sharing model).`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the primary Entity whose records were clustered. Drives drilldown (click a point -> open that record) and view-type qualification. Nullable for analyses not bound to a single entity; the full source definition (including multi-document selections) lives in Configuration.`),
+    Algorithm: z.union([z.literal('DBSCAN'), z.literal('Hierarchical'), z.literal('KMeans')]).describe(`
+        * * Field Name: Algorithm
+        * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: KMeans
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DBSCAN
+    *   * Hierarchical
+    *   * KMeans
+        * * Description: Clustering algorithm used: KMeans, DBSCAN, or Hierarchical. Stored as a top-level column for filtering/reporting; the full parameter set is captured in Configuration.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the configuration this analysis was run with: algorithm parameters (k / epsilon / minPoints), distance metric, the Entity Document ID(s) supplying the vectors, max record count, any record filter, and whether LLM cluster naming was requested. A complete, self-describing record of how to interpret (or re-run) the analysis.`),
+    Metrics: z.string().nullable().describe(`
+        * * Field Name: Metrics
+        * * Display Name: Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.`),
+    ProjectedPoints: z.string().nullable().describe(`
+        * * Field Name: ProjectedPoints
+        * * Display Name: Projected Points
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.`),
+    ViewportState: z.string().nullable().describe(`
+        * * Field Name: ViewportState
+        * * Display Name: Viewport State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.`),
+    Status: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+        * * Description: Lifecycle status of the analysis run: Pending (queued / running), Complete (results available), or Failed (run errored; see Metrics/Configuration for diagnostics).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJClusterAnalysisEntityType = z.infer<typeof MJClusterAnalysisSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Cluster Analysis Clusters
+ */
+export const MJClusterAnalysisClusterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ClusterAnalysisID: z.string().describe(`
+        * * Field Name: ClusterAnalysisID
+        * * Display Name: Cluster Analysis ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Cluster Analysis (vwClusterAnalysis.ID)
+        * * Description: Foreign key to the parent ClusterAnalysis. Cluster rows are deleted with their analysis (cascade).`),
+    ClusterIndex: z.number().describe(`
+        * * Field Name: ClusterIndex
+        * * Display Name: Cluster Index
+        * * SQL Data Type: int
+        * * Description: Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.`),
+    MemberCount: z.number().describe(`
+        * * Field Name: MemberCount
+        * * Display Name: Member Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records (points) assigned to this cluster.`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Color used to render this cluster in the scatter visualization (e.g. a hex string or token reference).`),
+    IsUserEdited: z.boolean().describe(`
+        * * Field Name: IsUserEdited
+        * * Display Name: Is User Edited
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ClusterAnalysis: z.string().describe(`
+        * * Field Name: ClusterAnalysis
+        * * Display Name: Cluster Analysis
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJClusterAnalysisClusterEntityType = z.infer<typeof MJClusterAnalysisClusterSchema>;
 
 /**
  * zod schema definition for the entity MJ: Collection Artifacts
@@ -10543,6 +10704,17 @@ export const MJContentItemTagSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
         * * Description: Optional link to the formal MJ Tag taxonomy. When set, this free-text tag has been matched (via semantic similarity or exact match) to a curated Tag record. NULL means the tag is unmatched free text only.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: Foreign key to the AI Prompt Run that produced this tag, populated by the autotagging pipeline at tag-creation time. Provides a direct, reliable edge from a tag back to the exact extraction run, replacing the previous fragile time-correlation heuristic. Nullable for tags created outside the LLM pipeline (e.g. manual tagging) or backfilled rows.`),
+    Reasoning: z.string().nullable().describe(`
+        * * Field Name: Reasoning
+        * * Display Name: Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.`),
     Item: z.string().nullable().describe(`
         * * Field Name: Item
         * * Display Name: Item Name
@@ -10550,6 +10722,10 @@ export const MJContentItemTagSchema = z.object({
     Tag_Virtual: z.string().nullable().describe(`
         * * Field Name: Tag_Virtual
         * * Display Name: Tag (Virtual)
+        * * SQL Data Type: nvarchar(255)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -26334,6 +26510,12 @@ export const MJUserViewSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJUserViewEntity_IDisplayState
         * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`),
+    ViewTypeID: z.string().nullable().describe(`
+        * * Field Name: ViewTypeID
+        * * Display Name: View Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: View Types (vwViewTypes.ID)
+        * * Description: Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
@@ -26947,6 +27129,77 @@ export const MJVersionLabelSchema = z.object({
 });
 
 export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: View Types
+ */
+export const MJViewTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.`),
+    DisplayName: z.string().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: User-facing label shown in the view-mode switcher (e.g. "Tag Cloud").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what the view type does and when it is useful.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.`),
+    PropertySheetDriverClass: z.string().nullable().describe(`
+        * * Field Name: PropertySheetDriverClass
+        * * Display Name: Property Sheet Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class shown next to the view type in the mode switcher (e.g. "fa-solid fa-diagram-project").`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order of the view type in the mode switcher (ascending).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 0, the view type is registered but hidden from users (e.g. disabled or under development).`),
+    SupportsConfiguration: z.boolean().describe(`
+        * * Field Name: SupportsConfiguration
+        * * Display Name: Supports Configuration
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the view type exposes a configuration prop-sheet (see PropertySheetDriverClass) and the host shows a settings affordance for it; when 0, the view type renders with no user-editable options.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJViewTypeEntityType = z.infer<typeof MJViewTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workflow Engines
@@ -35311,6 +35564,19 @@ each time the agent processes a prompt step.
     }
     set TotalCacheWriteTokensUsed(value: number | null) {
         this.Set('TotalCacheWriteTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: LastHeartbeatAt
+    * * Display Name: Last Heartbeat At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.
+    */
+    get LastHeartbeatAt(): Date | null {
+        return this.Get('LastHeartbeatAt');
+    }
+    set LastHeartbeatAt(value: Date | null) {
+        this.Set('LastHeartbeatAt', value);
     }
 
     /**
@@ -46688,11 +46954,12 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
     * * Display Name: Application ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to Application. When NULL the row is a GLOBAL setting that applies across all applications; when set, the setting is scoped to that single application. Resolution should prefer an app-scoped row over the global fallback for the same Name.
     */
-    get ApplicationID(): string {
+    get ApplicationID(): string | null {
         return this.Get('ApplicationID');
     }
-    set ApplicationID(value: string) {
+    set ApplicationID(value: string | null) {
         this.Set('ApplicationID', value);
     }
 
@@ -46758,7 +47025,7 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 }
@@ -49952,6 +50219,388 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Cluster Analysis - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ClusterAnalysis
+ * * Base View: vwClusterAnalysis
+ * * @description A saved cluster analysis: the configuration, computed metrics, and projected 2D/3D layout of a clustering run over an entity's embedding vectors. First-class, queryable, and shareable — replaces the prior approach of stashing analyses in a User Settings JSON blob / browser localStorage. Owner-private; explicit shares are recorded in ResourcePermission against the "Cluster Analysis" ResourceType.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Cluster Analysis')
+export class MJClusterAnalysisEntity extends BaseEntity<MJClusterAnalysisEntityType> {
+    /**
+    * Loads the MJ: Cluster Analysis record from the database
+    * @param ID: string - primary key value to load the MJ: Cluster Analysis record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJClusterAnalysisEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name for this saved analysis (e.g. "Members by skill embedding — June").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of what this analysis explores and how to interpret it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User who owns this analysis. The owner has full control; other users gain access only via explicit ResourcePermission share rows (owner-private sharing model).
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the primary Entity whose records were clustered. Drives drilldown (click a point -> open that record) and view-type qualification. Nullable for analyses not bound to a single entity; the full source definition (including multi-document selections) lives in Configuration.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Algorithm
+    * * Display Name: Algorithm
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: KMeans
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DBSCAN
+    *   * Hierarchical
+    *   * KMeans
+    * * Description: Clustering algorithm used: KMeans, DBSCAN, or Hierarchical. Stored as a top-level column for filtering/reporting; the full parameter set is captured in Configuration.
+    */
+    get Algorithm(): 'DBSCAN' | 'Hierarchical' | 'KMeans' {
+        return this.Get('Algorithm');
+    }
+    set Algorithm(value: 'DBSCAN' | 'Hierarchical' | 'KMeans') {
+        this.Set('Algorithm', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the configuration this analysis was run with: algorithm parameters (k / epsilon / minPoints), distance metric, the Entity Document ID(s) supplying the vectors, max record count, any record filter, and whether LLM cluster naming was requested. A complete, self-describing record of how to interpret (or re-run) the analysis.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Metrics
+    * * Display Name: Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.
+    */
+    get Metrics(): string | null {
+        return this.Get('Metrics');
+    }
+    set Metrics(value: string | null) {
+        this.Set('Metrics', value);
+    }
+
+    /**
+    * * Field Name: ProjectedPoints
+    * * Display Name: Projected Points
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.
+    */
+    get ProjectedPoints(): string | null {
+        return this.Get('ProjectedPoints');
+    }
+    set ProjectedPoints(value: string | null) {
+        this.Set('ProjectedPoints', value);
+    }
+
+    /**
+    * * Field Name: ViewportState
+    * * Display Name: Viewport State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.
+    */
+    get ViewportState(): string | null {
+        return this.Get('ViewportState');
+    }
+    set ViewportState(value: string | null) {
+        this.Set('ViewportState', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    * * Description: Lifecycle status of the analysis run: Pending (queued / running), Complete (results available), or Failed (run errored; see Metrics/Configuration for diagnostics).
+    */
+    get Status(): 'Complete' | 'Failed' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'Failed' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Cluster Analysis Clusters - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ClusterAnalysisCluster
+ * * Base View: vwClusterAnalysisClusters
+ * * @description One named cluster within a saved ClusterAnalysis. Holds the cluster's label (LLM-generated or user-edited), member count, and display color, so labels can be regenerated or hand-edited per cluster without re-running the whole analysis.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Cluster Analysis Clusters')
+export class MJClusterAnalysisClusterEntity extends BaseEntity<MJClusterAnalysisClusterEntityType> {
+    /**
+    * Loads the MJ: Cluster Analysis Clusters record from the database
+    * @param ID: string - primary key value to load the MJ: Cluster Analysis Clusters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJClusterAnalysisClusterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ClusterAnalysisID
+    * * Display Name: Cluster Analysis ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Cluster Analysis (vwClusterAnalysis.ID)
+    * * Description: Foreign key to the parent ClusterAnalysis. Cluster rows are deleted with their analysis (cascade).
+    */
+    get ClusterAnalysisID(): string {
+        return this.Get('ClusterAnalysisID');
+    }
+    set ClusterAnalysisID(value: string) {
+        this.Set('ClusterAnalysisID', value);
+    }
+
+    /**
+    * * Field Name: ClusterIndex
+    * * Display Name: Cluster Index
+    * * SQL Data Type: int
+    * * Description: Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.
+    */
+    get ClusterIndex(): number {
+        return this.Get('ClusterIndex');
+    }
+    set ClusterIndex(value: number) {
+        this.Set('ClusterIndex', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: MemberCount
+    * * Display Name: Member Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records (points) assigned to this cluster.
+    */
+    get MemberCount(): number {
+        return this.Get('MemberCount');
+    }
+    set MemberCount(value: number) {
+        this.Set('MemberCount', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Color used to render this cluster in the scatter visualization (e.g. a hex string or token reference).
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: IsUserEdited
+    * * Display Name: Is User Edited
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.
+    */
+    get IsUserEdited(): boolean {
+        return this.Get('IsUserEdited');
+    }
+    set IsUserEdited(value: boolean) {
+        this.Set('IsUserEdited', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ClusterAnalysis
+    * * Display Name: Cluster Analysis
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ClusterAnalysis(): string {
+        return this.Get('ClusterAnalysis');
     }
 }
 
@@ -54961,6 +55610,33 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     }
 
     /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: Foreign key to the AI Prompt Run that produced this tag, populated by the autotagging pipeline at tag-creation time. Provides a direct, reliable edge from a tag back to the exact extraction run, replacing the previous fragile time-correlation heuristic. Nullable for tags created outside the LLM pipeline (e.g. manual tagging) or backfilled rows.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: Reasoning
+    * * Display Name: Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.
+    */
+    get Reasoning(): string | null {
+        return this.Get('Reasoning');
+    }
+    set Reasoning(value: string | null) {
+        this.Set('Reasoning', value);
+    }
+
+    /**
     * * Field Name: Item
     * * Display Name: Item Name
     * * SQL Data Type: nvarchar(250)
@@ -54976,6 +55652,15 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     */
     get Tag_Virtual(): string | null {
         return this.Get('Tag_Virtual');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
     }
 }
 
@@ -96690,6 +97375,20 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
 
     /**
+    * * Field Name: ViewTypeID
+    * * Display Name: View Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: View Types (vwViewTypes.ID)
+    * * Description: Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.
+    */
+    get ViewTypeID(): string | null {
+        return this.Get('ViewTypeID');
+    }
+    set ViewTypeID(value: string | null) {
+        this.Set('ViewTypeID', value);
+    }
+
+    /**
     * * Field Name: UserName
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -98201,6 +98900,191 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: View Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ViewType
+ * * Base View: vwViewTypes
+ * * @description Registry of available view types (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...) for the entity-viewer plugin system. Each row binds a logical view to its renderer and (optionally) its configuration prop-sheet, so adding a new way to visualize records is a metadata row plus a registered driver class — no change to the host viewer. Whether a given view type is offered for a given entity is decided at runtime by the driver's availability predicate (e.g. Timeline needs a date field, Map needs geocoding, Cluster needs an Entity Document with vectors).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: View Types')
+export class MJViewTypeEntity extends BaseEntity<MJViewTypeEntityType> {
+    /**
+    * Loads the MJ: View Types record from the database
+    * @param ID: string - primary key value to load the MJ: View Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJViewTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: User-facing label shown in the view-mode switcher (e.g. "Tag Cloud").
+    */
+    get DisplayName(): string {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what the view type does and when it is useful.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: PropertySheetDriverClass
+    * * Display Name: Property Sheet Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.
+    */
+    get PropertySheetDriverClass(): string | null {
+        return this.Get('PropertySheetDriverClass');
+    }
+    set PropertySheetDriverClass(value: string | null) {
+        this.Set('PropertySheetDriverClass', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class shown next to the view type in the mode switcher (e.g. "fa-solid fa-diagram-project").
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of the view type in the mode switcher (ascending).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 0, the view type is registered but hidden from users (e.g. disabled or under development).
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: SupportsConfiguration
+    * * Display Name: Supports Configuration
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the view type exposes a configuration prop-sheet (see PropertySheetDriverClass) and the host shows a settings affordance for it; when 0, the view type renders with no user-editable options.
+    */
+    get SupportsConfiguration(): boolean {
+        return this.Get('SupportsConfiguration');
+    }
+    set SupportsConfiguration(value: boolean) {
+        this.Set('SupportsConfiguration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
