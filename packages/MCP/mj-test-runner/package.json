@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/mcp-mj-test-runner",
+  "type": "module",
+  "version": "5.34.1",
+  "description": "MemberJunction: MCP server exposing a single run_tier tool to run connector test tiers (T0-T8); the credential-safe channel for T8 authenticated-endpoint tests",
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "bin": {
+    "mj-test-runner": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "~3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
