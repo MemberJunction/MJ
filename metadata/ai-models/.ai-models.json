@@ -6448,10 +6448,10 @@
   {
     "fields": {
       "Name": "Grok Code Fast 1",
-      "Description": "x.ai's specialized coding model optimized for software development tasks. Features a 256K token context window with excellent code generation and understanding capabilities.",
+      "Description": "DEPRECATED 2026-05-15: Per docs.x.ai/developers/migration/may-15-retirement, grok-code-fast-1 was retired on May 15, 2026 and requests now redirect to grok-4.3 at grok-4.3 pricing. Replacement model is Grok Build 0.1 (released May 29, 2026) for agentic coding workloads. Original description: x.ai's specialized coding model optimized for software development tasks. Features a 256K token context window with excellent code generation and understanding capabilities.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 9,
       "CostRank": 3,
       "InheritTypeModalities": true
@@ -8062,10 +8062,10 @@
   {
     "fields": {
       "Name": "Gemini 2.0 Flash",
-      "Description": "Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
+      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026; since March 6, 2026 the API was restricted to existing customers. Recommended replacement: gemini-2.5-flash-lite or Gemini 3 Flash for stronger reasoning. Original description: Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -8448,10 +8448,10 @@
   {
     "fields": {
       "Name": "Gemini 2.0 Flash-Lite",
-      "Description": "A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
+      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash-lite on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026. Recommended replacement: gemini-2.5-flash-lite or gemini-3.1-flash-lite. Original description: A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -13759,6 +13759,21 @@
             "lastModified": "2026-06-03T21:29:46.659Z",
             "checksum": "721b3f191176881e36f09b6315dfcfef74e52947b623fd10ef0efbf6749057fb"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-05-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.435,
+            "OutputPricePerUnit": 0.87,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek V4 Pro permanent price cut effective May 23, 2026. The April 24, 2026 promotional pricing ($0.435 input cache miss / $0.87 output) — originally scheduled to expire May 31 — was made PERMANENT and replaces the prior list price of $1.74/$3.48 per 1M. Cache hit input pricing is $0.003625/1M (effectively 10x cheaper post the April 26 cache-hit reduction). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://www.engadget.com/2180062/deepseek-permanently-reduces-the-price-of-its-flagship-v4-model-by-75-percent/"
+          }
         }
       ]
     },
@@ -15250,6 +15265,347 @@
     "sync": {
       "lastModified": "2026-05-21T22:25:01.106Z",
       "checksum": "16c1cba3c18c4071c423cabf91d6b3c44fd977852bcbe4d1be37f280d8eb6fea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Opus 4.8",
+      "PowerRank": 24,
+      "Description": "Anthropic's frontier flagship released May 28, 2026, simultaneously available on Anthropic API, Amazon Bedrock, Vertex AI, and Microsoft Foundry. Same headline pricing ($5/$25 per 1M) and 1M context window as Opus 4.7, with meaningful capability gains in reasoning and judgement. Features 128K max output (300K via batch beta `output-300k-2026-03-24`), high-resolution image input (up to 2576px), adaptive thinking with default `effort=high`, and task budgets (beta). Uses the new Opus tokenizer introduced in 4.7. Note: temperature, top_p, top_k parameters return 400 errors when set to non-default values. Knowledge cutoff January 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Opus 4.7"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-opus-4-8",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-opus-4-8-v1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-05-28T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only — substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-05-28T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 4.8 pricing on Amazon Bedrock as of May 28, 2026 simultaneous launch. Vendor-parity pricing with Anthropic direct ($5/$25 per 1M). Cross-region inference still adds ~10%. Sources: https://www.aboutamazon.com/news/aws/anthropic-claude-4-opus-sonnet-amazon-bedrock ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok Build 0.1",
+      "PowerRank": 12,
+      "Description": "xAI's agentic coding specialist released May 29, 2026 as a functional successor to the retired Grok Code Fast 1. Features 256K token input context, no fixed output cap (up to 2M output tokens per response), always-on reasoning, tool calling, and structured outputs. Multimodal text+image input. Positioned as fast, low-cost coder for autonomous agent workflows.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Code Fast 1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "xAILLM",
+            "APIName": "grok-build-0.1",
+            "MaxInputTokens": 256000,
+            "MaxOutputTokens": 2000000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "x-ai/grok-build-0.1",
+            "MaxInputTokens": 256000,
+            "MaxOutputTokens": 2000000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-05-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.0,
+            "OutputPricePerUnit": 2.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Build 0.1 pricing on xAI direct API as of May 29, 2026 launch. $1.00/1M input, $2.00/1M output, cached input $0.20/1M. Sources: https://docs.x.ai/developers/models ; https://www.kucoin.com/news/flash/xai-launches-grok-build-0-1-for-agentic-coding-with-256k-context-window ; https://openrouter.ai/x-ai/grok-build-0.1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-05-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.0,
+            "OutputPricePerUnit": 2.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Build 0.1 on OpenRouter (passthrough xAI pricing). Source: https://openrouter.ai/x-ai/grok-build-0.1"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cohere Command A+",
+      "PowerRank": 17,
+      "Description": "Cohere's first Mixture-of-Experts flagship released May 20, 2026. 218B sparse MoE under Apache 2.0 license with vision + text input across 48 languages. 128K input / 64K output context. Optimized for enterprise RAG, agents, and tool use. Successor to Cohere Command A.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Cohere Command A"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereLLM",
+            "APIName": "command-a-plus-05-2026",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "StartedAt": "2026-05-20T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.5,
+            "OutputPricePerUnit": 10.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Cohere Command A+ direct API pricing as of May 20, 2026 launch. Same headline rates as Cohere Command A ($2.50/$10.00 per 1M). Sources: https://docs.cohere.com/docs/command-a-plus ; https://cohere.com/pricing"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "MiniMax-M3",
+      "PowerRank": 20,
+      "Description": "MiniMax's long-context multimodal flagship released June 1, 2026. Features the new MiniMax Sparse Attention (MSA) architecture for 9.7x faster prefill and 15.6x faster decode vs M2.7 at 1M context. 1M token context window. Native multimodal input (text + image + video) with desktop computer-use agent capabilities. Positioned as a long-context specialist complementing M2.7, not a replacement. Open weights and technical report promised within ~10 days of launch. OpenAI-compatible API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=MiniMax-M2.7"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MiniMaxLLM",
+            "APIName": "MiniMax-M3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "minimax/minimax-m3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "StartedAt": "2026-06-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M3 list pricing as of June 1, 2026 launch. Standard tier: $0.60/1M input, $2.40/1M output, $0.12/1M cache read. Launch promotional pricing (50% off) of $0.30/$1.20 effective through approximately June 7, 2026. Long-context tier (>512K input tokens) billed at a higher rate (exact figure not yet published). Sources: https://www.minimax.io/blog/minimax-m3 ; https://platform.minimax.io/docs/release-notes/models ; https://openrouter.ai/minimax/minimax-m3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-06-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M3 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/minimax/minimax-m3"
+          }
+        }
+      ]
     }
   }
 ]
