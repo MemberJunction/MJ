@@ -323,10 +323,35 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
     );
     log(`CodeBuild round ${codeRound}: ${codeResult.LinesOfCode ?? 0} LOC, BuildClean=${codeResult.BuildClean}`);
 
+    // ── Verify the connector FILE actually exists on disk ────────────────
+    // BuildClean from the agent is self-reported; gate it on a real file. The
+    // connector path convention is packages/Integration/connectors/src/<ClassName>.ts.
+    const CONNECTOR_FILE = codeResult.ConnectorFile
+        ?? `packages/Integration/connectors/src/${identity.Identity.ClassName}.ts`;
+    if (codeResult.BuildClean) {
+        const fileCheck = await agent(
+            `Run exactly: test -f ${CONNECTOR_FILE} && echo CONNECTOR_FILE_EXISTS || echo CONNECTOR_FILE_MISSING. Return whether the connector source file exists at ${CONNECTOR_FILE}.`,
+            { agentType: 'code-builder', schema: { type: 'object', required: ['Exists'], properties: { Exists: { type: 'boolean' }, Path: { type: 'string' } } }, phase: isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild', label: `verify-file:r${codeRound}` }
+        );
+        if (!fileCheck.Exists) {
+            log(`CodeBuild round ${codeRound}: BuildClean reported but connector file missing at ${CONNECTOR_FILE} → forcing non-clean`);
+            codeResult.BuildClean = false;
+            codeResult.BuildErrors = [...(codeResult.BuildErrors ?? []), { code: 'CONNECTOR_FILE_MISSING', locus: CONNECTOR_FILE }];
+        }
+    }
+
     if (!codeResult.BuildClean) {
         codeRound++;
         continue; // re-attempt with errors fed back
     }
+
+    // ── Ensure the connector is registered in connectors/src/index.ts ────
+    // Append the export iff it isn't already present. The export convention is
+    //   export { <ClassName> } from './<ClassName>.js';
+    await agent(
+        `Ensure the connector ${identity.Identity.ClassName} is registered. Read packages/Integration/connectors/src/index.ts; if it does NOT already contain an export for ${identity.Identity.ClassName}, append the line:\n  export { ${identity.Identity.ClassName} } from './${identity.Identity.ClassName}.js';\nIf an export for that class already exists, make no change. Do not touch any other line.`,
+        { agentType: 'code-builder', schema: { type: 'object', required: ['Registered'], properties: { Registered: { type: 'boolean' }, AlreadyPresent: { type: 'boolean' } } }, phase: isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild', label: `register:r${codeRound}` }
+    );
 
     // Build clean — try the ladder
     phase(isAmendment ? `VerificationLadderRound${codeRound}` : 'VerificationLadder');

@@ -3,9 +3,12 @@
  * mj-test-runner MCP server. THE CREDENTIAL SAFE CHANNEL.
  *
  * Exposes one tool — `run_tier` — that runs a named test tier against a
- * connector. T8 (authenticated endpoint) is the only tier that touches
- * credentials; that happens INSIDE this subprocess and the credential bytes
- * never leave it.
+ * connector. T0/T4 type-check / unit-test the REAL connectors package; T1 runs
+ * deterministic structural invariants; T2/T3/T5/T6/T7 are not-implemented
+ * (Skipped + `'<Tier> not-implemented'` marker). T8 is a READ-ONLY LIVE test —
+ * the only tier that touches credentials; that happens INSIDE this subprocess
+ * and the credential bytes never leave it. T8 performs only non-mutating ops
+ * (TestConnection / DiscoverObjects / one FetchChanges page) — never write.
  *
  * @see INTEGRATION-AGENT-TODO.md §2.19.3
  */
@@ -39,7 +42,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         {
             name: 'run_tier',
-            description: 'Run a connector test tier (T0-T8). For T8 only, supply CredentialFilePath; the file is read inside this subprocess and never leaves it.',
+            description: 'Run a connector test tier (T0-T8). T0/T4 run tsc/vitest against the real connectors package; T1 runs structural invariants; T2/T3/T5/T6/T7 are not-implemented (Skipped with a not-implemented marker). T8 is a READ-ONLY live test (TestConnection/DiscoverObjects/one FetchChanges page — never write); for T8 only, supply CredentialFilePath. The credential file is read inside this subprocess and its bytes never leave it.',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -60,7 +63,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                     },
                     CredentialFilePath: {
                         type: 'string',
-                        description: 'Required for T8 only. Absolute path to a credential file on disk. The path is read by this subprocess; bytes never returned to the caller.',
+                        description: 'Required for T8 (read-only live) only. Absolute path to a credential JSON file on disk. The file is read by this subprocess to run non-mutating connector calls; its bytes are never returned to the caller.',
                     },
                 },
                 required: ['Connector', 'Tier'],

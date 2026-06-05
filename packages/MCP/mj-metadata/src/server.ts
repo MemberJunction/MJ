@@ -36,7 +36,12 @@ import {
 } from './types.js';
 
 const REGISTRY_ROOT = process.env.MJ_CONNECTORS_REGISTRY ?? resolve(process.cwd(), 'packages/Integration/connectors-registry');
-const store = new MetadataFileStore(REGISTRY_ROOT);
+// Integration metadata files must land where `mj sync push` scans them:
+// <repoRoot>/metadata/integrations (glob **/.*.integration.json). REGISTRY_ROOT is
+// <repoRoot>/packages/Integration/connectors-registry, so repoRoot is 3 levels up.
+// Allow an explicit override via MJ_METADATA_ROOT for non-standard layouts.
+const METADATA_ROOT = process.env.MJ_METADATA_ROOT ?? resolve(REGISTRY_ROOT, '..', '..', '..', 'metadata', 'integrations');
+const store = new MetadataFileStore(REGISTRY_ROOT, METADATA_ROOT);
 
 // ── Trace logging ────────────────────────────────────────────────────────
 // Every tool call + outcome is appended as one JSONL line so a build run is

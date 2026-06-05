@@ -16,17 +16,32 @@ import type {
 } from './types.js';
 
 export class MetadataFileStore {
-    constructor(private readonly registryRoot: string) {}
+    /**
+     * @param registryRoot Root of the connectors registry (`<repoRoot>/packages/Integration/connectors-registry`).
+     *                     Used for PROVENANCE.json / CODE_EVIDENCE.json side-files.
+     * @param metadataRoot Root of the mj-sync metadata tree for integrations
+     *                     (`<repoRoot>/metadata/integrations`). This is what `mj sync push`
+     *                     scans (glob `**\/.*.integration.json`), so the integration file
+     *                     MUST be written here — not under the registry root.
+     */
+    constructor(private readonly registryRoot: string, private readonly metadataRoot: string) {}
 
     /**
      * Read the metadata file for a connector. Returns the parsed
      * {@link IntegrationMetadataFile} shape, or `null` if the file does not exist.
+     *
+     * The on-disk file is a top-level JSON array (the shape `mj sync push` expects);
+     * we unwrap element 0 into the flat in-memory shape. A bare object is also
+     * tolerated for backward-compat with any legacy non-array file.
      */
     public ReadIntegration(connectorName: string): IntegrationMetadataFile | null {
         const path = this.IntegrationFilePath(connectorName);
         if (!existsSync(path))
             return null;
-        return JSON.parse(readFileSync(path, 'utf-8'));
+        const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'));
+        if (Array.isArray(parsed))
+            return (parsed[0] as IntegrationMetadataFile | undefined) ?? null;
+        return parsed as IntegrationMetadataFile;
     }
 
     /**
@@ -40,7 +55,7 @@ export class MetadataFileStore {
     public UpsertIntegrationFields(connectorName: string, fields: Record<string, unknown>): void {
         const file = this.ReadIntegration(connectorName) ?? this.NewEmptyFile(connectorName);
         file.fields = { ...file.fields, ...fields };
-        this.WriteAtomic(this.IntegrationFilePath(connectorName), JSON.stringify(file, null, 2) + '\n');
+        this.WriteIntegration(connectorName, file);
     }
 
     /**
@@ -59,7 +74,7 @@ export class MetadataFileStore {
             ios.push({ fields: io });
         }
         file.relatedEntities = { ...(file.relatedEntities ?? {}), 'MJ: Integration Objects': ios };
-        this.WriteAtomic(this.IntegrationFilePath(connectorName), JSON.stringify(file, null, 2) + '\n');
+        this.WriteIntegration(connectorName, file);
     }
 
     /**
@@ -87,7 +102,7 @@ export class MetadataFileStore {
         related['MJ: Integration Object Fields'] = iofs;
         io.relatedEntities = related;
         file.relatedEntities = { ...(file.relatedEntities ?? {}), 'MJ: Integration Objects': ios };
-        this.WriteAtomic(this.IntegrationFilePath(connectorName), JSON.stringify(file, null, 2) + '\n');
+        this.WriteIntegration(connectorName, file);
     }
 
     /** Append a provenance entry to `<connector>/PROVENANCE.json`. */
@@ -110,8 +125,26 @@ export class MetadataFileStore {
         this.WriteAtomic(path, JSON.stringify(current, null, 2) + '\n');
     }
 
+    /**
+     * Persist the in-memory integration file to disk in the canonical mj-sync
+     * shape: a TOP-LEVEL JSON ARRAY with one element. `mj sync push` matches
+     * `**\/.*.integration.json` and expects an array of `{ fields, relatedEntities }`
+     * records, so we wrap the single file in a one-element array on write.
+     */
+    private WriteIntegration(connectorName: string, file: IntegrationMetadataFile): void {
+        this.WriteAtomic(this.IntegrationFilePath(connectorName), JSON.stringify([file], null, 2) + '\n');
+    }
+
+    /**
+     * Canonical mj-sync metadata path for a connector:
+     *   `<metadataRoot>/<vendorSlug>/.<vendorSlug>.integration.json`
+     * where vendorSlug is the connector name lowercased. The `.integration.json`
+     * suffix and the per-connector subdirectory are required for `mj sync push`'s
+     * `**\/.*.integration.json` glob to pick the file up.
+     */
     private IntegrationFilePath(connectorName: string): string {
-        return resolve(this.registryRoot, connectorName, 'metadata/integrations', `.${connectorName}.json`);
+        const slug = connectorName.toLowerCase();
+        return resolve(this.metadataRoot, slug, `.${slug}.integration.json`);
     }
 
     private NewEmptyFile(connectorName: string): IntegrationMetadataFile {

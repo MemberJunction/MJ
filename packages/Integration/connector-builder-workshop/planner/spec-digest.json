@@ -135,7 +135,7 @@
     {
       "id": "Integration.Name",
       "phase0Ref": "A schema",
-      "producer": "metadata-writer",
+      "producer": "identity-establisher",
       "primitive": "audit-source -> verify-claim",
       "nullable": false,
       "type": "string"
@@ -143,7 +143,7 @@
     {
       "id": "Integration.Description",
       "phase0Ref": "A schema",
-      "producer": "metadata-writer",
+      "producer": "identity-establisher",
       "primitive": "audit-source -> verify-claim",
       "nullable": false,
       "type": "string"
@@ -151,7 +151,7 @@
     {
       "id": "Integration.ClassName",
       "phase0Ref": "A schema",
-      "producer": "metadata-writer",
+      "producer": "identity-establisher",
       "primitive": "audit-source -> verify-claim",
       "nullable": false,
       "type": "string"
@@ -159,7 +159,7 @@
     {
       "id": "Integration.ImportPath",
       "phase0Ref": "A schema",
-      "producer": "metadata-writer",
+      "producer": "identity-establisher",
       "primitive": "audit-source -> verify-claim",
       "nullable": false,
       "type": "string"
@@ -191,7 +191,7 @@
     {
       "id": "Integration.CredentialTypeID",
       "phase0Ref": "A schema",
-      "producer": "metadata-writer",
+      "producer": "identity-establisher",
       "primitive": "audit-source -> verify-claim",
       "nullable": false,
       "type": "uuid"
@@ -199,7 +199,7 @@
     {
       "id": "Integration.Icon",
       "phase0Ref": "A schema",
-      "producer": "metadata-writer",
+      "producer": "identity-establisher",
       "primitive": "audit-source -> verify-claim",
       "nullable": true,
       "type": "string"
@@ -410,12 +410,27 @@
     },
     {
       "id": "IntegrationObject.DeleteAPIPath",
-      "phase0Ref": "A schema (v5.39.x)",
+      "phase0Ref": "A schema (v5.39.x); C generic CRUD",
       "producer": "ioiof-extractor",
       "primitive": "extract-iiof-pipeline",
       "nullable": true,
       "type": "string",
-      "cardinality": "many"
+      "cardinality": "many",
+      "groupedWith": [
+        "DeleteMethod",
+        "DeleteIDLocation"
+      ],
+      "_note": "When set, DeleteMethod MUST also be set — the generic DeleteRecord reads obj.DeleteMethod (verb is NOT assumed DELETE; some vendors POST/PUT soft-deletes)."
+    },
+    {
+      "id": "IntegrationObject.DeleteMethod",
+      "phase0Ref": "A schema (v5.39.x); C generic CRUD",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many",
+      "_note": "HTTP verb for delete. NON-nullable in practice whenever DeleteAPIPath is set (capability<->method bijection); the generic DeleteRecord passes it to MakeHTTPRequest."
     },
     {
       "id": "IntegrationObject.DeleteIDLocation",
@@ -711,5 +726,5 @@
       "_note": "Optional override; default identity inherited from base"
     }
   ],
-  "bijectionSlotCount": 65
+  "bijectionSlotCount": 66
 }

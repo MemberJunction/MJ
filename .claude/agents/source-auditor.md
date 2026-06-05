@@ -57,7 +57,44 @@ Write `connectors-registry/<vendor>/SOURCES.json` (ranked list) + `SOURCE_STUDY.
 - `CoversTaxonomies` — list of taxonomy names from SOURCE_STUDY that this source covers
 - `AccessNotes` — any retry attempts, fallback methods used
 
-Return brief structured stats to the orchestrator (source count, top source, proceed-vs-escalate decision).
+## Structured return contract (what the workflow consumes)
+
+You write the files above, but you ALSO **return** a single structured object — this is the value the `<vendor>.workflow.js` script binds as `const sources = await agent(...)` and then fans out over. The template does NOT re-read your `SOURCES.json`/`SOURCE_STUDY.md` to recover these fields; it consumes them directly off your return. If you omit a field, the downstream stage that maps over it fans out over `undefined`/`[]` and silently starves (this is the same IO-contract bug class fixed for `ioiof-extractor`). Return **exactly** this shape:
+
+```typescript
+interface SourceAuditReturn {
+    SourcesFile: string;          // path to the SOURCES.json you wrote — the workflow uses this as the
+                                  //   `sourceID` for extract-iiof-pipeline, the `openapiPath` in the
+                                  //   sourceBundle, and the `url` it feeds the audit-source primitive.
+                                  //   It is the canonical source identifier, not just a side-file.
+    SourceStudyFile: string;      // path to the SOURCE_STUDY.md you wrote.
+    TaxonomyLeaves: string[];     // THE coverable object list. These are the leaf object names of the
+                                  //   COVERABLE taxonomies (the connector's syncable objects) — NOT
+                                  //   the taxonomy container names, NOT the INFORMATIONAL taxonomies,
+                                  //   NOT the L1 containers. extract-iiof-pipeline maps the IOIOF
+                                  //   extraction ONCE PER ENTRY here, and compute-source-diff uses this
+                                  //   exact array as the `universe`. An empty/short array here =
+                                  //   extraction over nothing. This is the single most load-bearing field.
+    VendorDocsPaths: string[];   // categorized authoritative-source URLs/paths: prose vendor docs.
+    SDKPaths: string[];          // categorized authoritative-source URLs/paths: typed SDK sources.
+    PostmanPaths: string[];      // categorized authoritative-source URLs/paths: Postman collections.
+    Gaps: Array<{                 // taxonomy areas with no authoritative source — honest negatives,
+        Area: string;            //   not silent omissions. Drives the proceed-vs-escalate decision.
+        Reason: string;
+    }>;
+}
+```
+
+**How each field maps to the template** (so you can verify the names match `<vendor>.workflow.js` / `_TEMPLATE.workflow.js`):
+- `SourcesFile` → `sources.SourcesFile` → `sourceID`, `sourceBundle.openapiPath`, and `audit-source`'s `{ url }`.
+- `SourceStudyFile` → `sources.SourceStudyFile` (required by the stage schema).
+- `TaxonomyLeaves` → `sources.TaxonomyLeaves` → `objectList` for `extract-iiof-pipeline` AND `universe` for `compute-source-diff`.
+- `VendorDocsPaths` / `SDKPaths` / `PostmanPaths` → `sources.VendorDocsPaths` / `.SDKPaths` / `.PostmanPaths` → the multi-source PK/FK sweep `sourceBundle` (Gap 10). The template reads them as `sources.VendorDocsPaths ?? []` etc., so absence degrades to empty — but emit them: the extractor's cross-source verdicts are weaker without them.
+- `Gaps` → `sources.Gaps`.
+
+You already compute every one of these internally (you name the COVERABLE-taxonomy leaves and you categorize each source by `SourceCategory`). This section only requires you to **surface them as the return shape** — the leaves of your COVERABLE taxonomies become `TaxonomyLeaves`; your `OfficialDocs`/`OfficialSDK`/`PostmanCollection` sources become `VendorDocsPaths`/`SDKPaths`/`PostmanPaths` respectively; the `OpenAPISpec`/top-ranked source becomes `SourcesFile`.
+
+Return brief human-readable stats too (source count, top source, proceed-vs-escalate decision) for the run log — but the structured object above is the machine contract.
 
 ## Composition with locked primitives
 

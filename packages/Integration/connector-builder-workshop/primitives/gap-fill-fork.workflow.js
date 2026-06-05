@@ -5,8 +5,8 @@
 // directory; the fork agent receives ONLY the gap set + the source list and emits a
 // schema-conforming write-back. No raw IO/IOF tokens cross the boundary.
 //
-// Inputs:
-//   { gapSet: string[], sources: Array<{sourceID, audit}>, vendor: string }
+// Inputs (names align with the caller in _TEMPLATE.workflow.js):
+//   { gaps: string[], sourceBundle: object, vendor: string, writeBackPath?: string, outputDir?: string }
 //
 // Output:
 //   { filledSlots: Array<{slot, value, provenance}>, residualGaps: string[] }
@@ -50,7 +50,8 @@ const FILL_RESULT_SCHEMA = {
 };
 
 phase('fork');
-const gaps = Array.isArray(args?.gapSet) ? args.gapSet : [];
+const gaps = Array.isArray(args?.gaps) ? args.gaps : [];
+const sourceBundle = args?.sourceBundle ?? {};
 log(`gap-fill-fork: ${gaps.length} slots to fill for vendor=${args?.vendor ?? '(?)'}`);
 
 phase('write-back');
@@ -64,7 +65,7 @@ const forkAgentType =
     'metadata-writer';
 
 const fillResult = await agent(
-    `You have ONLY the following slot gaps and sources for vendor ${args?.vendor ?? '(?)'} — do not pull in unrelated context.\n\nGAPS: ${JSON.stringify(gaps)}\nSOURCES: ${JSON.stringify(args?.sources ?? [])}\n\nFor each gap, attempt to extract a value with a reproducible extractionScript pointed at one of the supplied sources. NEVER fabricate. Slots you cannot reproduce-verify remain in residualGaps. Return the structured fill result.`,
+    `You have ONLY the following slot gaps and source bundle for vendor ${args?.vendor ?? '(?)'} — do not pull in unrelated context.\n\nGAPS: ${JSON.stringify(gaps)}\nSOURCE_BUNDLE: ${JSON.stringify(sourceBundle)}\n\nWrite filled slots back to ${args?.writeBackPath ?? '(canonical metadata file)'} via mcp-mj-metadata. For each gap, attempt to extract a value with a reproducible extractionScript pointed at one of the supplied sources. NEVER fabricate. Slots you cannot reproduce-verify remain in residualGaps. Return the structured fill result.`,
     { agentType: forkAgentType, schema: FILL_RESULT_SCHEMA, phase: 'write-back', label: `fill:${args?.vendor ?? 'unknown'}` }
 );
 

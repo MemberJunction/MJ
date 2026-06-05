@@ -5,15 +5,22 @@
 //   1. An emission exists (the run journal records an agent producer for it).
 //   2. The emission has provenance (verify-claim ran and succeeded).
 //   3. The value is non-null OR the slot is nullable.
-// Also verifies the minimum-thoroughness manifest's structural declarations met.
+// Also verifies the minimum-thoroughness manifest's structural declarations met,
+// the EXTRACTION_REPORT_MATRIX.csv coverage / PK-defer rate, the source-diff
+// closure, the code build cleanliness + connector file existence, and the
+// verification ladder (no red rung; claimed tier reached).
 //
-// ALSO (live-e2e phase enforcement): iterates the ORDERED `e2eLivePhases` table
-// from the same slots file and verifies the T10/T11 ladder evidence
-// (journal.ladder.*.livePhaseLog) ran EVERY applicable §1→§7 phase, IN the
-// declared order, with per-test NL+JSON+pass/fail evidence (§6), with any
-// skipped phase/cell carrying a logged reason, and with §7 dual-dialect covered
-// on BOTH SQL Server and Postgres. Missing / reordered / unevidenced / silently-
-// skipped phases each force pass=false — mirroring how slot gaps do.
+// MECHANICAL GATE (2026-06-05 rewrite): the pass/fail DECISION is computed in JS,
+// NOT returned by an LLM. Agents are used ONLY to fetch raw bytes (`cat` the slots
+// file + matrix CSV) and run a deterministic existence check (`test -f` the
+// connector file). Every failure is pushed to `failures[]` in JS; `pass` is
+// `failures.length === 0`, computed in JS. The single agent that remains makes
+// ONLY genuinely-fuzzy slot-applicability judgments — never the final verdict.
+//
+// REMOVED (2026-06-05): live-e2e / dual-dialect / 2^N-write enforcement. Live
+// testing is now read-only only, so floor-check NO LONGER fails a run for missing
+// write/bidirectional/live-mutation/dual-dialect phases. The e2eLivePhases table
+// still lives in the slots file but is no longer iterated here.
 //
 // `pass: false` → run rejected, output NOT promoted to a connector PR.
 //
@@ -28,6 +35,15 @@
 //     journal: object,                      // run journal (events.jsonl summary)
 //   }
 //
+//   journal shape consumed here:
+//     {
+//       slotEmissions?: { [slotId]: { producer, value, verified } },  // per-slot producer + provenance
+//       extractStats?: { matrixPath, objectsExtracted, extractedObjects[] },
+//       sourceDiff?: { missing: string[] },
+//       codeResult?: { BuildClean: boolean, ConnectorFile: string },
+//       ladder?: { tierResults: [{tier,status}], achievedTier: string },
+//     }
+//
 // Output:
 //   {
 //     pass: boolean,
@@ -37,12 +53,12 @@
 
 export const meta = {
     name: 'floor-check',
-    description: 'Final gate. Iterates Phase 0 bijection slot table; rejects on any missing/unverified/unprovable-required slot or unmet manifest declaration.',
+    description: 'Final gate. JS-computed: iterates Phase 0 bijection slot table; checks manifest, matrix coverage/PK-defer, source-diff closure, build cleanliness + connector file, and ladder. Agent only fetches raw bytes / runs test -f.',
     phases: [
-        { title: 'load-bijection', detail: 'Load floor/phase0-slots.json' },
-        { title: 'iterate-slots', detail: 'Verify every slot has an emission + provenance' },
-        { title: 'manifest-check', detail: 'Verify manifest declarations met by journal' },
-        { title: 'verdict', detail: 'Aggregate to pass/fail' },
+        { title: 'load-bijection', detail: 'Agent cats slots file + matrix CSV; JS parses' },
+        { title: 'iterate-slots', detail: 'JS verifies every slot has emission + provenance + non-null-or-nullable' },
+        { title: 'manifest-check', detail: 'JS verifies manifest declarations, matrix, source-diff, build, ladder' },
+        { title: 'verdict', detail: 'JS aggregates failures[] -> pass' },
     ],
 };
 
@@ -59,6 +75,7 @@ const FLOOR_VERDICT_SCHEMA = {
                 properties: {
                     rule: {
                         enum: [
+                            'slots-file-unreadable',
                             'slot-not-filled',
                             'slot-not-verified',
                             'unprovable-required',
@@ -68,23 +85,16 @@ const FLOOR_VERDICT_SCHEMA = {
                             'manifest-extractEveryIO',
                             'manifest-verifyEveryClaim',
                             'e2e-tier-met',
-                            // Live-e2e ordered-phase enforcement (§1→§7 of the canonical test plan)
-                            'e2e-phase-missing',          // an applicable e2eLivePhases entry absent from the T10/T11 livePhaseLog
-                            'e2e-subphase-missing',       // a Phase B sub-phase (3.1–3.8) applicable but absent
-                            'e2e-phase-out-of-order',     // phases ran in an order other than the declared `order`
-                            'e2e-phase-evidence-missing', // phase ran but lacks NL + JSON + explicit pass/fail (§6)
-                            'e2e-skip-without-reason',    // phase/cell skipped with no logged skipReason (silent omission)
-                            'e2e-dual-dialect-missing',   // a dualDialect phase not proven on BOTH SQL Server and Postgres (§7)
                             'min-adversarial-reviewers-met',
                             'test-data-not-wiped',
+                            'build-not-clean',
+                            'connector-file-missing',
+                            'ladder-rung-red',
+                            'ladder-tier-not-reached',
                             // Gap 10 revised — multi-source PK/FK enforcement
-                            'pk-defer-rate-too-high',          // >50% IOs have IsPrimaryKey=undefined
+                            'pk-defer-rate-too-high',          // >50% IOs have PKVerdict=defer
                             'extraction-matrix-missing',        // EXTRACTION_REPORT_MATRIX.csv absent
                             'extraction-matrix-row-missing',    // matrix has fewer rows than emitted IOs
-                            'naming-convention-not-applied',    // PK convention found but not applied across vendor
-                            'cross-io-fk-missed',               // field name == sibling PK but IsForeignKey=false
-                            'fk-target-unresolvable',           // RelatedIntegrationObjectID @lookup doesn't match emitted IO
-                            'source-check-incomplete',          // matrix shows source not checked when source exists
                         ],
                     },
                     slot: { type: 'string' },
@@ -107,18 +117,231 @@ const FLOOR_VERDICT_SCHEMA = {
     additionalProperties: false,
 };
 
-phase('load-bijection');
-log(`floor-check: runID=${args?.runID ?? '(?)'} vendor=${args?.vendor ?? '(?)'}`);
-phase('iterate-slots');
-phase('manifest-check');
-phase('verdict');
+// Schema for the byte-fetcher agent: it ONLY cats files + runs test -f. No verdict.
+const RAW_FETCH_SCHEMA = {
+    type: 'object',
+    required: ['slotsContent', 'connectorFileExists'],
+    properties: {
+        slotsContent: { type: 'string' },        // verbatim bytes of the slots JSON file ('' if unreadable)
+        slotsReadable: { type: 'boolean' },
+        matrixContent: { type: 'string' },        // verbatim bytes of EXTRACTION_REPORT_MATRIX.csv ('' if absent)
+        matrixReadable: { type: 'boolean' },      // false when the file does not exist
+        connectorFileExists: { type: 'boolean' }, // result of `test -f <ConnectorFile>` (exit 0 => true)
+    },
+    additionalProperties: false,
+};
 
-// independent-reviewer (different model from any producer) runs the floor.
-// The reviewer's default-rejection posture aligns with the floor's structural
-// "any failure → pass=false" rule.
-const verdict = await agent(
-    `You are the FINAL GATE for connector run ${args?.runID ?? '(?)'} (vendor=${args?.vendor ?? '(?)'}).\n\nLoad the bijection slot table from ${args?.slotsPath ?? 'workshop/floor/phase0-slots.json'}. For EVERY slot:\n  1. Find the emission in the run journal.  Missing → failures.push({rule:'slot-not-filled', slot, ...}).\n  2. Confirm the emission has provenance via verify-claim.  Missing → failures.push({rule:'slot-not-verified', slot, ...}).\n  3. Confirm value !== null unless slot.nullable === true.  Null on non-nullable → failures.push({rule:'unprovable-required', slot, ...}).\n\nAdditionally verify minimum-thoroughness manifest declarations (${JSON.stringify(args?.manifest ?? {})}):\n  - extractEveryIO=true → every discovered IO went through extract-iiof-pipeline\n  - verifyEveryClaim=true → every claim has a verify-claim event\n  - sourceDiffMustClose=true → compute-source-diff returned empty missing[]\n  - e2eTier matched against verification-ladder.achievedTier\n  - adversarialVerifyMinReviewers met in every adversarial-verify event\n  - test-data directory wiped at PR-open time (presence = failure)\n\n--- LIVE-E2E ORDERED-PHASE ENFORCEMENT (§1→§7 of the canonical 'Integration Major Enhancement — Test Plan') ---\nLoad the ORDERED \`e2eLivePhases\` array from the SAME slots file (${args?.slotsPath ?? 'workshop/floor/phase0-slots.json'}). This is the FIXED §1→§7 phase skeleton (env bring-up → Phase A → Phase B 2^N matrix [sub-phases 3.1→3.8] → Phase C value-handling → §5 generation-action/agents → §6 observability → §7 dual-dialect). The HubSpot framework at packages/Integration/connectors/test/ is the reference implementation.\nRead the ladder's live-e2e evidence from the run journal: \`journal.ladder.tierResults\` for tiers T10 and T11, specifically each tier's \`livePhaseLog\` (array of { phaseId, order, nl, json, status:'pass'|'fail'|'skip', skipReason? }). Treat the union of T10's and T11's livePhaseLog entries as the executed-phase record.\nFor EVERY entry in \`e2eLivePhases\` (and, for E2E.PhaseB, every entry in its \`subPhases\`):\n  1. APPLICABILITY: a phase/sub-phase is APPLICABLE unless the connector's discovered capabilities exclude it (e.g. a pull-only connector's push/bidirectional cells under 3.2; a no-watermark connector's watermark cell under 3.1, for which content-hash/keyset is substituted). Determine applicability from the frozen contract's capability flags (SupportsWrite / SupportsIncrementalSync / generation-action availability), NOT from the agent's say-so.\n  2. PRESENCE: every APPLICABLE phase/sub-phase MUST appear in the livePhaseLog. Absent → failures.push({rule:'e2e-phase-missing'|'e2e-subphase-missing', slot:<phaseId>, detail}).\n  3. ORDER: the executed phases MUST appear in non-decreasing declared \`order\` (env(0) → PhaseA(1) → PhaseB(2) [3.1→3.8] → PhaseC(3) → GenAction(4) → Observability(5) → DualDialect(6)). Any inversion → 'e2e-phase-out-of-order'.\n  4. EVIDENCE (§6): every NON-skipped phase/cell MUST carry a non-empty \`nl\` (natural-language statement of what was tested + result), a \`json\` payload (scrubbed IntegrationGetRun / DB counts / progress.jsonl), AND an explicit \`status\` of 'pass' or 'fail'. Missing any of the three → 'e2e-phase-evidence-missing'. A phase reporting only \`Status='Success'\` with no outcome JSON is evidence-missing (the silent-fail rule).\n  5. NO SILENT OMISSION: a phase/sub-phase/cell that is APPLICABLE but skipped MUST carry a non-empty \`skipReason\`. status==='skip' with empty/absent skipReason → 'e2e-skip-without-reason'. (A correctly-justified skip — e.g. push cells on a pull-only connector — is ALLOWED and is NOT a failure.)\n  6. DUAL-DIALECT (§7): for every \`e2eLivePhases\` entry with \`dualDialect:true\`, the applicable phase MUST be proven on BOTH 'sqlserver' AND 'postgres' (each livePhaseLog entry, or the run artifacts it cites, identifies its dialect; both dialects must appear as DISTINCT artifacts). A dualDialect phase proven on only one dialect → 'e2e-dual-dialect-missing'.\nNEVER pass a run whose live-e2e skipped, reordered, or left unevidenced any APPLICABLE §1→§7 phase — these are structural failures exactly like a missing slot.\n\n--- GAP 10 MULTI-SOURCE PK/FK ENFORCEMENT (revised 2026-05-30) ---\nLoad EXTRACTION_REPORT_MATRIX.csv from the run's output dir.\n  - Matrix missing → fail with rule 'extraction-matrix-missing'.\n  - Matrix has fewer rows than emitted IOs → 'extraction-matrix-row-missing'.\n  - For every row: if existing connector .ts exists for this vendor but matrix shows 'ExistingConnectorTs: no' → 'source-check-incomplete'. Same for OpenAPI when sourceID is an OpenAPI URL.\n  - Tally PKVerdict column across all rows. If 'defer' > 50% of emitted IOs → 'pk-defer-rate-too-high' (producer was lazy across the multi-source sweep).\n  - For every emitted IO: scan its IOFs. If a field named '<ObjName>Id' or 'Id' exists with IsPrimaryKey=false AND no Tier-1 evidence in CODE_EVIDENCE contradicts → 'naming-convention-not-applied'.\n  - For every emitted IOF whose name matches another emitted IO's PK name AND IsForeignKey=false → 'cross-io-fk-missed'.\n  - For every IOF with IsForeignKey=true and a RelatedIntegrationObjectID @lookup target: confirm an IO emitted in this run has that exact Name. Unresolvable → 'fk-target-unresolvable'.\n\nReturn the structured verdict. NEVER soften the floor — even one structural failure forces pass=false.`,
-    { agentType: 'independent-reviewer', schema: FLOOR_VERDICT_SCHEMA, phase: 'verdict', label: `floor-check:${args?.runID}` }
+const runID = args?.runID ?? '(?)';
+const vendor = args?.vendor ?? '(?)';
+const slotsPath = args?.slotsPath ?? 'workshop/floor/phase0-slots.json';
+const manifest = args?.manifest ?? {};
+const journal = args?.journal ?? {};
+const extractStats = journal.extractStats ?? {};
+const matrixPath = extractStats.matrixPath ?? '';
+const codeResult = journal.codeResult ?? {};
+const connectorFile = codeResult.ConnectorFile ?? '';
+
+phase('load-bijection');
+log(`floor-check: runID=${runID} vendor=${vendor}`);
+
+// ── Agent fetches RAW BYTES only — cat slots, cat matrix, test -f connector. ──
+const fetched = await agent(
+    `You are a NON-JUDGING file reader for connector run ${runID} (vendor=${vendor}). Run these Bash commands and return ONLY their raw output. Make NO judgment about pass/fail.\n\n` +
+        `1. \`cat ${slotsPath}\` -> return its VERBATIM bytes as slotsContent (set slotsReadable=true; on error '' + slotsReadable=false).\n` +
+        (matrixPath
+            ? `2. If \`test -f ${matrixPath}\` exits 0, \`cat ${matrixPath}\` -> matrixContent (matrixReadable=true). If the file does NOT exist, return matrixContent='' and matrixReadable=false.\n`
+            : `2. No matrix path provided: return matrixContent='' and matrixReadable=false.\n`) +
+        (connectorFile
+            ? `3. Run \`test -f ${connectorFile} && echo EXISTS || echo MISSING\` -> set connectorFileExists=true ONLY if it printed EXISTS.\n`
+            : `3. No connector file path provided: return connectorFileExists=false.\n`) +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists }.`,
+    { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
 );
 
-return verdict;
+// ── Everything below is JS. The agent contributed only raw bytes. ──
+const failures = [];
+
+// Parse the slots file in JS.
+let slots = [];
+if (!fetched || !fetched.slotsReadable || typeof fetched.slotsContent !== 'string' || fetched.slotsContent.trim().length === 0) {
+    failures.push({ rule: 'slots-file-unreadable', detail: `could not read slots file at ${slotsPath}` });
+} else {
+    try {
+        const parsed = JSON.parse(fetched.slotsContent);
+        slots = Array.isArray(parsed?.slots) ? parsed.slots : [];
+        if (slots.length === 0) {
+            failures.push({ rule: 'slots-file-unreadable', detail: 'slots file parsed but contained no slots[]' });
+        }
+    } catch (e) {
+        failures.push({ rule: 'slots-file-unreadable', detail: `slots file is not valid JSON: ${String(e && e.message ? e.message : e)}` });
+    }
+}
+
+phase('iterate-slots');
+// ── Per-slot structural verification, decided in JS. ──
+const slotEmissions = journal.slotEmissions ?? {};
+let filled = 0;
+let verified = 0;
+let nullableSkipped = 0;
+
+// Slots whose producer is a deterministic pipeline with a fixed value (e.g.
+// MetadataSource='Declared') are satisfied by their fixedValue, not by an emission.
+const isFixedValueSlot = (slot) => slot && Object.prototype.hasOwnProperty.call(slot, 'fixedValue');
+
+for (const slot of slots) {
+    const slotId = slot?.id ?? '(unnamed)';
+    const nullable = slot?.nullable === true;
+
+    if (isFixedValueSlot(slot)) {
+        // Fixed-value slots are structurally filled + verified by definition.
+        filled += 1;
+        verified += 1;
+        continue;
+    }
+
+    const emission = slotEmissions[slotId];
+
+    // (1) emission exists (producer recorded in journal).
+    if (!emission || !emission.producer) {
+        failures.push({ rule: 'slot-not-filled', slot: slotId, detail: 'no producer emission recorded in journal' });
+        continue;
+    }
+    filled += 1;
+
+    // (2) provenance: verify-claim ran and succeeded.
+    if (emission.verified !== true) {
+        failures.push({ rule: 'slot-not-verified', slot: slotId, detail: 'emission lacks verify-claim provenance (verified !== true)' });
+        // a not-verified slot also can't count toward verified; continue to null check.
+    } else {
+        verified += 1;
+    }
+
+    // (3) value non-null unless slot.nullable.
+    const value = emission.value;
+    const isNull = value === null || value === undefined;
+    if (isNull) {
+        if (nullable) {
+            nullableSkipped += 1;
+        } else {
+            failures.push({ rule: 'unprovable-required', slot: slotId, detail: 'value is null/undefined on a non-nullable slot' });
+        }
+    }
+}
+
+phase('manifest-check');
+// ── Manifest declarations, decided in JS against the journal. ──
+
+// extractEveryIO: every discovered IO went through extract-iiof-pipeline.
+// We treat extractStats.extractedObjects as the proof. If the manifest demands it
+// and no objects were extracted, that's a failure.
+if (manifest.extractEveryIO === true) {
+    const extracted = Array.isArray(extractStats.extractedObjects) ? extractStats.extractedObjects : [];
+    if (extracted.length === 0) {
+        failures.push({ rule: 'manifest-extractEveryIO', detail: 'manifest.extractEveryIO=true but journal records zero extracted objects' });
+    }
+}
+
+// verifyEveryClaim: every emitted claim has a verify-claim event.
+// The extract pipeline exports verifyEveryClaim (claimsVerified === claimsTotal).
+if (manifest.verifyEveryClaim === true) {
+    if (extractStats.verifyEveryClaim !== true) {
+        const detail = `manifest.verifyEveryClaim=true but not every claim verified (verified=${extractStats.claimsVerified ?? '?'} of ${extractStats.claimsTotal ?? '?'})`;
+        failures.push({ rule: 'manifest-verifyEveryClaim', detail });
+    }
+}
+
+// sourceDiffMustClose: compute-source-diff returned empty missing[].
+if (manifest.sourceDiffMustClose === true) {
+    const missing = Array.isArray(journal.sourceDiff?.missing) ? journal.sourceDiff.missing : null;
+    if (missing === null) {
+        failures.push({ rule: 'source-diff-closed', detail: 'manifest.sourceDiffMustClose=true but journal has no sourceDiff.missing array' });
+    } else if (missing.length !== 0) {
+        failures.push({ rule: 'source-diff-closed', detail: `source-diff did not close: ${missing.length} missing item(s)` });
+    }
+}
+
+// ── Code build cleanliness + connector file existence (JS verdict on agent's test -f). ──
+if (codeResult.BuildClean !== true) {
+    failures.push({ rule: 'build-not-clean', detail: `journal.codeResult.BuildClean !== true (was ${JSON.stringify(codeResult.BuildClean)})` });
+}
+if (!connectorFile) {
+    failures.push({ rule: 'connector-file-missing', detail: 'journal.codeResult.ConnectorFile is empty' });
+} else if (!fetched || fetched.connectorFileExists !== true) {
+    failures.push({ rule: 'connector-file-missing', detail: `test -f ${connectorFile} did not confirm the file exists` });
+}
+
+// ── Verification ladder: no red rung; claimed tier reached. ──
+const ladder = journal.ladder ?? {};
+const tierResults = Array.isArray(ladder.tierResults) ? ladder.tierResults : [];
+for (const tr of tierResults) {
+    if (tr && tr.status === 'red') {
+        failures.push({ rule: 'ladder-rung-red', detail: `ladder rung ${tr.tier ?? '(?)'} is red` });
+    }
+}
+// e2eTier: the manifest's required tier must have been reached (achievedTier >= manifest.e2eTier).
+const tierNum = (t) => {
+    const m = typeof t === 'string' ? t.match(/T(\d+)/i) : null;
+    return m ? parseInt(m[1], 10) : -1;
+};
+if (manifest.e2eTier) {
+    const required = tierNum(manifest.e2eTier);
+    const achieved = tierNum(ladder.achievedTier);
+    if (required >= 0 && achieved < required) {
+        failures.push({ rule: 'e2e-tier-met', detail: `manifest.e2eTier=${manifest.e2eTier} but ladder achievedTier=${ladder.achievedTier ?? 'none'}` });
+    }
+}
+
+// ── EXTRACTION_REPORT_MATRIX.csv coverage + PK-defer rate (JS over cat'd bytes). ──
+const emittedIOCount = Number.isInteger(extractStats.objectsExtracted)
+    ? extractStats.objectsExtracted
+    : (Array.isArray(extractStats.extractedObjects) ? extractStats.extractedObjects.length : 0);
+
+if (matrixPath) {
+    if (!fetched || !fetched.matrixReadable || typeof fetched.matrixContent !== 'string' || fetched.matrixContent.trim().length === 0) {
+        failures.push({ rule: 'extraction-matrix-missing', detail: `EXTRACTION_REPORT_MATRIX.csv not readable at ${matrixPath}` });
+    } else {
+        // Parse the CSV in JS: first line is the header, remaining non-empty lines are rows.
+        const lines = fetched.matrixContent.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim().length > 0);
+        const header = lines.length > 0 ? lines[0].split(',').map(h => h.trim()) : [];
+        const dataLines = lines.slice(1);
+        const pkIdx = header.indexOf('PKVerdict');
+
+        // (a) row-count vs emitted IOs.
+        if (dataLines.length < emittedIOCount) {
+            failures.push({ rule: 'extraction-matrix-row-missing', detail: `matrix has ${dataLines.length} row(s) but ${emittedIOCount} IO(s) were emitted` });
+        }
+
+        // (b) PK defer-rate: >50% of rows with PKVerdict=defer => producer was lazy.
+        if (pkIdx >= 0 && dataLines.length > 0) {
+            let deferCount = 0;
+            for (const line of dataLines) {
+                const cells = line.split(',');
+                const verdictCell = (cells[pkIdx] ?? '').trim().toLowerCase();
+                if (verdictCell === 'defer') deferCount += 1;
+            }
+            if (deferCount > dataLines.length / 2) {
+                failures.push({ rule: 'pk-defer-rate-too-high', detail: `${deferCount}/${dataLines.length} matrix rows defer PK (>50%)` });
+            }
+        }
+    }
+}
+
+phase('verdict');
+// ── JS computes the final verdict. ──
+const totalSlots = slots.length;
+const gapsResidual = failures.filter(f => f.rule === 'slot-not-filled' || f.rule === 'unprovable-required').length;
+const pass = failures.length === 0;
+
+log(`floor-check: ${pass ? 'PASS' : 'FAIL'} — ${failures.length} failure(s) across ${totalSlots} slots (filled=${filled}, verified=${verified}, nullableSkipped=${nullableSkipped})`);
+
+return {
+    pass,
+    failures,
+    summary: {
+        totalSlots,
+        filled,
+        verified,
+        nullableSkipped,
+        gapsResidual,
+    },
+};

@@ -17,6 +17,8 @@
 //   {
 //     "runID": "connector-...",
 //     "workspaceDir": "packages/Integration/connectors-registry/<vendor>/runs/<runID>",
+//     "outputDir": "<workspaceDir>/output",
+//     "connectorTargetDir": "packages/Integration/connectors/src",
 //     "planPath": "packages/Integration/connector-builder-workshop/plans/<vendor>.workflow.js",
 //     "manifestPath": "<workspaceDir>/manifest.json",
 //     "specDigestPath": "packages/Integration/connector-builder-workshop/planner/spec-digest.json",
@@ -99,8 +101,14 @@ function main() {
 
     const planPath = join(WORKSHOP, 'plans', `${args.vendor}.workflow.js`);
     const manifestPath = join(workspaceDir, 'manifest.json');
+    const outputDir = join(workspaceDir, 'output');
     const specDigestPath = join(WORKSHOP, 'planner', 'spec-digest.json');
     const slotsPath = join(WORKSHOP, 'floor', 'phase0-slots.json');
+    // Where the built connector + its index.ts registration live. The connector
+    // class is emitted to <connectorTargetDir>/<ClassName>.ts and exported from
+    // <connectorTargetDir>/index.ts — we build in the connectors package directly
+    // (tsc/vitest run there), so no per-run scaffold is required.
+    const connectorTargetDir = 'packages/Integration/connectors/src';
 
     // Initial manifest — the IntegrationProgressEmitter will append events to
     // progress.jsonl alongside this manifest as the run proceeds.
@@ -123,6 +131,8 @@ function main() {
     const handoff = {
         runID,
         workspaceDir,
+        outputDir,
+        connectorTargetDir,
         planPath,
         manifestPath,
         specDigestPath,

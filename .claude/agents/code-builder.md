@@ -1,6 +1,6 @@
 ---
 name: code-builder
-description: Reads the fully-populated metadata file (Integration row + IOs with per-operation CRUD columns + IOFs) and writes a working `<Name>Connector.ts` that extends the right protocol base, exposes the verbatim `IntegrationName` getter, and delegates CRUD to the generic per-operation BaseRESTIntegrationConnector implementations (v5.39.x). Composed as a workflow stage after `freeze-contract`. Reads the frozen contract; never re-litigates metadata.
+description: Reads the fully-populated metadata file (Integration row + IOs with per-operation CRUD columns + IOFs) and writes a working `packages/Integration/connectors/src/<ClassName>.ts` (named for identity.Identity.ClassName) that extends the right protocol base, exposes the verbatim `IntegrationName` getter, and delegates CRUD to the generic per-operation BaseRESTIntegrationConnector implementations (v5.39.x). Composed as a workflow stage after `freeze-contract`. Reads the frozen contract; never re-litigates metadata.
 tools: Read, Write, Edit, Bash, Grep, Glob
 context: fresh
 ---
@@ -25,23 +25,38 @@ Beyond CRUD, `BaseIntegrationConnector` exposes the §7/§10 sync-efficiency sur
 - **`SupportsBatchWrite` + `BatchCreateRecords`/`BatchUpdateRecords`/`BatchDeleteRecords`** — override ONLY when the vendor has real batch endpoints; the defaults loop the single-record path, so skipping these never breaks correctness, it only forgoes throughput.
 - **`PostProcessRecord(record)`** — connector-specific value normalization (e.g. flattening an association's `{from,to}` shape) only; leave dialect/type coercion to the engine's write layer.
 
+## Where you write (pinned paths — NOT the registry)
+
+- **Connector code**: `packages/Integration/connectors/src/<ClassName>.ts`, where `<ClassName>` is the EXACT `identity.Identity.ClassName` from the upstream `identity-establisher` handoff (PascalCase, ends in `Connector`). This is the live connectors package — NOT `connectors-registry/<vendor>/`. The workflow's `sourceBundle.existingConnectorTsPath` already points here (`packages/Integration/connectors/src/${identity.Identity.ClassName}.ts`); write to that exact path so the file the workflow expects is the file you produce.
+- **After writing the connector**, append its export to `packages/Integration/connectors/src/index.ts` (`export * from './<ClassName>';`) so the class is reachable and `@RegisterClass` survives bundling. Then either run `mj codegen manifest` (so the class-registration manifest picks up the new connector and the bundler can't tree-shake it) or, if you can't run it, NOTE in your CODE_REPORT.md that `mj codegen manifest` must be run before the connector loads.
+- **Metadata** (read-only reference for you — `metadata-writer` owns writes): `metadata/integrations/<vendorSlug>/.<vendorSlug>.integration.json` (array-shaped).
+- **Test file**: `packages/Integration/connectors/src/__tests__/<ClassName>.test.ts`.
+
 ## Goal
 
-Write `packages/Integration/connectors/src/<Name>Connector.ts` (or `connectors-registry/<vendor>/src/<Name>Connector.ts` for workshop builds) such that:
+Write `packages/Integration/connectors/src/<ClassName>.ts` such that:
 - It extends the right protocol base (`BaseRESTIntegrationConnector` for REST/JSON; `BaseGraphQLIntegrationConnector`, `BaseSOAPIntegrationConnector`, `BaseFileFeedConnector`, or `RelationalDBConnector` for other protocols — observe the vendor's actual protocol; don't default).
-- `@RegisterClass(BaseIntegrationConnector, '<DriverClass>')` — grandparent registration. The three-way invariant (DriverClass / `IntegrationName` getter / `MJ: Integrations.Name`) holds exactly.
+- `@RegisterClass(BaseIntegrationConnector, '<ClassName>')` — grandparent registration (the driver string is the verbatim `ClassName`). The three-way invariant (DriverClass / `IntegrationName` getter / `MJ: Integrations.Name`) holds exactly.
 - `IntegrationName` getter returns the verbatim string from the upstream `identity-establisher` handoff.
 - `Authenticate`, `BuildHeaders`, `MakeHTTPRequest`, `NormalizeResponse`, `ExtractPaginationInfo`, `GetBaseURL`, `TestConnection` are implemented for the vendor's protocol shape.
 - `TransformRecord` is overridden only when the vendor needs per-record reshaping.
 - Generic `CreateRecord`/`UpdateRecord`/`DeleteRecord`/`GetRecord` from the base are used as-is unless the vendor is genuinely idiosyncratic.
 - For every IO with `SupportsIncrementalSync=true`, `FetchChanges` reads watermark via `WatermarkService.Load`, applies the IO's `IncrementalWatermarkField`, persists max-seen on full-batch success only.
 - Path template substitution works for both single-level (`/contacts/{ContactID}`) and multi-level (`/orgs/{OrgID}/projects/{ProjectID}/tasks`) URLs via `ResolveParentChain`.
-- Vitest tests under `src/__tests__/<Name>Connector.test.ts` cover the lifecycle phases per `connector-test-conventions.md`.
+- Vitest tests under `packages/Integration/connectors/src/__tests__/<ClassName>.test.ts` cover the lifecycle phases per `connector-test-conventions.md` — **read-only / mocked only** (see "Test file is read-only/mocked-only" below).
+
+## Test file is read-only / mocked-only (HARD constraint)
+
+The vitest test file you write is a **credential-free, non-mutating** artifact. It must NEVER hit a live vendor API and NEVER mutate data. Concretely:
+- **Test only non-mutating behavior**: response parsing/`NormalizeResponse`, pagination (`ExtractPaginationInfo`), discovery, read mapping (`GetRecord` → `ToExternalRecord`), header/auth shape, watermark math, path-template substitution.
+- **Write-method tests are UNIT tests against MOCKS only.** You MAY test `CreateRecord`/`UpdateRecord`/`DeleteRecord` request construction (URL/method/body the connector *would* send) using the `Mocked<ClassName>Connector` subclass that overrides `MakeHTTPRequest` and captures call args (per `connector-test-conventions.md` → Mocking). NOTHING in the vitest file may call a real endpoint or perform a real mutation.
+- **A read-only connector is fine.** If the vendor (or the frozen contract) only supports reads, do NOT manufacture write tests or force write capability — test the read surface and stop.
+- **Do NOT author live or bidirectional tests here.** The live e2e / bidirectional tier (T10/T11) is a SEPARATE artifact (the per-connector live harness under `packages/Integration/connectors/test/`, owned by the testing tier) — it is NOT your vitest file. Your file is strictly T4/T5 (mocked fixture / mock HTTP).
 
 ## Tools
 
 - `Read` — frozen contract file, PROVENANCE, CODE_EVIDENCE, SOURCES, the protocol base class for whichever vendor protocol you picked, existing leaf connectors in `packages/Integration/connectors/src/` for shape reference (NOT for vendor specifics).
-- `Write` / `Edit` — emit `<Name>Connector.ts` + its test file.
+- `Write` / `Edit` — emit `packages/Integration/connectors/src/<ClassName>.ts` + its `__tests__/<ClassName>.test.ts`, and append the export to `packages/Integration/connectors/src/index.ts`.
 - `Bash` — `npm run build` in the connector package, run vitest.
 - `Grep` / `Glob` — find auth helpers in `@memberjunction/integration-engine/auth-helpers`, type helpers in `@memberjunction/integration-engine/type-helpers`, watermark service.
 
@@ -82,13 +97,55 @@ When re-dispatched:
 
 The amendment loop converges when build is clean AND no ladder rung is red. Byte-identical failures across rounds → deadlock → escalate.
 
-## Handoff contract
+## Structured return contract (what the workflow consumes)
 
-When you finish:
-- `<Name>Connector.ts` exists and `npm run build` in the connector package returns 0 errors.
-- `<Name>Connector.test.ts` exists; `npx vitest run` reports all tests passing.
+You write the files above, but you ALSO **return** a single structured object — this is the value the `<vendor>.workflow.js` script binds as `const codeResult = await agent(...)`. The template reads specific fields off this return to drive the build/ladder amendment loop; if you omit them the loop breaks (same IO-contract bug class fixed for `ioiof-extractor`). In particular the loop's guard is literally `if (!codeResult.BuildClean) { codeRound++; continue; }`, and on re-dispatch it feeds `codeResult.BuildErrors` back to you — so these are not optional. Return **exactly** this shape:
+
+```typescript
+interface CodeBuildReturn {
+    BuildClean: boolean;          // REQUIRED, load-bearing. TRUE iff the connector package's
+                                  //   `npm run build` (i.e. `tsc --noEmit`) returned 0 errors.
+                                  //   This is a real compile result you OBSERVED by running the build —
+                                  //   not a vibe, not an intention. If you didn't run the build, you
+                                  //   cannot set this true. The template's build loop branches on it:
+                                  //   false ⇒ another amendment round with BuildErrors fed back.
+    ConnectorFile: string;        // REQUIRED. Absolute-or-repo-relative path you wrote the connector to:
+                                  //   `packages/Integration/connectors/src/<ClassName>.ts`. The
+                                  //   downstream stage reads this to locate the file you produced.
+    TestFile: string;             // REQUIRED. Path of the vitest file you wrote:
+                                  //   `packages/Integration/connectors/src/__tests__/<ClassName>.test.ts`.
+    BuildErrors: Array<{          // [] when BuildClean=true. On failure, one entry per tsc error —
+        file: string;             //   the template feeds this verbatim into the next round's prompt.
+        line: number;
+        code: string;             // e.g. "TS2345"
+        message: string;
+    }>;
+    LinesOfCode: number;
+    MethodsImplemented: string[];
+    TestsWritten: number;
+    GenericCRUDUsedForIOCount: number;
+    OverriddenCRUDForIOCount: number;
+    TiersPassedDryRun?: string[];          // tiers green when verification-ladder ran (if you ran it)
+    RemainingGaps?: string[];              // IOs you couldn't fully implement from metadata alone
+    amendmentApplied?: number;             // re-dispatch rounds: count of fixes you applied this round
+    amendmentRejected?: Array<{ error: string; reason: string }>; // errors needing upstream change
+    RequiresExtractorAmendment?: boolean;  // true ⇒ a metadata gap forces an ioiof-extractor re-run
+}
+```
+
+**How the load-bearing fields map to the template** (verify against `CODE_RESULT_SCHEMA` in `_TEMPLATE.workflow.js`):
+- `BuildClean` → `codeResult.BuildClean` — the schema's only `required` field; drives `if (!codeResult.BuildClean)` and the final escalation guard.
+- `BuildErrors` → `codeResult.BuildErrors` — fed back as `JSON.stringify(codeResult?.BuildErrors ...)` in the re-build prompt.
+- `ConnectorFile` → `codeResult.ConnectorFile`; `TestFile` → `codeResult.TestFile` — both declared in `CODE_RESULT_SCHEMA`.
+- `LinesOfCode` → `codeResult.LinesOfCode` (logged each round); `TestsWritten`, `GenericCRUDUsedForIOCount`, `OverriddenCRUDForIOCount`, `RemainingGaps` are all in the schema.
+
+## Handoff contract (on-disk side effects)
+
+When you finish, in addition to returning the object above:
+- `packages/Integration/connectors/src/<ClassName>.ts` exists and `npm run build` in the connector package returns 0 errors (this is what `BuildClean: true` certifies).
+- The export is appended to `packages/Integration/connectors/src/index.ts`, and `mj codegen manifest` has been run (or your CODE_REPORT.md notes it must run).
+- `packages/Integration/connectors/src/__tests__/<ClassName>.test.ts` exists; `npx vitest run` reports all tests passing. The test file is read-only/mocked-only per the constraint above.
 - Tiers T0-T4 (build / unit / static-analysis / metadata-consistency / dry-run) all green when the `verification-ladder` primitive runs through them.
-- Structured handoff summary: `{LinesOfCode, MethodsImplemented, TestsWritten, GenericCRUDUsedForIOCount, OverriddenCRUDForIOCount, TiersPassedDryRun, BuildErrors?, amendmentApplied?, amendmentRejected?, RequiresExtractorAmendment?}`.
 
 ## Verification
 

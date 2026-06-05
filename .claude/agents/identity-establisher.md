@@ -60,7 +60,10 @@ interface Phase1Handoff {
     Status: 'Complete' | 'Conflict' | 'NeedsHumanDisambiguation';
     Identity: {
         Name: string;                              // bijection: Integration.Name
-        ClassName: string;
+        ClassName: string;                         // REQUIRED — see "ClassName is a required output" below.
+                                                   //   PascalCase, ends in "Connector". The downstream
+                                                   //   workflow HARD-derefs identity.Identity.ClassName to
+                                                   //   build the connector path + ladder connectorName.
         ImportPath: string;                        // bijection: Integration.ImportPath
         Description: string;
         NavigationBaseURL: string | null;          // nullable per slot table
@@ -82,6 +85,21 @@ interface Phase1Handoff {
     }>;
 }
 ```
+
+## `ClassName` is a REQUIRED output (the workflow hard-derefs it)
+
+`Identity.ClassName` is not optional and not "nice to have" — the per-vendor `<vendor>.workflow.js` reads `identity.Identity.ClassName` **without any guard** in two load-bearing places:
+
+1. `sourceBundle.existingConnectorTsPath = packages/Integration/connectors/src/${identity.Identity.ClassName}.ts` — the path the IOIOF extractor and `code-builder` both expect the connector file to live at.
+2. `connectorName: identity.Identity.ClassName` — passed to the `verification-ladder` primitive to locate + register the class.
+
+If `ClassName` is missing/empty, both expressions produce a broken path (`.../undefined.ts`) and the build silently starves — the same IO-contract failure class fixed for `ioiof-extractor`. Therefore you MUST **always** emit `Identity.ClassName`, and it MUST be:
+
+- **Present and non-empty** on EVERY `Status: 'Complete'` emission (and on `'Conflict'` emissions where an existing row carries a class name).
+- **PascalCase, ending in `Connector`** (e.g. `WildApricotConnector`, `SageIntacctConnector`) — derived deterministically from the canonical `Name` (strip non-alphanumerics, PascalCase, append `Connector` if absent).
+- **The exact string `code-builder` writes the file as** and `@RegisterClass` registers — `code-builder` writes `packages/Integration/connectors/src/<ClassName>.ts` using this verbatim value, so any drift here breaks the three-way invariant downstream.
+
+This is part of the structured-return contract: the stage schema (`PHASE1_SCHEMA`) requires `Identity` as an object; within it, `ClassName` is a hard dependency of the workflow even though JSON-schema only checks the parent object's presence. Treat `ClassName` as required-by-consumer.
 
 ## Composition with locked primitives
 
