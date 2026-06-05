@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "integrationKey": {
+      "type": "string",
+      "title": "Integration Key",
+      "description": "DocuSign Integration Key (client ID / GUID) from the DocuSign Apps and Keys page.",
+      "isSecret": false,
+      "order": 0
+    },
+    "userId": {
+      "type": "string",
+      "title": "User ID (API Username)",
+      "description": "DocuSign API Username (User ID GUID) the integration impersonates via JWT. Not the email address.",
+      "isSecret": false,
+      "order": 1
+    },
+    "accountId": {
+      "type": "string",
+      "title": "API Account ID",
+      "description": "DocuSign API Account ID (GUID) the envelopes are created under.",
+      "isSecret": false,
+      "order": 2
+    },
+    "privateKey": {
+      "type": "string",
+      "title": "RSA Private Key (PEM)",
+      "description": "RSA private key (PEM) paired with the public key uploaded to DocuSign for the JWT grant. Used to sign the JWT assertion.",
+      "isSecret": true,
+      "order": 3
+    },
+    "oauthBase": {
+      "type": "string",
+      "title": "OAuth Base",
+      "description": "DocuSign OAuth base host. Demo: account-d.docusign.com. Production: account.docusign.com.",
+      "isSecret": false,
+      "order": 4,
+      "default": "account-d.docusign.com"
+    },
+    "restBase": {
+      "type": "string",
+      "title": "REST Base URI",
+      "description": "DocuSign REST base URI for the account, including /restapi. Demo: https://demo.docusign.net/restapi.",
+      "isSecret": false,
+      "order": 5,
+      "default": "https://demo.docusign.net/restapi"
+    }
+  },
+  "required": ["integrationKey", "userId", "accountId", "privateKey"]
+}

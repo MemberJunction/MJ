@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DocuSignSignatureProvider, mapDocuSignStatus } from '../DocuSignSignatureProvider';
 import type { SignatureProviderConfig } from '@memberjunction/esignature';
 
-// Stub the JWT signer so no real RSA key is needed.
-vi.mock('jsonwebtoken', () => ({ sign: vi.fn(() => 'fake.jwt.assertion') }));
+// Stub the JWT signer so no real RSA key is needed. The mock MUST expose `sign` on a `default`
+// export to match the driver's CommonJS-interop import (`import jwt from 'jsonwebtoken'`). A
+// named-only mock would pass type-check but blow up at runtime — which is the exact bug this
+// shape guards against (the driver originally used `import { sign }`, which throws under ESM).
+vi.mock('jsonwebtoken', () => ({ default: { sign: vi.fn(() => 'fake.jwt.assertion') } }));
 
 const VALID_CONFIG: SignatureProviderConfig = {
     integrationKey: 'ik',
@@ -81,6 +84,19 @@ describe('DocuSignSignatureProvider', () => {
             await provider.initialize(VALID_CONFIG);
             // Indirectly verified: configured succeeds and a later call signs with the key.
             expect(provider.IsConfigured).toBe(true);
+        });
+
+        it('normalizes a header-less base64 key (PEM markers omitted on paste)', async () => {
+            // A common credential-entry mistake: pasting only the base64 body. The driver should
+            // reconstruct a valid PEM and still be configured.
+            const bodyOnly = VALID_CONFIG.privateKey!.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+            await provider.initialize({ ...VALID_CONFIG, privateKey: bodyOnly });
+            expect(provider.IsConfigured).toBe(true);
+        });
+
+        it('is not configured when the private key is blank/whitespace', async () => {
+            await provider.initialize({ ...VALID_CONFIG, privateKey: '   ' });
+            expect(provider.IsConfigured).toBe(false);
         });
     });
 

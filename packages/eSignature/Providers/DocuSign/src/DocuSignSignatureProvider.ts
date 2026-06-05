@@ -1,5 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
-import { sign as jwtSign } from 'jsonwebtoken';
+// jsonwebtoken is a CommonJS module; under ESM the named `sign` export isn't available,
+// so we import the default and destructure. (A bare `import { sign }` throws at runtime.)
+import jwt from 'jsonwebtoken';
+const { sign: jwtSign } = jwt;
 import {
     BaseSignatureProvider,
     CreateEnvelopeRequest,
@@ -68,7 +71,7 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
         const integrationKey = this.readString(config, 'integrationKey');
         const userId = this.readString(config, 'userId');
         const accountId = this.readString(config, 'accountId');
-        const privateKey = this.readString(config, 'privateKey')?.replace(/\\n/g, '\n');
+        const privateKey = this.normalizePrivateKey(this.readString(config, 'privateKey'));
 
         if (!integrationKey || !userId || !accountId || !privateKey) {
             this.config = null;
@@ -344,6 +347,33 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
     private readString(config: SignatureProviderConfig, key: string): string | undefined {
         const value = config[key];
         return typeof value === 'string' ? value : undefined;
+    }
+
+    /**
+     * Normalize a pasted RSA private key into a valid PEM. Handles the common credential-entry
+     * mistakes: literal `\n` escapes, lost line breaks, and a missing BEGIN/END header/footer
+     * (e.g. when only the base64 body was pasted into a form). Returns undefined if no key.
+     */
+    private normalizePrivateKey(raw: string | undefined): string | undefined {
+        if (!raw) {
+            return undefined;
+        }
+        // Convert literal backslash-n to real newlines, normalize CRLF, and trim.
+        let key = raw.replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
+
+        const headerRe = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+        const footerRe = /-----END [A-Z ]*PRIVATE KEY-----/;
+        if (headerRe.test(key) && footerRe.test(key)) {
+            return key; // already a well-formed PEM
+        }
+
+        // No PEM markers — assume the base64 body was pasted alone. Re-wrap as PKCS#1 RSA.
+        const body = key.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+        if (!body) {
+            return undefined;
+        }
+        const wrapped = body.match(/.{1,64}/g)?.join('\n') ?? body;
+        return `-----BEGIN RSA PRIVATE KEY-----\n${wrapped}\n-----END RSA PRIVATE KEY-----\n`;
     }
 }
 
