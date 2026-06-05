@@ -525,7 +525,12 @@
                                             <i class="fa-solid fa-message"></i>
                                             <h4>Prompt Tokens</h4>
                                         </div>
-                                        <div class="metric-value large">{{ formatTokens(record.TokensPrompt) }}</div>
+                                        <div class="metric-value large" title="Full input the model processed — uncached (new) prompt tokens plus any cached tokens">{{ formatTokens(FullPromptTokens) }}</div>
+                                        @if (CachedTokens > 0) {
+                                            <div class="metric-rollup">
+                                                <span>incl. {{ formatTokens(CachedTokens) }} cached</span>
+                                            </div>
+                                        }
                                         @if (record.TokensPromptRollup && record.TokensPromptRollup !== record.TokensPrompt) {
                                             <div class="metric-rollup">
                                                 <span>Rollup: {{ formatTokens(record.TokensPromptRollup) }}</span>

@@ -426,13 +426,13 @@ export class AgentRunner {
             // - Step 7 (media) creates new AIAgentRunMedia and ConversationDetailAttachment records —
             //   entirely separate from steps 5 and 6
             //
-            // IMPORTANT: All three MUST complete before the resolver publishes the 'complete' event,
-            // because the client reloads all conversation data from the DB when it receives that event.
-            // If any write hasn't flushed yet, the client would see stale data. Promise.all guarantees
-            // all three finish before we return.
+            // IMPORTANT: All of these MUST complete before the resolver publishes the 'complete'
+            // event, because the client reloads all conversation data from the DB when it receives
+            // that event. If any write hasn't flushed yet, the client would see stale data. They run
+            // SEQUENTIALLY (not in parallel) — see the dispatch note below the definitions.
 
-            // Step 5: Update agent response detail with final result (async)
-            const updateDetailPromise = (async () => {
+            // Step 5: Update agent response detail with final result.
+            const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
                     // Wait for any in-flight progress save to complete
                     // EnsureSaveComplete() resolves immediately if no save in progress
@@ -469,10 +469,10 @@ export class AgentRunner {
                     }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
-            })();
+            };
 
-            // Step 6: Process artifacts if requested and agent succeeded (async)
-            const processArtifactsPromise = (async () => {
+            // Step 6: Process artifacts if requested and agent succeeded.
+            const processArtifacts = async () => {
                 const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
                 if (shouldCreateArtifacts && agentResult.success && agentResult.payload) {
                     return this.ProcessAgentArtifacts(
@@ -484,10 +484,10 @@ export class AgentRunner {
                     );
                 }
                 return undefined;
-            })();
+            };
 
-            // Step 6b: Process file artifacts produced by file-generation actions (async)
-            const processFileArtifactsPromise = (async () => {
+            // Step 6b: Process file artifacts produced by file-generation actions.
+            const processFileArtifacts = async () => {
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
                     await this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
@@ -498,10 +498,10 @@ export class AgentRunner {
                         params.agent.AcceptUnregisteredFiles
                     );
                 }
-            })();
+            };
 
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
-            const saveMediaPromise = (async () => {
+            const saveMedia = async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
                     const mediaToSave = agentResult.mediaOutputs;
                     LogStatus(`Processing ${mediaToSave.length} media output(s)`);
@@ -521,10 +521,23 @@ export class AgentRunner {
                     // artifact). Writing artifacts directly removes the deprecated-entity dependency
                     // and the redundant dual-write. Uses the same createArtifactWithVersion helper
                     // that ProcessFileArtifacts uses, keeping artifact creation logic in one place.
-                    if (agentResponseDetailId) {
+                    //
+                    // Suppress standalone artifacts for media already embedded in the report
+                    // payload (e.g. the research agent inlines its infographic as a base64 <img>
+                    // in report.html). Without this, the same image surfaces twice — once inside
+                    // the report and once as its own artifact card. Media NOT found in the payload
+                    // (e.g. Sage → Generate Image, where the image IS the deliverable) still gets a
+                    // standalone artifact. Note: SaveAgentRunMedia above is intentionally run over
+                    // the FULL list — the bytes are always retained for audit/lineage regardless.
+                    const payloadStr = agentResult.payload ? JSON.stringify(agentResult.payload) : '';
+                    const mediaForArtifacts = payloadStr
+                        ? mediaToSave.filter(m => !this.isMediaEmbeddedInPayload(m, payloadStr))
+                        : mediaToSave;
+
+                    if (agentResponseDetailId && mediaForArtifacts.length > 0) {
                         await this.CreateMediaArtifacts(
                             agentResponseDetailId,
-                            mediaToSave,
+                            mediaForArtifacts,
                             contextUser,
                             md
                         );
@@ -532,17 +545,22 @@ export class AgentRunner {
                     return ids;
                 }
                 return [];
-            })();
+            };
 
-            // Wait for all three post-execution operations to complete before returning.
-            // The resolver publishes the 'complete' event after this returns, so the client
-            // is guaranteed to see all DB writes when it reloads.
-            const [, artifactInfo] = await Promise.all([
-                updateDetailPromise,
-                processArtifactsPromise,
-                processFileArtifactsPromise,
-                saveMediaPromise
-            ]);
+            // Run these post-execution DB writes SEQUENTIALLY, not concurrently. They all mutate
+            // entities through the same request-scoped provider/connection, and the file/media path
+            // (createArtifactWithVersion) wraps its writes in an explicit BeginTransaction/Commit on
+            // that shared connection. Running them in parallel let the media transaction interleave
+            // with the report path's artifact + ConversationDetailArtifact saves, so the report's
+            // junction Save intermittently failed — the throw was swallowed and the report artifact
+            // was left orphaned (no conversation-detail link), surfacing in chat as "only the image,
+            // no report." Sequential execution removes the interleave; all writes still complete
+            // before we return, so the resolver's 'complete' event still guarantees the client sees
+            // every write.
+            await updateDetail();
+            const artifactInfo = await processArtifacts();
+            await processFileArtifacts();
+            await saveMedia();
 
             return {
                 agentResult,
@@ -1108,6 +1126,48 @@ export class AgentRunner {
     }
 
     // ── Media artifact creation ─────────────────────────────────────────────────
+
+    /**
+     * Determines whether a media output's bytes are already embedded inside the agent's
+     * output payload (which is serialized into the report artifact by
+     * {@link ProcessAgentArtifacts}).
+     *
+     * WHY: agents like the research agent write a report (e.g. `report.html`) that inlines
+     * a generated image as a base64 data URL (`<img src="data:image/png;base64,…">`). That
+     * same image ALSO arrives on `agentResult.mediaOutputs`, so creating a standalone media
+     * artifact for it would duplicate the image — once inside the report, once as its own
+     * card. When the media is provably embedded in the payload we skip the standalone
+     * artifact. Media that is NOT in the payload (e.g. Sage → Generate Image, where the
+     * image is the deliverable) is left alone and still persists as its own artifact.
+     *
+     * The check is purely in-memory (no DB query): we look for a representative chunk of the
+     * media's base64 bytes inside the already-serialized payload string. base64 blobs are
+     * large, so matching a fixed-length prefix is both cheap and robust against the payload
+     * wrapping the data in a `data:<mime>;base64,` prefix.
+     *
+     * @param media - The media output under consideration
+     * @param payloadStr - The agent payload pre-serialized via JSON.stringify (caller-cached)
+     * @returns true if the media bytes appear in the payload, false otherwise
+     */
+    private isMediaEmbeddedInPayload(media: MediaOutput, payloadStr: string): boolean {
+        if (!payloadStr || !media.data) {
+            return false;
+        }
+
+        // Strip any data-URL prefix so the needle is raw base64 — the payload may store the
+        // image either as a bare base64 string or wrapped in a data URL; the base64 body is
+        // common to both forms.
+        const rawBase64 = media.data.replace(/^data:[^;]+;base64,/, '');
+
+        // A fixed-length prefix is plenty to identify a specific base64 blob without scanning
+        // the entire (potentially multi-MB) string for an exact full-length match.
+        const needle = rawBase64.slice(0, 256);
+        if (needle.length === 0) {
+            return false;
+        }
+
+        return payloadStr.includes(needle);
+    }
 
     /**
      * Creates `MJ: Artifact` + `MJ: Artifact Version` + `MJ: Conversation Detail Artifact`
