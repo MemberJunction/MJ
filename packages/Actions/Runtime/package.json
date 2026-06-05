@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/action-runtime",
   "type": "module",
-  "version": "5.38.0",
+  "version": "5.39.0",
   "description": "Runtime Actions executor for MemberJunction — runs Action.Type='Runtime' JavaScript payloads inside the existing isolated-vm sandbox and (in a later phase) exposes the MJ bridge utilities to sandbox code.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,11 +21,11 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.38.0",
-    "@memberjunction/core": "5.38.0",
-    "@memberjunction/core-entities": "5.38.0",
-    "@memberjunction/actions-base": "5.38.0",
-    "@memberjunction/code-execution": "5.38.0"
+    "@memberjunction/global": "5.39.0",
+    "@memberjunction/core": "5.39.0",
+    "@memberjunction/core-entities": "5.39.0",
+    "@memberjunction/actions-base": "5.39.0",
+    "@memberjunction/code-execution": "5.39.0"
   },
   "repository": {
     "type": "git",
