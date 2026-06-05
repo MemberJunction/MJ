@@ -768,13 +768,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     protected override WrapSaveCallForResult(
         binding: SaveCallBinding,
-        _entity: BaseEntity,
+        entity: BaseEntity,
         spName: string,
     ): SaveSQLFragment {
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
         }
-        const sql = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(spName)}(${binding.callArgsSQL})`;
+        // CRUD functions live in the entity's OWN schema (e.g. hubspot.spCreatecontacts),
+        // not the MJ core schema. Codegen emits them via QuoteSchema(entity.SchemaName, fn),
+        // so the runtime must resolve the same schema or the function is "does not exist".
+        const sql = `SELECT * FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
         return { sql, parameters: [...binding.values] };
     }
 
@@ -835,7 +838,8 @@ SELECT * FROM save_result`;
         }
         const paramValues: unknown[] = pkFields.map((f: EntityFieldInfo) => entity.Get(f.Name));
         const paramPlaceholders = paramValues.map((_v: unknown, i: number) => `$${i + 1}`).join(', ');
-        const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+        // Delete function lives in the entity's own schema, mirroring codegen output.
+        const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
         if (this.ShouldTrackRecordChanges(entityInfo)) {
             const oldData = entity.GetAll(false);
@@ -1301,6 +1305,25 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     ]);
 
     /**
+     * Keywords that are ONLY recognized when they appear in ALL-CAPS — matched
+     * case-sensitively, unlike `_SQL_KEYWORDS` (which is matched via
+     * `word.toUpperCase()`). These are reserved words that collide with very
+     * common PascalCase MJ column names, so they must NOT suppress quoting of
+     * the column form:
+     *   - `TYPE` — `ALTER COLUMN <c> TYPE <t>` / `CREATE TYPE`; but `Type` is a
+     *     column on RecordChange and many other entities.
+     *   - `DATA` — `ALTER COLUMN <c> SET DATA TYPE <t>`; but `Data` is a column
+     *     on several entities.
+     * Putting these in the case-insensitive set would fold `Type`/`Data` column
+     * refs to lowercase on PG ("column does not exist"). All-caps-only matching
+     * recognizes the DDL keyword form (dialects always emit keywords upper-case)
+     * while leaving the mixed-case column form quotable.
+     */
+    private static readonly _SQL_KEYWORDS_UPPERCASE_ONLY = new Set([
+        'TYPE', 'DATA',
+    ]);
+
+    /**
      * Quotes mixed-case identifiers in a raw SQL string for PostgreSQL.
      * Walks the string token by token, skipping string literals, dollar-quoted
      * blocks, already-quoted identifiers, square-bracketed identifiers, and
@@ -1449,7 +1472,12 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
         const word = sql.substring(start, j);
 
-        const isKeyword = PostgreSQLDataProvider._SQL_KEYWORDS.has(word.toUpperCase());
+        // All-caps-only keywords (TYPE/DATA) are matched case-sensitively so the
+        // DDL keyword form is recognized while the PascalCase column form stays quotable.
+        const isUpperCaseOnlyKeyword = word === word.toUpperCase()
+            && PostgreSQLDataProvider._SQL_KEYWORDS_UPPERCASE_ONLY.has(word);
+        const isKeyword = isUpperCaseOnlyKeyword
+            || PostgreSQLDataProvider._SQL_KEYWORDS.has(word.toUpperCase());
         const isAllLower = word === word.toLowerCase();
         const isMJInternal = word.startsWith('__mj_');
         const startsUpper = /^[A-Z]/.test(word);

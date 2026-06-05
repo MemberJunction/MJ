@@ -432,11 +432,7 @@ export class IMISConnector extends BaseRESTIntegrationConnector {
 
         if (response.Status >= 200 && response.Status < 300) {
             const body = response.Body as Record<string, unknown>;
-            return {
-                Success: true,
-                ExternalID: this.ExtractIdFromRecord(body),
-                StatusCode: response.Status,
-            };
+            return this.BuildCreatedResult(this.ExtractIdFromRecord(body), response.Status, ctx.ObjectName);
         }
         return this.BuildCRUDError(response, 'CreateRecord', ctx.ObjectName);
     }

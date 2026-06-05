@@ -32942,7 +32942,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.` })
+@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
@@ -49699,6 +49699,10 @@ export class MJIntegrationObjectField_ {
     @Field(() => Boolean, {description: `When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
     IsCustom: boolean;
         
+    @Field({description: `Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`}) 
+    @MaxLength(20)
+    MetadataSource: string;
+        
     @Field() 
     @MaxLength(255)
     IntegrationObject: string;
@@ -49780,6 +49784,9 @@ export class CreateMJIntegrationObjectFieldInput {
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
 
+    @Field({ nullable: true })
+    MetadataSource?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -49855,6 +49862,9 @@ export class UpdateMJIntegrationObjectFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
+
+    @Field({ nullable: true })
+    MetadataSource?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -50035,6 +50045,59 @@ export class MJIntegrationObject_ {
     @Field(() => Boolean, {description: `When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
     IsCustom: boolean;
         
+    @Field({nullable: true, description: `HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.`}) 
+    CreateAPIPath?: string;
+        
+    @Field({nullable: true, description: `HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.`}) 
+    @MaxLength(20)
+    CreateMethod?: string;
+        
+    @Field({nullable: true, description: `Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).`}) 
+    @MaxLength(50)
+    CreateBodyShape?: string;
+        
+    @Field({nullable: true, description: `Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`}) 
+    @MaxLength(100)
+    CreateBodyKey?: string;
+        
+    @Field({nullable: true, description: `Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).`}) 
+    @MaxLength(20)
+    CreateIDLocation?: string;
+        
+    @Field({nullable: true, description: `HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.`}) 
+    UpdateAPIPath?: string;
+        
+    @Field({nullable: true, description: `HTTP method for update (typically PATCH or PUT).`}) 
+    @MaxLength(20)
+    UpdateMethod?: string;
+        
+    @Field({nullable: true, description: `Request body shape for update: flat | wrapped | literal. See CreateBodyShape.`}) 
+    @MaxLength(50)
+    UpdateBodyShape?: string;
+        
+    @Field({nullable: true, description: `Wrapper key for update body when UpdateBodyShape=wrapped.`}) 
+    @MaxLength(100)
+    UpdateBodyKey?: string;
+        
+    @Field({nullable: true, description: `For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`}) 
+    @MaxLength(20)
+    UpdateIDLocation?: string;
+        
+    @Field({nullable: true, description: `HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`}) 
+    DeleteAPIPath?: string;
+        
+    @Field({nullable: true, description: `For delete: where the target record ID is located — typically 'path'.`}) 
+    @MaxLength(20)
+    DeleteIDLocation?: string;
+        
+    @Field({nullable: true, description: `Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`}) 
+    @MaxLength(255)
+    IncrementalWatermarkField?: string;
+        
+    @Field({description: `Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`}) 
+    @MaxLength(20)
+    MetadataSource: string;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -50115,6 +50178,48 @@ export class CreateMJIntegrationObjectInput {
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
 
+    @Field({ nullable: true })
+    CreateAPIPath: string | null;
+
+    @Field({ nullable: true })
+    CreateMethod: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyShape: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyKey: string | null;
+
+    @Field({ nullable: true })
+    CreateIDLocation: string | null;
+
+    @Field({ nullable: true })
+    UpdateAPIPath: string | null;
+
+    @Field({ nullable: true })
+    UpdateMethod: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyShape: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyKey: string | null;
+
+    @Field({ nullable: true })
+    UpdateIDLocation: string | null;
+
+    @Field({ nullable: true })
+    DeleteAPIPath: string | null;
+
+    @Field({ nullable: true })
+    DeleteIDLocation: string | null;
+
+    @Field({ nullable: true })
+    IncrementalWatermarkField: string | null;
+
+    @Field({ nullable: true })
+    MetadataSource?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -50187,6 +50292,48 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field(() => Boolean, { nullable: true })
     IsCustom?: boolean;
+
+    @Field({ nullable: true })
+    CreateAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    CreateMethod?: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyShape?: string | null;
+
+    @Field({ nullable: true })
+    CreateBodyKey?: string | null;
+
+    @Field({ nullable: true })
+    CreateIDLocation?: string | null;
+
+    @Field({ nullable: true })
+    UpdateAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    UpdateMethod?: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyShape?: string | null;
+
+    @Field({ nullable: true })
+    UpdateBodyKey?: string | null;
+
+    @Field({ nullable: true })
+    UpdateIDLocation?: string | null;
+
+    @Field({ nullable: true })
+    DeleteAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    DeleteIDLocation?: string | null;
+
+    @Field({ nullable: true })
+    IncrementalWatermarkField?: string | null;
+
+    @Field({ nullable: true })
+    MetadataSource?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

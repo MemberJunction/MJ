@@ -1720,13 +1720,20 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * fields on both standard and custom SObjects.
      */
     private MapSFFieldToSchema(f: SFieldDescribe): ExternalFieldSchema {
+        // Salesforce's `Id` is the universal PK on every SObject (standard + custom).
+        // The /describe response sets type='id' on the PK field but doesn't carry
+        // an explicit IsPrimaryKey signal, so we have to stamp it here.  Without
+        // this, UpsertField's new-field path would persist `Id` with no PK flag
+        // and the downstream SoftPKClassifier becomes the only safety net.
+        const isPK = f.name === 'Id' || f.type === 'id';
         return {
             Name: f.name,
             Label: f.label,
             Description: f.inlineHelpText ?? undefined,
             DataType: this.MapSalesforceType(f.type),
             IsRequired: !f.nillable && !f.defaultedOnCreate,
-            IsUniqueKey: f.externalId || f.name === 'Id',
+            IsPrimaryKey: isPK,
+            IsUniqueKey: isPK || f.externalId,
             IsReadOnly: f.calculated || !f.updateable || SYSTEM_READ_ONLY_FIELDS.has(f.name),
             IsForeignKey: f.type === 'reference' && f.referenceTo.length > 0,
             ForeignKeyTarget: f.referenceTo.length > 0 ? f.referenceTo[0] : null,
@@ -2170,7 +2177,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
         if (response.Status >= 200 && response.Status < 300) {
             const created = response.Body as { id?: string };
-            return { Success: true, ExternalID: created.id ?? '', StatusCode: response.Status };
+            return this.BuildCreatedResult(created.id, response.Status, `${family} job`);
         }
         return this.BuildCRUDError(response, 'CreateBulkJob', family);
     }
@@ -2219,6 +2226,13 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * least a `compositeRequest` array. Returns the overall composite
      * response as the created record's ExternalID (Salesforce returns
      * per-sub-request results; callers should inspect Fields for details).
+     *
+     * Salesforce returns HTTP 200 for the OVERALL composite call even when
+     * individual sub-requests fail (the composite envelope carries a
+     * per-sub-request `httpStatusCode`). Blanket-returning Success:true on the
+     * envelope status swallows those sub-request failures. We inspect the
+     * `compositeResponse` array and fail loudly if any sub-request returned a
+     * 4xx/5xx, summarizing the sub-request errors so the caller sees them.
      */
     private async ExecuteCompositeRequest(
         auth: SalesforceAuthContext,
@@ -2232,13 +2246,74 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             : { allOrNone: true, compositeRequest: [attrs] };
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
         if (response.Status >= 200 && response.Status < 300) {
+            const subErrors = this.CollectCompositeSubErrors(response.Body);
+            if (subErrors.length > 0) {
+                return {
+                    Success: false,
+                    StatusCode: response.Status,
+                    ErrorMessage: `[Salesforce] Composite request returned HTTP ${response.Status} but ${subErrors.length} sub-request(s) failed: ${subErrors.join('; ')}`,
+                };
+            }
             return { Success: true, ExternalID: 'composite', StatusCode: response.Status };
         }
         return this.BuildCRUDError(response, 'ExecuteCompositeRequest', 'CompositeRequest');
     }
+
+    /**
+     * Inspects a composite response body for per-sub-request failures. A
+     * sub-request failed if its `httpStatusCode` is >= 400. Returns a
+     * human-readable summary string per failed sub-request (empty array when
+     * all sub-requests succeeded or the body has no compositeResponse array).
+     */
+    private CollectCompositeSubErrors(responseBody: unknown): string[] {
+        const subResponses = (responseBody as { compositeResponse?: CompositeSubResponse[] })?.compositeResponse;
+        if (!Array.isArray(subResponses)) return [];
+
+        const failures: string[] = [];
+        for (const sub of subResponses) {
+            if (typeof sub?.httpStatusCode === 'number' && sub.httpStatusCode >= 400) {
+                failures.push(this.SummarizeCompositeSubError(sub));
+            }
+        }
+        return failures;
+    }
+
+    /** Formats a single failed composite sub-response into a readable error string. */
+    private SummarizeCompositeSubError(sub: CompositeSubResponse): string {
+        const ref = sub.referenceId ?? '(no referenceId)';
+        const detail = this.ExtractCompositeSubErrorDetail(sub.body);
+        return `${ref} (HTTP ${sub.httpStatusCode})${detail ? `: ${detail}` : ''}`;
+    }
+
+    /**
+     * Salesforce sub-request error bodies are typically an array of
+     * `{ errorCode, message }`. Pull a concise detail string out of that shape.
+     */
+    private ExtractCompositeSubErrorDetail(body: unknown): string {
+        if (Array.isArray(body)) {
+            return body
+                .map(e => {
+                    const err = e as { errorCode?: string; message?: string };
+                    return [err.errorCode, err.message].filter(Boolean).join(': ');
+                })
+                .filter(Boolean)
+                .join(', ');
+        }
+        return '';
+    }
 }
 
 // ─── SF Describe API Type Definitions ─────────────────────────────────
+
+/** A single sub-response inside a Salesforce composite response envelope. */
+interface CompositeSubResponse {
+    /** Per-sub-request HTTP status — >= 400 means this sub-request failed even if the envelope was 200. */
+    httpStatusCode?: number;
+    /** Caller-supplied reference id for the sub-request. */
+    referenceId?: string;
+    /** Sub-request body (success payload or an array of { errorCode, message } on failure). */
+    body?: unknown;
+}
 
 /** Salesforce SObject describe response entry */
 interface SObjectDescribe {
