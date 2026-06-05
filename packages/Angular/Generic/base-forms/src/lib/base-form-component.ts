@@ -29,6 +29,7 @@ import {
   ValidationFailedEvent
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
+import { EntityFormConfig } from './types/entity-form-config';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -50,6 +51,17 @@ import { FormStateService } from './form-state.service';
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
+
+  /**
+   * Per-instance presentation config (toolbar visibility, related-entity
+   * sections, collapsibility, width, in-form navigation). Set by the form host
+   * (`MjEntityFormHostComponent`) or any consumer that instantiates the form
+   * directly. Read back by `MjRecordFormContainerComponent` and the collapsible
+   * panels through the `FormComponent` reference, so it takes effect WITHOUT
+   * regenerating the CodeGen-produced template. Null means "use the container's
+   * own defaults" (the classic full-page tab behavior).
+   */
+  public Config: EntityFormConfig | null = null;
 
   /**
    * Variants applicable to the current (entity, user) tuple, supplied by the
@@ -374,6 +386,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CancelEdit() {
     if (this.record) {
       const r = <BaseEntity>this.record;
+      // Capture BEFORE any mutation — Revert() can clear the "new" flag on some
+      // entities. We need to know whether this record was ever persisted so we
+      // can tell the host to dismiss the form (there's nothing to view).
+      const wasNeverSaved = !r.IsSaved;
+
       if (r.Dirty || this.PendingRecordsDirty()) {
         // Revert is safe here — the toolbar's discard dialog already confirmed with the user
         r.Revert();
@@ -388,6 +405,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.RaiseEvent(BaseFormComponentEventCodes.REVERT_PENDING_CHANGES);
       }
       this.EndEditMode();
+
+      // For never-saved records, ask the host to dismiss the form — leaving it
+      // in view mode shows an empty record (there IS no record) and any
+      // subsequent "Create New" click for the same entity would silently
+      // reuse this abandoned form. Hosts that don't have a meaningful close
+      // semantic can ignore this event.
+      if (wasNeverSaved) {
+        this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
+      }
     }
   }
 
@@ -703,8 +729,26 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       sectionFilter: this.searchFilter,
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
-      validationErrors: this._validationErrors
+      validationErrors: this._validationErrors,
+      collapsibleSections: this.Config?.CollapsibleSections,
+      enableRecordLinks: this.Config?.EnableRecordLinks,
+      showRelatedEntities: this.Config?.ShowRelatedEntities,
+      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      visibleSectionKeys: this.Config?.VisibleSectionKeys,
+      allowSectionReorder: this.resolveAllowSectionReorder()
     };
+  }
+
+  /**
+   * Resolves whether section drag-reorder is allowed for the current Config.
+   * When no toolbar is rendered (dialog/slide-in, `Config.Toolbar === null`)
+   * reorder is disabled; otherwise we honor the toolbar config's flag, defaulting
+   * to allowed when unspecified (classic tab behavior).
+   */
+  private resolveAllowSectionReorder(): boolean {
+    if (!this.Config) return true;
+    if (this.Config.Toolbar === null) return false;
+    return this.Config.Toolbar?.AllowSectionReorder ?? true;
   }
 
   /** Clears all validation display state (called on save success, cancel, end edit) */
@@ -878,7 +922,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * default on subsequent opens.
    */
   public getDefaultFormWidthMode(): 'centered' | 'full-width' {
-    return 'centered';
+    return this.Config?.WidthMode ?? 'centered';
   }
 
   public getFormWidthMode(): 'centered' | 'full-width' {

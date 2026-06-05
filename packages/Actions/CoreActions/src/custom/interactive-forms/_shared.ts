@@ -6,6 +6,7 @@
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJComponentEntity,
     MJEntityFormOverrideEntity,
@@ -168,7 +169,7 @@ export function checkOverrideOwnership(
     const ID = override.ID;
     switch (override.Scope) {
         case 'User': {
-            if (override.UserID !== user.ID) {
+            if (!UUIDsEqual(override.UserID, user.ID)) {
                 return failure(
                     "FORBIDDEN",
                     `Override ${ID} is User-scoped to a different user. Only the owning user can mutate it.`,

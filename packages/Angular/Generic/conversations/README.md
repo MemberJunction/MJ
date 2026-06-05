@@ -113,9 +113,9 @@ A floating chat panel (bottom-right corner) that wraps the chat area for persist
 The overlay is generic — it raises events for navigation and tool execution. The consuming application (e.g., MJExplorer) handles those events with app-specific logic like `NavigationService.OpenEntityRecord()`.
 
 **Related packages:**
-- [`@memberjunction/ai-agent-client`](../../AI/AgentsClient/README.md) — Core agent SDK (framework-agnostic, GraphQL transport, tool registry)
+- [`@memberjunction/ai-agent-client`](../../../AI/AgentsClient/README.md) — Core agent SDK (framework-agnostic, GraphQL transport, tool registry)
 - [`@memberjunction/ng-agent-client`](../agent-client/README.md) — Angular wrapper for the agent SDK
-- [`@memberjunction/core-entities`](../../../MJCoreEntities/README.md) — ConversationEngine for centralized conversation data
+- [`@memberjunction/core-entities`](../../../MJCoreEntities/readme.md) — ConversationEngine for centralized conversation data
 
 ### Message Components
 

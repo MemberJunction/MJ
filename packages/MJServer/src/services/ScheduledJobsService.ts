@@ -67,7 +67,18 @@ export class ScheduledJobsService {
         }
 
         try {
-            this.engine.StartPolling(this.systemUser);
+            // Wire engine tunables from MJServer's scheduledJobs config block.
+            // Both fields have schema defaults (maxConcurrentJobs=5, defaultLockTimeout=600000ms),
+            // but apply explicitly so the values are visible in startup logs and
+            // a future config change is picked up without an engine code change.
+            if (this.config.maxConcurrentJobs != null) {
+                this.engine.MaxConcurrentJobs = this.config.maxConcurrentJobs;
+            }
+            if (this.config.defaultLockTimeout != null) {
+                this.engine.LeaseTimeoutMs = this.config.defaultLockTimeout;
+            }
+
+            await this.engine.StartPolling(this.systemUser);
             this.isRunning = true;
 
             // Single consolidated console message
@@ -102,7 +113,9 @@ export class ScheduledJobsService {
 
         try {
             LogStatus('[ScheduledJobsService] Stopping scheduled job polling');
-            this.engine.StopPolling();
+            // Graceful shutdown: wait for in-flight dispatched jobs to settle,
+            // bounded by 30s so a zombie can't hang the shutdown indefinitely.
+            await this.engine.StopPolling({ waitForInflight: true, maxWaitMs: 30_000 });
             this.isRunning = false;
             LogStatus('[ScheduledJobsService] Polling stopped successfully');
         } catch (error) {

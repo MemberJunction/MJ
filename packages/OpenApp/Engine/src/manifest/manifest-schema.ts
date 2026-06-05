@@ -149,7 +149,8 @@ export const mjAppManifestSchema = z.object({
     // NPM Packages
     packages: packagesSchema,
 
-    // App Dependencies — values can be a semver range string or an object with version + repository
+    // App Dependencies — object keyed by app name; values can be a semver range
+    // string or an object with version + repository.
     dependencies: z.record(
         z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
         z.union([

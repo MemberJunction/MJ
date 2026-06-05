@@ -1,354 +1,73 @@
-import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter, inject, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router'
-import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
-import { Subscription } from 'rxjs';
-import { Container } from '@memberjunction/ng-container-directives';
-import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent, InteractiveFormComponent } from '@memberjunction/ng-base-forms';
+import { Component, EventEmitter, inject, Input, Output } from '@angular/core';
+import { CompositeKey, BaseEntity } from '@memberjunction/core';
+import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
-import { FormResolverService } from '../services/form-resolver.service';
-
-
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+
+/**
+ * Explorer-side host for a single entity record in the main tab area.
+ *
+ * This is now a **thin wrapper** around the Generic `<mj-entity-form-host>`
+ * (in `@memberjunction/ng-base-forms`), which owns all the mechanics: resolving
+ * the form (class / custom / interactive override + variants), loading the
+ * record, dynamically creating the form, binding it, and tearing it down.
+ *
+ * SingleRecordComponent's only remaining job is the **Explorer mapping**:
+ * translating the host's framework-agnostic events into Explorer services —
+ * `Navigate` → {@link NavigationService}, `Notification` → {@link SharedService},
+ * record loads → {@link RecentAccessService} — none of which belong in a Generic
+ * component.
+ */
 @Component({
   standalone: false,
   selector: 'mj-single-record',
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild(Container, {static: true}) formContainer!: Container;
+export class SingleRecordComponent extends BaseAngularComponent {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public newRecordValues: string | Record<string, unknown> | null = '';
 
-  @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
+  @Output() public loadComplete: EventEmitter<void> = new EventEmitter<void>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
+  /** Emitted when the hosted form asks to be dismissed (e.g. Discard on a new record). */
+  @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
 
-  private recentAccessService: RecentAccessService;
   private navigationService = inject(NavigationService);
   private sharedService = inject(SharedService);
-  private cdr = inject(ChangeDetectorRef);
-  private formResolver = inject(FormResolverService);
+  private formPresenter = inject(MJFormPresenterService);
+  private recentAccessService = new RecentAccessService();
 
-  constructor (private route: ActivatedRoute) {
-    super();
-    this.recentAccessService = new RecentAccessService();
-  }
-
-  public appDescription: string = ''
-  public useGenericForm: boolean = false;
-  public loading: boolean = true;
-  public errorTitle: string | null = null;
-  public errorDetail: string | null = null;
-
-  // Track dynamically created components and entities for cleanup
-  private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
-  private _currentRecord: BaseEntity | null = null;
-  private _eventHandlerSubscription: Subscription | null = null;
-  private _formEventSubscriptions: Subscription[] = [];
-
-  ngOnInit(): void {
-  }
-
-  ngAfterViewInit() {
-    this.LoadForm(this.PrimaryKey, <string>this.entityName)
-  }
-
-  public async LoadForm(primaryKey: CompositeKey, entityName: string) {
-    // Perform any necessary actions with the ViewID, such as fetching data
-    if (!entityName || entityName.trim().length === 0) {
-      // No entity yet — caller will re-invoke once it has one. Don't emit loadComplete;
-      // it would race the real load. The shell's recovery timer will surface the
-      // "taking longer than expected" reset if this is the terminal state.
-      return;
-    }
-
-    this.entityName = entityName;
-    if (primaryKey.HasValue) {
-      // we have an existing record to load up
-      this.PrimaryKey = primaryKey;
-    }
-    else {
-      // new record, no existing primary key
-      this.PrimaryKey = new CompositeKey();
-    }
-
-    const md = this.ProviderToUse;
-    const entity = md.EntityByName(entityName);
-    const permissions = entity?.GetUserPermisions(md.CurrentUser);
-
-    try {
-      if (!entity) {
-        this.failWithUserError(
-          `Entity not found: "${entityName}"`,
-          `This MemberJunction instance has no metadata for entity "${entityName}". Check that the entity name in the URL matches a row in __mj.Entity, and that the metadata cache is current.`
-        );
-        return;
-      }
-
-      // Resolve which form to render: User/Role/Global EntityFormOverride first,
-      // then ClassFactory-registered Angular form, then nothing.
-      const resolution = await this.formResolver.ResolveFormForEntity(entity, md.CurrentUser, md);
-
-      if (resolution.kind === 'none') {
-        this.failWithUserError(
-          `No form is registered for "${entityName}".`,
-          `MemberJunction could not find an EntityFormOverride or a class-based form for entity "${entityName}". This usually means CodeGen has not generated a form for this entity in the running build (forms live under packages/MJExplorer or your app's entity-form package). Run CodeGen, ensure the generated module is imported, register a custom form via @RegisterClass(BaseFormComponent, '${entityName}'), or create an EntityFormOverride row pointing at a runtime Component.`,
-          { entityId: entity.ID, recordKey: primaryKey?.ToString?.() ?? '(none)' }
-        );
-        return;
-      }
-
-      const record = await md.GetEntityObject<BaseEntity>(entityName);
-      if (!record) {
-        throw new Error(`Unable to instantiate entity ${entityName} with primary key values: ${primaryKey.ToString()}`);
-      }
-
-      if (primaryKey.HasValue) {
-        const loadOk = await record.InnerLoad(primaryKey);
-        if (!loadOk) {
-          this.failWithUserError(
-            `Could not load ${entityName} record.`,
-            record.LatestResult?.Message
-              ? `Server error: ${record.LatestResult.Message}`
-              : `InnerLoad returned false for entity "${entityName}" with key ${primaryKey.ToString()}. The record may not exist, you may lack permission to view it, or the load may have been blocked server-side.`,
-            { recordKey: primaryKey.ToString() }
-          );
-          return;
-        }
-        // Log access to existing record (fire-and-forget, don't await)
-        this.recentAccessService.logAccess(entityName, primaryKey, 'record');
-      }
-      else {
-        record.NewRecord();
-        this.SetNewRecordValues(record);
-      }
-
-      // CRITICAL: Track the event handler subscription for cleanup
-      this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
-        if (eventType.type === 'save')
-          this.recordSaved.emit(record);
-      });
-
-      const viewContainerRef = this.formContainer.viewContainerRef;
-      viewContainerRef.clear();
-
-      // Generated forms expose properties (e.g. `userPermissions`) that aren't
-      // on the abstract `BaseFormComponent`. Widen the instance type for the
-      // setter surface we share across class-based and interactive forms.
-      const componentRef: ComponentRef<BaseFormComponent> = resolution.kind === 'interactive'
-        ? viewContainerRef.createComponent(InteractiveFormComponent)
-        : viewContainerRef.createComponent(resolution.subClass);
-
-      if (resolution.kind === 'interactive') {
-        (componentRef as ComponentRef<InteractiveFormComponent>).instance.ComponentID = resolution.override.ComponentID;
-      }
-
-      // Track component and record for cleanup
-      this._formComponentRef = componentRef;
-      this._currentRecord = record;
-
-      const instance = componentRef.instance as BaseFormComponent & { userPermissions?: unknown };
-      instance.record = record;
-      instance.userPermissions = permissions;
-      instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
-
-      // Push variant list + active selection into the form so the
-      // record-form-container's picker renders. The resolver returns
-      // every applicable override regardless of status, but the runtime
-      // picker should only surface **Active** ones — Inactive rows are
-      // historical (e.g. the previous Component version that an agent
-      // refinement superseded) and Pending rows are AI-authored work
-      // awaiting activation in Form Builder. Picking either does
-      // nothing at runtime (pickActive requires Status='Active'), so
-      // including them in the picker was misleading the user into
-      // thinking "I can switch to this" when they actually can't.
-      //
-      // Authorship of Pending/Inactive overrides happens in the Form
-      // Builder cockpit, which intentionally shows the full lifecycle.
-      instance.Variants = (resolution.variants ?? [])
-        .filter(v => v.Status === 'Active')
-        .map(v => ({
-          ID: v.ID,
-          Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`,
-          Scope: v.Scope,
-          Status: v.Status,
-        }));
-      instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
-      // Wire the handler: persist the selection in localStorage and reload
-      // the form. Reload uses the existing entry path so all the resolver's
-      // tier/priority semantics apply (and the saved choice now overrides).
-      instance.OnVariantChanged = (variantID: string | null) => {
-        // null from the picker = user picked the "Default form" row →
-        // store the explicit-default sentinel so the resolver skips ALL
-        // overrides and falls back to the CodeGen / @RegisterClass form.
-        // Without this, clearing the preference let the resolver auto-pick
-        // the first Active override again, making Default unreachable from
-        // the UI for entities that have any user-scope overrides.
-        if (variantID === null) {
-          this.formResolver.SetExplicitDefault(entityName);
-        } else {
-          this.formResolver.SetSelectedVariant(entityName, variantID);
-        }
-        // Re-run the load with the same key — the resolver will honour the
-        // updated session-local selection.
-        this.LoadForm(this.PrimaryKey, entityName);
-      };
-
-      // Subscribe to form @Output events and map them to Explorer services
-      this.subscribeToFormEvents(instance);
-
-      this.useGenericForm = false;
-      this.errorTitle = null;
-      this.errorDetail = null;
-      this.loadComplete.emit();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.failWithUserError(
-        `Failed to load ${entityName} record.`,
-        `An unexpected error occurred while loading this record: ${msg}`,
-        { error: err }
-      );
-    }
-
-    this.loading = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Render a user-visible error state inside the record pane AND log a structured
-   * console.error for developers. Always emits `loadComplete` so the Explorer shell
-   * does not hang on its first-resource-load gate.
-   */
-  private failWithUserError(title: string, detail: string, context?: Record<string, unknown>): void {
-    this.errorTitle = title;
-    this.errorDetail = detail;
-    this.loading = false;
-
-    // Single structured console.error for devs — easy to grep, easy to read.
-    console.error(
-      `[SingleRecord] ${title}\n${detail}` +
-        (context ? `\nContext: ${JSON.stringify(context, null, 2)}` : '')
-    );
-
-    // Clear any prior form/component so the error UI is what shows.
-    if (this._formComponentRef) {
-      try { this._formComponentRef.destroy(); } catch { /* noop */ }
-      this._formComponentRef = null;
-    }
-    if (this.formContainer?.viewContainerRef) {
-      this.formContainer.viewContainerRef.clear();
-    }
-
-    // Always unblock the shell.
+  /** Unblock the shell's first-resource-load gate (success or error). */
+  onLoadComplete(): void {
     this.loadComplete.emit();
-    this.cdr.detectChanges();
   }
 
-  protected SetNewRecordValues(record: BaseEntity) {
-    if (!this.newRecordValues) {
-      return;
-    }
-
-    // Handle both object and string (URL segment) formats
-    if (typeof this.newRecordValues === 'string') {
-      if (this.newRecordValues.length === 0) {
-        return;
-      }
-      // we have a URL segment string format: "field1|value1||field2|value2"
-      const fv = new FieldValueCollection();
-      fv.SimpleLoadFromURLSegment(this.newRecordValues);
-      // now apply the values to the record
-      fv.KeyValuePairs.filter(kvp => kvp.Value !== null && kvp.Value !== undefined).forEach(kvp => {
-        const f = record.Fields.find(f => f.Name.trim().toLowerCase() === kvp.FieldName.trim().toLowerCase());
-        if (f) {
-          // make sure we set the value to the right type based on the f.TSType property
-          switch (f.EntityFieldInfo.TSType) {
-            case EntityFieldTSType.String:
-              record.Set(kvp.FieldName, kvp.Value);
-              break;
-            case EntityFieldTSType.Number:
-              record.Set(kvp.FieldName, parseFloat(kvp.Value));
-              break;
-            case EntityFieldTSType.Boolean:
-              if (kvp.Value === 'false' || kvp.Value === '0' || kvp.Value.toString().trim().length === 0 )
-                record.Set(kvp.FieldName, false);
-              else
-                record.Set(kvp.FieldName, true);
-              break;
-            case EntityFieldTSType.Date:
-              record.Set(kvp.FieldName, new Date(kvp.Value));
-              break;
-          }
-        }
-      });
-    }
-    else {
-      // we have a plain object format: { field1: value1, field2: value2 }
-      const recordValues = this.newRecordValues as Record<string, unknown>;
-      Object.keys(recordValues)
-        .filter(key => recordValues[key] !== null && recordValues[key] !== undefined)
-        .forEach(key => {
-          const f = record.Fields.find(f => f.Name.trim().toLowerCase() === key.trim().toLowerCase());
-          if (f) {
-            const value = recordValues[key];
-            // Set the value with proper type conversion
-            switch (f.EntityFieldInfo.TSType) {
-              case EntityFieldTSType.String:
-                record.Set(key, value?.toString() || '');
-                break;
-              case EntityFieldTSType.Number:
-                record.Set(key, typeof value === 'number' ? value : parseFloat(value?.toString() || '0'));
-                break;
-              case EntityFieldTSType.Boolean:
-                if (typeof value === 'boolean') {
-                  record.Set(key, value);
-                }
-                else if (typeof value === 'string') {
-                  record.Set(key, value !== 'false' && value !== '0' && value.trim().length > 0);
-                }
-                else {
-                  record.Set(key, !!value);
-                }
-                break;
-              case EntityFieldTSType.Date:
-                record.Set(key, value instanceof Date ? value : new Date(value?.toString() || ''));
-                break;
-              default:
-                record.Set(key, value);
-                break;
-            }
-          }
-        });
+  /** Log access for existing records once the form's record is ready. */
+  onRecordReady(record: BaseEntity): void {
+    if (record?.IsSaved) {
+      this.recentAccessService.logAccess(record.EntityInfo.Name, record.PrimaryKey, 'record');
     }
   }
 
-  /**
-   * Subscribe to BaseFormComponent @Output events and map them to Explorer services.
-   */
-  private subscribeToFormEvents(form: BaseFormComponent): void {
-    this.cleanupFormSubscriptions();
-
-    this._formEventSubscriptions.push(
-      form.Navigate.subscribe((event: FormNavigationEvent) => this.handleNavigation(event)),
-      form.Notification.subscribe((event: FormNotificationEvent) => {
-        this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
-      })
-    );
+  onSaved(record: BaseEntity): void {
+    this.recordSaved.emit(record);
   }
 
-  private handleNavigation(event: FormNavigationEvent): void {
+  onNotification(event: FormNotificationEvent): void {
+    this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
+  }
+
+  /** Map the form's navigation requests onto Explorer's NavigationService. */
+  handleNavigation(event: FormNavigationEvent): void {
     switch (event.Kind) {
       case 'record':
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
         break;
       case 'new-record':
-        // Creating a new related record from inside an open record form (e.g. + New
-        // on a related-entity grid). Force a new tab so the parent record stays
-        // intact — otherwise the new-record form silently replaces the parent in
-        // single-resource mode and the user loses their context. This is the
-        // original intent of dea32401ff, now stated explicitly at the call site
-        // instead of as a global navigation heuristic.
+        // Creating a related record from inside an open form: force a new tab so the
+        // parent record stays intact in single-resource mode.
         this.navigationService.OpenNewEntityRecord(event.EntityName, {
           newRecordValues: event.DefaultValues,
           forceNewTab: true,
@@ -363,44 +82,22 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       case 'email':
         window.open(`mailto:${event.EmailAddress}`, '_self');
         break;
+      case 'dismiss':
+        this.recordDismissed.emit();
+        break;
+      case 'create-related': {
+        // A FK field wants a new related record created. Open the related entity's form
+        // as a dialog/slide-in (prefilled), then hand the saved record back so the field
+        // can select it.
+        const ref = this.formPresenter.Open({
+          EntityName: event.EntityName,
+          Presentation: event.Presentation ?? 'dialog',
+          NewRecordValues: event.NewRecordValues,
+          Provider: event.Provider,
+        });
+        ref.AfterSaved().then(created => event.Complete(created));
+        break;
+      }
     }
-  }
-
-  private cleanupFormSubscriptions(): void {
-    for (const sub of this._formEventSubscriptions) {
-      sub.unsubscribe();
-    }
-    this._formEventSubscriptions = [];
-  }
-
-  ngOnDestroy(): void {
-    // CRITICAL: Clean up form event subscriptions first
-    this.cleanupFormSubscriptions();
-
-    // CRITICAL: Clean up dynamically created form component to prevent zombie components
-    if (this._formComponentRef) {
-      this._formComponentRef.destroy();
-      this._formComponentRef = null;
-    }
-
-    // CRITICAL: Unsubscribe from event handler to prevent memory leaks
-    if (this._eventHandlerSubscription) {
-      this._eventHandlerSubscription.unsubscribe();
-      this._eventHandlerSubscription = null;
-    }
-    
-    // Clean up record reference
-    if (this._currentRecord) {
-      this._currentRecord = null;
-    }
-    
-    // Clear the view container to ensure no lingering references
-    if (this.formContainer?.viewContainerRef) {
-      this.formContainer.viewContainerRef.clear();
-    }
-    
-    // Reset state
-    this.loading = true;
-    this.useGenericForm = false;
   }
 }

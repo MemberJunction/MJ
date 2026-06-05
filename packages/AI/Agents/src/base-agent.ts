@@ -13,7 +13,8 @@
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
+import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -56,13 +57,26 @@ import {
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
-    InputArtifact
+    InputArtifact,
+    AgentPipelineRequest
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
+import {
+    PipelineExecutor,
+    PipelineToolRegistry,
+    PipelineInvocable,
+    PipelineExecutionResult,
+    PipelineStage,
+    ActionInvocable,
+    ArtifactToolInvocable,
+    BuildPipelineToolDocs,
+    formatFinalOutput,
+    summarizePipelineStages,
+} from './pipeline';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
@@ -241,8 +255,13 @@ export class BaseAgent {
     /**
      * Queue map to chain database saves sequentially per step entity.
      * Prevents UPDATE queries running before INSERT queries on quick steps.
+     *
+     * Keyed by the step ENTITY INSTANCE, not its `ID`: a new step's `ID` is empty at create time and
+     * only gets populated during its INSERT `Save()`, so keying by `ID` would file the create and the
+     * finalize under different buckets and defeat the chain — letting the UPDATE race ahead of the
+     * INSERT on millisecond-fast steps (e.g. pipelines), which left them stuck at `Running`.
      */
-    private _stepSavePromises: Map<string, Promise<any>> = new Map();
+    private _stepSavePromises: Map<MJAIAgentRunStepEntityExtended, Promise<any>> = new Map();
 
     /**
      * Active per-request metadata provider, set at the start of Execute().
@@ -454,7 +473,12 @@ export class BaseAgent {
      * This prevents context overflow when action results contain large base64 data (images, audio, video).
      *
      * Uses generic ValueType=MediaOutput detection from action metadata to identify media output params.
-     * Intercepted media is stored in _mediaOutputs with refId and persist=false (not saved unless used).
+     *
+     * Intercepted media is stored in `_mediaOutputs` with a generated `refId` and is **always
+     * persisted** by `AgentRunner` — all media outputs are saved to `AIAgentRunMedia` +
+     * `ConversationDetailAttachment` (which auto-pairs to an artifact via the server hook).
+     * The `${media:<refId>}` placeholder injected into the action result keeps the LLM's
+     * context window small; the LLM is told the media will be displayed automatically.
      *
      * @param actionParams - The output parameters from an action result
      * @param actionEntity - Optional action entity metadata for ValueType checking
@@ -496,11 +520,10 @@ export class BaseAgent {
                         // Generate unique reference ID
                         const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
 
-                        // Store in unified media outputs with persist=false (won't be saved unless placeholder is used)
+                        // Store in unified media outputs — always persisted by AgentRunner.
                         this._mediaOutputs.push({
                             ...media,
                             refId,
-                            persist: false  // Not persisted unless placeholder is resolved in final output
                         });
 
                         references.push(`\${media:${refId}}`);
@@ -516,7 +539,7 @@ export class BaseAgent {
                         Value: {
                             mediaReferences: references,
                             count: mediaItems.length,
-                            note: `${extractedCount} media item(s) extracted. Use placeholder syntax in your response: <img src="${references[0]}" alt="description" />`
+                            note: `${extractedCount} media item(s) extracted and will be displayed to the user automatically.`
                         }
                     });
                     this.logStatus(`📦 Extracted ${extractedCount} ${param.Name} item(s) to media references`, true);
@@ -531,14 +554,13 @@ export class BaseAgent {
                 if (isMediaOutputParam || base64Pattern.test(param.Value.substring(0, 1000))) {
                     const refId = `data-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
 
-                    // Store in unified media outputs with persist=false
+                    // Store in unified media outputs — always persisted by AgentRunner.
                     this._mediaOutputs.push({
                         modality: 'Image', // Default to image, could be enhanced with mime detection
                         mimeType: 'application/octet-stream',
                         data: param.Value,
                         label: `Media data from ${param.Name}`,
                         refId,
-                        persist: false
                     });
 
                     sanitizedParams.push({
@@ -559,43 +581,53 @@ export class BaseAgent {
     }
 
     /**
-     * Resolves media placeholders in a string.
-     * Replaces ${media:ref-id} with actual data URIs (data:mime;base64,...).
-     * Sets persist=true on resolved media so it will be saved to AIAgentRunMedia.
+     * Substitutes `${media:<refId>}` placeholders in a string with the actual
+     * data URI (`data:<mime>;base64,<bytes>`) of the matching intercepted media item.
+     *
+     * Used for payload / actionable-command resolution at the terminal step, where the
+     * LLM wants to embed image (or other media) data inline at a specific position in
+     * its structured output rather than as a trailing attachment card. The string
+     * variant of placeholder resolution; recursive walker lives in
+     * {@link resolveMediaPlaceholdersInPayload}.
+     *
+     * This function only does substitution — it has no persistence side effects.
      *
      * @param text - The string that may contain media placeholders
-     * @returns String with placeholders resolved to actual data URIs
+     * @returns String with placeholders resolved to actual data URIs (or the original
+     *          placeholder if the refId is unknown — defensive, shouldn't happen)
      * @private
      * @since 3.1.0
      */
     private resolveMediaPlaceholdersInString(text: string): string {
-        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        // Fast path: nothing to resolve if there are no intercepted media items.
         const hasRefIds = this._mediaOutputs.some(m => m.refId);
         if (!text || !hasRefIds) {
             return text;
         }
 
-        // Match ${media:ref-id} pattern
+        // Match ${media:ref-id} pattern (lowercase letters, digits, dashes only —
+        // matches the IDs generated by interceptLargeBinaryContent).
         const placeholderRegex = /\$\{media:([a-z0-9-]+)\}/g;
 
         return text.replace(placeholderRegex, (match, refId: string) => {
             const media = this._mediaOutputs.find(m => m.refId === refId);
             if (media?.data) {
-                // Mark for persistence since it's being used in final output
-                media.persist = true;
                 return `data:${media.mimeType};base64,${media.data}`;
             }
-            // Keep placeholder if not found (shouldn't happen in normal flow)
+            // Unknown refId — leave the placeholder in place rather than emit a broken
+            // data URI. Defensive; this branch should not fire in normal flow.
             this.logStatus(`⚠️ Media reference '${refId}' not found in registry`, true);
             return match;
         });
     }
 
     /**
-     * Resolves media placeholders in a payload of any type.
-     * - For strings: resolves placeholders directly
-     * - For objects: recursively processes all string properties
-     * - For arrays: recursively processes all elements
+     * Resolves `${media:<refId>}` placeholders anywhere inside an arbitrary payload.
+     *   - Strings: resolves placeholders directly
+     *   - Objects: recursively processes every string property
+     *   - Arrays:  recursively processes every element
+     *
+     * Pure resolution — no persistence side effects.
      *
      * @param payload - The payload that may contain media placeholders in string values
      * @returns Payload with all placeholders resolved to actual data URIs
@@ -603,24 +635,12 @@ export class BaseAgent {
      * @since 3.1.0
      */
     private resolveMediaPlaceholdersInPayload<T>(payload: T): T {
-        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        // Fast path: nothing to resolve if no intercepted media exists.
         const hasRefIds = this._mediaOutputs.some(m => m.refId);
         if (!hasRefIds) {
             return payload;
         }
-
-        // Count how many media items have persist=false before resolution
-        const unpersisted = this._mediaOutputs.filter(m => m.refId && m.persist === false).length;
-        const resolved = this.resolveMediaPlaceholdersRecursive(payload);
-        // Count how many were marked for persistence (persist changed from false to true)
-        const persistedAfter = this._mediaOutputs.filter(m => m.refId && m.persist === true).length;
-        const resolvedCount = persistedAfter - (unpersisted - this._mediaOutputs.filter(m => m.refId && m.persist === false).length);
-
-        if (resolvedCount > 0) {
-            this.logStatus(`✅ Resolved ${resolvedCount} media placeholder(s) in final payload`, true);
-        }
-
-        return resolved;
+        return this.resolveMediaPlaceholdersRecursive(payload);
     }
 
     /**
@@ -653,61 +673,6 @@ export class BaseAgent {
 
         // Return primitives (numbers, booleans) as-is
         return value;
-    }
-
-    /**
-     * Processes media placeholders in agent messages for conversational agents.
-     *
-     * Unlike artifact-based agents (which embed images in HTML payload), conversational agents
-     * should display images via ConversationDetailAttachment. This method:
-     * 1. Detects ${media:xxx} placeholders in the message
-     * 2. Sets persist=true on referenced media (triggers save to AIAgentRunMedia)
-     * 3. Strips media HTML tags from the message (images display via attachment instead)
-     *
-     * @param message - The message that may contain media placeholders
-     * @returns Cleaned message with media tags stripped
-     * @private
-     * @since 3.1.0
-     */
-    private processMessageMediaPlaceholders(message: string): string {
-        if (!message) {
-            return message;
-        }
-
-        // Check if any media has a refId (meaning we have intercepted media)
-        const hasRefIds = this._mediaOutputs.some(m => m.refId);
-        if (!hasRefIds) {
-            return message;
-        }
-
-        // Find all ${media:xxx} placeholders and mark referenced media for persistence
-        const placeholderRegex = /\$\{media:([a-zA-Z0-9_-]+)\}/g;
-        let match;
-        let promotedCount = 0;
-
-        while ((match = placeholderRegex.exec(message)) !== null) {
-            const refId = match[1];
-            const media = this._mediaOutputs.find(m => m.refId === refId);
-            if (media && media.persist !== true) {
-                media.persist = true;  // Triggers save to AIAgentRunMedia
-                promotedCount++;
-            }
-        }
-
-        if (promotedCount > 0) {
-            this.logStatus(`📎 Auto-promoted ${promotedCount} media output(s) from message placeholders`, true);
-        }
-
-        // Strip <img>, <audio>, <video> tags containing media placeholders
-        // The media will display via ConversationDetailAttachment instead
-        let cleanedMessage = message
-            .replace(/<img[^>]*src=["']\$\{media:[^}]+\}["'][^>]*\/?>/gi, '')
-            .replace(/<audio[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/audio>/gi, '')
-            .replace(/<video[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/video>/gi, '')
-            .replace(/\n\s*\n\s*\n/g, '\n\n')  // Clean up excessive newlines
-            .trim();
-
-        return cleanedMessage;
     }
 
     /**
@@ -2261,6 +2226,22 @@ export class BaseAgent {
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Inject pipeline tool docs when pipelines are enabled and at least one source exists.
+            // A pipeline's first step must be a source (Action or artifact tool); with none
+            // available pipelines are impossible, so BuildPipelineToolDocs returns '' and the
+            // template's `{{ _PIPELINE_TOOLS }}` block stays empty.
+            const pipelineDocsEnabled = agentTypePromptParams?.includePipelineDocs !== false;
+            if (pipelineDocsEnabled) {
+                const sourceNames = [
+                    ...this.getEffectiveActionsForValidation(params.agent.ID).map((a) => a.Name),
+                    ...this._artifactToolManager.GetAvailableToolNames(),
+                ];
+                const pipelineDocs = BuildPipelineToolDocs(sourceNames);
+                if (pipelineDocs) {
+                    promptParams.data['_PIPELINE_TOOLS'] = pipelineDocs;
+                }
             }
 
             // Pass file artifacts as candidate native file inputs.
@@ -4104,9 +4085,10 @@ The context is now within limits. Please retry your request with the recovered c
         const body = toolResults.map((r, i) => {
             const heading = `### ${i + 1}. ${r.artifactId}.${r.tool}(${JSON.stringify(r.input)})`;
             if (r.result.success) {
-                const data = typeof r.result.data === 'string'
+                const raw = typeof r.result.data === 'string'
                     ? r.result.data
                     : JSON.stringify(r.result.data, null, 2);
+                const data = this.capStandaloneToolResultText(raw);
                 return `${heading}\n\`\`\`json\n${data}\n\`\`\``;
             }
             return `${heading}\n**Error:** ${r.result.errorMessage}`;
@@ -4122,6 +4104,180 @@ The context is now within limits. Please retry your request with the recovered c
                 // first-N-chars preview. The LLM is taught (via the loop-agent
                 // system prompt) that older tool results are summarised and that
                 // it can re-call the tool if it needs the full result back.
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
+    }
+
+    /**
+     * Character budget (~4 chars/token) for a SINGLE standalone artifact-tool result injected into
+     * the conversation. A `get_full` on a large artifact can otherwise dump the whole thing into
+     * context and overflow the model's window — the exact failure pipelines exist to avoid. Override
+     * in a subclass to tune. Pipelines are unaffected: their intermediate results never flow through
+     * here, and the executor already caps a pipeline's final output.
+     *
+     * @protected
+     */
+    protected get maxStandaloneToolResultChars(): number {
+        return 100_000; // ~25k tokens
+    }
+
+    /**
+     * Bound a standalone tool result to {@link maxStandaloneToolResultChars}: return a head slice
+     * plus a redirect that teaches the agent to page (`get_rows`) or reduce (`pipeline`) instead of
+     * reading a whole large artifact. Mirrors how read/search tools cap output at the tool boundary.
+     *
+     * @protected
+     */
+    protected capStandaloneToolResultText(text: string): string {
+        const budget = this.maxStandaloneToolResultChars;
+        if (text.length <= budget) {
+            return text;
+        }
+        const omitted = text.length - budget;
+        return (
+            text.slice(0, budget) +
+            `\n\n…[truncated ${omitted.toLocaleString()} chars. This artifact is too large to read whole ` +
+            `(~${Math.round(text.length / 4000)}k tokens) — reading it in full overflows the context window. ` +
+            `Instead: page it with get_rows(start, count), or run a pipeline that filters/aggregates it ` +
+            `server-side (where / select / groupBy → only the small final result returns to you).]`
+        );
+    }
+
+    /**
+     * Builds a per-run {@link PipelineToolRegistry} that unifies the three pipeline-able
+     * substrates behind one namespace: built-in transforms, the agent's effective Actions, and
+     * the run's artifact tools. Transforms register first so their reserved names win; a source
+     * whose name collides with a transform is skipped for pipeline use (still callable normally)
+     * and logged, rather than aborting the whole pipeline.
+     *
+     * @protected
+     */
+    protected buildPipelineRegistry(params: ExecuteAgentParams): PipelineToolRegistry {
+        const registry = new PipelineToolRegistry();
+        const register = (invocable: PipelineInvocable): void => {
+            try {
+                registry.Register(invocable);
+            } catch (e) {
+                this.logStatus(`[Pipeline] Skipped tool "${invocable.toolName}": ${(e as Error).message}`, true, params);
+            }
+        };
+
+        // Operators (where/select/map/…) are pure code-defined verbs, not registry tools — only
+        // capabilities (Actions + artifact tools) live here as pipeline sources/stages.
+
+        // Actions — each wrapped to run via the existing single-action execution path.
+        this.getEffectiveActionsForValidation(params.agent.ID).forEach((actionEntity) =>
+            register(
+                new ActionInvocable(actionEntity.Name, (p) =>
+                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser),
+                ),
+            ),
+        );
+
+        // Artifact tools — one invocable per distinct tool name; `artifactId` is supplied as a
+        // call-time param so the same `{ tool, params }` step shape works across all substrates.
+        this._artifactToolManager.GetAvailableToolNames().forEach((toolName) =>
+            register(
+                new ArtifactToolInvocable(toolName, async (tool, p) => {
+                    const stored = await this._artifactToolManager.ExecuteSingleToolCall({
+                        artifactId: String(p.artifactId ?? ''),
+                        tool,
+                        input: p,
+                    });
+                    return stored.result;
+                }),
+            ),
+        );
+
+        return registry;
+    }
+
+    /**
+     * Runs a tool pipeline as a single `Tool` step in the run tree (sibling of the prompt step that
+     * requested it, matching artifact-tool steps). ALL pipeline observability lives in this step's
+     * `OutputData` — the per-stage breakdown, totals, bytes saved, and the tool chain — so there are
+     * no dedicated pipeline entities and no extra SQL I/O; the run tree alone carries everything a
+     * debug UI needs.
+     *
+     * @protected
+     */
+    protected async executePipelineAsStep(
+        pipeline: AgentPipelineRequest,
+        params: ExecuteAgentParams,
+    ): Promise<PipelineExecutionResult> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Tool',
+            stepName: `Pipeline: ${pipeline.steps.length} step(s)`,
+            contextUser: params.contextUser,
+            inputData: { steps: pipeline.steps },
+        });
+
+        const registry = this.buildPipelineRegistry(params);
+        // The executor converts stage-level errors into a failed RESULT (it doesn't throw for those),
+        // but an unexpected throw — e.g. a tool returning a non-serializable value (BigInt/circular)
+        // that trips JSON.stringify in the executor's byte-accounting — must NEVER leave this step
+        // stuck on 'Running'. Catch it and materialize a failed result so finalize always runs and the
+        // failure surfaces as a 'Failed' step (answering "do pipeline errors show as errors?": yes).
+        let result: PipelineExecutionResult;
+        try {
+            result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
+        } catch (e) {
+            result = {
+                success: false,
+                finalOutput: null,
+                steps: [],
+                error: `Pipeline crashed: ${(e as Error)?.message ?? String(e)}`,
+                contextBytesSaved: 0,
+            };
+        }
+
+        // A pipeline is ONE run-step — not a parent + a child step per stage. It runs server-side in a
+        // single fast pass, so the full per-stage breakdown + totals live in this step's OutputData for
+        // a debug UI to visualize — no separate entities, no extra DB writes.
+        await this.finalizeStepEntity(stepEntity, result.success, result.success ? undefined : result.error, {
+            success: result.success,
+            toolChain: summarizePipelineStages(result.steps),
+            steps: result.steps,
+            contextBytesSaved: result.contextBytesSaved,
+            totalBytesStreamed: result.steps.reduce((sum, s) => sum + s.outputSize, 0),
+            totalDurationMs: result.steps.reduce((sum, s) => sum + s.durationMs, 0),
+            failedStepIndex: result.failedStepIndex,
+        });
+
+        return result;
+    }
+
+    /**
+     * Pushes the pipeline's final output (or its failure message) into the conversation for the
+     * LLM's next turn, mirroring the artifact-tool "inject once, then expire" pattern. Only the
+     * final output is surfaced — intermediate step outputs never enter the context window.
+     *
+     * @protected
+     */
+    protected injectPipelineResultMessage(params: ExecuteAgentParams, result: PipelineExecutionResult): void {
+        const diagnostic = result.success && result.diagnostic
+            ? `\n⚠ Empty result — ${result.diagnostic}`
+            : '';
+        // Identify which pipeline this result belongs to (stage chain, e.g. `get_rows → where →
+        // select`). Without it, multiple pipeline results across turns are indistinguishable once
+        // compacted — mirrors how artifact-tool results name their tool/artifact.
+        const label = summarizePipelineStages(result.steps);
+        const content = result.success
+            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n\`\`\`\n${formatFinalOutput(result.finalOutput)}\n\`\`\`${diagnostic}`
+            : `Pipeline failed [${label}].\n${result.error}`;
+
+        const message: AgentChatMessage = {
+            role: 'user',
+            content,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
                 expirationTurns: 3,
                 expirationMode: 'Compact',
                 compactMode: 'First N Chars',
@@ -4358,7 +4514,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
             { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
-            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' }
+            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' },
+            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -4672,6 +4829,7 @@ The context is now within limits. Please retry your request with the recovered c
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
+                inputArtifacts: params.inputArtifacts, // propagate input artifacts so sub-agents inherit the parent's artifact manifest + tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references)
                 data: {
                         ...params.data,
                         ...subAgentRequest.templateParameters,
@@ -5448,7 +5606,15 @@ The context is now within limits. Please retry your request with the recovered c
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
-        
+
+        // Hand the now-persisted run (it has a stable ID) to the watchdog so a process restart,
+        // crash, or failed terminal-state write can't leave it stuck 'Running' forever. Only the
+        // server-side DB provider can heartbeat via SQL; client/non-DB providers simply opt out.
+        const runProvider = params.provider || this._activeProvider;
+        if (runProvider instanceof DatabaseProviderBase && params.contextUser) {
+            AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser);
+        }
+
         // Invoke callback if provided
         if (modifiedParams.onAgentRunCreated) {
             try {
@@ -5687,17 +5853,18 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
-        const id = stepEntity.ID;
-        const previousSave = this._stepSavePromises.get(id) ?? Promise.resolve();
+        // Chain on the entity INSTANCE (stable), NOT stepEntity.ID — the ID is empty until the INSERT
+        // Save() assigns it, so an ID-keyed chain breaks for fast create→finalize sequences.
+        const previousSave = this._stepSavePromises.get(stepEntity) ?? Promise.resolve();
         const currentSave = previousSave.then(() => stepEntity.Save()).then((ok) => {
             if (!ok) {
                 LogError(
-                    `Failed to save agent run step record ${id}: ${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    `Failed to save agent run step record ${stepEntity.ID || '(unsaved)'}: ${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`
                 );
             }
             return ok;
         });
-        this._stepSavePromises.set(id, currentSave);
+        this._stepSavePromises.set(stepEntity, currentSave);
         this._pendingSaves.push(currentSave);
     }
 
@@ -6303,6 +6470,15 @@ The context is now within limits. Please retry your request with the recovered c
                 this.injectArtifactToolResultsMessage(params, toolResults);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
+            // Execute a tool pipeline if provided (zero turn cost — processed inline). Each step's
+            // output is threaded into the next server-side; only the final step's output returns to
+            // the LLM, so intermediate payloads never enter the context window.
+            if (initialNextStep.pipeline?.steps?.length) {
+                this.logStatus(`[Pipeline] LLM requested a ${initialNextStep.pipeline.steps.length}-stage pipeline: ${(initialNextStep.pipeline.steps as PipelineStage[]).map(s => (s.tool as string) ?? Object.keys(s)[0]).join(' | ')}`, true, params);
+                const pipelineResult = await this.executePipelineAsStep(initialNextStep.pipeline, params);
+                this.injectPipelineResultMessage(params, pipelineResult);
             }
 
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
@@ -9800,6 +9976,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
             this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
             await this._agentRun.Save();
@@ -9830,6 +10008,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
             this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
             await this._agentRun.Save();
@@ -9885,13 +10065,6 @@ The context is now within limits. Please retry your request with the recovered c
             ? this.resolveMediaPlaceholdersInPayload(finalStep.actionableCommands)
             : finalStep.actionableCommands;
 
-        // For root agents: process message for media placeholders
-        // This promotes referenced media (sets persist=true) and strips media HTML tags
-        // so images display via ConversationDetailAttachment instead of embedded in message
-        const processedMessage = (finalStep.message && isRootAgent)
-            ? this.processMessageMediaPlaceholders(finalStep.message)
-            : finalStep.message;
-
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
@@ -9917,7 +10090,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
             this._agentRun.FinalStep = finalStep.step;
-            this._agentRun.Message = processedMessage;
+            this._agentRun.Message = finalStep.message;
 
             // Set the FinalPayloadObject - this will automatically stringify for the DB
             this._agentRun.FinalPayloadObject = resolvedPayload;
@@ -9928,6 +10101,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
             this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
             this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
+            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
             this._agentRun.TotalCost = tokenStats.totalCost;
             
             const ok = await this._agentRun.Save();
@@ -9941,10 +10116,8 @@ The context is now within limits. Please retry your request with the recovered c
             this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
         }
 
-        // Return unified media outputs array which includes:
-        // - Explicitly promoted media (persist defaults to true)
-        // - Intercepted binary with refIds (persist=false unless placeholder was resolved)
-        // Sub-agents pass their full mediaOutputs to parent for merging and placeholder resolution.
+        // Return unified media outputs — all items are persisted by AgentRunner.
+        // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload: resolvedPayload,
@@ -9969,32 +10142,38 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns Token statistics including totals and costs
      * @private
      */
-    private calculateTokenStats(): { totalTokens: number; promptTokens: number; completionTokens: number; totalCost: number } {
+    private calculateTokenStats(): { totalTokens: number; promptTokens: number; completionTokens: number; cacheReadTokens: number; cacheWriteTokens: number; totalCost: number } {
         let totalTokens = 0;
         let promptTokens = 0;
         let completionTokens = 0;
+        let cacheReadTokens = 0;
+        let cacheWriteTokens = 0;
         let totalCost = 0;
 
         // Iterate through the agent run's steps to sum up tokens
         if (this._agentRun?.Steps) {
             for (const step of this._agentRun.Steps) {
                 if (step.StepType === 'Prompt' && step.PromptRun) {
-                    // Add tokens from prompt runs
+                    // Add tokens from prompt runs (rollup fields include any nested child prompt runs)
                     totalTokens += step.PromptRun.TokensUsedRollup || 0;
-                    promptTokens += step.PromptRun.TokensPromptRollup || 0;  
+                    promptTokens += step.PromptRun.TokensPromptRollup || 0;
                     completionTokens += step.PromptRun.TokensCompletionRollup || 0;
+                    cacheReadTokens += step.PromptRun.TokensCacheReadRollup || 0;
+                    cacheWriteTokens += step.PromptRun.TokensCacheWriteRollup || 0;
                     totalCost += step.PromptRun.TotalCost || 0;
                 } else if (step.StepType === 'Sub-Agent' && step.SubAgentRun) {
                     // Add tokens from sub-agent runs (these should already be calculated recursively)
                     totalTokens += step.SubAgentRun.TotalTokensUsed || 0;
                     promptTokens += step.SubAgentRun.TotalPromptTokensUsed || 0;
                     completionTokens += step.SubAgentRun.TotalCompletionTokensUsed || 0;
+                    cacheReadTokens += step.SubAgentRun.TotalCacheReadTokensUsed || 0;
+                    cacheWriteTokens += step.SubAgentRun.TotalCacheWriteTokensUsed || 0;
                     totalCost += step.SubAgentRun.TotalCost || 0;
                 }
             }
         }
 
-        return { totalTokens, promptTokens, completionTokens, totalCost };
+        return { totalTokens, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens, totalCost };
     }
 
     /**

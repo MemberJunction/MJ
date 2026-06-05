@@ -12,6 +12,7 @@ import {
     type FetchContext,
     type FetchBatchResult,
     type ExternalFieldSchema,
+    type ExternalObjectSchema,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
     type CRUDResult,
@@ -296,6 +297,39 @@ export class ConstantContactConnector extends BaseRESTIntegrationConnector {
         }
     }
 
+    /**
+     * Canonical Constant Contact v3 API top-level objects.  Returns the
+     * vendor-documented standard catalog (merged with anything already
+     * persisted in IntegrationObject via super.DiscoverObjects so operator-
+     * curated custom rows aren't lost).  CC's schema is fixed — there are no
+     * "custom tables" to surface, but the per-account custom-fields ARE
+     * discovered via DiscoverFields('Contacts') which queries the live
+     * `/contact_custom_fields` endpoint and merges them into the Contacts
+     * field set.
+     */
+    public override async DiscoverObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const persisted = await super.DiscoverObjects(companyIntegration, contextUser);
+        const canonical: ExternalObjectSchema[] = [
+            { Name: 'Contacts', Label: 'Contacts', Description: 'Contact records (people on mailing lists). v3 API /contacts.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'ContactLists', Label: 'Contact Lists', Description: 'Mailing lists. v3 API /contact_lists.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'ContactCustomFields', Label: 'Contact Custom Fields', Description: 'Account-defined custom fields available on Contacts. v3 API /contact_custom_fields.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'ContactTags', Label: 'Contact Tags', Description: 'Account-defined contact tags. v3 API /contact_tags.', SupportsIncrementalSync: false, SupportsWrite: true },
+            { Name: 'EmailCampaigns', Label: 'Email Campaigns', Description: 'Email campaigns. v3 API /emails.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'EmailCampaignActivities', Label: 'Email Campaign Activities', Description: 'Per-campaign send/open/click activity. v3 API /emails/activities.', SupportsIncrementalSync: true, SupportsWrite: false },
+            { Name: 'Segments', Label: 'Segments', Description: 'Audience segments. v3 API /segments.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'Activities', Label: 'Activities', Description: 'Bulk activity records (contact import jobs, etc). v3 API /activities.', SupportsIncrementalSync: true, SupportsWrite: false },
+        ];
+        const byName = new Map<string, ExternalObjectSchema>();
+        for (const o of persisted) byName.set(o.Name.toLowerCase(), o);
+        for (const c of canonical) {
+            if (!byName.has(c.Name.toLowerCase())) byName.set(c.Name.toLowerCase(), c);
+        }
+        return [...byName.values()];
+    }
+
     public override async DiscoverFields(
         companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,
@@ -344,11 +378,7 @@ export class ConstantContactConnector extends BaseRESTIntegrationConnector {
 
         if (response.Status >= 200 && response.Status < 300) {
             const body = response.Body as Record<string, unknown>;
-            return {
-                Success: true,
-                ExternalID: this.ExtractIdFromRecord(body, ctx.ObjectName),
-                StatusCode: response.Status,
-            };
+            return this.BuildCreatedResult(this.ExtractIdFromRecord(body, ctx.ObjectName), response.Status, ctx.ObjectName);
         }
         return this.BuildCRUDError(response, 'CreateRecord', ctx.ObjectName);
     }

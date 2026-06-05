@@ -24,7 +24,8 @@ export type {
     RemoveOptions,
     AppOperationResult,
     InstalledAppInfo,
-    ResolvedDependency
+    ResolvedDependency,
+    PassthroughInstallOptions
 } from './types/open-app-types.js';
 
 // Dependency resolution
@@ -35,6 +36,13 @@ export type {
     DependencyResolutionResult,
     InstalledAppMap
 } from './dependency/dependency-resolver.js';
+export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
+export type {
+    ManifestFetcher,
+    FetchedManifest,
+    RootApp,
+    GraphResolutionResult
+} from './dependency/dependency-graph-builder.js';
 export {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
@@ -78,6 +86,9 @@ export type { DynamicPackageEntry, ConfigOperationResult } from './install/confi
 
 export { RegenerateClientBootstrap } from './install/client-bootstrap-gen.js';
 export type { ClientBootstrapEntry } from './install/client-bootstrap-gen.js';
+
+export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
+export type { AngularConfigResult } from './install/angular-config-manager.js';
 
 export {
     RecordAppInstallation,

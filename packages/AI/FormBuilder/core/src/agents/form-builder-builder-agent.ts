@@ -22,6 +22,7 @@ import type {
     ExecuteAgentParams,
     AgentConfiguration,
     BaseAgentNextStep,
+    AIPromptRunResult,
 } from '@memberjunction/ai-core-plus';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -439,15 +440,20 @@ export class FormBuilderBuilderAgent extends BaseFormBuilderCodeAgent {
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt<{ spec: ComponentSpec; notes?: string }>(promptParams);
 
+            // The prompt returns JSON, but depending on its OutputType the runner
+            // hands us either a parsed object or the raw string (frequently wrapped
+            // in a ```json markdown fence). Normalize every shape so a correct LLM
+            // fix is never thrown away over a serialization detail.
+            const payload = this.extractLintFixPayload(result);
+            const fixed = payload?.spec ?? null;
+
             await this.finalizeRunStep(step, result.success, {
                 success: result.success,
-                hasSpec: !!(result.result && typeof result.result !== 'string' && result.result.spec),
-                notes: result.result && typeof result.result !== 'string' ? result.result.notes : undefined,
+                hasSpec: !!fixed,
+                notes: payload?.notes,
             }, result.promptRun?.ID, result.errorMessage || undefined);
 
-            if (!result.success || !result.result || typeof result.result === 'string') return null;
-            const fixed = result.result.spec;
-            if (!fixed || typeof fixed !== 'object') return null;
+            if (!result.success || !fixed || typeof fixed !== 'object') return null;
             // Defensive — keep componentRole + location pinned.
             (fixed as unknown as Record<string, unknown>).componentRole = 'form';
             if (!(fixed as unknown as Record<string, unknown>).location) {
@@ -456,6 +462,40 @@ export class FormBuilderBuilderAgent extends BaseFormBuilderCodeAgent {
             return fixed;
         } catch (err) {
             LogError(`FormBuilderBuilderAgent.runLintFixPrompt: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Normalize a lint-fix prompt result into its `{ spec, notes }` payload.
+     *
+     * The runner may return the payload as a parsed object (OutputType 'object')
+     * or as a raw string (OutputType 'string' — often a ```json-fenced blob). We
+     * accept both, and fall back to the run's `rawResult` if `result` is empty.
+     */
+    private extractLintFixPayload(
+        result: AIPromptRunResult<{ spec: ComponentSpec; notes?: string }>,
+    ): { spec?: ComponentSpec; notes?: string } | null {
+        const direct = result.result;
+        if (direct && typeof direct === 'object') return direct;
+        const text = typeof direct === 'string' ? direct : result.rawResult;
+        return typeof text === 'string' ? this.parseFencedJsonObject(text) : null;
+    }
+
+    /**
+     * Parse a JSON object from text, tolerating a leading/trailing markdown code
+     * fence (```json … ``` or ``` … ```). Returns null on any parse failure.
+     */
+    private parseFencedJsonObject(text: string): { spec?: ComponentSpec; notes?: string } | null {
+        const unfenced = text
+            .trim()
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim();
+        try {
+            const parsed = JSON.parse(unfenced) as { spec?: ComponentSpec; notes?: string };
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
             return null;
         }
     }

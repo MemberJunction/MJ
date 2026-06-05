@@ -2562,8 +2562,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Poll for the snapshot — interactive components need a few render cycles
-    // before `getCurrentDataState()` registers via callbacks.RegisterMethod.
-    const snapshot = await this.waitForViewerSnapshot(10000);
+    // before `getCurrentDataState()` registers via callbacks.RegisterMethod,
+    // and query-backed / server-paged components need additional time to load
+    // their rows (we now wait for rows, not just a registered table).
+    const snapshot = await this.waitForViewerSnapshot(15000);
     if (!snapshot) {
       console.warn('[client:capture-data-snapshot] Artifact viewer did not produce a snapshot within timeout');
       return;
@@ -2616,19 +2618,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * fetches run and its `getCurrentDataState()` becomes callable via
    * `callbacks.RegisterMethod('getCurrentDataState', ...)`.
    *
-   * `GetCurrentStateSnapshot()` returns two distinct shapes:
-   *   - **Live**: a populated DataSnapshot with `tables[]` containing rows.
+   * `GetCurrentStateSnapshot()` returns three distinct shapes:
+   *   - **Live**: a populated DataSnapshot with `tables[]` whose rows are filled.
    *   - **Fallback**: an empty placeholder with only `title` + `interpretation`
    *     ("No live data was captured — the component either has no data-fetching
    *     hooks or has not yet run its queries"). This fires when the React
    *     component hasn't yet registered `getCurrentDataState()`.
+   *   - **Schema-only**: a structured snapshot with real `tables`/`columns` and
+   *     metadata (e.g. `totalAvailableRowCount`) but `rows: []`. This is common
+   *     for query-backed / server-paged components whose data load hasn't
+   *     completed (or whose visible page is empty) at the moment of capture.
    *
-   * We must NOT accept the fallback while waiting — capturing the placeholder
-   * defeats the entire point of the snapshot pipeline. Keep polling until we
-   * either see a real snapshot (has `tables`) or the timeout elapses. Only
-   * after timeout do we return the last available fallback (any data is
-   * better than no data, but the user will see the placeholder text in the
-   * resulting artifact).
+   * We must accept ONLY a snapshot that actually carries rows — a schema-only
+   * or placeholder snapshot defeats the point of the pipeline (the analysis
+   * agent receives an empty table). So we key "live" on `rows.length`, not just
+   * `tables.length`, and keep polling so async/paged data has time to load.
+   * Only after timeout do we return the last available row-less snapshot (any
+   * structure is better than nothing, but the user will see an empty table in
+   * the resulting artifact).
    */
   private async waitForViewerSnapshot(timeoutMs: number): Promise<DataSnapshot | null> {
     const intervalMs = 200;
@@ -2642,7 +2649,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const viewer = this.artifactViewerComponent;
       const snap = viewer?.GetCurrentStateSnapshot?.();
       if (snap) {
-        const hasLiveData = Array.isArray(snap.tables) && snap.tables.length > 0;
+        const hasLiveData = Array.isArray(snap.tables) && snap.tables.some((t) => Array.isArray(t.rows) && t.rows.length > 0);
         const tableShape = Array.isArray(snap.tables)
           ? snap.tables.map((t) => `${t.name}:${(t.rows ?? []).length}rows`).join(', ')
           : 'no-tables';

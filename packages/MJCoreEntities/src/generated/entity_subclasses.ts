@@ -2749,7 +2749,7 @@ export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
 export const MJAIAgentRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
+        * * Display Name: Run ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         * * Description: Unique identifier for this agent run`),
@@ -2824,7 +2824,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
     TotalTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Total Tokens
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
@@ -2846,27 +2846,27 @@ export const MJAIAgentRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalPromptTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsed
-        * * Display Name: Total Prompt Tokens Used
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalCompletionTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsed
-        * * Display Name: Total Completion Tokens Used
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsedRollup
-        * * Display Name: Total Tokens Used (Rollup)
+        * * Display Name: Total Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens Used (Rollup)
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens Used (Rollup)
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
@@ -2882,7 +2882,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Conversation Detail Sequence
+        * * Display Name: Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -2917,7 +2917,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the final Payload state at the end of the agent run`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Final Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Final message from the agent to the end user at the end of a run`),
     LastRunID: z.string().nullable().describe(`
@@ -2958,7 +2958,7 @@ each time the agent processes a prompt step.`),
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
     Data: z.string().nullable().describe(`
         * * Field Name: Data
-        * * Display Name: Data
+        * * Display Name: Execution Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
@@ -3012,61 +3012,71 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference ID
+        * * Display Name: External Reference
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
-        * * Display Name: Company ID
+        * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
+    TotalCacheReadTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCacheReadTokensUsed
+        * * Display Name: Cache Read Tokens
+        * * SQL Data Type: int
+        * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`),
+    TotalCacheWriteTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCacheWriteTokensUsed
+        * * Display Name: Cache Write Tokens
+        * * SQL Data Type: int
+        * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent Details
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run Name
+        * * Display Name: Parent Run Details
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Name
+        * * Display Name: Conversation Details
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User Details
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail Details
         * * SQL Data Type: nvarchar(MAX)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run Name
+        * * Display Name: Last Run Details
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Name
+        * * Display Name: Configuration Details
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Override Model Name
+        * * Display Name: Override Model Details
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor Name
+        * * Display Name: Override Vendor Details
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Name
+        * * Display Name: Scheduled Job Details
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run Details
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity Name
+        * * Display Name: Primary Scope Entity Details
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
@@ -4544,12 +4554,12 @@ export const MJAIModelCostSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -4581,7 +4591,7 @@ export const MJAIModelCostSchema = z.object({
         * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase`),
     PriceTypeID: z.string().describe(`
         * * Field Name: PriceTypeID
-        * * Display Name: Price Type ID
+        * * Display Name: Price Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
     InputPricePerUnit: z.number().describe(`
@@ -4596,7 +4606,7 @@ export const MJAIModelCostSchema = z.object({
         * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing`),
     UnitTypeID: z.string().describe(`
         * * Field Name: UnitTypeID
-        * * Display Name: Unit Type ID
+        * * Display Name: Unit Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)`),
     ProcessingType: z.union([z.literal('Batch'), z.literal('Realtime')]).describe(`
@@ -4623,21 +4633,31 @@ export const MJAIModelCostSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CacheReadPricePerUnit: z.number().nullable().describe(`
+        * * Field Name: CacheReadPricePerUnit
+        * * Display Name: Cache Read Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+        * * Description: Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).`),
+    CacheWritePricePerUnit: z.number().nullable().describe(`
+        * * Field Name: CacheWritePricePerUnit
+        * * Display Name: Cache Write Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+        * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     PriceType: z.string().describe(`
         * * Field Name: PriceType
-        * * Display Name: Price Type
+        * * Display Name: Price Type Name
         * * SQL Data Type: nvarchar(100)`),
     UnitType: z.string().describe(`
         * * Field Name: UnitType
-        * * Display Name: Unit Type
+        * * Display Name: Unit Type Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -5405,7 +5425,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Optional configuration used for this execution.`),
     RunAt: z.date().describe(`
         * * Field Name: RunAt
-        * * Display Name: Run At
+        * * Display Name: Started At
         * * SQL Data Type: datetimeoffset
         * * Default Value: sysdatetimeoffset()
         * * Description: When the prompt run started, with timezone offset information.`),
@@ -5431,7 +5451,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The output result from the model.`),
     TokensUsed: z.number().nullable().describe(`
         * * Field Name: TokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
@@ -5506,12 +5526,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`),
     CostCurrency: z.string().nullable().describe(`
         * * Field Name: CostCurrency
-        * * Display Name: Cost Currency
+        * * Display Name: Currency
         * * SQL Data Type: nvarchar(10)
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Total Tokens (Rollup)
+        * * Display Name: Tokens Used (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
@@ -5571,12 +5591,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`),
     LogProbs: z.boolean().nullable().describe(`
         * * Field Name: LogProbs
-        * * Display Name: Log Probabilities
+        * * Display Name: Log Probs
         * * SQL Data Type: bit
         * * Description: Whether log probabilities were requested for this run`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probabilities
+        * * Display Name: Top Log Probs
         * * SQL Data Type: int
         * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
     DescendantCost: z.number().nullable().describe(`
@@ -5586,17 +5606,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
-        * * Display Name: Validation Attempt Count
+        * * Display Name: Validation Attempts
         * * SQL Data Type: int
         * * Description: Total number of validation attempts made (including the initial attempt)`),
     SuccessfulValidationCount: z.number().nullable().describe(`
         * * Field Name: SuccessfulValidationCount
-        * * Display Name: Successful Validation Count
+        * * Display Name: Successful Validations
         * * SQL Data Type: int
         * * Description: Number of validation attempts that passed validation`),
     FinalValidationPassed: z.boolean().nullable().describe(`
         * * Field Name: FinalValidationPassed
-        * * Display Name: Final Validation Passed
+        * * Display Name: Validation Passed
         * * SQL Data Type: bit
         * * Description: Whether validation ultimately passed (1) or failed (0)`),
     ValidationBehavior: z.string().nullable().describe(`
@@ -5611,7 +5631,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Retry strategy used: Fixed, Linear, or Exponential`),
     MaxRetriesConfigured: z.number().nullable().describe(`
         * * Field Name: MaxRetriesConfigured
-        * * Display Name: Max Retries Configured
+        * * Display Name: Max Retries
         * * SQL Data Type: int
         * * Description: Maximum number of retries configured on the prompt`),
     FinalValidationError: z.string().nullable().describe(`
@@ -5646,7 +5666,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total time spent on retries in milliseconds (excluding first attempt)`),
     ValidationAttempts: z.string().nullable().describe(`
         * * Field Name: ValidationAttempts
-        * * Display Name: Validation Attempts
+        * * Display Name: Validation Attempt Logs
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array containing detailed information about each validation attempt`),
     ValidationSummary: z.string().nullable().describe(`
@@ -5672,13 +5692,13 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: JSON array of duration in milliseconds for each failover attempt`),
     OriginalModelID: z.string().nullable().describe(`
         * * Field Name: OriginalModelID
-        * * Display Name: Original Model
+        * * Display Name: Original Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI Model ID that was originally attempted before any failovers`),
     OriginalRequestStartTime: z.date().nullable().describe(`
         * * Field Name: OriginalRequestStartTime
-        * * Display Name: Original Request Start Time
+        * * Display Name: Original Request Start
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
@@ -5694,7 +5714,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
     ModelSelection: z.string().nullable().describe(`
         * * Field Name: ModelSelection
-        * * Display Name: Model Selection
+        * * Display Name: Model Selection Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`),
     Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Pending'), z.literal('Running')]).describe(`
@@ -5749,7 +5769,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
     JudgeID: z.string().nullable().describe(`
         * * Field Name: JudgeID
-        * * Display Name: Judge
+        * * Display Name: Judge Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
@@ -5803,7 +5823,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Model Specific Response Details
+        * * Display Name: Provider Response Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     EffortLevel: z.number().nullable().describe(`
@@ -5832,6 +5852,26 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Assistant Prefill
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`),
+    TokensCacheRead: z.number().nullable().describe(`
+        * * Field Name: TokensCacheRead
+        * * Display Name: Tokens Cache Read
+        * * SQL Data Type: int
+        * * Description: Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.`),
+    TokensCacheWrite: z.number().nullable().describe(`
+        * * Field Name: TokensCacheWrite
+        * * Display Name: Tokens Cache Write
+        * * SQL Data Type: int
+        * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`),
+    TokensCacheReadRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCacheReadRollup
+        * * Display Name: Tokens Cache Read (Rollup)
+        * * SQL Data Type: int
+        * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`),
+    TokensCacheWriteRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCacheWriteRollup
+        * * Display Name: Tokens Cache Write (Rollup)
+        * * SQL Data Type: int
+        * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -5866,7 +5906,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RerunFromPromptRun: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRun
-        * * Display Name: Rerun From
+        * * Display Name: Rerun From Run
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
@@ -5886,7 +5926,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From
+        * * Display Name: Root Rerun Source
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -15144,7 +15184,7 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('HTML'), z.literal('Icon'), z.literal('MSTeams'), z.literal('Markdown'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -15161,7 +15201,10 @@ export const MJEntityFieldSchema = z.object({
     *   * GeoLongitude
     *   * GeoPostalCode
     *   * GeoStateProvince
+    *   * HTML
+    *   * Icon
     *   * MSTeams
+    *   * Markdown
     *   * Other
     *   * SIP
     *   * SMS
@@ -15170,7 +15213,7 @@ export const MJEntityFieldSchema = z.object({
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-        * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`),
+        * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`),
     CodeType: z.union([z.literal('CSS'), z.literal('HTML'), z.literal('JavaScript'), z.literal('Other'), z.literal('SQL'), z.literal('TypeScript')]).nullable().describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
@@ -17049,7 +17092,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Primary key`),
     IntegrationObjectID: z.string().describe(`
         * * Field Name: IntegrationObjectID
-        * * Display Name: Integration Object
+        * * Display Name: Integration Object ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to the IntegrationObject this field belongs to`),
@@ -17112,7 +17155,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Whether this field is part of the object primary key`),
     IsUniqueKey: z.boolean().describe(`
         * * Field Name: IsUniqueKey
-        * * Display Name: Is Unique Key
+        * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether values must be unique across all records`),
@@ -17177,13 +17220,24 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
-        * * Display Name: Integration Object Name
+        * * Display Name: Integration Object
         * * SQL Data Type: nvarchar(255)`),
     RelatedIntegrationObject: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObject
-        * * Display Name: Related Object Name
+        * * Display Name: Related Integration Object Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -17201,7 +17255,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration ID
+        * * Display Name: Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -17331,9 +17385,113 @@ export const MJIntegrationObjectSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    CreateAPIPath: z.string().nullable().describe(`
+        * * Field Name: CreateAPIPath
+        * * Display Name: Create API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.`),
+    CreateMethod: z.string().nullable().describe(`
+        * * Field Name: CreateMethod
+        * * Display Name: Create Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.`),
+    CreateBodyShape: z.union([z.literal('flat'), z.literal('literal'), z.literal('wrapped')]).nullable().describe(`
+        * * Field Name: CreateBodyShape
+        * * Display Name: Create Body Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+        * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).`),
+    CreateBodyKey: z.string().nullable().describe(`
+        * * Field Name: CreateBodyKey
+        * * Display Name: Create Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`),
+    CreateIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: CreateIDLocation
+        * * Display Name: Create ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).`),
+    UpdateAPIPath: z.string().nullable().describe(`
+        * * Field Name: UpdateAPIPath
+        * * Display Name: Update API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.`),
+    UpdateMethod: z.string().nullable().describe(`
+        * * Field Name: UpdateMethod
+        * * Display Name: Update Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for update (typically PATCH or PUT).`),
+    UpdateBodyShape: z.union([z.literal('flat'), z.literal('literal'), z.literal('wrapped')]).nullable().describe(`
+        * * Field Name: UpdateBodyShape
+        * * Display Name: Update Body Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+        * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.`),
+    UpdateBodyKey: z.string().nullable().describe(`
+        * * Field Name: UpdateBodyKey
+        * * Display Name: Update Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.`),
+    UpdateIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: UpdateIDLocation
+        * * Display Name: Update ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`),
+    DeleteAPIPath: z.string().nullable().describe(`
+        * * Field Name: DeleteAPIPath
+        * * Display Name: Delete API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`),
+    DeleteIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: DeleteIDLocation
+        * * Display Name: Delete ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: For delete: where the target record ID is located — typically 'path'.`),
+    IncrementalWatermarkField: z.string().nullable().describe(`
+        * * Field Name: IncrementalWatermarkField
+        * * Display Name: Incremental Watermark Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -22367,7 +22525,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`),
     NotifyViaInApp: z.boolean().describe(`
         * * Field Name: NotifyViaInApp
-        * * Display Name: Notify Via In App
+        * * Display Name: Notify Via In-App
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`),
@@ -22412,6 +22570,12 @@ export const MJScheduledJobSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RunImmediatelyIfNeverRun: z.boolean().describe(`
+        * * Field Name: RunImmediatelyIfNeverRun
+        * * Display Name: Run Immediately If Never Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`),
     JobType: z.string().describe(`
         * * Field Name: JobType
         * * Display Name: Job Type
@@ -23643,6 +23807,17 @@ export const MJTagSynonymSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Rejected
+        * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`),
     Tag: z.string().describe(`
         * * Field Name: Tag
         * * Display Name: Tag Name
@@ -34555,7 +34730,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
+    * * Display Name: Run ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     * * Description: Unique identifier for this agent run
@@ -34727,7 +34902,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Total Tokens
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of tokens consumed by all LLM calls during this agent run
@@ -34775,7 +34950,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsed
-    * * Display Name: Total Prompt Tokens Used
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -34788,7 +34963,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsed
-    * * Display Name: Total Completion Tokens Used
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -34801,7 +34976,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsedRollup
-    * * Display Name: Total Tokens Used (Rollup)
+    * * Display Name: Total Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
     */
@@ -34814,7 +34989,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens Used (Rollup)
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -34827,7 +35002,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens Used (Rollup)
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -34867,7 +35042,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Conversation Detail Sequence
+    * * Display Name: Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -34934,7 +35109,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Final Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Final message from the agent to the end user at the end of a run
     */
@@ -35031,7 +35206,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Data
-    * * Display Name: Data
+    * * Display Name: Execution Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
     */
@@ -35165,7 +35340,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference ID
+    * * Display Name: External Reference
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -35178,7 +35353,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: CompanyID
-    * * Display Name: Company ID
+    * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.
     */
@@ -35190,8 +35365,34 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: TotalCacheReadTokensUsed
+    * * Display Name: Cache Read Tokens
+    * * SQL Data Type: int
+    * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.
+    */
+    get TotalCacheReadTokensUsed(): number | null {
+        return this.Get('TotalCacheReadTokensUsed');
+    }
+    set TotalCacheReadTokensUsed(value: number | null) {
+        this.Set('TotalCacheReadTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCacheWriteTokensUsed
+    * * Display Name: Cache Write Tokens
+    * * SQL Data Type: int
+    * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.
+    */
+    get TotalCacheWriteTokensUsed(): number | null {
+        return this.Get('TotalCacheWriteTokensUsed');
+    }
+    set TotalCacheWriteTokensUsed(value: number | null) {
+        this.Set('TotalCacheWriteTokensUsed', value);
+    }
+
+    /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent Details
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -35200,7 +35401,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run Name
+    * * Display Name: Parent Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -35209,7 +35410,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Name
+    * * Display Name: Conversation Details
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -35218,7 +35419,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User Details
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -35227,7 +35428,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail Details
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -35236,7 +35437,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run Name
+    * * Display Name: Last Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -35245,7 +35446,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Name
+    * * Display Name: Configuration Details
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -35254,7 +35455,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Override Model Name
+    * * Display Name: Override Model Details
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -35263,7 +35464,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor Name
+    * * Display Name: Override Vendor Details
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -35272,7 +35473,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Name
+    * * Display Name: Scheduled Job Details
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -35281,7 +35482,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -35290,7 +35491,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity Name
+    * * Display Name: Primary Scope Entity Details
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -39386,7 +39587,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -39399,7 +39600,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -39471,7 +39672,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: PriceTypeID
-    * * Display Name: Price Type ID
+    * * Display Name: Price Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
     */
@@ -39510,7 +39711,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: UnitTypeID
-    * * Display Name: Unit Type ID
+    * * Display Name: Unit Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)
     */
@@ -39572,8 +39773,34 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     }
 
     /**
+    * * Field Name: CacheReadPricePerUnit
+    * * Display Name: Cache Read Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).
+    */
+    get CacheReadPricePerUnit(): number | null {
+        return this.Get('CacheReadPricePerUnit');
+    }
+    set CacheReadPricePerUnit(value: number | null) {
+        this.Set('CacheReadPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: CacheWritePricePerUnit
+    * * Display Name: Cache Write Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.
+    */
+    get CacheWritePricePerUnit(): number | null {
+        return this.Get('CacheWritePricePerUnit');
+    }
+    set CacheWritePricePerUnit(value: number | null) {
+        this.Set('CacheWritePricePerUnit', value);
+    }
+
+    /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -39582,7 +39809,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -39591,7 +39818,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: PriceType
-    * * Display Name: Price Type
+    * * Display Name: Price Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get PriceType(): string {
@@ -39600,7 +39827,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: UnitType
-    * * Display Name: Unit Type
+    * * Display Name: Unit Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get UnitType(): string {
@@ -41946,7 +42173,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RunAt
-    * * Display Name: Run At
+    * * Display Name: Started At
     * * SQL Data Type: datetimeoffset
     * * Default Value: sysdatetimeoffset()
     * * Description: When the prompt run started, with timezone offset information.
@@ -42012,7 +42239,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of tokens used (prompt + completion).
     */
@@ -42185,7 +42412,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: CostCurrency
-    * * Display Name: Cost Currency
+    * * Display Name: Currency
     * * SQL Data Type: nvarchar(10)
     * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.
     */
@@ -42198,7 +42425,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Total Tokens (Rollup)
+    * * Display Name: Tokens Used (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -42354,7 +42581,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: LogProbs
-    * * Display Name: Log Probabilities
+    * * Display Name: Log Probs
     * * SQL Data Type: bit
     * * Description: Whether log probabilities were requested for this run
     */
@@ -42367,7 +42594,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probabilities
+    * * Display Name: Top Log Probs
     * * SQL Data Type: int
     * * Description: Number of top log probabilities requested per token (if LogProbs is true)
     */
@@ -42393,7 +42620,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttemptCount
-    * * Display Name: Validation Attempt Count
+    * * Display Name: Validation Attempts
     * * SQL Data Type: int
     * * Description: Total number of validation attempts made (including the initial attempt)
     */
@@ -42406,7 +42633,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: SuccessfulValidationCount
-    * * Display Name: Successful Validation Count
+    * * Display Name: Successful Validations
     * * SQL Data Type: int
     * * Description: Number of validation attempts that passed validation
     */
@@ -42419,7 +42646,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: FinalValidationPassed
-    * * Display Name: Final Validation Passed
+    * * Display Name: Validation Passed
     * * SQL Data Type: bit
     * * Description: Whether validation ultimately passed (1) or failed (0)
     */
@@ -42458,7 +42685,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: MaxRetriesConfigured
-    * * Display Name: Max Retries Configured
+    * * Display Name: Max Retries
     * * SQL Data Type: int
     * * Description: Maximum number of retries configured on the prompt
     */
@@ -42549,7 +42776,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttempts
-    * * Display Name: Validation Attempts
+    * * Display Name: Validation Attempt Logs
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array containing detailed information about each validation attempt
     */
@@ -42615,7 +42842,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModelID
-    * * Display Name: Original Model
+    * * Display Name: Original Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI Model ID that was originally attempted before any failovers
@@ -42629,7 +42856,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalRequestStartTime
-    * * Display Name: Original Request Start Time
+    * * Display Name: Original Request Start
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp when the original request started, before any failovers
     */
@@ -42669,7 +42896,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSelection
-    * * Display Name: Model Selection
+    * * Display Name: Model Selection Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale
     */
@@ -42788,7 +43015,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: JudgeID
-    * * Display Name: Judge
+    * * Display Name: Judge Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
@@ -42922,7 +43149,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Model Specific Response Details
+    * * Display Name: Provider Response Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
     */
@@ -43000,6 +43227,58 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: TokensCacheRead
+    * * Display Name: Tokens Cache Read
+    * * SQL Data Type: int
+    * * Description: Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.
+    */
+    get TokensCacheRead(): number | null {
+        return this.Get('TokensCacheRead');
+    }
+    set TokensCacheRead(value: number | null) {
+        this.Set('TokensCacheRead', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheWrite
+    * * Display Name: Tokens Cache Write
+    * * SQL Data Type: int
+    * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.
+    */
+    get TokensCacheWrite(): number | null {
+        return this.Get('TokensCacheWrite');
+    }
+    set TokensCacheWrite(value: number | null) {
+        this.Set('TokensCacheWrite', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheReadRollup
+    * * Display Name: Tokens Cache Read (Rollup)
+    * * SQL Data Type: int
+    * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.
+    */
+    get TokensCacheReadRollup(): number | null {
+        return this.Get('TokensCacheReadRollup');
+    }
+    set TokensCacheReadRollup(value: number | null) {
+        this.Set('TokensCacheReadRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheWriteRollup
+    * * Display Name: Tokens Cache Write (Rollup)
+    * * SQL Data Type: int
+    * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.
+    */
+    get TokensCacheWriteRollup(): number | null {
+        return this.Get('TokensCacheWriteRollup');
+    }
+    set TokensCacheWriteRollup(value: number | null) {
+        this.Set('TokensCacheWriteRollup', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -43073,7 +43352,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRun
-    * * Display Name: Rerun From
+    * * Display Name: Rerun From Run
     * * SQL Data Type: nvarchar(255)
     */
     get RerunFromPromptRun(): string | null {
@@ -43118,7 +43397,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From
+    * * Display Name: Root Rerun Source
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
@@ -46619,6 +46898,41 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJApplicationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -67117,7 +67431,10 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * GeoLongitude
     *   * GeoPostalCode
     *   * GeoStateProvince
+    *   * HTML
+    *   * Icon
     *   * MSTeams
+    *   * Markdown
     *   * Other
     *   * SIP
     *   * SMS
@@ -67126,12 +67443,12 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-    * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
+    * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
@@ -71921,7 +72238,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IntegrationObjectID
-    * * Display Name: Integration Object
+    * * Display Name: Integration Object ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to the IntegrationObject this field belongs to
@@ -72080,7 +72397,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsUniqueKey
-    * * Display Name: Is Unique Key
+    * * Display Name: Is Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether values must be unique across all records
@@ -72228,8 +72545,27 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     }
 
     /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
     * * Field Name: IntegrationObject
-    * * Display Name: Integration Object Name
+    * * Display Name: Integration Object
     * * SQL Data Type: nvarchar(255)
     */
     get IntegrationObject(): string {
@@ -72238,7 +72574,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObject
-    * * Display Name: Related Object Name
+    * * Display Name: Related Integration Object Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedIntegrationObject(): string | null {
@@ -72293,7 +72629,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration ID
+    * * Display Name: Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -72594,8 +72930,224 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
 
     /**
+    * * Field Name: CreateAPIPath
+    * * Display Name: Create API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.
+    */
+    get CreateAPIPath(): string | null {
+        return this.Get('CreateAPIPath');
+    }
+    set CreateAPIPath(value: string | null) {
+        this.Set('CreateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: CreateMethod
+    * * Display Name: Create Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.
+    */
+    get CreateMethod(): string | null {
+        return this.Get('CreateMethod');
+    }
+    set CreateMethod(value: string | null) {
+        this.Set('CreateMethod', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyShape
+    * * Display Name: Create Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+    * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).
+    */
+    get CreateBodyShape(): 'flat' | 'literal' | 'wrapped' | null {
+        return this.Get('CreateBodyShape');
+    }
+    set CreateBodyShape(value: 'flat' | 'literal' | 'wrapped' | null) {
+        this.Set('CreateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyKey
+    * * Display Name: Create Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.
+    */
+    get CreateBodyKey(): string | null {
+        return this.Get('CreateBodyKey');
+    }
+    set CreateBodyKey(value: string | null) {
+        this.Set('CreateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: CreateIDLocation
+    * * Display Name: Create ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).
+    */
+    get CreateIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('CreateIDLocation');
+    }
+    set CreateIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('CreateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: UpdateAPIPath
+    * * Display Name: Update API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.
+    */
+    get UpdateAPIPath(): string | null {
+        return this.Get('UpdateAPIPath');
+    }
+    set UpdateAPIPath(value: string | null) {
+        this.Set('UpdateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: UpdateMethod
+    * * Display Name: Update Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for update (typically PATCH or PUT).
+    */
+    get UpdateMethod(): string | null {
+        return this.Get('UpdateMethod');
+    }
+    set UpdateMethod(value: string | null) {
+        this.Set('UpdateMethod', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyShape
+    * * Display Name: Update Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+    * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.
+    */
+    get UpdateBodyShape(): 'flat' | 'literal' | 'wrapped' | null {
+        return this.Get('UpdateBodyShape');
+    }
+    set UpdateBodyShape(value: 'flat' | 'literal' | 'wrapped' | null) {
+        this.Set('UpdateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyKey
+    * * Display Name: Update Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.
+    */
+    get UpdateBodyKey(): string | null {
+        return this.Get('UpdateBodyKey');
+    }
+    set UpdateBodyKey(value: string | null) {
+        this.Set('UpdateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: UpdateIDLocation
+    * * Display Name: Update ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).
+    */
+    get UpdateIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('UpdateIDLocation');
+    }
+    set UpdateIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('UpdateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: DeleteAPIPath
+    * * Display Name: Delete API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)
+    */
+    get DeleteAPIPath(): string | null {
+        return this.Get('DeleteAPIPath');
+    }
+    set DeleteAPIPath(value: string | null) {
+        this.Set('DeleteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: DeleteIDLocation
+    * * Display Name: Delete ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: For delete: where the target record ID is located — typically 'path'.
+    */
+    get DeleteIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('DeleteIDLocation');
+    }
+    set DeleteIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('DeleteIDLocation', value);
+    }
+
+    /**
+    * * Field Name: IncrementalWatermarkField
+    * * Display Name: Incremental Watermark Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.
+    */
+    get IncrementalWatermarkField(): string | null {
+        return this.Get('IncrementalWatermarkField');
+    }
+    set IncrementalWatermarkField(value: string | null) {
+        this.Set('IncrementalWatermarkField', value);
+    }
+
+    /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -85703,7 +86255,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyViaInApp
-    * * Display Name: Notify Via In App
+    * * Display Name: Notify Via In-App
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.
@@ -85804,6 +86356,20 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RunImmediatelyIfNeverRun
+    * * Display Name: Run Immediately If Never Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.
+    */
+    get RunImmediatelyIfNeverRun(): boolean {
+        return this.Get('RunImmediatelyIfNeverRun');
+    }
+    set RunImmediatelyIfNeverRun(value: boolean) {
+        this.Set('RunImmediatelyIfNeverRun', value);
     }
 
     /**
@@ -89070,6 +89636,25 @@ export class MJTagSynonymEntity extends BaseEntity<MJTagSynonymEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Rejected
+    * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.
+    */
+    get Status(): 'Active' | 'Pending' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Rejected') {
+        this.Set('Status', value);
     }
 
     /**
@@ -93615,6 +94200,41 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: User Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJUserApplicationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**

@@ -73,7 +73,7 @@ vi.mock('@memberjunction/ng-trees', () => ({
     TreeLeafConfig: class {},
 }));
 
-import { CronToHumanReadable } from '../AI/components/autotagging/autotagging-pipeline-resource.component';
+import { CronToHumanReadable } from '../AI/components/autotagging/shared/classify.format';
 
 describe('CronToHumanReadable', () => {
     describe('every N minutes patterns', () => {

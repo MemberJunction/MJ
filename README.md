@@ -9,7 +9,7 @@
 <h3 align="center">The open-source, AI-native data platform.</h3>
 
 <p align="center">
-  Unify your data. Add intelligence. Ship faster.
+  Unify your data. Add intelligence. <strong>Build AI-native apps on top of it.</strong>
 </p>
 
 <p align="center">
@@ -28,6 +28,10 @@
 MemberJunction is a **metadata-driven application platform** that turns your database into a fully functional application — complete with auto-generated APIs, forms, security, and deep AI integration. Define your schema, and MJ generates everything else: typed entity classes, GraphQL endpoints, Angular UI components, validation, and audit trails.
 
 What makes it different: **175 modular TypeScript packages** that work together or independently, **15+ AI providers** behind a single abstraction layer, and an **agent framework** for building autonomous workflows — all driven by metadata, not boilerplate.
+
+It's two things in one. A **data platform** for unifying and reasoning over your data — *and* a **full-stack framework for building AI-native applications** on top of it, where agents, prompts, and RAG operate directly on your entities. And because the whole stack is **TypeScript with one object model that runs identically on the server, in the browser, in the CLI, and inside agents**, you write your data and business logic once and run it on every tier.
+
+> **Already getting your data into MJ and wondering what else you can build?** MJ is a first-class platform for building **AI-native applications** on your unified data. Start with **[Building Applications on MemberJunction](./guides/BUILDING_APPS_ON_MJ.md)** — the developer's hub that walks the schema-to-app model and links every layer — and the **[framework comparison](./guides/FRAMEWORK_COMPARISON.md)** vs. Next.js/Vercel, Supabase, Rails, and Django.
 
 ```typescript
 // Three lines to load, modify, and save any entity — fully typed, validated, and audited
@@ -201,7 +205,7 @@ Connect to any major AI service through a unified API — swap providers with ze
 | **Ollama** | Local inference, no API keys | [`@memberjunction/ai-ollama`](./packages/AI/Providers/Ollama) |
 | **+ 6 more** | Cerebras, Fireworks, OpenRouter, LM Studio, xAI, Cohere | [All providers →](./packages/AI/Providers) |
 
-**Specialized:** [ElevenLabs](./packages/AI/Providers/ElevenLabs) (TTS) · [HeyGen](./packages/AI/Providers/HeyGen) (video) · [BlackForestLabs](./packages/AI/Providers/BlackForestLabs) (image gen) · [Pinecone](./packages/AI/Providers/Vectors-Pinecone) (vectors)
+**Specialized:** [ElevenLabs](./packages/AI/Providers/ElevenLabs) (TTS) · [HeyGen](./packages/AI/Providers/HeyGen) (video) · [BlackForestLabs](./packages/AI/Providers/BlackForestLabs) (image gen) · [Pinecone](./packages/AI/Vectors/Providers/Pinecone) (vectors)
 
 ---
 
@@ -304,7 +308,7 @@ AI infrastructure -- model abstractions, provider implementations, vector operat
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Core](./packages/AI/Core/README.md) | `@memberjunction/ai` | Base AI abstractions and interfaces for LLMs, embeddings, audio/video generation; zero MJ dependencies beyond `@memberjunction/global` |
+| [Core](./packages/AI/Core/readme.md) | `@memberjunction/ai` | Base AI abstractions and interfaces for LLMs, embeddings, audio/video generation; zero MJ dependencies beyond `@memberjunction/global` |
 | [CorePlus](./packages/AI/CorePlus/README.md) | `@memberjunction/ai-core-plus` | Extended AI components that require MJ entity concepts; usable on both server and client |
 | [BaseAIEngine](./packages/AI/BaseAIEngine/README.md) | `@memberjunction/ai-engine-base` | Base AI engine with extended types and data caching; usable anywhere |
 | [Engine](./packages/AI/Engine/README.md) | `@memberjunction/aiengine` | AI orchestration engine handling automatic execution of Entity AI Actions using AI Models |
@@ -334,11 +338,11 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Anthropic](./packages/AI/Providers/Anthropic/README.md) | `@memberjunction/ai-anthropic` | Wrapper for Anthropic AI Models (Claude) |
-| [Gemini](./packages/AI/Providers/Gemini/README.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
-| [Groq](./packages/AI/Providers/Groq/README.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
-| [Mistral](./packages/AI/Providers/Mistral/README.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
-| [OpenAI](./packages/AI/Providers/OpenAI/README.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
+| [Anthropic](./packages/AI/Providers/Anthropic/readme.md) | `@memberjunction/ai-anthropic` | Wrapper for Anthropic AI Models (Claude) |
+| [Gemini](./packages/AI/Providers/Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
+| [Groq](./packages/AI/Providers/Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
+| [Mistral](./packages/AI/Providers/Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
+| [OpenAI](./packages/AI/Providers/OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
 | [xAI](./packages/AI/Providers/xAI/README.md) | `@memberjunction/ai-xai` | Wrapper for xAI models (Grok) |
 
 **Cloud Platform Providers**
@@ -346,7 +350,7 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 | Package | npm | Description |
 |---------|-----|-------------|
 | [Azure](./packages/AI/Providers/Azure/README.md) | `@memberjunction/ai-azure` | Azure AI Provider for MemberJunction |
-| [Bedrock](./packages/AI/Providers/Bedrock/README.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
+| [Bedrock](./packages/AI/Providers/Bedrock/readme.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
 | [Vertex](./packages/AI/Providers/Vertex/README.md) | `@memberjunction/ai-vertex` | Wrapper for Google Vertex AI Models |
 
 **Inference Routers and Aggregators**
@@ -379,7 +383,7 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Vectors-Pinecone](./packages/AI/Providers/Vectors-Pinecone/README.md) | `@memberjunction/ai-vectors-pinecone` | Pinecone Implementation for AI Vectors |
+| [Vectors-Pinecone](./packages/AI/Vectors/Providers/Pinecone/README.md) | `@memberjunction/ai-vectors-pinecone` | Pinecone Implementation for AI Vectors |
 
 **Recommendation Providers**
 
@@ -450,11 +454,9 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [base-forms](./packages/Angular/Explorer/base-forms/README.md) | `@memberjunction/ng-base-forms` | Base form components, field rendering, and validation framework |
+| [base-forms](./packages/Angular/Generic/base-forms) | `@memberjunction/ng-base-forms` | Base form components, field rendering, and validation framework |
 | [core-entity-forms](./packages/Angular/Explorer/core-entity-forms/README.md) | `@memberjunction/ng-core-entity-forms` | Auto-generated and custom entity forms with dynamic form loading and registration |
 | [entity-form-dialog](./packages/Angular/Explorer/entity-form-dialog/README.md) | `@memberjunction/ng-entity-form-dialog` | Modal dialog for displaying and editing any entity record |
-| [form-toolbar](./packages/Angular/Explorer/form-toolbar/README.md) | `@memberjunction/ng-form-toolbar` | Form action toolbar providing save, cancel, delete, and navigation controls |
-
 **Data Grids & Lists**
 
 | Package | npm | Description |
@@ -475,7 +477,7 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 | [link-directives](./packages/Angular/Explorer/link-directives/README.md) | `@memberjunction/ng-link-directives` | Directives for turning elements into email, web, or record links |
 | [entity-permissions](./packages/Angular/Explorer/entity-permissions/README.md) | `@memberjunction/ng-entity-permissions` | Components for displaying and editing entity-level permissions |
 | [explorer-settings](./packages/Angular/Explorer/explorer-settings/README.md) | `@memberjunction/ng-explorer-settings` | Reusable components for the Explorer settings section |
-| [record-changes](./packages/Angular/Explorer/record-changes/README.md) | `@memberjunction/ng-record-changes` | Change-tracking dialog with diff visualization for individual records |
+| [record-changes](./packages/Angular/Explorer/record-changes) | `@memberjunction/ng-record-changes` | Change-tracking dialog with diff visualization for individual records |
 
 #### [Angular / Generic](./packages/Angular/Generic/README.md)
 
@@ -497,9 +499,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 | [chat](./packages/Angular/Generic/chat/README.md) | `@memberjunction/ng-chat` | Reusable chat component for AI or peer-to-peer chat applications |
 | [conversations](./packages/Angular/Generic/conversations/README.md) | `@memberjunction/ng-conversations` | Conversation, collection, and artifact management components |
 | [agents](./packages/Angular/Generic/agents/README.md) | `@memberjunction/ng-agents` | Reusable components for AI Agent management including permissions panel, dialog, and slideover |
-| [ai-test-harness](./packages/Angular/Generic/ai-test-harness/README.md) | `@memberjunction/ng-ai-test-harness` | Reusable component for testing AI agents and prompts with beautiful UX |
-| [skip-chat](./packages/Angular/Generic/skip-chat/README.md) | `@memberjunction/ng-skip-chat` | **DEPRECATED** -- use `@memberjunction/ng-conversations` instead |
-| [artifacts](./packages/Angular/Generic/artifacts/README.md) | `@memberjunction/ng-artifacts` | Artifact viewer plugin system for rendering different artifact types (JSON, Code, Markdown, HTML, SVG, Components) |
+| [ai-test-harness](./packages/Angular/Generic/ai-test-harness/README.md) | `@memberjunction/ng-ai-test-harness` | Reusable component for testing AI agents and prompts with beautiful UX || [artifacts](./packages/Angular/Generic/artifacts/README.md) | `@memberjunction/ng-artifacts` | Artifact viewer plugin system for rendering different artifact types (JSON, Code, Markdown, HTML, SVG, Components) |
 
 **Entity & Data**
 
@@ -526,9 +526,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 **Query & Reporting**
 
 | Package | npm | Description |
-|---------|-----|-------------|
-| [query-grid](./packages/Angular/Generic/query-grid/README.md) | `@memberjunction/ng-query-grid` | Grid to display any MemberJunction Query |
-| [query-viewer](./packages/Angular/Generic/query-viewer/README.md) | `@memberjunction/ng-query-viewer` | Components for viewing and executing stored queries with parameter input, interactive results grid, and entity linking |
+|---------|-----|-------------|| [query-viewer](./packages/Angular/Generic/query-viewer/README.md) | `@memberjunction/ng-query-viewer` | Components for viewing and executing stored queries with parameter input, interactive results grid, and entity linking |
 | [filter-builder](./packages/Angular/Generic/filter-builder/README.md) | `@memberjunction/ng-filter-builder` | Modern, intuitive filter builder for creating complex boolean filter expressions with portable JSON format |
 
 **Dashboard & Layout**
@@ -553,7 +551,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [ui-components](./packages/Angular/Generic/ui-components/README.md) | `@memberjunction/ng-ui-components` | Reusable standalone UI components (buttons, dialogs, windows, dropdowns, inputs, and more) |
+| [ui-components](./packages/Angular/Generic/ui-components) | `@memberjunction/ng-ui-components` | Reusable standalone UI components (buttons, dialogs, windows, dropdowns, inputs, and more) |
 | [generic-dialog](./packages/Angular/Generic/generic-dialog/README.md) | `@memberjunction/ng-generic-dialog` | Component for a generic dialog |
 | [code-editor](./packages/Angular/Generic/code-editor/README.md) | `@memberjunction/ng-code-editor` | Angular code editor component |
 | [file-storage](./packages/Angular/Generic/file-storage/README.md) | `@memberjunction/ng-file-storage` | Components for managing files and related operations |
@@ -652,8 +650,8 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | Package | npm | Description |
 |---------|-----|-------------|
 | [MJGlobal](./packages/MJGlobal/README.md) | `@memberjunction/global` | Global class factory and event system -- required by all other MJ components |
-| [MJCore](./packages/MJCore/README.md) | `@memberjunction/core` | Core metadata engine, entity framework, and utilities |
-| [MJCoreEntities](./packages/MJCoreEntities/README.md) | `@memberjunction/core-entities` | Entity subclasses for the MJ metadata layer (core schema) |
+| [MJCore](./packages/MJCore/readme.md) | `@memberjunction/core` | Core metadata engine, entity framework, and utilities |
+| [MJCoreEntities](./packages/MJCoreEntities/readme.md) | `@memberjunction/core-entities` | Entity subclasses for the MJ metadata layer (core schema) |
 | [MJCoreEntitiesServer](./packages/MJCoreEntitiesServer/README.md) | `@memberjunction/core-entities-server` | Server-only entity subclasses for the MJ metadata layer |
 | [Config](./packages/Config/README.md) | `@memberjunction/config` | Central configuration with default configs and merge utilities |
 
@@ -663,9 +661,9 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 |---------|-----|-------------|
 | [SQLServerDataProvider](./packages/SQLServerDataProvider/README.md) | `@memberjunction/sqlserver-dataprovider` | SQL Server data provider |
 | [GraphQLDataProvider](./packages/GraphQLDataProvider/README.md) | `@memberjunction/graphql-dataprovider` | GraphQL client data provider |
-| [MJDataContext](./packages/MJDataContext/README.md) | `@memberjunction/data-context` | Runtime data context loading and cross-tier interaction types |
+| [MJDataContext](./packages/MJDataContext/readme.md) | `@memberjunction/data-context` | Runtime data context loading and cross-tier interaction types |
 | [MJDataContextServer](./packages/MJDataContextServer/README.md) | `@memberjunction/data-context-server` | Server-side data context implementation with raw SQL support |
-| [MJStorage](./packages/MJStorage/README.md) | `@memberjunction/storage` | Cloud storage provider interface for server-side API integration |
+| [MJStorage](./packages/MJStorage/readme.md) | `@memberjunction/storage` | Cloud storage provider interface for server-side API integration |
 
 #### Server
 
@@ -709,7 +707,7 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | [MJExportEngine](./packages/MJExportEngine/README.md) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
 | [MJQueue](./packages/MJQueue/README.md) | `@memberjunction/queue` | Server-side queue management |
 | [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
-| [SkipTypes](./packages/SkipTypes/README.md) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
+| [SkipTypes](./packages/SkipTypes/readme.md) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
 | [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
 
 ---

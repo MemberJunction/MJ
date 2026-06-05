@@ -1,4 +1,4 @@
-import { NgModule } from '@angular/core';
+import { NgModule, Type } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -32,6 +32,17 @@ import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar
 import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
 import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
 import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
+import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
+import { VideoArtifactViewerComponent } from './components/plugins/video-artifact-viewer.component';
+import { AudioArtifactViewerComponent } from './components/plugins/audio-artifact-viewer.component';
+
+// Inline preview components (lightweight, rendered inside conversation message cards)
+import { ImageArtifactPreviewComponent } from './components/previews/image-artifact-preview.component';
+import { VideoArtifactPreviewComponent } from './components/previews/video-artifact-preview.component';
+import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
+import { MJGlobal } from '@memberjunction/global';
+import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
+import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -74,6 +85,14 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    ImageArtifactViewerComponent,
+    VideoArtifactViewerComponent,
+    AudioArtifactViewerComponent,
+
+    // Inline preview components
+    ImageArtifactPreviewComponent,
+    VideoArtifactPreviewComponent,
+    AudioArtifactPreviewComponent,
   ],
   imports: [
     CommonModule,
@@ -112,6 +131,14 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    ImageArtifactViewerComponent,
+    VideoArtifactViewerComponent,
+    AudioArtifactViewerComponent,
+
+    // Inline preview components
+    ImageArtifactPreviewComponent,
+    VideoArtifactPreviewComponent,
+    AudioArtifactPreviewComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -132,11 +159,49 @@ export class ArtifactsModule {
       PdfArtifactViewerComponent,
       XlsxArtifactViewerComponent,
       DocxArtifactViewerComponent,
+      ImageArtifactViewerComponent,
+      VideoArtifactViewerComponent,
+      AudioArtifactViewerComponent,
+      // Preview components are referenced via plugins' previewComponentType — list them here too
+      // so the bundler can't tree-shake the dynamically-rendered preview classes.
+      ImageArtifactPreviewComponent,
+      VideoArtifactPreviewComponent,
+      AudioArtifactPreviewComponent,
     ];
+
+    // Registration-time guard: every registered artifact-viewer plugin must expose at least one of
+    // componentType / previewComponentType. `componentType` is required by the interface (so this is
+    // trivially satisfied today); the guard protects against future loosening of that invariant.
+    ArtifactsModule.warnOnPluginsWithoutRenderTarget();
 
     // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.
     // By the time a user opens an interactive component artifact, the scripts will already
     // be cached. The adapter.preload() is non-blocking and deduplicates with initialize().
     this.adapter.preload();
+  }
+
+  /**
+   * Logs a warning for any registered artifact-viewer plugin that has NO render target at all —
+   * i.e. neither an implicit full viewer (the registered SubClass itself, which is the
+   * `componentType`) nor an explicit `previewComponentType`. Today every registration is an
+   * Angular component class, so the SubClass is always present and this never fires; the guard
+   * exists to catch regressions if the render-target invariant is ever loosened.
+   */
+  private static warnOnPluginsWithoutRenderTarget(): void {
+    const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseArtifactViewerPluginComponent);
+    for (const reg of registrations) {
+      const subClass = reg.SubClass as
+        | (Type<BaseArtifactViewerPluginComponent> & IArtifactViewerPluginPreviewStatics)
+        | undefined;
+      const hasFullViewer = !!subClass; // the registered class IS the componentType
+      // Read the STATIC preview contract off the constructor — never instantiate (these are Angular
+      // components with DI constructors; a bare `new` outside an injection context throws).
+      const hasPreview = !!subClass?.PreviewComponentType;
+      if (!hasFullViewer && !hasPreview) {
+        console.warn(
+          `ArtifactsModule: viewer plugin "${reg.Key}" has neither a componentType nor a previewComponentType — it can render nothing.`,
+        );
+      }
+    }
   }
 }

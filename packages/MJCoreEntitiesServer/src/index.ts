@@ -1,4 +1,5 @@
 export * from './custom/MJAIPromptEntityServer.server';
+export * from './custom/MJEntityDocumentEntityServer.server';
 export * from './custom/MJAIPromptRunEntityServer.server';
 export * from './custom/MJConversationDetailEntityServer.server';
 export * from './custom/MJConversationDetailAttachmentEntityServer.server';
@@ -16,6 +17,8 @@ export * from './custom/MJVectorIndexEntityServer.server';
 export * from './custom/MJTagEntityServer.server';
 export * from './custom/MJSearchScopeEntityServer.server';
 export * from './custom/MJTagScopeEntityServer.server';
+export * from './custom/MJCompanyIntegrationEntityServer.server';
+export * from './custom/IntegrationLLMPKCallback';
 export * from './custom/util';
 
 export * from './engines/QueryEngineServer';

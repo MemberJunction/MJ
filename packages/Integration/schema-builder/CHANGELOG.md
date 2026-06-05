@@ -1,5 +1,41 @@
 # @memberjunction/integration-schema-builder
 
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [a1e2776]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/integration-engine@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/schema-engine@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/integration-engine@5.38.0
+  - @memberjunction/schema-engine@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes

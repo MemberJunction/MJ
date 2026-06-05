@@ -88,6 +88,8 @@ import {
 } from '@memberjunction/core-entities';
 
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
+import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
+import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -899,6 +901,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Detects infrastructure-level connection errors (timeout, refused, pool closed)
+     * as opposed to query-level errors (bad SQL, constraint violations).
+     * Delegates to the dialect's driver-specific error classification, with a
+     * fallback for POOL_CLOSED errors thrown by our own code.
+     */
+    protected isConnectionError(e: unknown): boolean {
+        // Dialect-specific check (mssql ConnectionError, pg network codes, etc.)
+        if (this.getDialect()?.IsConnectionError(e)) return true;
+
+        // Our own pool-closed errors are not dialect-specific
+        if (e instanceof Error) {
+            const code = (e as { code?: string }).code ?? '';
+            if (code === 'POOL_CLOSED') return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Returns the batch separator token for the underlying database platform by delegating to
      * the SQLDialect instance returned by `getDialect()`.
      * SQL Server → `'GO'`, PostgreSQL → `''` (no separator needed).
@@ -1528,13 +1549,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 bHasWhere = true;
             }
 
-            // 5. Row-Level Security
-            if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-                const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-                if (rlsWhereClause && rlsWhereClause.length > 0) {
-                    whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-                    bHasWhere = true;
-                }
+            // 5. Row-Level Security (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
+                bHasWhere = true;
             }
 
             // 6. Keyset (AfterKey) seek predicate — only on the data query, NOT the count query.
@@ -1700,6 +1719,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 AggregateExecutionTime: aggregateExecutionTime,
             } as RunViewResult<T>;
         } catch (e) {
+            // Re-throw infrastructure errors (connection timeout, pool closed, etc.)
+            // so callers can distinguish "database is unreachable" from "query returned
+            // no results." Only query-level errors are safe to return as { Success: false }.
+            if (this.isConnectionError(e)) {
+                throw e;
+            }
+
             const exceptionStopTime = new Date();
             LogError(e);
             return {
@@ -2196,11 +2222,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-            if (rlsWhereClause && rlsWhereClause.length > 0) {
-                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-            }
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
 
         return whereSQL;
@@ -2770,6 +2794,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 CacheHit: false
             };
         } catch (e) {
+            if (this.isConnectionError(e)) {
+                throw e;
+            }
+
             LogError(e);
             const errorMessage = e instanceof Error ? e.message : String(e);
             return {
@@ -3129,9 +3157,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
         }).join(' AND ');
 
-        // Append Read RLS filter if user is not exempt
+        // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
         let fullWhere = where;
-        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+        if (user) {
             const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
@@ -3201,10 +3229,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3230,10 +3254,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3785,5 +3805,87 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return maxDate ? maxDate.toISOString() : new Date().toISOString();
+    }
+
+    /**
+     * Server-side semantic ranking pass for {@link ProviderBase.SearchEntity}
+     * (and, by extension, the batched {@link ProviderBase.SearchEntities}).
+     *
+     * The query embedding MUST be generated with the same model that produced
+     * the indexed vectors — otherwise cosine scores compare apples to oranges
+     * and rankings are garbage. We look up the EntityDocument's `AIModelID` via
+     * `AIEngine.Models` to recover the driver class / APIName and call
+     * `EmbedText(model, text)` directly. If the EntityDocument does not specify
+     * a model (or the model isn't loaded) we fall back to
+     * `EmbedTextLocal` (highest-power local model) only as a last resort.
+     *
+     * Vector ranking runs against the in-process `SimpleVectorServiceProvider`,
+     * which rehydrates the vector pool for `entityDocumentId` from
+     * `MJ: Entity Record Documents.VectorJSON` rows.
+     *
+     * Failures (no embedding model available, vector index miss) degrade to an
+     * empty result set so hybrid mode can still surface lexical matches.
+     */
+    protected override async searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        embeddingAIModelId: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        // Ensure AIEngine is loaded so Models / EmbedText are usable. Config()
+        // is a no-op when already initialized — safe to call on every search.
+        try {
+            await AIEngine.Instance.Config(false, contextUser);
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: AIEngine.Config failed: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+
+        let queryVector: number[] | null = null;
+        try {
+            if (embeddingAIModelId) {
+                const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingAIModelId));
+                if (!model) {
+                    LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
+                    return [];
+                }
+                const result = await AIEngine.Instance.EmbedText(model, searchText);
+                queryVector = result?.vector ?? null;
+            } else {
+                // No model on the EntityDocument — last-resort fallback to the
+                // highest-power local embedder. Logged because this path means
+                // indexing-time and query-time models can diverge.
+                LogError(`searchEntitiesSemanticPass: no AIModelID on EntityDocument "${entityDocumentId}"; falling back to highest-power local embedding model. Index/query mismatch possible.`);
+                const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
+                queryVector = embed?.result?.vector ?? null;
+            }
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: embedding generation threw: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+        if (!queryVector) return [];
+
+        const vectorProvider = new SimpleVectorServiceProvider();
+        const result = await vectorProvider.QueryIndex(
+            { id: entityDocumentId, vector: queryVector, topK: overFetch } as never,
+            contextUser
+        );
+        if (!result.success) return [];
+
+        const data = result.data as { matches?: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> } | null;
+        const matches = data?.matches ?? [];
+
+        const out: ScoredCandidate[] = [];
+        for (const m of matches) {
+            const recordId = String(m.metadata?.['RecordID'] ?? '');
+            if (!recordId) continue;
+            out.push({
+                ID: recordId,
+                Score: m.score,
+                Metadata: { entityRecordDocumentId: m.id },
+            });
+        }
+        return out;
     }
 }

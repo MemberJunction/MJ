@@ -1,5 +1,26 @@
 # @memberjunction/ai-llamacpp
 
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [34fe6d1]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-openai@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [30f598d]
+- Updated dependencies [3d739a3]
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ai-openai@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes

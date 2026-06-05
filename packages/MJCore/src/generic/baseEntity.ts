@@ -116,13 +116,23 @@ export class EntityField {
             // asserting status here becuase the flag is on AND the values
             // are different - this avoid assertions during sysops like SetMany that often aren't changing
             // the value of the field
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter');
         }
         if (
               !this.ReadOnly ||
               this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
                                  after that load for a given INSTANCE of an EntityField object we never set a ReadOnly Field*/
             ) {
+            // Strip trailing space-padding on fixed-width string columns
+            // (`nchar`/`char`/`bpchar`). SQL Server / PG right-pad these
+            // up to the declared length on storage and return that padding
+            // in result sets, which would otherwise surface through Get()
+            // and falsely dirty-flag every record where the application
+            // value is the logical (un-padded) form. See
+            // `EntityFieldInfo.FixedWidthColumn` for the source of truth.
+            if (typeof value === 'string' && this._entityFieldInfo.FixedWidthColumn) {
+                value = value.replace(/ +$/, '');
+            }
             this._Value = value;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
@@ -1770,7 +1780,7 @@ export abstract class BaseEntity<T = unknown> {
         // only iterates and reads (`engine.Models.find(m => m.ID === x).Name`) never triggers
         // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
         if (!this._fieldsHydrated && this._raw) {
-            const value = this._raw[FieldName];
+            let value = this._raw[FieldName];
             if (value === undefined) return null;
             // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
             // Date avoids reparsing on every read.
@@ -1779,6 +1789,13 @@ export abstract class BaseEntity<T = unknown> {
                 const d = new Date(value);
                 this._raw[FieldName] = d;
                 return d;
+            }
+            // Mirror the EntityField.Value setter: rtrim padding for fixed-
+            // width string columns. Memoize back into _raw so we don't
+            // re-trim on every read.
+            if (typeof value === 'string' && fi?.FixedWidthColumn) {
+                value = value.replace(/ +$/, '');
+                this._raw[FieldName] = value;
             }
             return value;
         }
@@ -2444,6 +2461,22 @@ export abstract class BaseEntity<T = unknown> {
                     if (valResult.Success) {
                         // Run registered PreSave hooks (e.g., tenant validation)
                         await this.RunPreSaveHooks();
+
+                        // Optimistic-UI hook: every pre-flight check (Validate, ValidateAsync,
+                        // PreSave hooks) has passed and the DB write is imminent. Fire the optional
+                        // OnValidated callback so a UI can render the now-known-valid change before
+                        // the persistence round-trip. A callback bug must never abort the save.
+                        // Excluded on ReplayOnly: replay bypasses validation (valResult is forced
+                        // Success above without running Validate/ValidateAsync), so the "known-valid"
+                        // guarantee the hook relies on does not hold for a replay.
+                        if (_options.OnValidated && !_options.ReplayOnly) {
+                            try {
+                                _options.OnValidated(this);
+                            }
+                            catch (cbErr: any) {
+                                LogError(`EntitySaveOptions.OnValidated callback threw (ignored): ${cbErr?.message ?? String(cbErr)}`);
+                            }
+                        }
 
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {

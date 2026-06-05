@@ -809,8 +809,8 @@ const mjServerConfig = {
 ## References
 
 ### Related Files
-- MJGlobal class: [packages/MJGlobal/src/Global.ts](packages/MJGlobal/src/Global.ts)
-- MJGlobal interfaces: [packages/MJGlobal/src/interface.ts](packages/MJGlobal/src/interface.ts)
+- MJGlobal class: [packages/MJGlobal/src/Global.ts](../../packages/MJGlobal/src/Global.ts)
+- MJGlobal interfaces: [packages/MJGlobal/src/interface.ts](../../packages/MJGlobal/src/interface.ts)
 - Configuration schema: [packages/MJServer/src/config.ts](packages/MJServer/src/config.ts)
 - Server bootstrap: [packages/ServerBootstrap/src/index.ts](packages/ServerBootstrap/src/index.ts)
 - MJAPI entry point: [packages/MJAPI/src/index.ts](packages/MJAPI/src/index.ts)
@@ -818,7 +818,7 @@ const mjServerConfig = {
 
 ### Documentation
 - MemberJunction Developer Guide: [CLAUDE.md](CLAUDE.md)
-- Server Bootstrap README: [packages/ServerBootstrap/README.md](packages/ServerBootstrap/README.md)
+- Server Bootstrap README: [packages/ServerBootstrap/README.md](../../packages/ServerBootstrap/README.md)
 - MJAPI README: [packages/MJAPI/README.md](packages/MJAPI/README.md)
 
 ---

@@ -9,6 +9,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
@@ -242,6 +243,13 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
         return (progress: any) => {
+            // Capture the agent run into the ref as soon as any progress event carries it (even
+            // "noise" steps), so the fire-and-forget liveness pulse can read its id/status mid-run
+            // rather than only after RunAgentInConversation returns.
+            if (progress.metadata?.agentRun) {
+                agentRunRef.current = progress.metadata.agentRun;
+            }
+
             // Only publish progress for significant steps (not initialization noise)
             const significantSteps = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
             if (!significantSteps.includes(progress.step)) {
@@ -373,7 +381,10 @@ export class RunAIAgentResolver extends ResolverBase {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string,
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
-        conversationId?: string
+        conversationId?: string,
+        /** Optional external ref the caller can read to observe the agent run as it becomes available
+         *  (used by the fire-and-forget liveness pulse to enrich heartbeats with the run id/status). */
+        runRef?: { current: MJAIAgentRunEntityExtended | null }
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -407,8 +418,9 @@ export class RunAIAgentResolver extends ResolverBase {
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
             const agentRunner = new AgentRunner(p);
 
-            // Track agent run for streaming (use ref to update later)
-            const agentRunRef = { current: null as any };
+            // Track agent run for streaming (use ref to update later). Reuse the caller-supplied
+            // ref when provided so the fire-and-forget liveness pulse can observe the run.
+            const agentRunRef = runRef ?? { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
@@ -1225,12 +1237,23 @@ export class RunAIAgentResolver extends ResolverBase {
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
         conversationId?: string
     ): void {
+        // Ref the liveness pulse reads to enrich heartbeats once the run is created.
+        const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
+        const pulse = startLivenessPulse({
+            pubSub,
+            sessionId,
+            resolver: 'RunAIAgentResolver',
+            readStatus: () => runRef.current
+                ? { runId: runRef.current.ID, status: runRef.current.Status }
+                : undefined,
+        });
+
         // Execute in background - errors are handled within, not propagated
         this.executeAIAgent(
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1249,7 +1272,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage })
             };
             this.PublishStreamingUpdate(pubSub, errorCompletionData, userPayload);
-        });
+        }).finally(() => pulse.stop());
     }
 
     /**
@@ -1298,13 +1321,13 @@ export class RunAIAgentResolver extends ResolverBase {
         // Reverse to get chronological order (oldest first)
         const details = detailsResult.Results.reverse();
 
-        // Get all message IDs for batch loading attachments
+        // Get all message IDs for batch loading artifacts
         const messageIds = details.map(d => d.ID);
 
-        // Batch load all attachments for these messages
-        const attachmentsByDetailId = await attachmentService.GetAttachmentsBatch(messageIds, contextUser, provider);
-
-        // Batch load input artifacts for these messages
+        // Batch load input artifacts for these messages. Since the backfill migration
+        // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
+        // ConversationDetailAttachment rows to artifact pairs, the artifact junction
+        // is the single source of truth — no separate attachment query needed.
         const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
 
         // Build ChatMessage array with attachments and input artifacts
@@ -1312,69 +1335,9 @@ export class RunAIAgentResolver extends ResolverBase {
 
         for (const detail of details) {
             const role = this.mapDetailRoleToMessageRole(detail.Role);
-            const attachments = attachmentsByDetailId.get(detail.ID) || [];
-
-            // Get attachment data with content URLs (handles both inline and FileID storage)
-            const attachmentDataPromises = attachments.map(att =>
-                attachmentService.GetAttachmentData(att, contextUser, provider)
-            );
-            const attachmentDataResults = await Promise.all(attachmentDataPromises);
-
-            // Decide inline vs. tools per-attachment via the artifact-type registry
-            // and the pure RouteArtifact() function. See plans/artifact-attachment-unification.md.
-            //
-            // Note on the modality check: this resolver doesn't know which model will
-            // ultimately run, so RouteArtifact's modality predicate is passed as a no-op.
-            // Model-specific modality enforcement is the driver layer's responsibility;
-            // a follow-up PR can thread the active model through here to surface modality
-            // mismatches at the hard-error path described in plan §4.
             const validAttachments: AttachmentData[] = [];
 
-            for (const result of attachmentDataResults) {
-                if (!result) continue;
-                // Storage-unified attachments link forward to their artifact version
-                // via ArtifactVersionID; the artifact path handles delivery, so skip
-                // the attachment row here to avoid double-processing.
-                if (result.attachment.ArtifactVersionID) {
-                    continue;
-                }
-                const mime = result.attachment.MimeType || '';
-                const fileName = result.attachment.FileName ?? '';
-                const ext = fileName.includes('.') ? fileName.split('.').pop() : undefined;
-                const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mime, ext);
-
-                const decision = RouteArtifact({
-                    typeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
-                    forceToolsOnly: false,
-                    mimeType: mime,
-                    sizeBytes: result.attachment.FileSizeBytes ?? 0,
-                    inlineSizeCap: INLINE_SIZE_CAP,
-                    modelSupportsModality: () => true,
-                    modelName: '<resolver>',
-                    artifactTypeName: artifactType?.Name ?? mime,
-                });
-
-                if (decision.delivery !== 'inline') {
-                    // Tools or error: skip inline embedding. The agent reaches the
-                    // bytes via artifact tools. Driver layer handles modality enforcement.
-                    if (decision.delivery === 'tools' && decision.annotation) {
-                        LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
-                    }
-                    continue;
-                }
-                validAttachments.push({
-                    type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
-                    mimeType: result.attachment.MimeType,
-                    fileName: result.attachment.FileName ?? undefined,
-                    sizeBytes: result.attachment.FileSizeBytes ?? undefined,
-                    width: result.attachment.Width ?? undefined,
-                    height: result.attachment.Height ?? undefined,
-                    durationSeconds: result.attachment.DurationSeconds ?? undefined,
-                    content: result.contentUrl
-                });
-            }
-
-            // Get input artifacts for this message — same routing logic, plus ForceToolsOnly.
+            // Get input artifacts for this message — routing via RouteArtifact.
             const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
             for (const artifactVersion of inputArtifacts) {
                 const artifactMime = artifactVersion.MimeType || '';

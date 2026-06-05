@@ -7,30 +7,18 @@
             <mj-stat-badge [Count]="CurrentFilteredCount" [Total]="CurrentTotalCount" Label="items"></mj-stat-badge>
         </div>
         <div actions>
-            <mj-filter-popover
-                [ActiveCount]="ActiveFilterCount"
-                [ShowClearAll]="ActiveFilterCount > 0"
-                (ClearAllRequested)="resetPopoverFilters()">
-                <mj-filter-panel
-                    [Fields]="mcpFilterFields"
-                    [Values]="mcpFilterValues"
-                    (ValuesChange)="onFilterValuesChange($event)"
-                    (Reset)="resetPopoverFilters()">
-                </mj-filter-panel>
-            </mj-filter-popover>
-
             <!-- Action Buttons based on tab -->
             @switch (ActiveTab) {
                 @case ('servers') {
                     <button mjButton variant="primary" size="sm" (click)="createServer()">
                         <i class="fa-solid fa-plus"></i>
-                        Add Server
+                        <span class="action-btn-label">Add Server</span>
                     </button>
                 }
                 @case ('connections') {
                     <button mjButton variant="primary" size="sm" (click)="createConnection()">
                         <i class="fa-solid fa-plus"></i>
-                        Add Connection
+                        <span class="action-btn-label">Add Connection</span>
                     </button>
                 }
                 @case ('tools') {
@@ -43,11 +31,11 @@
                         (click)="toggleScalableMode(!useScalablePagination)"
                         [title]="useScalablePagination ? 'Scale mode on: virtual scroll, paginated' : 'Enable scale mode for large tool sets'">
                         <i class="fa-solid" [class.fa-bolt]="useScalablePagination" [class.fa-bolt-lightning]="!useScalablePagination"></i>
-                        Scale: {{ useScalablePagination ? 'ON' : 'OFF' }}
+                        <span class="action-btn-label">Scale: {{ useScalablePagination ? 'ON' : 'OFF' }}</span>
                     </button>
                     <button mjButton variant="primary" size="sm" (click)="openTestToolDialog()">
                         <i class="fa-solid fa-play"></i>
-                        Test Tool
+                        <span class="action-btn-label">Test Tool</span>
                     </button>
                 }
                 @case ('logs') {
@@ -67,6 +55,17 @@
                 [Value]="CurrentFilters.searchTerm"
                 (ValueChange)="onSearchTermChange($event)">
             </mj-page-search>
+            <mj-filter-popover
+                [ActiveCount]="ActiveFilterCount"
+                [ShowClearAll]="ActiveFilterCount > 0"
+                (ClearAllRequested)="resetPopoverFilters()">
+                <mj-filter-panel
+                    [Fields]="mcpFilterFields"
+                    [Values]="mcpFilterValues"
+                    (ValuesChange)="onFilterValuesChange($event)"
+                    (Reset)="resetPopoverFilters()">
+                </mj-filter-panel>
+            </mj-filter-popover>
         </div>
     </mj-page-header>
 

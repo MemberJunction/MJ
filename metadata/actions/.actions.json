@@ -136,6 +136,24 @@
             "lastModified": "2026-05-24T13:05:30.488Z",
             "checksum": "fdfe80297a3785821fdb9e88203aae1d65aa89c8ab391e4201ad399675c6ea87"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityDocumentType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the EntityDocumentType to vectorize against. Defaults to 'Record Duplicate' (original behavior). Pass 'Search' to drive the search-tier vector pool used by Provider.SearchEntity / Search Entity action.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B4900903-5490-46BA-A9C0-F7D4225E0FAA"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T02:25:08.595Z",
+            "checksum": "3622df732b855e8676e619bf7e4401d8ac997fd42373e74b722cb55c6bf099fb"
+          }
         }
       ],
       "MJ: Action Result Codes": [

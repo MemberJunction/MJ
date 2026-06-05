@@ -23,6 +23,7 @@ import {
     ActionExecutionResult,
     CookieEntry,
 } from '../types/browser.js';
+import { ClassifyConnectEndpoint } from './connect-endpoint.js';
 
 export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private browser: Browser | null = null;
@@ -30,6 +31,11 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private page: Page | null = null;
 
     private config: BrowserConfig = new BrowserConfig();
+
+    /** True when we attached to an external browser rather than launching one. */
+    private connected: boolean = false;
+    /** True when WE created the context (so Close() is allowed to close it). */
+    private ownsContext: boolean = true;
 
     /** Per-domain extra headers. Key = domain, Value = headers map */
     private domainHeaders: Map<string, Record<string, string>> = new Map();
@@ -55,11 +61,54 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             );
         }
 
-        this.browser = await chromium.launch({
-            headless: config.Headless,
-            slowMo: config.SlowMo,
-        });
+        if (config.Connect) {
+            // Attach to an already-running browser. We don't own its lifecycle,
+            // so Close() must not call browser.close().
+            const method = ClassifyConnectEndpoint(config.Connect, config.ConnectType);
+            this.browser = method === 'server'
+                ? await chromium.connect(config.Connect)
+                : await chromium.connectOverCDP(config.Connect);
+            this.connected = true;
+        } else {
+            this.browser = await chromium.launch({
+                headless: config.Headless,
+                slowMo: config.SlowMo,
+                args: config.Args,
+            });
+            this.connected = false;
+        }
 
+        // Decide context strategy. When attached AND ReuseExistingContext is
+        // requested, reuse the running browser's first context (CDP always
+        // exposes the default context; a fresh Playwright server has none).
+        if (this.connected && config.ReuseExistingContext) {
+            const existing = this.browser.contexts();
+            if (existing.length > 0) {
+                this.context = existing[0];
+                this.ownsContext = false;
+                // Viewport/UserAgent/InitialLocalStorage are ignored on reused
+                // contexts — Playwright only honors them at newContext() time.
+            } else {
+                this.context = await this.createOwnContext(config);
+                this.ownsContext = true;
+            }
+        } else {
+            this.context = await this.createOwnContext(config);
+            this.ownsContext = true;
+        }
+
+        this.page = await this.context.newPage();
+
+        // Set default navigation timeout
+        this.page.setDefaultNavigationTimeout(config.NavigationTimeoutMs);
+        this.page.setDefaultTimeout(config.ActionTimeoutMs);
+    }
+
+    /**
+     * Create a fresh BrowserContext owned by this adapter. Applies viewport,
+     * user agent, and any InitialLocalStorage seed via storageState.
+     */
+    private async createOwnContext(config: BrowserConfig): Promise<BrowserContext> {
         // Build storageState if InitialLocalStorage is configured.
         // This pre-populates localStorage before any page loads, avoiding
         // race conditions with SPA auth SDKs that read localStorage on init.
@@ -73,7 +122,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             }
             : undefined;
 
-        this.context = await this.browser.newContext({
+        return this.browser!.newContext({
             viewport: {
                 width: config.ViewportWidth,
                 height: config.ViewportHeight,
@@ -81,31 +130,36 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             userAgent: config.UserAgent,
             ...(storageState ? { storageState } : {}),
         });
-
-        this.page = await this.context.newPage();
-
-        // Set default navigation timeout
-        this.page.setDefaultNavigationTimeout(config.NavigationTimeoutMs);
-        this.page.setDefaultTimeout(config.ActionTimeoutMs);
     }
 
     public override async Close(): Promise<void> {
-        // Tear down in reverse order: page → context → browser
+        // Tear down in reverse order: page → context → browser.
+        // Ownership rules:
+        //   - Always close the page we opened.
+        //   - Only close the context if WE created it (ownsContext).
+        //   - Only close the browser if WE launched it (!connected).
+        // Swallow errors — partial cleanup must not mask the original failure.
         if (this.page) {
             await this.page.close().catch(() => {});
             this.page = null;
         }
 
         if (this.context) {
-            await this.context.close().catch(() => {});
+            if (this.ownsContext) {
+                await this.context.close().catch(() => {});
+            }
             this.context = null;
         }
 
         if (this.browser) {
-            await this.browser.close().catch(() => {});
+            if (!this.connected) {
+                await this.browser.close().catch(() => {});
+            }
             this.browser = null;
         }
 
+        this.connected = false;
+        this.ownsContext = true;
         this.domainHeaders.clear();
         this.routeInterceptorActive = false;
     }
@@ -196,12 +250,61 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 await page.reload({ waitUntil: 'load' });
                 break;
 
+            case 'Drag':
+                await this.executeDrag(page, action);
+                break;
+
             default: {
                 // Exhaustive check — TypeScript will error if a case is missing
                 const _exhaustive: never = action;
                 throw new Error(`Unknown browser action type: ${JSON.stringify(_exhaustive)}`);
             }
         }
+    }
+
+    /**
+     * Execute a drag action. Uses bounding box centroids when provided,
+     * otherwise uses raw start/end X/Y coordinates.
+     *
+     * Implementation: mouseDown at start → multiple intermediate mouseMove
+     * steps → mouseUp at end. The intermediate steps matter because HTML5
+     * drag-and-drop handlers (e.g., AG Grid column reorder) only fire
+     * `dragover` once they observe sustained mouse motion.
+     */
+    private async executeDrag(
+        page: Page,
+        action: {
+            StartX: number;
+            StartY: number;
+            EndX: number;
+            EndY: number;
+            StartBoundingBox?: { XMin: number; YMin: number; XMax: number; YMax: number };
+            EndBoundingBox?: { XMin: number; YMin: number; XMax: number; YMax: number };
+            Steps: number;
+        }
+    ): Promise<void> {
+        let startX = action.StartX;
+        let startY = action.StartY;
+        let endX = action.EndX;
+        let endY = action.EndY;
+
+        if (action.StartBoundingBox) {
+            startX = (action.StartBoundingBox.XMin + action.StartBoundingBox.XMax) / 2;
+            startY = (action.StartBoundingBox.YMin + action.StartBoundingBox.YMax) / 2;
+        }
+        if (action.EndBoundingBox) {
+            endX = (action.EndBoundingBox.XMin + action.EndBoundingBox.XMax) / 2;
+            endY = (action.EndBoundingBox.YMin + action.EndBoundingBox.YMax) / 2;
+        }
+
+        const steps = Math.max(1, Math.floor(action.Steps || 10));
+
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        // Playwright's `steps` option walks the mouse via N intermediate
+        // moves, which is what HTML5 dnd needs to register the drag.
+        await page.mouse.move(endX, endY, { steps });
+        await page.mouse.up();
     }
 
     /**

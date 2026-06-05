@@ -374,9 +374,9 @@ All providers include built-in rate limit handling with automatic retry:
 
 ## Related Packages
 
-- [@memberjunction/actions](../../Engine/readme.md) - Action execution engine
+- [@memberjunction/actions](../../Engine/README.md) - Action execution engine
 - [@memberjunction/actions-base](../../Base/README.md) - Base classes and interfaces
-- [@memberjunction/core-actions](../../CoreActions/readme.md) - Pre-built core actions
+- [@memberjunction/core-actions](../../CoreActions/README.md) - Pre-built core actions
 - [@memberjunction/actions-bizapps-accounting](../Accounting/README.md) - Accounting integrations
 - [@memberjunction/actions-bizapps-lms](../LMS/README.md) - LMS integrations
 - [@memberjunction/actions-bizapps-crm](../CRM/README.md) - CRM integrations

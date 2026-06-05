@@ -1,8 +1,12 @@
 import { LogError } from "@memberjunction/core";
+import { MJTestRunEntity } from "@memberjunction/core-entities";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { SafeJSONParse } from "@memberjunction/global";
-import { FireAndForgetHelper } from "./fireAndForgetHelper";
+import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
+
+/** Mutable holder for the most recent test run id observed on the PubSub stream. */
+interface TestRunIdRef { id?: string; }
 
 /**
  * Parameters for running a test
@@ -122,6 +126,7 @@ export class GraphQLTestingClient {
             const mutation = this.buildRunTestMutation();
             const variables = this.buildRunTestVariables(params);
 
+            const runIdRef: TestRunIdRef = {};
             return await FireAndForgetHelper.Execute<RunTestResult>({
                 dataProvider: this._dataProvider,
                 mutation,
@@ -131,9 +136,11 @@ export class GraphQLTestingClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isTestCompletionEvent(parsed, params.testId),
                 extractResult: (parsed) => this.extractTestResult(parsed),
-                onMessage: params.onProgress
-                    ? (parsed) => this.forwardTestProgress(parsed, params.onProgress!)
-                    : undefined,
+                onMessage: (parsed) => {
+                    this.captureTestRunId(parsed, runIdRef);
+                    if (params.onProgress) this.forwardTestProgress(parsed, params.onProgress);
+                },
+                onStall: () => this.reconcileTestRun(runIdRef),
                 createErrorResult: (msg) => ({
                     success: false,
                     errorMessage: msg,
@@ -320,6 +327,58 @@ export class GraphQLTestingClient {
             parsed.type === 'FireAndForgetSuiteComplete' &&
             data?.type === 'complete' &&
             data?.suiteId === suiteId;
+    }
+
+    // ===== Test Run Reconciliation (idle-stall recovery) =====
+
+    /**
+     * Capture the test run id from test progress messages so the reconciliation
+     * hook has a handle. Early progress may carry the test *definition* id until
+     * the run record exists; it self-corrects once real progress flows.
+     */
+    private captureTestRunId(parsed: Record<string, unknown>, ref: TestRunIdRef): void {
+        if (parsed.resolver !== 'RunTestResolver') return;
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const id = data?.testRunId as string | undefined;
+        if (id) {
+            ref.id = id;
+        }
+    }
+
+    /**
+     * Reconcile against the persisted Test Run when the client idle timer expires.
+     * 'Pending'/'Running' means execution is still in progress (keep waiting);
+     * any terminal status resolves from the record (recovers a lost completion event).
+     */
+    private async reconcileTestRun(ref: TestRunIdRef): Promise<StallDecision<RunTestResult>> {
+        if (!ref.id) {
+            return 'continue'; // no handle yet — bounded by maxStallReconciles
+        }
+
+        const view = await this._dataProvider.RunView<MJTestRunEntity>({
+            EntityName: 'MJ: Test Runs',
+            ExtraFilter: `ID='${ref.id}'`,
+            ResultType: 'entity_object',
+            BypassCache: true, // true DB state — server wrote this via a different provider
+        });
+
+        const run = view.Success ? view.Results?.[0] : undefined;
+        if (!run) {
+            return 'continue'; // transient read miss / definition id — bounded by maxStallReconciles
+        }
+
+        if (run.Status === 'Pending' || run.Status === 'Running') {
+            return 'continue';
+        }
+
+        const success = run.Status === 'Passed';
+        return {
+            resolve: {
+                success,
+                errorMessage: success ? undefined : `Test run ${run.Status}`,
+                result: null,
+            },
+        };
     }
 
     // ===== Result Extraction =====

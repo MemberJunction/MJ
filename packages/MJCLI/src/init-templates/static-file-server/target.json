@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "name": "static-server",
+  "kind": "generic-web",
+  "description": "Mode D demo: target the static-file-server container that the docker-compose.app.yml overlay brings up alongside the test-runner.",
+
+  "baseUrl": "http://static-server:3000",
+  "allowedDomains": ["static-server"],
+
+  "auth": { "bindings": [] },
+
+  "suite": "Static Server Mode D Suite",
+  "extraMetadataDirs": [
+    "/app/static-server-metadata"
+  ]
+}

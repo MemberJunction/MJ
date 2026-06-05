@@ -5,11 +5,13 @@ import {
   ViewChild, ViewEncapsulation
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FormWidthMode } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
@@ -282,6 +284,26 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       return this.fc.getFormWidthMode();
     }
     return this.WidthMode;
+  }
+
+  /**
+   * Whether the in-form toolbar renders at all. Driven by the form's
+   * `Config.Toolbar`: an explicit `null` (the dialog/slide-in default) hides
+   * the entire toolbar so the surrounding chrome can own Save/Cancel/title.
+   * Any other value (undefined or a partial config) keeps the toolbar.
+   */
+  get EffectiveShowToolbar(): boolean {
+    return ResolveFormShowToolbar(this.fc?.Config);
+  }
+
+  /**
+   * Effective toolbar config: the bound `ToolbarConfig` (or the default)
+   * with the form's `Config.Toolbar` partial merged on top. This is the
+   * no-regeneration bridge — generated templates never bind `[Config]`,
+   * yet per-instance toolbar tweaks still take effect through `fc.Config`.
+   */
+  get EffectiveToolbarConfig(): FormToolbarConfig {
+    return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
   }
 
   get EffectiveSearchFilter(): string {
@@ -822,7 +844,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Label for the currently-selected variant (or "Default form" if none). */
   get CurrentVariantLabel(): string {
-    const v = this.EffectiveVariants?.find(x => x.ID === this.EffectiveCurrentVariantID);
+    const v = this.EffectiveVariants?.find(x => UUIDsEqual(x.ID, this.EffectiveCurrentVariantID));
     return v?.Label ?? 'Default form';
   }
 

@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 5.39.0
+
+### Minor Changes
+
+- 1b0f355: Loop agent prompt improvements for cache optimization. Capture cache-read and cache-write token counts from every LLM provider that reports them (Anthropic, OpenAI, Gemini, Groq, Cerebras, Fireworks, Azure, Bedrock) and surface them on AI Prompt Runs and Agent Runs. Adds `CacheReadTokens`/`CacheWriteTokens` columns to `AIPromptRun` (migration included — run CodeGen after applying), normalizes cache-token accounting in `baseModel` so usage totals are consistent across providers, and enables Gemini implicit/explicit cache reporting. The Prompt Run form and Agent Run analytics now display cache hit/write token breakdown
+
+### Patch Changes
+
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [30f598d]
+- Updated dependencies [3d739a3]
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes

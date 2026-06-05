@@ -166,5 +166,5 @@ mj-timeline {
 
 No external UI library dependencies. Pure Angular + HTML/CSS implementation.
 
-- [@memberjunction/core](../../MJCore/README.md) -- Optional, for entity data sources
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- Optional, for entity types
+- [@memberjunction/core](../../../MJCore/readme.md) -- Optional, for entity data sources
+- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- Optional, for entity types
