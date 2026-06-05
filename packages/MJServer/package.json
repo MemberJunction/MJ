@@ -50,6 +50,7 @@
     "@memberjunction/api-keys": "5.39.0",
     "@memberjunction/auth-providers": "5.39.0",
     "@memberjunction/codegen-lib": "5.39.0",
+    "@memberjunction/communication-engine": "5.39.0",
     "@memberjunction/communication-ms-graph": "5.39.0",
     "@memberjunction/communication-sendgrid": "5.39.0",
     "@memberjunction/communication-types": "5.39.0",
