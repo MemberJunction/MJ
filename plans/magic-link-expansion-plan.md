@@ -18,6 +18,26 @@ This doc is the single source of truth for that. It maps each comment to a dispo
 
 ---
 
+## Revision — Craig's direction (2026-06-05)
+
+cadam11 answered the v1 Open Questions. Three points change the design's *shape* (not its mechanics); recorded here so the rest of the doc reads in their light.
+
+**1. The scope union is the feature, not a bug to prevent.** v1 Open Question 1 asked "how do we avoid the role-union problem." That framing is wrong. A visitor who clicks two shared links *should* hold the union of what both links granted — "I only ever have what two people explicitly handed me." That's correct capability semantics. The thing to avoid is never the union itself; it's **storing the union as roles on a shared identity**, because then every anon visitor accretes onto the same user and you get the superuser problem. Keep scope **per-session / claims-based** and accretion is structurally impossible. So the anon model is a **shadow `User` table** — rows that aren't real users, just anon sessions — each session unioning the scopes granted by the links it has redeemed, carried as claims. (This generalizes §B below; §B was already claims-based, but framed the union defensively. It's a designed behavior.)
+
+**2. `(Application, Role)` is too broad to be the primary scoping unit.** A role "drags along way more than the one thing you actually meant to share." The intended unit of sharing is a **single FE route plus its supporting resources**:
+
+```
+[link] ---< [one UI view / FE route] ---< [N supporting resources]
+```
+
+The v1 plan kept `(app, role)` as the Phase 1/2 core and parked resource/route scoping in Phase 5 as an *addition*. That under-commits. Resource/route scope is the **intended** model; the role path is the coarse/legacy one that ships first only because it already works. The genuinely unsettled design problem — the one the bot dodged by falling back to `(app, role)` — is **how a "route + dependent resources" capability maps onto MJ's existing RBAC** (see rewritten Open Question 1). That mapping is the gate on the resource-scoping phase, not an implementation detail of it.
+
+**3. Default to short, re-mintable session tokens for revocability (Open Question 4).** Treat links as revocable shares, not durable permalinks: re-mint a short session JWT per load rather than issue one long-lived token you can't pull back. v1 already composes this way (§H/§D) but defaulted re-minting only for embed. Broaden it — re-minting on each load is the **default** for any share you'd want to revoke; long-lived tokens are the exception that a scenario opts into.
+
+Q2 (vendor/tier model) and Q3 (audit PII/retention) were not addressed and remain open.
+
+---
+
 ## Feedback traceability matrix
 
 Every comment on the PR, its disposition, and the phase that addresses it.
@@ -102,11 +122,14 @@ Perf guard: do **not** write a row per request. Log only on **session establishm
 
 Today `Email` is `NOT NULL` and **is** the identity; redemption provisions/links a per-email user and enforcement rides on that user's DB roles. That breaks for truly-anon links.
 
-- Seed **one** shared `Anonymous` user (fixed UUID, `Type='User'`, `IsActive`), mirroring the system-user pattern in `UserCache`.
-- Add an invite **`IdentityMode`**: `email` (existing behavior) | `anonymous` (all redemptions resolve to the shared Anonymous user; `Email` optional).
-- **Critical enforcement split** (Pranav + Amith agreed): scope for anon links **cannot** ride on the Anonymous user's roles — every anon link would accrete scope and the Anonymous user becomes a superuser. So anon enforcement is **claims-based**: the JWT carries the scope (resource/app/capability) and a server-side guard validates against the *claims*, not the user's role set. The email mode keeps the existing role-based path. Two paths, explicitly.
+- Seed **one** shared `Anonymous` *principal* (fixed UUID, `Type='User'`, `IsActive`), mirroring the system-user pattern in `UserCache`. This is a **shadow user** — an attribution anchor for rows/audit, **not** a permission holder. No scope ever attaches to its role set.
+- Add an invite **`IdentityMode`**: `email` (existing behavior) | `anonymous` (all redemptions resolve to the shared Anonymous principal; `Email` optional).
+- **The scope union is a designed behavior, not a hazard** (Craig, 2026-06-05). A visitor who redeems two anon links holds the union of both links' scopes — that's correct capability semantics. The only failure mode is representing that union as *roles on the shared Anonymous user*, which would turn it into a superuser for every visitor at once. So anon enforcement is **claims-based and per-session**: each session's JWT carries the union of scopes (resource/app/capability) granted by the links *that session* has redeemed, and a server-side guard validates against the *claims*, not the user's role set. Accretion across visitors is then structurally impossible — there is no shared mutable role set to accrete onto. The email mode keeps the existing role-based path. Two paths, explicitly.
+- **Open mechanics (Phase 4 design):** how a session accumulates scope across multiple redemptions — re-mint a fresh JWT carrying the widened claim union on each new redemption (server reads prior session's claims, adds the new link's scope, re-mints). The session token, not any DB row, is the carrier of the union. This is why short re-mintable tokens (Revision §3) and the anon model fit together.
 
-### C. URL / resource scoping (Phase 5)
+### C. URL / resource scoping (Phase 5) — *the intended sharing model, per Craig*
+
+Per the Revision above, this is not a bolt-on to `(app, role)` — it **is** the sharing unit MJ is actually trying to ship: one link → one FE route → the N resources that route depends on. The role path is the coarse fallback. The hard part isn't storing the scope; it's mapping a "route + dependent resources" capability onto MJ's RBAC (Open Question 1).
 
 Add a scope dimension beyond `(Application, Role)`:
 
@@ -140,11 +163,11 @@ In `provisionUser` / `ensureRoleAndApp` (`MagicLinkService.ts:283–409`), befor
 
 Robert: embed should be a feature gated to certain Application-Vendor tiers (Skip's external-embed feature). Pranav's constraint: keep **licensing out of the auth token** — enforce at issuance.
 
-Design:
+Design (resolved per Open Question 2):
 - Introduce an invite **`Kind`**: `app-session` | `resource-share` | `anonymous-embed`. Kind drives which scope columns/claims are valid and which capability gate applies.
 - **Instance-level** gate: config `allowedInviteKinds` — a deployment opts into embed at all.
-- **Vendor/tier** gate at **`/create`** (issuance time, not in the token): a capability-check seam the calling vendor (e.g. Skip) implements against its own tier model. `/create` refuses to mint an `anonymous-embed` link unless the capability check passes.
-- **Dependency / open question:** this assumes a place to hang vendor-tier capability. MJ has an `Application` entity and Application-Vendor concepts, but no built-out licensing/tier model surfaced in exploration. Phase 7 either (a) hangs the gate on a capability flag on `Application`, or (b) introduces a minimal `ApplicationCapability` construct. **Needs Robert/Amith input** before building — see Open Questions.
+- **Pluggable capability resolver** at **`/create`** (issuance time, not in the token): an injectable `IInviteCapabilityProvider.canIssue(kind, application, issuingUser)` resolved via `@RegisterClass`. `/create` refuses to mint a gated `Kind` unless the resolver admits it.
+- **No new licensing entity.** MJ stays tier-agnostic. The **default** resolver reads a coarse `Application`-scoped setting (e.g. `ExternalEmbedEnabled` via the existing settings mechanism — not a new column/table), giving no-vendor instances a no-code toggle. Vendors (Skip) register their **own** resolver against their tier model; MJ never learns what a "tier" is. Keeps auth and licensing decoupled (Craig's constraint).
 
 ### H. JWT lifetime (documentation only)
 
@@ -184,7 +207,7 @@ Dependencies: 1 → (2, 3 independent) → 4 → 5 → 6 → 7. Phase 3 can proc
 
 | Phase | Change |
 |---|---|
-| 1 | New table `MagicLinkRedemption` (entity `MJ: Magic Link Redemptions`); new RLS filter metadata on User Roles / User Applications / Application Roles; hash column → base64url (length review); config: `provisioningGuard` |
+| 1 | New table `MagicLinkRedemption` (entity `MJ: Magic Link Redemptions`); new RLS filter metadata on User Roles / User Applications / Application Roles; hash column → base64url (length review); config: `provisioningGuard`, `audit.retentionDays`, `audit.ipStorage` (Q3) |
 | 2 | New child tables `MagicLinkInviteApplication`, `MagicLinkInviteRole`; deprecate single `ApplicationID`/`RoleID` |
 | 3 | Seed `MJ: Audit Log Types` rows (metadata, not migration INSERT — via `metadata/` per repo convention) |
 | 4 | Seed Anonymous user; `MagicLinkInvite.IdentityMode`; `Email` → nullable |
@@ -212,7 +235,20 @@ Full-flow harness throughout: real redemptions in fresh incognito windows (fresh
 
 ## Open questions for reviewers
 
-1. **Multi-scope enforcement (Phase 2→later):** schema widens to multi-app/role now, but *when* do we enable redeeming a link into multiple apps/roles, and how do we avoid the role-union problem (a user accreting stacked scopes)? Per-session scoping vs additive provisioning — needs a decision before multi is switched on.
-2. **Vendor/tier model (Phase 7):** does MJ get a capability flag on `Application`, or a new `ApplicationCapability`/license construct? Who owns the tier source of truth (Skip vs MJ instance)? This is the least-settled area and blocks Phase 7.
-3. **Audit PII/retention:** storing IP + User-Agent on every redemption/session — retention window and any anonymization policy?
-4. **Anon embed token rotation:** short JWT re-minted per IFRAME load vs one long-lived JWT — confirm the rotation strategy and whether re-mint needs a silent endpoint.
+The first and last are now **resolved by Craig** (recorded for trail); 2 and 3 carry **proposed answers** (Craig didn't touch them) for reviewer sign-off.
+
+**1. ~~Multi-scope enforcement~~ → Route+resource capability ↦ RBAC mapping *(the real open design problem)*.** Craig settled the union question (it's a feature; carry it as per-session claims — Revision §1). What's still genuinely open is the thing the v1 plan dodged by falling back to `(app, role)`: **how does a "one FE route + its N dependent resources" capability express itself in MJ's permission model at enforcement time?** Concretely:
+   - A route isn't a permission primitive in MJ — entities, views, queries, and resources are. So "share this route" has to *resolve* to a set of resource-level grants the server can actually check. Is that resolution (a) computed at issuance and frozen into the invite/claims, or (b) computed at runtime from the route's live dependency graph (which §C/#13 says we can't fully enumerate up front)?
+   - For role links the server enforces via role perms + RLS. For claims-based resource links there is **no role** — so we need a server-side **claims authorizer** that, given `mj_resource_*` claims, admits exactly the reads that resource legitimately needs and nothing else. Designing that admit-list semantics (especially for transitive view/query access, #13) is the gate on Phase 5. **Needs a design pass before building.**
+
+**2. Vendor/tier model (Phase 7) — proposed answer: keep MJ tier-agnostic; gate via a pluggable issuance seam, not a licensing entity.** Craig's earlier inline call stands: licensing stays *out* of the token and the invite table, enforced at `/create`. Building on that:
+   - **No new MJ licensing/`ApplicationCapability` construct.** MJ has no tier model today and shouldn't grow one to serve this (YAGNI; it would couple auth to licensing — the exact thing Craig warned against).
+   - **Two gating layers at `/create`:** (a) **instance config `allowedInviteKinds`** — the deployment-wide on/off for embed at all; (b) a **pluggable capability resolver** — an injectable interface `IInviteCapabilityProvider.canIssue(kind, application, issuingUser)` resolved via `@RegisterClass`. `/create` refuses to mint a gated `Kind` (e.g. `anonymous-embed`) unless the resolver says yes.
+   - **Who owns the tier truth:** the **vendor**, not MJ. MJ ships a *default* resolver that reads a coarse `Application`-scoped setting (e.g. an `ExternalEmbedEnabled` flag via the existing settings mechanism — **not** a new column/table) so no-vendor instances still have a no-code toggle. Skip (or any vendor) registers its **own** resolver that consults its tier model. MJ never learns what a "tier" is. This keeps auth and licensing decoupled and evolving independently.
+
+**3. Audit PII/retention — proposed answer: ship controls + conservative defaults, not a baked-in policy.** IP+UA are personal data; the right call is to expose the knobs and let the deploying org set policy to its privacy posture, rather than MJ hardcoding one.
+   - **Retention is config-driven + purged by a scheduled job.** `magicLink.audit.retentionDays` (default 365 for the security-sensitive redemption audit). The general session audit (Phase 3) lives in `MJ: Audit Logs` — align with that table's own retention rather than inventing a parallel window; if it has none, default it shorter (e.g. 90) since it's higher-volume and operational, not forensic. Reuse MJ scheduled actions for the purge (keyset-paginate per the deep-pagination guide).
+   - **Anonymization knobs.** `audit.ipStorage: 'full' | 'truncated' | 'hashed' | 'none'`. *Truncated* drops the last IPv4 octet / low IPv6 bits; *hashed* stores a salted hash so you can correlate "same client" without keeping the raw IP. **Different defaults per tier, matching purpose:** redemption audit defaults `full` (you want forensics on token scanning/brute-force — that's the whole point of logging failures); general session audit defaults `truncated` (high-volume, operational).
+   - **The honest framing for reviewers:** this is a deployment policy decision. MJ provides the controls + sane defaults + guide documentation; it does not ship a one-size GDPR stance.
+
+**4. ~~Anon embed token rotation~~ → resolved (Craig).** Re-mint a short session JWT per load is the **default** for revocable shares, not just embed (Revision §3). Residual *mechanics* (not a policy question): an embed reload re-mints **without** a fresh redemption — the link is already consumed — so a silent re-mint endpoint validates the still-valid invite (`ExpiresAt`/`MaxUses` re-checked) and reissues the short JWT carrying the same scope claims. For multi-link anon sessions (§B), that endpoint also re-emits the accumulated claim union. Spec this endpoint in Phase 4/6; no further reviewer decision needed.
