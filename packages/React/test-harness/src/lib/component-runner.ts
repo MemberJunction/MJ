@@ -119,6 +119,12 @@ export interface ComponentExecutionResult {
   renderCount?: number;
   lintViolations?: Violation[];
   /**
+   * Raw Babel sourcemaps keyed by component name. Populated when `debug: true`
+   * (which enables Babel sourcemap generation in the compiler). Used by callers
+   * to translate runtime stack frame line numbers back to original JSX positions.
+   */
+  sourceMaps?: Record<string, any>;
+  /**
    * If true, the browser/page crashed during execution or cleanup.
    * This is an infrastructure issue, not a code issue.
    */
@@ -579,6 +585,17 @@ export class ComponentRunner {
               warnings: [],
               resolvedSpec: loadResult.resolvedSpec
             };
+
+            // Stash each compiled component's sourcemap so the Node-side error
+            // formatter can translate runtime stack frames back to original JSX lines.
+            (window as any).__testHarnessSourceMaps = (window as any).__testHarnessSourceMaps || {};
+            if (loadResult.loadedComponents) {
+              for (const c of loadResult.loadedComponents) {
+                if (c?.name && c?.sourceMap) {
+                  (window as any).__testHarnessSourceMaps[c.name] = c.sourceMap;
+                }
+              }
+            }
           } catch (registrationError: any) {
             // Capture the actual error before it gets obscured
             console.error('🔴 Component registration error:', registrationError);
@@ -1175,8 +1192,19 @@ export class ComponentRunner {
           rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
           line: 0,
           column: 0,
-          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
-        }));
+          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined),
+          stack: (e as any).stack as string | undefined,
+          componentStack: (e as any).componentStack as string | undefined,
+        })) as Array<{
+          message: string;
+          severity: 'critical';
+          rule: string;
+          line: number;
+          column: number;
+          source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
+          stack?: string;
+          componentStack?: string;
+        }>;
       
       // Add timeout error if detected
       if (hasTimeout) {
@@ -1265,7 +1293,8 @@ export class ComponentRunner {
         screenshot,
         executionTime: Date.now() - startTime,
         renderCount,
-        codeExecutionSuccess
+        codeExecutionSuccess,
+        sourceMaps: (this as any)._lastSourceMaps,
       };
 
       if (debug) {
@@ -1673,13 +1702,36 @@ export class ComponentRunner {
       // Override console.error
       const originalConsoleError = console.error;
       console.error = function(...args: any[]) {
-        const errorText = args.map(arg => 
+        const errorText = args.map(arg =>
           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
-        
+
+        // React dev-mode emits Rules-of-Hooks violations as "Warning:" messages.
+        // Promote these to test-failing errors so the Code Fixer sees them directly.
+        const hookRuleMessages = [
+          'Rendered more hooks than during the previous render',
+          'Rendered fewer hooks than expected',
+          'change in the order of Hooks called',
+          'Hooks can only be called inside the body of a function component',
+        ];
+        const isHookRuleViolation = hookRuleMessages.some(m => errorText.includes(m));
+
+        if (isHookRuleViolation) {
+          (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+          (window as any).__testHarnessRuntimeErrors.push({
+            message: errorText,
+            stack: new Error().stack,
+            type: 'react-hooks-rules',
+            source: 'react-framework',
+          });
+          (window as any).__testHarnessTestFailed = true;
+          originalConsoleError.apply(console, args);
+          return;
+        }
+
         // Check if this is a warning rather than an error
         // React warnings typically start with "Warning:" or contain warning-related text
-        const isWarning = 
+        const isWarning =
           errorText.includes('Warning:') ||
           errorText.includes('DevTools') ||
           errorText.includes('deprecated') ||
@@ -1689,7 +1741,7 @@ export class ComponentRunner {
           errorText.includes('Please update') ||
           (errorText.includes('React') && errorText.includes('recognize the')) || // Prop warnings
           (errorText.includes('React') && errorText.includes('Invalid'));
-        
+
         if (isWarning) {
           // Track as warning, don't fail the test
           (window as any).__testHarnessConsoleWarnings.push(errorText);
@@ -1698,7 +1750,7 @@ export class ComponentRunner {
           (window as any).__testHarnessConsoleErrors.push(errorText);
           (window as any).__testHarnessTestFailed = true;
         }
-        
+
         originalConsoleError.apply(console, args);
       };
 
@@ -1837,9 +1889,13 @@ export class ComponentRunner {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
         consoleErrors: (window as any).__testHarnessConsoleErrors || [],
-        testFailed: (window as any).__testHarnessTestFailed || false
+        testFailed: (window as any).__testHarnessTestFailed || false,
+        sourceMaps: (window as any).__testHarnessSourceMaps || {}
       };
     });
+
+    // Store sourcemaps on the instance so executeComponent can attach them to the result.
+    (this as any)._lastSourceMaps = errorData.sourceMaps;
 
     // Track unique errors and their counts
     const errorMap = new Map<string, {error: any; count: number}>();
@@ -1874,6 +1930,9 @@ export class ComponentRunner {
         case 'react-render-error':
           rule = 'react-render-error';
           break;
+        case 'react-hooks-rules':
+          rule = 'react-hooks-rules';
+          break;
         case 'render-loop':
           rule = 'infinite-render-loop';
           break;
@@ -1902,6 +1961,8 @@ export class ComponentRunner {
         errorMap.set(key, {
           error: {
             message: error.message,
+            stack: error.stack,
+            componentStack: error.componentStack,
             source: error.source,
             type: error.type,
             rule: rule
@@ -1914,7 +1975,7 @@ export class ComponentRunner {
     // Process console errors
     errorData.consoleErrors.forEach((error: string) => {
       const key = `console-error:${error}`;
-      
+
       if (errorMap.has(key)) {
         errorMap.get(key)!.count++;
       } else {
@@ -1931,13 +1992,20 @@ export class ComponentRunner {
     });
 
     // Convert map to array with occurrence counts
-    const errors: Array<{message: string; source?: string; type?: string; rule?: string}> = [];
+    const errors: Array<{
+      message: string;
+      stack?: string;
+      componentStack?: string;
+      source?: string;
+      type?: string;
+      rule?: string;
+    }> = [];
     errorMap.forEach(({error, count}) => {
       // Append count if > 1
-      const message = count > 1 
+      const message = count > 1
         ? `${error.message} (occurred ${count} times)`
         : error.message;
-      
+
       errors.push({
         ...error,
         message

@@ -299,6 +299,25 @@ export class EntitySaveOptions {
     SkipAsyncValidation?: boolean = undefined;
 
     /**
+     * Optional callback invoked exactly once, *after* all pre-flight checks pass
+     * (synchronous `Validate()`, `ValidateAsync()`, and PreSave hooks) but *before* the
+     * record is persisted to the database. It receives the entity being saved.
+     *
+     * This is the framework hook for **optimistic UI**: a UI surface can render the user's
+     * change the moment it is known to be valid — without the "render then validation fails
+     * then roll back" flicker you get when you render before calling `Save()`. The await on
+     * `Save()` is still in place; only the visible render moves earlier.
+     *
+     * It does **not** fire when the save is skipped (not dirty / `ReplayOnly`) or when validation
+     * fails. Any error thrown by the callback is swallowed and logged so a UI bug can never
+     * abort the persistence it was meant to accompany. See `guides/OPTIMISTIC_UI_SAVE_PATTERN.md`.
+     *
+     * Receives the `BaseEntity` being saved (callers typically close over their own entity
+     * reference and ignore the parameter).
+     */
+    OnValidated?: (entity: BaseEntity) => void;
+
+    /**
      * When true, this entity is being saved as part of an IS-A parent chain
      * initiated by a child entity. Provider behavior:
      * - GraphQLDataProvider: full ORM pipeline runs, skip network call
