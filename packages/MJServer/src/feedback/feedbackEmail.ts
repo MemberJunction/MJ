@@ -44,41 +44,52 @@ export async function sendFeedbackEmail(opts: SendFeedbackEmailOptions): Promise
     return false;
   }
 
-  const fromAddress = getFeedbackFromAddress();
-  const providerName = emailSettings.providerName ?? 'SendGrid';
-  const messageTypeName = emailSettings.messageTypeName ?? 'Email';
+  // Wrap everything below in a single try/catch so this function honors its
+  // documented "never throws" contract. CommunicationEngine.Config and
+  // SendSingleMessage both throw on provider/metadata/log failures, and the
+  // webhook handler dispatches this fire-and-forget (`void sendFeedbackEmail`),
+  // so an uncaught throw here would surface as an unhandled promise rejection
+  // in the Node process. Catch, log, and return false instead.
+  try {
+    const fromAddress = getFeedbackFromAddress();
+    const providerName = emailSettings.providerName ?? 'SendGrid';
+    const messageTypeName = emailSettings.messageTypeName ?? 'Email';
 
-  await CommunicationEngine.Instance.Config(false, opts.contextUser);
+    await CommunicationEngine.Instance.Config(false, opts.contextUser);
 
-  const provider = CommunicationEngine.Instance.Providers.find(p => p.Name === providerName);
-  if (!provider) {
-    const available = CommunicationEngine.Instance.Providers.map(p => p.Name).join(', ') || '(none)';
-    LogError(`Cannot send feedback email: provider '${providerName}' not configured. Available: ${available}`);
+    const provider = CommunicationEngine.Instance.Providers.find(p => p.Name === providerName);
+    if (!provider) {
+      const available = CommunicationEngine.Instance.Providers.map(p => p.Name).join(', ') || '(none)';
+      LogError(`Cannot send feedback email: provider '${providerName}' not configured. Available: ${available}`);
+      return false;
+    }
+    const messageType = provider.MessageTypes.find(mt => mt.Name === messageTypeName);
+    if (!messageType) {
+      const available = provider.MessageTypes.map(mt => mt.Name).join(', ') || '(none)';
+      LogError(`Cannot send feedback email: message type '${messageTypeName}' not found on provider '${providerName}'. Available: ${available}`);
+      return false;
+    }
+
+    const message: Message = {
+      MessageType: messageType,
+      From: fromAddress,
+      To: opts.to,
+      Subject: opts.subject,
+      Body: opts.textBody,
+      HTMLBody: opts.htmlBody,
+    };
+
+    const result = await CommunicationEngine.Instance.SendSingleMessage(providerName, messageTypeName, message);
+    if (!result?.Success) {
+      LogError(`Feedback email failed to ${opts.to} (subject '${opts.subject}'): ${result?.Error ?? 'unknown error'}`);
+      return false;
+    }
+    LogStatus(`Feedback email sent to ${opts.to} (subject '${opts.subject}')`);
+    return true;
+  } catch (err) {
+    LogError(`Feedback email to ${opts.to} (subject '${opts.subject}') threw`, undefined, err);
     return false;
   }
-  const messageType = provider.MessageTypes.find(mt => mt.Name === messageTypeName);
-  if (!messageType) {
-    const available = provider.MessageTypes.map(mt => mt.Name).join(', ') || '(none)';
-    LogError(`Cannot send feedback email: message type '${messageTypeName}' not found on provider '${providerName}'. Available: ${available}`);
-    return false;
-  }
-
-  const message: Message = {
-    MessageType: messageType,
-    From: fromAddress,
-    To: opts.to,
-    Subject: opts.subject,
-    Body: opts.textBody,
-    HTMLBody: opts.htmlBody,
-  };
-
-  const result = await CommunicationEngine.Instance.SendSingleMessage(providerName, messageTypeName, message);
-  if (!result?.Success) {
-    LogError(`Feedback email failed to ${opts.to} (subject '${opts.subject}'): ${result?.Error ?? 'unknown error'}`);
-    return false;
-  }
-  LogStatus(`Feedback email sent to ${opts.to} (subject '${opts.subject}')`);
-  return true;
 }
 
 /**

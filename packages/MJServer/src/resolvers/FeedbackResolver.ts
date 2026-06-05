@@ -1,8 +1,9 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
-import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { MJUserFeedbackSubmissionEntity } from '@memberjunction/core-entities';
+import { GetReadWriteProvider } from '../util.js';
 import {
   sendFeedbackEmail,
   escapeHtml,
@@ -956,7 +957,8 @@ Step 2 — SEVERITY. Strictly follow these rules:
   ): Promise<void> {
     try {
       const contextUser = ctx.userPayload?.userRecord;
-      const saved = await this.saveFeedbackSubmissionRow(submission, issue, config, contextUser);
+      const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+      const saved = await this.saveFeedbackSubmissionRow(submission, issue, config, contextUser, provider);
       if (!saved) return; // saveFeedbackSubmissionRow already logged the failure
 
       await this.sendConfirmationEmail(submission, issue, contextUser);
@@ -974,9 +976,10 @@ Step 2 — SEVERITY. Strictly follow these rules:
     submission: FeedbackSubmission,
     issue: { number: number; html_url: string },
     config: FeedbackConfig,
-    contextUser: UserInfo | undefined
+    contextUser: UserInfo | undefined,
+    provider?: IMetadataProvider
   ): Promise<boolean> {
-    const md = new Metadata();
+    const md = provider ?? new Metadata();
     const row = await md.GetEntityObject<MJUserFeedbackSubmissionEntity>(
       'MJ: User Feedback Submissions',
       contextUser

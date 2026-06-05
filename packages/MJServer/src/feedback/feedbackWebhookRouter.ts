@@ -1,6 +1,8 @@
 import express, { Router, Request, Response } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+import { LRUCache } from 'lru-cache';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { configInfo } from '../config.js';
@@ -18,6 +20,47 @@ import {
 // line breaks become <br>. Kept module-local (vs `marked.setOptions(...)`)
 // so we don't mutate global state any other MJServer code might rely on.
 const githubMarkdown = new Marked({ gfm: true, breaks: true });
+
+/**
+ * Allowlist-based sanitizer for the HTML produced from a GitHub comment's
+ * markdown. Although GitHub sanitizes its own rendered output, the raw
+ * comment *source* (which is what we render here) can contain arbitrary HTML
+ * authored by any user able to comment on the repo's issues — e.g.
+ * `<img src=x onerror=...>`, tracking pixels, or phishing markup. Since that
+ * HTML is emailed to the original submitter under the app's branded shell, we
+ * strip everything outside a conservative formatting allowlist before send.
+ * Tags/attributes default-deny: only the listed ones survive.
+ */
+function sanitizeCommentHtml(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: [
+      'p', 'br', 'b', 'i', 'strong', 'em', 'del', 'code', 'pre',
+      'blockquote', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'span',
+    ],
+    allowedAttributes: {
+      a: ['href', 'title'],
+    },
+    // Only safe link schemes; drops javascript:/data: URLs. Images are dropped
+    // entirely (no <img> in allowedTags) to defeat tracking-pixel beacons.
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+  });
+}
+
+/**
+ * In-memory dedup of GitHub webhook deliveries keyed by the X-GitHub-Delivery
+ * GUID. GitHub reuses the same delivery GUID when it retries a failed delivery
+ * or an operator manually redelivers, so caching the GUIDs we've already
+ * processed lets us acknowledge redeliveries with 200 without re-sending the
+ * email. Bounded + TTL'd so it can't grow unbounded; process-local, which is
+ * acceptable for v1 (a process restart simply resets the dedup window).
+ */
+const processedDeliveries = new LRUCache<string, true>({
+  max: 5000,
+  ttl: 1000 * 60 * 60, // 1 hour — comfortably longer than GitHub's retry window
+});
 
 /**
  * Internal extension of express.Request that exposes the raw request body
@@ -210,6 +253,19 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
       return;
     }
 
+    // Idempotency: GitHub reuses the X-GitHub-Delivery GUID across retries and
+    // manual redeliveries. If we've already dispatched an email for this exact
+    // delivery, acknowledge with 200 and do nothing — otherwise a retry (or an
+    // operator redelivery) would re-send the same notification. We only record
+    // a delivery as processed once it has been successfully dispatched (the 202
+    // path below), so a failed attempt is still safely retried by GitHub.
+    const deliveryId = req.header('X-GitHub-Delivery');
+    if (deliveryId && processedDeliveries.has(deliveryId)) {
+      LogStatus(`GitHub feedback webhook: ignoring duplicate delivery ${deliveryId}`);
+      res.status(200).json({ duplicate: true });
+      return;
+    }
+
     // Filter to the event types and actions we actually email about.
     if (!isHandledEvent(event, payload.action)) {
       res.status(204).send();
@@ -294,6 +350,12 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
       textBody: built.textBody,
       contextUser: systemUser,
     });
+
+    // Mark this delivery processed only now that we've actually dispatched the
+    // email, so a retry of a previously-failed attempt still gets handled.
+    if (deliveryId) {
+      processedDeliveries.set(deliveryId, true);
+    }
 
     LogStatus(
       `GitHub feedback webhook: dispatched ${event}/${payload.action} email for issue #${payload.issue.number} to ${row.Email}`
@@ -494,14 +556,15 @@ function buildCommentEmail(
   const safeGreeting = row.Name ? `Hi ${escapeHtml(row.Name)},` : 'Hi,';
   const safeCommenter = escapeHtml(comment.user.login);
   // Render the GitHub comment's markdown source the same way GitHub does:
-  // GFM (tables, strikethrough, autolinks) + soft line breaks. Trust GitHub's
-  // input sanitization (and the email client's output sanitization) as the
-  // defense against pathological HTML in the source — adding a server-side
-  // sanitizer would be defense-in-depth worth doing later, not v1.
+  // GFM (tables, strikethrough, autolinks) + soft line breaks, then run the
+  // result through an allowlist sanitizer before it goes into the email. The
+  // comment source is attacker-controllable (any user who can comment on the
+  // repo's issues), so we strip script/onerror/iframe/img and unsafe URL
+  // schemes rather than trusting GitHub's input sanitization alone.
   // `as string` is the standard workaround for marked's overloaded return
   // type: parse() returns string in sync mode (our case) but TypeScript can't
   // narrow because marked exposes a string | Promise<string> union.
-  const commentHtml = githubMarkdown.parse(comment.body) as string;
+  const commentHtml = sanitizeCommentHtml(githubMarkdown.parse(comment.body) as string);
 
   const subject = `[${appName}] ${comment.user.login} commented on your feedback: #${row.IssueNumber} ${row.IssueTitle}`;
 
