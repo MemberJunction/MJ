@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "DocuSign",
+      "ServerDriverKey": "DocuSign",
+      "IsActive": true,
+      "Priority": 0,
+      "RequiresOAuth": true,
+      "SupportsTemplates": true,
+      "SupportsEmbeddedSigning": true,
+      "Configuration": "{\"oauthBase\":\"account-d.docusign.com\",\"restBase\":\"https://demo.docusign.net/restapi\"}"
+    },
+    "primaryKey": {
+      "ID": "D6D9D6AB-FAD3-40B1-B3EE-281298645370"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T17:35:16.481Z",
+      "checksum": "cb7fea464c60d4fdfd835cf0d2d612d249f49469f72cfd52ae1de4f1955122f4"
+    }
+  }
+]

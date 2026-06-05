@@ -286,6 +286,12 @@ import { MJSearchScopeProviderFormComponent } from "./Entities/MJSearchScopeProv
 import { MJSearchScopeStorageAccountFormComponent } from "./Entities/MJSearchScopeStorageAccount/mjsearchscopestorageaccount.form.component";
 import { MJSearchScopeTestQueryFormComponent } from "./Entities/MJSearchScopeTestQuery/mjsearchscopetestquery.form.component";
 import { MJSearchScopeFormComponent } from "./Entities/MJSearchScope/mjsearchscope.form.component";
+import { MJSignatureAccountFormComponent } from "./Entities/MJSignatureAccount/mjsignatureaccount.form.component";
+import { MJSignatureProviderFormComponent } from "./Entities/MJSignatureProvider/mjsignatureprovider.form.component";
+import { MJSignatureRequestDocumentFormComponent } from "./Entities/MJSignatureRequestDocument/mjsignaturerequestdocument.form.component";
+import { MJSignatureRequestLogFormComponent } from "./Entities/MJSignatureRequestLog/mjsignaturerequestlog.form.component";
+import { MJSignatureRequestRecipientFormComponent } from "./Entities/MJSignatureRequestRecipient/mjsignaturerequestrecipient.form.component";
+import { MJSignatureRequestFormComponent } from "./Entities/MJSignatureRequest/mjsignaturerequest.form.component";
 import { MJSkillFormComponent } from "./Entities/MJSkill/mjskill.form.component";
 import { MJSQLDialectFormComponent } from "./Entities/MJSQLDialect/mjsqldialect.form.component";
 import { MJStateProvinceFormComponent } from "./Entities/MJStateProvince/mjstateprovince.form.component";
@@ -823,15 +829,15 @@ declarations: [
     MJSearchScopeStorageAccountFormComponent,
     MJSearchScopeTestQueryFormComponent,
     MJSearchScopeFormComponent,
+    MJSignatureAccountFormComponent,
+    MJSignatureProviderFormComponent,
+    MJSignatureRequestDocumentFormComponent,
+    MJSignatureRequestLogFormComponent,
+    MJSignatureRequestRecipientFormComponent,
+    MJSignatureRequestFormComponent,
     MJSkillFormComponent,
     MJSQLDialectFormComponent,
-    MJStateProvinceFormComponent,
-    MJTagAuditLogFormComponent,
-    MJTagCoOccurrenceFormComponent,
-    MJTagScopeFormComponent,
-    MJTagSuggestionFormComponent,
-    MJTagSynonymFormComponent,
-    MJTaggedItemFormComponent],
+    MJStateProvinceFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -848,6 +854,12 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
+    MJTagAuditLogFormComponent,
+    MJTagCoOccurrenceFormComponent,
+    MJTagScopeFormComponent,
+    MJTagSuggestionFormComponent,
+    MJTagSynonymFormComponent,
+    MJTaggedItemFormComponent,
     MJTagFormComponent,
     MJTaskDependencyFormComponent,
     MJTaskTypeFormComponent,
@@ -861,13 +873,7 @@ declarations: [
     MJTestRunFeedbackFormComponent,
     MJTestRunOutputTypeFormComponent,
     MJTestRunOutputFormComponent,
-    MJTestRunFormComponent,
-    MJTestSuiteRunFormComponent,
-    MJTestSuiteTestFormComponent,
-    MJTestSuiteFormComponent,
-    MJTestTypeFormComponent,
-    MJTestFormComponent,
-    MJUserApplicationEntityFormComponent],
+    MJTestRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -884,6 +890,12 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
+    MJTestSuiteRunFormComponent,
+    MJTestSuiteTestFormComponent,
+    MJTestSuiteFormComponent,
+    MJTestTypeFormComponent,
+    MJTestFormComponent,
+    MJUserApplicationEntityFormComponent,
     MJUserApplicationFormComponent,
     MJUserFavoriteFormComponent,
     MJUserNotificationPreferenceFormComponent,
@@ -897,13 +909,7 @@ declarations: [
     MJUserViewRunFormComponent,
     MJUserViewFormComponent,
     MJUserFormComponent,
-    MJVectorDatabaseFormComponent,
-    MJVectorIndexFormComponent,
-    MJVersionInstallationFormComponent,
-    MJVersionLabelItemFormComponent,
-    MJVersionLabelRestoreFormComponent,
-    MJVersionLabelFormComponent,
-    MJWorkflowEngineFormComponent],
+    MJVectorDatabaseFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -920,6 +926,12 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
+    MJVectorIndexFormComponent,
+    MJVersionInstallationFormComponent,
+    MJVersionLabelItemFormComponent,
+    MJVersionLabelRestoreFormComponent,
+    MJVersionLabelFormComponent,
+    MJWorkflowEngineFormComponent,
     MJWorkflowRunFormComponent,
     MJWorkflowFormComponent,
     MJWorkspaceItemFormComponent,

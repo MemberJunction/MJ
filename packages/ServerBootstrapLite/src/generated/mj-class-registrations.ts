@@ -166,7 +166,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (349 classes)
+// @memberjunction/core-entities (355 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -461,6 +461,12 @@ import {
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
+    MJSignatureAccountEntity,
+    MJSignatureProviderEntity,
+    MJSignatureRequestDocumentEntity,
+    MJSignatureRequestEntity,
+    MJSignatureRequestLogEntity,
+    MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -841,7 +847,7 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/core-actions (135 classes)
+// @memberjunction/core-actions (139 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -883,6 +889,7 @@ import {
     DeleteObjectAction,
     DeleteRecordAction,
     DirectoryExistsAction,
+    DownloadSignedDocumentAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
@@ -910,6 +917,7 @@ import {
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
+    GetSignatureStatusAction,
     GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
@@ -956,6 +964,7 @@ import {
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
+    SendDocumentForSignatureAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -975,6 +984,7 @@ import {
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
     XMLParserAction,
@@ -1331,6 +1341,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
+    MJSignatureAccountEntity,
+    MJSignatureProviderEntity,
+    MJSignatureRequestDocumentEntity,
+    MJSignatureRequestEntity,
+    MJSignatureRequestLogEntity,
+    MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -1649,6 +1665,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DeleteObjectAction,
     DeleteRecordAction,
     DirectoryExistsAction,
+    DownloadSignedDocumentAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
@@ -1676,6 +1693,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
+    GetSignatureStatusAction,
     GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
@@ -1722,6 +1740,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
+    SendDocumentForSignatureAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -1741,6 +1760,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
     XMLParserAction,
@@ -1755,7 +1775,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 750;
+export const CLASS_REGISTRATIONS_COUNT = 760;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

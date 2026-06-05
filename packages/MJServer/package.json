@@ -61,6 +61,7 @@
     "@memberjunction/core-entities": "5.39.0",
     "@memberjunction/core-entities-server": "5.39.0",
     "@memberjunction/data-context": "5.39.0",
+    "@memberjunction/esignature": "5.39.0",
     "@memberjunction/data-context-server": "5.39.0",
     "@memberjunction/doc-utils": "5.39.0",
     "@memberjunction/encryption": "5.39.0",
