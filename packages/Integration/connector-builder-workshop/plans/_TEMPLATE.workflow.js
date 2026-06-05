@@ -169,6 +169,8 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
             sourceID: sources.SourcesFile,
             objectList: sources.TaxonomyLeaves,
             writeBackPath: METADATA_FILE,
+            outputDir: `${RUNS_DIR}/output`,
+            runID: args?.runID,
             adversarialN: MANIFEST.adversarialVerifyMinReviewers,
             // Multi-source PK/FK detection inputs (Gap 10 revised 2026-05-30).
             // Producer MUST consult each of these where it exists.
@@ -229,7 +231,7 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     if (previousReviewFingerprint === reviewFingerprint) {
         log(`Amendment loop deadlock at round ${amendmentRound}: reviewer findings byte-identical to prior round → escalate`);
         return {
-            runID: RUN_ID,
+            runID: args?.runID,
             vendor: VENDOR,
             brand, identity, sources, metadataResult, extractStats, frozen, review,
             amendmentRound,
@@ -244,13 +246,44 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
 if (review.ConfirmedGapsBlocking > 0 && amendmentRound >= MAX_AMENDMENT_ROUNDS) {
     log(`Amendment loop exhausted ${MAX_AMENDMENT_ROUNDS} rounds with ${review.ConfirmedGapsBlocking} unresolved blocking gaps`);
     return {
-        runID: RUN_ID,
+        runID: args?.runID,
         vendor: VENDOR,
         brand, identity, sources, metadataResult, extractStats, frozen, review,
         amendmentRound,
         status: 'EscalatedMaxRounds',
         message: `Amendment loop hit ${MAX_AMENDMENT_ROUNDS}-round cap with ${review.ConfirmedGapsBlocking} blocking gaps. Reviewer's evidence is at ${review.ReviewFile} — human intervention required.`,
     };
+}
+
+// ── SourceDiff (completeness gate — manifest.sourceDiffMustClose) ────
+// Deterministic set-arithmetic: did we extract every coverable taxonomy leaf?
+// floor-check enforces missing[]===empty when sourceDiffMustClose=true. If the
+// diff doesn't close, attempt ONE gap-fill-fork recovery over the missing set,
+// then recompute — a genuinely incomplete extraction still fails the floor (correctly).
+phase('SourceDiff');
+let sourceDiff = await workflow(
+    { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/compute-source-diff.workflow.js' },
+    { universe: sources.TaxonomyLeaves ?? [], extracted: extractStats.extractedObjects ?? [] }
+);
+log(`SourceDiff: ${sourceDiff.missing.length} missing, ${sourceDiff.orphan.length} orphan (universe=${sourceDiff.universeCount}, extracted=${sourceDiff.extractedCount})`);
+
+if (sourceDiff.missing.length > 0) {
+    phase('GapFill');
+    await workflow(
+        { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/gap-fill-fork.workflow.js' },
+        { vendor: VENDOR, gaps: sourceDiff.missing, sourceBundle: { openapiPath: sources.SourcesFile }, writeBackPath: METADATA_FILE, outputDir: `${RUNS_DIR}/output` }
+    );
+    const recovered = await workflow(
+        { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/extract-iiof-pipeline.workflow.js' },
+        { vendor: VENDOR, sourceID: sources.SourcesFile, objectList: sourceDiff.missing, writeBackPath: METADATA_FILE, outputDir: `${RUNS_DIR}/output`, runID: args?.runID, adversarialN: MANIFEST.adversarialVerifyMinReviewers }
+    );
+    extractStats.extractedObjects = [...(extractStats.extractedObjects ?? []), ...(recovered.extractedObjects ?? [])];
+    extractStats.fieldsExtracted = (extractStats.fieldsExtracted ?? 0) + (recovered.fieldsExtracted ?? 0);
+    sourceDiff = await workflow(
+        { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/compute-source-diff.workflow.js' },
+        { universe: sources.TaxonomyLeaves ?? [], extracted: extractStats.extractedObjects ?? [] }
+    );
+    log(`SourceDiff after gap-fill: ${sourceDiff.missing.length} missing`);
 }
 
 // ── CodeBuild + ladder amendment loop (max 3 rounds) ────────────────
@@ -322,7 +355,7 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
     if (previousCodeFingerprint === codeFingerprint) {
         log(`Code+Ladder deadlock at round ${codeRound}: identical failures to prior round → escalate`);
         return {
-            runID: RUN_ID,
+            runID: args?.runID,
             vendor: VENDOR,
             brand, identity, sources, metadataResult, extractStats, frozen, review, codeResult, ladder,
             amendmentRound, codeRound,
@@ -337,7 +370,7 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
 if ((!codeResult?.BuildClean || (ladder?.tierResults ?? []).some(r => r?.status === 'red')) && codeRound >= MAX_CODE_BUILD_ROUNDS) {
     log(`Code+Ladder loop exhausted ${MAX_CODE_BUILD_ROUNDS} rounds`);
     return {
-        runID: RUN_ID,
+        runID: args?.runID,
         vendor: VENDOR,
         brand, identity, sources, metadataResult, extractStats, frozen, review, codeResult, ladder,
         amendmentRound, codeRound,
@@ -355,7 +388,7 @@ const verdict = await workflow(
         vendor: VENDOR,
         slotsPath: args?.slotsPath ?? 'packages/Integration/connector-builder-workshop/floor/phase0-slots.json',
         manifest: MANIFEST,
-        journal: { extractStats, frozen, review, codeResult, ladder },
+        journal: { extractStats, sourceDiff, frozen, review, codeResult, ladder },
     }
 );
 

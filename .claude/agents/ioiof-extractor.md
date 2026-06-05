@@ -115,24 +115,42 @@ You may be dispatched with `amendmentRound > 0` and a `reviewerFindings` array o
 
 The amendment loop converges when the reviewer reports `ConfirmedGapsBlocking=0`. If your output is byte-identical to the prior round (you couldn't apply the fixes), the workflow detects the deadlock and escalates — that's honest, don't fake compliance.
 
-## Handoff contract
+## Handoff contract (per-object structured return)
 
-When you finish:
-- Every IO the vendor exposes is upserted via `mj-metadata` MCP `upsert_integration_object`.
-- Every IOF on every IO is upserted via `upsert_integration_object_field`.
-- CODE_EVIDENCE.json has per-flag entries.
-- Structured stdout: `{IOCreated, IOFCreated, PKsExplicitlyEmitted, FKsEmitted, GapsForRuntimeD4, TraversalOrder, amendmentApplied?, amendmentRejected?}`. This is what the workflow reads.
+The `extract-iiof-pipeline` invokes you **once per object** (it maps over the taxonomy leaves). For the single object you're given, when you finish:
+- The object's IO is upserted via `mj-metadata` MCP `upsert_integration_object`, and every IOF on it via `upsert_integration_object_field`; CODE_EVIDENCE.json gets per-flag entries.
+- You **return** (StructuredOutput — the pipeline forces this schema) exactly:
+  ```
+  {
+    objectName: string,
+    fieldsExtracted: integer,
+    gapsRemaining: string[],       // slot IDs you could NOT provably fill (PROVEN negatives, not "didn't check")
+    claims: [                      // ONE per emitted slot — the pipeline reproduces + adversarially refutes each
+      { slot, value, extractionScript, sourcePath, evidence }
+    ],
+    matrixRow: {                   // your Gap-10 source-check row for THIS object → pipeline writes EXTRACTION_REPORT_MATRIX.csv
+      IOName, ExistingConnectorTs, ExistingMetadataJson, OpenAPIxPK, OpenAPIPathOps,
+      OpenAPILocationHeader, VendorDocsProseScan, SDKTypes, PostmanCommunity,
+      NamingConvention, CrossIOMatch, PKVerdict, FKVerdict, EvidenceCount
+    },
+    skipped?: { reason }           // set ONLY if the object cannot be extracted
+  }
+  ```
+  - **`claims[]` is load-bearing.** Every emitted slot value (PK flag, FK + `RelatedIntegrationObjectID`, each per-operation CRUD path/method/IDLocation, `IncrementalWatermarkField`, every typed field attribute) becomes one claim. `extractionScript` is a node/POSIX snippet that reproduces `value` from `sourcePath`; `evidence` carries the CODE_EVIDENCE citation. The pipeline runs `verify-claim` (re-reproduce) then `adversarial-verify` (N blind skeptics) on each — a claim that doesn't reproduce or gets refuted is dropped, so emit ONLY what is genuinely provable.
+  - **`matrixRow` is the structured form of the PK/FK source-check matrix you already build** for EXTRACTION_REPORT.md — same columns, one row for this object. Source-check cells = `yes|no|n/a`; `PKVerdict` ∈ `emit|unique-only|defer`; `EvidenceCount` = count of independent sources that agree.
+
+You still write `EXTRACTION_REPORT.md` (the prose proof-of-work); the structured `matrixRow` is what the pipeline aggregates into the machine-readable `EXTRACTION_REPORT_MATRIX.csv` that floor-check reads.
 
 ## Composition with locked primitives
 
-The `extract-iiof-pipeline` locked primitive wraps you. Per-object:
+The `extract-iiof-pipeline` locked primitive wraps you. Per object:
 
-1. You emit one IO + its IOFs.
-2. The pipeline invokes `verify-claim` on each emitted slot value with your extraction script as the reproducer.
-3. The pipeline invokes `adversarial-verify` (N skeptics, blind, prompted to refute) on each surviving claim.
-4. The pipeline writes back via `mcp-mj-metadata` only when (1)+(2)+(3) all pass.
+1. You emit the IO + its IOFs (via mcp-mj-metadata) and **return** the per-object contract above (incl. `claims[]` + `matrixRow`).
+2. The pipeline invokes `verify-claim` on each claim (your `extractionScript` is the reproducer).
+3. The pipeline invokes `adversarial-verify` (N blind skeptics, default-reject) on each surviving claim.
+4. The pipeline aggregates every `matrixRow` into `EXTRACTION_REPORT_MATRIX.csv` and surfaces verified-claim counts to floor-check.
 
-You do not call these primitives. You emit; the pipeline composes them around you.
+You do not call these primitives — you emit + return; the pipeline composes them around you. **(This is now structurally true; stages 2-4 were previously pass-throughs that assumed you did this internally — fixed 2026-06-05.)**
 
 ## Verification
 
