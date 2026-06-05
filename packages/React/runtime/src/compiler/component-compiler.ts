@@ -28,7 +28,7 @@ const DEFAULT_COMPILER_CONFIG: CompilerConfig = {
     plugins: []
   },
   minify: false,
-  sourceMaps: false,
+  sourceMaps: true,
   cache: true,
   maxCacheSize: 100,
   debug: false
@@ -89,7 +89,7 @@ export class ComponentCompiler {
       const loadedLibraries = await this.loadRequiredLibraries(options.libraries!, options.allLibraries);
 
       // Transpile the component code
-      const transpiledCode = this.transpileComponent(
+      const transpiled = this.transpileComponent(
         options.componentCode,
         options.componentName,
         options
@@ -97,7 +97,7 @@ export class ComponentCompiler {
 
       // Create the component factory with loaded libraries
       const componentFactory = this.createComponentFactory(
-        transpiledCode,
+        transpiled.code,
         options.componentName,
         loadedLibraries,
         options
@@ -109,7 +109,8 @@ export class ComponentCompiler {
         id: this.generateComponentId(options.componentName),
         name: options.componentName,
         compiledAt: new Date(),
-        warnings: []
+        warnings: [],
+        sourceMap: transpiled.map
       };
 
       // Cache if enabled
@@ -121,7 +122,7 @@ export class ComponentCompiler {
         success: true,
         component: compiledComponent,
         duration: Date.now() - startTime,
-        size: transpiledCode.length,
+        size: transpiled.code.length,
         loadedLibraries: loadedLibraries
       };
 
@@ -145,7 +146,7 @@ export class ComponentCompiler {
     code: string,
     componentName: string,
     options: CompileOptions
-  ): string {
+  ): { code: string; map?: any } {
     if (!this.babelInstance) {
       throw new Error('Babel instance not set. Call setBabelInstance() first.');
     }
@@ -161,7 +162,7 @@ export class ComponentCompiler {
         minified: this.config.minify
       });
 
-      return result.code;
+      return { code: result.code, map: result.map };
     } catch (error: any) {
       throw new Error(`Transpilation failed: ${error.message}`);
     }

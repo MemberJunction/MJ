@@ -17,6 +17,7 @@ import {
     type CRUDResult,
     type CreateRecordContext,
     type UpdateRecordContext,
+    type UpsertRecordContext,
     type DeleteRecordContext,
     type GetRecordContext,
     type SearchContext,
@@ -29,6 +30,7 @@ import {
     type ExternalFieldSchema,
     type SourceSchemaInfo,
     type SourceFieldInfo,
+    type RateLimitPolicy,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -93,6 +95,29 @@ const REQUEST_TIMEOUT_MS = 30000;
 const MIN_REQUEST_INTERVAL_MS = 100;
 
 /**
+ * HubSpot CRM search API hard cap: the opaque `after` offset cannot page beyond 10,000 results
+ * within a single query window. Incremental windows larger than this (and same-`hs_lastmodifieddate`
+ * clusters bigger than 10k from bulk imports) must re-anchor by keyset to be fetched completely.
+ */
+const HUBSPOT_SEARCH_WINDOW_CAP = 10_000;
+
+/**
+ * Within-scan resume state for the search-based incremental fetch (FetchChangesViaSearch).
+ * Serialized into FetchBatchResult.NextCursor so the engine threads it back via
+ * FetchContext.CurrentCursor on the next call.
+ *
+ * - `after` paginates WITHIN a single ≤10k HubSpot search window (the API's own opaque offset).
+ * - `anchorDateMs` + `anchorId` re-anchor the NEXT window by a (dateField, hs_object_id) keyset
+ *   once the 10k cap is hit, so a window larger than 10k — including a >10k cluster that all shares
+ *   one modified-date — is paged completely instead of stalling on a watermark that cannot advance.
+ */
+interface HubSpotSearchCursor {
+    after?: string;
+    anchorDateMs?: string;
+    anchorId?: string;
+}
+
+/**
  * Comprehensive HubSpot object metadata — single source of truth for both
  * action generation and API property requests.
  *
@@ -106,6 +131,9 @@ const HUBSPOT_OBJECTS: IntegrationObjectInfo[] = [
     {
         Name: 'contacts', DisplayName: 'Contact',
         Description: 'A person or lead in HubSpot CRM', SupportsWrite: true,
+        // Contacts upsert by email — the natural unique key. Drives the idempotent Upsert verb,
+        // which defines the contact-create collision race (409 Contact already exists) out of existence.
+        UpsertKey: 'email',
         Fields: [
             { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact email address' },
             { Name: 'firstname', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact first name' },
@@ -1017,6 +1045,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /** Cached auth context — reused within a session to avoid redundant credential loads */
     private _cachedAuth: RESTAuthContext | null = null;
 
+    /** Cache of resolved default association typeIds, keyed by `${fromType}/${toType}`. */
+    private _assocTypeIdCache = new Map<string, number>();
+
     // ── Per-instance config accessors (fall back to module-level defaults) ──
     private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
     private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
@@ -1026,11 +1057,36 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     public override get SupportsCreate(): boolean { return true; }
     public override get SupportsUpdate(): boolean { return true; }
+    public override get SupportsUpsert(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
     public override get SupportsSearch(): boolean { return true; }
     public override get SupportsListing(): boolean { return true; }
 
     public override get IntegrationName(): string { return 'HubSpot'; }
+
+    // ─── §7 sync-efficiency contract (HubSpot = the full reference implementation) ──────────
+    // The engine consumes these for adaptive rate limiting, peak parallelization, and precise 429
+    // back-off. HubSpot's public limit is ~100-110 requests / 10s per Private App; the connector's
+    // MinRequestIntervalMs (default 100ms) is the sustained pace.
+
+    /** ~10 req/s sustained (honors MinRequestIntervalMs config) with a ~100-request burst window. */
+    public override get RateLimitPolicy(): RateLimitPolicy {
+        const interval = this.effectiveMinRequestIntervalMs;
+        return {
+            TokensPerSec: Math.max(1, Math.round(1000 / (interval > 0 ? interval : 100))),
+            Burst: 100,
+            ThrottleBackoffFactor: 0.5,
+        };
+    }
+
+    /** HubSpot rate-limits on a rolling 10-second window; on a 429 that escaped internal retries, back off ~10s. */
+    public override ExtractRetryAfterMs(error: unknown): number | undefined {
+        const msg = error instanceof Error ? error.message : String(error);
+        return /\b429\b|rate.?limit|too many requests/i.test(msg) ? 10_000 : undefined;
+    }
+
+    /** HubSpot tolerates modest object-level parallelism; the engine's AIMD controller ramps toward this, with the token-bucket as the real backstop. */
+    public override get MaxConcurrencyHint(): number { return 4; }
 
     // ─── Action Metadata ─────────────────────────────────────────────────
 
@@ -1231,9 +1287,26 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     private static readonly ASSOCIATION_OBJECTS: Array<{
         name: string; label: string; description: string;
         apiPath: string; pkFields: [string, string];
+        /**
+         * HubSpot v4 create/delete "from" object type (e.g. 'deals'). The wire direction is
+         * DECOUPLED from pkFields order and apiPath order: pkFields drive the
+         * stored composite ExternalID, fromType/toType drive only the request body's from/to.
+         */
+        fromType?: string; toType?: string;
+        /** Which pkField supplies the wire 'from.id' / 'to.id'. */
+        fromPkField?: string; toPkField?: string;
+        /** HUBSPOT_DEFINED for all default associations. */
+        associationCategory?: 'HUBSPOT_DEFINED';
+        /**
+         * HUBSPOT_DEFINED typeId for fromType->toType (portal-independent constant).
+         * When omitted, CreateAssociation falls back to a cached /labels lookup.
+         * Reference: HubSpot default association type IDs (deal->contact = 3, contact->deal = 4, ...).
+         */
+        associationTypeId?: number;
     }> = [
         { name: 'assoc_contacts_companies', label: 'Contact ↔ Company', description: 'Associations between contacts and companies', apiPath: '/crm/v4/associations/contacts/companies', pkFields: ['contact_id', 'company_id'] },
-        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals', pkFields: ['contact_id', 'deal_id'] },
+        // deal->contact = 3 (HUBSPOT_DEFINED, verified via /labels). Wire from=deal even though stored key is contact|deal.
+        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals', pkFields: ['contact_id', 'deal_id'], fromType: 'deals', toType: 'contacts', fromPkField: 'deal_id', toPkField: 'contact_id', associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 },
         { name: 'assoc_contacts_tickets', label: 'Contact ↔ Ticket', description: 'Associations between contacts and tickets', apiPath: '/crm/v4/associations/contacts/tickets', pkFields: ['contact_id', 'ticket_id'] },
         { name: 'assoc_contacts_calls', label: 'Contact ↔ Call', description: 'Associations between contacts and calls', apiPath: '/crm/v4/associations/contacts/calls', pkFields: ['contact_id', 'call_id'] },
         { name: 'assoc_contacts_emails', label: 'Contact ↔ Email', description: 'Associations between contacts and emails', apiPath: '/crm/v4/associations/contacts/emails', pkFields: ['contact_id', 'email_id'] },
@@ -1241,7 +1314,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         { name: 'assoc_contacts_notes', label: 'Contact ↔ Note', description: 'Associations between contacts and notes', apiPath: '/crm/v4/associations/contacts/notes', pkFields: ['contact_id', 'note_id'] },
         { name: 'assoc_contacts_tasks', label: 'Contact ↔ Task', description: 'Associations between contacts and tasks', apiPath: '/crm/v4/associations/contacts/tasks', pkFields: ['contact_id', 'task_id'] },
         { name: 'assoc_contacts_feedback_submissions', label: 'Contact ↔ Feedback Submission', description: 'Associations between contacts and feedback submissions', apiPath: '/crm/v4/associations/contacts/feedback_submissions', pkFields: ['contact_id', 'feedback_submission_id'] },
-        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals', pkFields: ['company_id', 'deal_id'] },
+        // No hardcoded typeId — resolved at runtime via /labels (deals/companies exposes multiple HUBSPOT_DEFINED defaults).
+        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals', pkFields: ['company_id', 'deal_id'], fromType: 'companies', toType: 'deals', fromPkField: 'company_id', toPkField: 'deal_id', associationCategory: 'HUBSPOT_DEFINED' },
         { name: 'assoc_companies_tickets', label: 'Company ↔ Ticket', description: 'Associations between companies and tickets', apiPath: '/crm/v4/associations/companies/tickets', pkFields: ['company_id', 'ticket_id'] },
         { name: 'assoc_companies_calls', label: 'Company ↔ Call', description: 'Associations between companies and calls', apiPath: '/crm/v4/associations/companies/calls', pkFields: ['company_id', 'call_id'] },
         { name: 'assoc_companies_emails', label: 'Company ↔ Email', description: 'Associations between companies and emails', apiPath: '/crm/v4/associations/companies/emails', pkFields: ['company_id', 'email_id'] },
@@ -1400,11 +1474,16 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 IsReadOnly: p.modificationMetadata?.readOnlyValue === true || p.calculated,
             }));
 
-        // Ensure hs_object_id is the unique key — HubSpot's Properties API sets
+        // Ensure hs_object_id is the record PK — HubSpot's Properties API sets
         // hasUniqueValue=false for hs_object_id even though it IS the record identifier,
-        // so we must override it regardless of what the API reports.
+        // AND the API never returns an IsPrimaryKey signal at all (PK lives in the
+        // response envelope, not in property metadata).  We must therefore stamp
+        // IsPrimaryKey + IsUniqueKey + IsReadOnly on this field explicitly.  Without
+        // the IsPrimaryKey stamp, UpsertField's new-field path persists it without a
+        // PK flag and the downstream SoftPKClassifier becomes our only safety net.
         const pkField = fields.find(f => f.Name === 'hs_object_id');
         if (pkField) {
+            pkField.IsPrimaryKey = true;
             pkField.IsUniqueKey = true;
             pkField.IsReadOnly = true;
         } else {
@@ -1414,6 +1493,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 Description: 'HubSpot internal object ID',
                 DataType: 'string',
                 IsRequired: true,
+                IsPrimaryKey: true,
                 IsUniqueKey: true,
                 IsReadOnly: true,
             });
@@ -1458,6 +1538,38 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             IsUniqueKey: true,
             IsReadOnly: true,
         }];
+    }
+
+    /**
+     * Priority-ordered list of HubSpot "last changed" timestamp field names, used to
+     * populate SourceObjectInfo.IncrementalWatermarkField. Every name here is a field
+     * the connector ALREADY declares on its objects — CRM objects expose
+     * `hs_lastmodifieddate` (contacts use the legacy `lastmodifieddate`), while non-CRM
+     * REST objects expose `updatedAt`. Provable-only: the watermark is set on an object
+     * solely from that object's own declared field list, never invented.
+     */
+    private static readonly WATERMARK_FIELD_CANDIDATES: readonly string[] = [
+        'hs_lastmodifieddate',
+        'lastmodifieddate',
+        'updatedAt',
+    ];
+
+    /**
+     * Promotes an object's own declared "last changed" timestamp field into the
+     * IncrementalWatermarkField slot. Returns the first candidate present in the
+     * supplied field-name set, or undefined when the object declares none — an honest
+     * gap rather than a fabricated watermark. Matching is case-insensitive so a
+     * DB-cached field list (which may differ in casing) still resolves.
+     */
+    private PickIncrementalWatermarkField(fieldNames: string[]): string | undefined {
+        const present = new Set(fieldNames.map(n => n.toLowerCase()));
+        for (const candidate of HubSpotConnector.WATERMARK_FIELD_CANDIDATES) {
+            if (present.has(candidate.toLowerCase())) {
+                // Return the actually-declared name (preserve its real casing).
+                return fieldNames.find(n => n.toLowerCase() === candidate.toLowerCase());
+            }
+        }
+        return undefined;
     }
 
 
@@ -1544,6 +1656,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                     Fields: sourceFields,
                     PrimaryKeyFields: pkFields.map(f => f.Name),
                     Relationships: [],
+                    IncrementalWatermarkField: this.PickIncrementalWatermarkField(sourceFields.map(f => f.Name)),
                 });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
@@ -1581,6 +1694,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                             Fields: sourceFields,
                             PrimaryKeyFields: pkFields.map(f => f.Name),
                             Relationships: [],
+                            IncrementalWatermarkField: this.PickIncrementalWatermarkField(sourceFields.map(f => f.Name)),
                         });
                         console.log(`[HubSpot] Used ${dbFields.length} DB-cached fields for "${obj.Name}" after exception`);
                         continue;
@@ -1681,6 +1795,70 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
+     * Idempotently creates-or-updates a record keyed by a unique business property
+     * (default: the object's `UpsertKey` metadata, e.g. 'email' for contacts).
+     *
+     * Uses HubSpot's batch/upsert endpoint with a batch of one. This is the ONLY HubSpot
+     * single-call idempotent path verified against the live API: the single-record
+     * PATCH .../{id}?idProperty=email does NOT create-on-missing (returns 404), while
+     * POST .../batch/upsert creates-on-missing and updates-on-existing with a 2xx (no 409).
+     * A batch of one sidesteps the documented batch caveats (whole-batch-409 on concurrent
+     * batches, no partial upserts) that only bite multi-input batches.
+     *
+     * This *defines the error out of existence*: a search-then-create sequence has a window in
+     * which a concurrent writer can create the same email-keyed contact, yielding
+     * `409 Contact already exists`. Rather than catch and special-case that 409, the single keyed
+     * upsert removes the window entirely — the collision is no longer a condition the caller (or
+     * this code) ever has to handle.
+     */
+    public override async Upsert(ctx: UpsertRecordContext): Promise<CRUDResult> {
+        const idProperty = ctx.IDProperty ?? this.GetUpsertKey(ctx.ObjectName);
+        if (!idProperty) {
+            return {
+                Success: false,
+                StatusCode: 400,
+                ErrorMessage: `[HubSpot] Upsert on '${ctx.ObjectName}' has no upsert key — set ctx.IDProperty or declare UpsertKey in object metadata`,
+            };
+        }
+
+        const idValue = ctx.Attributes[idProperty];
+        if (idValue == null || String(idValue).length === 0) {
+            return {
+                Success: false,
+                StatusCode: 400,
+                ErrorMessage: `[HubSpot] Upsert on '${ctx.ObjectName}' is missing a value for the upsert key '${idProperty}' in Attributes`,
+            };
+        }
+
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/batch/upsert`;
+
+        // Batch of one: id is the upsert-key value; properties carry the full record.
+        const body = { inputs: [{ idProperty, id: String(idValue), properties: ctx.Attributes }] };
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+
+        // Never trust a bare 2xx — the batch envelope can report per-input errors with a 2xx.
+        const batchError = this.GetBatchUpsertError(response);
+        if (batchError) {
+            return {
+                Success: false,
+                StatusCode: response.Status,
+                ErrorMessage: `[HubSpot] Upsert on ${ctx.ObjectName}: ${batchError}`,
+            };
+        }
+
+        const upserted = (response.Body as { results?: Array<{ id?: unknown }> }).results?.[0];
+        return {
+            Success: true,
+            ExternalID: String(upserted?.id ?? ''),
+            StatusCode: response.Status,
+        };
+    }
+
+    /**
      * Deletes (archives) a record in HubSpot by ExternalID.
      * Routes association objects to the v4 batch/archive endpoint instead of v3 objects.
      */
@@ -1738,19 +1916,33 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             };
         }
 
-        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
-        const fromType = pathParts[pathParts.length - 2];
-        const toType = pathParts[pathParts.length - 1];
+        // Wire direction is explicit config, decoupled from pkFields/apiPath order.
+        // attributes are keyed by pkField name, so map from/to via fromPkField/toPkField.
+        const { fromType, toType } = this.GetAssociationWireTypes(assocConfig);
+        const fromID = assocConfig.fromPkField ? String(attributes[assocConfig.fromPkField] ?? '') : leftID;
+        const toID = assocConfig.toPkField ? String(attributes[assocConfig.toPkField] ?? '') : rightID;
+
+        // typeId: hardcoded verified-only fast path; otherwise resolve from /labels.
+        const typeId = assocConfig.associationTypeId
+            ?? await this.ResolveAssociationTypeId(auth, headers, fromType, toType);
+        if (typeId == null) {
+            return { Success: false, ExternalID: '', StatusCode: 400, ErrorMessage: `CreateAssociation ${objectName}: could not resolve a HUBSPOT_DEFINED association typeId for ${fromType}->${toType}` };
+        }
+        const types = [{ associationCategory: assocConfig.associationCategory ?? 'HUBSPOT_DEFINED', associationTypeId: typeId }];
 
         const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/create`;
-        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID }, types: [] }] };
+        const body = { inputs: [{ from: { id: fromID }, to: { id: toID }, types }] };
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
 
-        if (response.Status >= 200 && response.Status < 300) {
+        // Never trust a bare 2xx — HubSpot returns 2xx with numErrors/empty results on
+        // validation failures and on the old empty-types no-op.
+        const batchError = this.GetAssociationBatchError(response);
+        if (!batchError) {
+            // Stored ExternalID stays in pkFields order (left|right), NOT wire order.
             return { Success: true, ExternalID: `${leftID}|${rightID}`, StatusCode: response.Status };
         }
 
-        return this.BuildCRUDErrorResult(response, 'CreateAssociation', objectName);
+        return { Success: false, ExternalID: '', StatusCode: response.Status, ErrorMessage: `CreateAssociation ${objectName}: ${batchError}` };
     }
 
     /**
@@ -1781,12 +1973,16 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const leftID = externalID.substring(0, pipeIndex);
         const rightID = externalID.substring(pipeIndex + 1);
 
-        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
-        const fromType = pathParts[pathParts.length - 2];
-        const toType = pathParts[pathParts.length - 1];
+        // Stored key is in pkFields order (left=pkFields[0], right=pkFields[1]). Map to the
+        // explicit wire direction so archive matches the create direction.
+        const { fromType, toType } = this.GetAssociationWireTypes(assocConfig);
+        const [leftPkField] = assocConfig.pkFields;
+        const idByPkField: Record<string, string> = { [leftPkField]: leftID, [assocConfig.pkFields[1]]: rightID };
+        const fromID = assocConfig.fromPkField ? idByPkField[assocConfig.fromPkField] : leftID;
+        const toID = assocConfig.toPkField ? idByPkField[assocConfig.toPkField] : rightID;
 
         const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/archive`;
-        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID } }] };
+        const body = { inputs: [{ from: { id: fromID }, to: { id: toID } }] };
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
 
         // batch/archive returns 204 No Content on success
@@ -1891,6 +2087,123 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }
     }
 
+    /**
+     * Resolves the v4 wire from/to object types for an association. Uses explicit fromType/toType
+     * config when present; otherwise falls back to apiPath segment order. Both
+     * CreateAssociation and DeleteAssociation share this so create and archive always agree.
+     */
+    private GetAssociationWireTypes(
+        assocConfig: typeof HubSpotConnector.ASSOCIATION_OBJECTS[number]
+    ): { fromType: string; toType: string } {
+        const segments = assocConfig.apiPath.split('/').filter(Boolean);
+        return {
+            fromType: assocConfig.fromType ?? segments.at(-2)!,
+            toType: assocConfig.toType ?? segments.at(-1)!,
+        };
+    }
+
+    /**
+     * Resolves the default HUBSPOT_DEFINED association typeId for a (fromType, toType) pair via
+     * GET /crm/v4/associations/{fromType}/{toType}/labels, cached per pair for the connector's life.
+     * Picks the unlabeled HUBSPOT_DEFINED entry (label === null) as the plain default; if none is
+     * unlabeled, falls back to the sole/first HUBSPOT_DEFINED entry. Returns null on lookup failure
+     * or when no HUBSPOT_DEFINED entry exists — callers MUST treat null as a hard error (never
+     * silently send empty types).
+     */
+    private async ResolveAssociationTypeId(
+        auth: RESTAuthContext,
+        headers: Record<string, string>,
+        fromType: string,
+        toType: string
+    ): Promise<number | null> {
+        const cacheKey = `${fromType}/${toType}`;
+        const cached = this._assocTypeIdCache.get(cacheKey);
+        if (cached != null) return cached;
+
+        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/labels`;
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status < 200 || response.Status >= 300) {
+            console.warn(`[HubSpot] /labels lookup failed for ${cacheKey}: HTTP ${response.Status}`);
+            return null;
+        }
+
+        const body = response.Body as { results?: Array<{ category?: string; typeId?: number; label?: string | null }> } | undefined;
+        const defined = (body?.results ?? []).filter(r => r.category === 'HUBSPOT_DEFINED' && r.typeId != null);
+        if (defined.length === 0) return null;
+
+        const unlabeled = defined.find(r => r.label == null);
+        const chosen = (unlabeled ?? defined[0]).typeId!;
+        this._assocTypeIdCache.set(cacheKey, chosen);
+        return chosen;
+    }
+
+    /**
+     * Validates a v4 association batch/create response BODY (not just the HTTP status).
+     * HubSpot returns 2xx even when zero associations are created — on the legacy empty-`types`
+     * no-op (empty results, no errors) and on validation failures (empty results + numErrors).
+     * Returns null when the operation genuinely completed; otherwise a human-readable error.
+     * Predicate verified against live HubSpot batch/create responses.
+     */
+    private GetAssociationBatchError(response: RESTResponse): string | null {
+        if (response.Status < 200 || response.Status >= 300) {
+            const b = response.Body as Record<string, unknown> | undefined;
+            return b?.['message'] ? String(b['message']) : `HTTP ${response.Status}`;
+        }
+        const body = response.Body as {
+            status?: string;
+            results?: unknown[];
+            errors?: Array<{ message?: string }>;
+            numErrors?: number;
+        } | undefined;
+
+        if (body?.numErrors || (body?.errors && body.errors.length > 0)) {
+            return body.errors?.[0]?.message ?? `HubSpot reported ${body?.numErrors ?? body?.errors?.length} association error(s)`;
+        }
+        if (body?.status && body.status !== 'COMPLETE') {
+            return `association batch status was '${body.status}', expected 'COMPLETE'`;
+        }
+        if (!body?.results || body.results.length === 0) {
+            return `HubSpot returned no association results (2xx but nothing linked)`;
+        }
+        return null;
+    }
+
+    /**
+     * Validates a v3 batch/upsert response BODY (not just the HTTP status). HubSpot's batch
+     * envelope can return a 2xx while reporting per-input failures via `numErrors`/`errors`,
+     * an incomplete `status`, or an empty `results` array. Returns null when the upsert
+     * genuinely produced a record; otherwise a human-readable error. Mirrors the
+     * GetAssociationBatchError precedent — never trust a bare 2xx on a batch endpoint.
+     */
+    private GetBatchUpsertError(response: RESTResponse): string | null {
+        if (response.Status < 200 || response.Status >= 300) {
+            const b = response.Body as Record<string, unknown> | undefined;
+            return b?.['message'] ? String(b['message']) : `HTTP ${response.Status}`;
+        }
+        const body = response.Body as {
+            status?: string;
+            results?: Array<{ id?: unknown }>;
+            errors?: Array<{ message?: string }>;
+            numErrors?: number;
+        } | undefined;
+
+        if (body?.numErrors || (body?.errors && body.errors.length > 0)) {
+            return body.errors?.[0]?.message ?? `HubSpot reported ${body?.numErrors ?? body?.errors?.length} upsert error(s)`;
+        }
+        if (body?.status && body.status !== 'COMPLETE') {
+            return `upsert batch status was '${body.status}', expected 'COMPLETE'`;
+        }
+        if (!body?.results || body.results.length === 0) {
+            return `HubSpot returned no upsert results (2xx but nothing written)`;
+        }
+        // A 2xx result with no usable id means the write didn't really land — reporting success here
+        // would hand the caller an empty ExternalID and silently break any later lookup keyed on it.
+        if (body.results[0]?.id == null || String(body.results[0].id).length === 0) {
+            return `HubSpot upsert result is missing an object id (2xx but no id to link)`;
+        }
+        return null;
+    }
+
     /** Builds a CRUDResult for error responses. */
     private BuildCRUDErrorResult(response: RESTResponse, operation: string, objectName: string): CRUDResult {
         const bodyObj = response.Body as Record<string, unknown> | undefined;
@@ -1982,7 +2295,10 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             return this.BuildRESTResponse(response, responseBody);
         }
 
-        throw new Error(`HubSpot API request failed after ${maxRetries} retries: ${url}`);
+        // The loop only retries on 429 (every other status returns above), so exhausting retries here
+        // means sustained 429 rate-limiting. Carry the "429 rate limit" marker so ClassifyError →
+        // RATE_LIMIT_EXCEEDED and the engine's adaptive limiter / ExtractRetryAfterMs react correctly.
+        throw new Error(`HubSpot 429 rate limit: request failed after ${maxRetries} retries (sustained throttling): ${url}`);
     }
 
     protected NormalizeResponse(
@@ -2693,8 +3009,28 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /**
      * Fetches changed records using the HubSpot search API with server-side date filtering.
      * Much more efficient than fetching ALL records and filtering client-side.
+     *
+     * Handles the search API's 10,000-results-per-window hard cap by keyset re-anchoring: results
+     * are sorted by (dateField, hs_object_id) ASCENDING, paginated within a window by the API's
+     * opaque `after` offset, and once that offset hits the 10k cap the NEXT window re-anchors with a
+     * compound filter `(dateField > anchor) OR (dateField == anchor AND hs_object_id > anchorId)`.
+     * This makes an incremental window — or a bulk-import cluster of >10k records that all share one
+     * `hs_lastmodifieddate` — page through completely in a single sync, instead of the watermark
+     * stalling on a same-timestamp cluster it can never advance past (which silently lost records).
+     * The date GTE watermark remains the primary filter throughout, so incremental sync is preserved.
+     *
+     * LIVE-VERIFY (confirm during the credentialed run against a real >10k same-timestamp cluster):
+     *  1. hs_object_id GT/EQ comparison in v3 search is NUMERIC, not lexicographic. HIGHEST STAKES — if
+     *     lexicographic, '2' > '10000' and the keyset would skip records. (hs_object_id is a sequential
+     *     64-bit integer / number-typed property, so numeric is expected, but prove it across an
+     *     id-magnitude boundary, e.g. ids 9, 10, 100, 1000 within one timestamp cluster.)
+     *  2. Datetime filter values accept epoch-millis-as-string for EQ/GT/GTE (the pre-existing GTE
+     *     watermark filter already relies on this, so a regression here would also break prior behavior).
+     *  3. The compound (dateField ASC, hs_object_id ASC) sort is honored deterministically across pages
+     *     and object types, so the last raw result is the true (date,id)-max keyset boundary.
+     *  4. `total` reflects the CURRENT filterGroups per re-anchored query (not a cached original count).
      */
-    private async FetchChangesViaSearch(ctx: FetchContext): Promise<FetchBatchResult> {
+    protected async FetchChangesViaSearch(ctx: FetchContext): Promise<FetchBatchResult> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -2705,21 +3041,36 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const properties = this.BuildEffectiveProperties(ctx.ObjectName, ctx.RequestedSourceFields);
         const pageSize = Math.min(ctx.BatchSize ?? 100, 100); // HubSpot search API max is 100
 
+        const cursor = this.parseSearchCursor(ctx.CurrentCursor);
+        const isReanchored = cursor.anchorDateMs != null && cursor.anchorId != null;
+
+        // When re-anchored past a 10k window, the keyset predicate replaces the plain GTE filter.
+        // anchorDateMs is always >= watermarkMs (we only ever advance), so the keyset predicate
+        // subsumes the original watermark filter — incremental scope is never widened.
+        const filterGroups = isReanchored
+            ? [
+                  { filters: [{ propertyName: dateField, operator: 'GT', value: cursor.anchorDateMs }] },
+                  { filters: [
+                      { propertyName: dateField, operator: 'EQ', value: cursor.anchorDateMs },
+                      { propertyName: 'hs_object_id', operator: 'GT', value: cursor.anchorId },
+                  ] },
+              ]
+            : [{ filters: [{ propertyName: dateField, operator: 'GTE', value: String(watermarkMs) }] }];
+
         const searchBody: Record<string, unknown> = {
-            filterGroups: [{
-                filters: [{
-                    propertyName: dateField,
-                    operator: 'GTE',
-                    value: String(watermarkMs),
-                }],
-            }],
-            sorts: [{ propertyName: dateField, direction: 'ASCENDING' }],
+            filterGroups,
+            // Secondary sort on hs_object_id is REQUIRED: it makes ordering deterministic within a
+            // same-timestamp cluster so the keyset anchor (last record's id) is well-defined and the
+            // next window can never skip or re-emit a record at the boundary.
+            sorts: [
+                { propertyName: dateField, direction: 'ASCENDING' },
+                { propertyName: 'hs_object_id', direction: 'ASCENDING' },
+            ],
             properties,
             limit: pageSize,
         };
-
-        if (ctx.CurrentCursor) {
-            searchBody['after'] = ctx.CurrentCursor;
+        if (cursor.after) {
+            searchBody['after'] = cursor.after;
         }
 
         const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/search`;
@@ -2731,20 +3082,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             total?: number;
             paging?: { next?: { after?: string } };
         };
-
-        // HubSpot Search API hard limit: 10,000 results maximum per query window.
-        // If total > 10K, only the oldest-modified records (sorted ASCENDING) are returned.
-        // The watermark advances to the batch's max date each cycle, so subsequent syncs
-        // pick up the remainder — no records are permanently lost, but multiple sync cycles
-        // are needed to catch up. Log a warning so operators can monitor.
         const searchTotal = body.total ?? 0;
-        if (searchTotal > 10_000) {
-            console.warn(
-                `[HubSpot] ${ctx.ObjectName}: Search API returned total=${searchTotal} but is capped at 10,000 results. ` +
-                `Sync will require ${Math.ceil(searchTotal / 10_000)} cycles to catch up from watermark ${ctx.WatermarkValue}. ` +
-                `Consider reducing the sync interval or enabling continuous sync for this object.`
-            );
-        }
 
         const rawResults = body.results ?? [];
         const records: ExternalRecord[] = rawResults.map(r => {
@@ -2757,11 +3095,39 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             };
         });
 
-        const nextCursor = body.paging?.next?.after;
-        const hasMore = nextCursor != null;
+        // Keyset anchor for the NEXT window = the last record in (date, id) sort order.
+        const anchor = this.extractSearchAnchor(rawResults, dateField);
+        const { nextCursor, hasMore, stalled } = this.computeSearchResume({
+            incoming: cursor,
+            pagingNextAfter: body.paging?.next?.after,
+            total: searchTotal,
+            lastAnchorDateMs: anchor.dateMs,
+            lastAnchorId: anchor.id,
+        });
 
-        // On the final page of active records, also fetch archived (deleted) records
-        // since the watermark so they flow through the engine's delete pipeline.
+        if (stalled) {
+            // total exceeds the window cap but we couldn't form a keyset anchor to page past it. Fail
+            // LOUD rather than silently dropping the remainder: the engine catches this, marks the
+            // fetch incomplete, and leaves the watermark un-advanced so the next sync retries the gap.
+            throw new Error(
+                `HubSpot ${ctx.ObjectName}: search reported total=${searchTotal} (beyond the ` +
+                `${HUBSPOT_SEARCH_WINDOW_CAP}-record window cap) but the last page returned no keyset anchor, ` +
+                `so the scan cannot advance without risking silent record loss. Aborting this fetch; the ` +
+                `watermark is left un-advanced and the remainder is retried on the next sync.`
+            );
+        }
+
+        if (searchTotal > HUBSPOT_SEARCH_WINDOW_CAP && !cursor.after && !isReanchored) {
+            // Informational only — the keyset re-anchor below pages through the whole window in this
+            // sync; this is no longer a multi-cycle stall, just a large object worth noting.
+            console.log(
+                `[HubSpot] ${ctx.ObjectName}: ${searchTotal} records since watermark exceed the 10k search window; ` +
+                `keyset-paginating by (${dateField}, hs_object_id) to fetch them all in this sync.`
+            );
+        }
+
+        // On the final page of the entire scan, also fetch archived (deleted) records since the
+        // watermark so they flow through the engine's delete pipeline.
         if (!hasMore) {
             const archived = await this.FetchArchivedCRMChanges(
                 auth, headers, ctx.ObjectName, dateField, watermarkMs, properties
@@ -2781,9 +3147,109 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         return {
             Records: records,
             HasMore: hasMore,
-            NextCursor: nextCursor,
+            NextCursor: nextCursor ? JSON.stringify(nextCursor) : undefined,
             NewWatermarkValue: newWatermark,
         };
+    }
+
+    /**
+     * Parses the {@link HubSpotSearchCursor} threaded via FetchContext.CurrentCursor. Tolerates a
+     * legacy raw `after` string (pre-keyset format) by treating it as a plain window offset, so an
+     * in-flight sync mid-upgrade degrades gracefully rather than throwing.
+     */
+    protected parseSearchCursor(raw: string | undefined): HubSpotSearchCursor {
+        if (!raw) return {};
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed as HubSpotSearchCursor;
+            // Parsed to a primitive (e.g. a bare numeric `after` like "9900" from the pre-keyset
+            // format) — treat the raw value as a plain window offset.
+            return { after: raw };
+        } catch {
+            return { after: raw };
+        }
+    }
+
+    /**
+     * Extracts the keyset anchor (the last record's dateField-as-epoch-ms and hs_object_id) from a
+     * batch of raw search results. Because results are sorted (dateField, hs_object_id) ASCENDING,
+     * the last element is the maximum position and therefore the resume point for the next window.
+     * Returns undefined fields when the batch is empty or the values can't be parsed.
+     */
+    private extractSearchAnchor(
+        rawResults: unknown[],
+        dateField: string
+    ): { dateMs?: string; id?: string } {
+        if (rawResults.length === 0) return {};
+        const lastFlat = this.FlattenHubSpotRecord(rawResults[rawResults.length - 1] as Record<string, unknown>);
+        const id = lastFlat['hs_object_id'];
+        const result: { dateMs?: string; id?: string } = {};
+        if (id != null && String(id).length > 0) result.id = String(id);
+        const dateMs = this.toEpochMs(lastFlat[dateField]);
+        if (dateMs != null) result.dateMs = dateMs;
+        return result;
+    }
+
+    /**
+     * Normalizes a HubSpot datetime property value to an epoch-millis string for use in a search
+     * filter. Accepts both an ISO-8601 string (the usual v3 shape) and a bare epoch-millis numeric
+     * string (some endpoints/properties). Returns undefined when unparseable — callers then skip
+     * re-anchoring rather than seeking from a NaN position.
+     */
+    private toEpochMs(dateVal: unknown): string | undefined {
+        if (dateVal == null) return undefined;
+        const s = String(dateVal);
+        const iso = new Date(s).getTime();
+        if (!Number.isNaN(iso)) return String(iso);
+        const epoch = Number(s);
+        if (!Number.isNaN(epoch) && epoch > 0) return String(epoch);
+        return undefined;
+    }
+
+    /**
+     * Pure decision for the next search window, given this page's pagination + total. No network.
+     *
+     * - If more pages remain inside the current ≤10k window, advance the API `after` offset and keep
+     *   the same anchor.
+     * - Otherwise the window is exhausted (the API stopped returning `after`, or it reached the 10k
+     *   cap). If records still match the current filter (`total > cap`), re-anchor the next window on
+     *   the last record's (dateField, hs_object_id) keyset; else the scan is complete.
+     *
+     * `total` is the count matching the CURRENT filter, so after each re-anchor it shrinks by roughly
+     * one window until it falls to/under the cap — guaranteeing termination with no skipped records
+     * (the anchor's id strictly increases) and no duplicates (the keyset predicate excludes it).
+     */
+    protected computeSearchResume(args: {
+        incoming: HubSpotSearchCursor;
+        pagingNextAfter: string | undefined;
+        total: number;
+        lastAnchorDateMs: string | undefined;
+        lastAnchorId: string | undefined;
+    }): { nextCursor: HubSpotSearchCursor | undefined; hasMore: boolean; stalled?: boolean } {
+        const { incoming, pagingNextAfter, total, lastAnchorDateMs, lastAnchorId } = args;
+        const cap = HUBSPOT_SEARCH_WINDOW_CAP;
+
+        const withinWindow = pagingNextAfter != null && Number(pagingNextAfter) < cap;
+        if (withinWindow) {
+            return {
+                nextCursor: { after: pagingNextAfter, anchorDateMs: incoming.anchorDateMs, anchorId: incoming.anchorId },
+                hasMore: true,
+            };
+        }
+
+        if (total > cap) {
+            if (lastAnchorId != null && lastAnchorDateMs != null) {
+                return { nextCursor: { anchorDateMs: lastAnchorDateMs, anchorId: lastAnchorId }, hasMore: true };
+            }
+            // total exceeds the 10k window cap but this page produced no usable keyset anchor — which
+            // means HubSpot returned a total > 0 with an empty/anchorless page (a contract violation).
+            // Re-anchoring is impossible; silently stopping here would DROP the remaining records — the
+            // exact silent-loss this fix exists to prevent. Flag it so the caller aborts loudly and
+            // leaves the watermark un-advanced (the next sync retries the gap) instead of skipping it.
+            return { nextCursor: undefined, hasMore: false, stalled: true };
+        }
+
+        return { nextCursor: undefined, hasMore: false };
     }
 
     /**
@@ -2819,7 +3285,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                         value: String(watermarkMs),
                     }],
                 }],
-                sorts: [{ propertyName: dateField, direction: 'ASCENDING' }],
+                // Secondary sort on hs_object_id matches the active-record path: bulk deletions often
+                // share one hs_lastmodifieddate, so without a tie-breaker the opaque `after` pages of
+                // this archived scan have undefined intra-cluster order and could skip/duplicate.
+                sorts: [
+                    { propertyName: dateField, direction: 'ASCENDING' },
+                    { propertyName: 'hs_object_id', direction: 'ASCENDING' },
+                ],
                 properties,
                 limit: 100,
                 archived: true,
@@ -2887,7 +3359,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const parsed = this.ParseAssociationPath(obj.APIPath);
         if (!parsed) {
             console.warn(`[HubSpot] Cannot parse association path: ${obj.APIPath}`);
-            return { Records: [], HasMore: false };
+            return {
+                Records: [], HasMore: false,
+                Warnings: [{
+                    Code: 'ASSOCIATION_PATH_UNPARSEABLE',
+                    Message: `Association '${obj.Name}' has an unparseable APIPath '${obj.APIPath}' — cannot determine the from/to object types, so 0 associations were fetched (not a real "no data" result).`,
+                    Data: { object: obj.Name, apiPath: obj.APIPath },
+                }],
+            };
         }
         const { fromType, toType } = parsed;
 
@@ -2902,6 +3381,24 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const parentIDs = await this.LoadAssociationParentIDs(fromType, ctx);
         const parentOffset = ctx.CurrentOffset ?? 0;
         const BATCH_LIMIT = 100; // HubSpot v4 batch/read max inputs per request
+
+        // Zero parents on the FIRST page = the silent-empty case for a second-layer object: there is
+        // no parent `fromType` data in MJ to read associations from (parent not synced/mapped, or its
+        // entity-map disabled, or DAG ordered this before its parent). Surface it as a structured
+        // FetchWarning so the engine records it in the run artifact (visible over GraphQL) instead
+        // of a quiet zero-record "success". Subsequent pages legitimately exhaust to 0 — not flagged.
+        if (parentOffset === 0 && parentIDs.length === 0) {
+            console.warn(`[HubSpot] Association '${obj.Name}': 0 parent ${fromType} records in MJ — nothing to associate.`);
+            return {
+                Records: [],
+                HasMore: false,
+                Warnings: [{
+                    Code: 'ZERO_PARENTS',
+                    Message: `Association '${obj.Name}' has no parent ${fromType} records in MJ to read associations from — '${fromType}' was not synced/mapped this run (or its entity-map is disabled). 0 associations fetched.`,
+                    Data: { object: obj.Name, parentType: fromType },
+                }],
+            };
+        }
 
         if (parentOffset === 0) {
             console.log(`[HubSpot] Fetching ${obj.Name}: ${parentIDs.length} parent ${fromType} via batch API (100/request)`);
@@ -2943,8 +3440,10 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         if (response.Status < 200 || response.Status >= 300) {
             const respBody = response.Body as Record<string, unknown> | undefined;
             const msg = respBody?.message ?? respBody?.error ?? JSON.stringify(respBody);
-            console.warn(`[HubSpot] Association batch read failed for ${objectName}: HTTP ${response.Status} — ${msg}`);
-            return [];
+            // Surface as a real error (the engine's fetch handler records it as sync.record.error in
+            // the run artifact) instead of a swallowed console.warn + empty result that reads as a
+            // successful "no associations" — a non-2xx batch/read is a failure, not absence of data.
+            throw new Error(`[HubSpot] Association batch read failed for ${objectName}: HTTP ${response.Status} — ${msg}`);
         }
 
         const respBody = response.Body as {
@@ -3057,6 +3556,15 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     private GetObjectFieldNames(objectName: string): string[] {
         const obj = HUBSPOT_OBJECTS.find(o => o.Name === objectName);
         return obj ? obj.Fields.map(f => f.Name) : [];
+    }
+
+    /**
+     * Returns the configured upsert key (unique business property to match on) for an
+     * object from HUBSPOT_OBJECTS metadata, or undefined if the object declares none.
+     * Used by Upsert to default the idProperty when the caller doesn't override it.
+     */
+    private GetUpsertKey(objectName: string): string | undefined {
+        return HUBSPOT_OBJECTS.find(o => o.Name === objectName)?.UpsertKey;
     }
 
     /**

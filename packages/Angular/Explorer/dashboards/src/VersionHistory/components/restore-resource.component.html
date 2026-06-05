@@ -14,24 +14,17 @@
       <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
     </div>
     <div toolbar>
-      <mj-filter-chip
-        Label="Complete"
-        Icon="fa-solid fa-circle-check"
-        [Active]="StatusFilter === 'Complete'"
-        (Clicked)="OnStatusFilterChange('Complete')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Error"
-        Icon="fa-solid fa-circle-xmark"
-        [Active]="StatusFilter === 'Error'"
-        (Clicked)="OnStatusFilterChange('Error')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Partial"
-        Icon="fa-solid fa-circle-half-stroke"
-        [Active]="StatusFilter === 'Partial'"
-        (Clicked)="OnStatusFilterChange('Partial')">
-      </mj-filter-chip>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetStatusFilter()">
+        <mj-filter-panel
+          [Fields]="statusFilterFields"
+          [Values]="statusFilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetStatusFilter()">
+        </mj-filter-panel>
+      </mj-filter-popover>
     </div>
   </mj-page-header>
 

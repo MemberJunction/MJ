@@ -62,8 +62,35 @@
                 <div class="card-content">
                   <h3>Total Cost</h3>
                   <div class="metric-value">{{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
-                  <div class="metric-detail">
-                    <span>{{ promptMetrics.tokenUsage.totalInput + promptMetrics.tokenUsage.totalOutput }} tokens</span>
+                  <div class="metric-detail cache-detail">
+                    <span>{{ totalTokensProcessed | number }} tokens</span>
+                    @if (promptMetrics.tokenUsage.totalCacheRead > 0 || promptMetrics.tokenUsage.totalCacheWrite > 0) {
+                      <span>incl. {{ (promptMetrics.tokenUsage.totalCacheRead + promptMetrics.tokenUsage.totalCacheWrite) | number }} cached</span>
+                    }
+                    @if (inputCost > 0 || outputCost > 0) {
+                      <span>input {{ formatCost(inputCost) }} &middot; output {{ formatCost(outputCost) }}</span>
+                    }
+                    @if (cacheSavings > 0) {
+                      <span class="success">saved {{ formatCost(cacheSavings) }} ({{ cacheSavingsPct | number:'1.0-0' }}%) via cache</span>
+                    }
+                  </div>
+                </div>
+              </div>
+              <div class="summary-card">
+                <div class="card-icon cache">
+                  <i class="fas fa-bolt"></i>
+                </div>
+                <div class="card-content">
+                  <h3>Prompt Cache</h3>
+                  <div class="metric-value">{{ promptMetrics.tokenUsage.totalCacheRead | number }}</div>
+                  <div class="metric-detail cache-detail">
+                    <span>tokens read from cache</span>
+                    @if (promptMetrics.tokenUsage.totalCacheWrite > 0) {
+                      <span>{{ promptMetrics.tokenUsage.totalCacheWrite | number }} written</span>
+                    }
+                    @if (promptMetrics.tokenUsage.totalCacheRead > 0 || promptMetrics.tokenUsage.totalCacheWrite > 0) {
+                      <span>{{ cacheHitRatePct | number:'1.0-0' }}% hit rate</span>
+                    }
                   </div>
                 </div>
               </div>

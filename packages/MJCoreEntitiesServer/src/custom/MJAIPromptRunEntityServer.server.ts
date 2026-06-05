@@ -69,9 +69,14 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             return false;
         }
         
-        // Must have token usage to calculate (at least one token field > 0)
-        if (!this.TokensPrompt || !this.TokensCompletion || 
-            (this.TokensPrompt <= 0 && this.TokensCompletion <= 0)) {
+        // Must have token usage to calculate (at least one input or output token > 0). Input is the
+        // TOTAL input the provider processed: net-new (TokensPrompt) + cache reads + cache writes.
+        // A heavily-cached call can have TokensPrompt === 0 yet still incur input cost via cache
+        // tokens, so we gate on the total rather than net-new alone.
+        const totalInputTokens =
+            (this.TokensPrompt ?? 0) + (this.TokensCacheRead ?? 0) + (this.TokensCacheWrite ?? 0);
+        const totalCompletionTokens = this.TokensCompletion ?? 0;
+        if (totalInputTokens <= 0 && totalCompletionTokens <= 0) {
             return false;
         }
         
@@ -124,10 +129,18 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 return;
             }
             
-            const normalizedCost = priceCalculator.CalculateNormalizedCost(
+            // Price each input bucket at its own rate: uncached/net-new (TokensPrompt) at the
+            // standard input rate, cache reads/writes at CacheReadPricePerUnit/CacheWritePricePerUnit
+            // when the cost row records them. When those cache rates are NULL the calculator falls
+            // back to the input rate, so the result is identical to the prior single-bucket behavior
+            // for models without cache pricing — while models that DO have cache rates get the
+            // (usually much cheaper) cached-token cost instead of being billed as full input.
+            const normalizedCost = priceCalculator.CalculateNormalizedCostWithCache(
                 activeCost,
-                this.TokensPrompt,
-                this.TokensCompletion
+                this.TokensPrompt ?? 0,
+                this.TokensCacheRead ?? 0,
+                this.TokensCacheWrite ?? 0,
+                this.TokensCompletion ?? 0
             );
             
             // Set the cost fields

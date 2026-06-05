@@ -21,7 +21,16 @@ vi.mock('@memberjunction/core', () => ({
     })),
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
-    IsVerboseLoggingEnabled: vi.fn(() => false)
+    IsVerboseLoggingEnabled: vi.fn(() => false),
+    // Added in v5.39 for decoupling fix — the engine imports these even on
+    // code paths these existing tests don't exercise. Minimal class stubs
+    // so module-load doesn't fail.
+    IMetadataProvider: class {},
+    RunView: class {
+        async RunView(): Promise<{ Success: boolean; Results: unknown[] }> {
+            return { Success: true, Results: [] };
+        }
+    }
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -43,6 +52,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         SuccessCount = 0;
         FailureCount = 0;
         LastRunAt: Date | null = null;
+        RunImmediatelyIfNeverRun = false;
         JobTypeID = '';
         NotifyOnSuccess = false;
         NotifyOnFailure = false;
@@ -112,7 +122,17 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         GetJobTypeByName: vi.fn(),
         GetJobTypeByDriverClass: vi.fn(),
         GetJobsByType: vi.fn().mockReturnValue([]),
-        GetRunsForJob: vi.fn().mockReturnValue([])
+        GetRunsForJob: vi.fn().mockReturnValue([]),
+        // Added in v5.39 for the decoupling fix. Provider doubles as both an
+        // IMetadataProvider and a DatabaseProviderBase via the engine's cast.
+        // Default ExecuteSQL returns the permission-probe "OK" shape so the
+        // probe call in StartPolling doesn't warn.
+        ContextUser: { ID: 'user-1' },
+        ProviderToUse: {
+            MJCoreSchemaName: '__mj',
+            ExecuteSQL: vi.fn().mockResolvedValue([{ permission_name: 'EXECUTE' }])
+        },
+        RunViewProviderToUse: {}
     };
 
     return {
@@ -137,6 +157,7 @@ vi.mock('../NotificationManager', () => ({
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
+import { CronExpressionHelper } from '../CronExpressionHelper';
 
 describe('SchedulingEngine', () => {
     let engine: SchedulingEngine;
@@ -146,6 +167,12 @@ describe('SchedulingEngine', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
+        // `vi.clearAllMocks()` wipes the mock return values declared at
+        // `vi.mock()` registration time, so re-install the CronExpressionHelper
+        // stubs here. Without this, GetNextRunTime returns undefined and the
+        // initializeNextRunTimes branch tests can't observe the cron-tick path.
+        (CronExpressionHelper.GetNextRunTime as ReturnType<typeof vi.fn>).mockReturnValue(new Date('2025-06-01T00:00:00Z'));
+        (CronExpressionHelper.IsExpressionDue as ReturnType<typeof vi.fn>).mockReturnValue(false);
         // Access the singleton and reset its state
         engine = SchedulingEngine.Instance;
         // Stop any existing polling
@@ -176,36 +203,46 @@ describe('SchedulingEngine', () => {
     });
 
     describe('StopPolling', () => {
-        it('should do nothing when not polling', () => {
+        it('should do nothing when not polling', async () => {
             expect(engine.IsPolling).toBe(false);
-            engine.StopPolling();
+            await engine.StopPolling();
             expect(engine.IsPolling).toBe(false);
         });
 
-        it('should set IsPolling to false when called', () => {
-            // Start polling first
+        it('should set IsPolling to false when called', async () => {
+            // Start polling first. v5.39: StartPolling is async, and requires
+            // at least one active job to actually set isPolling=true (otherwise
+            // it short-circuits with "no active jobs, polling not started").
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
-            engine.StopPolling();
+            await engine.StopPolling();
             expect(engine.IsPolling).toBe(false);
+            mockBase.ScheduledJobs = [];
         });
     });
 
     describe('StartPolling', () => {
-        it('should set IsPolling to true', () => {
+        it('should set IsPolling to true', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
         });
 
-        it('should not start double polling if already polling', () => {
+        it('should not start double polling if already polling', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             const firstPollingState = engine.IsPolling;
             // Calling again should be a no-op
-            engine.StartPolling(mockUser);
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(firstPollingState);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
         });
     });
 
@@ -277,6 +314,68 @@ describe('SchedulingEngine', () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.OnJobChanged>[0];
             await engine.OnJobChanged(mockUser);
             expect(mockBase.UpdatePollingInterval).toHaveBeenCalled();
+        });
+    });
+
+    describe('initializeNextRunTimes — RunImmediatelyIfNeverRun', () => {
+        // Helper to build a minimal job object matching the MJScheduledJobEntity mock shape
+        const buildJob = (overrides: Partial<Record<string, unknown>>): Record<string, unknown> => ({
+            ID: 'job-1',
+            Name: 'Test Job',
+            CronExpression: '0 4 * * *',
+            Timezone: 'UTC',
+            NextRunAt: null,
+            LastRunAt: null,
+            RunImmediatelyIfNeverRun: false,
+            Save: vi.fn().mockResolvedValue(true),
+            ...overrides,
+        });
+
+        // The method we're testing is private. Calling via a typed cast is
+        // cleaner than the alternative of plumbing every code path that
+        // reaches it for the sake of one branch test.
+        const callInitialize = async (jobs: Array<Record<string, unknown>>): Promise<void> => {
+            (mockBase as Record<string, unknown>).ScheduledJobs = jobs;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (engine as any).initializeNextRunTimes({ ID: 'user-1' });
+        };
+
+        it('sets NextRunAt to the next cron tick when the flag is off', async () => {
+            const nextTick = new Date('2025-06-01T00:00:00Z');
+            const job = buildJob({ RunImmediatelyIfNeverRun: false, LastRunAt: null });
+            await callInitialize([job]);
+            expect(job.NextRunAt).toEqual(nextTick);
+            expect(job.Save).toHaveBeenCalledOnce();
+        });
+
+        it('sets NextRunAt to "now" when flag is on AND the job has never run', async () => {
+            vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+            const job = buildJob({ RunImmediatelyIfNeverRun: true, LastRunAt: null });
+            await callInitialize([job]);
+            expect((job.NextRunAt as Date).toISOString()).toBe('2026-01-15T12:00:00.000Z');
+            expect(job.Save).toHaveBeenCalledOnce();
+        });
+
+        it('uses the cron tick when the flag is on but the job HAS run before', async () => {
+            const nextTick = new Date('2025-06-01T00:00:00Z');
+            const job = buildJob({
+                RunImmediatelyIfNeverRun: true,
+                LastRunAt: new Date('2026-01-10T00:00:00Z'),
+            });
+            await callInitialize([job]);
+            expect(job.NextRunAt).toEqual(nextTick);
+        });
+
+        it('does nothing when NextRunAt is already set', async () => {
+            const existing = new Date('2026-02-01T00:00:00Z');
+            const job = buildJob({
+                RunImmediatelyIfNeverRun: true,
+                LastRunAt: null,
+                NextRunAt: existing,
+            });
+            await callInitialize([job]);
+            expect(job.NextRunAt).toBe(existing);
+            expect(job.Save).not.toHaveBeenCalled();
         });
     });
 });

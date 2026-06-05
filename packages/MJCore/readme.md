@@ -858,6 +858,56 @@ Key features:
 
 ---
 
+### BaseEngineRegistry — cross-engine cache reverse lookup
+
+Every `BaseEngine` registers itself with the process-wide `BaseEngineRegistry` on
+load, so the registry always knows **which loaded engines cache which entities**.
+You can use that to ask, from anywhere, *"is this entity already fully in memory?
+if so, hand me the array — and don't go to the database."*
+
+This is the introspection behind the Admin → System Diagnostics "loaded engines"
+view, plus two reverse-lookup helpers:
+
+```typescript
+import { BaseEngineRegistry, UserInfo } from '@memberjunction/core';
+
+// All loaded engines that cache 'Users', unfiltered (full-set) caches first.
+// Each match carries the engine, its config, and a LIVE pointer to the array.
+const matches = BaseEngineRegistry.Instance.FindCachedEntity<UserInfo>('Users');
+// matches[0] => { engineClassName, engine, config, records: UserInfo[], unfiltered }
+
+// Or the one-liner: the best (unfiltered-preferred) cached array, or null.
+const users = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (users) {
+    // Small/static entity already in memory — filter/sort locally, zero DB calls.
+    const hits = users.filter(u => u.Name.toLowerCase().includes(q));
+} else {
+    // Not cached as a full set → fall back to a normal RunView against the DB.
+}
+```
+
+`FindCachedEntity(entityName, { unfilteredOnly? })`:
+- Considers **only loaded** engines (a registered-but-unloaded engine has no data).
+- Matches an engine config when `Type === 'entity'` and `EntityName` matches (case-insensitive, trimmed).
+- Orders **unfiltered caches first** — a config with no `Filter` holds the *complete*
+  entity set and is authoritative (safe for "show all" / in-memory search); filtered
+  caches (a subset) come after. `unfilteredOnly: true` omits the filtered ones.
+- Returns the engine's **live array** (not a copy) — read it, don't mutate it. When the
+  config's `ResultType` is `'simple'`, rows are plain objects, not `BaseEntity` instances.
+- Returns **all** matches when several engines cache the same entity, so the caller can
+  pick (by `engineClassName`, by inspecting `config`, etc.).
+
+`TryGetCachedRecords(entityName, { unfilteredOnly? })` is the convenience wrapper —
+the best match's array, or `null`.
+
+**Why it's useful:** UI and service code that needs to look up records for a
+small/static entity (FK pickers, dropdowns, validation) can serve the lookup from
+an already-loaded engine cache in a single line — no extra DB round-trip, no
+per-keystroke query — and transparently fall back to `RunView` when the entity
+isn't cached as a full set.
+
+---
+
 ### RegisterForStartup
 
 The `@RegisterForStartup` decorator registers singleton engine classes (or any class implementing `IStartupSink`) with the `StartupManager` to automatically run configuration/setup during application boot.
@@ -1213,6 +1263,73 @@ Features:
 - **Dirty Detection** -- Only generates embeddings when source text changes
 - **Null Handling** -- Clears vector fields when source text is empty
 - **Parallel Processing** -- Multiple embeddings generated concurrently
+
+---
+
+## Ranked Entity Record Search (`SearchEntity` / `SearchEntities`)
+
+A two-tier ranked-search API for finding the most relevant **records** of an entity for a free-text request. Distinct from the other lookups MJ already exposes — see the comparison below.
+
+```typescript
+import { Metadata, EntitySearchResult } from '@memberjunction/core';
+
+const md = new Metadata();
+
+// Singular form — search one entity, return ranked record list
+const results: EntitySearchResult[] = await md.SearchEntity({
+    entityName: 'MJ: Entities',
+    searchText: userRequestText,
+    options: { mode: 'hybrid', topK: 10, weights: { lexical: 1.0, semantic: 1.5 }, contextUser }
+});
+
+// Plural form — search many entities in ONE round-trip
+// Returns an array of arrays, aligned by input order
+const groups = await md.SearchEntities([
+    { entityName: 'Invoices',  searchText: 'overdue payments', options: { topK: 5, contextUser } },
+    { entityName: 'Customers', searchText: 'overdue payments', options: { topK: 5, contextUser } },
+    { entityName: 'Notes',     searchText: 'overdue payments', options: { topK: 5, contextUser } },
+]);
+// groups[0] = top Invoices, groups[1] = top Customers, groups[2] = top Notes
+```
+
+**Modes:**
+- `lexical` — substring / prefix matching on the entity's name field and any `IncludeInUserSearchAPI` fields.
+- `semantic` — vector cosine against precomputed embeddings in `MJ: Entity Record Documents.VectorJSON`.
+- `hybrid` (default) — weighted RRF blend of the two, tunable via `options.weights` and `options.rrfK`.
+
+**Configuration:** semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds one for `MJ: Entities` so the entity catalog is searchable out of the box; users enable it for other entities via metadata (see `/metadata/entity-documents/`).
+
+**Provider implementation:** declared on `IMetadataProvider`, implemented polymorphically by each concrete provider. `GenericDatabaseProvider` runs the ranking in-process (embedding the query via `AIEngine.EmbedTextLocal` and querying `SimpleVectorServiceProvider` directly); `GraphQLDataProvider` proxies the whole batch to the server in one round-trip via the `SearchEntities` resolver. No registration or wiring required at startup.
+
+### How this differs from MJ's other search/lookup APIs
+
+| API | Purpose | Returns |
+|---|---|---|
+| `EntityByName(name)` / `EntityByID(id)` | Look up an entity **definition** (`EntityInfo`). Deterministic, not ranked. | One `EntityInfo` |
+| `FullTextSearch(params)` | Multi-entity server-side text search using each entity's `UserSearchString` rule (LIKE / FTS). Lexical only. | Groups of `FullTextSearchResultItem` |
+| **`SearchEntity(params)`** | "Find the N most relevant **records** of *this* entity for this query." Hybrid lexical + semantic. | `EntitySearchResult[]` |
+| **`SearchEntities(params[])`** | Batch — same ranking applied to multiple entities in one call. | `EntitySearchResult[][]` aligned by input |
+| `SearchEngine.Search()` ([`@memberjunction/search-engine`](../SearchEngine/README.md)) | **Cross-source** unified search across vectors, full-text, entities, and storage. Scoped via `SearchScope` metadata, optional reranker. | Aggregated `SearchResult` |
+
+**Picking the right one** is straightforward: if you know the entity and want ranked records, use `SearchEntity`. If you know the candidate entities, use `SearchEntities` (plural). If you don't know which entity / want cross-source results, use `SearchEngine.Search`. For exact-name metadata lookup, use `EntityByName`.
+
+---
+
+## Weighted Reciprocal Rank Fusion (`ComputeRRF`)
+
+`ComputeRRF` is the canonical RRF implementation used wherever MJ blends ranked result lists (`SearchEntity` / `SearchEntities` hybrid mode, `SearchEngine` cross-scope fusion, dupe detection). It accepts an optional per-list `weights` array:
+
+```typescript
+import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
+
+const fused = ComputeRRF(
+    [lexicalResults, semanticResults],
+    /* k */ 60,
+    /* weights */ [1.0, 1.5]   // semantic contributes 1.5× per rank position
+);
+```
+
+Formula: `FusedScore(d) = Σ_i w_i / (k + rank_i(d))`. Omitting `weights` is equivalent to all-ones — canonical unweighted RRF.
 
 ---
 

@@ -51,6 +51,7 @@ This package serves as the foundational layer for MemberJunction's Computer Use 
 - **PlaywrightBrowserAdapter**: Production-ready Chromium automation
 - **Isolated Interface**: No direct browser library dependencies in core logic
 - **Extensibility**: Implement `BaseBrowserAdapter` for custom browsers
+- **External-Browser Attach**: Connect to an already-running Chrome (CDP) or Playwright server via `BrowserConfig.Connect` — see **[External Browser Attach Guide](docs/EXTERNAL_BROWSER_ATTACH.md)**
 
 ### 🎪 Robust Error Handling
 - **No Uncaught Exceptions**: All errors wrapped in `ComputerUseResult`

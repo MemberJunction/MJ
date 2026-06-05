@@ -193,11 +193,10 @@
     flex-shrink: 0;
 }
 
-.slideout-footer .mj-btn {
+/* Button shape/size is owned by the mjButton directive (variant/size inputs).
+   Only the layout min-width is set here, scoped to the element (not .mj-btn). */
+.slideout-footer button {
     min-width: 80px;
-    padding: 8px 16px;
-    font-weight: 500;
-    border-radius: 6px;
 }
 
 /* Messages */
@@ -864,40 +863,11 @@
     box-shadow: var(--mj-focus-ring);
 }
 
-/* Button styling in edit actions */
-.edit-actions .mj-btn {
+/* Button shape/size is owned by the mjButton directive (variant/size inputs).
+   Only the layout min-width is set here, scoped to the element (not .mj-btn). */
+.edit-actions button,
+.scopes-header button {
     min-width: 120px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.edit-actions .mj-btn--primary {
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-.edit-actions .mj-btn--primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
-}
-
-/* Scopes header button styling */
-.scopes-header .mj-btn {
-    min-width: 120px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.scopes-header .mj-btn--primary {
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-.scopes-header .mj-btn--primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
 }
 
 /* No Scopes Warning */

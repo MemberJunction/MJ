@@ -292,6 +292,14 @@ export interface SourceObjectInfo {
     PrimaryKeyFields: string[];
     /** Foreign key relationships to other source objects. */
     Relationships: SourceRelationshipInfo[];
+    /**
+     * Source field name that marks "last changed" for incremental sync.
+     * When introspecting a source whose docs (or describe response) name a
+     * watermark field, surface it here so SchemaBuilder/IntegrationSchemaSync
+     * can populate IntegrationObject.IncrementalWatermarkField. Leave undefined
+     * when the source does not expose a documented watermark.
+     */
+    IncrementalWatermarkField?: string;
 }
 
 /** One field/column in a source object discovered during introspection. */
@@ -304,8 +312,17 @@ export interface SourceFieldInfo {
     Description?: string;
     /** Generic source type (e.g., "string", "integer", "datetime", "boolean"). */
     SourceType: string;
-    /** Whether the field is required/non-nullable. */
+    /**
+     * Whether the field must be provided when creating a new record.
+     * Semantically distinct from AllowsNull — see ExternalFieldSchema.IsRequired.
+     */
     IsRequired: boolean;
+    /**
+     * Whether NULL is a permitted value at rest. Distinct from IsRequired.
+     * Undefined ⇒ source did not declare; default to permissive (nullable).
+     * Honest gap rather than fabricated NOT NULL.
+     */
+    AllowsNull?: boolean;
     /** Maximum length for string types (null if not applicable). */
     MaxLength: number | null;
     /** Precision for numeric types (null if not applicable). */
@@ -316,6 +333,19 @@ export interface SourceFieldInfo {
     DefaultValue: string | null;
     /** Whether this field is part of the primary key. */
     IsPrimaryKey: boolean;
+    /**
+     * Whether this field is constrained as unique. Distinct from IsPrimaryKey —
+     * an object can have several unique fields (email, phone) of which only one
+     * is the PK. Both flags should be set independently when the source distinguishes
+     * them; SchemaBuilder uses this for DDL UNIQUE constraint emission.
+     */
+    IsUniqueKey?: boolean;
+    /**
+     * Whether the field is read-only (computed, system-managed, or otherwise
+     * not user-writable). Affects whether the field is included in
+     * Create/Update operation bodies.
+     */
+    IsReadOnly?: boolean;
     /** Whether this field is a foreign key. */
     IsForeignKey: boolean;
     /** If FK, which source object it references (null if not a FK). */
@@ -361,6 +391,28 @@ export interface UpdateRecordContext extends CRUDContext {
     /** Field values to update */
     Attributes: Record<string, unknown>;
     /** Optional relationship data to update */
+    Relationships?: Record<string, unknown>;
+}
+
+/**
+ * Context for upserting a record in an external system — a single idempotent
+ * create-or-update keyed by a unique business property (not the system PK).
+ *
+ * Upsert exists to define create-then-update race conditions out of existence:
+ * a search-then-create sequence has a window in which a concurrent writer can
+ * create the same record, producing a duplicate-key conflict (e.g. HubSpot
+ * `409 Contact already exists`). A single keyed upsert call has no such window.
+ */
+export interface UpsertRecordContext extends CRUDContext {
+    /** Field values for the record (must include the upsert-key property's value) */
+    Attributes: Record<string, unknown>;
+    /**
+     * The unique business property to match on (e.g. 'email' for HubSpot contacts).
+     * Optional override; when omitted, the connector resolves a per-object default
+     * from its own metadata. Connectors that cannot resolve a default MUST fail loudly.
+     */
+    IDProperty?: string;
+    /** Optional relationship data */
     Relationships?: Record<string, unknown>;
 }
 

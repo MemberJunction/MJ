@@ -16,9 +16,9 @@
               (click)="RunDetection()"
               [disabled]="IsDetecting || !SelectedEntityDocumentID">
           @if (IsDetecting) {
-              <i class="fa-solid fa-spinner fa-spin"></i> Detecting…
+              <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Detecting…</span>
           } @else {
-              <i class="fa-solid fa-magnifying-glass"></i> Run Detection
+              <i class="fa-solid fa-magnifying-glass"></i> <span class="action-btn-label">Run Detection</span>
           }
       </button>
     </div>
