@@ -100,6 +100,11 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
         this.loadModePreference();
         this.emitAgentContext();
         this.registerAgentTools();
+        // loadModePreference() may flip ActiveMode AFTER the view's first CD pass
+        // (it runs post-`await`), which swaps the `@if (IsActiveMode('clusters'))`
+        // branch and the embedded child's count bindings mid-cycle — surfacing an
+        // NG0100. Flush once here so the mode is settled before the next checked render.
+        this.cdr.detectChanges();
         this.NotifyLoadComplete();
     }
 

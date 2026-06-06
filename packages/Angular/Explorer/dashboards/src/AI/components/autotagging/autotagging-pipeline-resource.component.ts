@@ -64,7 +64,27 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public IsLoadingMoreRuns = false;
 
     // ── Tab state ──
-    public ActiveTab: TabName = 'pipeline';
+    private _activeTab: TabName = 'pipeline';
+    /** True once the view exists (after ngAfterViewInit), so the setter can safely run CD. */
+    private viewReady = false;
+    /**
+     * The active tab. Backed by a setter that, once the view is ready, synchronously
+     * flushes change detection whenever the value changes. The left-nav binds
+     * `[ActiveId]="ActiveTab"`; mutating this during an async gap in init (e.g. between
+     * the await in ngAfterViewInit and the next CD pass) previously surfaced an NG0100
+     * (`Previous value: 'pipeline'. Current value: 'sources'`). Flushing in the setter
+     * keeps the bound value stable across the check that follows.
+     */
+    public get ActiveTab(): TabName {
+        return this._activeTab;
+    }
+    public set ActiveTab(value: TabName) {
+        if (value === this._activeTab) return;
+        this._activeTab = value;
+        if (this.viewReady) {
+            this.cdr.detectChanges();
+        }
+    }
     private tabDataLoaded = new Set<TabName>();
 
     /** Live reference to the Tag Library tab (for deep-link + agent-tool search). */
@@ -277,6 +297,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     @ViewChild(ClassifyHealthTabComponent) private healthTab?: ClassifyHealthTabComponent;
 
     async ngAfterViewInit(): Promise<void> {
+        this.viewReady = true;
         await Promise.all([
             KnowledgeHubMetadataEngine.Instance.Config(false),
             UserInfoEngine.Instance.Config(false),
