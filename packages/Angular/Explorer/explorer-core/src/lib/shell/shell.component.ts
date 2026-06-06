@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -63,6 +63,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+
+  // Global Activity indicator (P3)
+  activityItems: ActivityItem[] = [];
+  activityRunningCount = 0;
+  activityOpen = false;
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
@@ -179,7 +184,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private homePinService: HomeAppPinService,
     private fileOpenService: FileOpenService,
     private feedbackDialogService: FeedbackDialogService,
-    private feedbackService: FeedbackService
+    private feedbackService: FeedbackService,
+    private activityService: ActivityService
   ) {
     super();
 
@@ -280,6 +286,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(visible => {
         this.tabBarVisible = visible;
+      })
+    );
+
+    // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
+    this.subscriptions.push(
+      this.activityService.Activities$.subscribe(items => {
+        this.activityItems = items;
+        this.activityRunningCount = items.filter(i => i.Status === 'running').length;
+        if (items.length === 0) this.activityOpen = false;
+        this.cdr.detectChanges();
       })
     );
 
@@ -2635,6 +2651,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Show notifications page as a tab
    */
+  /** Toggle the global Activity drawer. */
+  toggleActivity(event: MouseEvent): void {
+    event.stopPropagation();
+    this.activityOpen = !this.activityOpen;
+    this.cdr.detectChanges();
+  }
+
+  /** Clear finished activities from the tracker. */
+  clearFinishedActivity(): void {
+    this.activityService.ClearFinished();
+  }
+
+  /** Close the Activity drawer when clicking anywhere outside it. */
+  @HostListener('document:click')
+  onDocumentClickCloseActivity(): void {
+    if (this.activityOpen) {
+      this.activityOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   showNotifications(): void {
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,

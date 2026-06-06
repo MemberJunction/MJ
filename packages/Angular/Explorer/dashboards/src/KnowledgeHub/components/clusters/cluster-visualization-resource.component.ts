@@ -15,7 +15,7 @@ import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, EntityFieldInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -65,6 +65,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     private cdr = inject(ChangeDetectorRef);
     private clusteringService = inject(ClusteringService);
+    private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
 
@@ -197,12 +198,17 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
         this.cdr.detectChanges();
 
+        const activityID = this.activityService.Start('Cluster analysis', {
+            icon: 'fa-solid fa-circle-nodes',
+            detail: `${config.EntityName || 'Multiple sources'} · ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`,
+        });
         try {
             // Fetch vectors from the vector database
             const vectors = await this.fetchVectorsForEntity(config);
 
             // Run clustering (client-side UMAP + K-Means/DBSCAN)
             this.Result = await this.clusteringService.RunClustering(vectors, config);
+            this.activityService.Complete(activityID, 'success', `${this.Result.Points.length} points · ${this.Result.Clusters.length} clusters`);
             this.VisualizationTitle = `${config.EntityName} — ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`;
             this.FieldPriority = this.ComputeFieldPriority(config.EntityName);
 
@@ -217,6 +223,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             console.error('[ClusterVisualization] Pipeline error:', error);
             this.Result = null;
             this.RunError = error instanceof Error ? error.message : String(error);
+            this.activityService.Complete(activityID, 'error', this.RunError);
         } finally {
             this.IsRunning = false;
             this.cdr.detectChanges();

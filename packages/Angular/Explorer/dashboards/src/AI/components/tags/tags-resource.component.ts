@@ -25,7 +25,7 @@ import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberju
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -391,6 +391,7 @@ type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type'
 export class TagsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
 
     // ── Global state ──
@@ -5469,6 +5470,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         if (this.HealthRunning) return;
         this.HealthRunning = true;
         this.cdr.detectChanges();
+        const activityID = this.activityService.Start('Tag health check', { icon: 'fa-solid fa-heart-pulse' });
+        let healthOk = false;
         try {
             const provider = this.ProviderToUse as GraphQLDataProvider;
             if (!provider) throw new Error('No GraphQL provider available.');
@@ -5498,10 +5501,17 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             );
             // Pull in the new pending suggestions so Duplicates / Orphans / Suggestions all reflect
             await this.loadSuggestions();
+            healthOk = true;
+            this.activityService.Complete(activityID, 'success',
+                `${r.MergeCount} merge · ${r.LowUsageCount} low-usage · ${r.WideNodeCount} wide-node`);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             MJNotificationService.Instance.CreateSimpleNotification(`Tag Health failed: ${msg}`, 'error', 5000);
+            this.activityService.Complete(activityID, 'error', msg);
         } finally {
+            if (!healthOk && this.activityService.Activities.find(a => a.ID === activityID && a.Status === 'running')) {
+                this.activityService.Complete(activityID, 'error');
+            }
             this.HealthRunning = false;
             this.cdr.detectChanges();
         }

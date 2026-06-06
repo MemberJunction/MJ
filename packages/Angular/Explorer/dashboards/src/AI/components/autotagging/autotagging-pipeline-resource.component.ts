@@ -13,7 +13,7 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 import { BaseEntity, BaseEntityEvent, CompositeKey, RunView } from '@memberjunction/core';
 import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledActionEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID, MJGlobal, MJEventType } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -39,6 +39,9 @@ import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords, deriv
 export class AutotaggingPipelineResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
+    /** Activity-tracker id for the currently running pipeline (P3). */
+    private pipelineActivityID: string | null = null;
 
     /** Debounced bus of entity names that changed externally; drives targeted reloads. */
     private entityChange$ = new Subject<string>();
@@ -1215,6 +1218,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             }
 
             this.CurrentPipelineRunID = result.PipelineRunID;
+            this.pipelineActivityID = this.activityService.Start('Classify pipeline', {
+                icon: 'fa-solid fa-bolt',
+                detail: 'Starting…',
+                progress: 0,
+            });
             this.subscribeToPipelineProgress(result.PipelineRunID);
             MJNotificationService.Instance.CreateSimpleNotification('Classification pipeline started…', 'info', 3000);
         } catch (error) {
@@ -1351,6 +1359,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 this.RunProgress = success ? 100 : 0;
                 this.CurrentPipelineRunID = null;
                 this.CurrentProcessRunID = null;
+                if (this.pipelineActivityID) {
+                    this.activityService.Complete(this.pipelineActivityID, success ? 'success' : 'error',
+                        success ? 'Classification complete' : 'Pipeline failed');
+                    this.pipelineActivityID = null;
+                }
 
                 for (const stage of this.PipelineStages) {
                     stage.Status = 'idle';
@@ -1410,6 +1423,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 this.RunStage = this.formatStageName(stage);
                 this.RunCurrentItem = currentItem ?? '';
                 this.updateStagesForActiveRun(stage);
+                if (this.pipelineActivityID) {
+                    this.activityService.Update(this.pipelineActivityID, {
+                        Progress: this.RunProgress,
+                        Detail: this.RunCurrentItem || this.RunStage,
+                    });
+                }
                 this.cdr.detectChanges();
 
                 if (stage === 'complete') {
