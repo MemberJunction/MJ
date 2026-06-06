@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Knowledge Hub",
+      "Name": "classify.org.context",
+      "Value": "",
+      "Comments": "Organization-wide domain context for the Knowledge Hub autotagging/classification pipeline. The text supplied here is injected into the classification prompt to describe the organization's domain, audience, and terminology so generated tags are grounded in the org's vocabulary. Leave blank to use no org-level context; set a short paragraph describing your organization and the kind of content being classified."
+    },
+    "primaryKey": {
+      "ID": "D2405E2A-4946-40DB-BEDD-82D2881942F2"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.581Z",
+      "checksum": "b8f779b87afb1a9f2d35aee4711f820a0a460744b1ae84bd6e53d45601b3336b"
+    }
+  }
+]

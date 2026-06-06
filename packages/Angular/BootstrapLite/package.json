@@ -46,6 +46,7 @@
     "@memberjunction/ng-auth-services": "5.38.0",
     "@memberjunction/ng-core-entity-forms": "5.38.0",
     "@memberjunction/ng-dashboard-viewer": "5.38.0",
+    "@memberjunction/ng-entity-viewer": "5.38.0",
     "@memberjunction/ng-explorer-core": "5.38.0",
     "@memberjunction/ng-file-storage": "5.38.0",
     "@memberjunction/ng-shared": "5.38.0",

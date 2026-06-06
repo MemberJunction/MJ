@@ -71,6 +71,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return super.getInstance<AutotagBaseEngine>();
     }
 
+    /**
+     * Internal LLMResults key under which the AIPromptRun ID that produced the
+     * accumulated keyword set is stashed. Used to stamp ContentItemTag.AIPromptRunID
+     * for tag→prompt-run lineage. Prefixed with `__` so it never collides with a
+     * real LLM-produced field and is excluded by the attribute-save skip set.
+     */
+    private static readonly AI_PROMPT_RUN_ID_KEY = '__aiPromptRunID';
+
     // Cached metadata unique to this engine — loaded by BaseEngine.Config()
     private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
     private _ContentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
@@ -774,6 +782,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
         }
 
+        // Capture the AIPromptRun ID that produced this chunk's tags so the
+        // tag-persistence path can stamp ContentItemTag.AIPromptRunID for lineage.
+        // Tags are merged across chunks; the last successful chunk's run is the
+        // one whose keyword set is persisted, so the last-write-wins value here
+        // matches the keywords actually saved.
+        if (result.promptRun?.ID) {
+            LLMResults[AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY] = result.promptRun.ID;
+        }
+
         return LLMResults;
     }
 
@@ -868,19 +885,29 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
 
+        // AIPromptRun lineage: the run that produced this keyword set was stashed on
+        // LLMResults during chunk processing. Stamped on each ContentItemTag for audit.
+        const rawPromptRunID = LLMResults[AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY];
+        const aiPromptRunID: string | null = typeof rawPromptRunID === 'string' && rawPromptRunID.length > 0
+            ? rawPromptRunID
+            : null;
+
         // Normalize keywords — support both formats:
         //   Old: ["keyword1", "keyword2"]
         //   New: [{ tag: "keyword1", weight: 0.95 }, { tag: "keyword2", weight: 0.7 }]
         //   New with parentTag: [{ tag: "keyword1", weight: 0.95, parentTag: "parent" }]
-        const normalizedTags: Array<{ tag: string; weight: number; parentTag: string | null }> = keywords.map((kw: unknown) => {
+        //   New with reasoning: [{ tag: "keyword1", weight: 0.95, reasoning: "why..." }]
+        const normalizedTags: Array<{ tag: string; weight: number; parentTag: string | null; reasoning: string | null }> = keywords.map((kw: unknown) => {
             if (typeof kw === 'string') {
-                return { tag: kw, weight: 1.0, parentTag: null };
+                return { tag: kw, weight: 1.0, parentTag: null, reasoning: null };
             }
-            const obj = kw as { tag?: string; keyword?: string; weight?: number; parentTag?: string };
+            const obj = kw as { tag?: string; keyword?: string; weight?: number; parentTag?: string; reasoning?: string; rationale?: string };
+            const rawReasoning = obj.reasoning ?? obj.rationale;
             return {
                 tag: obj.tag || obj.keyword || String(kw),
                 weight: typeof obj.weight === 'number' ? Math.max(0, Math.min(1, obj.weight)) : 0.5,
                 parentTag: obj.parentTag ?? null,
+                reasoning: typeof rawReasoning === 'string' && rawReasoning.trim().length > 0 ? rawReasoning.trim() : null,
             };
         });
 
@@ -892,7 +919,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 contentItemTag.NewRecord();
                 contentItemTag.ItemID = contentItemID;
                 contentItemTag.Tag = item.tag;
-                contentItemTag.Set('Weight', item.weight);
+                contentItemTag.Weight = item.weight;
+                // Phase 4 lineage/audit — only set when available, both columns nullable.
+                if (aiPromptRunID) {
+                    contentItemTag.AIPromptRunID = aiPromptRunID;
+                }
+                if (item.reasoning) {
+                    contentItemTag.Reasoning = item.reasoning;
+                }
                 const saved = await contentItemTag.Save();
 
                 // Invoke taxonomy bridge callback if set
@@ -915,7 +949,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const contentItemID = LLMResults.contentItemID as string;
-        const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent']);
+        const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent', AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY]);
 
         // Update title and description on the content item.
         // For entity-sourced items (EntityRecordDocumentID is set), preserve the

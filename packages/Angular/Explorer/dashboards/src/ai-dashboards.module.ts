@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { AngularSplitModule } from 'angular-split';
+import { AgGridModule } from 'ag-grid-angular';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -36,6 +37,9 @@ import { ClassifyTaxonomyTabComponent } from './AI/components/autotagging/tabs/t
 import { ClassifyInboxTabComponent } from './AI/components/autotagging/tabs/inbox-tab.component';
 import { ClassifyHealthTabComponent } from './AI/components/autotagging/tabs/health-tab.component';
 import { ClassifyItemDetailDialogComponent } from './AI/components/autotagging/dialogs/item-detail.dialog.component';
+import { ClassifyItemGridComponent } from './AI/components/autotagging/components/classify-item-grid.component';
+import { ClassifyItemDrilldownComponent } from './AI/components/autotagging/components/classify-item-drilldown.component';
+import { ClassifyOverviewAnalyticsComponent } from './AI/components/autotagging/components/classify-overview-analytics.component';
 import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
 import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
 import { ClassifyDryRunPreviewDialogComponent } from './AI/components/autotagging/dialogs/dry-run-preview.dialog.component';
@@ -105,6 +109,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClassifyInboxTabComponent,
     ClassifyHealthTabComponent,
     ClassifyItemDetailDialogComponent,
+    ClassifyItemGridComponent,
+    ClassifyItemDrilldownComponent,
+    ClassifyOverviewAnalyticsComponent,
     ClassifyNoContentTypeWarningComponent,
     ClassifySourceTypeFormDialogComponent,
     ClassifyDryRunPreviewDialogComponent,
@@ -132,6 +139,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     FormsModule,
     ReactiveFormsModule,
     AngularSplitModule,
+    AgGridModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     SharedGenericModule,

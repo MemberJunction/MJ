@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "Name": "Name Clusters",
+      "Description": "Generates short descriptive labels for vector similarity clusters by analyzing a sample of member labels from each cluster. Used by the server-side clustering engine (ClusterNamer) for the Knowledge Hub clustering analysis.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/knowledge-hub/name-clusters.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C391C70E-F62B-42E0-BE6F-FD72DEB5B4F9"
+          },
+          "sync": {
+            "lastModified": "2026-06-06T16:39:27.184Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3ED5F53A-E203-4378-A40D-1FDC69794970"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:27.152Z",
+      "checksum": "89c761cf597490d3478aed5578cc3e8d22327b99c6071b32cc4152c9e30bf82f"
+    }
+  }
+]

@@ -34,39 +34,60 @@
 
       <!-- View Mode Toggle -->
       @if (effectiveConfig.showViewModeToggle) {
-        <div class="view-mode-toggle">
-          <button
-            class="toggle-btn"
-            [class.active]="effectiveViewMode === 'grid'"
-            (click)="setViewMode('grid')"
-            title="Grid View">
-            <i class="fa-solid fa-list"></i>
-          </button>
-          <button
-            class="toggle-btn"
-            [class.active]="effectiveViewMode === 'cards'"
-            (click)="setViewMode('cards')"
-            title="Cards View">
-            <i class="fa-solid fa-grip"></i>
-          </button>
-          @if (hasDateFields) {
+        @if (viewTypesFromRegistry) {
+          <!-- Registry-sourced switcher: built from ViewTypeEngine.GetAvailableViewTypes().
+               Active when the MJ: View Types metadata is seeded. The set of buttons and
+               their availability (timeline/map) come from each descriptor's IsAvailableFor.
+               TODO (future): mount each descriptor's RendererComponent dynamically here
+               instead of the hardcoded [hidden] child components below. -->
+          <div class="view-mode-toggle">
+            @for (vt of availableViewTypes; track vt.mode) {
+              <button
+                class="toggle-btn"
+                [class.active]="effectiveViewMode === vt.mode"
+                (click)="setViewMode(vt.mode)"
+                [title]="vt.label + ' View'">
+                <i [class]="vt.icon"></i>
+              </button>
+            }
+          </div>
+        } @else {
+          <!-- Fallback switcher: hardcoded modes. Used when the View Types registry has no
+               data (not yet seeded) so existing behavior is preserved unchanged. -->
+          <div class="view-mode-toggle">
             <button
               class="toggle-btn"
-              [class.active]="effectiveViewMode === 'timeline'"
-              (click)="setViewMode('timeline')"
-              title="Timeline View">
-              <i class="fa-solid fa-timeline"></i>
+              [class.active]="effectiveViewMode === 'grid'"
+              (click)="setViewMode('grid')"
+              title="Grid View">
+              <i class="fa-solid fa-list"></i>
             </button>
-          }
-          <button
-            class="toggle-btn"
-            [class.active]="effectiveViewMode === 'map'"
-            [class.geo-hidden]="!HasGeoCoding"
-            (click)="setViewMode('map')"
-            title="Map View">
-            <i class="fa-solid fa-map-location-dot"></i>
-          </button>
-        </div>
+            <button
+              class="toggle-btn"
+              [class.active]="effectiveViewMode === 'cards'"
+              (click)="setViewMode('cards')"
+              title="Cards View">
+              <i class="fa-solid fa-grip"></i>
+            </button>
+            @if (hasDateFields) {
+              <button
+                class="toggle-btn"
+                [class.active]="effectiveViewMode === 'timeline'"
+                (click)="setViewMode('timeline')"
+                title="Timeline View">
+                <i class="fa-solid fa-timeline"></i>
+              </button>
+            }
+            <button
+              class="toggle-btn"
+              [class.active]="effectiveViewMode === 'map'"
+              [class.geo-hidden]="!HasGeoCoding"
+              (click)="setViewMode('map')"
+              title="Map View">
+              <i class="fa-solid fa-map-location-dot"></i>
+            </button>
+          </div>
+        }
       }
 
       <!-- Recycle Bin chip (auto-hides when entity has no deleted records, no tracking,

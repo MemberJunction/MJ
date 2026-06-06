@@ -54,5 +54,9 @@ export * from './lib/recycle-bin/events/recycle-bin-events';
 // Utilities
 export * from './lib/utils/highlight.util';
 export * from './lib/utils/record.util';
+
+// View-Type Plugin Architecture (contracts, engine, built-in descriptors)
+export * from './lib/view-types';
+
 // Geo support exports
 export const ENTITY_VIEWER_GEO_VERSION = 1;

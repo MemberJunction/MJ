@@ -25,6 +25,12 @@ import { DuplicateViewDialogComponent } from './lib/duplicate-view-dialog/duplic
 import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
 import { RecycleBinComponent } from './lib/recycle-bin/recycle-bin.component';
 import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.component';
+import { LoadViewTypeDescriptors } from './lib/view-types';
+
+// Register the built-in view-type descriptors with the ClassFactory at module load.
+// This force-references each @RegisterClass-decorated descriptor so bundlers don't
+// tree-shake them out, making them discoverable by the ViewTypeEngine via DriverClass.
+LoadViewTypeDescriptors();
 
 /**
  * EntityViewerModule - Provides components for viewing entity data

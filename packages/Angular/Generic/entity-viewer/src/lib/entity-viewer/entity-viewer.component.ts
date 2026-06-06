@@ -35,6 +35,35 @@ import {
 } from '../entity-data-grid/events/grid-events';
 import { GridToolbarConfig, GridSelectionMode, ForeignKeyClickEvent } from '../entity-data-grid/models/grid-types';
 import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
+import { IViewTypeDescriptor, ViewTypeEngine } from '../view-types';
+
+/**
+ * A single entry in the view-mode switcher. Built either from the registry
+ * (ViewTypeEngine descriptors) or from the hardcoded fallback list.
+ */
+export interface ViewModeOption {
+  /** The legacy EntityViewMode value the host's [hidden]-based rendering switches on. */
+  mode: EntityViewMode;
+  /** User-facing label. */
+  label: string;
+  /** Font Awesome icon class. */
+  icon: string;
+}
+
+/**
+ * Maps a registered view-type descriptor's DriverClass Name to the legacy
+ * EntityViewMode the host's [hidden] rendering still switches on this round.
+ * Returns null for view types that have no legacy rendering yet (Cluster, Tag Cloud).
+ */
+function driverClassToViewMode(name: string): EntityViewMode | null {
+  switch (name) {
+    case 'GridViewType': return 'grid';
+    case 'CardsViewType': return 'cards';
+    case 'TimelineViewType': return 'timeline';
+    case 'MapViewType': return 'map';
+    default: return null;
+  }
+}
 
 /**
  * EntityViewerComponent - Full-featured composite component for viewing entity data
@@ -119,6 +148,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
     // Detect geocoding support for map view
     this.updateGeoCodingSupport();
+
+    // Recompute available view types for the new entity from the registry (if loaded).
+    // Falls back silently when the registry has no data.
+    this.refreshAvailableViewTypes();
 
     if (this._initialized) {
       // If entity changed to a different entity, clear all stale state from the old entity
@@ -469,6 +502,23 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   // ========================================
 
   public internalViewMode: EntityViewMode = 'grid';
+
+  /**
+   * The view-mode options shown in the switcher. Sourced from {@link ViewTypeEngine}
+   * (the `MJ: View Types` registry) when available, falling back to the hardcoded set
+   * when the registry has no data (View Types not yet seeded). The template renders the
+   * switcher from this list when it's populated, and from the legacy hardcoded buttons
+   * otherwise — keeping behavior unchanged on un-seeded systems.
+   *
+   * NOTE (deferred): rendering itself is still [hidden]-based against the legacy
+   * EntityViewMode union. A future round will mount the descriptor's RendererComponent
+   * dynamically off the registry instead of hardcoding the four child components.
+   */
+  public availableViewTypes: ViewModeOption[] = [];
+
+  /** Whether the registry (ViewTypeEngine) successfully sourced the available modes. */
+  public viewTypesFromRegistry: boolean = false;
+
   public internalFilterText: string = '';
   public debouncedFilterText: string = '';
   public isLoading: boolean = false;
@@ -898,6 +948,11 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     // Mark as initialized - setters will now trigger data loading
     this._initialized = true;
 
+    // Load the view-type registry and source the available-modes list from it.
+    // Fire-and-forget: until it resolves (or if it fails), the template uses the
+    // hardcoded fallback switcher, so behavior is unchanged on un-seeded systems.
+    void this.ensureViewTypesLoaded();
+
     // If viewEntity was set before initialization, extract its sort state now.
     // The viewEntity setter skips this when _initialized is false.
     if (this._viewEntity) {
@@ -1224,6 +1279,57 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   // ========================================
   // VIEW MODE
   // ========================================
+
+  /**
+   * Loads the ViewTypeEngine once, then recomputes the available view types for the
+   * current entity. Fire-and-forget from lifecycle/setters — failures fall back to the
+   * hardcoded modes so behavior is unchanged when View Types aren't seeded.
+   */
+  private async ensureViewTypesLoaded(): Promise<void> {
+    try {
+      const provider = this.ProviderToUse;
+      await ViewTypeEngine.Instance.Config(false, provider?.CurrentUser, provider ?? undefined);
+      this.refreshAvailableViewTypes();
+    } catch {
+      // Engine unavailable / not seeded — keep the hardcoded fallback.
+      this.viewTypesFromRegistry = false;
+    }
+  }
+
+  /**
+   * Recomputes {@link availableViewTypes} from the registry for the current entity.
+   * Sets {@link viewTypesFromRegistry} true only when the registry yields at least one
+   * descriptor that maps to a legacy EntityViewMode (so the template can choose between
+   * registry-sourced and hardcoded switchers).
+   */
+  private refreshAvailableViewTypes(): void {
+    const entity = this.effectiveEntity;
+    if (!entity) {
+      this.availableViewTypes = [];
+      this.viewTypesFromRegistry = false;
+      return;
+    }
+
+    let descriptors: IViewTypeDescriptor[] = [];
+    try {
+      descriptors = ViewTypeEngine.Instance.GetAvailableViewTypes(entity, this.ProviderToUse ?? undefined);
+    } catch {
+      descriptors = [];
+    }
+
+    const options: ViewModeOption[] = [];
+    for (const d of descriptors) {
+      const mode = driverClassToViewMode(d.Name);
+      // Only surface view types the host can actually render this round.
+      if (mode) {
+        options.push({ mode, label: d.DisplayName, icon: d.Icon ?? '' });
+      }
+    }
+
+    this.availableViewTypes = options;
+    this.viewTypesFromRegistry = options.length > 0;
+    this.cdr.detectChanges();
+  }
 
   /**
    * Set the view mode and emit change event

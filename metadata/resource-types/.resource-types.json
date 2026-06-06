@@ -178,5 +178,23 @@
       "lastModified": "2025-12-30T23:06:45.429Z",
       "checksum": "8e554b8e0ccc802155cf33b80424127018b6e4083e710fdddd744dc06dba48a8"
     }
+  },
+  {
+    "fields": {
+      "Name": "Cluster Analysis",
+      "DisplayName": "Cluster Analysis",
+      "Description": "Cluster Analyses group records by similarity to surface structure and relationships in the data",
+      "Icon": "fa-solid fa-diagram-project",
+      "DriverClass": "ClusterAnalysisResource",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Cluster Analysis",
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "372A1572-9836-4846-BD2C-3F613CD6E15C"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:02.399Z",
+      "checksum": "8c7c2243e7df7cfe7c5a4fd6c933265eb34634006bef2eaaf8a154f39ab4012c"
+    }
   }
 ]

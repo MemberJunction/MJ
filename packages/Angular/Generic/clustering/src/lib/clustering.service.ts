@@ -1,18 +1,35 @@
 /**
- * @fileoverview Pure clustering + dimensionality-reduction service.
+ * @fileoverview Clustering + dimensionality-reduction orchestration service.
  *
- * This service is GENERIC — it accepts pre-fetched vectors and returns
- * clustering results.  It does NOT fetch data from any database or API.
+ * This service has two complementary paths:
  *
- * Pipeline:
- * 1. Accept vectors from the caller
- * 2. Run clustering via SimpleVectorService (K-Means or DBSCAN)
- * 3. Reduce dimensions to 2D via UMAP (or PCA fallback)
- * 4. Return ClusterVisualizationResult
+ * 1. **Server-delegated** ({@link ClusteringService.RunClusterAnalysis}) —
+ *    the preferred path when a data provider is available. The heavy
+ *    fetch → cluster → reduce → name pipeline runs server-side via the
+ *    `RunClusterAnalysis` GraphQL mutation (engine: `@memberjunction/clustering-engine`).
+ *    The transport is the typed {@link GraphQLClusterClient}. This keeps large
+ *    vector payloads off the wire and lets the server own LLM cluster-naming.
+ *
+ * 2. **In-browser fallback** ({@link ClusteringService.RunClustering}) — accepts
+ *    pre-fetched vectors and runs the clustering + 2D projection locally via
+ *    `SimpleVectorService` + UMAP/PCA. Used when no provider/endpoint is
+ *    available, or by callers that already hold the vectors.
+ *
+ * The public API of the in-browser path is unchanged so existing consumers keep
+ * compiling.
  */
 
 import { Injectable } from '@angular/core';
 import { SimpleVectorService, VectorEntry, ClusterResult } from '@memberjunction/ai-vectors-memory';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
+import {
+    GraphQLDataProvider,
+    GraphQLClusterClient,
+    RunClusterAnalysisInput,
+    RunClusterAnalysisResult,
+    ClusterAnalysisPoint,
+    ClusterAnalysisInfo,
+} from '@memberjunction/graphql-dataprovider';
 import {
     ClusterConfig,
     ClusterVisualizationResult,
@@ -23,12 +40,73 @@ import {
     CLUSTER_COLORS,
 } from './clustering.types';
 
+/**
+ * Optional server-only knobs that `ClusterConfig` (the in-browser config shape)
+ * does not carry, but the server pipeline supports. Passed alongside the config
+ * to {@link ClusteringService.RunClusterAnalysis}.
+ */
+export interface ClusterAnalysisServerOptions {
+    /** Entity ID — persisted to the analysis row when available. */
+    EntityID?: string;
+    /** When true, the server runs the optional LLM cluster-naming step. */
+    NameClusters?: boolean;
+    /** Number of dimensions for the projected layout (2 or 3). Defaults to 2. */
+    Dimensions?: 2 | 3;
+    /** When supplied, the server persists the analysis with this Name and returns its AnalysisID. */
+    PersistName?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ClusteringService {
 
     /**
-     * Run the full clustering pipeline on pre-fetched vectors:
+     * Run the full clustering pipeline on the **server** via the
+     * `RunClusterAnalysis` GraphQL mutation, then map the result into the
+     * Angular {@link ClusterVisualizationResult} shape used for rendering.
+     *
+     * This is the preferred path: the server fetches the vectors, clusters,
+     * reduces dimensions, and (optionally) names clusters with an LLM — so the
+     * client never has to ship large vector payloads or duplicate that logic.
+     *
+     * The data provider is resolved per multi-provider rules: the caller may
+     * pass an explicit {@link IMetadataProvider}; otherwise the global
+     * `Metadata.Provider` is used. The provider must be a {@link GraphQLDataProvider}
+     * (the browser transport); when it is not, this method returns `null` so the
+     * caller can fall back to {@link ClusteringService.RunClustering}.
+     *
+     * @param config   Clustering configuration (algorithm, K, epsilon, etc.).
+     * @param options  Optional server-only knobs (NameClusters, Dimensions, PersistName, EntityID).
+     * @param provider Optional metadata provider to scope the request to a specific server.
+     * @returns A visualization result, or `null` when no GraphQL provider is available.
+     */
+    public async RunClusterAnalysis(
+        config: ClusterConfig,
+        options?: ClusterAnalysisServerOptions,
+        provider?: IMetadataProvider | null,
+    ): Promise<ClusterVisualizationResult | null> {
+        const gqlProvider = this.resolveGraphQLProvider(provider);
+        if (!gqlProvider) {
+            // No GraphQL endpoint available — caller should fall back to RunClustering().
+            return null;
+        }
+
+        const client = new GraphQLClusterClient(gqlProvider);
+        const input = this.buildAnalysisInput(config, options);
+        const serverResult = await client.RunClusterAnalysis(input);
+
+        if (!serverResult.Success) {
+            throw new Error(serverResult.ErrorMessage || 'Cluster analysis failed on the server.');
+        }
+
+        return this.mapServerResult(serverResult, config);
+    }
+
+    /**
+     * Run the full clustering pipeline on pre-fetched vectors **in the browser**:
      * cluster, project to 2D, and return a visualization result.
+     *
+     * This is the fallback path used when no GraphQL provider is available, or
+     * by callers that already hold the vectors and want local computation.
      *
      * @param vectors  Array of vectors with keys, raw number arrays, and optional metadata.
      * @param config   Clustering configuration (algorithm, K, epsilon, etc.).
@@ -98,7 +176,92 @@ export class ClusteringService {
     }
 
     // ================================================================
-    // Private helpers
+    // Private helpers — server delegation
+    // ================================================================
+
+    /**
+     * Resolve a {@link GraphQLDataProvider} from the supplied provider (or the
+     * global default). Returns `null` when the active provider is not a GraphQL
+     * provider (e.g. a non-browser transport), signalling the caller to fall
+     * back to the in-browser pipeline.
+     */
+    private resolveGraphQLProvider(provider?: IMetadataProvider | null): GraphQLDataProvider | null {
+        const p = provider ?? Metadata.Provider;
+        return p instanceof GraphQLDataProvider ? p : null;
+    }
+
+    /** Build the {@link RunClusterAnalysisInput} from the config + server options. */
+    private buildAnalysisInput(
+        config: ClusterConfig,
+        options?: ClusterAnalysisServerOptions,
+    ): RunClusterAnalysisInput {
+        return {
+            EntityName: config.EntityName,
+            EntityID: options?.EntityID,
+            EntityDocumentID: config.EntityDocumentID,
+            Algorithm: config.Algorithm,
+            K: config.K,
+            Epsilon: config.Epsilon,
+            MinPoints: config.MinPoints,
+            DistanceMetric: config.DistanceMetric,
+            MaxRecords: config.MaxRecords,
+            Filter: config.Filter,
+            NameClusters: options?.NameClusters,
+            Dimensions: options?.Dimensions,
+            PersistName: options?.PersistName,
+        };
+    }
+
+    /**
+     * Map the server's {@link RunClusterAnalysisResult} (engine-shaped, with
+     * `ClusterIndex` / `Index` / `Key`) into the Angular
+     * {@link ClusterVisualizationResult} shape (`ClusterId` / `Id` / `VectorKey`)
+     * consumed by the scatter plot.
+     */
+    private mapServerResult(
+        serverResult: RunClusterAnalysisResult,
+        config: ClusterConfig,
+    ): ClusterVisualizationResult {
+        const points: ClusterPoint[] = serverResult.Points.map(p => this.mapServerPoint(p));
+        const clusters: ClusterInfo[] = serverResult.Clusters.map(c => this.mapServerCluster(c));
+        clusters.sort((a, b) => a.Id - b.Id);
+
+        const m = serverResult.Metrics;
+        const metrics: ClusterMetrics = {
+            SilhouetteScore: m.SilhouetteScore,
+            ClusterCount: m.ClusterCount,
+            ComputationTimeMs: m.ComputationTimeMs,
+            RecordCount: m.RecordCount,
+            OutlierCount: m.OutlierCount,
+        };
+
+        return { Points: points, Clusters: clusters, Metrics: metrics, Config: config };
+    }
+
+    /** Map a single engine-shaped point into the Angular {@link ClusterPoint} shape. */
+    private mapServerPoint(p: ClusterAnalysisPoint): ClusterPoint {
+        return {
+            X: p.X,
+            Y: p.Y,
+            ClusterId: p.ClusterIndex,
+            Label: p.Label ?? p.Key,
+            VectorKey: p.Key,
+            Metadata: p.Metadata ?? {},
+        };
+    }
+
+    /** Map a single engine-shaped cluster into the Angular {@link ClusterInfo} shape. */
+    private mapServerCluster(c: ClusterAnalysisInfo): ClusterInfo {
+        return {
+            Id: c.Index,
+            Label: c.Label,
+            Color: c.Color || CLUSTER_COLORS[c.Index % CLUSTER_COLORS.length],
+            MemberCount: c.MemberCount,
+        };
+    }
+
+    // ================================================================
+    // Private helpers — in-browser pipeline
     // ================================================================
 
     /**

@@ -23,7 +23,7 @@ import {
     SourceCard, SourceDetailInfo, ContentItemDetail, RunHistoryRow, WeightedTag,
     ItemPipelineStatus
 } from '../shared/classify.types';
-import { formatNumber, formatDate, computeDuration, displayStatus, getSourceTypeIcon, CronToHumanReadable } from '../shared/classify.format';
+import { formatNumber, formatDate, computeDuration, displayStatus, getSourceTypeIcon, CronToHumanReadable, deriveDisplayName } from '../shared/classify.format';
 
 @Component({
     standalone: false,
@@ -125,6 +125,9 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
     // ── Tab-local view state ──
 
+    /** Shown while a manual Refresh() recomputes the source cards. */
+    public IsLoading = false;
+
     public SourceCards: SourceCard[] = [];
 
     // Source Detail slide-in
@@ -162,6 +165,19 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
     @Output() OpenContentItemRequested = new EventEmitter<ContentItemDetail>();
     /** Fired after a delete / schedule change so the host reloads the shared source list. */
     @Output() DataChanged = new EventEmitter<void>();
+
+    /**
+     * Recompute the source cards from the current host-supplied inputs. The data
+     * itself is owned by the host (flows in via @Input); Refresh just rebuilds the
+     * view models and surfaces a brief loading state for user feedback.
+     */
+    public async Refresh(): Promise<void> {
+        this.IsLoading = true;
+        this.cdr.detectChanges();
+        this.rebuild();
+        this.IsLoading = false;
+        this.cdr.detectChanges();
+    }
 
     public onAddSource(): void {
         this.AddSourceRequested.emit();
@@ -800,7 +816,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
             const itemStatuses = this.inferPipelineStatuses(item, tagCount);
             return {
                 ID: itemId,
-                Name: (item['Name'] as string) ?? 'Unnamed',
+                Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                 SourceName: (item['ContentSource'] as string) ?? '',
                 SourceTypeName: (item['ContentSourceType'] as string) ?? '',
                 ContentTypeName: (item['ContentType'] as string) ?? '',

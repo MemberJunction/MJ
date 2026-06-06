@@ -101,6 +101,7 @@ export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
 
 // User Management Actions

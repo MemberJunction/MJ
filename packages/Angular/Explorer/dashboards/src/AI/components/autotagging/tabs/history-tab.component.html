@@ -1,6 +1,15 @@
 <mj-page-header-interior
     Title="Run History"
     Subtitle="Pipeline execution history and per-source run detail">
+  <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
+      } @else {
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+      }
+    </button>
+  </div>
   <div toolbar>
     <mj-filter-popover
         [ActiveCount]="historyActiveFilterCount"
@@ -57,6 +66,20 @@
             </tbody>
           </table>
         </div>
+        @if (TotalRunCount > 0) {
+          <div class="at-load-more-bar">
+            <span class="at-load-more-count">Showing {{ FilteredRunRows.length }} of {{ TotalRunCount }} runs</span>
+            @if (HasMoreRuns) {
+              <button mjButton variant="secondary" size="sm" (click)="onLoadMore()" [disabled]="IsLoadingMore">
+                @if (IsLoadingMore) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                } @else {
+                  <i class="fa-solid fa-chevron-down"></i> Load more
+                }
+              </button>
+            }
+          </div>
+        }
       </div>
 
       <!-- Per-run detail panel -->
@@ -115,6 +138,19 @@
                 <p>No per-source detail records found for this run.</p>
               </div>
             }
+
+            <!-- Phase 4: content items processed in this run -->
+            <div class="at-run-items-section">
+              <div class="at-card-header" style="padding-left: 0; padding-right: 0;">
+                <span class="at-card-title">
+                  <i class="fa-solid fa-list-check"></i> Items in this run
+                </span>
+              </div>
+              <classify-item-grid
+                  [RunID]="SelectedRunID"
+                  [Provider]="Provider"
+                  (ItemSelected)="onItemSelected($event)"></classify-item-grid>
+            </div>
           </div>
         </div>
       }

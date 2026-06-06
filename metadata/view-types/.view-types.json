@@ -1,0 +1,122 @@
+[
+  {
+    "fields": {
+      "Name": "Grid",
+      "DisplayName": "Grid",
+      "Description": "Classic tabular view that renders records as rows and columns with sorting, filtering, and inline editing. The default view type for most entities.",
+      "DriverClass": "GridViewType",
+      "PropertySheetDriverClass": null,
+      "Icon": "fa-solid fa-table",
+      "Sequence": 10,
+      "IsActive": 1,
+      "SupportsConfiguration": 1
+    },
+    "primaryKey": {
+      "ID": "964FF5F8-E907-42F8-97F7-ED9988FAB5F2"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.618Z",
+      "checksum": "6c2754ca24a6d8e97f0fea33bdb2c937f5a52f74df0ec84e6fda5cfe72b11110"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cards",
+      "DisplayName": "Cards",
+      "Description": "Renders each record as a card in a responsive grid layout, surfacing key fields visually. Useful for browsing image- or summary-oriented data.",
+      "DriverClass": "CardsViewType",
+      "PropertySheetDriverClass": null,
+      "Icon": "fa-solid fa-grip",
+      "Sequence": 20,
+      "IsActive": 1,
+      "SupportsConfiguration": 0
+    },
+    "primaryKey": {
+      "ID": "0710F394-1FC4-4784-B1B1-9667DE2036E5"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.633Z",
+      "checksum": "666dbfbba2b30b79cfe10aa468b175de4bbe654e667265583908bfb81a29d776"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Timeline",
+      "DisplayName": "Timeline",
+      "Description": "Plots records along a chronological axis based on a configurable date field, making temporal patterns and sequences easy to explore.",
+      "DriverClass": "TimelineViewType",
+      "PropertySheetDriverClass": "TimelineViewPropSheet",
+      "Icon": "fa-solid fa-timeline",
+      "Sequence": 30,
+      "IsActive": 1,
+      "SupportsConfiguration": 1
+    },
+    "primaryKey": {
+      "ID": "BCD1C1B8-158A-45A4-9525-D4A2BC096AAF"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.648Z",
+      "checksum": "95e9b4a9cde71cd7418518e1ceec6d84c8a640c6bb798946ce346dd1929880bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Map",
+      "DisplayName": "Map",
+      "Description": "Displays geocoded records as markers on an interactive map, with configurable location fields and clustering of nearby points.",
+      "DriverClass": "MapViewType",
+      "PropertySheetDriverClass": "MapViewPropSheet",
+      "Icon": "fa-solid fa-map-location-dot",
+      "Sequence": 40,
+      "IsActive": 1,
+      "SupportsConfiguration": 1
+    },
+    "primaryKey": {
+      "ID": "ECC439A3-2042-4B01-80B0-C64D267684BA"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.703Z",
+      "checksum": "80dca52612e462619c6db5d4d4e7b5aeae98ba44792ddd24424cac97798397f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cluster",
+      "DisplayName": "Cluster",
+      "Description": "Visualizes records grouped into clusters by similarity, surfacing structure and relationships in the data via a configurable clustering analysis.",
+      "DriverClass": "ClusterViewType",
+      "PropertySheetDriverClass": "ClusterViewPropSheet",
+      "Icon": "fa-solid fa-diagram-project",
+      "Sequence": 50,
+      "IsActive": 1,
+      "SupportsConfiguration": 1
+    },
+    "primaryKey": {
+      "ID": "FBB362C5-05EE-4CE8-875B-037806392CDD"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.720Z",
+      "checksum": "a6907cbb1529128a6599f31d4865261ddd703511515effddf3e9bae024447188"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TagCloud",
+      "DisplayName": "Tag Cloud",
+      "Description": "Aggregates records by their tags or a configurable text dimension and renders a weighted word cloud where size reflects frequency.",
+      "DriverClass": "TagCloudViewType",
+      "PropertySheetDriverClass": "TagCloudViewPropSheet",
+      "Icon": "fa-solid fa-tags",
+      "Sequence": 60,
+      "IsActive": 1,
+      "SupportsConfiguration": 1
+    },
+    "primaryKey": {
+      "ID": "D817A859-720B-49C7-A0B3-BD8C6C23E189"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T16:39:28.733Z",
+      "checksum": "cedf27a5c36cacbaeccc6a82d70486b145f9dc637e561bc848aac20451a57033"
+    }
+  }
+]
