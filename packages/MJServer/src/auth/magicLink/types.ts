@@ -4,6 +4,23 @@
  */
 
 /**
+ * One unit of scope a magic-link session holds. The union of these across all links
+ * a session has redeemed is the anonymous-session authorization boundary (enforced
+ * server-side against the claims, never via roles on the shared Anonymous principal).
+ */
+export interface MagicLinkScopeEntry {
+  /** The invite that granted this scope entry. */
+  inviteId: string;
+  /** The Application this entry grants access to. */
+  appId: string;
+  /** The role name this entry carries (email/app-session links). */
+  role?: string;
+  /** For resource-share/embed links: the shared resource's type + id. */
+  resourceType?: string;
+  resourceId?: string;
+}
+
+/**
  * Claims carried by a MJ-issued magic-link session JWT.
  * Identity claims (email/given_name/family_name) follow standard OIDC so the
  * existing provider extraction works; the `mj_*` claims describe the scope.
@@ -27,6 +44,20 @@ export interface MagicLinkJWTClaims {
   mj_app_id: string;
   /** The restricted role name assigned to this user (informational; enforcement is server-side via the role's entity permissions). */
   mj_role: string;
+  /** UserID of the internal user who issued the invite (attribution/audit). Absent on links whose inviter could not be resolved. */
+  mj_invited_by?: string;
+  /**
+   * Per-session scope UNION (Phase 4+). Each entry is one redeemed link's grant.
+   * The server enforces anonymous sessions against THIS set (not the user's role
+   * set), which is why two anon visitors sharing the Anonymous principal can hold
+   * different scopes without accretion. For email sessions the singular mj_app_id/
+   * mj_role remain authoritative; this carries the union when links are stacked.
+   */
+  mj_scopes?: MagicLinkScopeEntry[];
+  /** True when this session resolves to the shared Anonymous principal (claims-based enforcement). */
+  mj_anon?: boolean;
+  /** Opaque per-session id — correlates one anonymous session's activity across audit rows without a real user. */
+  mj_sid?: string;
   /** Marks the session as magic-link so the Explorer can confine the UI. */
   mj_magic_link: true;
 }
@@ -75,6 +106,17 @@ export interface CreateMagicLinkInviteResult {
 
 /** Why a redemption failed. */
 export type RedeemErrorCode = 'not_found' | 'expired' | 'consumed' | 'revoked' | 'invalid' | 'provisioning_failed' | 'server_error';
+
+/**
+ * Per-request forensic context captured for the redemption audit trail
+ * (`MJ: Magic Link Redemptions`). Sourced from the HTTP request at the router;
+ * all fields optional because the API/JSON flow may omit them.
+ */
+export interface RedeemAuditContext {
+  ipAddress?: string;
+  userAgent?: string;
+  origin?: string;
+}
 
 /** Result of redeeming an invite. */
 export interface RedeemMagicLinkResult {

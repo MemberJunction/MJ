@@ -7,7 +7,7 @@
  */
 
 import { randomBytes, createHash } from 'node:crypto';
-import type { MagicLinkJWTClaims, RedeemErrorCode } from './types.js';
+import type { MagicLinkJWTClaims, MagicLinkScopeEntry, RedeemErrorCode } from './types.js';
 
 /** Token prefix, mirroring the API-key convention (`mj_sk_`). */
 export const MAGIC_LINK_TOKEN_PREFIX = 'mj_ml_';
@@ -17,9 +17,19 @@ export function generateRawToken(): string {
   return MAGIC_LINK_TOKEN_PREFIX + randomBytes(32).toString('hex');
 }
 
-/** SHA-256 hex hash of a raw token — only the hash is ever persisted. */
+/** Generates an opaque per-session id (anonymous-session forensics correlation). */
+export function generateSessionId(): string {
+  return randomBytes(16).toString('base64url');
+}
+
+/**
+ * SHA-256 hash of a raw token, base64url-encoded — only the hash is ever
+ * persisted. base64url (43 chars) is shorter than hex (64 chars), URL-safe, and
+ * carries the full 256 bits. Both write (CreateInvite) and read (RedeemInvite)
+ * paths call this, so the encoding stays internally consistent.
+ */
 export function hashToken(rawToken: string): string {
-  return createHash('sha256').update(rawToken).digest('hex');
+  return createHash('sha256').update(rawToken).digest('base64url');
 }
 
 /** Minimal shape of an invite needed for redemption eligibility. */
@@ -115,9 +125,19 @@ export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { 
  * the matched row(s) so the caller can detect a win (exactly one row) regardless
  * of trigger behavior.
  *
+ * `qualifiedTable` is asserted to be a bracket-quoted `[schema].[table]` (word
+ * chars only) before interpolation. The caller derives it from `EntityInfo`
+ * (never user input), so this is defense-in-depth: even a future careless caller
+ * cannot turn this into an injection vector — a non-conforming table throws.
+ *
  * @param qualifiedTable  bracket-quoted `[schema].[table]` for MagicLinkInvite
  */
+const QUALIFIED_TABLE_PATTERN = /^\[\w+\]\.\[\w+\]$/;
+
 export function buildConsumeInviteSQL(qualifiedTable: string): string {
+  if (!QUALIFIED_TABLE_PATTERN.test(qualifiedTable)) {
+    throw new Error(`buildConsumeInviteSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
+  }
   return (
     `DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER); ` +
     `UPDATE ${qualifiedTable} ` +
@@ -130,6 +150,20 @@ export function buildConsumeInviteSQL(qualifiedTable: string): string {
   );
 }
 
+/**
+ * Pure scope-union: appends `next` to `prior` unless an entry from the same invite
+ * is already present (dedup by inviteId). This is how a session accumulates the union
+ * of scopes across multiple redeemed links — carried in the re-minted JWT, never as
+ * roles on a shared user, so anonymous sessions can't accrete into a superuser.
+ */
+export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
+  const result = [...(prior ?? [])];
+  if (!result.some((s) => s.inviteId === next.inviteId)) {
+    result.push(next);
+  }
+  return result;
+}
+
 /** Builds the session-token claims (pure). */
 export function buildSessionClaims(args: {
   issuer: string;
@@ -140,10 +174,27 @@ export function buildSessionClaims(args: {
   lastName?: string;
   applicationId: string;
   roleName: string;
+  invitedByUserId?: string;
+  /** True for anonymous sessions — the server enforces scope from mj_scopes, not roles. */
+  anonymous?: boolean;
+  /** Opaque per-session id (anonymous forensics correlation). */
+  sessionId?: string;
+  /** Prior session's scope union to carry forward (multi-link anonymous sessions). */
+  priorScopes?: readonly MagicLinkScopeEntry[];
+  /** Resource-share/embed scope for this link's entry. */
+  resourceType?: string;
+  resourceId?: string;
   nowSeconds: number;
   ttlSeconds: number;
 }): MagicLinkJWTClaims {
   const name = [args.firstName, args.lastName].filter(Boolean).join(' ') || undefined;
+  const scopeEntry: MagicLinkScopeEntry = {
+    inviteId: args.inviteId,
+    appId: args.applicationId,
+    role: args.roleName,
+    resourceType: args.resourceType,
+    resourceId: args.resourceId,
+  };
   return {
     iss: args.issuer,
     aud: args.audience,
@@ -156,6 +207,10 @@ export function buildSessionClaims(args: {
     name,
     mj_app_id: args.applicationId,
     mj_role: args.roleName,
+    mj_invited_by: args.invitedByUserId,
+    mj_scopes: unionScopes(args.priorScopes, scopeEntry),
+    mj_anon: args.anonymous ? true : undefined,
+    mj_sid: args.sessionId,
     mj_magic_link: true,
   };
 }

@@ -12,7 +12,7 @@
       "ID": "677F4E7E-9EB6-4335-A2D6-01D759AD79DD"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.850Z",
+      "lastModified": "2026-06-05T23:59:34.720Z",
       "checksum": "a949513046a1806f1aa305b92a33099b578eb54795b645b71cc611655941133a"
     }
   },
@@ -29,7 +29,7 @@
       "ID": "68F43C79-53AF-43D5-9434-47CBE82C2276"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.869Z",
+      "lastModified": "2026-06-05T23:59:34.739Z",
       "checksum": "d048a067aa8fbd275d2af2cf59653b27607bdefbcbaca0e7a75b04e2aa8460d9"
     }
   },
@@ -46,7 +46,7 @@
       "ID": "E658EA96-64F8-473E-9EBC-0EE92672237A"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.886Z",
+      "lastModified": "2026-06-05T23:59:34.758Z",
       "checksum": "b6e28c9cf1fb0702e7fe157ba774da752211adf85dcf7bcbdc6974197f130945"
     }
   },
@@ -63,7 +63,7 @@
       "ID": "BFD5321D-B170-432F-945B-223A92EA35E2"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.902Z",
+      "lastModified": "2026-06-05T23:59:34.775Z",
       "checksum": "3796fec996c563d1e3cdd6ea35281752ba36415bf591901da2779cea1e91235b"
     }
   },
@@ -80,7 +80,7 @@
       "ID": "B48D8799-C03E-43CA-ADD6-BB77C160B31A"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.918Z",
+      "lastModified": "2026-06-05T23:59:34.791Z",
       "checksum": "19caeea88d09eb146523f3406f856fc2ecf4eab2a552584955d3672a13e4b082"
     }
   },
@@ -97,7 +97,7 @@
       "ID": "F8388976-E46E-4710-95AA-28C63D66B16E"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:01:03.933Z",
+      "lastModified": "2026-06-05T23:59:34.805Z",
       "checksum": "b5154c13ecc097117f82888dc38f859f5eca48e3a1f84ddbc4dbfccbadecb4db"
     }
   },
@@ -108,14 +108,15 @@
       "CanRead": true,
       "CanCreate": false,
       "CanUpdate": false,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
     },
     "primaryKey": {
       "ID": "83A2DB79-1F88-4483-A647-ED80EB458CAF"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:48:56.571Z",
-      "checksum": "6ce693451904a701dfe41f706030cde0f0a2c35a1ba2982eed63b618b9b718f0"
+      "lastModified": "2026-06-05T23:59:34.833Z",
+      "checksum": "935fa7dfbe5f2771da88e36668c5f228e23976c478b7b3f6ae3b5824ffd6163c"
     }
   },
   {
@@ -125,14 +126,15 @@
       "CanRead": true,
       "CanCreate": false,
       "CanUpdate": false,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
     },
     "primaryKey": {
       "ID": "D9976037-BE90-4E42-969D-3F556C8E47D4"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:48:56.592Z",
-      "checksum": "800da10bab81f6fe6a07a62f8c85454220e0f1b47edcb90b5d77f68a6dffd6d2"
+      "lastModified": "2026-06-05T23:59:34.849Z",
+      "checksum": "c513354ca9ec7272012d134a07b9532157a75219da58b4689445b7b6fbf77242"
     }
   },
   {
@@ -142,14 +144,15 @@
       "CanRead": true,
       "CanCreate": false,
       "CanUpdate": false,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Application Roles"
     },
     "primaryKey": {
       "ID": "3B6D257A-10CC-412B-9372-6DDA3E66A353"
     },
     "sync": {
-      "lastModified": "2026-05-31T18:48:56.609Z",
-      "checksum": "5e908d3ff6486250942221fef35a311c8f7cb3c08d7b8eda5cdc8ebdc4d62e6a"
+      "lastModified": "2026-06-05T23:59:34.863Z",
+      "checksum": "5555fd74539ba1b5e7b0f75782f1ded48e461a41d37afaaf51b03bddbc7c5000"
     }
   }
 ]

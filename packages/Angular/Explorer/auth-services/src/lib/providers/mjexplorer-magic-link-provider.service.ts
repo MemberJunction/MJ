@@ -42,6 +42,33 @@ export class MJMagicLinkProvider extends MJAuthBase {
     super({ name: MJMagicLinkProvider.PROVIDER_TYPE, type: MJMagicLinkProvider.PROVIDER_TYPE });
   }
 
+  /**
+   * True if a magic-link session token is present for this page load — either
+   * arriving in the URL fragment (`#token=<jwt>`, from the redeem redirect) or
+   * already stashed in sessionStorage from earlier in this tab.
+   *
+   * Used at module-config time (`AuthServicesModule.forRoot`) to auto-select the
+   * magic-link provider even when `AUTH_TYPE` names a different primary IdP, so a
+   * single Explorer deployment can serve both SSO users and magic-link guests.
+   * Falls back cleanly to the primary IdP when no token is present (e.g. after a
+   * guest's session expires or logs out).
+   */
+  static hasSessionToken(): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      const hash = window.location?.hash ?? '';
+      const fragment = hash.startsWith('#') ? hash.slice(1) : hash;
+      if (new URLSearchParams(fragment).get('token')) {
+        return true;
+      }
+      return !!window.sessionStorage?.getItem(TOKEN_STORAGE_KEY);
+    } catch {
+      return false;
+    }
+  }
+
   async initialize(): Promise<void> {
     // Token may arrive in the URL fragment from the redeem redirect, or already
     // be stored from earlier in this tab's session.

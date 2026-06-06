@@ -103,6 +103,39 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="IdentityMode"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Kind"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ResourceTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ResourceID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -120,6 +153,135 @@
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- Magic Link Invite Allowed Domains Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkInviteAllowedDomains"
+        SectionName="Magic Link Invite Allowed Domains"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkInviteAllowedDomains')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invite Allowed Domains','InviteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invite Allowed Domains')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkInviteAllowedDomains')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInviteAllowedDomains', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Magic Link Invite Allowed Paths Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkInviteAllowedPaths"
+        SectionName="Magic Link Invite Allowed Paths"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkInviteAllowedPaths')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invite Allowed Paths','InviteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invite Allowed Paths')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkInviteAllowedPaths')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInviteAllowedPaths', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Magic Link Invite Applications Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkInviteApplications"
+        SectionName="Magic Link Invite Applications"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkInviteApplications')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invite Applications','InviteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invite Applications')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkInviteApplications')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInviteApplications', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Magic Link Invite Roles Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkInviteRoles"
+        SectionName="Magic Link Invite Roles"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkInviteRoles')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invite Roles','InviteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invite Roles')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkInviteRoles')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInviteRoles', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Magic Link Redemptions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkRedemptions"
+        SectionName="Magic Link Redemptions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkRedemptions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Redemptions','InviteID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Redemptions')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkRedemptions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkRedemptions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>

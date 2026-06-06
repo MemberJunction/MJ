@@ -130,7 +130,13 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
       return;
     }
 
-    const result = await service.RedeemInvite(token);
+    // Forensic context for the redemption audit trail. `req.ip` honors the app's
+    // trust-proxy setting; headers are best-effort and may be absent for API clients.
+    const result = await service.RedeemInvite(token, {
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined,
+      origin: req.get('origin') ?? undefined,
+    });
     sendRedeemResult(res, result, wantsJson);
   });
 

@@ -317,6 +317,15 @@ No new mechanism — it's reads over existing data:
 - **Invites** — the `MJ: Magic Link Invites` entity records who created each link
   (`CreatedByUserID`), the recipient (`Email`), `UseCount`, `ConsumedAt`, `Status`.
   An admin queries/filters these.
+- **⚠️ `Status` is not the whole story — compute *effective* status.** Expiry is
+  enforced by timestamp alone: the redeem path rejects any link past `ExpiresAt`,
+  but **nothing ever writes `Status = 'Expired'`**. An expired-but-never-redeemed
+  invite still reads `Status = 'Active'` in the table. So an admin/audit view that
+  filters on `Status = 'Active'` to mean "still usable" is wrong — it will list
+  dead links. Derive usability instead:
+  `Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > SYSUTCDATETIME()`
+  (the same predicate the atomic consume uses). Treat `Status` as the *manual*
+  lifecycle flag (`Active`/`Consumed`/`Revoked`); treat expiry as computed.
 - **What the recruiter did** — enable **`AuditViewRuns`** (and/or record-access
   auditing) on the `Candidates` entity; every recruiter search/view is logged.
   MJ's built-in **Record Changes** captures any mutations.

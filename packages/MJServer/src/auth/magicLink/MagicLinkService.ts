@@ -20,6 +20,9 @@ import {
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   type MJMagicLinkInviteEntity,
+  type MJMagicLinkRedemptionEntity,
+  type MJMagicLinkInviteApplicationEntity,
+  type MJMagicLinkInviteRoleEntity,
   type MJUserEntity,
   type MJUserRoleEntity,
   type MJUserApplicationEntity,
@@ -31,18 +34,24 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
-import { generateRawToken, hashToken, evaluateInvite, buildSessionClaims, buildConsumeInviteSQL, canIssueInvites, isRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import { generateRawToken, generateSessionId, hashToken, evaluateInvite, buildSessionClaims, buildConsumeInviteSQL, canIssueInvites, isRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
   RedeemMagicLinkResult,
+  RedeemAuditContext,
 } from './types.js';
 
 const INVITE_ENTITY = 'MJ: Magic Link Invites';
+const REDEMPTION_ENTITY = 'MJ: Magic Link Redemptions';
+/** Shared Anonymous principal — seeded by the Phase-4 migration; must match that UUID. */
+const ANONYMOUS_USER_ID = '273910DF-28F1-45C1-A8F8-6E9AD8E5F008';
 
 /** Outcome of provisioning a redeeming user. */
 interface ProvisionResult {
   success: boolean;
+  /** The provisioned/linked user's ID — used for the redemption audit row. */
+  userId?: string;
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -129,6 +138,12 @@ export class MagicLinkService {
         return { success: false, error: `Failed to create invite: ${invite.LatestResult?.CompleteMessage ?? 'unknown error'}` };
       }
 
+      // Phase 2: pre-stage the multi-scope child rows (one app + one role) mirroring
+      // the single ApplicationID/RoleID. Additive — the columns stay authoritative for
+      // redemption today; this populates the child tables for the eventual switch to
+      // multi-scope reads. Best-effort so a child-row hiccup never fails issuance.
+      await this.writeInviteScopeChildRows(invite.ID, params.applicationId, roleId, creatingUser, md);
+
       const redemptionUrl = this.buildRedemptionUrl(rawToken);
 
       let emailSent = false;
@@ -164,20 +179,32 @@ export class MagicLinkService {
    * correct trade-off for a single-use credential — burning a token on a server
    * error is recoverable (re-issue); allowing replay is not.
    */
-  public async RedeemInvite(rawToken: string): Promise<RedeemMagicLinkResult> {
+  public async RedeemInvite(rawToken: string, audit?: RedeemAuditContext): Promise<RedeemMagicLinkResult> {
+    // Captured by the `done` closure below so every exit path — success or any
+    // failure — records exactly one MagicLinkRedemption row with the outcome and
+    // whatever attribution we'd resolved by then.
+    let inviteId: string | undefined;
+    let provisionedUserId: string | undefined;
+    let ctxUser: UserInfo | null = null;
+    const done = async (result: RedeemMagicLinkResult): Promise<RedeemMagicLinkResult> => {
+      await this.recordRedemption(result, inviteId, provisionedUserId, audit, ctxUser);
+      return result;
+    };
+
     try {
       if (!rawToken || !rawToken.startsWith(MAGIC_LINK_TOKEN_PREFIX)) {
-        return { success: false, errorCode: 'invalid', error: 'Malformed token.' };
+        return done({ success: false, errorCode: 'invalid', error: 'Malformed token.' });
       }
 
-      const contextUser = this.resolveProvisioningContextUser();
-      if (!contextUser) {
+      ctxUser = this.resolveProvisioningContextUser();
+      if (!ctxUser) {
         LogError('[MagicLink] No provisioning context user available for redemption.');
-        return { success: false, errorCode: 'server_error', error: 'Server not configured for provisioning.' };
+        return done({ success: false, errorCode: 'server_error', error: 'Server not configured for provisioning.' });
       }
+      const contextUser = ctxUser;
 
       // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet
-      const md = Metadata.Provider;
+      const md = Metadata.Provider; // global-provider-ok: server-side magic-link service; runs under the server's single default provider
       const provider = md as DatabaseProviderBase;
 
       const tokenHash = hashToken(rawToken);
@@ -193,24 +220,35 @@ export class MagicLinkService {
 
       if (!found.Success) {
         LogError(`[MagicLink] Invite lookup failed: ${found.ErrorMessage}`);
-        return { success: false, errorCode: 'server_error', error: 'Lookup failed.' };
+        return done({ success: false, errorCode: 'server_error', error: 'Lookup failed.' });
       }
       const invite = found.Results?.[0];
       if (!invite) {
-        return { success: false, errorCode: 'not_found', error: 'Invite not found.' };
+        return done({ success: false, errorCode: 'not_found', error: 'Invite not found.' });
       }
+      inviteId = invite.ID;
 
       // Fast, friendly pre-check (returns a precise reason). NOT the authority —
       // the atomic consume below is what actually enforces single-use.
       const eligibility = evaluateInvite(invite, Date.now());
       if (!eligibility.ok) {
-        return { success: false, errorCode: eligibility.errorCode, error: `Invite is ${eligibility.errorCode}.` };
+        return done({ success: false, errorCode: eligibility.errorCode, error: `Invite is ${eligibility.errorCode}.` });
+      }
+
+      // Fail-closed on the inviter: if the user who issued this link is no longer
+      // an active account, the link dies with them. Without this, a deactivated
+      // employee's outstanding invites would keep working (and provisioning would
+      // silently fall back to an Owner context). The invite is only as trustworthy
+      // as the still-active person who minted it.
+      if (!this.isInviterActive(invite.CreatedByUserID)) {
+        LogError(`[MagicLink] Invite ${invite.ID} rejected: inviter ${invite.CreatedByUserID} is not an active user.`);
+        return done({ success: false, errorCode: 'invalid', error: 'The user who issued this invite is no longer active.' });
       }
 
       const role = md.Roles.find((r) => UUIDsEqual(r.ID, invite.RoleID));
       if (!role) {
         LogError(`[MagicLink] Invite ${invite.ID} references missing role ${invite.RoleID}.`);
-        return { success: false, errorCode: 'server_error', error: 'Invite role not found.' };
+        return done({ success: false, errorCode: 'server_error', error: 'Invite role not found.' });
       }
 
       // Atomic consume BEFORE minting. If we lose the race (0 rows updated), the
@@ -221,17 +259,19 @@ export class MagicLinkService {
         // consume. The in-memory copy still looks eligible if only the DB-side
         // use count changed, so default that case to 'consumed'.
         const recheck = evaluateInvite(invite, Date.now());
-        return { success: false, errorCode: recheck.ok ? 'consumed' : recheck.errorCode, error: 'Invite already redeemed or expired.' };
+        return done({ success: false, errorCode: recheck.ok ? 'consumed' : recheck.errorCode, error: 'Invite already redeemed or expired.' });
       }
 
       const provision = await this.provisionUser(invite, role, contextUser);
       if (!provision.success) {
         // Token already consumed (fail-closed). The link cannot be reused.
         LogError(`[MagicLink] Provisioning failed after consuming invite ${invite.ID}: ${provision.error}`);
-        return { success: false, errorCode: 'provisioning_failed', error: provision.error };
+        return done({ success: false, errorCode: 'provisioning_failed', error: provision.error });
       }
+      provisionedUserId = provision.userId;
 
       const nowSeconds = Math.floor(Date.now() / 1000);
+      const isAnon = invite.IdentityMode === 'anonymous';
       const claims = buildSessionClaims({
         issuer: this.publicUrl,
         audience: this.config.audience,
@@ -241,6 +281,13 @@ export class MagicLinkService {
         lastName: provision.lastName,
         applicationId: invite.ApplicationID,
         roleName: role.Name,
+        invitedByUserId: invite.CreatedByUserID,
+        anonymous: isAnon,
+        // Per-session id for anon forensics (correlates one session's activity since all
+        // anon redemptions share the Anonymous principal). Carried into the redemption audit row.
+        sessionId: isAnon ? generateSessionId() : undefined,
+        // Resource-share scope (Phase 5): the single shared resource this link grants.
+        resourceId: invite.ResourceID ?? undefined,
         nowSeconds,
         ttlSeconds: this.config.sessionTokenTtlHours * 3600,
       });
@@ -248,7 +295,7 @@ export class MagicLinkService {
 
       const app = md.Applications.find((a) => UUIDsEqual(a.ID, invite.ApplicationID));
 
-      return {
+      return done({
         success: true,
         token,
         expiresAt: new Date(claims.exp * 1000).toISOString(),
@@ -256,10 +303,92 @@ export class MagicLinkService {
         applicationName: app?.Name,
         applicationPath: app?.Path || undefined,
         email: provision.email,
-      };
+      });
     } catch (e) {
       LogError(e);
-      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+      return done({ success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  /**
+   * Writes one MagicLinkRedemption audit row for a redemption attempt. Best-effort:
+   * a failure here is logged but never fails the redemption (the user already has,
+   * or has been denied, their session — losing an audit row must not change that).
+   *
+   * InviteID/ProvisionedUserID are null when the attempt didn't get far enough to
+   * resolve them (e.g. a malformed or unknown token — exactly the scan/brute-force
+   * signal we want recorded). IP/User-Agent/Origin are stored as supplied by the
+   * router per the deployment's audit policy.
+   */
+  private async recordRedemption(
+    result: RedeemMagicLinkResult,
+    inviteId: string | undefined,
+    provisionedUserId: string | undefined,
+    audit: RedeemAuditContext | undefined,
+    contextUser: UserInfo | null,
+  ): Promise<void> {
+    try {
+      const ctx = contextUser ?? this.resolveProvisioningContextUser();
+      if (!ctx) {
+        LogError('[MagicLink] Cannot record redemption audit row: no context user available.');
+        return;
+      }
+      // global-provider-ok: redemption runs pre-auth, no per-request provider yet.
+      const md = Metadata.Provider; // global-provider-ok: server-side magic-link service; runs under the server's single default provider
+      const row = await md.GetEntityObject<MJMagicLinkRedemptionEntity>(REDEMPTION_ENTITY, ctx);
+      row.NewRecord();
+      if (inviteId) {
+        row.InviteID = inviteId;
+      }
+      row.AttemptedAt = new Date();
+      row.Outcome = result.success ? 'success' : result.errorCode ?? 'server_error';
+      row.IPAddress = audit?.ipAddress ?? null;
+      row.UserAgent = audit?.userAgent ?? null;
+      row.Origin = audit?.origin ?? null;
+      if (provisionedUserId) {
+        row.ProvisionedUserID = provisionedUserId;
+      }
+      if (!(await row.Save())) {
+        LogError(`[MagicLink] Failed to write redemption audit row: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
+    } catch (e) {
+      LogError(`[MagicLink] Redemption audit write threw: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /**
+   * Writes the Phase-2 multi-scope child rows (one application + one role) that
+   * mirror the invite's single ApplicationID/RoleID. The columns remain the
+   * source of truth for redemption today; these rows pre-stage the data for the
+   * eventual switch to multi-scope reads, avoiding a breaking migration later.
+   * Best-effort: a child-write failure is logged but does not fail invite
+   * issuance (the columns alone keep the one-of-each flow working).
+   */
+  private async writeInviteScopeChildRows(
+    inviteId: string,
+    applicationId: string,
+    roleId: string,
+    creatingUser: UserInfo,
+    md: IMetadataProvider,
+  ): Promise<void> {
+    try {
+      const appRow = await md.GetEntityObject<MJMagicLinkInviteApplicationEntity>('MJ: Magic Link Invite Applications', creatingUser);
+      appRow.NewRecord();
+      appRow.InviteID = inviteId;
+      appRow.ApplicationID = applicationId;
+      if (!(await appRow.Save())) {
+        LogError(`[MagicLink] Failed to write invite-application child row: ${appRow.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
+
+      const roleRow = await md.GetEntityObject<MJMagicLinkInviteRoleEntity>('MJ: Magic Link Invite Roles', creatingUser);
+      roleRow.NewRecord();
+      roleRow.InviteID = inviteId;
+      roleRow.RoleID = roleId;
+      if (!(await roleRow.Save())) {
+        LogError(`[MagicLink] Failed to write invite-role child row: ${roleRow.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
+    } catch (e) {
+      LogError(`[MagicLink] Writing invite scope child rows threw: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -281,26 +410,92 @@ export class MagicLinkService {
    * ensures the restricted role and the single app assignment exist.
    */
   private async provisionUser(invite: MJMagicLinkInviteEntity, role: RoleInfo, contextUser: UserInfo): Promise<ProvisionResult> {
-    const email = invite.Email;
-
     // Ensure the invite's role can ACCESS the invite's app (Application Role with
     // CanAccess) — otherwise Explorer's app-access gate bounces the user off the
     // scoped app to a default. The invite is the authorization for that role to
-    // reach that app. Idempotent + role/app-level (independent of the user).
+    // reach that app. Idempotent + role/app-level (independent of the user/identity mode).
     await this.ensureAppAccess(invite.RoleID, invite.ApplicationID, contextUser);
+
+    // Anonymous mode: resolve the shared Anonymous principal. CRITICALLY, we do NOT
+    // write any UserRole/UserApplication for it — the anon user must never accrete
+    // scope (that would make every anon visitor a superuser). Scope rides on the
+    // per-session JWT claims; enforcement is claims-based, not role-based.
+    if (invite.IdentityMode === 'anonymous') {
+      return this.resolveAnonymousPrincipal();
+    }
+
+    const email = invite.Email;
+    if (!email) {
+      return { success: false, error: 'Email-mode invite is missing an email address.' };
+    }
 
     const existing = UserCache.Instance.Users.find(
       (u) => !!u.Email && u.Email.trim().toLowerCase() === email.trim().toLowerCase(),
     );
 
     if (existing) {
+      // Provisioning guard: never silently attach an external role/app to a
+      // privileged existing account (Owner, or anyone holding a role OUTSIDE the
+      // set of roles magic-link may legitimately grant). The invite's own granted
+      // role is part of that allowed set, so a prior magic-link guest holding only
+      // that role can re-redeem a multi-use link.
+      if (this.isProtectedAccount(existing, role.Name)) {
+        const detail = `existing account '${existing.Email}' is an Owner or already holds non-restricted roles`;
+        if (this.config.provisioningGuard === 'block') {
+          LogError(`[MagicLink] Blocked provisioning onto protected account: ${detail} (provisioningGuard=block).`);
+          return { success: false, error: 'This email matches an existing privileged account; magic-link provisioning was blocked.' };
+        }
+        LogError(`[MagicLink] WARNING: provisioning external scope onto protected account — ${detail} (provisioningGuard=warn); proceeding.`);
+      }
+
       const ok = await this.ensureRoleAndApp(existing.ID, invite.RoleID, invite.ApplicationID, contextUser);
       return ok
-        ? { success: true, email: existing.Email, firstName: existing.FirstName ?? undefined, lastName: existing.LastName ?? undefined }
+        ? { success: true, userId: existing.ID, email: existing.Email, firstName: existing.FirstName ?? undefined, lastName: existing.LastName ?? undefined }
         : { success: false, error: 'Failed to assign role/application to existing user.' };
     }
 
     return this.createScopedUser(invite, role, contextUser);
+  }
+
+  /**
+   * Resolves the shared Anonymous principal for an anonymous-mode redemption. This
+   * principal is an ATTRIBUTION ANCHOR only — it holds no scenario roles and gets no
+   * UserRole/UserApplication rows here, so concurrent anon visitors can never accrete
+   * scope onto a shared identity. Their actual scope lives in the per-session JWT
+   * claims (mj_scopes) and is enforced claims-side. Fail-closed if the principal was
+   * never seeded (the Phase-4 migration is required).
+   */
+  private resolveAnonymousPrincipal(): ProvisionResult {
+    const anon = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, ANONYMOUS_USER_ID));
+    if (!anon) {
+      LogError(`[MagicLink] Anonymous principal ${ANONYMOUS_USER_ID} not found in cache; run the Phase-4 migration.`);
+      return { success: false, error: 'Anonymous access is not configured on this server.' };
+    }
+    return { success: true, userId: anon.ID, email: anon.Email ?? undefined, firstName: 'Anonymous', lastName: undefined };
+  }
+
+  /**
+   * True if an existing account is "protected" from magic-link provisioning: an
+   * Owner, or a user holding any role OUTSIDE the set of roles magic-link may
+   * legitimately grant. That allowed set is: the configured restricted role, the
+   * deployment's `grantableRoleNames`, AND the role THIS invite grants. So a prior
+   * magic-link guest holding only magic-link-grantable roles (e.g. the invite's own
+   * granted role) is NOT protected — re-redeeming a multi-use link is the intended
+   * flow. A user holding e.g. Developer/Admin is still protected and blocked.
+   *
+   * @param user  the existing account being re-provisioned
+   * @param invitedRoleName  the role name this invite grants
+   */
+  private isProtectedAccount(user: UserInfo, invitedRoleName: string): boolean {
+    if ((user.Type ?? '').trim().toLowerCase() === 'owner') {
+      return true;
+    }
+    const allowed = new Set<string>(
+      [this.config.restrictedRoleName, ...this.config.grantableRoleNames, invitedRoleName]
+        .filter((n): n is string => !!n)
+        .map((n) => n.trim().toLowerCase()),
+    );
+    return (user.UserRoles ?? []).some((r) => !!r.Role && !allowed.has(r.Role.trim().toLowerCase()));
   }
 
   /** Creates a new user with exactly the restricted role + single app, transactionally. */
@@ -308,7 +503,7 @@ export class MagicLinkService {
     // Single provider for BOTH the transaction and the entity writes, so the
     // BeginTransaction/Save/Commit are provably on the same connection.
     // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet.
-    const provider = Metadata.Provider as DatabaseProviderBase;
+    const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: server-side magic-link service; runs under the server's single default provider
     const email = invite.Email;
     // The invite does not persist a name; provision a sensible default. (The
     // create-invite params accept first/last name but there is no column to
@@ -355,7 +550,7 @@ export class MagicLinkService {
       this.pushUserToCache(user, role);
 
       LogStatus(`[MagicLink] Provisioned external user ${email} with role '${role.Name}'.`);
-      return { success: true, email, firstName, lastName };
+      return { success: true, userId: user.ID, email, firstName, lastName };
     } catch (txErr) {
       await provider.RollbackTransaction();
       LogError(txErr);
@@ -366,7 +561,7 @@ export class MagicLinkService {
   /** Idempotently ensures an existing user has the given role and app assignment. */
   private async ensureRoleAndApp(userId: string, roleId: string, applicationId: string, contextUser: UserInfo): Promise<boolean> {
     try {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: server-side magic-link provisioning; runs under the server's single default provider
       const rv = new RunView();
 
       const [roleRes, appRes] = await rv.RunViews(
@@ -423,7 +618,7 @@ export class MagicLinkService {
       if (res.Success && (res.Results?.length ?? 0) > 0) {
         return; // already granted
       }
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: server-side magic-link provisioning; runs under the server's single default provider
       const appRole = await md.GetEntityObject<MJApplicationRoleEntity>('MJ: Application Roles', contextUser);
       appRole.NewRecord();
       appRole.ApplicationID = applicationId;
@@ -471,6 +666,19 @@ export class MagicLinkService {
     initData.UserRoles = [{ UserID: user.ID, RoleName: role.Name, RoleID: role.ID }];
     const ui = new UserInfo(Metadata.Provider, initData); // global-provider-ok: redemption runs pre-auth, seeding the shared cache
     UserCache.Instance.Users.push(ui);
+  }
+
+  /**
+   * True iff the invite's creator resolves to a still-active user. Used to
+   * fail-closed at redeem time so a deactivated/removed inviter's outstanding
+   * links stop working. A missing/blank CreatedByUserID is treated as inactive.
+   */
+  private isInviterActive(createdByUserId: string | null | undefined): boolean {
+    if (!createdByUserId) {
+      return false;
+    }
+    const inviter = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, createdByUserId));
+    return !!inviter && inviter.IsActive === true;
   }
 
   /** Resolves the user whose context provisions magic-link users. */

@@ -266,6 +266,15 @@ const magicLinkSchema = z.object({
   grantableRoleNames: z.array(z.string()).optional().default([]),
   /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
   contextUserForProvisioning: z.string().optional(),
+  /**
+   * Guard against bolting an external magic-link role/app onto an EXISTING account
+   * that is an Owner or already holds non-restricted ("real") roles. One mistyped
+   * recipient email is all it takes to hand a colleague an external role otherwise.
+   * `block` (default) refuses to provision onto such accounts; `warn` logs loudly
+   * and proceeds. Provisioning onto brand-new or already-external accounts is never
+   * affected.
+   */
+  provisioningGuard: z.enum(['block', 'warn']).optional().default('block'),
   /** CommunicationEngine provider name used to deliver invite emails (e.g. 'SendGrid', 'Microsoft Graph'). When unset, emails are not sent and the redemption link is returned to the caller instead. */
   communicationProvider: z.string().optional(),
   /** From address for invite emails. */

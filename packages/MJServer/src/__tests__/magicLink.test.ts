@@ -9,6 +9,7 @@ import {
   buildConsumeInviteSQL,
   canIssueInvites,
   isRoleGrantable,
+  unionScopes,
   MAGIC_LINK_TOKEN_PREFIX,
 } from '../auth/magicLink/magicLinkCore.js';
 import { buildRedeemLandingHtml, escapeHtml } from '../auth/magicLink/redeemLanding.js';
@@ -30,10 +31,11 @@ describe('magic-link core', () => {
   });
 
   describe('hashToken', () => {
-    it('is deterministic and 64-hex (sha256)', () => {
+    it('is deterministic and base64url-encoded sha256 (43 chars, URL-safe alphabet)', () => {
       const raw = 'mj_ml_abc';
       expect(hashToken(raw)).toBe(hashToken(raw));
-      expect(hashToken(raw)).toMatch(/^[0-9a-f]{64}$/);
+      // base64url of 32 bytes = 43 chars, no padding, only [A-Za-z0-9_-]
+      expect(hashToken(raw)).toMatch(/^[A-Za-z0-9_-]{43}$/);
     });
 
     it('differs for different inputs and never equals the raw token', () => {
@@ -99,6 +101,71 @@ describe('magic-link core', () => {
       expect(claims.email).toBe('ext@client.com');
       expect(claims.name).toBe('Ext User');
     });
+
+    it('carries mj_invited_by when an inviter is supplied (attribution claim)', () => {
+      const claims = buildSessionClaims({
+        issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
+        applicationId: 'APP-1', roleName: 'External App User',
+        invitedByUserId: 'USER-42', nowSeconds: 1000, ttlSeconds: 3600,
+      });
+      expect(claims.mj_invited_by).toBe('USER-42');
+    });
+
+    it('omits mj_invited_by when no inviter is supplied', () => {
+      const claims = buildSessionClaims({
+        issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
+        applicationId: 'APP-1', roleName: 'External App User',
+        nowSeconds: 1000, ttlSeconds: 3600,
+      });
+      expect(claims.mj_invited_by).toBeUndefined();
+    });
+
+    it('always emits a single-entry mj_scopes for the current link', () => {
+      const claims = buildSessionClaims({
+        issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
+        applicationId: 'APP-1', roleName: 'External App User', nowSeconds: 1000, ttlSeconds: 3600,
+      });
+      expect(claims.mj_scopes).toEqual([{ inviteId: 'INVITE-1', appId: 'APP-1', role: 'External App User', resourceType: undefined, resourceId: undefined }]);
+    });
+
+    it('marks anonymous sessions and carries the per-session id + prior-scope union', () => {
+      const claims = buildSessionClaims({
+        issuer: 'i', audience: 'a', inviteId: 'INVITE-2', email: 'anon@x',
+        applicationId: 'APP-2', roleName: 'Guest', anonymous: true, sessionId: 'SID-9',
+        priorScopes: [{ inviteId: 'INVITE-1', appId: 'APP-1', role: 'Guest' }],
+        nowSeconds: 1000, ttlSeconds: 3600,
+      });
+      expect(claims.mj_anon).toBe(true);
+      expect(claims.mj_sid).toBe('SID-9');
+      // union = prior + this link, both apps present, no accretion duplicate
+      expect(claims.mj_scopes?.map((s) => s.appId).sort()).toEqual(['APP-1', 'APP-2']);
+    });
+
+    it('does NOT mark mj_anon for email sessions', () => {
+      const claims = buildSessionClaims({
+        issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
+        applicationId: 'APP-1', roleName: 'External App User', nowSeconds: 1000, ttlSeconds: 3600,
+      });
+      expect(claims.mj_anon).toBeUndefined();
+    });
+  });
+
+  describe('unionScopes', () => {
+    const a = { inviteId: 'I1', appId: 'A1', role: 'R' };
+    const b = { inviteId: 'I2', appId: 'A2', role: 'R' };
+
+    it('appends a new scope entry', () => {
+      expect(unionScopes([a], b)).toEqual([a, b]);
+    });
+
+    it('is idempotent by inviteId — re-redeeming the same link never accretes a duplicate', () => {
+      expect(unionScopes([a, b], { inviteId: 'I1', appId: 'A1', role: 'R' })).toEqual([a, b]);
+    });
+
+    it('handles an empty/undefined prior union', () => {
+      expect(unionScopes(undefined, a)).toEqual([a]);
+      expect(unionScopes([], a)).toEqual([a]);
+    });
   });
 
   describe('buildConsumeInviteSQL', () => {
@@ -149,6 +216,15 @@ describe('magic-link core', () => {
       expect(sql).toContain('DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER)');
       expect(sql.match(/;/g)?.length).toBe(3);
       expect(sql.trim().endsWith(';')).toBe(true);
+    });
+
+    it('rejects a non-whitelisted table identifier (defense-in-depth against injection)', () => {
+      // Only bracket-quoted [schema].[table] of word chars is accepted, even though
+      // the caller derives the table from EntityInfo and never from user input.
+      expect(() => buildConsumeInviteSQL('__mj.MagicLinkInvite')).toThrow();
+      expect(() => buildConsumeInviteSQL('[__mj].[MagicLinkInvite]; DROP TABLE x;--')).toThrow();
+      expect(() => buildConsumeInviteSQL('[__mj].[Magic Link]')).toThrow();
+      expect(() => buildConsumeInviteSQL(table)).not.toThrow();
     });
   });
 
