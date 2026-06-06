@@ -465,6 +465,12 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     private panStartX = 0;
     private panStartY = 0;
     private panStartViewBox = [0, 0, 1000, 700];
+    // 3D orbit-drag state
+    private isRotating = false;
+    private rotateStartX = 0;
+    private rotateStartY = 0;
+    private rotateStartYaw = 0;
+    private rotateStartPitch = 0;
     private boundOnMouseMove: ((e: MouseEvent) => void) | null = null;
     private boundOnMouseUp: ((e: MouseEvent) => void) | null = null;
 
@@ -591,34 +597,52 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
         return this.Points.some(p => p.Z != null);
     }
 
-    /** Fixed yaw angle (radians) for the isometric 3D projection. */
-    private readonly threeDAngle = 0.6;
+    /** Orbit angles (radians) for the interactive 3D projection. Updated by drag. */
+    public Yaw = 0.6;
+    public Pitch = 0.45;
+
+    /** Rotate a centered (x,y,z) by the current yaw (around Y) then pitch (around X). */
+    private rotate(point: ClusterPoint): { x: number; y: number; z: number } {
+        const x0 = point.X - 500;
+        const y0 = point.Y - 350;
+        const z0 = (point.Z ?? 500) - 500;
+        const cy = Math.cos(this.Yaw), sy = Math.sin(this.Yaw);
+        // yaw around vertical (Y) axis
+        const x1 = x0 * cy + z0 * sy;
+        const z1 = -x0 * sy + z0 * cy;
+        const y1 = y0;
+        // pitch around horizontal (X) axis
+        const cp = Math.cos(this.Pitch), sp = Math.sin(this.Pitch);
+        const y2 = y1 * cp - z1 * sp;
+        const z2 = y1 * sp + z1 * cp;
+        return { x: x1, y: y2, z: z2 };
+    }
 
     /** Project a point's (X,Y,Z) to a screen X in the SVG coordinate space. */
     public PX(point: ClusterPoint): number {
         if (!this.Is3D || point.Z == null) return point.X;
-        const x = point.X - 500;
-        const z = point.Z - 500;
-        return 500 + (x * Math.cos(this.threeDAngle) - z * Math.sin(this.threeDAngle));
+        return 500 + this.rotate(point).x;
     }
 
     /** Project a point's (X,Y,Z) to a screen Y in the SVG coordinate space. */
     public PY(point: ClusterPoint): number {
         if (!this.Is3D || point.Z == null) return point.Y;
-        const x = point.X - 500;
-        const z = point.Z - 500;
-        const depth = x * Math.sin(this.threeDAngle) + z * Math.cos(this.threeDAngle);
-        return point.Y - depth * 0.35;
+        return 350 + this.rotate(point).y;
     }
 
     /** Normalized depth [0=far, 1=near] for a point, used for size/opacity cues. */
     private depthNorm(point: ClusterPoint): number {
         if (!this.Is3D || point.Z == null) return 1;
-        const x = point.X - 500;
-        const z = point.Z - 500;
-        const depth = x * Math.sin(this.threeDAngle) + z * Math.cos(this.threeDAngle);
-        // depth roughly in [-620, 620] given normalized coords; map to [0,1]
-        return Math.max(0, Math.min(1, (depth + 620) / 1240));
+        const depth = this.rotate(point).z;
+        // centered coords span roughly ±440 per axis; combined depth ~[-760, 760]
+        return Math.max(0, Math.min(1, (depth + 600) / 1200));
+    }
+
+    /** Reset the 3D orbit to the default viewing angle. */
+    public ResetRotation(): void {
+        this.Yaw = 0.6;
+        this.Pitch = 0.45;
+        this.cdr.detectChanges();
     }
 
     /**
@@ -796,7 +820,18 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
      * @param event  The native mouse event.
      */
     public OnMouseDown(event: MouseEvent): void {
-        if (event.button !== 0 || !this.EnablePan) return;
+        if (event.button !== 0) return;
+        // In 3D mode a left-drag orbits the camera (so depth is perceivable);
+        // in 2D it pans the viewBox.
+        if (this.Is3D) {
+            this.isRotating = true;
+            this.rotateStartX = event.clientX;
+            this.rotateStartY = event.clientY;
+            this.rotateStartYaw = this.Yaw;
+            this.rotateStartPitch = this.Pitch;
+            return;
+        }
+        if (!this.EnablePan) return;
         this.isPanning = true;
         this.panStartX = event.clientX;
         this.panStartY = event.clientY;
@@ -1110,6 +1145,15 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     // ================================================================
 
     private onMouseMove(event: MouseEvent): void {
+        if (this.isRotating) {
+            const dx = event.clientX - this.rotateStartX;
+            const dy = event.clientY - this.rotateStartY;
+            this.Yaw = this.rotateStartYaw + dx * 0.01;
+            // clamp pitch so the scene never flips upside down
+            this.Pitch = Math.max(-1.3, Math.min(1.3, this.rotateStartPitch + dy * 0.01));
+            this.cdr.detectChanges();
+            return;
+        }
         if (!this.isPanning || !this.svgRef) return;
         const svg = this.svgRef.nativeElement;
         const rect = svg.getBoundingClientRect();
@@ -1133,6 +1177,7 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     private onMouseUp(_event: MouseEvent): void {
         this.isPanning = false;
+        this.isRotating = false;
     }
 
     private computeCentroids(): void {

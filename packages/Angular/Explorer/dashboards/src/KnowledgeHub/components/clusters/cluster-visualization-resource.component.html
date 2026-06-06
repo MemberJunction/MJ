@@ -112,6 +112,7 @@
                 [EntityDocOptions]="EntityDocOptions"
                 [AllEntityDocOptions]="AllEntityDocOptions"
                 (RunClustering)="OnRunClustering($event)"
+                (DimensionsChanged)="OnDimensionsChanged($event)"
                 (SaveVisualization)="OnSaveVisualization()">
             </mj-cluster-config-panel>
         </div>

@@ -223,6 +223,18 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         }
     }
 
+    /**
+     * Re-run when the user flips 2D⇄3D so the projection updates immediately.
+     * A 3D layout needs a Z coordinate that only a fresh projection produces, so
+     * toggling alone wouldn't change the existing plot.
+     */
+    public OnDimensionsChanged(dims: 2 | 3): void {
+        this.ActiveConfig = { ...this.ActiveConfig, Dimensions: dims };
+        if (this.Result && this.Result.Points.length > 0 && !this.IsRunning) {
+            void this.OnRunClustering(this.ActiveConfig);
+        }
+    }
+
     /** Handle point click — log for now */
     public OnPointClicked(_point: ClusterPoint): void {
         // Detail panel is handled by the scatter component internally

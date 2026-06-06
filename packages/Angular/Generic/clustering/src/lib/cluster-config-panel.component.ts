@@ -235,6 +235,13 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
      */
     @Output() AlgorithmChanged = new EventEmitter<ClusterAlgorithm>();
 
+    /**
+     * Fires when the 2D/3D projection toggle changes. Hosts should re-run (or
+     * re-project) so the change is reflected immediately — a 3D projection needs
+     * a Z coordinate that only a fresh run produces.
+     */
+    @Output() DimensionsChanged = new EventEmitter<2 | 3>();
+
     // ================================================================
     // Internal State
     // ================================================================
@@ -401,8 +408,10 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
 
     /** Set the projection dimensionality (2 or 3). */
     public SetDimensions(d: 2 | 3): void {
+        if (this.Config.Dimensions === d) return;
         this.Config.Dimensions = d;
         this.emitConfigChanged();
+        this.DimensionsChanged.emit(d);
         this.cdr.detectChanges();
     }
 
