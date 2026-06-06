@@ -24,10 +24,20 @@
         </div>
     } @else if (HasGenerated) {
         @if (FlatNodes.length === 0) {
-            <div class="cls-seed-empty">
-                <i class="fa-solid fa-circle-info"></i>
-                No taxonomy could be proposed from the sampled content.
-            </div>
+            @if (LastSampleSize === 0) {
+                <div class="cls-seed-empty">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    No content sampled — this source has no ingested content items yet.
+                    Add content (crawl &amp; vectorize the source) first, then generate a
+                    taxonomy, or skip this step and define the taxonomy later.
+                </div>
+            } @else {
+                <div class="cls-seed-empty">
+                    <i class="fa-solid fa-circle-info"></i>
+                    The model proposed no tags from the sampled content. Try generating again,
+                    or skip this step and define the taxonomy later.
+                </div>
+            }
         } @else {
             <div class="cls-seed-tree">
                 @for (node of FlatNodes; track node.Key) {

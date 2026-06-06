@@ -203,4 +203,30 @@
     flex: 1;
     position: relative;
     overflow: hidden;
+    min-height: 0;
+}
+
+/* The scatter SVG / empty-state should fill and be clipped to the area … */
+.scatter-area > mj-cluster-scatter {
+    position: absolute;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+}
+
+/* … but the floating Configuration panel must never be clipped by the area's
+   overflow. Constrain its height to the visible area and let its own body scroll
+   when the Filter (Optional) section makes it tall. (Panel lives in the generic
+   ng-clustering package; we only adjust its containment from here.) */
+.scatter-area > mj-cluster-config-panel {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+.scatter-area ::ng-deep .config-panel {
+    pointer-events: auto;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }

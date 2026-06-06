@@ -32,6 +32,12 @@ export type {
     ClusterAnalysisInfo,
     ClusterAnalysisMetrics
 } from './graphQLClusterClient';
+export { GraphQLClassifyClient } from './graphQLClassifyClient';
+export type {
+    GenerateSeedTaxonomyInput,
+    SeedTaxonomyResult,
+    SeedTaxonomyNode
+} from './graphQLClassifyClient';
 export { GraphQLTestingClient } from './graphQLTestingClient';
 export type {
     RunTestParams,

@@ -108,7 +108,9 @@ export class ClassifySetupWizardComponent extends BaseAngularComponent {
         this.SourceTypeID = '';
         this.EntityID = '';
         this.EntityDocID = '';
-        this.ContentTypeID = '';
+        // Preserve the auto-selected content type when only one exists (set in
+        // loadOptions), so the wizard can skip the content-type step.
+        this.ContentTypeID = this.ContentTypeOptions.length === 1 ? this.ContentTypeOptions[0].ID : '';
         this.SourceURL = '';
         this.ClassificationContext = '';
         this.ClassificationContextMode = 'additive';
@@ -122,6 +124,11 @@ export class ClassifySetupWizardComponent extends BaseAngularComponent {
             await engine.Config(false, p.CurrentUser, p);
             this.SourceTypeOptions = engine.ContentSourceTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.ContentTypeOptions = engine.ContentTypes.map(t => ({ ID: t.ID, Name: t.Name }));
+            // When exactly one content type exists, auto-select it so the wizard can
+            // skip the content-type step entirely (see ActiveSteps).
+            if (this.ContentTypeOptions.length === 1) {
+                this.ContentTypeID = this.ContentTypeOptions[0].ID;
+            }
             // Entities that have active documents — the safe default for entity sources.
             const entityMap = new Map<string, string>();
             for (const doc of engine.GetActiveEntityDocuments()) {
@@ -190,9 +197,10 @@ export class ClassifySetupWizardComponent extends BaseAngularComponent {
             // Entity Document step only when the chosen entity lacks one.
             if (this.EntityID && this.SelectedEntityHasNoDocument) steps.push('entity-doc');
         }
-        // Content type only matters for non-entity sources; skip when one already exists is
-        // NOT done (operator may want to pick which) — but skip entirely for entity sources.
-        if (!this.IsEntitySource) steps.push('content-type');
+        // Content type only matters for non-entity sources. When exactly one content
+        // type exists it is auto-selected (see loadOptions) and the step is skipped —
+        // there's nothing to choose. The step is shown for 0 (n/a path) or 2+ options.
+        if (!this.IsEntitySource && this.ContentTypeOptions.length !== 1) steps.push('content-type');
         steps.push('taxonomy');
         steps.push('domain-context');
         steps.push('review');

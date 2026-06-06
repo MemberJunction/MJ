@@ -57,7 +57,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
     }
 
     async GetResourceIconClass(_data: ResourceData): Promise<string> {
-        return 'fa-solid fa-chart-network';
+        return 'fa-solid fa-circle-nodes';
     }
 
     // ================================================================

@@ -105,7 +105,25 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // OpenFeedItemDetail(index) — the tab emits the original index back up.
 
     // Pipeline run state
-    public IsRunning = false;
+    private _isRunning = false;
+    /**
+     * True while a classification pipeline run is in flight. Backed by a setter
+     * that flushes change detection once the view is ready, so the `[disabled]="IsRunning"`
+     * Run button binding stays stable across the check that follows a within-cycle
+     * flip (run starting / instantly completing on an empty source) — eliminating
+     * the NG0100 (`Previous value: 'true'. Current value: 'false'`). Mirrors the
+     * `ActiveTab` setter pattern above.
+     */
+    public get IsRunning(): boolean {
+        return this._isRunning;
+    }
+    public set IsRunning(value: boolean) {
+        if (value === this._isRunning) return;
+        this._isRunning = value;
+        if (this.viewReady) {
+            this.cdr.detectChanges();
+        }
+    }
     public IsPaused = false;
     public RunProgress = 0;
     public RunStage = '';
@@ -1145,6 +1163,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
             this.CurrentPipelineRunID = result.PipelineRunID;
             this.subscribeToPipelineProgress(result.PipelineRunID);
+            MJNotificationService.Instance.CreateSimpleNotification('Classification pipeline started…', 'info', 3000);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[Autotagging] Error starting pipeline:', msg);
@@ -1264,6 +1283,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         `;
 
         let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        // Track the most recent processed-item count from the progress stream so the
+        // completion toast can report it (and surface the "no ingested content" case).
+        let lastProcessedItems = 0;
 
         const finishPipeline = (success: boolean) => {
             if (idleTimer) clearTimeout(idleTimer);
@@ -1292,7 +1314,17 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                         this.loadEntityRecordDocCache(),
                     ]);
                     this.tabDataLoaded.add('pipeline');
-                    MJNotificationService.Instance.CreateSimpleNotification('Pipeline complete', 'success', 3000);
+                    if (lastProcessedItems > 0) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Pipeline complete — ${lastProcessedItems} ${lastProcessedItems === 1 ? 'item' : 'items'} processed`,
+                            'success', 4000
+                        );
+                    } else {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            'Pipeline complete — 0 items processed. This source has no ingested content yet; add/crawl & vectorize content first.',
+                            'warning', 8000
+                        );
+                    }
                 }
                 this.cdr.detectChanges();
             });
@@ -1316,6 +1348,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 const stage = progress['Stage'] as string;
                 const pct = progress['PercentComplete'] as number;
                 const currentItem = progress['CurrentItem'] as string | undefined;
+                const processedItems = progress['ProcessedItems'] as number | undefined;
+                if (typeof processedItems === 'number') {
+                    lastProcessedItems = processedItems;
+                }
 
                 this.RunProgress = Math.min(100, Math.max(0, pct));
                 this.RunStage = this.formatStageName(stage);

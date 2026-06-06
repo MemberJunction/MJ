@@ -7,24 +7,22 @@
  * `MJ: Tags` (parent/child wired via ParentID). Used standalone on the Tags /
  * Taxonomy area and embedded inside the setup wizard's Taxonomy step.
  *
- * The mutation is invoked through the threaded provider's `ExecuteGQL` (the
- * provider is a `GraphQLDataProvider` at runtime; we narrow to its `ExecuteGQL`
- * surface to stay decoupled from the concrete class while honoring the
- * multi-provider `ProviderToUse` contract).
+ * The mutation is invoked through the first-class transport helper
+ * `GraphQLClassifyClient` (constructed from the threaded `ProviderToUse`,
+ * narrowed to the concrete `GraphQLDataProvider` it is at runtime), which
+ * returns a strongly-typed `SeedTaxonomyResult` — no inline GraphQL or manual
+ * JSON parsing in the component.
  */
 import { Component, ChangeDetectorRef, EventEmitter, Input, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJTagEntity } from '@memberjunction/core-entities';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
-
-/** One node in the server-proposed taxonomy (parsed from `NodesJSON`). */
-interface SeedTaxonomyNodeJson {
-    Name: string;
-    Description?: string;
-    MemberCount?: number;
-    Children?: SeedTaxonomyNodeJson[];
-}
+import {
+    GraphQLClassifyClient,
+    GraphQLDataProvider,
+    SeedTaxonomyNode as SeedTaxonomyNodeDTO,
+} from '@memberjunction/graphql-dataprovider';
 
 /** Editable view-model node — adds selection + rename + a stable key for tracking. */
 export interface SeedTaxonomyNode {
@@ -36,15 +34,6 @@ export interface SeedTaxonomyNode {
     Renaming: boolean;
     Depth: number;
     Children: SeedTaxonomyNode[];
-}
-
-/** Minimal shape of the GenerateSeedTaxonomy mutation result we consume. */
-interface GenerateSeedTaxonomyResult {
-    Success: boolean;
-    ErrorMessage?: string | null;
-    Method?: string | null;
-    SampleSize?: number | null;
-    NodesJSON?: string | null;
 }
 
 @Component({
@@ -104,41 +93,23 @@ export class ClassifySeedTaxonomyComponent extends BaseAngularComponent {
         this.IsGenerating = true;
         this.cdr.detectChanges();
 
-        const mutation = `
-            mutation GenerateSeedTaxonomy($sourceID: String!, $sampleSize: Int!) {
-                GenerateSeedTaxonomy(sourceID: $sourceID, sampleSize: $sampleSize) {
-                    Success
-                    ErrorMessage
-                    Method
-                    SampleSize
-                    NodesJSON
-                }
-            }
-        `;
-
         try {
-            const provider = this.ProviderToUse as unknown as {
-                ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<unknown>;
-            };
-            if (typeof provider.ExecuteGQL !== 'function') {
-                MJNotificationService.Instance.CreateSimpleNotification('This provider cannot run the taxonomy generator.', 'error', 4000);
-                return;
-            }
+            const client = new GraphQLClassifyClient(this.ProviderToUse as GraphQLDataProvider);
+            const result = await client.GenerateSeedTaxonomy({
+                SourceID: this.SourceID,
+                SampleSize: this.SampleSize,
+            });
 
-            const raw = await provider.ExecuteGQL(mutation, { sourceID: this.SourceID, sampleSize: this.SampleSize });
-            const result = (raw as { GenerateSeedTaxonomy?: GenerateSeedTaxonomyResult } | null)?.GenerateSeedTaxonomy;
-
-            if (!result?.Success) {
+            if (!result.Success) {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to generate taxonomy: ${result?.ErrorMessage ?? 'Unknown error'}`, 'error', 5000
+                    `Failed to generate taxonomy: ${result.ErrorMessage ?? 'Unknown error'}`, 'error', 5000
                 );
                 return;
             }
 
             this.LastMethod = result.Method ?? null;
-            this.LastSampleSize = result.SampleSize ?? null;
-            const parsed = this.parseNodes(result.NodesJSON);
-            this.ProposedNodes = this.toViewModel(parsed, 0);
+            this.LastSampleSize = result.SampleSize;
+            this.ProposedNodes = this.toViewModel(result.Nodes, 0);
             this.HasGenerated = true;
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -149,17 +120,7 @@ export class ClassifySeedTaxonomyComponent extends BaseAngularComponent {
         }
     }
 
-    private parseNodes(json: string | null | undefined): SeedTaxonomyNodeJson[] {
-        if (!json) return [];
-        try {
-            const parsed = JSON.parse(json);
-            return Array.isArray(parsed) ? parsed as SeedTaxonomyNodeJson[] : [];
-        } catch {
-            return [];
-        }
-    }
-
-    private toViewModel(nodes: SeedTaxonomyNodeJson[], depth: number): SeedTaxonomyNode[] {
+    private toViewModel(nodes: SeedTaxonomyNodeDTO[], depth: number): SeedTaxonomyNode[] {
         return nodes.map(n => ({
             Key: `n${this.keySeq++}`,
             Name: n.Name ?? '(unnamed)',

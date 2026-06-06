@@ -1,4 +1,4 @@
-<mj-dialog [Visible]="Visible" Title="Add Source (Guided)" Width="720" (Close)="Close()">
+<mj-dialog [Visible]="Visible" Title="Add Source (Guided)" [Width]="660" (Close)="Close()">
     <div class="wiz">
         <!-- Step progress -->
         <div class="wiz-progress">
@@ -11,7 +11,7 @@
             }
         </div>
         <div class="wiz-step-title">
-            Step {{ StepIndex + 1 }} of {{ TotalSteps }} · {{ StepLabel }}
+            <span class="wiz-step-counter">Step {{ StepIndex + 1 }} of {{ TotalSteps }}</span>{{ StepLabel }}
         </div>
 
         <div class="wiz-body">
@@ -169,6 +169,7 @@
             @if (StepIndex > 0) {
                 <button mjButton variant="secondary" size="sm" (click)="Back()" [disabled]="Saving">Back</button>
             }
+            <span class="wiz-actions-spacer"></span>
             <button mjButton variant="flat" size="sm" (click)="Close()">Cancel</button>
         </div>
     </mj-dialog-actions>

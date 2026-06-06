@@ -23,7 +23,7 @@
       },
       {
         "Label": "Visualize",
-        "Icon": "fa-solid fa-chart-network",
+        "Icon": "fa-solid fa-circle-nodes",
         "ResourceType": "Custom",
         "DriverClass": "VisualizationResource",
         "isDefault": false
@@ -65,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-06-06T18:42:19.818Z",
-    "checksum": "47c1927c1a303ea8820b37847223962b0bb3660d55359b7b574b0c7ae11a90bd"
+    "lastModified": "2026-06-06T21:29:25.182Z",
+    "checksum": "bc695d67eb84350c158e9e469c76dd921ef3f27fe51ad7f22d2f1f94903f7cc4"
   }
 }
