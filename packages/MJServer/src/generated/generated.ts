@@ -7599,6 +7599,9 @@ each time the agent processes a prompt step.`})
     @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`}) 
     TotalCacheWriteTokensUsed?: number;
         
+    @Field({nullable: true, description: `Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`}) 
+    LastHeartbeatAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7826,6 +7829,9 @@ export class CreateMJAIAgentRunInput {
     @Field(() => Int, { nullable: true })
     TotalCacheWriteTokensUsed: number | null;
 
+    @Field({ nullable: true })
+    LastHeartbeatAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7973,6 +7979,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalCacheWriteTokensUsed?: number | null;
+
+    @Field({ nullable: true })
+    LastHeartbeatAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
