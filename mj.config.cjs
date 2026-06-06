@@ -38,6 +38,34 @@ module.exports = {
 
   /**
    * ====================
+   * Magic Link (external, app-scoped access) — dev/e2e
+   * ====================
+   * Ephemeral RS256 key (no rsaPrivateKey) — fine for local testing; restart
+   * invalidates outstanding magic-link sessions. No communicationProvider, so
+   * POST /magic-link/create returns the raw redemption link in its response
+   * instead of emailing it. Provisioning context user falls back to an Owner.
+   */
+  magicLink: {
+    enabled: true,
+    restrictedRoleName: 'External App User',
+    defaultExpiresInHours: 72,
+    sessionTokenTtlHours: 8,
+    audience: 'mj-magic-link',
+    // Browser redeems redirect into the Explorer dev server (port 4201) with the
+    // token in the URL fragment; Explorer's magic-link auth provider reads it.
+    explorerUrl: 'http://localhost:4201',
+  },
+
+  // The amd64-on-arm64 emulated SQL Server is slow on cold metadata queries
+  // (e.g. the MJ_Metadata dataset join), which blew past the 30s default and
+  // crashed startup. Raise the request timeout for this dev instance.
+  // (Deep-merged over DEFAULT_SERVER_CONFIG.databaseSettings — pool/conn defaults preserved.)
+  databaseSettings: {
+    requestTimeout: 120000,
+  },
+
+  /**
+   * ====================
    * CodeGen Overrides
    * ====================
    */
