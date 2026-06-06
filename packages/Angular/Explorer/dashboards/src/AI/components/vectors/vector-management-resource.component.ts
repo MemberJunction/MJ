@@ -108,6 +108,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // --- Sidebar data ---
     public VectorDBName = '';
     public VectorDBStatus: 'Healthy' | 'Degraded' | 'Offline' = 'Healthy';
+    /** Human-readable explanation of the current health status (shown as helper text / tooltip). */
+    public VectorDBStatusReason = '';
     public EmbeddingModel: EmbeddingModelInfo = { Name: '', Dimensions: null };
     public StorageUsagePercent = 0;
     public TotalVectors = 0;
@@ -1168,12 +1170,18 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.vectorDatabases.length > 0) {
             const db = this.vectorDatabases[0];
             this.VectorDBName = db.Name;
-            // Determine health based on whether we have records with vectors
+            // "Degraded" here doesn't mean the database is unhealthy — it means no
+            // records have been vectorized yet. Say that plainly so users don't
+            // chase a phantom outage.
             const hasVectors = this.TotalVectors > 0;
             this.VectorDBStatus = hasVectors ? 'Healthy' : 'Degraded';
+            this.VectorDBStatusReason = hasVectors
+                ? `${this.TotalVectors.toLocaleString()} vector(s) stored and queryable.`
+                : `Connected, but no records have been vectorized yet. Run a sync below to populate the index.`;
         } else {
             this.VectorDBName = 'Not configured';
             this.VectorDBStatus = 'Offline';
+            this.VectorDBStatusReason = 'No vector database is configured for this environment.';
         }
     }
 
