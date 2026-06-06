@@ -13,6 +13,7 @@
 "@memberjunction/ng-explorer-app": minor
 "@memberjunction/ng-explorer-core": minor
 "@memberjunction/ng-explorer-modules": minor
+"@memberjunction/ng-shared": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
