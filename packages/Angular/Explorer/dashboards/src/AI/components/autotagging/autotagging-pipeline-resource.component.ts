@@ -21,6 +21,7 @@ import { ClassifyTagsTabComponent } from './tabs/tags-tab.component';
 import { ClassifyInboxTabComponent } from './tabs/inbox-tab.component';
 import { ClassifyHealthTabComponent } from './tabs/health-tab.component';
 import { ClassifySourceTypeFormDialogComponent } from './dialogs/source-type-form.dialog.component';
+import { ClassifySetupWizardComponent } from './dialogs/classify-setup-wizard.component';
 
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
@@ -164,6 +165,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     /** Live reference to the slide-in CRUD form dialog (driven from tab events). */
     @ViewChild('formDialog') private formDialog?: ClassifySourceTypeFormDialogComponent;
+    @ViewChild('setupWizard') private setupWizard?: ClassifySetupWizardComponent;
 
     // ── Schedule dialog ──
     // The quick-schedule dialog (state + save/remove logic) moved to
@@ -991,6 +993,16 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         // Feed the dialog the raw source rows so edit can hydrate Configuration JSON.
         if (this.formDialog) this.formDialog.RawSources = this.contentSourcesRaw;
         void this.formDialog?.OpenAddSource();
+    }
+
+    /** Open the guided setup wizard (empty-state CTA + "Add Source (Guided)"). */
+    public OpenSetupWizard(): void {
+        void this.setupWizard?.Open();
+    }
+
+    /** After the wizard creates a source, reload the shared source list. */
+    public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
+        await this.refreshSourcesTab();
     }
 
     public OpenEditSourceForm(card: SourceCard): void {

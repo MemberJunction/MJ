@@ -157,6 +157,8 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
     /** Bubble "add source" up — host opens its slide-in CRUD form. */
     @Output() AddSourceRequested = new EventEmitter<void>();
+    /** Bubble "add source (guided)" up — host opens the setup wizard. */
+    @Output() AddSourceGuidedRequested = new EventEmitter<void>();
     /** Bubble "edit source" up — host opens its slide-in CRUD form pre-filled. */
     @Output() EditSourceRequested = new EventEmitter<SourceCard>();
     /** Bubble "run pipeline for source" up — host runs the pipeline for the given source ID. */
@@ -181,6 +183,10 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
     public onAddSource(): void {
         this.AddSourceRequested.emit();
+    }
+
+    public onAddSourceGuided(): void {
+        this.AddSourceGuidedRequested.emit();
     }
 
     public onEditSource(card: SourceCard): void {

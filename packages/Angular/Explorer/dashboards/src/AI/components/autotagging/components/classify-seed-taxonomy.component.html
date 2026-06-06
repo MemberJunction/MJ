@@ -1,0 +1,65 @@
+<div class="cls-seed">
+    <div class="cls-seed-bar">
+        <button mjButton variant="primary" size="sm" (click)="Generate()" [disabled]="IsGenerating || !SourceID">
+            @if (IsGenerating) {
+                <i class="fa-solid fa-spinner fa-spin"></i> Generating…
+            } @else if (HasGenerated) {
+                <i class="fa-solid fa-rotate"></i> Generate again
+            } @else {
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate seed taxonomy
+            }
+        </button>
+        @if (HasGenerated) {
+            <span class="cls-seed-meta">
+                {{ SelectedCount }} selected
+                @if (LastMethod) { · {{ LastMethod }} }
+                @if (LastSampleSize != null) { · sampled {{ LastSampleSize }} }
+            </span>
+        }
+    </div>
+
+    @if (IsGenerating) {
+        <div class="cls-seed-loading">
+            <mj-loading text="Sampling content and proposing tags…"></mj-loading>
+        </div>
+    } @else if (HasGenerated) {
+        @if (FlatNodes.length === 0) {
+            <div class="cls-seed-empty">
+                <i class="fa-solid fa-circle-info"></i>
+                No taxonomy could be proposed from the sampled content.
+            </div>
+        } @else {
+            <div class="cls-seed-tree">
+                @for (node of FlatNodes; track node.Key) {
+                    <div class="cls-seed-row" [style.padding-left.px]="12 + node.Depth * 20">
+                        <input type="checkbox" [checked]="node.Selected" (change)="ToggleNode(node)">
+                        @if (node.Renaming) {
+                            <input #renameInput type="text" class="mj-input cls-seed-rename" [value]="node.Name"
+                                   (blur)="CommitRename(node, renameInput.value)"
+                                   (keyup.enter)="CommitRename(node, renameInput.value)">
+                        } @else {
+                            <span class="cls-seed-name" (click)="StartRename(node)" title="Click to rename">{{ node.Name }}</span>
+                            @if (node.MemberCount != null) {
+                                <span class="cls-seed-count">{{ node.MemberCount }}</span>
+                            }
+                            <button class="cls-seed-rename-btn" (click)="StartRename(node)" aria-label="Rename">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="cls-seed-actions">
+                <button mjButton variant="primary" size="sm" (click)="AcceptSelected()"
+                        [disabled]="IsAccepting || !HasSelection">
+                    @if (IsAccepting) { <i class="fa-solid fa-spinner fa-spin"></i> Saving… }
+                    @else { <i class="fa-solid fa-check"></i> Accept selected ({{ SelectedCount }}) }
+                </button>
+                <button mjButton variant="secondary" size="sm" (click)="Generate()" [disabled]="IsGenerating">
+                    <i class="fa-solid fa-rotate"></i> Generate again
+                </button>
+            </div>
+        }
+    }
+</div>

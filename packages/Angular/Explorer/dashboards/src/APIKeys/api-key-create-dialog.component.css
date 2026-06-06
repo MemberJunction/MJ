@@ -109,29 +109,6 @@
     flex-shrink: 0;
 }
 
-:host ::ng-deep .slideout-footer .k-button {
-    min-width: 100px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-:host ::ng-deep .slideout-footer .k-button-solid-primary {
-    background: var(--mj-brand-primary);
-    border: none;
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-:host ::ng-deep .slideout-footer .k-button-solid-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
-}
-
-:host ::ng-deep .slideout-footer .k-button i {
-    margin: 0 5px;
-}
-
 /* Step Indicator */
 .step-indicator {
     display: flex;
@@ -664,18 +641,7 @@
 }
 
 /* Form input styling */
-:host ::ng-deep .form-input .k-input,
-:host ::ng-deep .form-textarea .k-input-inner,
-:host ::ng-deep .k-datepicker .k-input {
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 14px;
-    border-color: var(--mj-border-default);
-    transition: all 0.2s ease;
-}
-
 :host ::ng-deep .form-input:focus-within,
-:host ::ng-deep .form-textarea:focus-within,
-:host ::ng-deep .k-datepicker:focus-within {
+:host ::ng-deep .form-textarea:focus-within {
     box-shadow: var(--mj-focus-ring);
 }

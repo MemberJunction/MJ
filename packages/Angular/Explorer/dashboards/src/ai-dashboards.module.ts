@@ -12,7 +12,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -43,6 +43,9 @@ import { ClassifyOverviewAnalyticsComponent } from './AI/components/autotagging/
 import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
 import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
 import { ClassifyDryRunPreviewDialogComponent } from './AI/components/autotagging/dialogs/dry-run-preview.dialog.component';
+import { ClassifyOrgContextEditorComponent } from './AI/components/autotagging/components/classify-org-context-editor.component';
+import { ClassifySeedTaxonomyComponent } from './AI/components/autotagging/components/classify-seed-taxonomy.component';
+import { ClassifySetupWizardComponent } from './AI/components/autotagging/dialogs/classify-setup-wizard.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
@@ -121,6 +124,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClassifyNoContentTypeWarningComponent,
     ClassifySourceTypeFormDialogComponent,
     ClassifyDryRunPreviewDialogComponent,
+    ClassifyOrgContextEditorComponent,
+    ClassifySeedTaxonomyComponent,
+    ClassifySetupWizardComponent,
     TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
@@ -178,6 +184,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent

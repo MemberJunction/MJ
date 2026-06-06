@@ -69,6 +69,7 @@
             [EntityRecordDocCache]="EntityRecordDocCacheMap"
             [Provider]="ProviderToUse"
             (AddSourceRequested)="OpenAddSourceForm()"
+            (AddSourceGuidedRequested)="OpenSetupWizard()"
             (EditSourceRequested)="OpenEditSourceForm($event)"
             (RunSourceRequested)="RunPipelineForSource($event)"
             (OpenContentItemRequested)="OpenContentItemDetail($event)"
@@ -195,6 +196,12 @@
         (ContentTypeMissing)="ShowNoContentTypeWarning = true"
         (NavigateToRecordRequested)="onFormNavigateToRecord($event)">
     </classify-source-type-form-dialog>
+
+    <!-- ══════ GUIDED SETUP WIZARD ══════ -->
+    <classify-setup-wizard #setupWizard
+        [Provider]="ProviderToUse"
+        (Created)="onWizardCreated($event)">
+    </classify-setup-wizard>
 
     <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
     <classify-item-detail-dialog

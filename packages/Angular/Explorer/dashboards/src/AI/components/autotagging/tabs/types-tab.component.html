@@ -23,6 +23,11 @@
       </div>
     }
     <div class="at-page-body">
+      <!-- Org-level domain context (broadest classification-context scope) -->
+      <div class="at-org-ctx-wrap">
+        <classify-org-context-editor [Provider]="Provider"></classify-org-context-editor>
+      </div>
+
       <div class="at-ct-grid">
         @for (card of ContentTypeCards; track card.ID) {
           <div class="at-ct-card">
