@@ -8,6 +8,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIModelRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { TagGovernanceEngine, TagSuggestionReason } from './TagGovernanceEngine';
+import { generateSeedTaxonomy as generateSeedTaxonomyImpl, SeedTaxonomyResult } from './SeedTaxonomy';
+import type { IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Taxonomy resolution mode. `hybrid` is identical to `auto-grow` except that
@@ -567,6 +569,31 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return `${tag.Name}: ${tag.Description}`;
         }
         return tag.Name;
+    }
+
+    // ========================================================================
+    // Seed Taxonomy (onboarding)
+    // ========================================================================
+
+    /**
+     * Propose a hierarchical tag taxonomy for a content source WITHOUT persisting
+     * anything. Reuses {@link ClusteringEngine} over a sample of the source's
+     * content-item embeddings (clusters are LLM-named), and falls back to a single
+     * AI prompt over a sample of content when embeddings are unavailable.
+     *
+     * @param sourceID    ContentSource ID whose items seed the taxonomy.
+     * @param sampleSize  Max number of content items to consider.
+     * @param contextUser User context (required server-side).
+     * @param provider    Optional metadata provider override.
+     * @returns The proposed taxonomy tree + provenance metadata (nothing is saved).
+     */
+    public async generateSeedTaxonomy(
+        sourceID: string,
+        sampleSize: number,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<SeedTaxonomyResult> {
+        return generateSeedTaxonomyImpl(sourceID, sampleSize, contextUser, provider);
     }
 
     // ========================================================================

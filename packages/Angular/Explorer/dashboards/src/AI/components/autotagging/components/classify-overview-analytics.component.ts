@@ -24,7 +24,7 @@ import {
     TagDistributionEntry,
     ItemsOverTimeBucket,
     WeightHistogramBin,
-} from '@memberjunction/tag-engine';
+} from '@memberjunction/tag-engine-base';
 import { formatNumber, formatShortDate } from '../shared/classify.format';
 
 /** A bar in the tag-distribution chart, pre-scaled to the chart width. */

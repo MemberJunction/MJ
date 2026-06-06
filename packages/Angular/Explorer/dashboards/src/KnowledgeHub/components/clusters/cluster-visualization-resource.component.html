@@ -1,3 +1,6 @@
+@if (Embedded) {
+  <ng-container *ngTemplateOutlet="clusterBody"></ng-container>
+} @else {
 <mj-page-layout>
   <mj-page-header
     Title="Cluster Visualization"
@@ -11,6 +14,12 @@
   </mj-page-header>
 
   <mj-page-body [Flex]="true" [Padding]="false">
+    <ng-container *ngTemplateOutlet="clusterBody"></ng-container>
+  </mj-page-body>
+</mj-page-layout>
+}
+
+<ng-template #clusterBody>
 <div class="cluster-viz-container">
     <!-- Left Sidebar: Saved Visualizations -->
     <div class="sidebar">
@@ -98,5 +107,4 @@
         </div>
     </div>
 </div>
-  </mj-page-body>
-</mj-page-layout>
+</ng-template>

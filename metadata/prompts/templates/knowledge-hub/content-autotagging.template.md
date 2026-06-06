@@ -6,6 +6,14 @@ Your task is to accurately extract key information from a provided piece of text
 The text should be a {{ contentType }}. If the provided text does not actually appear to be of the type {{ contentType }}, please disregard everything in the instructions after this and return this exact JSON response: { "isValidContent": false }.
 {% endif %}
 
+{% if classificationContext %}
+## Classification Context
+
+The following context describes how this content should be interpreted and classified. Use it to guide your title, summary, and especially your choice of tags so they align with the intended taxonomy and domain. Prefer terminology and emphasis that is consistent with this guidance.
+
+{{ classificationContext }}
+{% endif %}
+
 Please extract the title of the provided text, a short summary of the provided documents, as well as between {{ minTags }} and {{ maxTags }} topical key words that are most relevant to the text.
 
 For each keyword, also assign a relevance weight between 0.0 and 1.0:

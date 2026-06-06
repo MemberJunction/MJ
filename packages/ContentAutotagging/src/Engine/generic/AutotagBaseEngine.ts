@@ -15,6 +15,7 @@ import pdfParse from 'pdf-parse'
 import officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
+import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from './ClassificationContextResolver'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
@@ -323,6 +324,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
         processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
         processingParams.contentTypeID = contentItem.ContentTypeID;
+        processingParams.contentSourceID = contentItem.ContentSourceID;
 
         const { modelID, minTags, maxTags } = this.GetContentItemParams(processingParams.contentTypeID);
         processingParams.modelID = modelID;
@@ -676,13 +678,62 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             maxTags: params.maxTags,
             additionalAttributePrompts,
             existingTaxonomy: this.TaxonomyContext ?? undefined,
+            classificationContext: params.classificationContext ?? undefined,
             contentText: chunk,
             previousResults: hasPreviousResults ? JSON.stringify(previousResults) : undefined,
         };
     }
 
+    /**
+     * Resolve the effective classification context for a content item by combining
+     * the org / content-type / source scopes via {@link ClassificationContextResolver}.
+     * Returns undefined when no scope supplies context. Best-effort: any failure is
+     * logged and treated as "no context" so the autotag run is never blocked.
+     */
+    private async resolveClassificationContext(
+        params: ContentItemProcessParams,
+        contextUser: UserInfo,
+    ): Promise<string | undefined> {
+        try {
+            const sourceConfig = this.getSourceClassificationConfig(params.contentSourceID);
+            return await ClassificationContextResolver.ResolveEffectiveContext(
+                sourceConfig,
+                params.contentTypeID,
+                this.ContentTypes,
+                contextUser,
+                this.ProviderToUse,
+            );
+        } catch (e) {
+            LogError(`[Autotag] Failed to resolve classification context for item ${params.contentItemID}: ${e instanceof Error ? e.message : String(e)}`);
+            return undefined;
+        }
+    }
+
+    /**
+     * Look up the parsed ContentSource configuration (with the classification-context
+     * extension keys) for a given source ID from the cached KnowledgeHub sources.
+     */
+    private getSourceClassificationConfig(
+        contentSourceID: string | undefined,
+    ): IContentSourceClassificationConfiguration | null {
+        if (!contentSourceID) {
+            return null;
+        }
+        const source = this.khEngine.ContentSources.find(s => UUIDsEqual(s.ID, contentSourceID));
+        if (!source) {
+            return null;
+        }
+        // ConfigurationObject is the CodeGen-generated typed accessor; the classification
+        // extension keys ride along in the same JSON and are surfaced via the extended interface.
+        return (source.ConfigurationObject as IContentSourceClassificationConfiguration | null) ?? null;
+    }
+
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
         await AIEngine.Instance.Config(false, contextUser);
+
+        // Resolve the effective classification context once per item (async lookup);
+        // buildPromptData reads it from params for each chunk.
+        params.classificationContext = await this.resolveClassificationContext(params, contextUser);
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);

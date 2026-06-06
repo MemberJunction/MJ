@@ -59,6 +59,28 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIModelRunner: class {},
+    AIPromptRunner: class {
+        async ExecutePrompt() {
+            return { success: true, result: { taxonomy: [] }, errorMessage: null };
+        }
+    },
+}));
+
+// TagGovernanceEngine imports TagEngine, which imports SeedTaxonomy (which pulls
+// in ai-core-plus + clustering-engine). Mock those so the real CorePlus module
+// (needs BaseEntity/MJAIPromptEntity) is not pulled into the mocked import graph.
+vi.mock('@memberjunction/ai-core-plus', () => ({
+    AIPromptParams: class {},
+}));
+
+vi.mock('@memberjunction/clustering-engine', () => ({
+    ClusteringEngine: class {
+        SuggestK() { return 1; }
+        async RunPipeline() { return { Points: [], Clusters: [], Metrics: {}, Config: {} }; }
+    },
+    InMemoryVectorSource: class {
+        constructor(public vectors: unknown[]) {}
+    },
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({

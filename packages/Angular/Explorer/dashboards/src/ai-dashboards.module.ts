@@ -71,6 +71,12 @@ import {
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
 import {
+  VisualizeResourceComponent,
+  LoadVisualizeResource
+} from './KnowledgeHub/components/visualize/visualize-resource.component';
+import { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+import { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
+import {
   SchedulingResourceComponent,
   LoadSchedulingResource
 } from './KnowledgeHub/components/scheduling/scheduling-resource.component';
@@ -121,6 +127,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
+    VisualizeResourceComponent,
+    TagCloudComponent,
+    RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
     AIAnalyticsResourceComponent,
@@ -192,6 +201,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
+    VisualizeResourceComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
     AIAnalyticsResourceComponent,
@@ -212,6 +222,7 @@ export class AIDashboardsModule {
         // Ensure tree-shaking prevention loaders are called
         LoadTagsResource();
         LoadClusterVisualizationResource();
+        LoadVisualizeResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();
         LoadAIAnalyticsResource();

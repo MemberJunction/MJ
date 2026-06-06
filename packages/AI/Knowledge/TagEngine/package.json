@@ -23,7 +23,8 @@
     "@memberjunction/ai": "5.39.0",
     "@memberjunction/ai-vectors-memory": "5.39.0",
     "@memberjunction/aiengine": "5.39.0",
-    "@memberjunction/ai-prompts": "5.39.0"
+    "@memberjunction/ai-prompts": "5.39.0",
+    "@memberjunction/clustering-engine": "5.39.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

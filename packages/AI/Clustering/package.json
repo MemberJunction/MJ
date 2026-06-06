@@ -17,13 +17,13 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai-core-plus": "5.38.0",
-    "@memberjunction/ai-prompts": "5.38.0",
-    "@memberjunction/ai-vectors-memory": "5.38.0",
-    "@memberjunction/aiengine": "5.38.0",
-    "@memberjunction/core": "5.38.0",
-    "@memberjunction/core-entities": "5.38.0",
-    "@memberjunction/global": "5.38.0",
+    "@memberjunction/ai-core-plus": "5.39.0",
+    "@memberjunction/ai-prompts": "5.39.0",
+    "@memberjunction/ai-vectors-memory": "5.39.0",
+    "@memberjunction/aiengine": "5.39.0",
+    "@memberjunction/core": "5.39.0",
+    "@memberjunction/core-entities": "5.39.0",
+    "@memberjunction/global": "5.39.0",
     "umap-js": "^1.4.0"
   },
   "devDependencies": {

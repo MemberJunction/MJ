@@ -10,7 +10,7 @@
  * Registered as BaseResourceComponent for the Knowledge Hub application.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild, Input, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, EntityFieldInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
@@ -71,6 +71,17 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     /** LLM-generated cluster labels for the current result */
     public ClusterLabels: ClusterLabel[] = [];
 
+    /**
+     * When true, this component is embedded inside the Visualize host surface.
+     * In that case the host owns the resource lifecycle (NotifyLoadComplete,
+     * agent context) and record navigation, so this component suppresses those
+     * and instead emits open-record intents via {@link OpenRecordRequested}.
+     */
+    @Input() Embedded = false;
+
+    /** Emitted (only when Embedded) to ask the host to open an entity record. */
+    @Output() OpenRecordRequested = new EventEmitter<{ EntityName: string; RecordID: string }>();
+
     // ================================================================
     // Resource overrides
     // ================================================================
@@ -119,13 +130,17 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         await this.loadEntityOptions();
         this.loadSavedVisualizations();
         this.restoreLastSession();
-        this.navigationService.SetAgentContext(this, {
-            IsVisualizationLoaded: !!this.Result,
-            VisualizationTitle: this.VisualizationTitle || null,
-            ClusterCount: this.Result?.Clusters?.length ?? 0,
-            TotalPoints: this.Result?.Points?.length ?? 0,
-        });
-        this.NotifyLoadComplete();
+        // When embedded in the Visualize host, the host owns agent context +
+        // the resource load lifecycle; skip them here to avoid double-reporting.
+        if (!this.Embedded) {
+            this.navigationService.SetAgentContext(this, {
+                IsVisualizationLoaded: !!this.Result,
+                VisualizationTitle: this.VisualizationTitle || null,
+                ClusterCount: this.Result?.Clusters?.length ?? 0,
+                TotalPoints: this.Result?.Points?.length ?? 0,
+            });
+            this.NotifyLoadComplete();
+        }
     }
 
     ngOnDestroy(): void {
@@ -217,6 +232,12 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         const entityName = point.Metadata?.['Entity'] as string;
         const recordID = point.Metadata?.['RecordID'] as string;
         if (!entityName || !recordID) return;
+
+        // When embedded, defer navigation to the host (shared drilldown owner).
+        if (this.Embedded) {
+            this.OpenRecordRequested.emit({ EntityName: entityName, RecordID: recordID });
+            return;
+        }
 
         const compositeKey = new CompositeKey();
         compositeKey.SimpleLoadFromURLSegment(recordID);

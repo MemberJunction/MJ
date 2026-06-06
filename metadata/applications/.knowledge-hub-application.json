@@ -22,10 +22,10 @@
         "isDefault": false
       },
       {
-        "Label": "Clusters",
-        "Icon": "fa-solid fa-circle-nodes",
+        "Label": "Visualize",
+        "Icon": "fa-solid fa-chart-network",
         "ResourceType": "Custom",
-        "DriverClass": "ClusterVisualizationResource",
+        "DriverClass": "VisualizationResource",
         "isDefault": false
       },
       {
