@@ -782,15 +782,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildKPIMetrics(): void {
+        // Single canonical KPI row for the Pipeline Monitor. The Overview-analytics
+        // child below renders charts only (its old duplicate KPI strip — Content
+        // Items / Total Tags — was removed) so these five metrics are the one place
+        // headline numbers appear: sources, volume, vocabulary throughput, errors.
         const sourceCount = this.contentSourcesRaw.length;
         const itemCount = this.totalContentItemCount;
         const tagCount = this.totalContentTagCount;
+        const avgTagsPerItem = itemCount > 0 ? Math.round((tagCount / itemCount) * 10) / 10 : 0;
         const errorCount = this.contentRunsRaw.filter(r => (r['Status'] as string)?.toLowerCase() === 'error' || (r['Status'] as string)?.toLowerCase() === 'failed').length;
 
         this.KPIMetrics = [
             { Label: 'Active Sources', Value: sourceCount, Icon: 'fa-solid fa-satellite-dish', Trend: '', TrendUp: true },
             { Label: 'Content Items', Value: itemCount, Icon: 'fa-solid fa-file-lines', Trend: '', TrendUp: true },
-            { Label: 'Tags Generated', Value: tagCount, Icon: 'fa-solid fa-tags', Trend: tagCount > 0 && itemCount > 0 ? `${(tagCount / itemCount).toFixed(1)} avg/item` : '', TrendUp: true },
+            { Label: 'Total Tags', Value: tagCount, Icon: 'fa-solid fa-tags', Trend: '', TrendUp: true },
+            { Label: 'Avg Tags / Item', Value: avgTagsPerItem, Icon: 'fa-solid fa-chart-simple', Trend: '', TrendUp: true },
             { Label: 'Errors', Value: errorCount, Icon: 'fa-solid fa-circle-exclamation', Trend: '', TrendUp: false }
         ];
     }

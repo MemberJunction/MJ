@@ -7,6 +7,12 @@
 .cluster-viz-container {
     display: flex;
     flex: 1;
+    /* height:100% so we fill the host whether the parent is a flex container
+       (non-embedded, inside mj-page-body[Flex]) OR a plain block host
+       (embedded inside Visualize, where :host is display:block and flex:1
+       would otherwise be ignored, collapsing the area and clipping the
+       floating config panel). */
+    height: 100%;
     min-height: 0;
     overflow: hidden;
 }
@@ -196,6 +202,26 @@
 
 .metric-value.good {
     color: var(--mj-status-success);
+}
+
+/* Run error banner */
+.cluster-run-error {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 70%;
+    padding: 10px 14px;
+    background: var(--mj-status-error-bg);
+    border: 1px solid var(--mj-status-error-border);
+    color: var(--mj-status-error-text);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-text-primary) 12%, transparent);
 }
 
 /* Scatter area */

@@ -17,6 +17,14 @@ export interface RunClusterAnalysisInput {
     EntityID?: string;
     /** Specific Entity Document ID supplying the vectors. Blank => the server chooses. */
     EntityDocumentID?: string;
+    /**
+     * Multi-entity clustering: one or more Entity Document IDs whose vectors are
+     * merged into one analysis. Takes precedence over `EntityDocumentID` when
+     * non-empty. The server hard-blocks documents that use different embedding models.
+     */
+    EntityDocumentIDs?: string[];
+    /** Legend mode: color points by 'cluster' (default) or 'entity'. */
+    ColorBy?: 'cluster' | 'entity';
     /** Clustering algorithm: 'kmeans' or 'dbscan'. */
     Algorithm?: string;
     /** Number of clusters for K-Means. */

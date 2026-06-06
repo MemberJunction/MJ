@@ -23,6 +23,19 @@ export class RunClusterAnalysisInput {
     @Field({ nullable: true })
     EntityDocumentID?: string;
 
+    /**
+     * Multi-entity clustering: one or more Entity Document IDs whose vectors are
+     * merged into a single analysis. Takes precedence over EntityDocumentID when
+     * non-empty. All selected docs must share the same embedding model (the engine
+     * hard-blocks mismatches).
+     */
+    @Field(() => [String], { nullable: true })
+    EntityDocumentIDs?: string[];
+
+    /** Legend mode: color points by 'cluster' (default) or 'entity'. */
+    @Field({ nullable: true })
+    ColorBy?: string;
+
     /** Clustering algorithm: 'kmeans' or 'dbscan'. */
     @Field({ nullable: true })
     Algorithm?: string;
@@ -169,6 +182,8 @@ export class RunClusterAnalysisResolver extends ResolverBase {
             EntityName: input.EntityName ?? '',
             EntityID: input.EntityID ?? '',
             EntityDocumentID: input.EntityDocumentID ?? '',
+            EntityDocumentIDs: (input.EntityDocumentIDs ?? []).filter((id) => !!id && id.trim().length > 0),
+            ColorBy: input.ColorBy === 'entity' ? 'entity' : 'cluster',
             Algorithm: this.normalizeAlgorithm(input.Algorithm),
             K: input.K ?? 4,
             Epsilon: input.Epsilon ?? 0.3,

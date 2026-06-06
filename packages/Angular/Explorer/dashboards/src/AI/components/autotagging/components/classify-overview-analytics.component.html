@@ -1,24 +1,9 @@
 <div class="coa-wrap">
 
-  <!-- KPI cards -->
-  <div class="coa-kpi-strip">
-    <div class="coa-kpi-card">
-      <div class="coa-kpi-value">{{ FormatNumber(KPIs.TotalItems) }}</div>
-      <div class="coa-kpi-label"><i class="fa-solid fa-file-lines"></i> Content Items</div>
-    </div>
-    <div class="coa-kpi-card">
-      <div class="coa-kpi-value">{{ FormatNumber(KPIs.TotalTags) }}</div>
-      <div class="coa-kpi-label"><i class="fa-solid fa-tags"></i> Total Tags</div>
-    </div>
-    <div class="coa-kpi-card">
-      <div class="coa-kpi-value">{{ KPIs.AvgTagsPerItem | number:'1.0-1' }}</div>
-      <div class="coa-kpi-label"><i class="fa-solid fa-chart-simple"></i> Avg Tags / Item</div>
-    </div>
-    <div class="coa-kpi-card">
-      <div class="coa-kpi-value">{{ FormatNumber(KPIs.DistinctTags) }}</div>
-      <div class="coa-kpi-label"><i class="fa-solid fa-layer-group"></i> Distinct Tags</div>
-    </div>
-  </div>
+  <!-- KPI cards removed: the Pipeline Monitor's top KPI strip is now the single
+       canonical headline-metrics row (Active Sources / Content Items / Total Tags /
+       Avg Tags per Item / Errors). This section renders charts only, eliminating the
+       duplicate "Content Items" + "Total Tags" cards that previously appeared twice. -->
 
   @if (IsLoading) {
     <mj-loading text="Loading analytics..." size="small"></mj-loading>

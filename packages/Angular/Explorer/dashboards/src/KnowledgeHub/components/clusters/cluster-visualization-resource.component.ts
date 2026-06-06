@@ -110,6 +110,10 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public EntityOptions: ClusterConfigPanelEntityOption[] = [];
     /** Entity document options for the selected entity (shown when 2+) */
     public EntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
+    /** All entity documents across entities (for the multi-entity source selector) */
+    public AllEntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
+    /** User-facing error from the last run (e.g. multi-entity embedding mismatch) */
+    public RunError: string | null = null;
     /** Ordered field keys for prioritized display in scatter tooltip/detail */
     public FieldPriority: string[] = [];
     /** Map of field names to human-readable display names */
@@ -183,6 +187,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.IsRunning = true;
         this.ActiveConfig = config;
         this.ClusterLabels = [];
+        this.RunError = null;
 
         // Auto-hide detail panel from previous visualization
         this.scatterPlot?.CloseDetailPanel();
@@ -211,6 +216,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         } catch (error) {
             console.error('[ClusterVisualization] Pipeline error:', error);
             this.Result = null;
+            this.RunError = error instanceof Error ? error.message : String(error);
         } finally {
             this.IsRunning = false;
             this.cdr.detectChanges();
@@ -357,6 +363,17 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 this.EntityOptions = entityNames.map(name => ({ Name: name }));
             }
 
+            // Build the cross-entity document list that powers the multi-entity
+            // source selector (each option tagged with its owning entity).
+            const allDocs: ClusterConfigPanelEntityDocOption[] = [];
+            for (const name of entityNames) {
+                const docs = engine.GetEntityDocumentsForEntity(name).filter(d => d.Status === 'Active');
+                for (const d of docs) {
+                    allDocs.push({ ID: d.ID, Name: d.Name, EntityName: name });
+                }
+            }
+            this.AllEntityDocOptions = allDocs;
+
             // Set default entity if config is blank
             if (this.EntityOptions.length > 0 && !this.ActiveConfig.EntityName) {
                 this.ActiveConfig.EntityName = this.EntityOptions[0].Name;
@@ -397,48 +414,73 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
      * that match the requested entity.
      */
     private async fetchVectorsForEntity(config: ClusterConfig): Promise<ClusterInputVector[]> {
-        // Use the selected entity document, or fall back to first active one
-        let entityDocID = config.EntityDocumentID;
-        if (!entityDocID) {
-            const engine = KnowledgeHubMetadataEngine.Instance;
-            const entityDocs = engine.GetEntityDocumentsForEntity(config.EntityName)
-                .filter(d => d.Status === 'Active');
-            if (entityDocs.length === 0) {
-                return [];
-            }
-            entityDocID = entityDocs[0].ID;
-        }
-
-        // Fetch vectors + metadata directly from the vector database (Pinecone)
-        const provider = this.ProviderToUse as GraphQLDataProvider;
-        const aiClient = new GraphQLAIClient(provider);
-        const result = await aiClient.FetchEntityVectors({
-            entityDocumentID: entityDocID,
-            maxRecords: config.MaxRecords,
-            filter: config.Filter || undefined,
-        });
-
-        if (!result.Success || result.Results.length === 0) {
+        const docIDs = this.resolveDocIDs(config);
+        if (docIDs.length === 0) {
             return [];
         }
 
-        // Convert vector DB results to ClusterInputVector format
+        const isMulti = docIDs.length > 1;
+        const docEntityMap = new Map(this.AllEntityDocOptions.map(d => [d.ID, d.EntityName ?? '']));
+        const provider = this.ProviderToUse as GraphQLDataProvider;
+        const aiClient = new GraphQLAIClient(provider);
+
         const vectors: ClusterInputVector[] = [];
-        for (const item of result.Results) {
-            if (!item.Values || item.Values.length === 0) continue;
+        let expectedLen = -1;
 
-            const metadata = this.parseVectorMetadata(item.Metadata);
-            const label = this.buildLabel(metadata);
-
-            vectors.push({
-                Key: item.ID,
-                Label: label,
-                Vector: item.Values,
-                Metadata: metadata,
+        for (const docID of docIDs) {
+            const result = await aiClient.FetchEntityVectors({
+                entityDocumentID: docID,
+                maxRecords: config.MaxRecords,
+                filter: config.Filter || undefined,
             });
+            if (!result.Success || result.Results.length === 0) continue;
+
+            for (const item of result.Results) {
+                if (!item.Values || item.Values.length === 0) continue;
+
+                // Hard-block multi-entity embedding mismatches: vectors of different
+                // dimensionalities live in different spaces and aren't co-clusterable.
+                if (isMulti) {
+                    if (expectedLen === -1) {
+                        expectedLen = item.Values.length;
+                    } else if (item.Values.length !== expectedLen) {
+                        throw new Error(
+                            'The selected documents use different embedding models (vector sizes differ), ' +
+                            'so their points are not comparable. Pick documents that share the same embedding model.',
+                        );
+                    }
+                }
+
+                const metadata = this.parseVectorMetadata(item.Metadata);
+                // Ensure each point knows its source entity for color-by-entity.
+                if (isMulti && !metadata['EntityName']) {
+                    metadata['EntityName'] = docEntityMap.get(docID) ?? metadata['Entity'] ?? '';
+                }
+                const label = this.buildLabel(metadata);
+
+                vectors.push({
+                    Key: item.ID,
+                    Label: label,
+                    Vector: item.Values,
+                    Metadata: metadata,
+                });
+            }
         }
 
         return vectors;
+    }
+
+    /** Resolve which entity-document IDs to source vectors from for a run. */
+    private resolveDocIDs(config: ClusterConfig): string[] {
+        if (config.EntityDocumentIDs && config.EntityDocumentIDs.length > 0) {
+            return config.EntityDocumentIDs;
+        }
+        if (config.EntityDocumentID) {
+            return [config.EntityDocumentID];
+        }
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        const docs = engine.GetEntityDocumentsForEntity(config.EntityName).filter(d => d.Status === 'Active');
+        return docs.length > 0 ? [docs[0].ID] : [];
     }
 
     /** Parse the JSON metadata string from the vector DB into a record */

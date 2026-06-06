@@ -24,7 +24,7 @@
     <!-- Left Sidebar: Saved Visualizations -->
     <div class="sidebar">
         <div class="sidebar-header">
-            <h2><i class="fa-solid fa-circle-nodes"></i> Saved Clusters</h2>
+            <h2><i class="fa-solid fa-circle-nodes"></i> Saved Visualizations</h2>
         </div>
         <div class="saved-list">
             @for (saved of SavedVisualizations; track TrackSavedBy($index, saved)) {
@@ -88,6 +88,7 @@
                 [Points]="Result?.Points ?? []"
                 [Clusters]="Result?.Clusters ?? []"
                 [IsLoading]="IsRunning"
+                [ColorBy]="ActiveConfig.ColorBy ?? 'cluster'"
                 [EntityName]="ActiveConfig.EntityName"
                 (PointClicked)="OnPointClicked($event)"
                 (PointHovered)="OnPointHovered($event)"
@@ -95,12 +96,21 @@
                 (LabelEdited)="OnLabelEdited($event)">
             </mj-cluster-scatter>
 
+            <!-- Run error banner (e.g. multi-entity embedding mismatch) -->
+            @if (RunError) {
+                <div class="cluster-run-error">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>{{ RunError }}</span>
+                </div>
+            }
+
             <!-- Floating config panel -->
             <mj-cluster-config-panel
                 [IsRunning]="IsRunning"
                 [Metrics]="Metrics"
                 [EntityOptions]="EntityOptions"
                 [EntityDocOptions]="EntityDocOptions"
+                [AllEntityDocOptions]="AllEntityDocOptions"
                 (RunClustering)="OnRunClustering($event)"
                 (SaveVisualization)="OnSaveVisualization()">
             </mj-cluster-config-panel>

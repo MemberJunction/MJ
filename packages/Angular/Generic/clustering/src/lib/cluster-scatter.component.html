@@ -49,30 +49,30 @@
                 }
             </g>
 
-            <!-- Cluster glow circles -->
-            @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
-                <circle [attr.cx]="centroid.Cx"
-                        [attr.cy]="centroid.Cy"
-                        [attr.r]="centroid.R"
-                        [attr.fill]="'url(#cluster-glow-' + centroid.ClusterId + ')'"/>
-            }
-
-            <!-- Cluster labels (positioned above centroids) -->
-            @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
-                @if (GetClusterLabelById(centroid.ClusterId); as label) {
-                    <text class="cluster-label"
-                          [attr.x]="centroid.Cx"
-                          [attr.y]="centroid.Cy - centroid.R - 8"
-                          text-anchor="middle"
-                          [attr.fill]="centroid.Color">{{ label }}</text>
+            <!-- Cluster glow + labels (2D only; centroids are 2D aesthetics) -->
+            @if (!Is3D) {
+                @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                    <circle [attr.cx]="centroid.Cx"
+                            [attr.cy]="centroid.Cy"
+                            [attr.r]="centroid.R"
+                            [attr.fill]="'url(#cluster-glow-' + centroid.ClusterId + ')'"/>
+                }
+                @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                    @if (GetClusterLabelById(centroid.ClusterId); as label) {
+                        <text class="cluster-label"
+                              [attr.x]="centroid.Cx"
+                              [attr.y]="centroid.Cy - centroid.R - 8"
+                              text-anchor="middle"
+                              [attr.fill]="centroid.Color">{{ label }}</text>
+                    }
                 }
             }
 
-            <!-- Data points -->
-            @for (point of Points; track TrackPointBy($index, point)) {
+            <!-- Data points (RenderPoints is depth-sorted in 3D) -->
+            @for (point of RenderPoints; track TrackPointBy($index, point)) {
                 <circle class="data-point"
-                        [attr.cx]="point.X"
-                        [attr.cy]="point.Y"
+                        [attr.cx]="PX(point)"
+                        [attr.cy]="PY(point)"
                         [attr.r]="GetPointRadius(point)"
                         [attr.fill]="GetPointColor(point)"
                         [attr.opacity]="GetPointOpacity(point)"
@@ -85,8 +85,8 @@
             @for (point of Points; track TrackPointBy($index, point)) {
                 @if (IsSelected(point)) {
                     <circle class="selection-ring"
-                            [attr.cx]="point.X"
-                            [attr.cy]="point.Y"
+                            [attr.cx]="PX(point)"
+                            [attr.cy]="PY(point)"
                             [attr.r]="HighlightRadius + 2"
                             fill="none"
                             [attr.stroke]="GetPointColor(point)"
@@ -99,8 +99,8 @@
             @if (HighlightedKey) {
                 @for (point of Points; track TrackPointBy($index, point)) {
                     @if (IsHighlighted(point)) {
-                        <circle [attr.cx]="point.X"
-                                [attr.cy]="point.Y"
+                        <circle [attr.cx]="PX(point)"
+                                [attr.cy]="PY(point)"
                                 [attr.r]="HighlightRadius + 4"
                                 fill="none"
                                 [attr.stroke]="GetPointColor(point)"
@@ -112,8 +112,22 @@
         </svg>
     }
 
-    <!-- Legend overlay -->
-    @if (ShowLegend && Clusters.length > 0) {
+    <!-- Entity legend (multi-entity color mode) -->
+    @if (ShowLegend && ColorBy === 'entity' && EntityLegend.length > 0) {
+        <div class="legend">
+            <div class="legend-title">Entities</div>
+            @for (ent of EntityLegend; track ent.Name) {
+                <div class="legend-item">
+                    <div class="legend-dot" [style.background]="ent.Color"></div>
+                    <span class="legend-label">{{ ent.Name }}</span>
+                    <span class="legend-count">{{ ent.Count }}</span>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Legend overlay (cluster color mode) -->
+    @if (ShowLegend && ColorBy !== 'entity' && Clusters.length > 0) {
         <div class="legend">
             <div class="legend-title">Clusters</div>
             @for (cluster of Clusters; track TrackClusterBy($index, cluster)) {

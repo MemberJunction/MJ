@@ -41,10 +41,24 @@ export interface ClusterInputVector {
 export interface ClusterConfig {
     /** Entity name whose records are being clustered (drives drilldown / view qualification). */
     EntityName?: string;
-    /** Entity ID — persisted to the top-level `EntityID` column when available. */
+    /** Entity ID — persisted to the top-level `EntityID` column when available. Null for multi-entity analyses. */
     EntityID?: string;
     /** Specific Entity Document ID supplying the vectors. Blank => source adapter chooses. */
     EntityDocumentID?: string;
+    /**
+     * Multi-entity clustering: one or more Entity Document IDs whose vectors are
+     * merged into a single analysis. When supplied (length >= 1) this takes
+     * precedence over {@link EntityDocumentID}. All selected documents MUST share
+     * the same embedding model + vector dimensionality — the source adapter
+     * hard-blocks incompatible combinations rather than produce a meaningless layout.
+     */
+    EntityDocumentIDs?: string[];
+    /**
+     * How points are colored in the renderer: by their assigned cluster (default)
+     * or by their source entity (useful for multi-entity analyses). Persisted so a
+     * reloaded analysis restores the chosen legend mode.
+     */
+    ColorBy?: 'cluster' | 'entity';
     /** Clustering algorithm to use. */
     Algorithm: ClusterAlgorithm;
     /** Number of clusters for K-Means (ignored for DBSCAN). */
@@ -170,6 +184,8 @@ export function DefaultClusterConfig(): ClusterConfig {
         EntityName: '',
         EntityID: '',
         EntityDocumentID: '',
+        EntityDocumentIDs: [],
+        ColorBy: 'cluster',
         Algorithm: 'kmeans',
         K: 4,
         Epsilon: 0.3,

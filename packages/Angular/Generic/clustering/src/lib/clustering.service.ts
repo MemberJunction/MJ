@@ -139,12 +139,12 @@ export class ClusteringService {
             clusterResult = svc.KMeansCluster(k, 100, config.DistanceMetric);
         }
 
-        // Step 2: Reduce dimensions to 2D
+        // Step 2: Reduce dimensions to 2D or 3D
         const vectorMap = new Map<string, number[]>();
         for (const v of vectors) {
             vectorMap.set(v.Key, v.Vector);
         }
-        const projected = await this.reduceDimensionsKeyed(vectorMap);
+        const projected = await this.reduceDimensionsKeyed(vectorMap, config.Dimensions ?? 2);
 
         // Step 3: Build result
         return this.buildResult(vectors, clusterResult, projected, config, startTime);
@@ -199,6 +199,8 @@ export class ClusteringService {
             EntityName: config.EntityName,
             EntityID: options?.EntityID,
             EntityDocumentID: config.EntityDocumentID,
+            EntityDocumentIDs: config.EntityDocumentIDs,
+            ColorBy: config.ColorBy,
             Algorithm: config.Algorithm,
             K: config.K,
             Epsilon: config.Epsilon,
@@ -207,7 +209,7 @@ export class ClusteringService {
             MaxRecords: config.MaxRecords,
             Filter: config.Filter,
             NameClusters: options?.NameClusters,
-            Dimensions: options?.Dimensions,
+            Dimensions: config.Dimensions ?? options?.Dimensions,
             PersistName: options?.PersistName,
         };
     }
@@ -243,6 +245,7 @@ export class ClusteringService {
         return {
             X: p.X,
             Y: p.Y,
+            Z: p.Z,
             ClusterId: p.ClusterIndex,
             Label: p.Label ?? p.Key,
             VectorKey: p.Key,
@@ -268,15 +271,18 @@ export class ClusteringService {
      * Reduce high-dimensional vectors to 2D using UMAP.
      * Falls back to PCA if UMAP is not available.
      */
-    private async reduceDimensionsKeyed(vectorMap: Map<string, number[]>): Promise<Map<string, [number, number]>> {
+    private async reduceDimensionsKeyed(
+        vectorMap: Map<string, number[]>,
+        dimensions: 2 | 3 = 2,
+    ): Promise<Map<string, number[]>> {
         const keys = Array.from(vectorMap.keys());
         const vectors = keys.map(k => vectorMap.get(k)!);
-        const result = new Map<string, [number, number]>();
+        const result = new Map<string, number[]>();
 
         if (vectors.length <= 2) {
             // Trivial case
             keys.forEach((key, i) => {
-                result.set(key, [i * 500 + 250, 350]);
+                result.set(key, dimensions === 3 ? [i * 500 + 250, 350, 350] : [i * 500 + 250, 350]);
             });
             return result;
         }
@@ -284,53 +290,58 @@ export class ClusteringService {
         try {
             const { UMAP } = await import('umap-js');
             const umap = new UMAP({
-                nComponents: 2,
+                nComponents: dimensions,
                 nNeighbors: Math.min(15, Math.max(2, Math.floor(vectors.length / 5))),
                 minDist: 0.1,
                 spread: 1.0,
             });
             const embedding = umap.fit(vectors);
-            this.normalizeAndAssign(keys, embedding, result);
+            this.normalizeAndAssign(keys, embedding, result, dimensions);
         } catch {
-            // PCA fallback: project onto first 2 principal components
-            this.pcaFallback(keys, vectors, result);
+            // PCA fallback: project onto first N principal components
+            this.pcaFallback(keys, vectors, result, dimensions);
         }
 
         return result;
     }
 
-    /** Normalize 2D embedding to [padding, viewBoxSize - padding] range */
+    /** Normalize an N-dimensional embedding to the [padding, size - padding] range per axis. */
     private normalizeAndAssign(
         keys: string[],
         embedding: number[][],
-        result: Map<string, [number, number]>
+        result: Map<string, number[]>,
+        dimensions: 2 | 3 = 2,
     ): void {
         const padding = 60;
         const size = 1000;
         const usable = size - 2 * padding;
 
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const [x, y] of embedding) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
+        const mins = new Array<number>(dimensions).fill(Infinity);
+        const maxs = new Array<number>(dimensions).fill(-Infinity);
+        for (const row of embedding) {
+            for (let d = 0; d < dimensions; d++) {
+                const val = row[d] ?? 0;
+                if (val < mins[d]) mins[d] = val;
+                if (val > maxs[d]) maxs[d] = val;
+            }
         }
-        const rangeX = maxX - minX || 1;
-        const rangeY = maxY - minY || 1;
+        const ranges = mins.map((min, d) => (maxs[d] - min) || 1);
 
         keys.forEach((key, i) => {
-            const nx = padding + ((embedding[i][0] - minX) / rangeX) * usable;
-            const ny = padding + ((embedding[i][1] - minY) / rangeY) * usable;
-            result.set(key, [nx, ny]);
+            const coord: number[] = [];
+            for (let d = 0; d < dimensions; d++) {
+                coord.push(padding + (((embedding[i][d] ?? 0) - mins[d]) / ranges[d]) * usable);
+            }
+            result.set(key, coord);
         });
     }
 
-    /** Simple PCA: compute mean, subtract, take first 2 components via power iteration */
+    /** Simple PCA: compute mean, subtract, take first N components via power iteration. */
     private pcaFallback(
         keys: string[],
         vectors: number[][],
-        result: Map<string, [number, number]>
+        result: Map<string, number[]>,
+        dimensions: 2 | 3 = 2,
     ): void {
         const dim = vectors[0].length;
         const n = vectors.length;
@@ -345,9 +356,9 @@ export class ClusteringService {
         // Center data
         const centered = vectors.map(v => v.map((val, d) => val - mean[d]));
 
-        // Power iteration for first 2 components
+        // Power iteration for first N components
         const components: number[][] = [];
-        for (let comp = 0; comp < 2; comp++) {
+        for (let comp = 0; comp < dimensions; comp++) {
             let w = new Array<number>(dim).fill(0).map(() => Math.random() - 0.5);
             for (let iter = 0; iter < 50; iter++) {
                 const newW = new Array<number>(dim).fill(0);
@@ -367,20 +378,19 @@ export class ClusteringService {
             components.push(w);
         }
 
-        // Project
-        const projections = centered.map(row => [
-            row.reduce((s, val, d) => s + val * components[0][d], 0),
-            row.reduce((s, val, d) => s + val * (components[1]?.[d] ?? 0), 0),
-        ]);
+        // Project onto each component
+        const projections = centered.map(row =>
+            components.map(comp => row.reduce((s, val, d) => s + val * comp[d], 0)),
+        );
 
-        this.normalizeAndAssign(keys, projections, result);
+        this.normalizeAndAssign(keys, projections, result, dimensions);
     }
 
     /** Build a ClusterVisualizationResult from raw data */
     private buildResult(
         vectors: ClusterInputVector[],
         clusterResult: ClusterResult,
-        projected: Map<string, [number, number]>,
+        projected: Map<string, number[]>,
         config: ClusterConfig,
         startTime: number,
     ): ClusterVisualizationResult {
@@ -400,11 +410,13 @@ export class ClusteringService {
         }
 
         // Build points
+        const is3D = (config.Dimensions ?? 2) === 3;
         const points: ClusterPoint[] = vectors.map(v => {
-            const [x, y] = projected.get(v.Key) ?? [500, 350];
+            const coord = projected.get(v.Key) ?? [500, 350, 350];
             return {
-                X: x,
-                Y: y,
+                X: coord[0] ?? 500,
+                Y: coord[1] ?? 350,
+                Z: is3D ? (coord[2] ?? 350) : undefined,
                 ClusterId: keyToCluster.get(v.Key) ?? -1,
                 Label: v.Label ?? v.Key,
                 VectorKey: v.Key,

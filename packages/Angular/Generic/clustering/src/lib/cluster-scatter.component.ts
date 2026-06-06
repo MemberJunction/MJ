@@ -82,6 +82,13 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     @Input() Clusters: ClusterInfo[] = [];
 
     /**
+     * Legend / color mode. `'cluster'` (default) colors each point by its assigned
+     * cluster; `'entity'` colors by the point's source entity (`Metadata.EntityName`),
+     * which is the useful mode for multi-entity analyses.
+     */
+    @Input() ColorBy: 'cluster' | 'entity' = 'cluster';
+
+    /**
      * When `true`, a semi-transparent loading overlay is displayed
      * on top of the scatter plot.
      */
@@ -532,10 +539,95 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
      * @returns CSS color string.
      */
     public GetPointColor(point: ClusterPoint): string {
+        if (this.ColorBy === 'entity') {
+            return this.getEntityColor(point);
+        }
         if (point.ClusterId < 0) return '#64748b'; // outlier gray
         const palette = this.getActivePalette();
         const cluster = this.Clusters.find(c => c.Id === point.ClusterId);
         return cluster?.Color ?? palette[point.ClusterId % palette.length];
+    }
+
+    // ================================================================
+    // Color-by-entity (multi-entity analyses)
+    // ================================================================
+
+    /** Stable entity-name → color map, assigned in first-seen order. */
+    private entityColorMap = new Map<string, string>();
+
+    /** Resolve a color for a point keyed by its source entity name. */
+    private getEntityColor(point: ClusterPoint): string {
+        const name = (point.Metadata?.['EntityName'] as string) || (point.Metadata?.['Entity'] as string) || 'Unknown';
+        let color = this.entityColorMap.get(name);
+        if (!color) {
+            const palette = this.getActivePalette();
+            color = palette[this.entityColorMap.size % palette.length];
+            this.entityColorMap.set(name, color);
+        }
+        return color;
+    }
+
+    /** Distinct source entities present in the data (for the entity legend). */
+    public get EntityLegend(): Array<{ Name: string; Color: string; Count: number }> {
+        if (this.ColorBy !== 'entity') return [];
+        const counts = new Map<string, number>();
+        for (const p of this.Points) {
+            const name = (p.Metadata?.['EntityName'] as string) || (p.Metadata?.['Entity'] as string) || 'Unknown';
+            counts.set(name, (counts.get(name) ?? 0) + 1);
+        }
+        return [...counts.entries()].map(([Name, Count]) => ({
+            Name,
+            Count,
+            Color: this.getEntityColor({ Metadata: { EntityName: Name } } as unknown as ClusterPoint),
+        }));
+    }
+
+    // ================================================================
+    // 3D projection (static isometric, depth-cued)
+    // ================================================================
+
+    /** True when any point carries a Z coordinate (a 3D projection). */
+    public get Is3D(): boolean {
+        return this.Points.some(p => p.Z != null);
+    }
+
+    /** Fixed yaw angle (radians) for the isometric 3D projection. */
+    private readonly threeDAngle = 0.6;
+
+    /** Project a point's (X,Y,Z) to a screen X in the SVG coordinate space. */
+    public PX(point: ClusterPoint): number {
+        if (!this.Is3D || point.Z == null) return point.X;
+        const x = point.X - 500;
+        const z = point.Z - 500;
+        return 500 + (x * Math.cos(this.threeDAngle) - z * Math.sin(this.threeDAngle));
+    }
+
+    /** Project a point's (X,Y,Z) to a screen Y in the SVG coordinate space. */
+    public PY(point: ClusterPoint): number {
+        if (!this.Is3D || point.Z == null) return point.Y;
+        const x = point.X - 500;
+        const z = point.Z - 500;
+        const depth = x * Math.sin(this.threeDAngle) + z * Math.cos(this.threeDAngle);
+        return point.Y - depth * 0.35;
+    }
+
+    /** Normalized depth [0=far, 1=near] for a point, used for size/opacity cues. */
+    private depthNorm(point: ClusterPoint): number {
+        if (!this.Is3D || point.Z == null) return 1;
+        const x = point.X - 500;
+        const z = point.Z - 500;
+        const depth = x * Math.sin(this.threeDAngle) + z * Math.cos(this.threeDAngle);
+        // depth roughly in [-620, 620] given normalized coords; map to [0,1]
+        return Math.max(0, Math.min(1, (depth + 620) / 1240));
+    }
+
+    /**
+     * Points in render order. In 3D, far points are drawn first so nearer points
+     * paint on top (SVG has no z-index); in 2D the original order is preserved.
+     */
+    public get RenderPoints(): ClusterPoint[] {
+        if (!this.Is3D) return this.Points;
+        return [...this.Points].sort((a, b) => this.depthNorm(a) - this.depthNorm(b));
     }
 
     /**
@@ -549,6 +641,10 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     public GetPointRadius(point: ClusterPoint): number {
         if (this.SelectedPointIds.has(point.VectorKey)) {
             return this.HighlightRadius;
+        }
+        if (this.Is3D) {
+            // Nearer points (depth→1) render larger to convey depth.
+            return this.DotRadius * (0.6 + 0.7 * this.depthNorm(point));
         }
         return this.DotRadius;
     }
@@ -564,6 +660,10 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     public GetPointOpacity(point: ClusterPoint): number {
         if (this.HoveredPoint && this.HoveredPoint.VectorKey !== point.VectorKey) {
             return this.DotOpacity * 0.5;
+        }
+        if (this.Is3D) {
+            // Fade far points slightly for depth perception.
+            return this.DotOpacity * (0.55 + 0.45 * this.depthNorm(point));
         }
         return this.DotOpacity;
     }
