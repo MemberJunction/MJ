@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type {
     RESTAuthContext,
     RESTResponse,
@@ -471,6 +474,24 @@ describe('PropFuelConnector — checkin_questions upsert + tombstone', () => {
         expect(result.Records[0].Fields['checkin_question.deleted_at']).toBe('2026-03-02T00:00:00Z');
     });
 
+    it('flattens nullable nested fields (question.display=null) without dropping the column (re-verify nullability)', async () => {
+        const c = new MockedPropFuelConnector();
+        c.ListResponse = { Status: 200, Body: ['1777565745.0000-checkin_questions.json'], Headers: {} };
+        const rec = checkinQuestionRecord(44);
+        // The 851-file union re-scan (propfuel-schema-union-1780737815) refined question.display to nullable.
+        (rec.question as Record<string, unknown>).display = null;
+        c.DownloadResponses = {
+            '1777565745.0000-checkin_questions.json': { Status: 200, Body: [rec], Headers: {} },
+        };
+        const result = await c.FetchChanges(fetchCtx('checkin_questions', null));
+        expect(result.Records).toHaveLength(1);
+        // The dotted column is still present (flattened), carrying the null value — not silently dropped.
+        expect('question.display' in result.Records[0].Fields).toBe(true);
+        expect(result.Records[0].Fields['question.display']).toBeNull();
+        // Its sibling response_type still flattens normally.
+        expect(result.Records[0].Fields['question.response_type']).toBe('rating');
+    });
+
     it('does NOT tombstone when deleted_at is null', async () => {
         const c = new MockedPropFuelConnector();
         c.ListResponse = { Status: 200, Body: ['1777565740.0000-checkin_questions.json'], Headers: {} };
@@ -555,6 +576,117 @@ class RateLimitTestConnector extends PropFuelConnector {
 const ok = (body: unknown = []): RESTResponse => ({ Status: 200, Body: body, Headers: {} });
 const throttled = (status: 429 | 503): RESTResponse => ({ Status: status, Body: null, Headers: {} });
 
+// ─── Frozen-contract field-catalog regression guard ────────────────────────
+//
+// Binds the connector's DiscoverFields output to the RE-VERIFIED frozen contract
+// (metadata/integrations/propfuel/.propfuel.integration.json, re-verify run
+// connector-propfuel-1780736733985-c8a0cf02 / broker scan propfuel-schema-union-1780737815).
+// The 851-file union re-scan surfaced NO field beyond what already shipped, so these lists
+// are the authoritative set. If discovery ever drifts from the frozen contract — a field
+// added, dropped, or renamed away from the per-stream naming convention (dotted for
+// checkin_questions, underscore for clicks/opens) — this fails loudly.
+
+const CONTRACT_FIELDS: Record<string, string[]> = {
+    checkin_questions: [
+        'checkin_question.id',
+        'checkin_question.checkin_id',
+        'checkin_question.rating',
+        'checkin_question.selection',
+        'checkin_question.response',
+        'checkin_question.answered_at',
+        'checkin_question.created_at',
+        'checkin_question.updated_at',
+        'checkin_question.deleted_at',
+        'contact.id',
+        'contact.name',
+        'contact.email',
+        'contact.external_ids',
+        'question.id',
+        'question.display',
+        'question.follow_up',
+        'question.response_type',
+        'campaign.id',
+        'campaign.name',
+    ],
+    clicks: [
+        'click_id',
+        'click_type',
+        'click_checkin_id',
+        'click_clicked_at',
+        'click_link',
+        'contact_id',
+        'contact_name',
+        'contact_email',
+        'campaign_id',
+        'campaign_name',
+        'checkin_notification_id',
+        'checkin_notification_type',
+    ],
+    opens: [
+        'open_id',
+        'open_type',
+        'open_checkin_id',
+        'open_opened_at',
+        'contact_id',
+        'contact_name',
+        'contact_email',
+        'campaign_id',
+        'campaign_name',
+        'checkin_notification_id',
+        'checkin_notification_type',
+    ],
+};
+
+describe('PropFuelConnector — DiscoverFields matches the re-verified frozen contract', () => {
+    for (const stream of ['checkin_questions', 'clicks', 'opens'] as const) {
+        it(`${stream}: exact field set + order matches the frozen contract (no missing, no extra)`, async () => {
+            const c = new PropFuelConnector();
+            const fields = await c.DiscoverFields(CI, stream, USER);
+            const names = fields.map(f => f.Name);
+            // Exact equality (order-preserving): catches drops, additions, and renames at once.
+            expect(names).toEqual(CONTRACT_FIELDS[stream]);
+            // Every contract field is surfaced as a read-only, non-FK column (pull-only feed).
+            for (const f of fields) {
+                expect(f.IsReadOnly).toBe(true);
+                expect(f.IsForeignKey).toBe(false);
+            }
+        });
+    }
+
+    it('checkin_questions naming stays DOTTED; clicks/opens stay UNDERSCORE', async () => {
+        const c = new PropFuelConnector();
+        const cq = (await c.DiscoverFields(CI, 'checkin_questions', USER)).map(f => f.Name);
+        // Every checkin_questions column is a dotted nested path.
+        expect(cq.every(n => n.includes('.'))).toBe(true);
+
+        for (const stream of ['clicks', 'opens'] as const) {
+            const flat = (await c.DiscoverFields(CI, stream, USER)).map(f => f.Name);
+            // No dotted names on the underscore-convention streams.
+            expect(flat.every(n => !n.includes('.'))).toBe(true);
+        }
+    });
+
+    it('every non-PK contract field is nullable (non-required) and only the id column is PK', async () => {
+        const c = new PropFuelConnector();
+        const pkByStream: Record<string, string> = {
+            checkin_questions: 'checkin_question.id',
+            clicks: 'click_id',
+            opens: 'open_id',
+        };
+        for (const stream of ['checkin_questions', 'clicks', 'opens'] as const) {
+            const fields = await c.DiscoverFields(CI, stream, USER);
+            const pk = fields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+            expect(pk).toEqual([pkByStream[stream]]);
+            // Newly-surfaced / non-identity fields are non-required (nullable) per the contract.
+            for (const f of fields) {
+                if (f.Name !== pkByStream[stream]) {
+                    expect(f.IsRequired).toBe(false);
+                }
+            }
+        }
+    });
+});
+
 describe('PropFuelConnector — rate-limit retry/backoff (429/503)', () => {
     it('retries on 429 then succeeds, backing off once between the two attempts', async () => {
         const c = new RateLimitTestConnector();
@@ -588,5 +720,91 @@ describe('PropFuelConnector — rate-limit retry/backoff (429/503)', () => {
         await c.request(3);
         expect(c.backoffs.length).toBe(2);
         expect(c.backoffs[1]).toBeGreaterThan(c.backoffs[0]); // ~2000+jitter > ~1000+jitter
+    });
+});
+
+// ─── Live binding to the RE-VERIFIED frozen-contract metadata file ─────────
+//
+// The block above (CONTRACT_FIELDS) is a hand-maintained regression guard. THIS block
+// instead reads the actual on-disk frozen-contract artifact —
+//   metadata/integrations/propfuel/.propfuel.integration.json
+// (authored by the re-verify run connector-propfuel-1780736733985-c8a0cf02 / broker scan
+// propfuel-schema-union-1780737815) — and asserts the connector's DiscoverFields output
+// EXACTLY equals the IOFs that file declares per stream. This is a live binding: if a future
+// contract re-verify surfaces a NEW field into the metadata file, this fails until the
+// connector's per-stream catalog adds it (and vice-versa for a drop/rename). It also independently
+// re-confirms the present re-verify added nothing beyond what already shipped (19 / 12 / 11).
+
+interface MetadataIOF { fields: { Name: string; IsPrimaryKey?: boolean; IsReadOnly?: boolean } }
+interface MetadataIO {
+    fields: { Name: string };
+    relatedEntities?: { 'MJ: Integration Object Fields'?: MetadataIOF[] };
+}
+interface MetadataIntegration {
+    relatedEntities?: { 'MJ: Integration Objects'?: MetadataIO[] };
+}
+
+function loadContractIOFNamesByStream(): Record<string, string[]> {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // src/__tests__ -> repo root -> metadata/integrations/propfuel/.propfuel.integration.json
+    const metadataPath = resolve(
+        here,
+        '../../../../../metadata/integrations/propfuel/.propfuel.integration.json'
+    );
+    const raw = JSON.parse(readFileSync(metadataPath, 'utf8')) as MetadataIntegration[];
+    const ios = raw[0]?.relatedEntities?.['MJ: Integration Objects'] ?? [];
+    const out: Record<string, string[]> = {};
+    for (const io of ios) {
+        const iofs = io.relatedEntities?.['MJ: Integration Object Fields'] ?? [];
+        out[io.fields.Name] = iofs.map(f => f.fields.Name);
+    }
+    return out;
+}
+
+describe('PropFuelConnector — DiscoverFields is bound to the on-disk re-verified contract', () => {
+    const contractByStream = loadContractIOFNamesByStream();
+
+    it('the metadata file declares exactly the three proven streams', () => {
+        expect(Object.keys(contractByStream).sort()).toEqual(['checkin_questions', 'clicks', 'opens']);
+    });
+
+    for (const stream of ['checkin_questions', 'clicks', 'opens'] as const) {
+        it(`${stream}: connector discovery field SET equals the metadata file's declared IOFs (no field missing, none extra)`, async () => {
+            const c = new PropFuelConnector();
+            const discovered = (await c.DiscoverFields(CI, stream, USER)).map(f => f.Name);
+            const declared = contractByStream[stream];
+            expect(declared.length).toBeGreaterThan(0);
+            // Set-equality (sorted): every metadata-declared field is surfaced by discovery, and
+            // discovery surfaces nothing the contract doesn't declare.
+            expect([...discovered].sort()).toEqual([...declared].sort());
+        });
+    }
+
+    it('re-verify added no new fields: counts stay 19 / 12 / 11', () => {
+        expect(contractByStream['checkin_questions'].length).toBe(19);
+        expect(contractByStream['clicks'].length).toBe(12);
+        expect(contractByStream['opens'].length).toBe(11);
+    });
+
+    it('every metadata-declared PK is surfaced by discovery as a PK (and is the only PK)', async () => {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const metadataPath = resolve(
+            here,
+            '../../../../../metadata/integrations/propfuel/.propfuel.integration.json'
+        );
+        const raw = JSON.parse(readFileSync(metadataPath, 'utf8')) as MetadataIntegration[];
+        const ios = raw[0]?.relatedEntities?.['MJ: Integration Objects'] ?? [];
+        const c = new PropFuelConnector();
+        for (const io of ios) {
+            const declaredPKs = (io.relatedEntities?.['MJ: Integration Object Fields'] ?? [])
+                .filter(f => f.fields.IsPrimaryKey === true)
+                .map(f => f.fields.Name)
+                .sort();
+            const discoveredPKs = (await c.DiscoverFields(CI, io.fields.Name, USER))
+                .filter(f => f.IsPrimaryKey)
+                .map(f => f.Name)
+                .sort();
+            expect(discoveredPKs).toEqual(declaredPKs);
+        }
     });
 });

@@ -17,8 +17,8 @@
         "FileFeedListPath": "/dataexport/{AccountID}/list",
         "FileFeedDownloadPath": "/dataexport/{AccountID}/download/{file}",
         "FileFeedAckPath": "/dataexport/{AccountID}/ack/{file}",
-        "WatermarkMechanism": "microtime-filename-prefix",
-        "WatermarkDescription": "Files are named [microtime]-[datatype].json where microtime is Unix seconds with sub-second precision (e.g. 1777565710.1224). Files are returned by the list endpoint in chronological order. The connector advances its watermark by acknowledging processed files via POST /dataexport/{AccountID}/ack/{file}. The highest-microtime successfully-acked file is the durable cursor.",
+        "WatermarkMechanism": "Feed-level cursor: microtime filename prefix",
+        "WatermarkDescription": "Files named \"<microtime>-<datatype>.json\" where microtime is Unix seconds with sub-second precision (e.g. 1777565710.1224). Files returned by list endpoint in chronological order (oldest first). The connector advances its feed cursor by acknowledging processed files via POST /dataexport/{AccountID}/ack/{file}; the highest-acked microtime is the durable feed cursor. Proven from filenames in propfuel-probe-1780682837 sample: [\"1777565710.1224-checkin_questions.json\", \"1777565714.4161-clicks.json\", \"1777565718.7132-opens.json\"]. Record-level watermark (checkin_questions only): checkin_question.updated_at — used as IncrementalWatermarkField for in-record incremental sync within the mutable stream. Clicks and opens have no per-record watermark; they use AppendOnlyCursor with StableOrderingKey (click.id / open.id respectively).",
         "WatermarkSampleFilenames": [
           "1777565710.1224-checkin_questions.json",
           "1777565714.4161-clicks.json",
@@ -55,7 +55,8 @@
         "DefaultConflictResolution": "SourceWins",
         "DefaultConflictResolutionNote": "No ETag or version field on file-feed records; MostRecent cannot be safely applied. In practice this connector is pull-only and conflict resolution is not exercised.",
         "universalPK": {
-          "note": "Per-stream PK. All are integer id fields on the root-level record object.",
+          "fieldName": "id",
+          "note": "Vendor-wide convention: every data stream root object uses an integer 'id' field as primary key. Per-stream paths: checkin_question.id (checkin_questions), click.id (clicks), open.id (opens). All idCandidates score=1 from live discovery (propfuel-discover-1780683251).",
           "checkin_questions": "checkin_question.id",
           "clicks": "click.id",
           "opens": "open.id"
@@ -347,7 +348,8 @@
               "BrokerResultRefs": [
                 "propfuel-discover-1780683251",
                 "propfuel-lifecycle-1780683380",
-                "propfuel-probe-1780682837"
+                "propfuel-probe-1780682837",
+                "propfuel-schema-union-1780737815"
               ],
               "AdditionalObservations": [
                 {
@@ -372,7 +374,7 @@
                 "fields": {
                   "Name": "checkin_question.id",
                   "DisplayName": "id",
-                  "Description": "Primary key of the check-in question record. Live-proven identity field (idCandidates score=1; recurring-identity scan confirms record re-emission on state change).",
+                  "Description": "Primary key of the check-in question record. Live-proven identity field (idCandidates score=1; recurring-identity scan confirms record re-emission on state change). Connector source declares IsPrimaryKey:true.",
                   "Type": "Integer",
                   "Length": null,
                   "Precision": null,
@@ -387,7 +389,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 1,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -409,14 +412,15 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 2,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
                 "fields": {
                   "Name": "checkin_question.rating",
                   "DisplayName": "rating",
-                  "Description": "Numeric rating supplied by the contact when answering. Null until answered (populated in 40 of 2318 sampled records).",
+                  "Description": "Numeric rating supplied by the contact when answering. Null until answered.",
                   "Type": "Integer",
                   "Length": null,
                   "Precision": null,
@@ -431,14 +435,15 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 3,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
                 "fields": {
                   "Name": "checkin_question.selection",
                   "DisplayName": "selection",
-                  "Description": "Selected choice value when the contact answers a selection-type question. Null until answered (populated in 423 of 2318).",
+                  "Description": "Selected choice value when the contact answers a selection-type question. Null until answered.",
                   "Type": "String",
                   "Length": null,
                   "Precision": null,
@@ -453,14 +458,15 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 4,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
                 "fields": {
                   "Name": "checkin_question.response",
                   "DisplayName": "response",
-                  "Description": "Free-text / typed response from the contact. Null until answered (populated in 183 of 2318).",
+                  "Description": "Free-text / typed response from the contact. Null until answered.",
                   "Type": "String",
                   "Length": null,
                   "Precision": null,
@@ -475,7 +481,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 5,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -497,7 +504,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 6,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -519,7 +527,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 7,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -541,7 +550,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 8,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -563,7 +573,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "checkin_question",
                   "Sequence": 9,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -585,7 +596,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "contact",
                   "Sequence": 10,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -607,7 +619,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "contact",
                   "Sequence": 11,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -629,7 +642,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "contact",
                   "Sequence": 12,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -656,7 +670,8 @@
                     "TypeUnknown": true,
                     "Note": "Observed only as null across all sampled records; populated type unknown. Treated as nullable String blob.",
                     "Provenance": "SOURCE_STUDY.md Gap 2"
-                  }
+                  },
+                  "IsForeignKey": false
                 }
               },
               {
@@ -678,19 +693,20 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "question",
                   "Sequence": 14,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
                 "fields": {
                   "Name": "question.display",
                   "DisplayName": "display",
-                  "Description": "Display text of the question.",
+                  "Description": "Display text of the question. Nullable: observed as null in some records across 851-file union scan (propfuel-schema-union-1780737815).",
                   "Type": "String",
                   "Length": null,
                   "Precision": null,
                   "Scale": null,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "DefaultValue": null,
                   "IsRequired": false,
                   "IsReadOnly": true,
@@ -700,7 +716,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "question",
                   "Sequence": 15,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -727,7 +744,8 @@
                     "TypeUnknown": true,
                     "Note": "Observed only as null across all sampled records; populated type unknown. Treated as nullable String blob.",
                     "Provenance": "SOURCE_STUDY.md Gap 3"
-                  }
+                  },
+                  "IsForeignKey": false
                 }
               },
               {
@@ -749,7 +767,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "question",
                   "Sequence": 17,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -771,7 +790,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "campaign",
                   "Sequence": 18,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               },
               {
@@ -793,7 +813,8 @@
                   "RelatedIntegrationObjectFieldName": null,
                   "Category": "campaign",
                   "Sequence": 19,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "IsForeignKey": false
                 }
               }
             ]
@@ -821,7 +842,22 @@
             "IsAppendOnly": true,
             "ContentHashApplicable": false,
             "StableOrderingKey": "click_id",
-            "Status": "Active"
+            "Status": "Active",
+            "ResponseDataKey": null,
+            "Category": "Engagement",
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateBodyKey": null,
+            "CreateIDLocation": null,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateBodyKey": null,
+            "UpdateIDLocation": null,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
