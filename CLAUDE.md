@@ -295,6 +295,13 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - Imperative (`forms.open({...})`) and declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`) usage
   - **Read this before building any bespoke "edit a record in a dialog/slide-in" component** — the generic capability almost certainly covers it.
 
+- **[Transport-Layer Architecture Guide](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md)**: The canonical **engine → resolver → GraphQL client → thin UI** layering (plus the optional **Action** layer for agentic/workflow/low-code invocation) for any *custom server-side capability* the browser or an agent invokes — clustering, search, classify, LLM calls, "run this pipeline" buttons. Covers:
+  - Why business logic lives in the framework-agnostic **engine** exactly once, and what each adapter layer must NOT do
+  - Step-by-step: build the engine → thin TypeGraphQL resolver (`ResolverBase` + per-request user) → typed `GraphQL<Feature>Client` in `@memberjunction/graphql-dataprovider` → thinnest Angular wrapper (never inline `gql`) → optional Action that calls the engine *directly*
+  - A decision table for which layers you actually need (and when to just use the generated entity CRUD layer instead)
+  - JSON-string-field pattern for complex payloads, client/engine type decoupling, and reference implementations (`GraphQLClusterClient`, `SearchKnowledgeResolver`, etc.)
+  - **Read this before hand-writing any new resolver or GraphQL client.** Not for plain entity CRUD — that's already generated.
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
