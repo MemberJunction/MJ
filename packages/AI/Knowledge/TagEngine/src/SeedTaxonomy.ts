@@ -1,7 +1,7 @@
 import { UserInfo, IMetadataProvider, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIModelRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 // NOTE: AIPromptParams lives in @memberjunction/ai-core-plus, which is a direct dependency
 // of @memberjunction/ai-prompts (already a TagEngine dependency) and is therefore resolvable.
@@ -149,7 +149,7 @@ async function embedContentItems(
         return [];
     }
 
-    await AIEngine.Instance.Config(false, contextUser);
+    await AIEngineBase.Instance.Config(false, contextUser);
 
     const texts = items.map(buildEmbeddingText);
     try {
@@ -271,8 +271,8 @@ async function runFallbackPrompt(
     contextUser?: UserInfo,
 ): Promise<SeedTaxonomyNode[]> {
     try {
-        await AIEngine.Instance.Config(false, contextUser);
-        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === SEED_TAXONOMY_PROMPT_NAME);
+        await AIEngineBase.Instance.Config(false, contextUser);
+        const prompt = AIEngineBase.Instance.Prompts.find(p => p.Name === SEED_TAXONOMY_PROMPT_NAME);
         if (!prompt) {
             LogError(`generateSeedTaxonomy: fallback prompt "${SEED_TAXONOMY_PROMPT_NAME}" not found — returning empty taxonomy.`);
             return [];

@@ -8,7 +8,7 @@
  */
 
 import { UserInfo, LogError } from '@memberjunction/core';
-import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { ClusterInfo, ClusterPoint } from './types';
@@ -74,8 +74,8 @@ export class ClusterNamer {
 
     /** Resolve the naming prompt from AIEngine metadata (cached). */
     private async resolvePrompt(promptName: string, contextUser?: UserInfo) {
-        await AIEngine.Instance.Config(false, contextUser);
-        return AIEngine.Instance.Prompts.find((p) => p.Name === promptName) ?? null;
+        await AIEngineBase.Instance.Config(false, contextUser);
+        return AIEngineBase.Instance.Prompts.find((p) => p.Name === promptName) ?? null;
     }
 
     /** Build a compact, ordered sample of member labels for each cluster. */

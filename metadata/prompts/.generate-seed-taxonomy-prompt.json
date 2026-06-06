@@ -25,9 +25,23 @@
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "9C27AB4A-821E-408F-AF62-A8408799AD2E"
+          },
+          "sync": {
+            "lastModified": "2026-06-06T18:42:18.824Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "9890B578-65C5-468A-8C2C-0BEE839A4E0C"
+    },
+    "sync": {
+      "lastModified": "2026-06-06T18:42:18.803Z",
+      "checksum": "9559344821fb10f79780bd1c39b978ed59150bdaaef3a758162ad02122dba589"
     }
   }
 ]
