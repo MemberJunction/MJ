@@ -599,3 +599,14 @@
     cursor: pointer;
 }
 .threed-reset:hover { color: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+
+/* 3D cluster labels — halo for readability over points */
+.cluster-label-3d {
+    font-weight: 700;
+    font-size: 13px;
+    paint-order: stroke;
+    stroke: var(--mj-bg-surface);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+    pointer-events: none;
+}

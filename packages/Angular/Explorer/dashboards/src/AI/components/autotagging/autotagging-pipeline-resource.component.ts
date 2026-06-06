@@ -1045,6 +1045,53 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         void this.setupWizard?.Open();
     }
 
+    // ================================================================
+    // First-run onboarding (P2)
+    // ================================================================
+
+    /** Show the guided onboarding checklist until content has been classified. */
+    public get ShowOnboarding(): boolean {
+        return this.TotalContentItemCount === 0;
+    }
+
+    /** Whether the onboarding card has been dismissed this session. */
+    public OnboardingDismissed = false;
+
+    /** Steps for the first-run onboarding checklist, with live completion state. */
+    public get OnboardingSteps(): Array<{ N: number; Title: string; Desc: string; Done: boolean; Action: 'add' | 'run' | '' ; Cta: string }> {
+        const hasSource = this.contentSourcesRaw.length > 0;
+        const hasRun = this.TotalRunHistoryCount > 0;
+        const hasItems = this.TotalContentItemCount > 0;
+        return [
+            { N: 1, Title: 'Add a content source', Desc: 'Connect where your content comes from — a website, files, RSS, email, or API.', Done: hasSource, Action: 'add', Cta: 'Add Source' },
+            { N: 2, Title: 'Run the classification pipeline', Desc: 'Ingest and auto-tag your content. Tip: seed a starter taxonomy first for better tags.', Done: hasRun, Action: 'run', Cta: 'Run Pipeline' },
+            { N: 3, Title: 'Review results', Desc: 'Inspect the generated tags, confidence scores, and analytics.', Done: hasItems, Action: '', Cta: '' },
+        ];
+    }
+
+    /** Index of the first incomplete step (the "active" one). */
+    public get OnboardingActiveStep(): number {
+        const steps = this.OnboardingSteps;
+        const idx = steps.findIndex(s => !s.Done);
+        return idx < 0 ? steps.length : idx;
+    }
+
+    /** Handle an onboarding step CTA. */
+    public OnOnboardingAction(action: 'add' | 'run' | 'seed'): void {
+        if (action === 'add') {
+            this.OpenSetupWizard();
+        } else if (action === 'run') {
+            void this.RunPipeline();
+        } else if (action === 'seed') {
+            void this.SwitchTab('taxonomy');
+        }
+    }
+
+    /** Dismiss the onboarding card (until next load / still empty). */
+    public DismissOnboarding(): void {
+        this.OnboardingDismissed = true;
+    }
+
     /** After the wizard creates a source, reload the shared source list. */
     public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
         await this.refreshSourcesTab();

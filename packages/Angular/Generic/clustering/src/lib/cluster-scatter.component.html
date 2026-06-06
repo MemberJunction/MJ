@@ -81,6 +81,19 @@
                         (click)="OnPointClick(point); $event.stopPropagation()"/>
             }
 
+            <!-- 3D cluster labels (at projected centroids; follow rotation) -->
+            @if (Is3D && ColorBy !== 'entity') {
+                @for (lbl of ProjectedClusterLabels; track lbl.ClusterId) {
+                    @if (GetClusterLabelById(lbl.ClusterId); as text) {
+                        <text class="cluster-label cluster-label-3d"
+                              [attr.x]="lbl.X"
+                              [attr.y]="lbl.Y"
+                              text-anchor="middle"
+                              [attr.fill]="lbl.Color">{{ text }}</text>
+                    }
+                }
+            }
+
             <!-- Selection rings for selected points -->
             @for (point of Points; track TrackPointBy($index, point)) {
                 @if (IsSelected(point)) {

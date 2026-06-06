@@ -646,6 +646,30 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     }
 
     /**
+     * Cluster labels positioned at each cluster's centroid in *projected* space.
+     * Used to label clusters in 3D (where the 2D centroid-glow path is disabled).
+     * Recomputes as the user orbits because it depends on PX/PY (yaw/pitch).
+     */
+    public get ProjectedClusterLabels(): Array<{ X: number; Y: number; ClusterId: number; Color: string }> {
+        if (!this.Is3D) return [];
+        const groups = new Map<number, ClusterPoint[]>();
+        for (const p of this.Points) {
+            if (p.ClusterId < 0) continue;
+            const arr = groups.get(p.ClusterId);
+            if (arr) arr.push(p); else groups.set(p.ClusterId, [p]);
+        }
+        const palette = this.getActivePalette();
+        const out: Array<{ X: number; Y: number; ClusterId: number; Color: string }> = [];
+        for (const [cid, pts] of groups) {
+            const sx = pts.reduce((s, p) => s + this.PX(p), 0) / pts.length;
+            const sy = pts.reduce((s, p) => s + this.PY(p), 0) / pts.length;
+            const cluster = this.Clusters.find(c => c.Id === cid);
+            out.push({ X: sx, Y: sy, ClusterId: cid, Color: cluster?.Color ?? palette[cid % palette.length] });
+        }
+        return out;
+    }
+
+    /**
      * Points in render order. In 3D, far points are drawn first so nearer points
      * paint on top (SVG has no z-index); in 2D the original order is preserved.
      */

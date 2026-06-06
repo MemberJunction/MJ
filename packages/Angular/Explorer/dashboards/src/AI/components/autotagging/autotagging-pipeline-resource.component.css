@@ -3771,3 +3771,113 @@
     font-size: 0.78rem;
     color: var(--mj-text-muted);
 }
+
+/* ============================================================
+   First-run onboarding (P2)
+   ============================================================ */
+.kh-onboarding {
+    margin: 0 0 16px 0;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)),
+        var(--mj-bg-surface));
+    padding: 18px 20px;
+}
+.kh-onboarding-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.kh-onboarding-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.kh-onboarding-title > i {
+    font-size: 1.3rem;
+    color: var(--mj-brand-primary);
+    margin-top: 2px;
+}
+.kh-onboarding-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+}
+.kh-onboarding-title p {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: var(--mj-text-secondary);
+}
+.kh-onboarding-dismiss {
+    background: none;
+    border: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px;
+    border-radius: 6px;
+}
+.kh-onboarding-dismiss:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
+.kh-onboarding-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 16px;
+}
+.kh-step {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+}
+.kh-step-active {
+    background: var(--mj-bg-surface);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+.kh-step-marker {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 1px solid var(--mj-border-default);
+}
+.kh-step-active .kh-step-marker {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+}
+.kh-step-done .kh-step-marker {
+    background: var(--mj-status-success);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-status-success);
+}
+.kh-step-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.kh-step-done .kh-step-title { color: var(--mj-text-secondary); }
+.kh-step-desc {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+    line-height: 1.4;
+}
+.kh-step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
