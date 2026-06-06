@@ -1,5 +1,30 @@
 # @memberjunction/ai-core-plus
 
+## 5.39.0
+
+### Minor Changes
+
+- d1cc0ad: agents can run a multi-step, server-side dataflow over their Actions and artifact tools in a single turn, with only the final result entering the context window. Stages pass structured JSON (PowerShell-style) and bind to fields via a safe, eval-free path grammar; operators include where/select/sort/groupBy/distinct/first/last/count/jsonpath/lines/grep/head/tail, plus map and let. Requested via nextStep.type: 'Pipeline'.
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/templates-base-types@5.39.0
+
 ## 5.38.0
 
 ### Minor Changes

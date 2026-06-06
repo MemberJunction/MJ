@@ -1,5 +1,78 @@
 # @memberjunction/ng-shared-generic
 
+## 5.39.0
+
+### Minor Changes
+
+- 4bc6fb4: feat(forms): FK dropdown scope picker, per-user persistence, and a centralized search-highlight theme token
+
+  Enhancements to `<mj-form-field>`'s foreign-key autocomplete in `@memberjunction/ng-base-forms`:
+  - **Search-field scope picker** — a pill (shown only while focused) lets the user
+    choose which related-entity field the dropdown searches: the Name field by
+    default, any shown column, or other searchable fields like ID. Exactly one
+    targeted `LIKE` (DB) or one in-memory scan (cached) — never all columns.
+  - **Configurable visible columns** — an eye toggle per field shows/hides it as a
+    grid column, letting users surface normally-hidden fields (e.g. ID) or drop
+    defaults.
+  - **Per-user persistence** via a new `LinkedFieldOptionsStore` (backed by
+    `UserInfoEngine`, one settings key): search scope, sort column/direction,
+    column widths, and visible-column set are remembered per (entity, FK field).
+    Nothing is written unless the user customizes.
+  - **Column resize** — drag a header's edge; widths persist.
+  - Plus polish: muted (theme-token) search highlight, fixed whitespace clipping in
+    highlighted cells, body-portal render-timing fix for cached fields, and a
+    scope/column menu that overlays the results list.
+
+  Design-token addition in `@memberjunction/ng-shared-generic`: new semantic
+  `--mj-search-highlight-bg` / `--mj-search-highlight-text` tokens (light + dark) so
+  the typed-query `<mark>` highlight is muted and theme-controlled in one place.
+
+  Also migrates the remaining primitive token usages in `ng-base-forms` CSS to
+  semantic tokens (package is now 100% semantic tokens), and adds
+  `STANDALONE_USAGE.md` documenting how to use these components as general-purpose
+  data-bindable controls outside the forms architecture.
+
+- ae74fd5: Auto-detect and render Markdown/HTML in long-text form fields. `MjFormFieldComponent`
+  now honors an explicit `EntityField.ExtendedType` (`Markdown`/`HTML`/`Code`) and, when it
+  is null, runs lightweight client-side content detection on eligible long-text fields
+  (TS-type string with `MaxLength >= 255` or unlimited — generic across SQL Server/PostgreSQL).
+  Read mode renders `<mj-markdown>` for Markdown, DOMPurify-sanitized `[innerHTML]` for HTML
+  (via the new `mjSafeRichHtml` pipe — see below), and a read-only `<mj-code-editor>` for code;
+  edit mode uses `<mj-code-editor>` with syntax highlighting for non-plain modes (mode frozen at
+  edit entry), while plain fields keep the existing textbox/textarea.
+
+  Widens the `EntityFieldExtendedType` union and the `CK_EntityField_ExtendedType` CHECK
+  constraint to include `Markdown` and `HTML` (migration included — run CodeGen after applying
+  to regenerate `EntityFieldEntity` types and metadata).
+
+  Adds a reusable, dependency-free `detectRichTextFormat(value, maxScanLength?)` text classifier
+  to `@memberjunction/global` (defaults to scanning the first 500 characters) so any consumer can
+  sniff Markdown/HTML/plain content.
+
+  Adds reusable safe-HTML rendering to `@memberjunction/ng-shared-generic`: a `PurifyRichTextHtml()`
+  function and an `mjSafeRichHtml` pure pipe backed by DOMPurify (HTML + SVG profiles). Unlike
+  Angular's built-in `[innerHTML]` sanitizer (which strips all SVG and inline styles), this keeps
+  safe inline SVG and richer markup while still removing `<script>`, `on*` handlers, and
+  `javascript:`/`data:` URLs — so it's safe for untrusted content yet renders richer HTML. Any
+  Angular component can use `[innerHTML]="value | mjSafeRichHtml"`.
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes
