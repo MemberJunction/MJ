@@ -17,7 +17,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (349 classes)
+// @memberjunction/core-entities (352 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -115,6 +115,8 @@ import {
     MJAuditLogTypeEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJClusterAnalysisClusterEntity,
+    MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
@@ -361,6 +363,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJViewTypeEntity,
     MJWorkflowEngineEntity,
     MJWorkflowEntity,
     MJWorkflowRunEntity,
@@ -697,6 +700,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuditLogTypeEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJClusterAnalysisClusterEntity,
+    MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
@@ -943,6 +948,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJViewTypeEntity,
     MJWorkflowEngineEntity,
     MJWorkflowEntity,
     MJWorkflowRunEntity,
@@ -1123,7 +1129,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 518;
+export const CLASS_REGISTRATIONS_COUNT = 521;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
