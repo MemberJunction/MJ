@@ -100,6 +100,24 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createRetryStep(validationResult.message);
             }
 
+            // A tool pipeline is a yield/await action (like client tools): the agent can't know
+            // its result until it runs. Handle it BEFORE Chat/taskComplete/nextStep-switch checks —
+            // the loop executes the pipeline inline, injects the final output, and we force one
+            // more turn (Retry, non-terminal) so the LLM can use the result. Pipeline is a singular
+            // `nextStep.type`, so the model cannot also request Actions/Chat/etc. this turn; checking
+            // it here preserves yield/await semantics (it pre-empts taskComplete, like client tools).
+            if (response.nextStep?.type === 'Pipeline' && response.nextStep.pipeline?.steps?.length) {
+                return this.createNextStep('Retry', {
+                    pipeline: response.nextStep.pipeline,
+                    terminate: false,
+                    scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence
+                });
+            }
+
             // Check for Chat nextStep BEFORE checking taskComplete
             // This allows agents to ask for user clarification even when taskComplete=true
             if (response.nextStep?.type === 'Chat') {
@@ -247,6 +265,13 @@ export class LoopAgentType extends BaseAgentType {
                     retVal.messageIndex = response.nextStep.messageIndex;
                     retVal.expandReason = response.nextStep.reason;
                     break;
+                case 'Pipeline':
+                    // A well-formed pipeline is handled by the early return above; reaching the
+                    // switch means type='Pipeline' was set with no (or empty) nextStep.pipeline.steps.
+                    retVal.step = 'Retry';
+                    retVal.message = 'When nextStep.type == "Pipeline", nextStep.pipeline.steps must contain 1 or more stages';
+                    retVal.errorMessage = 'Pipeline steps not specified for Pipeline type';
+                    break;
                 default:
                     retVal.step = 'Retry';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
@@ -333,7 +358,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -353,6 +378,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.while) {
                 response.nextStep.type = 'While'; // update the data structure to have the correct type
                 lcaseType = 'while';
+            } else if (!lcaseType && response.nextStep.pipeline?.steps?.length) {
+                response.nextStep.type = 'Pipeline'; // update the data structure to have the correct type
+                lcaseType = 'pipeline';
             }
 
             if (!validStepTypes.includes(lcaseType)) {

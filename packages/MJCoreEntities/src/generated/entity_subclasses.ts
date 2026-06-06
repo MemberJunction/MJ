@@ -2749,7 +2749,7 @@ export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
 export const MJAIAgentRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
+        * * Display Name: Run ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         * * Description: Unique identifier for this agent run`),
@@ -2824,7 +2824,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
     TotalTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Total Tokens
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
@@ -2846,27 +2846,27 @@ export const MJAIAgentRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalPromptTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsed
-        * * Display Name: Total Prompt Tokens Used
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalCompletionTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsed
-        * * Display Name: Total Completion Tokens Used
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsedRollup
-        * * Display Name: Total Tokens Used (Rollup)
+        * * Display Name: Total Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens Used (Rollup)
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens Used (Rollup)
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
@@ -2882,7 +2882,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Conversation Detail Sequence
+        * * Display Name: Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -2917,7 +2917,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the final Payload state at the end of the agent run`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Final Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Final message from the agent to the end user at the end of a run`),
     LastRunID: z.string().nullable().describe(`
@@ -2958,7 +2958,7 @@ each time the agent processes a prompt step.`),
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
     Data: z.string().nullable().describe(`
         * * Field Name: Data
-        * * Display Name: Data
+        * * Display Name: Execution Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
@@ -3012,61 +3012,71 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference ID
+        * * Display Name: External Reference
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
-        * * Display Name: Company ID
+        * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
+    TotalCacheReadTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCacheReadTokensUsed
+        * * Display Name: Cache Read Tokens
+        * * SQL Data Type: int
+        * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`),
+    TotalCacheWriteTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalCacheWriteTokensUsed
+        * * Display Name: Cache Write Tokens
+        * * SQL Data Type: int
+        * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent Details
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run Name
+        * * Display Name: Parent Run Details
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Name
+        * * Display Name: Conversation Details
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User Details
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail Details
         * * SQL Data Type: nvarchar(MAX)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run Name
+        * * Display Name: Last Run Details
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Name
+        * * Display Name: Configuration Details
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Override Model Name
+        * * Display Name: Override Model Details
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor Name
+        * * Display Name: Override Vendor Details
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Name
+        * * Display Name: Scheduled Job Details
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run Details
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity Name
+        * * Display Name: Primary Scope Entity Details
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
@@ -4544,12 +4554,12 @@ export const MJAIModelCostSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -4581,7 +4591,7 @@ export const MJAIModelCostSchema = z.object({
         * * Description: ISO 4217 three-letter currency code (e.g., USD, EUR, GBP) in uppercase`),
     PriceTypeID: z.string().describe(`
         * * Field Name: PriceTypeID
-        * * Display Name: Price Type ID
+        * * Display Name: Price Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
     InputPricePerUnit: z.number().describe(`
@@ -4596,7 +4606,7 @@ export const MJAIModelCostSchema = z.object({
         * * Description: Price per unit for output tokens/responses. Must be non-negative. Often higher than input pricing`),
     UnitTypeID: z.string().describe(`
         * * Field Name: UnitTypeID
-        * * Display Name: Unit Type ID
+        * * Display Name: Unit Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)`),
     ProcessingType: z.union([z.literal('Batch'), z.literal('Realtime')]).describe(`
@@ -4623,21 +4633,31 @@ export const MJAIModelCostSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CacheReadPricePerUnit: z.number().nullable().describe(`
+        * * Field Name: CacheReadPricePerUnit
+        * * Display Name: Cache Read Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+        * * Description: Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).`),
+    CacheWritePricePerUnit: z.number().nullable().describe(`
+        * * Field Name: CacheWritePricePerUnit
+        * * Display Name: Cache Write Price Per Unit
+        * * SQL Data Type: decimal(18, 8)
+        * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     PriceType: z.string().describe(`
         * * Field Name: PriceType
-        * * Display Name: Price Type
+        * * Display Name: Price Type Name
         * * SQL Data Type: nvarchar(100)`),
     UnitType: z.string().describe(`
         * * Field Name: UnitType
-        * * Display Name: Unit Type
+        * * Display Name: Unit Type Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -5405,7 +5425,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Optional configuration used for this execution.`),
     RunAt: z.date().describe(`
         * * Field Name: RunAt
-        * * Display Name: Run At
+        * * Display Name: Started At
         * * SQL Data Type: datetimeoffset
         * * Default Value: sysdatetimeoffset()
         * * Description: When the prompt run started, with timezone offset information.`),
@@ -5431,17 +5451,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The output result from the model.`),
     TokensUsed: z.number().nullable().describe(`
         * * Field Name: TokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
         * * Field Name: TokensPrompt
-        * * Display Name: Tokens Prompt
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the prompt.`),
     TokensCompletion: z.number().nullable().describe(`
         * * Field Name: TokensCompletion
-        * * Display Name: Tokens Completion
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the completion/result.`),
     TotalCost: z.number().nullable().describe(`
@@ -5506,22 +5526,22 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The cost of this specific prompt execution as reported by the AI provider. This does not include costs from child executions. The currency is specified in CostCurrency field.`),
     CostCurrency: z.string().nullable().describe(`
         * * Field Name: CostCurrency
-        * * Display Name: Cost Currency
+        * * Display Name: Currency
         * * SQL Data Type: nvarchar(10)
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Tokens Used Rollup
+        * * Display Name: Tokens Used (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Tokens Prompt Rollup
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Tokens Completion Rollup
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -5571,12 +5591,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`),
     LogProbs: z.boolean().nullable().describe(`
         * * Field Name: LogProbs
-        * * Display Name: Log Probabilities
+        * * Display Name: Log Probs
         * * SQL Data Type: bit
         * * Description: Whether log probabilities were requested for this run`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probabilities
+        * * Display Name: Top Log Probs
         * * SQL Data Type: int
         * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
     DescendantCost: z.number().nullable().describe(`
@@ -5586,17 +5606,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
-        * * Display Name: Validation Attempt Count
+        * * Display Name: Validation Attempts
         * * SQL Data Type: int
         * * Description: Total number of validation attempts made (including the initial attempt)`),
     SuccessfulValidationCount: z.number().nullable().describe(`
         * * Field Name: SuccessfulValidationCount
-        * * Display Name: Successful Validation Count
+        * * Display Name: Successful Validations
         * * SQL Data Type: int
         * * Description: Number of validation attempts that passed validation`),
     FinalValidationPassed: z.boolean().nullable().describe(`
         * * Field Name: FinalValidationPassed
-        * * Display Name: Final Validation Passed
+        * * Display Name: Validation Passed
         * * SQL Data Type: bit
         * * Description: Whether validation ultimately passed (1) or failed (0)`),
     ValidationBehavior: z.string().nullable().describe(`
@@ -5611,7 +5631,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Retry strategy used: Fixed, Linear, or Exponential`),
     MaxRetriesConfigured: z.number().nullable().describe(`
         * * Field Name: MaxRetriesConfigured
-        * * Display Name: Max Retries Configured
+        * * Display Name: Max Retries
         * * SQL Data Type: int
         * * Description: Maximum number of retries configured on the prompt`),
     FinalValidationError: z.string().nullable().describe(`
@@ -5646,7 +5666,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total time spent on retries in milliseconds (excluding first attempt)`),
     ValidationAttempts: z.string().nullable().describe(`
         * * Field Name: ValidationAttempts
-        * * Display Name: Validation Attempts
+        * * Display Name: Validation Attempt Logs
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array containing detailed information about each validation attempt`),
     ValidationSummary: z.string().nullable().describe(`
@@ -5672,13 +5692,13 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: JSON array of duration in milliseconds for each failover attempt`),
     OriginalModelID: z.string().nullable().describe(`
         * * Field Name: OriginalModelID
-        * * Display Name: Original Model
+        * * Display Name: Original Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI Model ID that was originally attempted before any failovers`),
     OriginalRequestStartTime: z.date().nullable().describe(`
         * * Field Name: OriginalRequestStartTime
-        * * Display Name: Original Request Start Time
+        * * Display Name: Original Request Start
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
@@ -5688,7 +5708,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total time spent in failover attempts in milliseconds`),
     RerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRunID
-        * * Display Name: Rerun From Run
+        * * Display Name: Rerun From
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
@@ -5749,7 +5769,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
     JudgeID: z.string().nullable().describe(`
         * * Field Name: JudgeID
-        * * Display Name: Judge
+        * * Display Name: Judge Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
@@ -5803,7 +5823,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Model Specific Details
+        * * Display Name: Provider Response Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     EffortLevel: z.number().nullable().describe(`
@@ -5842,6 +5862,16 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Tokens Cache Write
         * * SQL Data Type: int
         * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`),
+    TokensCacheReadRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCacheReadRollup
+        * * Display Name: Tokens Cache Read (Rollup)
+        * * SQL Data Type: int
+        * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`),
+    TokensCacheWriteRollup: z.number().nullable().describe(`
+        * * Field Name: TokensCacheWriteRollup
+        * * Display Name: Tokens Cache Write (Rollup)
+        * * SQL Data Type: int
+        * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -5896,7 +5926,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From Run
+        * * Display Name: Root Rerun Source
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -17062,7 +17092,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Primary key`),
     IntegrationObjectID: z.string().describe(`
         * * Field Name: IntegrationObjectID
-        * * Display Name: Integration Object
+        * * Display Name: Integration Object ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to the IntegrationObject this field belongs to`),
@@ -17125,7 +17155,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Whether this field is part of the object primary key`),
     IsUniqueKey: z.boolean().describe(`
         * * Field Name: IsUniqueKey
-        * * Display Name: Is Unique Key
+        * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether values must be unique across all records`),
@@ -17190,13 +17220,24 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
-        * * Display Name: Integration Object Name
+        * * Display Name: Integration Object
         * * SQL Data Type: nvarchar(255)`),
     RelatedIntegrationObject: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObject
-        * * Display Name: Related Object Name
+        * * Display Name: Related Integration Object Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -17214,7 +17255,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration ID
+        * * Display Name: Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -17344,9 +17385,113 @@ export const MJIntegrationObjectSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    CreateAPIPath: z.string().nullable().describe(`
+        * * Field Name: CreateAPIPath
+        * * Display Name: Create API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.`),
+    CreateMethod: z.string().nullable().describe(`
+        * * Field Name: CreateMethod
+        * * Display Name: Create Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.`),
+    CreateBodyShape: z.union([z.literal('flat'), z.literal('literal'), z.literal('wrapped')]).nullable().describe(`
+        * * Field Name: CreateBodyShape
+        * * Display Name: Create Body Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+        * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).`),
+    CreateBodyKey: z.string().nullable().describe(`
+        * * Field Name: CreateBodyKey
+        * * Display Name: Create Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`),
+    CreateIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: CreateIDLocation
+        * * Display Name: Create ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).`),
+    UpdateAPIPath: z.string().nullable().describe(`
+        * * Field Name: UpdateAPIPath
+        * * Display Name: Update API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.`),
+    UpdateMethod: z.string().nullable().describe(`
+        * * Field Name: UpdateMethod
+        * * Display Name: Update Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for update (typically PATCH or PUT).`),
+    UpdateBodyShape: z.union([z.literal('flat'), z.literal('literal'), z.literal('wrapped')]).nullable().describe(`
+        * * Field Name: UpdateBodyShape
+        * * Display Name: Update Body Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+        * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.`),
+    UpdateBodyKey: z.string().nullable().describe(`
+        * * Field Name: UpdateBodyKey
+        * * Display Name: Update Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.`),
+    UpdateIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: UpdateIDLocation
+        * * Display Name: Update ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`),
+    DeleteAPIPath: z.string().nullable().describe(`
+        * * Field Name: DeleteAPIPath
+        * * Display Name: Delete API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`),
+    DeleteIDLocation: z.union([z.literal('body'), z.literal('header'), z.literal('n/a'), z.literal('path')]).nullable().describe(`
+        * * Field Name: DeleteIDLocation
+        * * Display Name: Delete ID Location
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+        * * Description: For delete: where the target record ID is located — typically 'path'.`),
+    IncrementalWatermarkField: z.string().nullable().describe(`
+        * * Field Name: IncrementalWatermarkField
+        * * Display Name: Incremental Watermark Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -18066,360 +18211,6 @@ export const MJListSchema = z.object({
 });
 
 export type MJListEntityType = z.infer<typeof MJListSchema>;
-
-/**
- * zod schema definition for the entity MJ: Magic Link Invite Allowed Domains
- */
-export const MJMagicLinkInviteAllowedDomainSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    InviteID: z.string().describe(`
-        * * Field Name: InviteID
-        * * Display Name: Invite ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-        * * Description: Foreign key to the MagicLinkInvite this allowed-domain belongs to.`),
-    Domain: z.string().describe(`
-        * * Field Name: Domain
-        * * Display Name: Domain
-        * * SQL Data Type: nvarchar(255)
-        * * Description: An allowed host/origin (e.g. https://partner.example.com) where the link may be framed.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-});
-
-export type MJMagicLinkInviteAllowedDomainEntityType = z.infer<typeof MJMagicLinkInviteAllowedDomainSchema>;
-
-/**
- * zod schema definition for the entity MJ: Magic Link Invite Allowed Paths
- */
-export const MJMagicLinkInviteAllowedPathSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    InviteID: z.string().describe(`
-        * * Field Name: InviteID
-        * * Display Name: Invite ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-        * * Description: Foreign key to the MagicLinkInvite this allowed-path belongs to.`),
-    Path: z.string().describe(`
-        * * Field Name: Path
-        * * Display Name: Path
-        * * SQL Data Type: nvarchar(1000)
-        * * Description: An allowed FE path (after the Explorer base URL) the session may navigate to. UX confinement only.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-});
-
-export type MJMagicLinkInviteAllowedPathEntityType = z.infer<typeof MJMagicLinkInviteAllowedPathSchema>;
-
-/**
- * zod schema definition for the entity MJ: Magic Link Invite Applications
- */
-export const MJMagicLinkInviteApplicationSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    InviteID: z.string().describe(`
-        * * Field Name: InviteID
-        * * Display Name: Invite ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-        * * Description: Foreign key to the MagicLinkInvite this application grant belongs to.`),
-    ApplicationID: z.string().describe(`
-        * * Field Name: ApplicationID
-        * * Display Name: Application ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
-        * * Description: Foreign key to the Application this invite grants access to.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
-        * * Field Name: Application
-        * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type MJMagicLinkInviteApplicationEntityType = z.infer<typeof MJMagicLinkInviteApplicationSchema>;
-
-/**
- * zod schema definition for the entity MJ: Magic Link Invite Roles
- */
-export const MJMagicLinkInviteRoleSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    InviteID: z.string().describe(`
-        * * Field Name: InviteID
-        * * Display Name: Invite ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-        * * Description: Foreign key to the MagicLinkInvite this role grant belongs to.`),
-    RoleID: z.string().describe(`
-        * * Field Name: RoleID
-        * * Display Name: Role ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
-        * * Description: Foreign key to the Role this invite grants to the redeeming user.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Role: z.string().describe(`
-        * * Field Name: Role
-        * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)`),
-});
-
-export type MJMagicLinkInviteRoleEntityType = z.infer<typeof MJMagicLinkInviteRoleSchema>;
-
-/**
- * zod schema definition for the entity MJ: Magic Link Invites
- */
-export const MJMagicLinkInviteSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    TokenHash: z.string().describe(`
-        * * Field Name: TokenHash
-        * * Display Name: Token Hash
-        * * SQL Data Type: nvarchar(128)
-        * * Description: SHA-256 hash of the raw magic-link token, base64url-encoded (43 chars). The raw token is delivered only in the emailed URL and is never persisted. Lookups hash the incoming token and match against this column. Unique.`),
-    Email: z.string().nullable().describe(`
-        * * Field Name: Email
-        * * Display Name: Email
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Email address the invite was issued to and delivered at. Becomes the provisioned user's email on first redemption.`),
-    ApplicationID: z.string().describe(`
-        * * Field Name: ApplicationID
-        * * Display Name: Application ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
-        * * Description: Foreign key to Application — the single app this invite grants access to. The provisioned user receives exactly one User Application record for this app.`),
-    RoleID: z.string().describe(`
-        * * Field Name: RoleID
-        * * Display Name: Role ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
-        * * Description: Foreign key to Role — the restricted role assigned to the redeeming user. This role's entity permissions are the real authorization boundary that confines the external user to the shared app's data.`),
-    ExpiresAt: z.date().describe(`
-        * * Field Name: ExpiresAt
-        * * Display Name: Expires At
-        * * SQL Data Type: datetimeoffset
-        * * Description: Hard expiry for the link. After this instant the invite cannot be redeemed regardless of Status.`),
-    ConsumedAt: z.date().nullable().describe(`
-        * * Field Name: ConsumedAt
-        * * Display Name: Consumed At
-        * * SQL Data Type: datetimeoffset
-        * * Description: Timestamp of the first successful redemption. NULL while unconsumed. Set in the same transaction that mints the session JWT to enforce single-use semantics.`),
-    MaxUses: z.number().describe(`
-        * * Field Name: MaxUses
-        * * Display Name: Max Uses
-        * * SQL Data Type: int
-        * * Default Value: 1
-        * * Description: Maximum number of times this invite may be redeemed. Defaults to 1 (true single-use). Set higher only for intentionally multi-use links.`),
-    UseCount: z.number().describe(`
-        * * Field Name: UseCount
-        * * Display Name: Use Count
-        * * SQL Data Type: int
-        * * Default Value: 0
-        * * Description: Number of times this invite has been redeemed so far. Incremented on each successful redemption; redemption is rejected once UseCount reaches MaxUses.`),
-    CreatedByUserID: z.string().describe(`
-        * * Field Name: CreatedByUserID
-        * * Display Name: Created By User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-        * * Description: Foreign key to User — the internal user who created/shared this invite. Audit trail for who granted external access.`),
-    Status: z.union([z.literal('Active'), z.literal('Consumed'), z.literal('Expired'), z.literal('Revoked')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Consumed
-    *   * Expired
-    *   * Revoked
-        * * Description: Lifecycle status: Active (redeemable), Consumed (single-use link fully redeemed), Revoked (manually disabled), Expired (past ExpiresAt). Revoking an unconsumed link is the primary revocation mechanism.`),
-    IdentityMode: z.union([z.literal('anonymous'), z.literal('email')]).describe(`
-        * * Field Name: IdentityMode
-        * * Display Name: Identity Mode
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: email
-    * * Value List Type: List
-    * * Possible Values 
-    *   * anonymous
-    *   * email
-        * * Description: Identity resolution mode. 'email' (default, legacy): redemption provisions/links a per-email user and enforcement rides that user's DB roles. 'anonymous': all redemptions resolve to the shared Anonymous principal (an attribution anchor, not a permission holder); scope is carried per-session in the minted JWT claims, never as roles on that user.`),
-    Kind: z.union([z.literal('anonymous-embed'), z.literal('app-session'), z.literal('resource-share')]).describe(`
-        * * Field Name: Kind
-        * * Display Name: Kind
-        * * SQL Data Type: nvarchar(30)
-        * * Default Value: app-session
-    * * Value List Type: List
-    * * Possible Values 
-    *   * anonymous-embed
-    *   * app-session
-    *   * resource-share
-        * * Description: Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. 'app-session' (default): the legacy app+role session. 'resource-share': scoped to a single resource (ResourceTypeID/ResourceID). 'anonymous-embed': framed in an external site (requires allowed domains + tier capability).`),
-    ResourceTypeID: z.string().nullable().describe(`
-        * * Field Name: ResourceTypeID
-        * * Display Name: Resource Type ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Resource Types (vwResourceTypes.ID)
-        * * Description: For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link's reach to dependent data is admitted at runtime via FK-reachable resource-pinned row-level security, not an enumerated list. NULL for app-session invites.`),
-    ResourceID: z.string().nullable().describe(`
-        * * Field Name: ResourceID
-        * * Display Name: Resource ID
-        * * SQL Data Type: nvarchar(450)
-        * * Description: For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource's key type). NULL for app-session invites.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
-        * * Field Name: Application
-        * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
-        * * Field Name: Role
-        * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)`),
-    CreatedByUser: z.string().describe(`
-        * * Field Name: CreatedByUser
-        * * Display Name: Created By User
-        * * SQL Data Type: nvarchar(100)`),
-    ResourceType: z.string().nullable().describe(`
-        * * Field Name: ResourceType
-        * * Display Name: Resource Type
-        * * SQL Data Type: nvarchar(255)`),
-});
-
-export type MJMagicLinkInviteEntityType = z.infer<typeof MJMagicLinkInviteSchema>;
-
-/**
- * zod schema definition for the entity MJ: Magic Link Redemptions
- */
-export const MJMagicLinkRedemptionSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    InviteID: z.string().nullable().describe(`
-        * * Field Name: InviteID
-        * * Display Name: Invite ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-        * * Description: Foreign key to MagicLinkInvite. NULLABLE: a redemption attempt against a token that matches no invite (not_found — the signature of scanning/brute-force) has no invite to reference but is still logged.`),
-    AttemptedAt: z.date().describe(`
-        * * Field Name: AttemptedAt
-        * * Display Name: Attempted At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: sysutcdatetime()
-        * * Description: Timestamp of the redemption attempt (UTC). Defaults to the time of insert.`),
-    Outcome: z.union([z.literal('consumed'), z.literal('expired'), z.literal('invalid'), z.literal('not_found'), z.literal('provisioning_failed'), z.literal('revoked'), z.literal('server_error'), z.literal('success')]).describe(`
-        * * Field Name: Outcome
-        * * Display Name: Outcome
-        * * SQL Data Type: nvarchar(30)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * consumed
-    *   * expired
-    *   * invalid
-    *   * not_found
-    *   * provisioning_failed
-    *   * revoked
-    *   * server_error
-    *   * success
-        * * Description: Outcome of the attempt: 'success', or one of the redemption error codes (not_found, expired, consumed, revoked, invalid, provisioning_failed, server_error). Mirrors the RedeemErrorCode union in the server code.`),
-    IPAddress: z.string().nullable().describe(`
-        * * Field Name: IPAddress
-        * * Display Name: IP Address
-        * * SQL Data Type: nvarchar(64)
-        * * Description: Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment's magicLink.audit.ipStorage policy. NULL when unavailable or policy is 'none'.`),
-    UserAgent: z.string().nullable().describe(`
-        * * Field Name: UserAgent
-        * * Display Name: User Agent
-        * * SQL Data Type: nvarchar(512)
-        * * Description: User-Agent header of the redeeming client. NULL when unavailable.`),
-    Origin: z.string().nullable().describe(`
-        * * Field Name: Origin
-        * * Display Name: Origin
-        * * SQL Data Type: nvarchar(512)
-        * * Description: Origin header of the redemption request. Retained for embed/domain forensics (which host framed or initiated the redemption). NULL for direct (non-embedded) redemptions.`),
-    ProvisionedUserID: z.string().nullable().describe(`
-        * * Field Name: ProvisionedUserID
-        * * Display Name: Provisioned User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-        * * Description: Foreign key to the User provisioned/linked by a SUCCESSFUL redemption. NULL on failed attempts and on (future) anonymous redemptions that resolve to a shared principal rather than a per-email user.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    ProvisionedUser: z.string().nullable().describe(`
-        * * Field Name: ProvisionedUser
-        * * Display Name: Provisioned User
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type MJMagicLinkRedemptionEntityType = z.infer<typeof MJMagicLinkRedemptionSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Server Connection Permissions
@@ -34862,7 +34653,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
+    * * Display Name: Run ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     * * Description: Unique identifier for this agent run
@@ -35034,7 +34825,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Total Tokens
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of tokens consumed by all LLM calls during this agent run
@@ -35082,7 +34873,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsed
-    * * Display Name: Total Prompt Tokens Used
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -35095,7 +34886,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsed
-    * * Display Name: Total Completion Tokens Used
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -35108,7 +34899,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsedRollup
-    * * Display Name: Total Tokens Used (Rollup)
+    * * Display Name: Total Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
     */
@@ -35121,7 +34912,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens Used (Rollup)
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -35134,7 +34925,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens Used (Rollup)
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -35174,7 +34965,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Conversation Detail Sequence
+    * * Display Name: Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -35241,7 +35032,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Final Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Final message from the agent to the end user at the end of a run
     */
@@ -35338,7 +35129,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Data
-    * * Display Name: Data
+    * * Display Name: Execution Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
     */
@@ -35472,7 +35263,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference ID
+    * * Display Name: External Reference
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -35485,7 +35276,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: CompanyID
-    * * Display Name: Company ID
+    * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.
     */
@@ -35497,8 +35288,34 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: TotalCacheReadTokensUsed
+    * * Display Name: Cache Read Tokens
+    * * SQL Data Type: int
+    * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.
+    */
+    get TotalCacheReadTokensUsed(): number | null {
+        return this.Get('TotalCacheReadTokensUsed');
+    }
+    set TotalCacheReadTokensUsed(value: number | null) {
+        this.Set('TotalCacheReadTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCacheWriteTokensUsed
+    * * Display Name: Cache Write Tokens
+    * * SQL Data Type: int
+    * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.
+    */
+    get TotalCacheWriteTokensUsed(): number | null {
+        return this.Get('TotalCacheWriteTokensUsed');
+    }
+    set TotalCacheWriteTokensUsed(value: number | null) {
+        this.Set('TotalCacheWriteTokensUsed', value);
+    }
+
+    /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent Details
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -35507,7 +35324,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run Name
+    * * Display Name: Parent Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -35516,7 +35333,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Name
+    * * Display Name: Conversation Details
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -35525,7 +35342,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User Details
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -35534,7 +35351,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail Details
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -35543,7 +35360,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run Name
+    * * Display Name: Last Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -35552,7 +35369,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Name
+    * * Display Name: Configuration Details
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -35561,7 +35378,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Override Model Name
+    * * Display Name: Override Model Details
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -35570,7 +35387,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor Name
+    * * Display Name: Override Vendor Details
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -35579,7 +35396,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Name
+    * * Display Name: Scheduled Job Details
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -35588,7 +35405,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -35597,7 +35414,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity Name
+    * * Display Name: Primary Scope Entity Details
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -39693,7 +39510,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -39706,7 +39523,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -39778,7 +39595,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: PriceTypeID
-    * * Display Name: Price Type ID
+    * * Display Name: Price Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
     */
@@ -39817,7 +39634,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: UnitTypeID
-    * * Display Name: Unit Type ID
+    * * Display Name: Unit Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Unit Types (vwAIModelPriceUnitTypes.ID)
     */
@@ -39879,8 +39696,34 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     }
 
     /**
+    * * Field Name: CacheReadPricePerUnit
+    * * Display Name: Cache Read Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).
+    */
+    get CacheReadPricePerUnit(): number | null {
+        return this.Get('CacheReadPricePerUnit');
+    }
+    set CacheReadPricePerUnit(value: number | null) {
+        this.Set('CacheReadPricePerUnit', value);
+    }
+
+    /**
+    * * Field Name: CacheWritePricePerUnit
+    * * Display Name: Cache Write Price Per Unit
+    * * SQL Data Type: decimal(18, 8)
+    * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.
+    */
+    get CacheWritePricePerUnit(): number | null {
+        return this.Get('CacheWritePricePerUnit');
+    }
+    set CacheWritePricePerUnit(value: number | null) {
+        this.Set('CacheWritePricePerUnit', value);
+    }
+
+    /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -39889,7 +39732,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -39898,7 +39741,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: PriceType
-    * * Display Name: Price Type
+    * * Display Name: Price Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get PriceType(): string {
@@ -39907,7 +39750,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
 
     /**
     * * Field Name: UnitType
-    * * Display Name: Unit Type
+    * * Display Name: Unit Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get UnitType(): string {
@@ -42253,7 +42096,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RunAt
-    * * Display Name: Run At
+    * * Display Name: Started At
     * * SQL Data Type: datetimeoffset
     * * Default Value: sysdatetimeoffset()
     * * Description: When the prompt run started, with timezone offset information.
@@ -42319,7 +42162,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of tokens used (prompt + completion).
     */
@@ -42332,7 +42175,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPrompt
-    * * Display Name: Tokens Prompt
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the prompt.
     */
@@ -42345,7 +42188,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletion
-    * * Display Name: Tokens Completion
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the completion/result.
     */
@@ -42492,7 +42335,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: CostCurrency
-    * * Display Name: Cost Currency
+    * * Display Name: Currency
     * * SQL Data Type: nvarchar(10)
     * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.
     */
@@ -42505,7 +42348,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Tokens Used Rollup
+    * * Display Name: Tokens Used (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -42518,7 +42361,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Tokens Prompt Rollup
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -42531,7 +42374,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Tokens Completion Rollup
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -42661,7 +42504,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: LogProbs
-    * * Display Name: Log Probabilities
+    * * Display Name: Log Probs
     * * SQL Data Type: bit
     * * Description: Whether log probabilities were requested for this run
     */
@@ -42674,7 +42517,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probabilities
+    * * Display Name: Top Log Probs
     * * SQL Data Type: int
     * * Description: Number of top log probabilities requested per token (if LogProbs is true)
     */
@@ -42700,7 +42543,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttemptCount
-    * * Display Name: Validation Attempt Count
+    * * Display Name: Validation Attempts
     * * SQL Data Type: int
     * * Description: Total number of validation attempts made (including the initial attempt)
     */
@@ -42713,7 +42556,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: SuccessfulValidationCount
-    * * Display Name: Successful Validation Count
+    * * Display Name: Successful Validations
     * * SQL Data Type: int
     * * Description: Number of validation attempts that passed validation
     */
@@ -42726,7 +42569,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: FinalValidationPassed
-    * * Display Name: Final Validation Passed
+    * * Display Name: Validation Passed
     * * SQL Data Type: bit
     * * Description: Whether validation ultimately passed (1) or failed (0)
     */
@@ -42765,7 +42608,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: MaxRetriesConfigured
-    * * Display Name: Max Retries Configured
+    * * Display Name: Max Retries
     * * SQL Data Type: int
     * * Description: Maximum number of retries configured on the prompt
     */
@@ -42856,7 +42699,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttempts
-    * * Display Name: Validation Attempts
+    * * Display Name: Validation Attempt Logs
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array containing detailed information about each validation attempt
     */
@@ -42922,7 +42765,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModelID
-    * * Display Name: Original Model
+    * * Display Name: Original Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI Model ID that was originally attempted before any failovers
@@ -42936,7 +42779,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalRequestStartTime
-    * * Display Name: Original Request Start Time
+    * * Display Name: Original Request Start
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp when the original request started, before any failovers
     */
@@ -42962,7 +42805,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRunID
-    * * Display Name: Rerun From Run
+    * * Display Name: Rerun From
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID
@@ -43095,7 +42938,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: JudgeID
-    * * Display Name: Judge
+    * * Display Name: Judge Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
@@ -43229,7 +43072,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Model Specific Details
+    * * Display Name: Provider Response Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
     */
@@ -43330,6 +43173,32 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
     set TokensCacheWrite(value: number | null) {
         this.Set('TokensCacheWrite', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheReadRollup
+    * * Display Name: Tokens Cache Read (Rollup)
+    * * SQL Data Type: int
+    * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.
+    */
+    get TokensCacheReadRollup(): number | null {
+        return this.Get('TokensCacheReadRollup');
+    }
+    set TokensCacheReadRollup(value: number | null) {
+        this.Set('TokensCacheReadRollup', value);
+    }
+
+    /**
+    * * Field Name: TokensCacheWriteRollup
+    * * Display Name: Tokens Cache Write (Rollup)
+    * * SQL Data Type: int
+    * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.
+    */
+    get TokensCacheWriteRollup(): number | null {
+        return this.Get('TokensCacheWriteRollup');
+    }
+    set TokensCacheWriteRollup(value: number | null) {
+        this.Set('TokensCacheWriteRollup', value);
     }
 
     /**
@@ -43451,7 +43320,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From Run
+    * * Display Name: Root Rerun Source
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
@@ -72292,7 +72161,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IntegrationObjectID
-    * * Display Name: Integration Object
+    * * Display Name: Integration Object ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to the IntegrationObject this field belongs to
@@ -72451,7 +72320,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsUniqueKey
-    * * Display Name: Is Unique Key
+    * * Display Name: Is Unique
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether values must be unique across all records
@@ -72599,8 +72468,27 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     }
 
     /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
     * * Field Name: IntegrationObject
-    * * Display Name: Integration Object Name
+    * * Display Name: Integration Object
     * * SQL Data Type: nvarchar(255)
     */
     get IntegrationObject(): string {
@@ -72609,7 +72497,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObject
-    * * Display Name: Related Object Name
+    * * Display Name: Related Integration Object Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedIntegrationObject(): string | null {
@@ -72664,7 +72552,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration ID
+    * * Display Name: Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -72965,8 +72853,224 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
 
     /**
+    * * Field Name: CreateAPIPath
+    * * Display Name: Create API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.
+    */
+    get CreateAPIPath(): string | null {
+        return this.Get('CreateAPIPath');
+    }
+    set CreateAPIPath(value: string | null) {
+        this.Set('CreateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: CreateMethod
+    * * Display Name: Create Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.
+    */
+    get CreateMethod(): string | null {
+        return this.Get('CreateMethod');
+    }
+    set CreateMethod(value: string | null) {
+        this.Set('CreateMethod', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyShape
+    * * Display Name: Create Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+    * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).
+    */
+    get CreateBodyShape(): 'flat' | 'literal' | 'wrapped' | null {
+        return this.Get('CreateBodyShape');
+    }
+    set CreateBodyShape(value: 'flat' | 'literal' | 'wrapped' | null) {
+        this.Set('CreateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyKey
+    * * Display Name: Create Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.
+    */
+    get CreateBodyKey(): string | null {
+        return this.Get('CreateBodyKey');
+    }
+    set CreateBodyKey(value: string | null) {
+        this.Set('CreateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: CreateIDLocation
+    * * Display Name: Create ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).
+    */
+    get CreateIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('CreateIDLocation');
+    }
+    set CreateIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('CreateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: UpdateAPIPath
+    * * Display Name: Update API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.
+    */
+    get UpdateAPIPath(): string | null {
+        return this.Get('UpdateAPIPath');
+    }
+    set UpdateAPIPath(value: string | null) {
+        this.Set('UpdateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: UpdateMethod
+    * * Display Name: Update Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for update (typically PATCH or PUT).
+    */
+    get UpdateMethod(): string | null {
+        return this.Get('UpdateMethod');
+    }
+    set UpdateMethod(value: string | null) {
+        this.Set('UpdateMethod', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyShape
+    * * Display Name: Update Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * flat
+    *   * literal
+    *   * wrapped
+    * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.
+    */
+    get UpdateBodyShape(): 'flat' | 'literal' | 'wrapped' | null {
+        return this.Get('UpdateBodyShape');
+    }
+    set UpdateBodyShape(value: 'flat' | 'literal' | 'wrapped' | null) {
+        this.Set('UpdateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyKey
+    * * Display Name: Update Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.
+    */
+    get UpdateBodyKey(): string | null {
+        return this.Get('UpdateBodyKey');
+    }
+    set UpdateBodyKey(value: string | null) {
+        this.Set('UpdateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: UpdateIDLocation
+    * * Display Name: Update ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).
+    */
+    get UpdateIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('UpdateIDLocation');
+    }
+    set UpdateIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('UpdateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: DeleteAPIPath
+    * * Display Name: Delete API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)
+    */
+    get DeleteAPIPath(): string | null {
+        return this.Get('DeleteAPIPath');
+    }
+    set DeleteAPIPath(value: string | null) {
+        this.Set('DeleteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: DeleteIDLocation
+    * * Display Name: Delete ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * body
+    *   * header
+    *   * n/a
+    *   * path
+    * * Description: For delete: where the target record ID is located — typically 'path'.
+    */
+    get DeleteIDLocation(): 'body' | 'header' | 'n/a' | 'path' | null {
+        return this.Get('DeleteIDLocation');
+    }
+    set DeleteIDLocation(value: 'body' | 'header' | 'n/a' | 'path' | null) {
+        this.Set('DeleteIDLocation', value);
+    }
+
+    /**
+    * * Field Name: IncrementalWatermarkField
+    * * Display Name: Incremental Watermark Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.
+    */
+    get IncrementalWatermarkField(): string | null {
+        return this.Get('IncrementalWatermarkField');
+    }
+    set IncrementalWatermarkField(value: string | null) {
+        this.Set('IncrementalWatermarkField', value);
+    }
+
+    /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -74776,879 +74880,6 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     */
     get LastRefreshedByUser(): string | null {
         return this.Get('LastRefreshedByUser');
-    }
-}
-
-
-/**
- * MJ: Magic Link Invite Allowed Domains - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: MagicLinkInviteAllowedDomain
- * * Base View: vwMagicLinkInviteAllowedDomains
- * * @description An external host (origin) where this invite may be embedded in an IFRAME. Enforced server-side via Content-Security-Policy frame-ancestors plus Origin/Referer checks on embed responses. Multiple rows = multiple allowed hosts.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Allowed Domains')
-export class MJMagicLinkInviteAllowedDomainEntity extends BaseEntity<MJMagicLinkInviteAllowedDomainEntityType> {
-    /**
-    * Loads the MJ: Magic Link Invite Allowed Domains record from the database
-    * @param ID: string - primary key value to load the MJ: Magic Link Invite Allowed Domains record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJMagicLinkInviteAllowedDomainEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: InviteID
-    * * Display Name: Invite ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-    * * Description: Foreign key to the MagicLinkInvite this allowed-domain belongs to.
-    */
-    get InviteID(): string {
-        return this.Get('InviteID');
-    }
-    set InviteID(value: string) {
-        this.Set('InviteID', value);
-    }
-
-    /**
-    * * Field Name: Domain
-    * * Display Name: Domain
-    * * SQL Data Type: nvarchar(255)
-    * * Description: An allowed host/origin (e.g. https://partner.example.com) where the link may be framed.
-    */
-    get Domain(): string {
-        return this.Get('Domain');
-    }
-    set Domain(value: string) {
-        this.Set('Domain', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-}
-
-
-/**
- * MJ: Magic Link Invite Allowed Paths - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: MagicLinkInviteAllowedPath
- * * Base View: vwMagicLinkInviteAllowedPaths
- * * @description An Explorer FE path (after the base URL) this link is confined to in the UI. This is UX confinement only — the real authorization boundary is server-side entity/resource permissions. Multiple rows = multiple allowed paths.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Allowed Paths')
-export class MJMagicLinkInviteAllowedPathEntity extends BaseEntity<MJMagicLinkInviteAllowedPathEntityType> {
-    /**
-    * Loads the MJ: Magic Link Invite Allowed Paths record from the database
-    * @param ID: string - primary key value to load the MJ: Magic Link Invite Allowed Paths record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJMagicLinkInviteAllowedPathEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: InviteID
-    * * Display Name: Invite ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-    * * Description: Foreign key to the MagicLinkInvite this allowed-path belongs to.
-    */
-    get InviteID(): string {
-        return this.Get('InviteID');
-    }
-    set InviteID(value: string) {
-        this.Set('InviteID', value);
-    }
-
-    /**
-    * * Field Name: Path
-    * * Display Name: Path
-    * * SQL Data Type: nvarchar(1000)
-    * * Description: An allowed FE path (after the Explorer base URL) the session may navigate to. UX confinement only.
-    */
-    get Path(): string {
-        return this.Get('Path');
-    }
-    set Path(value: string) {
-        this.Set('Path', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-}
-
-
-/**
- * MJ: Magic Link Invite Applications - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: MagicLinkInviteApplication
- * * Base View: vwMagicLinkInviteApplications
- * * @description Join row granting a magic-link invite access to one Application. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.ApplicationID) while multi-scope enforcement is being designed.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Applications')
-export class MJMagicLinkInviteApplicationEntity extends BaseEntity<MJMagicLinkInviteApplicationEntityType> {
-    /**
-    * Loads the MJ: Magic Link Invite Applications record from the database
-    * @param ID: string - primary key value to load the MJ: Magic Link Invite Applications record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJMagicLinkInviteApplicationEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: InviteID
-    * * Display Name: Invite ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-    * * Description: Foreign key to the MagicLinkInvite this application grant belongs to.
-    */
-    get InviteID(): string {
-        return this.Get('InviteID');
-    }
-    set InviteID(value: string) {
-        this.Set('InviteID', value);
-    }
-
-    /**
-    * * Field Name: ApplicationID
-    * * Display Name: Application ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
-    * * Description: Foreign key to the Application this invite grants access to.
-    */
-    get ApplicationID(): string {
-        return this.Get('ApplicationID');
-    }
-    set ApplicationID(value: string) {
-        this.Set('ApplicationID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Application
-    * * Display Name: Application
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Application(): string {
-        return this.Get('Application');
-    }
-}
-
-
-/**
- * MJ: Magic Link Invite Roles - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: MagicLinkInviteRole
- * * Base View: vwMagicLinkInviteRoles
- * * @description Join row granting a magic-link invite a Role. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.RoleID) while multi-scope enforcement is being designed.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Roles')
-export class MJMagicLinkInviteRoleEntity extends BaseEntity<MJMagicLinkInviteRoleEntityType> {
-    /**
-    * Loads the MJ: Magic Link Invite Roles record from the database
-    * @param ID: string - primary key value to load the MJ: Magic Link Invite Roles record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJMagicLinkInviteRoleEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: InviteID
-    * * Display Name: Invite ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-    * * Description: Foreign key to the MagicLinkInvite this role grant belongs to.
-    */
-    get InviteID(): string {
-        return this.Get('InviteID');
-    }
-    set InviteID(value: string) {
-        this.Set('InviteID', value);
-    }
-
-    /**
-    * * Field Name: RoleID
-    * * Display Name: Role ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
-    * * Description: Foreign key to the Role this invite grants to the redeeming user.
-    */
-    get RoleID(): string {
-        return this.Get('RoleID');
-    }
-    set RoleID(value: string) {
-        this.Set('RoleID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Role
-    * * Display Name: Role
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Role(): string {
-        return this.Get('Role');
-    }
-}
-
-
-/**
- * MJ: Magic Link Invites - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: MagicLinkInvite
- * * Base View: vwMagicLinkInvites
- * * @description A shareable, single-use, app-scoped magic-link invite for an external user. Bound to one Application and one restricted Role; redeeming it provisions/links a user with that scope and mints a short-lived MJ-issued JWT. The raw token is never stored — only its SHA-256 hash.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Magic Link Invites')
-export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityType> {
-    /**
-    * Loads the MJ: Magic Link Invites record from the database
-    * @param ID: string - primary key value to load the MJ: Magic Link Invites record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJMagicLinkInviteEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: TokenHash
-    * * Display Name: Token Hash
-    * * SQL Data Type: nvarchar(128)
-    * * Description: SHA-256 hash of the raw magic-link token, base64url-encoded (43 chars). The raw token is delivered only in the emailed URL and is never persisted. Lookups hash the incoming token and match against this column. Unique.
-    */
-    get TokenHash(): string {
-        return this.Get('TokenHash');
-    }
-    set TokenHash(value: string) {
-        this.Set('TokenHash', value);
-    }
-
-    /**
-    * * Field Name: Email
-    * * Display Name: Email
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Email address the invite was issued to and delivered at. Becomes the provisioned user's email on first redemption.
-    */
-    get Email(): string | null {
-        return this.Get('Email');
-    }
-    set Email(value: string | null) {
-        this.Set('Email', value);
-    }
-
-    /**
-    * * Field Name: ApplicationID
-    * * Display Name: Application ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
-    * * Description: Foreign key to Application — the single app this invite grants access to. The provisioned user receives exactly one User Application record for this app.
-    */
-    get ApplicationID(): string {
-        return this.Get('ApplicationID');
-    }
-    set ApplicationID(value: string) {
-        this.Set('ApplicationID', value);
-    }
-
-    /**
-    * * Field Name: RoleID
-    * * Display Name: Role ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
-    * * Description: Foreign key to Role — the restricted role assigned to the redeeming user. This role's entity permissions are the real authorization boundary that confines the external user to the shared app's data.
-    */
-    get RoleID(): string {
-        return this.Get('RoleID');
-    }
-    set RoleID(value: string) {
-        this.Set('RoleID', value);
-    }
-
-    /**
-    * * Field Name: ExpiresAt
-    * * Display Name: Expires At
-    * * SQL Data Type: datetimeoffset
-    * * Description: Hard expiry for the link. After this instant the invite cannot be redeemed regardless of Status.
-    */
-    get ExpiresAt(): Date {
-        return this.Get('ExpiresAt');
-    }
-    set ExpiresAt(value: Date) {
-        this.Set('ExpiresAt', value);
-    }
-
-    /**
-    * * Field Name: ConsumedAt
-    * * Display Name: Consumed At
-    * * SQL Data Type: datetimeoffset
-    * * Description: Timestamp of the first successful redemption. NULL while unconsumed. Set in the same transaction that mints the session JWT to enforce single-use semantics.
-    */
-    get ConsumedAt(): Date | null {
-        return this.Get('ConsumedAt');
-    }
-    set ConsumedAt(value: Date | null) {
-        this.Set('ConsumedAt', value);
-    }
-
-    /**
-    * * Field Name: MaxUses
-    * * Display Name: Max Uses
-    * * SQL Data Type: int
-    * * Default Value: 1
-    * * Description: Maximum number of times this invite may be redeemed. Defaults to 1 (true single-use). Set higher only for intentionally multi-use links.
-    */
-    get MaxUses(): number {
-        return this.Get('MaxUses');
-    }
-    set MaxUses(value: number) {
-        this.Set('MaxUses', value);
-    }
-
-    /**
-    * * Field Name: UseCount
-    * * Display Name: Use Count
-    * * SQL Data Type: int
-    * * Default Value: 0
-    * * Description: Number of times this invite has been redeemed so far. Incremented on each successful redemption; redemption is rejected once UseCount reaches MaxUses.
-    */
-    get UseCount(): number {
-        return this.Get('UseCount');
-    }
-    set UseCount(value: number) {
-        this.Set('UseCount', value);
-    }
-
-    /**
-    * * Field Name: CreatedByUserID
-    * * Display Name: Created By User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    * * Description: Foreign key to User — the internal user who created/shared this invite. Audit trail for who granted external access.
-    */
-    get CreatedByUserID(): string {
-        return this.Get('CreatedByUserID');
-    }
-    set CreatedByUserID(value: string) {
-        this.Set('CreatedByUserID', value);
-    }
-
-    /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Consumed
-    *   * Expired
-    *   * Revoked
-    * * Description: Lifecycle status: Active (redeemable), Consumed (single-use link fully redeemed), Revoked (manually disabled), Expired (past ExpiresAt). Revoking an unconsumed link is the primary revocation mechanism.
-    */
-    get Status(): 'Active' | 'Consumed' | 'Expired' | 'Revoked' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Active' | 'Consumed' | 'Expired' | 'Revoked') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: IdentityMode
-    * * Display Name: Identity Mode
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: email
-    * * Value List Type: List
-    * * Possible Values 
-    *   * anonymous
-    *   * email
-    * * Description: Identity resolution mode. 'email' (default, legacy): redemption provisions/links a per-email user and enforcement rides that user's DB roles. 'anonymous': all redemptions resolve to the shared Anonymous principal (an attribution anchor, not a permission holder); scope is carried per-session in the minted JWT claims, never as roles on that user.
-    */
-    get IdentityMode(): 'anonymous' | 'email' {
-        return this.Get('IdentityMode');
-    }
-    set IdentityMode(value: 'anonymous' | 'email') {
-        this.Set('IdentityMode', value);
-    }
-
-    /**
-    * * Field Name: Kind
-    * * Display Name: Kind
-    * * SQL Data Type: nvarchar(30)
-    * * Default Value: app-session
-    * * Value List Type: List
-    * * Possible Values 
-    *   * anonymous-embed
-    *   * app-session
-    *   * resource-share
-    * * Description: Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. 'app-session' (default): the legacy app+role session. 'resource-share': scoped to a single resource (ResourceTypeID/ResourceID). 'anonymous-embed': framed in an external site (requires allowed domains + tier capability).
-    */
-    get Kind(): 'anonymous-embed' | 'app-session' | 'resource-share' {
-        return this.Get('Kind');
-    }
-    set Kind(value: 'anonymous-embed' | 'app-session' | 'resource-share') {
-        this.Set('Kind', value);
-    }
-
-    /**
-    * * Field Name: ResourceTypeID
-    * * Display Name: Resource Type ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Resource Types (vwResourceTypes.ID)
-    * * Description: For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link's reach to dependent data is admitted at runtime via FK-reachable resource-pinned row-level security, not an enumerated list. NULL for app-session invites.
-    */
-    get ResourceTypeID(): string | null {
-        return this.Get('ResourceTypeID');
-    }
-    set ResourceTypeID(value: string | null) {
-        this.Set('ResourceTypeID', value);
-    }
-
-    /**
-    * * Field Name: ResourceID
-    * * Display Name: Resource ID
-    * * SQL Data Type: nvarchar(450)
-    * * Description: For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource's key type). NULL for app-session invites.
-    */
-    get ResourceID(): string | null {
-        return this.Get('ResourceID');
-    }
-    set ResourceID(value: string | null) {
-        this.Set('ResourceID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Application
-    * * Display Name: Application
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Application(): string {
-        return this.Get('Application');
-    }
-
-    /**
-    * * Field Name: Role
-    * * Display Name: Role
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Role(): string {
-        return this.Get('Role');
-    }
-
-    /**
-    * * Field Name: CreatedByUser
-    * * Display Name: Created By User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get CreatedByUser(): string {
-        return this.Get('CreatedByUser');
-    }
-
-    /**
-    * * Field Name: ResourceType
-    * * Display Name: Resource Type
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ResourceType(): string | null {
-        return this.Get('ResourceType');
-    }
-}
-
-
-/**
- * MJ: Magic Link Redemptions - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: MagicLinkRedemption
- * * Base View: vwMagicLinkRedemptions
- * * @description One row per magic-link redemption ATTEMPT (success or failure). Provides per-use redemption history and forensic visibility into token scanning/brute-force. Distinct from MagicLinkInvite, which keeps only an aggregate UseCount + last ConsumedAt.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Magic Link Redemptions')
-export class MJMagicLinkRedemptionEntity extends BaseEntity<MJMagicLinkRedemptionEntityType> {
-    /**
-    * Loads the MJ: Magic Link Redemptions record from the database
-    * @param ID: string - primary key value to load the MJ: Magic Link Redemptions record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJMagicLinkRedemptionEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: InviteID
-    * * Display Name: Invite ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
-    * * Description: Foreign key to MagicLinkInvite. NULLABLE: a redemption attempt against a token that matches no invite (not_found — the signature of scanning/brute-force) has no invite to reference but is still logged.
-    */
-    get InviteID(): string | null {
-        return this.Get('InviteID');
-    }
-    set InviteID(value: string | null) {
-        this.Set('InviteID', value);
-    }
-
-    /**
-    * * Field Name: AttemptedAt
-    * * Display Name: Attempted At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: sysutcdatetime()
-    * * Description: Timestamp of the redemption attempt (UTC). Defaults to the time of insert.
-    */
-    get AttemptedAt(): Date {
-        return this.Get('AttemptedAt');
-    }
-    set AttemptedAt(value: Date) {
-        this.Set('AttemptedAt', value);
-    }
-
-    /**
-    * * Field Name: Outcome
-    * * Display Name: Outcome
-    * * SQL Data Type: nvarchar(30)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * consumed
-    *   * expired
-    *   * invalid
-    *   * not_found
-    *   * provisioning_failed
-    *   * revoked
-    *   * server_error
-    *   * success
-    * * Description: Outcome of the attempt: 'success', or one of the redemption error codes (not_found, expired, consumed, revoked, invalid, provisioning_failed, server_error). Mirrors the RedeemErrorCode union in the server code.
-    */
-    get Outcome(): 'consumed' | 'expired' | 'invalid' | 'not_found' | 'provisioning_failed' | 'revoked' | 'server_error' | 'success' {
-        return this.Get('Outcome');
-    }
-    set Outcome(value: 'consumed' | 'expired' | 'invalid' | 'not_found' | 'provisioning_failed' | 'revoked' | 'server_error' | 'success') {
-        this.Set('Outcome', value);
-    }
-
-    /**
-    * * Field Name: IPAddress
-    * * Display Name: IP Address
-    * * SQL Data Type: nvarchar(64)
-    * * Description: Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment's magicLink.audit.ipStorage policy. NULL when unavailable or policy is 'none'.
-    */
-    get IPAddress(): string | null {
-        return this.Get('IPAddress');
-    }
-    set IPAddress(value: string | null) {
-        this.Set('IPAddress', value);
-    }
-
-    /**
-    * * Field Name: UserAgent
-    * * Display Name: User Agent
-    * * SQL Data Type: nvarchar(512)
-    * * Description: User-Agent header of the redeeming client. NULL when unavailable.
-    */
-    get UserAgent(): string | null {
-        return this.Get('UserAgent');
-    }
-    set UserAgent(value: string | null) {
-        this.Set('UserAgent', value);
-    }
-
-    /**
-    * * Field Name: Origin
-    * * Display Name: Origin
-    * * SQL Data Type: nvarchar(512)
-    * * Description: Origin header of the redemption request. Retained for embed/domain forensics (which host framed or initiated the redemption). NULL for direct (non-embedded) redemptions.
-    */
-    get Origin(): string | null {
-        return this.Get('Origin');
-    }
-    set Origin(value: string | null) {
-        this.Set('Origin', value);
-    }
-
-    /**
-    * * Field Name: ProvisionedUserID
-    * * Display Name: Provisioned User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    * * Description: Foreign key to the User provisioned/linked by a SUCCESSFUL redemption. NULL on failed attempts and on (future) anonymous redemptions that resolve to a shared principal rather than a per-email user.
-    */
-    get ProvisionedUserID(): string | null {
-        return this.Get('ProvisionedUserID');
-    }
-    set ProvisionedUserID(value: string | null) {
-        this.Set('ProvisionedUserID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: ProvisionedUser
-    * * Display Name: Provisioned User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get ProvisionedUser(): string | null {
-        return this.Get('ProvisionedUser');
     }
 }
 

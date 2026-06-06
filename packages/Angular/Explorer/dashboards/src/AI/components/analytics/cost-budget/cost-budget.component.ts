@@ -11,6 +11,8 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
+import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -24,6 +26,8 @@ interface PromptRunRecord {
     TokensPrompt: number | null;
     TokensCompletion: number | null;
     TokensUsed: number | null;
+    TokensCacheRead: number | null;
+    TokensCacheWrite: number | null;
     ModelID: string | null;
     Model: string | null;
     VendorID: string | null;
@@ -62,6 +66,10 @@ interface CostByModelRow {
     Runs: number;
     InputTokens: number;
     OutputTokens: number;
+    CacheReadTokens: number;
+    CacheWriteTokens: number;
+    CacheHitRate: number;
+    CacheSavings: number;
     InputCost: number;
     OutputCost: number;
     TotalCost: number;
@@ -70,8 +78,25 @@ interface CostByModelRow {
 
 const FIELDS = [
     'ID', 'RunAt', 'Cost', 'TotalCost', 'TokensPrompt', 'TokensCompletion',
-    'TokensUsed', 'ModelID', 'Model', 'VendorID', 'Vendor', 'Success'
+    'TokensUsed', 'TokensCacheRead', 'TokensCacheWrite', 'ModelID', 'Model', 'VendorID', 'Vendor', 'Success'
 ];
+
+interface ModelCostRow {
+    ModelID: string | null;
+    VendorID: string | null;
+    InputPricePerUnit: number | null;
+    OutputPricePerUnit: number | null;
+    CacheReadPricePerUnit: number | null;
+    CacheWritePricePerUnit: number | null;
+    UnitType: string | null;
+}
+
+// AIModelCost UnitType name -> token divisor, matching the BasePriceUnitType driver classes.
+const UNIT_DIVISORS: Record<string, number> = {
+    'Per Million Tokens': 1_000_000,
+    'Per Hundred Thousand Tokens': 100_000,
+    'Per Thousand Tokens': 1_000
+};
 
 const TIME_RANGE_OPTIONS = ['Today', '7d', '30d', 'MTD'];
 
@@ -209,15 +234,17 @@ const TREEMAP_COLORS = [
                                 <th class="col-numeric">Runs</th>
                                 <th class="col-numeric">Input Tokens</th>
                                 <th class="col-numeric">Output Tokens</th>
+                                <th class="col-numeric" title="Share of input tokens served from the provider's prompt cache">Cache Hit</th>
                                 <th class="col-numeric">Input Cost</th>
                                 <th class="col-numeric">Output Cost</th>
                                 <th class="col-numeric">Total Cost</th>
+                                <th class="col-numeric" title="Net dollars saved by caching vs. full input pricing (requires cache rates on AI Model Costs)">Cache Saved</th>
                                 <th class="col-numeric">% of Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (CostByModelRows.length === 0) {
-                                <tr><td colspan="9" class="empty-row">No data available</td></tr>
+                                <tr><td colspan="11" class="empty-row">No data available</td></tr>
                             }
                             @for (row of CostByModelRows; track row.Model) {
                                 <tr>
@@ -226,9 +253,11 @@ const TREEMAP_COLORS = [
                                     <td class="cell-numeric">{{ row.Runs | number }}</td>
                                     <td class="cell-numeric">{{ row.InputTokens | number }}</td>
                                     <td class="cell-numeric">{{ row.OutputTokens | number }}</td>
+                                    <td class="cell-numeric">{{ (row.CacheReadTokens + row.CacheWriteTokens) > 0 ? ((row.CacheHitRate * 100 | number:'1.0-0') + '%') : '—' }}</td>
                                     <td class="cell-numeric">{{ FormatCurrency(row.InputCost, 4) }}</td>
                                     <td class="cell-numeric">{{ FormatCurrency(row.OutputCost, 4) }}</td>
                                     <td class="cell-numeric cell-cost">{{ FormatCurrency(row.TotalCost) }}</td>
+                                    <td class="cell-numeric">{{ row.CacheSavings > 0 ? FormatCurrency(row.CacheSavings, 4) : '—' }}</td>
                                     <td class="cell-numeric">{{ row.PercentOfTotal | number:'1.1-1' }}%</td>
                                 </tr>
                             }
@@ -631,6 +660,10 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     private allRuns: PromptRunRecord[] = [];
     private previousPeriodRuns: PromptRunRecord[] = [];
 
+    // Per model+vendor cache pricing (rates already normalized to currency-per-token). Empty until
+    // AIModelCost cache rates are configured — savings then stays 0 (surfaced as "Set rates").
+    private cacheRates = new Map<string, CacheRate>();
+
     ngOnInit(): void {
         this.initialized = true;
         this.LoadData();
@@ -662,9 +695,9 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     }
 
     public ExportCSV(): void {
-        const header = 'Model,Vendor,Runs,Input Tokens,Output Tokens,Input Cost,Output Cost,Total Cost,% of Total';
+        const header = 'Model,Vendor,Runs,Input Tokens,Output Tokens,Cache Read Tokens,Cache Write Tokens,Cache Hit Rate %,Input Cost,Output Cost,Total Cost,Cache Saved,% of Total';
         const rows = this.CostByModelRows.map(r =>
-            `"${r.Model}","${r.Vendor}",${r.Runs},${r.InputTokens},${r.OutputTokens},${r.InputCost.toFixed(6)},${r.OutputCost.toFixed(6)},${r.TotalCost.toFixed(6)},${r.PercentOfTotal.toFixed(1)}`
+            `"${r.Model}","${r.Vendor}",${r.Runs},${r.InputTokens},${r.OutputTokens},${r.CacheReadTokens},${r.CacheWriteTokens},${(r.CacheHitRate * 100).toFixed(1)},${r.InputCost.toFixed(6)},${r.OutputCost.toFixed(6)},${r.TotalCost.toFixed(6)},${r.CacheSavings.toFixed(6)},${r.PercentOfTotal.toFixed(1)}`
         );
         const csv = [header, ...rows].join('\n');
         this.downloadCSV(csv, 'cost-by-model.csv');
@@ -684,7 +717,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             const currentFilter = this.combineDateAndModelFilter(currentStart, now, modelFilter);
             const prevFilter = this.combineDateAndModelFilter(previousStart, currentStart, modelFilter);
 
-            const [currentResult, prevResult] = await rv.RunViews([
+            const [currentResult, prevResult, rateResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: AI Prompt Runs',
                     ExtraFilter: currentFilter,
@@ -698,11 +731,18 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                     Fields: FIELDS,
                     OrderBy: 'RunAt ASC',
                     ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: AI Model Costs',
+                    ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
+                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitType'],
+                    ResultType: 'simple'
                 }
             ]);
 
             this.allRuns = (currentResult?.Results ?? []) as PromptRunRecord[];
             this.previousPeriodRuns = (prevResult?.Results ?? []) as PromptRunRecord[];
+            this.buildCacheRateMap(rateResult?.Results ?? []);
 
             this.computeKpis();
             this.computeDailyBars();
@@ -714,6 +754,41 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             this.IsLoading = false;
             this.cdr.detectChanges();
         }
+    }
+
+    // ── Cache pricing ──
+
+    /** Stable map key for a model+vendor pair (UUIDs normalized for case-insensitive matching). */
+    private rateKey(modelID: string | null, vendorID: string | null): string {
+        return `${NormalizeUUID(modelID ?? '')}|${NormalizeUUID(vendorID ?? '')}`;
+    }
+
+    /** The cache rate for a run's model+vendor, or undefined when no active cost row is configured. */
+    private rateFor(run: PromptRunRecord): CacheRate | undefined {
+        return this.cacheRates.get(this.rateKey(run.ModelID, run.VendorID));
+    }
+
+    /** Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token. */
+    private buildCacheRateMap(rows: ModelCostRow[]): void {
+        this.cacheRates.clear();
+        for (const row of rows) {
+            const divisor = UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+            const inputRate = (row.InputPricePerUnit ?? 0) / divisor;
+            // Cache read/write fall back to the input rate when no distinct rate is recorded — exactly
+            // as the server-side cost calculator does — which makes the corresponding savings term 0.
+            const cacheReadRate = (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
+            const cacheWriteRate = (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
+            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { inputRate, cacheReadRate, cacheWriteRate });
+        }
+    }
+
+    /** Sum net cache savings across a set of runs using each run's model+vendor rate. */
+    private sumCacheSavings(runs: PromptRunRecord[]): number {
+        return runs.reduce((total, run) => total + netCacheSavings({
+            uncachedInputTokens: 0,
+            cacheReadTokens: run.TokensCacheRead ?? 0,
+            cacheWriteTokens: run.TokensCacheWrite ?? 0
+        }, this.rateFor(run)), 0);
     }
 
     // ── Computations ──
@@ -771,6 +846,43 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 Icon: 'fa-solid fa-chart-line'
             }
         ];
+
+        this.appendCacheKpis();
+    }
+
+    /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period runs). */
+    private appendCacheKpis(): void {
+        const totals: CacheTokenTotals = { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        for (const r of this.allRuns) {
+            totals.uncachedInputTokens += r.TokensPrompt ?? 0;
+            totals.cacheReadTokens += r.TokensCacheRead ?? 0;
+            totals.cacheWriteTokens += r.TokensCacheWrite ?? 0;
+        }
+        const savings = this.sumCacheSavings(this.allRuns);
+        const activity = hasCacheActivity(totals);
+
+        this.CostKpis.push({
+            Label: 'Cache Hit Rate',
+            Value: (cacheHitRate(totals) * 100).toFixed(1) + '%',
+            Delta: null,
+            DeltaDirection: 'stable',
+            Highlighted: false,
+            Icon: 'fa-solid fa-bolt'
+        });
+
+        // Savings requires cache rates on AIModelCost. When cache engaged but no savings computed,
+        // it means rates aren't configured yet — say so rather than implying $0 was saved.
+        const savingsValue = savings > 0
+            ? this.FormatCurrency(savings)
+            : (activity ? 'Set rates' : '$0.00');
+        this.CostKpis.push({
+            Label: 'Saved via Cache',
+            Value: savingsValue,
+            Delta: null,
+            DeltaDirection: 'stable',
+            Highlighted: savings > 0,
+            Icon: 'fa-solid fa-piggy-bank'
+        });
     }
 
     private computeDailyBars(): void {
@@ -837,6 +949,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         for (const [, modelRuns] of groups) {
             const inputTokens = modelRuns.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0);
             const outputTokens = modelRuns.reduce((s, r) => s + (r.TokensCompletion ?? 0), 0);
+            const cacheReadTokens = modelRuns.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
+            const cacheWriteTokens = modelRuns.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
             const cost = modelRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
 
             // Approximate input/output cost split based on token ratio
@@ -850,6 +964,10 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 Runs: modelRuns.length,
                 InputTokens: inputTokens,
                 OutputTokens: outputTokens,
+                CacheReadTokens: cacheReadTokens,
+                CacheWriteTokens: cacheWriteTokens,
+                CacheHitRate: cacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
+                CacheSavings: this.sumCacheSavings(modelRuns),
                 InputCost: inputCost,
                 OutputCost: outputCost,
                 TotalCost: cost,

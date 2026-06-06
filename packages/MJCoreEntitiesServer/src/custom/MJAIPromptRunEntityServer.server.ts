@@ -129,18 +129,18 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 return;
             }
             
-            // Cost must be priced on TOTAL input tokens (uncached/net-new + cache reads + cache
-            // writes). TokensPrompt now holds only the UNCACHED ("net-new") input count, with cache
-            // tokens carried separately in TokensCacheRead/TokensCacheWrite. Summing them reconstructs
-            // the gross input count the provider processed, so pricing matches today's behavior and
-            // cached tokens are not silently dropped (which would under-count cost).
-            const totalInputTokens =
-                (this.TokensPrompt ?? 0) + (this.TokensCacheRead ?? 0) + (this.TokensCacheWrite ?? 0);
-
-            const normalizedCost = priceCalculator.CalculateNormalizedCost(
+            // Price each input bucket at its own rate: uncached/net-new (TokensPrompt) at the
+            // standard input rate, cache reads/writes at CacheReadPricePerUnit/CacheWritePricePerUnit
+            // when the cost row records them. When those cache rates are NULL the calculator falls
+            // back to the input rate, so the result is identical to the prior single-bucket behavior
+            // for models without cache pricing — while models that DO have cache rates get the
+            // (usually much cheaper) cached-token cost instead of being billed as full input.
+            const normalizedCost = priceCalculator.CalculateNormalizedCostWithCache(
                 activeCost,
-                totalInputTokens,
-                this.TokensCompletion
+                this.TokensPrompt ?? 0,
+                this.TokensCacheRead ?? 0,
+                this.TokensCacheWrite ?? 0,
+                this.TokensCompletion ?? 0
             );
             
             // Set the cost fields

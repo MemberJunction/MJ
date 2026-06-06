@@ -6,3 +6,4 @@
 export * from './AgentScheduledJobDriver';
 export * from './ActionScheduledJobDriver';
 export * from './IntegrationSyncScheduledJobDriver';
+export * from './AgentRunSweepScheduledJobDriver';

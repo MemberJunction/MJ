@@ -22,6 +22,9 @@ interface PromptRunRecord {
     Success: boolean;
     Cost: number | null;
     TokensUsed: number | null;
+    TokensPrompt: number | null;
+    TokensCacheRead: number | null;
+    TokensCacheWrite: number | null;
     ExecutionTimeMS: number | null;
 }
 
@@ -44,6 +47,7 @@ interface PeakSummary {
     Value: string;
     Count: number;
     Icon: string;
+    CountUnit?: string; // defaults to 'runs' in the template
 }
 
 interface HourlyBar {
@@ -57,7 +61,7 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 const FIELDS: string[] = [
-    'ID', 'RunAt', 'Success', 'Cost', 'TokensUsed', 'ExecutionTimeMS'
+    'ID', 'RunAt', 'Success', 'Cost', 'TokensUsed', 'TokensPrompt', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS'
 ];
 
 @Component({
@@ -146,7 +150,7 @@ const FIELDS: string[] = [
                                 <div class="peak-card__content">
                                     <div class="peak-card__label">{{ peak.Label }}</div>
                                     <div class="peak-card__value">{{ peak.Value }}</div>
-                                    <div class="peak-card__count">{{ peak.Count | number }} runs</div>
+                                    <div class="peak-card__count">{{ peak.Count | number }} {{ peak.CountUnit || 'runs' }}</div>
                                 </div>
                             </div>
                         }
@@ -602,7 +606,7 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
                 this.HeatmapCells = this.buildHeatmap(dayCounts);
                 this.DayDistributions = this.buildDayDistributions(dayCounts);
                 this.HourlyBars = this.buildHourlyBars(dayCounts);
-                this.PeakSummaries = this.buildPeakSummaries(dayCounts);
+                this.PeakSummaries = this.buildPeakSummaries(dayCounts, runs);
             }
         } catch (err) {
             console.error('Usage patterns data load failed:', err);
@@ -696,7 +700,7 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
         }));
     }
 
-    private buildPeakSummaries(dayCounts: number[][]): PeakSummary[] {
+    private buildPeakSummaries(dayCounts: number[][], runs: PromptRunRecord[]): PeakSummary[] {
         const hourSums = HOURS.map(h =>
             dayCounts.reduce((sum, dayHours) => sum + dayHours[h], 0)
         );
@@ -741,7 +745,22 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
             Icon: 'fa-solid fa-moon'
         };
 
-        return [busiestHour, busiestDay, quietest];
+        // Overall prompt-cache hit rate for the period (cache reads / total input processed)
+        let cacheRead = 0, inputForHit = 0;
+        for (const r of runs) {
+            const read = r.TokensCacheRead ?? 0;
+            cacheRead += read;
+            inputForHit += (r.TokensPrompt ?? 0) + read + (r.TokensCacheWrite ?? 0);
+        }
+        const cacheHitRate: PeakSummary = {
+            Label: 'Cache Hit Rate',
+            Value: inputForHit > 0 ? `${Math.round((cacheRead / inputForHit) * 100)}%` : '—',
+            Count: cacheRead,
+            Icon: 'fa-solid fa-bolt',
+            CountUnit: 'cached tokens'
+        };
+
+        return [busiestHour, busiestDay, quietest, cacheHitRate];
     }
 
     // ── Utility helpers ──

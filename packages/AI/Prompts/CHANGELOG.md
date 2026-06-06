@@ -1,5 +1,37 @@
 # @memberjunction/ai-prompts
 
+## 5.39.0
+
+### Minor Changes
+
+- 1b0f355: Loop agent prompt improvements for cache optimization. Capture cache-read and cache-write token counts from every LLM provider that reports them (Anthropic, OpenAI, Gemini, Groq, Cerebras, Fireworks, Azure, Bedrock) and surface them on AI Prompt Runs and Agent Runs. Adds `CacheReadTokens`/`CacheWriteTokens` columns to `AIPromptRun` (migration included — run CodeGen after applying), normalizes cache-token accounting in `baseModel` so usage totals are consistent across providers, and enables Gemini implicit/explicit cache reporting. The Prompt Run form and Agent Run analytics now display cache hit/write token breakdown
+- 34fe6d1: Capture and surface AI prompt-cache cost across providers — OpenRouter provider-reported cost passthrough; per-model cache read/write pricing on AI Model Costs with cache-aware cost calculation; cache-token rollups on AI Prompt Runs and Agent Runs; and cache hit-rate + dollar-savings analytics across the AI dashboards (Cost & Budget, Model Performance, Prompt Runs, Usage Patterns, Executive Summary) and the prompt-run / agent-run detail views. Includes a migration adding cache columns — run CodeGen after applying.
+
+### Patch Changes
+
+- 8c39dd9: Wire Prompt.ModelSpecificResponseFormat through AIPromptRunner to the Gemini provider, and map responseFormat correctly so JSON mode sets responseMimeType=application/json and ModelSpecific applies the prompt-supplied config (e.g. responseSchema) to the Gemini model options.
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/credentials@5.39.0
+  - @memberjunction/templates-base-types@5.39.0
+  - @memberjunction/templates@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

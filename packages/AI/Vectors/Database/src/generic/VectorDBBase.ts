@@ -4,6 +4,7 @@ import { BaseRequestParams, BaseResponse, CreateIndexParams,
         VectorRecord } from "./record";
 import { HybridQueryOptions, QueryOptions } from './query.types';
 import { SharedIndexFilterOptions, VectorMetadataFilter } from './MetadataFilter';
+import { ColocatedQueryOptions, ColocatedQueryResult, IColocatedVectorHost, IsColocatedVectorHost } from './colocated.types';
 
 export abstract class VectorDBBase {
     private _apiKey: string;
@@ -134,5 +135,90 @@ export abstract class VectorDBBase {
      */
     public BuildMetadataFilter(options: SharedIndexFilterOptions): object | undefined {
         return VectorMetadataFilter.FromOptions(options);
+    }
+
+    // ----------------------------------------------------------------
+    //  Colocated (in-database) vector support
+    // ----------------------------------------------------------------
+
+    /**
+     * The host relational connection a colocated provider borrows to store and query
+     * vectors in the same database as the application's entity data. `undefined` until
+     * {@link SetColocatedHost} (or {@link TryWireColocatedHost}) is called.
+     */
+    protected ColocatedHost: IColocatedVectorHost | undefined;
+
+    /**
+     * Whether this provider stores vectors inside the application's relational database and
+     * can resolve query results to entity records without an external mapping hop. Override
+     * and return `true` in colocated providers (e.g. `PgVectorColocated`, `SQLServerVectorDatabase`).
+     */
+    public get SupportsColocatedQuery(): boolean {
+        return false;
+    }
+
+    /**
+     * Wire in the host relational connection so this provider reuses it for colocated
+     * storage and queries instead of opening its own pool. No-op semantics for providers
+     * that ignore it; colocated providers require it before any operation.
+     */
+    public SetColocatedHost(host: IColocatedVectorHost): void {
+        this.ColocatedHost = host;
+    }
+
+    /**
+     * Convenience used by callers that hold an opaque provider reference (the active MJ data
+     * provider). If `host` implements {@link IColocatedVectorHost} *and* this provider supports
+     * colocated queries, wire it in.
+     *
+     * @returns `true` if the host was wired in, `false` otherwise.
+     */
+    public TryWireColocatedHost(host: unknown): boolean {
+        if (this.SupportsColocatedQuery && IsColocatedVectorHost(host)) {
+            this.SetColocatedHost(host);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Run a colocated query that fuses a vector component with an optional keyword component
+     * in a single server-side statement, applying an optional metadata filter. Only meaningful
+     * when {@link SupportsColocatedQuery} is `true`; the default implementation throws to surface
+     * misuse on providers that don't support it.
+     */
+    public ColocatedQuery(_params: ColocatedQueryOptions, _contextUser?: UserInfo): Promise<ColocatedQueryResult> {
+        return Promise.reject(new Error('ColocatedQuery is not supported by this provider (SupportsColocatedQuery is false)'));
+    }
+
+    /**
+     * Build a standard SUCCESS {@link BaseResponse}. Shared across all drivers so every
+     * provider reports results in a uniform shape.
+     *
+     * @param data - The provider-specific payload to attach to the response.
+     */
+    protected wrapSuccessResponse(data: unknown): BaseResponse {
+        return {
+            success: true,
+            message: '',
+            data,
+        };
+    }
+
+    /**
+     * Build a standard FAILURE {@link BaseResponse}.
+     *
+     * **Always** return this (never a success response) from a `catch` block — returning a
+     * success response on error silently swallows real failures and makes callers, and the
+     * vectorization pipeline, believe an operation worked when it did not.
+     *
+     * @param message - Optional human-readable error detail; falls back to a generic message.
+     */
+    protected wrapFailureResponse(message?: string): BaseResponse {
+        return {
+            success: false,
+            message: message || 'An error occurred',
+            data: null,
+        };
     }
 }

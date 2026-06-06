@@ -183,6 +183,18 @@ interface PostMigrationResult {
   ApiRestarted: boolean;
   GitCommitSuccess: boolean;
   BranchName?: string;
+  /**
+   * Whether the run-wide CodeGen step succeeded. Undefined when CodeGen was
+   * skipped (no successful migration). When FALSE the migrations executed but
+   * CodeGen did NOT — so the affected entities may have no stored procedures
+   * (e.g. CODEGEN_DB creds that don't match the target DB platform, or a build
+   * that isn't present), and a sync would silently skip them with
+   * SchemaNotGenerated. A connector must NOT report success when its CodeGen
+   * failed, so this flows into each per-caller result's Success.
+   */
+  CodeGenSucceeded?: boolean;
+  /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
+  CodeGenError?: string;
 }
 
 /**
@@ -311,6 +323,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   private _ddlProvider: DatabaseProviderBase | null = null;
   private _codeGenRunner: IRSUCodeGenRunner | null = null;
   private _codeGenOutputPaths: string[] = [];
+  private _additionalSchemaInfoPath: string | null = null;
   private _outOfSync = false;
   private _outOfSyncSince: Date | null = null;
   private _lastRunAt: Date | null = null;
@@ -341,6 +354,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   public SetCodeGenOutputPaths(paths: string[]): void {
     this._codeGenOutputPaths = paths;
+  }
+
+  /**
+   * Set the additionalSchemaInfo file path that CodeGen reads (from mj.config.cjs
+   * `additionalSchemaInfo`). RSU writes its soft PK/FK config to THIS path so the
+   * subsequent CodeGen run actually finds it. Injected by the server at startup,
+   * mirroring SetCodeGenOutputPaths.
+   *
+   * Without injection, RSU falls back to RSU_ADDITIONAL_SCHEMA_INFO_PATH /
+   * 'additionalSchemaInfo.json' — a path that need not match CodeGen's configured
+   * one. When they diverge, RSU writes soft PKs to a file CodeGen never reads, and
+   * every integration table is skipped with "No primary key found". Keeping the two
+   * in lockstep is the whole point of this setter.
+   */
+  public SetAdditionalSchemaInfoPath(configuredPath: string): void {
+    this._additionalSchemaInfoPath = configuredPath;
+  }
+
+  /**
+   * The additionalSchemaInfo path RSU writes to, relative to WorkDir. Prefers the
+   * CodeGen-configured path (injected at startup) so writer and reader agree; falls
+   * back to the env/default only when nothing was injected.
+   */
+  private get additionalSchemaInfoPath(): string {
+    return this._additionalSchemaInfoPath ?? rsuConfig.AdditionalSchemaInfoPath;
   }
 
   // ─── Pending Work (post-restart tasks) ─────────────────────────
@@ -580,6 +618,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map((r) => r.Input)), sharedSteps);
 
     const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
+    // Thread the CodeGen success/failure into the post-migration result. A migration
+    // can ExecuteMigration:success yet leave its entity with NO spCreate/spUpdate procs
+    // if RunCodeGen failed — after which a sync silently skips the entity with
+    // SchemaNotGenerated (the connector looks "created" but isn't functional). Surface
+    // it so buildPerCallerResults FAILS the connector instead of passing silently.
+    result.CodeGenSucceeded = !!codegenOk;
+    if (!codegenOk) {
+      result.CodeGenError =
+        sharedSteps.find((s) => s.Name === 'RunCodeGen' && s.Status === 'failed')?.Message ??
+        'CodeGen failed after a successful migration — entities may be missing stored procedures/views';
+    }
     if (codegenOk) {
       const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
       if (compileOk) {
@@ -622,19 +671,29 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     postResult: PostMigrationResult,
   ): RSUPipelineBatchResult {
     this._lastRunAt = new Date();
-    this._lastRunResult = successfulItems.length > 0 ? 'success' : 'failed';
+    // A run-wide CodeGen failure means the migrations applied but the entities may have
+    // no stored procedures — treat the run as failed, not success.
+    const codeGenFailed = postResult.CodeGenSucceeded === false;
+    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed ? 'success' : 'failed';
 
     const results: RSUPipelineResult[] = itemResults.map((item) => {
       const allSteps = [...sharedSteps, ...item.Steps];
+      // A migration that executed but whose run-wide CodeGen failed is NOT a success —
+      // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
+      const codeGenFailedThisCaller = codeGenFailed && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed,
         MigrationFilePath: item.FilePath,
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
         BranchName: postResult.BranchName,
         Steps: allSteps,
-        ErrorMessage: item.Error,
-        ErrorStep: item.Error ? item.Steps.find((s) => s.Status === 'failed')?.Name : undefined,
+        ErrorMessage: codeGenFailedThisCaller ? postResult.CodeGenError ?? item.Error : item.Error,
+        ErrorStep: codeGenFailedThisCaller
+          ? 'RunCodeGen'
+          : item.Error
+            ? item.Steps.find((s) => s.Status === 'failed')?.Name
+            : undefined,
       };
 
       this.writeAuditLog(item.Input, result).catch((err) => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));
@@ -767,7 +826,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const directoriesToCheck = [
       nodePath.join(workDir, rsuConfig.MigrationsPath),
       nodePath.join(workDir, rsuConfig.PendingWorkPath),
-      dirname(nodePath.join(workDir, rsuConfig.AdditionalSchemaInfoPath)),
+      dirname(nodePath.join(workDir, this.additionalSchemaInfoPath)),
       rsuConfig.CodeGenDir,
       workDir, // pipeline log
     ];
@@ -888,7 +947,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('node:fs');
     const { join, dirname } = await import('node:path');
-    const configFilePath = join(rsuConfig.WorkDir, rsuConfig.AdditionalSchemaInfoPath);
+    const configFilePath = join(rsuConfig.WorkDir, this.additionalSchemaInfoPath);
 
     // Load existing config or start fresh
     // Format: { schemaName: [ { TableName, PrimaryKey?, ForeignKeys? }, ... ], ... }
@@ -962,11 +1021,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         finalBatches.push(batch);
         continue;
       }
-      // Split on statement-ending `;` (preserve the `;`) and re-group.
-      const statements = batch.split(/;\s*\n/g)
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
-        .map(s => s.endsWith(';') ? s : s + ';');
+      // Split on statement-ending `;` (preserve the `;`) and re-group — but NEVER inside a
+      // PostgreSQL dollar-quoted block (DO $$…$$ / function bodies / the integration view-drop
+      // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
+      // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
+      // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
+      const statements = GetDialect(this.Platform).SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));

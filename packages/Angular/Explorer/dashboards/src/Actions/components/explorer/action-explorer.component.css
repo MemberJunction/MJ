@@ -61,22 +61,7 @@
 .status-dot[data-status="Pending"]  { background: var(--mj-status-warning); }
 .status-dot[data-status="Disabled"] { background: var(--mj-status-error); }
 
-/* ──── Sort dropdown ──── */
-.dropdown-container {
-  position: relative;
-}
-.dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  min-width: 220px;
-  padding: 8px 0;
-}
+/* ──── Sort options (inside the Filters popover) ──── */
 .sort-option {
   display: flex;
   align-items: center;
@@ -107,37 +92,6 @@
 .sort-option .direction-icon {
   margin-left: auto;
   font-size: 11px;
-}
-
-/* ──── Active filter chips (in [toolbar] next to search) ──── */
-.active-filters {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-  color: var(--mj-text-primary);
-  border-radius: 14px;
-}
-.status-chip.removable {
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.status-chip.removable:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
-}
-.status-chip i {
-  font-size: 10px;
-  color: var(--mj-text-muted);
 }
 
 .action-explorer {
@@ -283,6 +237,8 @@
 }
 
 @media (max-width: 768px) {
+  /* Search-grow + .action-btn-label collapse are owned by the shared chrome
+     (page-header.scss) since search lives in the [toolbar] slot. None here. */
   .explorer-content {
     padding: 12px;
   }

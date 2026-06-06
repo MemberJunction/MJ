@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [bd95e83]
+- Updated dependencies [3b29882]
+  - @memberjunction/ng-ui-components@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

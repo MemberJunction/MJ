@@ -1,5 +1,28 @@
 # @memberjunction/ng-agents
 
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/ng-shared@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

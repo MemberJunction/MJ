@@ -646,7 +646,13 @@ ${permissions}
         const pkType = firstKey.Type.toLowerCase().trim();
         const pkHandledByStrategy =
             firstKey.AutoIncrement ||
-            ((pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1);
+            ((pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1) ||
+            // Composite PK: buildCreateInsertStrategy prepends every PK column explicitly. The
+            // generateInsertFieldString `isCallerSuppliedPK` exception would ALSO emit those same
+            // caller-supplied composite-PK columns, producing `column "x" specified more than once`
+            // on PostgreSQL (real bug on composite-PK association/junction tables). Exclude the PK
+            // from the auto field list so the strategy's prepend is the single source for them.
+            entity.PrimaryKeys.length > 1;
         const insertColumns = this.generateInsertFieldString(entity, entity.Fields, '', pkHandledByStrategy);
         const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', pkHandledByStrategy);
 
