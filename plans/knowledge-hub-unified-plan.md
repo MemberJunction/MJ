@@ -231,32 +231,59 @@ The defect this plan corrects — across Classify *and* Clustering — is **logi
 
 ---
 
-## Phase 6 — UserView Visualization Plug-in Architecture (OPTIONAL / exploratory)
+## Phase 6 — ViewType Plug-in Architecture (GREENLIT — Amith, 2026-06-07)
 
-> **Status: may-or-may-not implement.** Phases 0–5 are committed; this phase generalizes the KH Visualize surface into a **core, app-wide UserView capability**. Captured with enough detail to estimate and decide later (decision D7). Nothing here is required for Phases 0–5 to ship.
+> **Status: GREENLIT and detailed by Amith** (decision D7 = build it). Full verbatim design in
+> [`plans/p6-viewtype-plugin-design-from-amith.md`](./p6-viewtype-plugin-design-from-amith.md).
+> Build **all of the below EXCEPT T6.6 (filtered-view → cluster subset)**, which is queued for a
+> design discussion first.
 
-**Idea:** any saved `UserView` (or entity) can expose additional visualization "modes" beyond the grid — cluster, tag cloud, timeline, map, etc. — each contributed by a **plug-in class** that declares *whether it's available* for a given view/entity. Visualization becomes a pluggable, metadata-driven extension point rather than bespoke per-feature UI.
+**Idea:** any entity / saved `UserView` exposes pluggable **view types** beyond the grid — Cards,
+Timeline, Map, Cluster, … — each a registered Angular plug-in that declares *whether it's available*
+for a given entity. Totally generic: anyone registers a **viewer** class (impl the viewer interface)
++ a **prop-sheet** class (impl the prop-sheet interface) + an availability predicate, and it appears
+in the `ng-entity-viewer` switcher dynamically.
 
-### Proposed architecture (applies the §1 doctrine)
-- **Schema:**
-  - `UserView.AdditionalVisualizationsConfig` — a new **JSONType** column (fits the existing `GridState` / `FilterState` / `SortState` JSON pattern on UserView) holding an array of per-view visualization *instances* (visualization type + that instance's config).
-  - `MJ: User View Visualizations` — a new entity for persisted visualization instances where a real record is warranted (sharing, ownership), parallel to how `MJ: Cluster Analyses` persists.
-- **Plug-in registry (core, framework-agnostic):** each visualization *type* is a class registered via `@RegisterClass` (consistent with MJ's ClassFactory plug-in model), exposing:
-  1. **`IsAvailableFor(entity / view): boolean`** — the availability predicate. Examples: **cluster** → entity has vectors + an Entity Document; **tag cloud** → entity has a tag/text field or co-occurrence data; **timeline** → entity has ≥1 date field; **map** → entity has geo fields.
-  2. display metadata (name, icon, description).
-  3. the Angular component to mount (thin, consuming its own engine/transport).
-- **View-mode host UI:** a UserView gains a mode switch (Grid | Cluster | Tag Cloud | …) populated by the registry, **filtered by each plug-in's predicate**, and configured from `AdditionalVisualizationsConfig`. "Show those records only" falls out naturally — the active view's result set is the plug-in's input.
-- **Re-home Phase 2/5 components as the first two plug-ins:** the cluster scatter and tag cloud become registry plug-ins (no rewrite if Phase 5's forward-compat note is honored), instantly available on any compatible entity/view — realizing the "view type for a given entity" bullets.
-- **Shared drilldown** (Phase 5 T5.4) is reused across all plug-ins.
+### Decisions locked (Amith, 2026-06-07)
+1. **`UserView.ViewTypeID` = the view's currently-selected view type** (added in the v5.40 migration).
+   Today the selection is buried in `DisplayState.defaultMode`. Make `ViewTypeID` the source of truth.
+   **Backfill migration** maps existing `DisplayState.defaultMode` → `ViewTypeID`, **resilient**: must
+   not fail when the JSONPath/value is absent or unrecognized (default → Grid / leave null).
+2. **Per-view-type config = parallel array on `UserView.DisplayState`** (existing JSONType — no new
+   column), keyed by **ViewType UUID** so each type keeps its own config in parallel (switching
+   Map↔Timeline preserves both). Shape: `viewTypeConfigs?: { viewTypeId: string; config: <typed> }[]`.
+   ⚠️ Root CLAUDE.md bans `any` → use `Record<string, unknown>` (or per-plugin typed config), not `any`.
+   **Mechanism CONFIRMED (2026-06-07):** `metadata/entities/JSONType-interfaces/IDisplayState.ts` is the
+   source interface, wired via `.entity-field-jsontype-user-views.json`, emitted by CodeGen as
+   `MJUserViewEntity_IDisplayState` in `entity_subclasses.ts`. So: extend `IDisplayState.ts` →
+   `mj sync push` → CodeGen re-emits the typed interface for downstream use.
+3. **List == Grid** — one type, call it **"Grid"**.
+4. **Cluster plug-in availability** = entity has an Entity Document with vectors — **reuse the exact KH
+   availability check + the same scatter viewer + helper via a thin wrapper** (no duplicated logic).
+5. **No circular deps** — `ng-clustering` (Angular/Generic) is imported one-way by `ng-entity-viewer`
+   (Angular/Generic). Verified ng-clustering does not import ng-entity-viewer.
+6. **(was D8) Storage = hybrid:** `@RegisterClass` registry for view-type *classes* + JSON on
+   `DisplayState` for per-view *instances/config*. No new `MJ: User View Visualizations` entity for v1
+   (persisted Cluster Analyses already cover the "real record" case).
+7. **Generic & pluggable** — viewer interface + prop-sheet interface + availability predicate; cluster
+   is the proof a third party adds a type with zero host changes.
 
-### Tasks (high-level; refine if/when greenlit)
-
-- [ ] **T6.1 — Schema:** `UserView.AdditionalVisualizationsConfig` (JSONType) + `MJ: User View Visualizations` entity. Migration + CodeGen.
-- [ ] **T6.2 — Plug-in registry + base class** with the `IsAvailableFor` predicate contract (core package).
-- [ ] **T6.3 — View-mode host UI** on UserView — registry-driven and predicate-gated.
-- [ ] **T6.4 — Adopt cluster + tag cloud as plug-ins** (from Phases 2/5).
-- [ ] **T6.5 — Reference third plug-in (timeline)** to prove the predicate pattern (requires ≥1 date field).
-- [ ] **T6.6 — Client tools + tests.**
+### Tasks
+- [ ] **T6.1 — Backfill migration + `ViewTypeID` as source-of-truth.** Resilient JSONPath read of
+  `DisplayState.defaultMode` → set `UserView.ViewTypeID` (composite-PK-safe; never errors on missing data).
+- [ ] **T6.2 — Per-view-type config in `IDisplayState`.** Extend the JSONType interface (`viewTypeConfigs`
+  keyed by ViewType UUID), `mj sync push`, run CodeGen (authorized for this), use the emitted type downstream.
+- [ ] **T6.3 — Migrate the 4 existing view types (Grid, Cards, Timeline, Map) to the plug-in interface**
+  + ensure their `ViewType` metadata rows exist (seed via metadata-sync, not SQL).
+- [ ] **T6.4 — Cluster ViewType plug-in.** `IsAvailableFor` = entity has an Entity Doc with vectors
+  (shared helper); renders the existing scatter via a thin wrapper. Seed its `ViewType` row.
+- [ ] **T6.5 — Registry + host wiring** in `ng-entity-viewer`: predicate-gated switcher, prop-sheet
+  mounting, config read/write to `DisplayState.viewTypeConfigs`.
+- [ ] **T6.6 — (QUEUED, DISCUSS FIRST) filtered-view → cluster subset.** A filtered view must cluster only
+  its rows though vectors exist for all rows. Candidate: join/sub-query the view's PK set (composite-PK
+  aware) against `EntityRecordDocument` and pull vectors from its JSON (we do the cluster math ourselves,
+  not in the vector DB), provider-independent. **Do not build until discussed with Amith.**
+- [ ] **T6.7 — Client tools + tests.**
 
 ---
 
@@ -268,7 +295,7 @@ The defect this plan corrects — across Classify *and* Clustering — is **logi
 - **D4 (T2.1) — Cluster analysis sharing scope.** Owner-private with explicit share, app-wide, or role-scoped? Affects the `MJ: Cluster Analyses` schema (owner/sharing columns).
 - **D5 (phase ordering) — Confirm Phase 2 (Clustering) before Phase 3 (Setup).** Rationale: seed taxonomy (T3.4) reuses the clustering engine, and clustering is the cleanest place to set the architecture. If the team would rather ship Classify onboarding first, swap Phases 2 and 3 — but then T3.4 must either wait for the engine or ship its fallback single-prompt path first.
 - **D6 (T2.12) — 3D rendering tech.** SVG can't do 3D; pick a renderer (three.js / `regl-scatterplot` / other WebGL). New dependency decision. Keep the 2D SVG path for 2D mode.
-- **D7 (Phase 6 go/no-go) — Generalize to core UserView?** Ship visualization only as the KH "Visualize" surface (Phases 1–5), or also build the app-wide UserView plug-in architecture (Phase 6)? Phase 6 is higher-leverage but larger and touches core. Decide after Phase 5.
+- **D7 (Phase 6 go/no-go) — RESOLVED 2026-06-07: BUILD IT.** Amith greenlit the app-wide ViewType plug-in architecture with a detailed design (see Phase 6 + `plans/p6-viewtype-plugin-design-from-amith.md`). Build all of Phase 6 except T6.6 (filtered-subset), which is queued for discussion.
 - **D8 (T6.1) — Visualization config storage.** `MJ: User View Visualizations` entity vs. JSON-only on `UserView.AdditionalVisualizationsConfig` vs. hybrid (code `@RegisterClass` registry for *types* + JSON/entity for per-view *instances*). Recommendation: hybrid.
 - **D9 (T2.13) — Multi-entity embedding compatibility.** Hard-block mixing entity docs with different embedding models/dimensions (recommended for v1, with a clear UI message), or attempt per-doc projection + alignment (harder, fuzzier)?
 
@@ -291,5 +318,6 @@ The defect this plan corrects — across Classify *and* Clustering — is **logi
 
 > Append a dated entry each working session: phase/tasks touched, decisions, blockers, commit SHAs. Newest first.
 
+- **2026-06-07** — Phases 1–5 work landed on `knowledge-hub-classify-redesign` (PR #2737): clustering 3D/multi-entity/color-by + save UX; **taxonomy now generates a balanced governed hierarchy** (live cache + `parentIDForNew` governed nesting in BOTH bridges — the entity-source bridge was the real flat-taxonomy bug — + prompt rewrite + category-consolidation threshold; verified 0%→~71% nested); Content Item naming from entity name field; **Classify/Tags IA split** (no overlap); P2 onboarding; P3 global Activity indicator; tag-cache + NG0100 fixes; vector-health/duplicate-naming polish; **multi-provider provider-threading** through ClusteringEngine/EntityDocumentVectorSource/resolver/action; Transport-Layer Architecture guide. Full-repo unit suite 471/472 (lone `sql-converter` failure is a concurrency flake, passes standalone); fixed real mock-drift in content-autotagging + tag-engine + MJGlobal compliance. **Phase 6 GREENLIT** (D7) with Amith's detailed design — building all except T6.6 (filtered-subset, queued). Confirmed the `IDisplayState` JSONType→CodeGen mechanism for T6.2. Queued: Duplicates "flashy progress" bug.
 - **2026-06-03** — Expanded scope from Amith's KH-visualization bullets. Added cluster feature extensions to Phase 2 (T2.12 2D/3D, T2.13 multi-entity-doc clustering, T2.14 per-cluster label management, T2.15 build/modify client tools). Added **Phase 5 — Tag Clouds & the "Visualize" surface** (committed) reusing the existing `ng-word-cloud` + `TagCoOccurrenceEngine`. Added **Phase 6 — UserView Visualization Plug-in Architecture** as **optional/exploratory** (per-view `AdditionalVisualizationsConfig` JSONType + `MJ: User View Visualizations` entity + `@RegisterClass` plug-in registry with an `IsAvailableFor` predicate; cluster/tag-cloud/timeline as plug-ins). New decisions D6–D9 and risks R6–R8. Phase count now 0–6 (0–5 committed, 6 optional). No code changes yet.
 - **2026-06-02** — Plan authored. Unified the three Classify plans (audit/analytics, setup/onboarding, UX fixes) plus a new Clustering object-model phase into this single WBS. Established the Architectural Principles (§1: engine → resolver → transport helper → thin UI; Actions on top of engine for agents). Scoped Phase 0 Kendo hygiene (no live deps; ~86 stray refs/dead CSS/comments across ~25 files). No code changes yet. Open decisions D1–D5 pending. The three superseded plan files were folded in and deleted.
