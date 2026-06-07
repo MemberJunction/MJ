@@ -21,6 +21,7 @@
     "@memberjunction/global": "5.39.0",
     "@memberjunction/core-entities": "5.39.0",
     "@memberjunction/ai": "5.39.0",
+    "@memberjunction/ai-core-plus": "5.39.0",
     "@memberjunction/ai-vectors-memory": "5.39.0",
     "@memberjunction/aiengine": "5.39.0",
     "@memberjunction/ai-prompts": "5.39.0",

@@ -34,8 +34,13 @@
   "dependencies": {
     "@memberjunction/ai-vectors-memory": "5.39.0",
     "@memberjunction/core": "5.39.0",
+    "@memberjunction/core-entities": "5.39.0",
+    "@memberjunction/global": "5.39.0",
     "@memberjunction/graphql-dataprovider": "5.39.0",
+    "@memberjunction/ng-base-types": "5.39.0",
     "@memberjunction/ng-entity-card": "5.39.0",
+    "@memberjunction/ng-entity-viewer": "5.39.0",
+    "rxjs": "^7.8.2",
     "tslib": "^2.8.1",
     "umap-js": "^1.4.0"
   },

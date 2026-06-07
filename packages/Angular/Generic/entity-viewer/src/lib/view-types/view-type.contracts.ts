@@ -67,6 +67,18 @@ export interface IViewTypeDescriptor {
    * @param provider optional metadata provider (for multi-provider scenarios)
    */
   IsAvailableFor(entity: EntityInfo, provider?: IMetadataProvider): boolean;
+
+  /**
+   * Optional async hook to load any data this descriptor's {@link IsAvailableFor} predicate
+   * depends on (e.g. the Cluster view type needs the set of entities that have an active
+   * Entity Document with vectors). The host awaits this once — before computing availability —
+   * so the synchronous predicate can read from a now-populated cache. Implementations should
+   * be cheap/idempotent (typically `await SomeEngine.Instance.Config(false, ...)`). Omit when
+   * availability is computable purely from the {@link EntityInfo} (Grid/Cards/Timeline/Map).
+   *
+   * @param provider optional metadata provider (for multi-provider scenarios)
+   */
+  EnsureAvailabilityData?(provider?: IMetadataProvider): Promise<void>;
 }
 
 /**
@@ -152,6 +164,14 @@ export abstract class BaseViewTypeDescriptor implements IViewTypeDescriptor {
    */
   IsAvailableFor(_entity: EntityInfo, _provider?: IMetadataProvider): boolean {
     return true;
+  }
+
+  /**
+   * Default: nothing to preload. Override in subclasses whose availability predicate needs
+   * async data (e.g. the Cluster view type loading which entities have Entity Documents).
+   */
+  async EnsureAvailabilityData(_provider?: IMetadataProvider): Promise<void> {
+    // no-op by default
   }
 }
 

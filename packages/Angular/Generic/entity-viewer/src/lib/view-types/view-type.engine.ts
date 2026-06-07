@@ -85,13 +85,61 @@ export class ViewTypeEngine extends BaseEngine<ViewTypeEngine> {
       return [];
     }
 
-    const result: IViewTypeDescriptor[] = [];
+    return this.GetAvailableViewTypeRows(entity, provider).map(r => r.Descriptor);
+  }
+
+  /**
+   * Like {@link GetAvailableViewTypes} but returns each available view type's metadata
+   * row paired with its resolved descriptor — so callers that need the `MJ: View Types`
+   * row ID (for `UserView.ViewTypeID` persistence and per-view-type config keying) get
+   * both without a second lookup.
+   *
+   * @param entity the entity the viewer is displaying
+   * @param provider optional metadata provider (multi-provider scenarios)
+   */
+  public GetAvailableViewTypeRows(
+    entity: EntityInfo,
+    provider?: IMetadataProvider
+  ): Array<{ ViewType: MJViewTypeEntity; Descriptor: IViewTypeDescriptor }> {
+    if (!entity) {
+      return [];
+    }
+
+    const result: Array<{ ViewType: MJViewTypeEntity; Descriptor: IViewTypeDescriptor }> = [];
     for (const row of this._viewTypes) {
       const descriptor = this.GetDescriptor(row.DriverClass);
       if (descriptor && descriptor.IsAvailableFor(entity, provider)) {
-        result.push(descriptor);
+        result.push({ ViewType: row, Descriptor: descriptor });
       }
     }
     return result;
+  }
+
+  /**
+   * Awaits each registered descriptor's optional {@link IViewTypeDescriptor.EnsureAvailabilityData}
+   * hook so synchronous {@link GetAvailableViewTypeRows} predicates can read from now-populated
+   * caches (e.g. the Cluster view type preloading which entities have Entity Documents). Each
+   * DriverClass is prepared at most once; a descriptor whose hook throws simply stays unavailable.
+   *
+   * @param provider optional metadata provider (multi-provider scenarios)
+   */
+  public async EnsureAvailabilityData(provider?: IMetadataProvider): Promise<void> {
+    const prepared = new Set<string>();
+    await Promise.all(
+      this._viewTypes.map(async row => {
+        if (prepared.has(row.DriverClass)) {
+          return;
+        }
+        prepared.add(row.DriverClass);
+        const descriptor = this.GetDescriptor(row.DriverClass);
+        if (descriptor) {
+          try {
+            await descriptor.EnsureAvailabilityData(provider);
+          } catch {
+            // Availability data failed to load — the descriptor's predicate stays false.
+          }
+        }
+      })
+    );
   }
 }

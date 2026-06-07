@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone, ViewContainerRef, ComponentRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
@@ -35,19 +35,35 @@ import {
 } from '../entity-data-grid/events/grid-events';
 import { GridToolbarConfig, GridSelectionMode, ForeignKeyClickEvent } from '../entity-data-grid/models/grid-types';
 import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
-import { IViewTypeDescriptor, ViewTypeEngine } from '../view-types';
+import { IViewTypeDescriptor, IViewRenderer, ViewTypeEngine } from '../view-types';
 
 /**
  * A single entry in the view-mode switcher. Built either from the registry
  * (ViewTypeEngine descriptors) or from the hardcoded fallback list.
  */
 export interface ViewModeOption {
-  /** The legacy EntityViewMode value the host's [hidden]-based rendering switches on. */
-  mode: EntityViewMode;
+  /**
+   * Stable key for this option — the descriptor's `Name` (== `MJ: View Types.DriverClass`),
+   * e.g. "GridViewType", "ClusterViewType". Used as the `@for` track key and to identify the
+   * active option independent of the legacy {@link EntityViewMode}.
+   */
+  key: string;
+  /**
+   * The legacy EntityViewMode the host's built-in [hidden]-based rendering switches on, for
+   * the four built-in view types (Grid/Cards/Timeline/Map). `null` for plug-in view types
+   * (Cluster, third-party) which are dynamic-mounted via the descriptor's RendererComponent.
+   */
+  mode: EntityViewMode | null;
   /** User-facing label. */
   label: string;
   /** Font Awesome icon class. */
   icon: string;
+  /** True when this view type has no built-in block and must be dynamic-mounted. */
+  isDynamic: boolean;
+  /** The resolved descriptor (carries the RendererComponent + PropSheetComponent). */
+  descriptor: IViewTypeDescriptor;
+  /** The `MJ: View Types` row ID — for ViewTypeID persistence + per-view-type config keying. */
+  viewTypeId: string;
 }
 
 /**
@@ -497,6 +513,28 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     recordIds: string[];
   }>();
 
+  /**
+   * The initial/active view type to open in, by `MJ: View Types` row ID. Hosts that persist
+   * the selection (e.g. Explorer's `UserView.ViewTypeID`) bind this so the viewer opens in the
+   * saved type — built-in OR plug-in. Applied once the registry resolves; later user switches
+   * emit {@link viewTypeChange} for the host to persist.
+   */
+  @Input()
+  set ViewTypeID(value: string | null) {
+    this._initialViewTypeId = value;
+    // If options are already loaded, apply immediately; otherwise refreshAvailableViewTypes will.
+    if (value && this.availableViewTypes.length > 0) {
+      const opt = this.availableViewTypes.find(o => o.viewTypeId === value);
+      if (opt && opt.key !== this.activeViewTypeKey) {
+        this.applyViewTypeSelection(opt, false);
+      }
+    }
+  }
+  get ViewTypeID(): string | null {
+    return this._initialViewTypeId;
+  }
+  private _initialViewTypeId: string | null = null;
+
   // ========================================
   // INTERNAL STATE
   // ========================================
@@ -518,6 +556,76 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /** Whether the registry (ViewTypeEngine) successfully sourced the available modes. */
   public viewTypesFromRegistry: boolean = false;
+
+  /**
+   * The currently-active view type's stable key (descriptor Name). Tracks selection
+   * independent of the legacy {@link EntityViewMode} so plug-in (dynamic) view types
+   * are first-class. Null until the registry resolves.
+   */
+  public activeViewTypeKey: string | null = null;
+
+  /**
+   * The active option when a plug-in (dynamic) view type is selected; null when a built-in
+   * (Grid/Cards/Timeline/Map) is active. Drives the dynamic-mount host in the template.
+   */
+  public activeDynamicOption: ViewModeOption | null = null;
+
+  /** True when a plug-in view type is mounted (built-in blocks hide). */
+  public get isDynamicViewActive(): boolean {
+    return this.activeDynamicOption !== null;
+  }
+
+  /** Whether to render the switcher as a dropdown (many types) vs. an icon strip (few). */
+  public viewTypeDropdownOpen = false;
+
+  /**
+   * At or below this many available view types, the switcher renders as an icon strip;
+   * above it, as a compact dropdown to save horizontal space (Amith's real-estate concern).
+   */
+  public readonly viewTypeStripThreshold = 5;
+
+  /**
+   * Per-view-type configuration payloads, keyed by `MJ: View Types` row ID. Seeded from
+   * {@link viewTypeConfigsInput} and updated as plug-in renderers emit config changes;
+   * handed to each dynamic renderer on mount.
+   */
+  private viewTypeConfigById = new Map<string, Record<string, unknown>>();
+
+  /**
+   * Per-view-type configuration provided by the host (e.g. Explorer reading
+   * `UserView.DisplayState.viewTypeConfigs`). The active type is controlled separately via
+   * the `viewMode` / ViewTypeID inputs; this carries only the config payloads.
+   */
+  @Input()
+  set ViewTypeConfigs(value: Array<{ viewTypeId: string; config: Record<string, unknown> }> | null) {
+    this.viewTypeConfigById.clear();
+    for (const entry of value ?? []) {
+      if (entry?.viewTypeId) {
+        this.viewTypeConfigById.set(entry.viewTypeId, entry.config ?? {});
+      }
+    }
+    if (this.dynamicRendererRef && this.activeDynamicOption) {
+      this.pushDynamicRendererInputs();
+    }
+  }
+
+  /**
+   * Emitted when the active view type changes (built-in OR plug-in). Hosts persist this to
+   * `UserView.ViewTypeID`. Carries both the row ID and the DriverClass for convenience.
+   */
+  @Output() ViewTypeChange = new EventEmitter<{ viewTypeId: string; driverClass: string }>();
+
+  /**
+   * Emitted when a plug-in renderer mutates its own configuration. Hosts persist this into
+   * `UserView.DisplayState.viewTypeConfigs` (keyed by `viewTypeId`).
+   */
+  @Output() ViewTypeConfigChange = new EventEmitter<{ viewTypeId: string; config: Record<string, unknown> }>();
+
+  /** Anchor for dynamically-mounted plug-in view renderers. */
+  @ViewChild('dynamicViewHost', { read: ViewContainerRef }) private dynamicViewHost?: ViewContainerRef;
+
+  /** The currently-mounted plug-in renderer, if any. */
+  private dynamicRendererRef: ComponentRef<IViewRenderer> | null = null;
 
   public internalFilterText: string = '';
   public debouncedFilterText: string = '';
@@ -990,6 +1098,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   ngOnDestroy(): void {
+    this.unmountDynamicRenderer();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -1065,6 +1174,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         } else {
           this.updateFilteredCount();
         }
+        this.pushDynamicRendererInputs();   // client-side filter changed — refresh a mounted plug-in
         this.cdr.detectChanges();
       });
   }
@@ -1243,6 +1353,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         this.isLoading = false;
         this.pagination.isLoading = false;
         this.isInitialLoad = false;
+        this.pushDynamicRendererInputs();   // keep a mounted plug-in renderer in sync with new data
         this.cdr.detectChanges();
       });
 
@@ -1289,6 +1400,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     try {
       const provider = this.ProviderToUse;
       await ViewTypeEngine.Instance.Config(false, provider?.CurrentUser, provider ?? undefined);
+      // Let plug-in descriptors (e.g. Cluster) preload availability data before predicates run.
+      await ViewTypeEngine.Instance.EnsureAvailabilityData(provider ?? undefined);
       this.refreshAvailableViewTypes();
     } catch {
       // Engine unavailable / not seeded — keep the hardcoded fallback.
@@ -1310,31 +1423,183 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return;
     }
 
-    let descriptors: IViewTypeDescriptor[] = [];
+    let rows: Array<{ ViewType: { ID: string }; Descriptor: IViewTypeDescriptor }> = [];
     try {
-      descriptors = ViewTypeEngine.Instance.GetAvailableViewTypes(entity, this.ProviderToUse ?? undefined);
+      rows = ViewTypeEngine.Instance.GetAvailableViewTypeRows(entity, this.ProviderToUse ?? undefined);
     } catch {
-      descriptors = [];
+      rows = [];
     }
 
     const options: ViewModeOption[] = [];
-    for (const d of descriptors) {
-      const mode = driverClassToViewMode(d.Name);
-      // Only surface view types the host can actually render this round.
-      if (mode) {
-        options.push({ mode, label: d.DisplayName, icon: d.Icon ?? '' });
-      }
+    for (const { ViewType, Descriptor } of rows) {
+      const mode = driverClassToViewMode(Descriptor.Name);
+      options.push({
+        key: Descriptor.Name,
+        mode,                          // null for plug-in (dynamic) view types
+        label: Descriptor.DisplayName,
+        icon: Descriptor.Icon ?? '',
+        isDynamic: mode === null,
+        descriptor: Descriptor,
+        viewTypeId: ViewType.ID,
+      });
     }
 
     this.availableViewTypes = options;
     this.viewTypesFromRegistry = options.length > 0;
+
+    // Keep the active key valid: if the previously-active type is no longer available
+    // (entity changed), select — in priority order — the host-persisted ViewTypeID, then the
+    // option matching the current built-in mode, then the first available type.
+    if (options.length > 0 && !options.some(o => o.key === this.activeViewTypeKey)) {
+      const persisted = this._initialViewTypeId
+        ? options.find(o => o.viewTypeId === this._initialViewTypeId)
+        : undefined;
+      const fallback = persisted ?? options.find(o => o.mode === this.effectiveViewMode) ?? options[0];
+      this.applyViewTypeSelection(fallback, false);
+    }
+
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Returns the switcher option for the active view type (for the current-type chip in the
+   * switcher), or null before the registry resolves.
+   */
+  get activeViewTypeOption(): ViewModeOption | null {
+    return this.availableViewTypes.find(o => o.key === this.activeViewTypeKey) ?? null;
+  }
+
+  /**
+   * Selects a view type from the switcher. Built-in types route to {@link setViewMode}
+   * (preserving the rich grid/cards/timeline/map integration); plug-in types are
+   * dynamic-mounted via the descriptor's RendererComponent. Emits {@link viewTypeChange}
+   * so hosts can persist `UserView.ViewTypeID`.
+   */
+  selectViewType(option: ViewModeOption): void {
+    this.viewTypeDropdownOpen = false;
+    this.applyViewTypeSelection(option, true);
+  }
+
+  /**
+   * Applies a view-type selection. `emit` controls whether {@link viewTypeChange} fires
+   * (true for user actions, false for internal reconciliation).
+   */
+  private applyViewTypeSelection(option: ViewModeOption, emit: boolean): void {
+    this.activeViewTypeKey = option.key;
+
+    if (option.isDynamic) {
+      this.activeDynamicOption = option;
+      this.mountDynamicRenderer(option);
+    } else {
+      // Built-in: tear down any plug-in renderer and use the legacy [hidden] block.
+      this.unmountDynamicRenderer();
+      this.activeDynamicOption = null;
+      if (option.mode) {
+        this.setViewMode(option.mode);
+      }
+    }
+
+    if (emit) {
+      this.ViewTypeChange.emit({ viewTypeId: option.viewTypeId, driverClass: option.key });
+    }
+    this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // DYNAMIC (PLUG-IN) VIEW RENDERER MOUNTING
+  // ========================================
+
+  /**
+   * Mounts a plug-in view type's RendererComponent into the dynamic host, wires the
+   * {@link IViewRenderer} inputs, and subscribes to its selection/open/config outputs.
+   * Replaces any previously-mounted plug-in renderer.
+   */
+  private mountDynamicRenderer(option: ViewModeOption): void {
+    this.unmountDynamicRenderer();
+    const host = this.dynamicViewHost;
+    const componentType = option.descriptor.RendererComponent;
+    if (!host || !componentType) {
+      return;
+    }
+
+    const ref = host.createComponent<IViewRenderer>(componentType as never);
+    this.dynamicRendererRef = ref;
+
+    // Wire outputs (the renderer's IViewRenderer EventEmitters).
+    const inst = ref.instance;
+    inst.recordSelected?.pipe(takeUntil(this.destroy$)).subscribe((r: unknown) => this.onDynamicRecordSelected(r));
+    inst.recordOpened?.pipe(takeUntil(this.destroy$)).subscribe((r: unknown) => this.onDynamicRecordOpened(r));
+    inst.configChanged
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe((cfg: unknown) => this.onDynamicConfigChanged(option.viewTypeId, (cfg ?? {}) as Record<string, unknown>));
+
+    this.pushDynamicRendererInputs();
+    ref.changeDetectorRef.detectChanges();
+  }
+
+  /** Destroys the mounted plug-in renderer (if any) and clears the host. */
+  private unmountDynamicRenderer(): void {
+    if (this.dynamicRendererRef) {
+      this.dynamicRendererRef.destroy();
+      this.dynamicRendererRef = null;
+    }
+    this.dynamicViewHost?.clear();
+  }
+
+  /**
+   * Pushes the current data/selection/config into the mounted plug-in renderer via
+   * `setInput` (which triggers the renderer's change detection correctly).
+   */
+  private pushDynamicRendererInputs(): void {
+    const ref = this.dynamicRendererRef;
+    const option = this.activeDynamicOption;
+    if (!ref || !option) {
+      return;
+    }
+    ref.setInput('entity', this.effectiveEntity);
+    ref.setInput('records', this.filteredRecords);
+    ref.setInput('selectedRecordId', this.selectedRecordId);
+    ref.setInput('filterText', this.debouncedFilterText);
+    ref.setInput('config', this.viewTypeConfigById.get(option.viewTypeId) ?? {});
+  }
+
+  private onDynamicRecordSelected(record: unknown): void {
+    const entity = this.effectiveEntity;
+    if (entity && record) {
+      const row = record as Record<string, unknown>;
+      this.recordSelected.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+    }
+  }
+
+  private onDynamicRecordOpened(record: unknown): void {
+    const entity = this.effectiveEntity;
+    if (entity && record) {
+      const row = record as Record<string, unknown>;
+      this.recordOpened.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+    }
+  }
+
+  private onDynamicConfigChanged(viewTypeId: string, config: Record<string, unknown>): void {
+    this.viewTypeConfigById.set(viewTypeId, config);
+    this.ViewTypeConfigChange.emit({ viewTypeId, config });
   }
 
   /**
    * Set the view mode and emit change event
    */
   setViewMode(mode: EntityViewMode): void {
+    // Switching to a built-in mode always tears down any active plug-in renderer and
+    // syncs the registry selection key so the switcher highlight stays correct, even when
+    // the parent drives this via the legacy [(viewMode)] binding or a timeline/map fallback.
+    if (this.isDynamicViewActive) {
+      this.unmountDynamicRenderer();
+      this.activeDynamicOption = null;
+    }
+    const matchingOption = this.availableViewTypes.find(o => o.mode === mode);
+    if (matchingOption) {
+      this.activeViewTypeKey = matchingOption.key;
+    }
+
     const previousMode = this.effectiveViewMode;
     if (previousMode !== mode) {
       this.internalViewMode = mode;

@@ -43,6 +43,7 @@
     "@memberjunction/graphql-dataprovider": "5.39.0",
     "@memberjunction/ng-artifacts": "5.39.0",
     "@memberjunction/ng-auth-services": "5.39.0",
+    "@memberjunction/ng-clustering": "5.39.0",
     "@memberjunction/ng-core-entity-forms": "5.39.0",
     "@memberjunction/ng-dashboard-viewer": "5.39.0",
     "@memberjunction/ng-dashboards": "5.39.0",

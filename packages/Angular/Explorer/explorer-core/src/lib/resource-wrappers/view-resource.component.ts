@@ -148,6 +148,12 @@ export class UserViewResource extends BaseResourceComponent {
     /** View mode from dashboard configuration (grid/cards/timeline/map) */
     public configuredViewMode: EntityViewMode | null = null;
 
+    /** The persisted active view type (UserView.ViewTypeID) — source of truth for which type opens. */
+    public configuredViewTypeId: string | null = null;
+
+    /** Per-view-type configuration from UserView.DisplayState.viewTypeConfigs. */
+    public viewTypeConfigs: Array<{ viewTypeId: string; config: Record<string, unknown> }> = [];
+
     /** Map render mode from dashboard configuration */
     public configuredMapRenderMode: 'point' | 'choropleth' | 'heatmap' = 'point';
 
@@ -288,6 +294,48 @@ export class UserViewResource extends BaseResourceComponent {
                 console.warn('Failed to parse GridState:', e);
                 this.gridState = null;
             }
+        }
+
+        // Active view type (source of truth) + per-view-type config from DisplayState.
+        this.configuredViewTypeId = this.viewEntity.ViewTypeID || null;
+        this.viewTypeConfigs = this.viewEntity.DisplayStateObject?.viewTypeConfigs ?? [];
+    }
+
+    /**
+     * Persist the user's active view-type selection to UserView.ViewTypeID. Fire-and-forget;
+     * only saved views (with an ID) are persisted — ad-hoc/dynamic views just keep it in memory.
+     */
+    public async onViewTypeChange(event: { viewTypeId: string; driverClass: string }): Promise<void> {
+        this.configuredViewTypeId = event.viewTypeId;
+        const view = this.viewEntity;
+        if (!view?.ID || view.ViewTypeID === event.viewTypeId) {
+            return;
+        }
+        view.ViewTypeID = event.viewTypeId;
+        const saved = await view.Save();
+        if (!saved) {
+            console.warn(`Failed to persist ViewTypeID: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Persist a per-view-type config change into UserView.DisplayState.viewTypeConfigs (keyed by
+     * the view type's row ID), preserving the rest of DisplayState. Saved views only.
+     */
+    public async onViewTypeConfigChange(event: { viewTypeId: string; config: Record<string, unknown> }): Promise<void> {
+        const view = this.viewEntity;
+        if (!view?.ID) {
+            return;
+        }
+        const displayState = view.DisplayStateObject ?? { defaultMode: 'grid' };
+        const configs = (displayState.viewTypeConfigs ?? []).filter(c => c.viewTypeId !== event.viewTypeId);
+        configs.push({ viewTypeId: event.viewTypeId, config: event.config });
+        displayState.viewTypeConfigs = configs;
+        view.DisplayStateObject = displayState;
+        this.viewTypeConfigs = configs;
+        const saved = await view.Save();
+        if (!saved) {
+            console.warn(`Failed to persist view-type config: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 

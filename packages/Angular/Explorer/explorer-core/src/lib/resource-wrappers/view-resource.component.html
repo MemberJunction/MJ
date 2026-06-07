@@ -66,8 +66,12 @@
             [viewEntity]="viewEntity"
             [gridState]="gridState"
             [viewMode]="configuredViewMode"
+            [ViewTypeID]="configuredViewTypeId"
+            [ViewTypeConfigs]="viewTypeConfigs"
             [mapRenderMode]="configuredMapRenderMode"
             (recordOpened)="onRecordOpened($any($event))"
+            (ViewTypeChange)="onViewTypeChange($event)"
+            (ViewTypeConfigChange)="onViewTypeConfigChange($event)"
             (dataLoaded)="onDataLoaded()">
         </mj-entity-viewer>
 

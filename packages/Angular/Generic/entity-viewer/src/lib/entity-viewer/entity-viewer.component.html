@@ -35,22 +35,51 @@
       <!-- View Mode Toggle -->
       @if (effectiveConfig.showViewModeToggle) {
         @if (viewTypesFromRegistry) {
-          <!-- Registry-sourced switcher: built from ViewTypeEngine.GetAvailableViewTypes().
-               Active when the MJ: View Types metadata is seeded. The set of buttons and
-               their availability (timeline/map) come from each descriptor's IsAvailableFor.
-               TODO (future): mount each descriptor's RendererComponent dynamically here
-               instead of the hardcoded [hidden] child components below. -->
-          <div class="view-mode-toggle">
-            @for (vt of availableViewTypes; track vt.mode) {
+          <!-- Registry-sourced switcher: built from ViewTypeEngine.GetAvailableViewTypeRows().
+               Built-in types (Grid/Cards/Timeline/Map) render via their [hidden] blocks below;
+               plug-in types (Cluster, third-party) are dynamic-mounted into #dynamicViewHost.
+               Availability (timeline/map/cluster) comes from each descriptor's IsAvailableFor. -->
+          @if (availableViewTypes.length <= viewTypeStripThreshold) {
+            <!-- Icon strip — used while the set of view types is small. -->
+            <div class="view-mode-toggle">
+              @for (vt of availableViewTypes; track vt.key) {
+                <button
+                  class="toggle-btn"
+                  [class.active]="activeViewTypeKey === vt.key"
+                  (click)="selectViewType(vt)"
+                  [title]="vt.label + ' View'">
+                  <i [class]="vt.icon"></i>
+                </button>
+              }
+            </div>
+          } @else {
+            <!-- Compact dropdown — used as the list of view types grows, to save space.
+                 Shows the active type's icon + label; the menu lists every available type. -->
+            <div class="view-type-dropdown">
               <button
-                class="toggle-btn"
-                [class.active]="effectiveViewMode === vt.mode"
-                (click)="setViewMode(vt.mode)"
-                [title]="vt.label + ' View'">
-                <i [class]="vt.icon"></i>
+                class="toggle-btn view-type-dropdown-trigger"
+                [class.active]="viewTypeDropdownOpen"
+                (click)="viewTypeDropdownOpen = !viewTypeDropdownOpen"
+                [title]="(activeViewTypeOption?.label ?? '') + ' View'">
+                <i [class]="activeViewTypeOption?.icon ?? 'fa-solid fa-table'"></i>
+                <span class="view-type-dropdown-label">{{ activeViewTypeOption?.label }}</span>
+                <i class="fa-solid fa-chevron-down view-type-dropdown-caret"></i>
               </button>
-            }
-          </div>
+              @if (viewTypeDropdownOpen) {
+                <div class="view-type-dropdown-menu">
+                  @for (vt of availableViewTypes; track vt.key) {
+                    <button
+                      class="view-type-dropdown-item"
+                      [class.active]="activeViewTypeKey === vt.key"
+                      (click)="selectViewType(vt)">
+                      <i [class]="vt.icon"></i>
+                      <span>{{ vt.label }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
         } @else {
           <!-- Fallback switcher: hardcoded modes. Used when the View Types registry has no
                data (not yet seeded) so existing behavior is preserved unchanged. -->
@@ -156,15 +185,24 @@
       <p>Select an entity to view records</p>
     </div>
 
-    <!-- Empty state: no records found -->
-    <div class="empty-state" [hidden]="!effectiveEntity || filteredRecords.length > 0 || isLoading">
+    <!-- Empty state: no records found (suppressed for plug-in view types, which render
+         their own empty/loading states) -->
+    <div class="empty-state" [hidden]="!effectiveEntity || filteredRecords.length > 0 || isLoading || isDynamicViewActive">
       <i class="fa-solid fa-inbox"></i>
       <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
     </div>
 
+    <!-- Plug-in (dynamic) view renderer host. The active descriptor's RendererComponent is
+         created into #dynamicViewHost via ViewContainerRef; built-in blocks below hide while
+         a plug-in is active. This is the generic extension point — any registered view type
+         with no built-in block renders here, with zero host changes. -->
+    <div class="dynamic-view-host" [hidden]="!isDynamicViewActive || !effectiveEntity">
+      <ng-template #dynamicViewHost></ng-template>
+    </div>
+
     <!-- Grid View - always rendered, visibility controlled by hidden -->
     <mj-entity-data-grid
-      [hidden]="effectiveViewMode !== 'grid' || !effectiveEntity"
+      [hidden]="effectiveViewMode !== 'grid' || !effectiveEntity || isDynamicViewActive"
       [Data]="filteredRecords"
       [Params]="gridParams"
       [FilterText]="debouncedFilterText"
@@ -195,7 +233,7 @@
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->
     <mj-entity-cards
-      [hidden]="effectiveViewMode !== 'cards' || !effectiveEntity"
+      [hidden]="effectiveViewMode !== 'cards' || !effectiveEntity || isDynamicViewActive"
       [entity]="effectiveEntity"
       [records]="filteredRecords"
       [selectedRecordId]="selectedRecordId"
@@ -208,7 +246,7 @@
 
     <!-- Timeline View - always rendered when date fields exist, visibility controlled by hidden -->
     <mj-timeline
-      [hidden]="effectiveViewMode !== 'timeline' || !hasDateFields"
+      [hidden]="effectiveViewMode !== 'timeline' || !hasDateFields || isDynamicViewActive"
       [groups]="timelineGroups"
       [orientation]="timelineOrientation"
       [layout]="timelineOrientation === 'vertical' ? 'alternating' : 'single'"
@@ -223,7 +261,7 @@
     <!-- Map View - rendered when geocoding supported, visibility controlled by hidden -->
     @if (HasGeoCoding) {
       <mj-map-view
-        [hidden]="effectiveViewMode !== 'map'"
+        [hidden]="effectiveViewMode !== 'map' || isDynamicViewActive"
         [Entity]="effectiveEntity!"
         [Records]="filteredRecords"
         [TotalRecordCount]="totalRecordCount"
