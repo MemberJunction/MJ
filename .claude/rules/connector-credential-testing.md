@@ -2,6 +2,20 @@
 
 Testing is the crux. The objective is one number: **maximize the assurance a connector is real and correct — with or without a live credential** — and state the residual gap honestly, never launder "format-verified" as "sync-verified".
 
+> **⏱️ CREDENTIAL TIMING — TEST-TIME ONLY (hard rule).** The credential (and the broker) is used ONLY at the
+> testing tiers (`verification-ladder` T8-live, `hybrid-e2e` live). It is NEVER used during the build phases —
+> research, source-audit, metadata authoring, IO/IOF extraction, contract freeze, or code generation all run
+> **credential-free**. This is not just credential *safety* (the agent never sees the bytes); it is decision
+> *hygiene*: if the agent can reach live data while building, it sample-discovers once and **bakes the concrete
+> result into a static `DiscoverObjects` instead of authoring the discovery mechanism** (the PropFuel 3-stream
+> freeze). The credential serves no purpose before testing and actively corrupts discovery design. With no
+> live access at build time, discovery MUST be written from the **docs** — the mechanism (e.g. "GET `/list`,
+> parse the data type from each filename"), not the answer — and the credential first reaches the source at the
+> live e2e, where the dynamic method runs and populates `Discovered`. So: build = docs-only Declared metadata +
+> dynamic discovery code; test-time = the credential exercises that code for real. (Self-obtainable credentials
+> are still *triaged + reported* early per §0 — but they are *exercised* only at test time, never folded into
+> build-phase discovery.)
+
 > **🥇 Credentialed testing is strictly the best, and self-obtainable credentials must be surfaced EARLY.**
 > A live round-trip against real (or vendor-sandbox) data proves things no credential-free technique can. So
 > the **very first** thing the discovery pass does is answer "can *we* get data out of this API ourselves,

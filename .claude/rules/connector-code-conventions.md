@@ -9,7 +9,7 @@ Applies to TS files under `packages/Integration/connectors-registry/<name>/src/`
 
 ## Class structure
 
-- Connector extends a protocol base — `BaseRESTIntegrationConnector` is the standard for REST/JSON APIs; `BaseGraphQLIntegrationConnector`, `BaseSOAPIntegrationConnector`, `BaseFileFeedConnector`, or `RelationalDBConnector` for other protocols. All live in `@memberjunction/integration-engine`.
+- Connector extends a protocol base. The ONLY protocol bases that exist are `BaseIntegrationConnector` (the grandparent) and `BaseRESTIntegrationConnector` — both in `@memberjunction/integration-engine`; the engine exports no others. `BaseRESTIntegrationConnector` is the standard for REST/JSON APIs. For GraphQL / SOAP / file-feed APIs, extend `BaseRESTIntegrationConnector` and implement the protocol over HTTP (e.g. PropFuel rides REST for its file-feed; a GraphQL API POSTs queries to `/graphql` via `MakeHTTPRequest` + `NormalizeResponse`). Do NOT name `BaseGraphQLIntegrationConnector`, `BaseSOAPIntegrationConnector`, `BaseFileFeedConnector`, or `RelationalDBConnector` — they do not exist.
 - Decorated with `@RegisterClass(BaseIntegrationConnector, '<DriverClass>')` — grandparent registration, NOT the intermediate base. The factory dispatches off `BaseIntegrationConnector`.
 - Public `IntegrationName` getter returns the exact `MJ: Integrations.Name` string. Part of the three-way invariant.
 
@@ -30,6 +30,14 @@ Applies to TS files under `packages/Integration/connectors-registry/<name>/src/`
 - Auth: `@memberjunction/integration-engine/auth-helpers` (`JWTSigner`, `OAuth2TokenManager`, `HMACSigner`, `APIKeyHeaderBuilder`). NEVER inline crypto.
 - Types: `@memberjunction/integration-engine/type-helpers` (`MapSourceType`).
 
+## Full-record pass-through (forward-compat — REQUIRED, enforced by T1 `FullRecordPassThrough`)
+
+Every record a connector emits MUST carry the **full source record** in `ExternalRecord.Fields` — never a hand-filtered subset. The framework's custom-field capture (and the eventual framework-level custom-column feature) reads `ExternalRecord.Fields` and diffs its keys against the field maps; anything dropped *before* the record is built is invisible and unrecoverable. Persistence is unaffected — the engine writes only the mapped/shortlisted fields (`SetEntityFields(entity, record.MappedFields)`), so a full `Fields` never causes unknown-column writes.
+
+- **Base-fetch connectors** (use the base REST path) get this for free — `ToExternalRecord` sets `Fields: raw`, and `applyTransformPreservingKeys` re-adds any undeclared key a `TransformRecord` override drops. Don't fight it.
+- **`TransformRecord`** may reshape/flatten/coerce but MUST NOT drop source keys. If you deliberately remove vendor noise (e.g. a metadata blob) or a flattened parent, declare those keys in `ExcludedSourceKeys(objectName)` — that is the only sanctioned, auditable removal (and those keys are excluded from change-detection too).
+- **Override-fetch connectors that hand-build records** (override `FetchChanges`): set `Fields` to the **full** record — `Fields: raw` / `Fields: record` / `Fields: { ...source }` — never a constructed literal like `Fields: { Id: x.Id, Name: x.Name }` (drops customs). Exclude **only** nested child collections from a spread (e.g. `const f = { ...gt }; delete f.Groups;`). The T1 `FullRecordPassThrough` check fails a narrow keyed object-literal with no `...` spread.
+
 ## Source-side DTOs (post-Phase 0 schema)
 
 When implementing `DiscoverObjects` / `DiscoverFields`:
@@ -38,6 +46,15 @@ When implementing `DiscoverObjects` / `DiscoverFields`:
 - `AllowsNull` is distinct from `IsRequired` — required is a create-time constraint; nullable is a record-state constraint. Leave `AllowsNull` undefined when the source doesn't state it explicitly (provable-only); consumers default to permissive (nullable). Never infer NOT NULL from sample data.
 - `IsReadOnly` — mark computed / system-managed / non-user-writable fields. It feeds whether a field is included in Create/Update bodies, so getting it wrong either drops a writable field or sends a read-only field the API rejects.
 - `IsForeignKey` + `ForeignKeyTarget` — set the source object name a FK references. The base `IntrospectSchema` only emits a `Relationships` entry when BOTH `IsForeignKey` is true AND `ForeignKeyTarget` is non-null; a half-set FK is silently dropped.
+
+### Discovery MUST capture customs whenever the source allows them
+
+Discovery MUST capture custom objects/fields whenever the source allows them (HubSpot / Salesforce / most SaaS do). Pick the discovery mode by what the source exposes:
+- **LIVE** describe/introspection — when the source exposes a schema API (Salesforce `describeGlobal` + `/sobjects/{name}/describe`; GraphQL introspection). Always preferred.
+- **SAMPLE-discovery** — when there is no schema API but data is reachable: download/fetch a page, union the flattened keys across records, and emit the extras as **nullable** fields (the PropFuel pattern).
+- **STATIC** hardcoded catalog — allowed ONLY when the source schema is genuinely fixed and admits no customs.
+
+A static catalog where the source allows customs is a **DEFECT** — customs are silently dropped at `FieldMappingEngine.MapSingleRecord` (only fields surfaced by `DiscoverFields` get a column + field map, so anything not discovered never lands).
 
 ### Provable-only PK/FK/watermark — NEVER fabricated, the overlay enforces it
 

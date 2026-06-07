@@ -100,21 +100,26 @@ Every emitted per-operation column gets a CODE_EVIDENCE entry citing the extract
 
 **Deferring to runtime D4 is the FAILURE mode.** The script must aggregate evidence across every viable source before deferring. See `.claude/agents/ioiof-extractor.md` § "PK detection" / § "FK detection" for the rule; this section is the script-implementation.
 
-### Source loaders (call all of them at the top of the script)
+### Source loaders — CREDENTIAL-FREE SOURCES ONLY (the extractor seeds STATIC metadata; it never reads output or live data)
+
+> **🚨 The extractor's ONLY job is to SEED STATIC (Declared) metadata from CREDENTIAL-FREE sources. Its only output is the metadata file.** There are exactly two legitimate sources of a connector's objects/fields: **(1) STATIC metadata** = credential-free docs/spec, seeded here at build; and **(2) LIVE** = the connector's discovery **methods** (`DiscoverObjects`/`DiscoverFields`) at runtime. The extractor does ONLY (1). It does NOT do (2), and it NEVER reads any of the following — **forbidden sources, always:**
+> - **the connector being built** (`src` / `dist` / `.archived` copies) — that is OUTPUT. Reading it re-bakes prior output back in: the circular-source defect that re-baked PropFuel's 3 streams every run (the generated extractor literally hardcoded `.archived/…/PropFuelConnector.ts` as "Tier-1").
+> - **the existing/prior metadata file** — also prior output.
+> - **any auth-gated / live data** (anything that needs a credential to read) — by rule it can NEVER source standard objects; it's a runtime *discoverable* reached via the methods, not the extractor.
+>
+> Permitted sources are credential-free **public docs/spec only**:
 
 ```typescript
 const sources = {
-    connectorSrc: await loadIfExists(`packages/Integration/connectors/src/${ClassName}.ts`),
-    existingMetadata: await loadIfExists(`metadata/integrations/${slug}/.${slug}.integration.json`)
-                   ?? await loadIfExists(`metadata/integrations/.${legacySlug}.json`),
     openapi: await loadOpenAPISpec(openapiURL),                // x-primary-key, path ops, Location headers
     vendorDocsText: await loadPDFsAndHTML(docPaths),           // grep "primary key" / "unique identifier"
-    sdkTypes: await loadSDKTypeDefs(sdkPaths),                 // annotations
-    postman: await loadPostmanCollections(postmanPaths),
+    sdkTypes: await loadSDKTypeDefs(sdkPaths),                 // PUBLIC SDK type annotations
+    postman: await loadPostmanCollections(postmanPaths),       // PUBLIC published collections
+    // NO connectorSrc, NO existingMetadata, NO live/auth-gated fetch — those are OUTPUT or runtime-discoverables.
 };
 ```
 
-The script **MUST** call every loader. Missing source-loads are visible to the reviewer via the source-check matrix.
+The script **MUST** call every (credential-free) loader. Missing source-loads are visible to the reviewer via the source-check matrix. If a field/object is not provable from these credential-free sources, it is NOT seeded as static metadata — it becomes a runtime **Discovered** row via the connector's methods. (`floor-check` rejects an extractor that reads the connector/dist/archive or auth-gated data; `catalog-in-code` rejects a connector that bakes the catalog instead.)
 
 ### Per-IOF signal aggregator
 
@@ -125,13 +130,8 @@ type Signal = { source: string; tier: Tier; kind: 'PK' | 'FK'; locus: string; ex
 function aggregatePKFKSignals(fieldName: string, ioName: string, allSources: SourceBundle): Signal[] {
     const out: Signal[] = [];
 
-    // Tier-1: existing connector source carries the answer
-    if (allSources.connectorSrc) {
-        const pkLiteral = new RegExp(`['"]${fieldName}['"][^}]*?(IsPrimaryKey|PrimaryKey)\\s*[:=]\\s*true`, 'i');
-        if (pkLiteral.test(allSources.connectorSrc)) {
-            out.push({ source: 'connector-src', tier: 1, kind: 'PK', locus: `${ClassName}.ts` });
-        }
-    }
+    // NOTE: the connector being built + prior metadata are NOT sources (they are OUTPUT; reading
+    // them is the circular-source defect). Signals come ONLY from credential-free docs/spec below.
     // Tier-1: OpenAPI GetById path parameter == field
     if (allSources.openapi) {
         for (const [p, methods] of Object.entries(allSources.openapi.paths)) {
@@ -143,7 +143,9 @@ function aggregatePKFKSignals(fieldName: string, ioName: string, allSources: Sou
     }
     // Tier-1: OpenAPI POST response Location header → /<resource>/{field}
     // Tier-1: vendor-docs prose grep "primary key|unique identifier|system ID" near field name
-    // Tier-2: naming convention applied ≥ 80% of objects
+    // Tier-2: naming convention — a pattern ≥ 80% is EVIDENCE TO INVESTIGATE, not enough to emit.
+    //         To EMIT a structural constraint it must clear p ≤ 0.05 (≈ ≥95% consistency, adequate
+    //         sample, not chance) — plan §0b "Statistical-significance bar". Below ≥95% → defer.
     // Tier-2: field name == sibling IO's emitted PK (cross-IO match for FK)
     // ...
     return out;
@@ -160,7 +162,7 @@ function classifyPK(signals: Signal[]): 'emit' | 'unique-only' | 'defer' {
 
 ### Vendor-wide universal-PK hint
 
-When the script detects a consistent vendor-wide PK pattern (≥ 80% of objects), emit BOTH:
+When the script detects a consistent vendor-wide PK pattern STRONG ENOUGH to emit (p ≤ 0.05 ≈ ≥ 95% of objects, adequate sample — NOT merely ≥80%, which is investigate-only per plan §0b), emit BOTH:
 1. `Integration.Configuration.universalPK = { fieldName: 'id' }` (or whatever the convention is).
 2. Individual IOF `IsPrimaryKey=true` on the matched fields per their multi-signal verdict.
 
@@ -168,10 +170,9 @@ The hint is for runtime D4 acceleration; the per-IOF flags are the actual emissi
 
 ### FK detection
 
-Tier-1 signals the script extracts:
+Tier-1 signals the script extracts (from credential-free sources ONLY — never the connector/prior metadata):
 - Parametric child path `/Parent/{ParentId}/Children` where `ParentId` matches the parent's emitted PK name.
-- Existing connector source contains `RelatedIntegrationObjectID: '<TargetIO>'` literal for this field.
-- Vendor docs explicitly describe relationship.
+- Vendor docs / OpenAPI explicitly describe the relationship.
 
 Tier-2:
 - Field name == sibling IO's emitted PK AND sibling IO exists in this run.

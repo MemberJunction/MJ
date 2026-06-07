@@ -38,8 +38,14 @@ connector-builder-workshop/
     └── regenerate-spec-digest.mjs
 ```
 
-## Discipline (non-negotiable, per plan §0a / §13a)
+## Discipline (non-negotiable, per plan §0a / §0b / §13a)
 
+- **Per-finding anxiety (plan §0b)** — EVERY emission is guilty until proven, interrogated
+  proactively by the producer/verify/adversarial/coordinator, never reactively after a human
+  notices: (1) totally **provable** from the source as a code motif (signals/model-knowledge =
+  defer), (2) **complete** vs the raw source, (3) **contradiction-free** vs the source's own
+  words, (4) **defer on doubt** (a wrong FK/PK fails real syncs). A human having to catch a
+  defect = a missing anxiety to add to the process.
 - **Bijection floor-check** rejects any run with a missing Phase 0 slot or unverified
   provenance. Done is structural, not agent-declared.
 - **Locked primitives** carry their guarantees with them — the planner composes
