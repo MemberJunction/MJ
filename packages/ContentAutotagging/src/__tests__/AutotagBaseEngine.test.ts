@@ -223,7 +223,11 @@ vi.mock('@memberjunction/aiengine', () => ({
   },
 }));
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+  // Spread the real module so transitively-imported exports (e.g.
+  // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
+  // otherwise adding any new core-entities export breaks this mock's load.
+  const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
   const mockVectorIndexes = [
     { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
   ];
@@ -238,6 +242,7 @@ vi.mock('@memberjunction/core-entities', () => {
     ),
   };
   return {
+    ...actual,
     MJContentSourceEntity: vi.fn(),
     MJContentItemEntity: vi.fn(),
     MJContentFileTypeEntity: vi.fn(),

@@ -82,8 +82,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return this._activeTab;
     }
     public set ActiveTab(value: TabName) {
-        if (value === this._activeTab) return;
-        this._activeTab = value;
+        // Tag-vocabulary tabs moved to the dedicated Tags surface; coerce any
+        // stale saved/deep-linked value for a removed tab back to the cockpit.
+        const v: TabName = AutotaggingPipelineResourceComponent.VALID_TABS.includes(value) ? value : 'pipeline';
+        if (v === this._activeTab) return;
+        this._activeTab = v;
         if (this.viewReady) {
             this.cdr.detectChanges();
         }
@@ -303,7 +306,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
-    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'inbox', 'health', 'history'];
+    // Classify is now the pipeline-operator workspace only. Tag Library / Taxonomy
+    // / Inbox / Health moved to the dedicated Tags surface (no more overlap).
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'history'];
 
     /** Lightweight count of Pending tag suggestions for the Inbox nav badge. */
     public InboxPendingCount = 0;
@@ -363,26 +368,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     /**
-     * D9: If a tagSearch parameter was provided via configuration, switch to the tags tab
-     * and apply the search filter after tag data loads.
+     * Tag browsing/search now lives on the dedicated Tags surface, so the Classify
+     * cockpit no longer hosts a `tagSearch` deep-link target. Kept as a no-op to
+     * preserve the call site. (Re-targeting Analytics' tag drill-down to the Tags
+     * surface is a tracked follow-up.)
      */
     private async handleInitialTagSearch(): Promise<void> {
-        const config = this.Data?.Configuration as Record<string, unknown> | undefined;
-        const tagSearch = config?.['tagSearch'] as string | undefined;
-        if (!tagSearch) return;
-
-        // Switch to the tags tab so ClassifyTagsTabComponent renders and the
-        // ViewChild resolves, ensuring its data is loaded.
-        if (this.ActiveTab !== 'tags') {
-            this.ActiveTab = 'tags';
-        }
-        if (!this.tabDataLoaded.has('tags')) {
-            await this.loadTabData('tags');
-            this.tabDataLoaded.add('tags');
-        }
-        this.cdr.detectChanges();
-
-        this.tagsTab?.ApplySearch(tagSearch);
+        return;
     }
 
     ngOnDestroy(): void {
@@ -574,18 +566,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             {
                 items: [
                     {
-                        id: 'inbox',
-                        label: 'Inbox',
-                        icon: 'fa-solid fa-inbox',
-                        badge: this.InboxPendingCount > 0 ? String(this.InboxPendingCount) : undefined
-                    },
-                    {
-                        id: 'health',
-                        label: 'Health',
-                        icon: 'fa-solid fa-heart-pulse',
-                        badge: this.HealthPendingCount > 0 ? String(this.HealthPendingCount) : undefined
-                    },
-                    {
                         id: 'history',
                         label: 'Run History',
                         icon: 'fa-solid fa-clock-rotate-left'
@@ -775,12 +755,14 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         // the Tag Library + Taxonomy Governance curation surfaces (Governance /
         // Synonyms / Scope editors live on the Taxonomy tab). All curation tabs are
         // surfaced here so they're directly reachable, not just agent-reachable.
+        // Classify is the content-pipeline operator workspace. Tag-vocabulary
+        // curation (Tag Library, Taxonomy tree, Suggestions/Inbox review, Health)
+        // lives on the dedicated "Tags" surface — we intentionally do NOT duplicate
+        // those tabs here. See the deep-link to Tags ▸ review from the pipeline.
         this.NavItems = [
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
-            { Tab: 'tags', Icon: 'fa-solid fa-tags', Label: 'Tag Library', BadgeText: '', BadgeClass: '' },
-            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: '', BadgeClass: '' },
         ];
     }
 
