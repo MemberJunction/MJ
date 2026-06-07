@@ -11,7 +11,7 @@
  * This engine has NO Angular / DOM coupling and can run on the server or client.
  */
 
-import { Metadata, UserInfo, LogError } from '@memberjunction/core';
+import { Metadata, UserInfo, LogError, IMetadataProvider } from '@memberjunction/core';
 import {
     SimpleVectorService,
     VectorEntry,
@@ -112,6 +112,9 @@ export class ClusteringEngine {
      * @param config The config the result was produced with.
      * @param owner Display name + ID of the owning user.
      * @param contextUser User context for the save (required server-side).
+     * @param provider Per-request metadata provider — REQUIRED on a multi-user server
+     *   so the save uses the caller's connection/security context, not the process
+     *   global. Falls back to the global only for single-provider callers (e.g. CLI).
      * @returns The saved analysis ID, or null on failure.
      */
     public async SaveAnalysis(
@@ -119,8 +122,9 @@ export class ClusteringEngine {
         config: ClusterConfig,
         owner: { Name: string; UserID: string },
         contextUser?: UserInfo,
+        provider?: IMetadataProvider,
     ): Promise<string | null> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const analysis = await md.GetEntityObject<MJClusterAnalysisEntity>('MJ: Cluster Analysis', contextUser);
 
         this.populateAnalysis(analysis, result, config, owner);
@@ -130,7 +134,7 @@ export class ClusteringEngine {
             return null;
         }
 
-        const clustersSaved = await this.saveClusters(analysis.ID, result.Clusters, contextUser);
+        const clustersSaved = await this.saveClusters(analysis.ID, result.Clusters, contextUser, provider);
         if (!clustersSaved) {
             LogError('SaveAnalysis: one or more cluster child rows failed to save.');
         }
@@ -340,8 +344,9 @@ export class ClusteringEngine {
         analysisID: string,
         clusters: ClusterInfo[],
         contextUser?: UserInfo,
+        provider?: IMetadataProvider,
     ): Promise<boolean> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         let allOk = true;
         for (const cluster of clusters) {
             const row = await md.GetEntityObject<MJClusterAnalysisClusterEntity>(

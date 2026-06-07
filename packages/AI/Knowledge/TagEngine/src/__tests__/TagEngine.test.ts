@@ -41,6 +41,7 @@ vi.mock('@memberjunction/core', () => ({
     LogStatus: vi.fn(),
     Metadata: class { Entities = []; CurrentUser = {}; },
     RunView: class { RunView = vi.fn().mockResolvedValue({ Success: true, Results: [] }); },
+    BaseEntity: class {},
     BaseEngine: class {
         static getInstance() { return new this(); }
         async Load() {}

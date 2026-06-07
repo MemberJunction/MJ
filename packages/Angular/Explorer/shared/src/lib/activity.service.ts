@@ -14,6 +14,7 @@
  */
 
 import { Injectable } from '@angular/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 /** Lifecycle state of a tracked activity. */
@@ -80,7 +81,7 @@ export class ActivityService {
 
     /** Patch an in-flight activity's label / detail / progress. */
     public Update(id: string, patch: Partial<Pick<ActivityItem, 'Label' | 'Detail' | 'Progress'>>): void {
-        const item = this._items.find(i => i.ID === id);
+        const item = this._items.find(i => UUIDsEqual(i.ID, id));
         if (!item) return;
         Object.assign(item, patch);
         this.emit();
@@ -88,7 +89,7 @@ export class ActivityService {
 
     /** Mark an activity finished (success or error). */
     public Complete(id: string, status: 'success' | 'error' = 'success', detail?: string): void {
-        const item = this._items.find(i => i.ID === id);
+        const item = this._items.find(i => UUIDsEqual(i.ID, id));
         if (!item) return;
         item.Status = status;
         item.EndedAt = Date.now();
@@ -99,7 +100,7 @@ export class ActivityService {
 
     /** Remove a single activity from the list. */
     public Remove(id: string): void {
-        this._items = this._items.filter(i => i.ID !== id);
+        this._items = this._items.filter(i => !UUIDsEqual(i.ID, id));
         this.emit();
     }
 

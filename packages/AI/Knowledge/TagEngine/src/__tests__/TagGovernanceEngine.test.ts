@@ -40,6 +40,7 @@ vi.mock('@memberjunction/core', () => {
         UserInfo: class {},
         LogError: vi.fn(),
         LogStatus: vi.fn(),
+        BaseEntity: class {},
         BaseEngine: class {
             static getInstance() { return new this(); }
             async Load() {}

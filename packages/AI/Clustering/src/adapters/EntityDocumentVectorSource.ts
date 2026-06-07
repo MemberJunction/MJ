@@ -14,7 +14,7 @@
  * because vectors from different embedding spaces are not co-clusterable.
  */
 
-import { RunView, UserInfo, LogError, Metadata } from '@memberjunction/core';
+import { RunView, UserInfo, LogError, Metadata, IMetadataProvider } from '@memberjunction/core';
 import {
     MJEntityRecordDocumentEntity,
     MJEntityDocumentEntity,
@@ -25,10 +25,20 @@ import { ClusterConfig, ClusterInputVector, IClusterVectorSource } from '../type
  * Fetches clustering input vectors from persisted Entity Record Documents.
  */
 export class EntityDocumentVectorSource implements IClusterVectorSource {
+    /** RunView scoped to the per-request provider (falls back to global for single-provider callers). */
+    private rv(): RunView {
+        return this.provider ? RunView.FromMetadataProvider(this.provider) : new RunView();
+    }
+
     /**
      * @param contextUser User context for the RunView calls (required server-side).
+     * @param provider Per-request metadata provider — pass it on a multi-user server so
+     *   all reads use the caller's connection/security context, not the process global.
      */
-    constructor(private readonly contextUser?: UserInfo) {}
+    constructor(
+        private readonly contextUser?: UserInfo,
+        private readonly provider?: IMetadataProvider,
+    ) {}
 
     /** @inheritdoc */
     public async FetchVectors(config: ClusterConfig): Promise<ClusterInputVector[]> {
@@ -80,7 +90,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
         if (config.EntityID) {
             filterParts.push(`EntityID = '${config.EntityID}'`);
         } else if (config.EntityName) {
-            const md = new Metadata();
+            const md = this.provider ?? new Metadata();
             const entity = md.EntityByName(config.EntityName);
             if (!entity) {
                 return null;
@@ -88,7 +98,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
             filterParts.push(`EntityID = '${entity.ID}'`);
         }
 
-        const rv = new RunView();
+        const rv = this.rv();
         const result = await rv.RunView<MJEntityDocumentEntity>(
             {
                 EntityName: 'MJ: Entity Documents',
@@ -112,7 +122,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
      */
     private async assertCompatibleDocuments(docIDs: string[]): Promise<void> {
         const idList = docIDs.map((id) => `'${id}'`).join(', ');
-        const rv = new RunView();
+        const rv = this.rv();
         const result = await rv.RunView<MJEntityDocumentEntity>(
             {
                 EntityName: 'MJ: Entity Documents',
@@ -147,7 +157,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
             filterParts.push(`(${config.Filter.trim()})`);
         }
 
-        const rv = new RunView();
+        const rv = this.rv();
         const result = await rv.RunView<MJEntityRecordDocumentEntity>(
             {
                 EntityName: 'MJ: Entity Record Documents',

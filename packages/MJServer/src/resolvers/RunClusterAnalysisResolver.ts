@@ -1,7 +1,8 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, InputType, Field, Float, Int } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetReadWriteProvider } from '../util.js';
 import {
     ClusteringEngine,
     EntityDocumentVectorSource,
@@ -134,17 +135,20 @@ export class RunClusterAnalysisResolver extends ResolverBase {
     @Mutation(() => RunClusterAnalysisResult)
     async RunClusterAnalysis(
         @Arg('input', () => RunClusterAnalysisInput) input: RunClusterAnalysisInput,
-        @Ctx() { userPayload }: AppContext = {} as AppContext
+        @Ctx() context: AppContext = {} as AppContext
     ): Promise<RunClusterAnalysisResult> {
         try {
-            const currentUser = this.GetUserFromPayload(userPayload);
+            const currentUser = this.GetUserFromPayload(context.userPayload);
             if (!currentUser) {
                 return this.errorResult('Unable to determine current user');
             }
 
+            // Per-request provider so reads/writes use this user's connection +
+            // security context (multi-user safe), not the process global.
+            const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
             const config = this.buildConfig(input);
             const engine = new ClusteringEngine();
-            const vectorSource = new EntityDocumentVectorSource(currentUser);
+            const vectorSource = new EntityDocumentVectorSource(currentUser, provider);
 
             LogStatus(
                 `RunClusterAnalysis: algorithm=${config.Algorithm} entity=${config.EntityName ?? config.EntityID ?? config.EntityDocumentID}`
@@ -154,7 +158,7 @@ export class RunClusterAnalysisResolver extends ResolverBase {
 
             let analysisID: string | undefined;
             if (input.PersistName && input.PersistName.trim().length > 0) {
-                analysisID = await this.persistAnalysis(engine, result, config, input.PersistName.trim(), currentUser);
+                analysisID = await this.persistAnalysis(engine, result, config, input.PersistName.trim(), currentUser, provider);
             }
 
             return {
@@ -216,10 +220,11 @@ export class RunClusterAnalysisResolver extends ResolverBase {
         result: Awaited<ReturnType<ClusteringEngine['RunPipeline']>>,
         config: ClusterConfig,
         persistName: string,
-        currentUser: UserInfo
+        currentUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string | undefined> {
         const owner = { Name: persistName, UserID: currentUser.ID };
-        const savedID = await engine.SaveAnalysis(result, config, owner, currentUser);
+        const savedID = await engine.SaveAnalysis(result, config, owner, currentUser, provider);
         if (!savedID) {
             LogError(`RunClusterAnalysis: failed to persist analysis "${persistName}".`);
             return undefined;

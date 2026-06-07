@@ -51,7 +51,7 @@ export class RunClusterAnalysisAction extends BaseAction {
             }
 
             const engine = new ClusteringEngine();
-            const source = new EntityDocumentVectorSource(params.ContextUser);
+            const source = new EntityDocumentVectorSource(params.ContextUser, params.Provider);
             const result = await engine.RunPipeline(config, source, params.ContextUser);
 
             if (result.Metrics.RecordCount === 0) {
@@ -115,7 +115,7 @@ export class RunClusterAnalysisAction extends BaseAction {
             LogError('RunClusterAnalysisAction: PersistAs supplied but no ContextUser available — skipping persistence.');
             return null;
         }
-        return engine.SaveAnalysis(result, config, { Name: persistAs, UserID: user.ID }, user);
+        return engine.SaveAnalysis(result, config, { Name: persistAs, UserID: user.ID }, user, params.Provider);
     }
 
     /** Add output params summarizing the run. */
