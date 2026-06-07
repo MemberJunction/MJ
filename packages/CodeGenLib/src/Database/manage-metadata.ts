@@ -5319,10 +5319,14 @@ export class ManageMetadataBase {
    ): Promise<void> {
       const existingCategories = this.buildExistingCategorySet(fields);
 
-      await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
+      // Defensive: a malformed LLM result can leave fieldCategories undefined or
+      // non-array; both consumers below iterate it, so coerce to a safe array.
+      const fieldCategories = Array.isArray(result.fieldCategories) ? result.fieldCategories : [];
+
+      await this.applyFieldCategories(pool, entity, fields, fieldCategories, existingCategories);
 
       // Auto-detect geo-capable entities and set SupportsGeoCoding
-      await this.detectAndSetGeoCodingSupport(pool, entity, result.fieldCategories);
+      await this.detectAndSetGeoCodingSupport(pool, entity, fieldCategories);
 
       if (result.entityIcon) {
          await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
