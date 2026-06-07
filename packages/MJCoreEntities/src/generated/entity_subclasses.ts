@@ -1517,7 +1517,7 @@ export const MJAIAgentExampleSchema = z.object({
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
         * * Display Name: Source AI Agent Run
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
@@ -1958,7 +1958,7 @@ export const MJAIAgentNoteSchema = z.object({
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
         * * Display Name: Source AI Agent Run
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     Company: z.string().nullable().describe(`
         * * Field Name: Company
         * * Display Name: Company
@@ -2455,7 +2455,7 @@ export const MJAIAgentRequestSchema = z.object({
     OriginatingAgentRun: z.string().nullable().describe(`
         * * Field Name: OriginatingAgentRun
         * * Display Name: Originating Agent Run Name
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     OriginatingAgentRunStep: z.string().nullable().describe(`
         * * Field Name: OriginatingAgentRunStep
         * * Display Name: Originating Agent Run Step Name
@@ -2463,7 +2463,7 @@ export const MJAIAgentRequestSchema = z.object({
     ResumingAgentRun: z.string().nullable().describe(`
         * * Field Name: ResumingAgentRun
         * * Display Name: Resuming Agent Run Name
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJAIAgentRequestEntityType = z.infer<typeof MJAIAgentRequestSchema>;
@@ -2557,10 +2557,10 @@ export const MJAIAgentRunMediaSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.`),
-    AgentRun: z.string().describe(`
+    AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     SourcePromptRunMedia: z.string().nullable().describe(`
         * * Field Name: SourcePromptRunMedia
         * * Display Name: Source Prompt Run Media
@@ -2727,10 +2727,10 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
-    AgentRun: z.string().describe(`
+    AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Step
@@ -3042,7 +3042,7 @@ each time the agent processes a prompt step.`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
         * * Display Name: Parent Run Details
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation Details
@@ -3058,7 +3058,7 @@ each time the agent processes a prompt step.`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
         * * Display Name: Last Run Details
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration Details
@@ -5904,7 +5904,7 @@ export const MJAIPromptRunSchema = z.object({
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
         * * Display Name: Original Model
@@ -31626,7 +31626,7 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     /**
     * * Field Name: SourceAIAgentRun
     * * Display Name: Source AI Agent Run
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get SourceAIAgentRun(): string | null {
         return this.Get('SourceAIAgentRun');
@@ -32695,7 +32695,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     /**
     * * Field Name: SourceAIAgentRun
     * * Display Name: Source AI Agent Run
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get SourceAIAgentRun(): string | null {
         return this.Get('SourceAIAgentRun');
@@ -34005,7 +34005,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     /**
     * * Field Name: OriginatingAgentRun
     * * Display Name: Originating Agent Run Name
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get OriginatingAgentRun(): string | null {
         return this.Get('OriginatingAgentRun');
@@ -34023,7 +34023,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     /**
     * * Field Name: ResumingAgentRun
     * * Display Name: Resuming Agent Run Name
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get ResumingAgentRun(): string | null {
         return this.Get('ResumingAgentRun');
@@ -34294,9 +34294,9 @@ export class MJAIAgentRunMediaEntity extends BaseEntity<MJAIAgentRunMediaEntityT
     /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
-    get AgentRun(): string {
+    get AgentRun(): string | null {
         return this.Get('AgentRun');
     }
 
@@ -34762,9 +34762,9 @@ detailed information about what validation rules failed.
     /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
-    get AgentRun(): string {
+    get AgentRun(): string | null {
         return this.Get('AgentRun');
     }
 
@@ -35591,7 +35591,7 @@ each time the agent processes a prompt step.
     /**
     * * Field Name: ParentRun
     * * Display Name: Parent Run Details
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
         return this.Get('ParentRun');
@@ -35627,7 +35627,7 @@ each time the agent processes a prompt step.
     /**
     * * Field Name: LastRun
     * * Display Name: Last Run Details
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
         return this.Get('LastRun');
@@ -43524,7 +43524,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: nvarchar(255)
     */
     get AgentRun(): string | null {
         return this.Get('AgentRun');

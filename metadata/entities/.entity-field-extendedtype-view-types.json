@@ -22,7 +22,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: View Types&Name=Icon"
           },
           "sync": {
-            "lastModified": "2026-06-07T15:28:47.007Z",
+            "lastModified": "2026-06-07T18:42:25.335Z",
             "checksum": "39afc04784729464ed827591de05eb8a6c9dd7c9739e094d8b053af0d6a9b391"
           }
         }

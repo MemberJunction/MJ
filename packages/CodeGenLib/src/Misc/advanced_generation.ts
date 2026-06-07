@@ -221,7 +221,16 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<SmartFieldIdentificationResult>(params);
 
             if (result.success && result.result) {
-                return result.result;
+                // Normalize: LLMs frequently omit array keys when they would be
+                // empty. Default every collection so downstream apply* consumers
+                // can iterate without undefined-guard crashes.
+                const r = result.result;
+                r.nameFields ??= [];
+                r.defaultInView ??= [];
+                r.searchableFields ??= [];
+                r.searchPredicates ??= [];
+                r.fullTextSearchFields ??= [];
+                return r;
             } else {
                 LogError(`AdvancedGeneration:Smart field identification failed: ${result.errorMessage}`);
                 return null;

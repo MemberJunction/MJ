@@ -4173,7 +4173,7 @@ export class MJAIAgentExample_ {
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     SourceAIAgentRun?: string;
         
     @Field({nullable: true}) 
@@ -5287,7 +5287,7 @@ export class MJAIAgentNote_ {
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     SourceAIAgentRun?: string;
         
     @Field({nullable: true}) 
@@ -6545,7 +6545,7 @@ export class MJAIAgentRequest_ {
     RequestType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     OriginatingAgentRun?: string;
         
     @Field({nullable: true}) 
@@ -6553,7 +6553,7 @@ export class MJAIAgentRequest_ {
     OriginatingAgentRunStep?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     ResumingAgentRun?: string;
         
 }
@@ -6850,9 +6850,9 @@ export class MJAIAgentRunMedia_ {
     @Field({nullable: true, description: `Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.`}) 
     Description?: string;
         
-    @Field() 
-    @MaxLength(36)
-    AgentRun: string;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -7161,9 +7161,9 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
         
-    @Field() 
-    @MaxLength(36)
-    AgentRun: string;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -7607,7 +7607,7 @@ each time the agent processes a prompt step.`})
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     ParentRun?: string;
         
     @Field({nullable: true}) 
@@ -7622,7 +7622,7 @@ each time the agent processes a prompt step.`})
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     LastRun?: string;
         
     @Field({nullable: true}) 
@@ -15318,7 +15318,7 @@ export class MJAIPromptRun_ {
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
+    @MaxLength(255)
     AgentRun?: string;
         
     @Field({nullable: true}) 
