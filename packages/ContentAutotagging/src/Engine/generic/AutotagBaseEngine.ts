@@ -7,7 +7,7 @@ import {
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
     MJContentItemDuplicateEntity, MJTaggedItemEntity,
-    MJEntityRecordDocumentEntity, MJTagEntity
+    MJEntityRecordDocumentEntity
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
@@ -521,6 +521,24 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
+     * Build the existing-taxonomy markdown from the LIVE TagEngine cache at the
+     * moment a prompt is constructed — NOT a once-per-run snapshot.
+     *
+     * TagEngine wraps the process-global TagEngineBase cache, which stays current
+     * as tags are created during the run (each tag Save fires BaseEntity events
+     * that update the shared cache). Reading it per item means every item sees the
+     * tags created by earlier items and can reuse / nest into them, so a real
+     * hierarchy emerges instead of a flat list of near-duplicates. (The old
+     * `TaxonomyContext` snapshot was built once and, on a from-empty run, never —
+     * leaving the LLM blind for the whole run.)
+     */
+    private getLiveTaxonomyMarkdown(): string | undefined {
+        const tags = TagEngine.Instance.Tags;
+        if (!tags || tags.length === 0) return undefined;
+        return this.buildTaxonomyMarkdown(TagEngine.Instance.GetTaxonomyTree());
+    }
+
+    /**
      * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
      * Uses TagEngine.ResolveTag() in auto-grow mode by default.
      *
@@ -551,10 +569,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // Resolve the tag with rootID=null so matching searches the WHOLE
             // taxonomy (reusing an existing tag wherever possible — passing the
             // parent as rootID would scope the search to that subtree and spawn
-            // duplicates of existing root-level tags). We nest ONLY tags that are
-            // freshly created, via the onTagCreated hook, so existing tags keep
-            // their current placement and we never reparent or duplicate them.
-            let createdTag: MJTagEntity | null = null;
+            // duplicates of existing root-level tags). parentIDForNew nests a
+            // freshly-created tag under the LLM-suggested parent and runs it
+            // through ValidateAutoGrow governance (MaxChildren / depth), so nesting
+            // is deterministically rule-compliant. Existing tags keep their place.
             const formalTag = await TagEngine.Instance.ResolveTag(
                 contentItemTag.Tag,
                 contentItemTag.Weight,
@@ -562,19 +580,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 null,   // global search — reuse existing tags, avoid duplicates
                 0.80,   // similarity threshold — lower to catch plurals/variants like "AI Agent" vs "AI Agents"
                 contextUser,
-                { onTagCreated: (t) => { createdTag = t; } }
+                parentTagID ? { parentIDForNew: parentTagID } : undefined
             );
 
             if (formalTag) {
-                // Nest a brand-new tag under the LLM-suggested parent (skip if the
-                // parent resolved to the tag itself, or the tag already has a parent).
-                if (createdTag && parentTagID && !formalTag.ParentID && !UUIDsEqual(formalTag.ID, parentTagID)) {
-                    formalTag.ParentID = parentTagID;
-                    if (!(await formalTag.Save())) {
-                        LogError(`[TaxonomyBridge] Failed to nest tag "${formalTag.Name}" under parent ${parentTagID}: ${formalTag.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                    }
-                }
-
                 // Link ContentItemTag to formal Tag
                 contentItemTag.TagID = formalTag.ID;
                 await contentItemTag.Save();
@@ -699,7 +708,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             minTags: params.minTags,
             maxTags: params.maxTags,
             additionalAttributePrompts,
-            existingTaxonomy: this.TaxonomyContext ?? undefined,
+            existingTaxonomy: this.getLiveTaxonomyMarkdown(),
             classificationContext: params.classificationContext ?? undefined,
             contentText: chunk,
             previousResults: hasPreviousResults ? JSON.stringify(previousResults) : undefined,

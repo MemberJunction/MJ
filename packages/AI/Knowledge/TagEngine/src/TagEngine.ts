@@ -49,6 +49,15 @@ export interface ResolveTagOptions {
      * per-run / per-item creation counts without global state.
      */
     onTagCreated?: (tag: MJTagEntity) => void;
+    /**
+     * Parent tag ID to nest a NEWLY-created tag under, WITHOUT scoping the match
+     * search to that parent's subtree (which `rootID` would do — and which would
+     * spawn duplicates of existing root-level tags). When set, the new tag is
+     * created under this parent and the parent is run through `ValidateAutoGrow`
+     * governance (MaxChildren / MaxDescendantDepth / depth), so nesting is
+     * deterministically rule-compliant. Existing matches are still found globally.
+     */
+    parentIDForNew?: string | null;
 }
 
 /**
@@ -1021,7 +1030,10 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         }
 
         // AutoGrow / FreeFlow — gated by ValidateAutoGrow.
-        const proposedParentID = mode === 'auto-grow' ? rootID : null;
+        // An explicit parentIDForNew nests the new tag under that parent (and is
+        // governance-checked here) without having scoped the match search to it.
+        // Otherwise fall back to rootID for auto-grow (legacy callers).
+        const proposedParentID = options?.parentIDForNew ?? (mode === 'auto-grow' ? rootID : null);
         const validation = await TagGovernanceEngine.Instance.ValidateAutoGrow(proposedParentID, weight, contextUser);
         if (validation.ok === false) {
             await this.enqueueSuggestionSafe(contextUser, {

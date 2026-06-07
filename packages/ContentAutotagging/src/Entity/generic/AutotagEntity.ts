@@ -231,12 +231,20 @@ export class AutotagEntity extends AutotagBase {
             ? 'hybrid'
             : mode;
 
-        // If parent tag is suggested by LLM, resolve it through the mutex too
-        // to prevent duplicate parent tags from concurrent batch processing.
-        // ResolveTag handles find-or-create atomically.
+        // If the LLM suggested a parent tag, resolve it first (through the mutex,
+        // find-or-create atomically) and CAPTURE its ID so the child can be nested
+        // under it. Without this the child was created flat (or only under the
+        // source's TagRootID), which is why entity-source taxonomies came out as a
+        // flat list of near-duplicates with no parent/child nesting.
+        let parentTagID: string | null = null;
         if (parentTagName && effectiveMode !== 'constrained') {
-            await TagEngine.Instance.ResolveTag(
-                parentTagName, 0, effectiveMode, rootID, threshold, contextUser, {
+            // Parent tags are broad CATEGORIES — consolidate near-duplicates more
+            // aggressively (e.g. "Research Analysis" → "Research and Analysis") with
+            // a lower match threshold than child tags, which we keep distinct. This
+            // curbs top-level category proliferation without over-merging leaves.
+            const categoryThreshold = Math.min(threshold, 0.82);
+            const parentTag = await TagEngine.Instance.ResolveTag(
+                parentTagName, 0, effectiveMode, rootID, categoryThreshold, contextUser, {
                     scopeContext,
                     suggestThreshold,
                     sourceContentItemID: contentItemTag.ItemID,
@@ -244,9 +252,13 @@ export class AutotagEntity extends AutotagBase {
                     onTagCreated: () => budget?.recordTagCreated(),
                 }
             );
+            parentTagID = parentTag?.ID ?? null;
         }
 
-        // Resolve the tag to a formal Tag record
+        // Resolve the tag to a formal Tag record. parentIDForNew nests a NEWLY
+        // created tag under the LLM-suggested parent and is governance-checked via
+        // ValidateAutoGrow (MaxChildren / depth / AllowAutoGrow). When no parent was
+        // suggested it falls back to the source's TagRootID (legacy behavior).
         const formalTag = await TagEngine.Instance.ResolveTag(
             contentItemTag.Tag,
             contentItemTag.Weight,
@@ -261,6 +273,7 @@ export class AutotagEntity extends AutotagBase {
                 sourceContentSourceID: sourceID,
                 sourceText: contentItemTag.Tag,
                 onTagCreated: () => budget?.recordTagCreated(),
+                parentIDForNew: parentTagID ?? undefined,
             }
         );
 
