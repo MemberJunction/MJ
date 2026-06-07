@@ -7,7 +7,7 @@ import {
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
     MJContentItemDuplicateEntity, MJTaggedItemEntity,
-    MJEntityRecordDocumentEntity
+    MJEntityRecordDocumentEntity, MJTagEntity
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
@@ -534,25 +534,47 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            // If parent tag is suggested by LLM, resolve it through the mutex too
-            // to prevent duplicate parent tags from concurrent batch processing
+            // If the LLM suggested a parent tag, resolve it first (through the same
+            // mutex, to prevent duplicate parents under concurrent batch processing)
+            // and CAPTURE its ID so a NEWLY-created child can be nested under it.
+            // Previously the parent's ID was discarded and children were always
+            // created flat — which is why the generated taxonomy came out as one big
+            // flat list with no parent/child nesting.
+            let parentTagID: string | null = null;
             if (parentTagName) {
-                await TagEngine.Instance.ResolveTag(
+                const parentTag = await TagEngine.Instance.ResolveTag(
                     parentTagName, 0, 'auto-grow', null, 0.80, contextUser
                 );
+                parentTagID = parentTag?.ID ?? null;
             }
 
-            // Resolve the tag using auto-grow mode (create if no match)
+            // Resolve the tag with rootID=null so matching searches the WHOLE
+            // taxonomy (reusing an existing tag wherever possible — passing the
+            // parent as rootID would scope the search to that subtree and spawn
+            // duplicates of existing root-level tags). We nest ONLY tags that are
+            // freshly created, via the onTagCreated hook, so existing tags keep
+            // their current placement and we never reparent or duplicate them.
+            let createdTag: MJTagEntity | null = null;
             const formalTag = await TagEngine.Instance.ResolveTag(
                 contentItemTag.Tag,
                 contentItemTag.Weight,
                 'auto-grow',
-                null,   // no root constraint
+                null,   // global search — reuse existing tags, avoid duplicates
                 0.80,   // similarity threshold — lower to catch plurals/variants like "AI Agent" vs "AI Agents"
-                contextUser
+                contextUser,
+                { onTagCreated: (t) => { createdTag = t; } }
             );
 
             if (formalTag) {
+                // Nest a brand-new tag under the LLM-suggested parent (skip if the
+                // parent resolved to the tag itself, or the tag already has a parent).
+                if (createdTag && parentTagID && !formalTag.ParentID && !UUIDsEqual(formalTag.ID, parentTagID)) {
+                    formalTag.ParentID = parentTagID;
+                    if (!(await formalTag.Save())) {
+                        LogError(`[TaxonomyBridge] Failed to nest tag "${formalTag.Name}" under parent ${parentTagID}: ${formalTag.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                }
+
                 // Link ContentItemTag to formal Tag
                 contentItemTag.TagID = formalTag.ID;
                 await contentItemTag.Save();
