@@ -24,6 +24,7 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
@@ -1060,6 +1061,10 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         ]);
         this.loadClassifyPreferences();
         this.applyIncomingConfiguration();
+        // Restoring a non-default saved tab here changes ActiveTab (and the derived
+        // header subtitle) after the first render already checked the default 'tags'.
+        // Flush it in its own pass so the bindings don't trip NG0100.
+        this.cdr.detectChanges();
 
         // Tags dashboard's default landing is the Tag Library — load that data
         // (and the entity-record-document cache used by drill-down) up front.
@@ -1070,6 +1075,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         if (this.ActiveTab !== 'tags' && !this.tabDataLoaded.has(this.ActiveTab)) {
             await this.loadTabData(this.ActiveTab);
             this.tabDataLoaded.add(this.ActiveTab);
+            // The eager load updates header-subtitle inputs (e.g. taxonomy tag
+            // count); flush so the new subtitle doesn't trip NG0100 on next check.
+            this.cdr.detectChanges();
         }
 
         this.IsLoading = false;
@@ -1224,7 +1232,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     public get currentTabSubtitle(): string {
         switch (this.ActiveTab) {
             case 'tags':        return `${this.TagRows.length} unique tags across all content sources`;
-            case 'taxonomy':    return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
+            case 'taxonomy':    return 'Manage tag hierarchy, resolve duplicates, and monitor taxonomy health';
             case 'suggestions': return `${this.SuggestionRows.length} pending · select rows for bulk approve / reject`;
             case 'health':      return 'Automated signals about taxonomy quality';
         }
@@ -3407,14 +3415,20 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
      */
     private async loadTaxonomyData(): Promise<void> {
         try {
+            // Tags come from the TagEngineBase cache (browser-safe BaseEngine that
+            // caches MJ: Tags and stays fresh via BaseEntity save/delete events) —
+            // no need to RunView them here. Only tagged-items + audit logs are fetched.
+            await TagEngineBase.Instance.Config(false, undefined, this.ProviderToUse);
+
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const [tagsResult, taggedItemsResult, auditResult] = await rv.RunViews([
-                { EntityName: 'MJ: Tags', OrderBy: 'Name', ResultType: 'simple' },
+            const [taggedItemsResult, auditResult] = await rv.RunViews([
                 { EntityName: 'MJ: Tagged Items', ResultType: 'simple' },
                 { EntityName: 'MJ: Tag Audit Logs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 200, ResultType: 'simple' }
             ]);
 
-            this.tagsRaw = tagsResult.Success ? tagsResult.Results : [];
+            this.tagsRaw = TagEngineBase.Instance.Tags
+                .map(t => t.GetAll())
+                .sort((a, b) => String(a['Name'] ?? '').localeCompare(String(b['Name'] ?? '')));
             this.taggedItemsRaw = taggedItemsResult.Success ? taggedItemsResult.Results : [];
             this.tagAuditLogsRaw = auditResult.Success ? auditResult.Results : [];
 
