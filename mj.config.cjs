@@ -56,14 +56,6 @@ module.exports = {
     explorerUrl: 'http://localhost:4201',
   },
 
-  // The amd64-on-arm64 emulated SQL Server is slow on cold metadata queries
-  // (e.g. the MJ_Metadata dataset join), which blew past the 30s default and
-  // crashed startup. Raise the request timeout for this dev instance.
-  // (Deep-merged over DEFAULT_SERVER_CONFIG.databaseSettings — pool/conn defaults preserved.)
-  databaseSettings: {
-    requestTimeout: 120000,
-  },
-
   /**
    * ====================
    * CodeGen Overrides
