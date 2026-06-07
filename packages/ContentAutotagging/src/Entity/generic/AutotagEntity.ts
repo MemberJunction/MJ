@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -423,8 +423,9 @@ export class AutotagEntity extends AutotagBase {
         for (const record of modifiedRecords) {
             const recordID = String(record[pkFieldName] ?? '');
             try {
+                const recordName = this.buildContentItemName(entityInfo, record);
                 const contentItem = await this.ProcessSingleRecord(
-                    record, recordID, contentSource, entityDocument,
+                    record, recordID, recordName, contentSource, entityDocument,
                     templateText, parser, existingERDs, existingContentItems
                 );
                 if (contentItem) {
@@ -437,6 +438,35 @@ export class AutotagEntity extends AutotagBase {
         }
 
         return contentItems;
+    }
+
+    /**
+     * Build the Content Item name for an entity record from the entity's name
+     * field(s). Uses every `IsNameField` in Sequence order (e.g. FirstName +
+     * LastName → "Sarah Chen"), falling back to the single `NameField`, then a
+     * literal `Name` column, then empty. Prevents Content Items from inheriting a
+     * generic/LLM-derived title when the source entity has a real name field.
+     */
+    private buildContentItemName(entityInfo: EntityInfo, record: Record<string, unknown>): string {
+        const val = (fieldName: string | undefined): string => {
+            if (!fieldName) return '';
+            const v = record[fieldName];
+            return v == null ? '' : String(v).trim();
+        };
+
+        // Combine all IsNameField fields in Sequence order.
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+        if (nameFields.length > 0) {
+            const parts = nameFields.map(f => val(f.Name)).filter(p => p.length > 0);
+            if (parts.length > 0) return parts.join(' ');
+        }
+
+        // Single NameField fallback, then a literal Name column.
+        const single = val(entityInfo.NameField?.Name);
+        if (single) return single;
+        return val('Name');
     }
 
     /**
@@ -548,6 +578,7 @@ export class AutotagEntity extends AutotagBase {
     private async ProcessSingleRecord(
         record: Record<string, unknown>,
         recordID: string,
+        recordName: string,
         contentSource: MJContentSourceEntity,
         entityDocument: MJEntityDocumentEntity,
         templateText: string,
@@ -575,7 +606,7 @@ export class AutotagEntity extends AutotagBase {
 
         // 4. Create or update ContentItem linked to ERD
         const contentItem = await this.UpsertContentItem(
-            contentSource, erd, renderedText, checksum, record, existingContentItems
+            contentSource, erd, renderedText, checksum, record, recordName, existingContentItems
         );
 
         return contentItem;
@@ -631,6 +662,7 @@ export class AutotagEntity extends AutotagBase {
         text: string,
         checksum: string,
         record: Record<string, unknown>,
+        recordName: string,
         existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
         const md = this.ProviderToUse;
@@ -666,8 +698,11 @@ export class AutotagEntity extends AutotagBase {
             contentItem.URL = contentSourceParams.URL;
         }
 
-        // Set/update fields
-        contentItem.Name = (record['Name'] as string) ?? contentSourceParams.name;
+        // Set/update fields. Prefer the entity's name-field value(s) (computed by
+        // buildContentItemName); fall back to the content source name only when the
+        // record has no usable name. This keeps Content Item names like "GPT-4"
+        // instead of inheriting a generic/LLM-derived title.
+        contentItem.Name = recordName && recordName.length > 0 ? recordName : contentSourceParams.name;
         contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
         contentItem.Text = text;
         contentItem.Checksum = checksum;

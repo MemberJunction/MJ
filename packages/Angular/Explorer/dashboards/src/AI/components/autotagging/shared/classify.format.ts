@@ -13,20 +13,24 @@ export function formatNumber(n: number): string {
 /**
  * Derive a human-meaningful display name for a content item.
  *
- * Content items are often imported with a `Name` equal to the source entity
- * name, so every row in a feed looks identical. To produce distinguishable
- * labels we prefer the first non-empty, meaningful line of the `Description`
- * (stripped of common markdown noise and clamped to ~80 chars), then fall back
- * to `Name`, then to a generic placeholder.
+ * Entity-sourced content items now carry a real per-record `Name` (the source
+ * entity's name field — e.g. "GPT-4"), so we prefer `Name` directly. Only when a
+ * Name is missing (or is a generic source-name placeholder) do we fall back to
+ * the first meaningful line of the LLM-generated `Description` to keep rows
+ * distinguishable, then to a placeholder.
  *
  * Pure/stateless — safe to call from any render site.
  */
 export function deriveDisplayName(item: { Name?: string | null; Description?: string | null }): string {
+    const name = item?.Name?.trim();
+    if (name) {
+        return name.length > DISPLAY_NAME_MAX_LEN
+            ? `${name.slice(0, DISPLAY_NAME_MAX_LEN).trimEnd()}…`
+            : name;
+    }
+
     const fromDescription = firstMeaningfulLine(item?.Description);
     if (fromDescription) return fromDescription;
-
-    const name = item?.Name?.trim();
-    if (name) return name;
 
     return '(Untitled)';
 }
