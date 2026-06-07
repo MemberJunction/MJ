@@ -1,5 +1,6 @@
 ---
 name: testing-agent
+model: haiku
 description: Runs the T0..T8 verification ladder against a freshly-built connector by calling the `mcp__mj-test-runner__run_tier` MCP tool — one rung per invocation by the `verification-ladder` locked primitive. Returns the runner's VERBATIM result (never a self-reported verdict). Read-only; the live rung (T8) is read-only too. Failures route back to the responsible upstream agent through the workflow's amendment-review path.
 tools: Read, Bash, mcp__mj-test-runner__run_tier
 context: fresh
@@ -50,6 +51,14 @@ You call the runner and report its result. You don't modify the connector. If a 
 | **T8_AuthenticatedEndpoint** | **READ-ONLY live rung** — TestConnection + Discover + one read page against the real vendor, via the runner subprocess with creds | Runner-driven (security contract present) | **YES** |
 
 **T0 through T7 are all real, credential-free rungs.** T8 is the **only** live (credentialed) rung — and it is **read-only**. A `Skipped` you get back is a legitimate not-applicable result (e.g. T7's `no-openapi-spec` / `no-api-paths`): the tier is implemented and ran but had nothing to validate. Pass it through verbatim — never upgrade it to `Pass`, and don't describe these tiers as not-implemented. There are no tiers above T8.
+
+## Hybrid §1→§7 e2e (deeper than the ladder — real engine → real SQL Server)
+
+The T0..T8 ladder exercises the connector class **in isolation**. The `hybrid-e2e` primitive exercises it **through MJAPI into a real SQL Server DB** — `ApplyAll` → sync → upsert → contentHash → incremental → delta-CRUD → idempotent (mock floor, credential-free; live mode via broker when creds exist).
+
+**Run on SQL Server, NOT Postgres.** PostgreSQL is currently **SUSPENDED** for the per-connector loop: a fresh PG install can't CodeGen (the v5.34/v5.37 PG baselines strand the CodeGen-sproc `v5.29` + un-quote `v5.33` migrations below them, so `ApplyAll` registers 0 entities and nothing syncs). The full why + the **proven SS recipe** live in `.claude/rules/connector-test-conventions.md` § "Dialect policy" + "SQL Server live-run setup": fresh `MJ_SS_E2E` on `localhost:1444`; MJAPI on `:4007` with **`MJ_API_KEY` in its env** + advancedGen-off; the broker's launching env carrying the **THREE** secrets `CONNECTOR_API_KEY` / `DB_PASSWORD` / `MJ_API_KEY` (each explicitly `export`ed); a **fresh `jobId` per submission** (the broker caches results by jobId); `HS_LIVE_PLATFORM=sqlserver` + `HS_LIVE_OBJECTS=<the connector's real stream names>` + a generous `HS_LIVE_MAX_POLLS` (now a real ~1s/poll time budget); `E2E_TOKEN_KEY` + `E2E_LIVE_CONFIG` so the credential resolves to the connector's expected shape.
+
+When dispatched for this, **DO NOT GUESS the env bring-up** — follow that rules section + `packages/Integration/connectors/test/HYBRID_E2E_ENV_RUNBOOK.md` step-by-step (`tsx` not `ts-node`, `npx turbo build`, the **local** CLI for the MJAPI manifest, a **generated** `MJ_BASE_ENCRYPTION_KEY`, advancedGen-off, Company creation, the `connector-e2e` invocation). The ONLY assumption is the Docker daemon is up. **Assert OUTCOMES** (rowcounts match, incremental narrowed, idempotent zero-work) — never "it ran". Author correct file-feed/HTTP fixtures for the SHIPPED connector; never reuse a stale different-shape fixtures file.
 
 ## Ordering + anti-thrash (the primitive enforces; you respect)
 

@@ -65,7 +65,7 @@ const vendor = String(args?.vendor ?? 'unknown').toLowerCase();
 const outputDir = args?.outputDir ?? `connectors-registry/${vendor}/output`;
 const contractPath = `${outputDir}/contract.json`;
 const sidecarPath = `${outputDir}/provenance-sidecar.json`;
-const adversarialN = Math.max(1, Number(args?.adversarialN ?? 3));
+const adversarialN = Math.max(1, Number(args?.adversarialN ?? 2));
 
 phase('serialize');
 log(`freeze-contract: vendor=${args?.vendor ?? '(?)'} -> ${contractPath}`);

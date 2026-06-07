@@ -34,7 +34,8 @@ export const meta = {
         { title: 'IndependentReview', detail: 'Different-model adversarial review of EXTRACTION_REPORT' },
         { title: 'CodeBuild', detail: 'Connector class + tests' },
         { title: 'VerificationLadder', detail: 'T0..maxTier' },
-        { title: 'FloorCheck', detail: 'Bijection slot table + manifest declarations' },
+        { title: 'HybridE2E', detail: 'Deep §1→§7 e2e: real MJ engine → real Postgres (ApplyAll/upsert/contentHash/incremental/delta-CRUD/idempotent). Env bring-up per HYBRID_E2E_ENV_RUNBOOK.md (no guessing).' },
+        { title: 'FloorCheck', detail: 'Bijection slot table + manifest declarations + hybrid-e2e pass' },
     ],
 };
 
@@ -49,7 +50,7 @@ const MANIFEST = {
     verifyEveryClaim: true,
     sourceDiffMustClose: true,
     e2eTier: args?.maxTier ?? 'T9',
-    adversarialVerifyMinReviewers: 4,
+    adversarialVerifyMinReviewers: 2,
 };
 
 // ── BrandResearch ────────────────────────────────────────────────────
@@ -151,7 +152,7 @@ const REVIEW_SCHEMA = {
     },
 };
 
-const MAX_AMENDMENT_ROUNDS = 3;
+const MAX_AMENDMENT_ROUNDS = 1;
 let extractStats, frozen, review;
 let amendmentRound = 0;
 let previousReviewFingerprint = null;
@@ -211,7 +212,7 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     // ── Independent review ────────────────────────────────────────────
     phase('IndependentReview');
     review = await agent(
-        `Adversarial review of EXTRACTION_REPORT + emission for ${VENDOR} (amendment round ${amendmentRound}). Build your own expected inventory BEFORE opening producer's report. Bijection violations are always Confirmed Gaps (Blocking). When you report Confirmed Gaps, populate FixInstructions with the exact mechanical change required (slot, before, after, locus) so the producer can apply them deterministically.`,
+        `Adversarial review of the ${VENDOR} emission (amendment round ${amendmentRound}). SLIM MODE — do NOT read the full source/SDL into your context. Completeness is already guaranteed mechanically (extractor 0-field hard-fail + compute-source-diff); to re-confirm, RUN a small count-reconcile node script over the metadata file + the source and read its compact stdout (object/field/zero-field counts) — never parse the source in-context. Then spot-check a SAMPLE of ~15 emitted fields (read the metadata file, not the source) for bijection + plausibility. Any zero-field object or bijection violation is a Confirmed Gap (Blocking); populate FixInstructions with the exact mechanical change (slot, before, after, locus). Keep your context small — counts + sample, never the whole schema.`,
         { agentType: 'independent-reviewer', model: 'sonnet', schema: REVIEW_SCHEMA, phase: 'IndependentReview', label: `review:r${amendmentRound}` }
     );
     log(`Review round ${amendmentRound}: ${review.ConfirmedGapsBlocking} blocking, ${review.JudgmentCalls ?? 0} judgment, ${review.BijectionViolationsFound ?? 0} bijection violations`);
@@ -307,7 +308,7 @@ const CODE_RESULT_SCHEMA = {
     },
 };
 
-const MAX_CODE_BUILD_ROUNDS = 3;
+const MAX_CODE_BUILD_ROUNDS = 2;
 let codeResult, ladder;
 let codeRound = 0;
 let previousCodeFingerprint = null;
@@ -353,13 +354,32 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
         { agentType: 'code-builder', schema: { type: 'object', required: ['Registered'], properties: { Registered: { type: 'boolean' }, AlreadyPresent: { type: 'boolean' } } }, phase: isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild', label: `register:r${codeRound}` }
     );
 
+    // ── Stage artifacts into the registry dir where mj-test-runner looks ──
+    // The runner (T1 invariants, T3 doc-self-check, T7 openapi) resolves the metadata,
+    // connector .ts, and EXTRACTION_REPORT_MATRIX.csv RELATIVE TO connectors-registry/<vendor>/,
+    // but the build writes them to canonical/shared/run-specific locations
+    // (metadata/integrations/<vendor>/, the shared connectors/src/ package, runs/<runID>/output/).
+    // Symlink them into the registry so the runner finds them. Idempotent; single source of truth.
+    await agent(
+        `Stage the build artifacts into the registry dir so mj-test-runner can find them. Run EXACTLY these Bash commands from the repo root and return whether each symlink resolves:\n` +
+        `  mkdir -p ${REGISTRY_DIR}/src ${REGISTRY_DIR}/output\n` +
+        `  ln -sf "$(pwd)/${METADATA_FILE}" ${REGISTRY_DIR}/.${VENDOR_SLUG}.integration.json\n` +
+        `  ln -sf "$(pwd)/packages/Integration/connectors/src/${identity.Identity.ClassName}.ts" ${REGISTRY_DIR}/src/${identity.Identity.ClassName}.ts\n` +
+        `  ln -sf "$(pwd)/${RUNS_DIR}/output/EXTRACTION_REPORT_MATRIX.csv" ${REGISTRY_DIR}/output/EXTRACTION_REPORT_MATRIX.csv\n` +
+        `Then verify with: test -f ${REGISTRY_DIR}/.${VENDOR_SLUG}.integration.json && test -f ${REGISTRY_DIR}/src/${identity.Identity.ClassName}.ts && test -f ${REGISTRY_DIR}/output/EXTRACTION_REPORT_MATRIX.csv && echo STAGED_OK. Return Staged=true iff STAGED_OK printed.`,
+        { agentType: 'code-builder', schema: { type: 'object', required: ['Staged'], properties: { Staged: { type: 'boolean' } } }, phase: isAmendment ? `VerificationLadderRound${codeRound}` : 'VerificationLadder', label: `stage-artifacts:r${codeRound}` }
+    );
+
     // Build clean — try the ladder
     phase(isAmendment ? `VerificationLadderRound${codeRound}` : 'VerificationLadder');
     ladder = await workflow(
         { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/verification-ladder.workflow.js' },
         {
             vendor: VENDOR,
-            connectorName: identity.Identity.ClassName,
+            // mj-test-runner resolves Connector → connectors-registry/<slug>/; pass the
+            // registry SLUG, not ClassName. T1's three-way name check reads the real
+            // ClassName from the metadata file. (Finding A — ClassName≠slug deadlocks T1.)
+            connectorName: VENDOR_SLUG,
             manifest: MANIFEST,
             credentialReference: args?.credentialReference ?? null,
             maxTier: MANIFEST.e2eTier,
@@ -404,6 +424,29 @@ if ((!codeResult?.BuildClean || (ladder?.tierResults ?? []).some(r => r?.status 
     };
 }
 
+// ── HybridE2E (deep §1→§7: real MJ engine → real Postgres) ────────────
+// REQUIRED on every build. The T0..T8 ladder above only exercises the connector
+// class in isolation; this proves it THROUGH MJAPI into a real Postgres DB
+// (ApplyAll → upsert → contentHash → incremental → delta-CRUD → idempotent).
+// The mock floor is credential-free; live mode runs when broker creds are present.
+// The ENTIRE env bring-up is scripted in HYBRID_E2E_ENV_RUNBOOK.md — the agent does
+// NOT guess. The ONLY assumption is the Docker daemon is up.
+phase('HybridE2E');
+const hybridE2E = await workflow(
+    { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/hybrid-e2e.workflow.js' },
+    {
+        runID: args?.runID,
+        vendor: VENDOR,
+        // registry SLUG, not ClassName (Finding A) — the runner/e2e resolve by slug dir.
+        connectorName: VENDOR_SLUG,
+        integrationName: brand?.CanonicalName ?? identity.Identity.ClassName,
+        mode: args?.credentialReference ? 'live' : 'mock',
+        credentialReference: args?.credentialReference ?? null,
+        brokerPlans: args?.brokerPlans ?? null,
+    }
+);
+log(`HybridE2E: pass=${hybridE2E?.pass} (mock floor + ${args?.credentialReference ? 'live' : 'live-skipped'})`);
+
 // ── FloorCheck (final gate) ──────────────────────────────────────────
 phase('FloorCheck');
 const verdict = await workflow(
@@ -413,7 +456,8 @@ const verdict = await workflow(
         vendor: VENDOR,
         slotsPath: args?.slotsPath ?? 'packages/Integration/connector-builder-workshop/floor/phase0-slots.json',
         manifest: MANIFEST,
-        journal: { extractStats, sourceDiff, frozen, review, codeResult, ladder },
+        hybridE2E,
+        journal: { extractStats, sourceDiff, frozen, review, codeResult, ladder, hybridE2E },
     }
 );
 

@@ -1,5 +1,6 @@
 ---
 name: identity-establisher
+model: haiku
 description: Phase 1 of connector creation. Establishes the canonical Integration row identity (Name, ClassName, ImportPath, Description, NavigationBaseURL, Icon, CredentialTypeID, BatchMaxRequestCount, BatchRequestWaitTime). Invoked as a workflow stage from the planner-emitted dynamic workflow, OR as an agent inside the `audit-source → verify-claim` locked primitive composition that satisfies the Integration.* bijection slots.
 tools: Read, Write, Bash, WebFetch
 context: fresh
@@ -16,7 +17,16 @@ The Integration-row slots in `packages/Integration/connector-builder-workshop/fl
 3. `ImportPath` — published package path the class is loaded from (e.g. `@memberjunction/integration-connectors`).
 4. `Description` — vendor's own description, trimmed to 1–2 sentences. Cited via PROVENANCE.
 5. `NavigationBaseURL` — root URL the user clicks to reach the vendor's UI for this integration (NOT the API base URL). Nullable per the slot table.
-6. `CredentialTypeID` — `@lookup:MJ: Credential Types.Name=<TypeName>` reference. Determined from the vendor's auth flow (oauth2-cc, oauth2-authcode, api-key, basic, etc.).
+6. `CredentialTypeID` — `@lookup:MJ: Credential Types.Name=<TypeName>` reference. Determined from the vendor's auth flow (oauth2-cc, oauth2-authcode, api-key, basic, etc.). **This is a MATCH-OR-CREATE responsibility, not a pointer-pick — see "Credential type: match-or-create" below.** Pointing at a credential type whose schema keys do NOT cover what the connector's `ConnectionConfig` actually reads is a live-auth failure waiting to happen (PropFuel shipped pointing at the generic *"API Key with Endpoint"* type — keys `apiKey`/`endpoint` — while the connector reads `Token`/`AccountID`, so credential resolution can never succeed).
+
+## Credential type: match-or-create (plan §E1 — REQUIRED pre-testing metadata)
+
+The per-connector seed is THREE artifacts, not one (plan `integration-phase-0-pr1.md` §E1): `.integration.json`, the credential **type record**, and its **auth schema** (`schemas/<type>.schema.json`). You own the credential dimension. The rule:
+
+1. **Derive the connector's credential KEY SHAPE** — the exact set of keys the connector's `ConnectionConfig` reads at runtime (e.g. PropFuel = `{ Token, AccountID }`; a JWT-bearer connector = `{ consumerKey, privateKey, username, ... }`). This comes from the studied auth scheme, NOT from the provided context's convenience.
+2. **MATCH FIRST — reuse an existing credential type when one is usable.** Scan `metadata/credential-types/.credential-types.json`; if an existing type's auth-schema property keys **cover the connector's key shape**, reuse it (`@lookup:` that type's `Name`). Reusing the shared generic types (API Key, OAuth2 Client Credentials, Basic Auth, etc.) is the PREFERRED outcome whenever they genuinely fit — do not create a bespoke type for a vanilla `Authorization: Bearer <key>` connector.
+3. **CREATE ONLY when no existing type matches AND the signature is unique.** If — and only if — no existing type's keys cover the connector's shape, author a dedicated type the same way every real connector did (`YourMembership API`, `Wicket API`, `GrowthZone API`, `NetForum Enterprise Token`…): add a record to `metadata/credential-types/.credential-types.json` and a matching `metadata/credential-types/schemas/<vendor>-<auth>.schema.json` whose properties are EXACTLY the connector's key shape, then `@lookup:` the new type. Author it via the metadata tools, never by hand-pasting credentials — schemas describe key NAMES + which are secret, never values.
+4. **The bijection is keys ↔ config.** Whichever path (2) or (3), the chosen/created type's schema keys MUST be a superset of the connector's `ConnectionConfig` keys. `floor-check` now verifies this against the real files (`credential-type-key-mismatch`) — a mismatch fails the build, not silently ships.
 7. `Icon` — Font Awesome class string (`fa-solid fa-plug` if no vendor-specific glyph). Nullable.
 8. `BatchMaxRequestCount` — vendor-stated per-app rate-limit count. Nullable when undocumented.
 9. `BatchRequestWaitTime` — vendor-stated window. Nullable when undocumented.

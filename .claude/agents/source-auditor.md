@@ -1,5 +1,6 @@
 ---
 name: source-auditor
+model: sonnet
 description: Finds + audits authoritative documentation sources for a vendor's API. Composes with the `audit-source` locked primitive — emits the candidate list; the primitive scores each on the fixed rubric. Downstream `ioiof-extractor` and `metadata-writer` agents consume the audited result.
 tools: WebSearch, WebFetch, Read, Write, Bash
 context: fresh
@@ -20,6 +21,24 @@ Produce a ranked list of authoritative documentation sources for the vendor + a 
 - `Write` — emit `SOURCES.json` + `SOURCE_STUDY.md` to `connectors-registry/<vendor>/`.
 
 ## Discipline
+
+### Acquire the machine-readable schema RAW, in code — do this FIRST
+
+Most APIs publish a **machine-readable contract**, and when one exists it is THE authoritative source, ranked above every prose page. Find it and pull it **in full, with code** — before you rank any human-readable docs. Exhaust **every legal acquisition path** the source offers; do not stop at the first prose page.
+
+- **Detect the contract type** (use `Bash` curl/node + `WebSearch`, not assumptions):
+  - **OpenAPI/Swagger** — `openapi.json`, `swagger.json`, `/v3/api-docs`, a linked `*.yaml`/`*.json` spec.
+  - **GraphQL** — try an introspection query first (`curl -sX POST <gql-url> -H 'content-type: application/json' --data '{"query":"query{__schema{types{name}}}"}'`). If introspection is auth-gated, look for a downloadable SDL **or** a generated schema-reference page (**SpectaQL / GraphDoc / Magidoc** — detect by `spectaql`/`graphdoc` JS assets and `#definition-<Type>` anchors). **A SpectaQL page embeds the ENTIRE SDL** (every type, field, and description) in its HTML — that HTML *is* the schema; save it whole.
+  - **Postman** — a "Run in Postman" button / a public `postman.com/<vendor>` collection (search for it). Capture the collection JSON.
+  - **SOAP** — the WSDL + referenced XSDs.  **SDK** — published TypeScript/Python/etc. type defs.
+- **Pull raw bytes via `Bash` (curl / node-fetch) and save the WHOLE file** to `sources/` (e.g. `sources/schema.spectaql.html`, `sources/openapi.json`, `sources/postman.collection.json`). That saved file is what the extractor parses in code.
+- **`WebFetch` is a summarizer — NEVER the source of record for a schema.** It runs a small model over the page and **truncates** ("Content truncated due to length…"); a 1.2 MB schema reference comes back as "a few sample fields," which *looks* complete and is not. Use `WebFetch` only to navigate/locate candidate URLs; use `Bash` to fetch the bytes you hand downstream.
+- Record each acquired contract in `SOURCES.json` with `SourceCategory` (`OpenAPISpec`/`PostmanCollection`/`GraphQLSDL`/`OfficialSDK`) **and the local raw-file path you saved**.
+- **Scratch-pad, never context.** Huge artifacts (a multi-MB schema reference, a big spec) must go to a **scratch file on disk** and be inspected with `grep`/`node`/`jq` — NEVER pulled into your reasoning window. Curl → file → grep the file for the structure you need (type/anchor counts, section markers) → emit small structured findings. Holding the raw bytes in context is both lossy and wasteful; the disk file is the artifact, code is how you read it.
+
+### Be suspicious of cheap completeness
+
+A result that arrives suspiciously thin or suspiciously tidy is the #1 silent-failure source — be anxious about every result. A `WebFetch` summary listing "sample fields," a page that "truncated," a catalog with far fewer objects/fields than the type list implies, an object that would end up with **zero fields** when the schema clearly documents them — treat ALL of these as **INCOMPLETE until cross-checked against the raw bytes**. Count the types/fields in the raw artifact and assert downstream coverage matches; a large unexplained gap is a defect to surface, not a pass to wave through.
 
 - **No hardcoding.** Don't assume the vendor has OpenAPI / Postman / a typed SDK / any specific doc shape. Different vendors expose truth differently. Discover what's there.
 - **No fabrication.** Every URL you cite must be reachable. If WebFetch returns 404 / empty / a bot-block, surface that with structured error evidence — final status code, attempt timestamps, response shape if any. Retry 3 times with exponential backoff (1s, 3s, 9s); if WebFetch still fails, try the URL via `curl` from Bash before declaring it inaccessible. Tag uncertain URLs `AccessStatus: 'WebFetchBlocked'` so downstream verifiers know to cross-check.
@@ -71,10 +90,12 @@ interface SourceAuditReturn {
     TaxonomyLeaves: string[];     // THE coverable object list. These are the leaf object names of the
                                   //   COVERABLE taxonomies (the connector's syncable objects) — NOT
                                   //   the taxonomy container names, NOT the INFORMATIONAL taxonomies,
-                                  //   NOT the L1 containers. extract-iiof-pipeline maps the IOIOF
-                                  //   extraction ONCE PER ENTRY here, and compute-source-diff uses this
-                                  //   exact array as the `universe`. An empty/short array here =
-                                  //   extraction over nothing. This is the single most load-bearing field.
+                                  //   NOT the L1 containers. extract-iiof-pipeline's ONE extractor
+                                  //   script walks this entire leaf set in a single pass (flat in object
+                                  //   count — NOT one extraction per entry), and compute-source-diff uses
+                                  //   this exact array as the `universe` to compute completeness. An
+                                  //   empty/short array here = extraction over nothing. Single most
+                                  //   load-bearing field.
     VendorDocsPaths: string[];   // categorized authoritative-source URLs/paths: prose vendor docs.
     SDKPaths: string[];          // categorized authoritative-source URLs/paths: typed SDK sources.
     PostmanPaths: string[];      // categorized authoritative-source URLs/paths: Postman collections.
