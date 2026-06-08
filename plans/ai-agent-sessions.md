@@ -158,15 +158,14 @@ The co-agent needs the **same context the loop agent already assembles**: releva
 
 1. **New `AIModelType`: `Realtime`.** No metadata folder exists for model types yet (they pre-date the seeding convention), so add `metadata/ai-model-types/` with a `.mj-sync.json` bound to entity **`MJ: AI Model Types`**, and seed the `Realtime` type (per the CLAUDE.md "Seeding New Lookup/Reference Tables" rule).
 
-2. **Three new `MJ: AI Models`**, each typed `Realtime`, with an `MJ: AI Model Vendors` association whose `DriverClass` points at the realtime driver (mirroring the existing `xAILLM` / `AnthropicLLM` convention):
-   - **Gemini Live** → `DriverClass: GeminiRealtime`
-   - **GPT Realtime** → `DriverClass: OpenAIRealtime`
-   - **Eleven Labs (full stack)** → `DriverClass: ElevenLabsRealtime` — the bundled STT+LLM+TTS stack run entirely in the Eleven Labs cloud (what powers the production Grace experience) counts as a real-time model here. (Running Eleven Labs as *separate* STT/TTS components is the slower, non-real-time path and is **not** part of this design.)
+2. **Realtime `MJ: AI Models`**, each typed `Realtime`, with an `MJ: AI Model Vendors` association whose `DriverClass` points at the realtime driver (mirroring the existing `xAILLM` / `AnthropicLLM` convention). Two fit `BaseRealtimeModel` cleanly and ship first:
+   - **Gemini 3.1 Flash Live** — Google's latest live native-audio model (Mar 2026; supersedes the deprecated `gemini-live-2.5-flash-*-native-audio` previews) → `DriverClass: GeminiRealtime`
+   - **gpt-realtime-2** — OpenAI's latest GA realtime voice model (May 2026; `gpt-realtime` was the original GA) → `DriverClass: OpenAIRealtime`
 
    ```jsonc
    {
      "fields": {
-       "Name": "Gemini Live 2.5 Flash",
+       "Name": "Gemini 3.1 Flash Live",
        "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
        "IsActive": true,
        "InheritTypeModalities": true
@@ -186,20 +185,34 @@ The co-agent needs the **same context the loop agent already assembles**: releva
        ]
      }
    }
-   // …sibling records for "GPT Realtime" (OpenAIRealtime / OpenAI) and
-   //    "Eleven Labs" (ElevenLabsRealtime / ElevenLabs).
+   // …sibling record for "gpt-realtime-2" (OpenAIRealtime / OpenAI).
    ```
 
 3. Apply with: `npx mj sync push --dir=metadata --include="ai-model-types,ai-models"`.
 
-The driver classes (`GeminiRealtime`, `OpenAIRealtime`, `ElevenLabsRealtime`, implementing `BaseRealtimeModel`) ship as code in the respective `packages/AI/Providers/*` packages and self-register via `@RegisterClass(BaseRealtimeModel, 'GeminiRealtime')`.
+The driver classes (`GeminiRealtime`, `OpenAIRealtime`, implementing `BaseRealtimeModel`) ship as code in the respective `packages/AI/Providers/*` packages and self-register via `@RegisterClass(BaseRealtimeModel, 'GeminiRealtime')`.
+
+#### Eleven Labs — a config-bound "agent", mapped but a fast-follow
+
+Eleven Labs is genuinely different and worth calling out. Its real-time unit is **not a raw model** but an **Agent** — a server-side configuration bundle (ASR + LLM + TTS/voice + turn-taking + system prompt + tools) created in their dashboard/API and referenced by an **`agent_id`**. A client opens a WebSocket/WebRTC conversation against that `agent_id`. At conversation start you may pass **`conversation_config_override`** (system prompt, first message, LLM, voice, language — *each field must be pre-enabled for override on the agent*), **`dynamic_variables`**, and `custom_llm_extra_body`. **Tools** are declared on the agent config; the client registers *handlers* whose names must match those declarations — it does **not** accept arbitrary tool schemas at session start the way GPT Realtime / Gemini Live do.
+
+How it maps to our model:
+- The EL **Agent sits *below* our model** — it is purely the voice transport + reasoning bundle. Our MJ Voice Co-Agent (companion framing, target description, conversation history, memory) lives in the **overridden system prompt + dynamic variables**; the target agent is a runtime value, not a different EL agent.
+- **One pre-provisioned EL agent serves all targets:** create it once with override enabled for system prompt / first message / variables and with the co-agent's stable tool set declared (primary: *invoke target agent*). The `ElevenLabsRealtime` driver opens the socket against its `agent_id`, sends the per-session overrides + dynamic variables, and registers client-tool handlers matching the declared names.
+- The **`agent_id` (and which override fields are enabled) is driver configuration** — stored via the model/vendor config (e.g. `MJ: AI Configuration Params`) and read by the driver, not hardcoded.
+
+Because of the pre-provisioning + override-enablement asymmetry, **Eleven Labs is a fast-follow**: Gemini and GPT (which take full system prompt + tools dynamically at session start) ship first and exercise the whole path; EL slots in once the agent-provisioning story is settled. (Aside: EL also supports *bring-your-own-LLM* via an OpenAI-compatible endpoint — interesting later for putting MJ inside EL's loop, but it defeats the low-latency point and is not part of this design.)
+
+> [!NOTE]
+> **Driver capability asymmetry.** GPT Realtime and Gemini Live accept the full system prompt + tool definitions at session start; Eleven Labs binds to a pre-configured agent and accepts only enabled overrides + handlers for pre-declared tools. `BaseRealtimeModel` must accommodate both — `RegisterTools` is direct for GPT/Gemini, while the EL driver maps it onto pre-declared tool names plus per-conversation overrides.
 
 > [!IMPORTANT]
-> **To verify during implementation:** the names in the snippet are placeholders. Before authoring the real metadata files, confirm against current metadata/data:
-> - the exact `MJ: AI Vendors` row names (`Google` / `Google AI` / `Gemini`? `OpenAI`? `ElevenLabs` / `Eleven Labs`?) for the `@lookup` references;
+> **To verify during implementation:** the names in the snippet are placeholders. Confirm against current metadata/data:
+> - exact `MJ: AI Vendors` names (`Google` / `Google AI`? `OpenAI`? `ElevenLabs` / `Eleven Labs`?) for the `@lookup` references;
 > - that a `MJ: AI Vendor Type Definitions` row named `Inference Provider` exists (existing records use `Model Developer`);
-> - the canonical model display names against the providers' current model IDs;
-> - the final `DriverClass` naming convention to match sibling drivers in `packages/AI/Providers/*`;
+> - the exact provider **model IDs** for Gemini 3.1 Flash Live and gpt-realtime-2 (use the providers' current API identifiers — they move fast);
+> - the `DriverClass` naming convention to match sibling drivers in `packages/AI/Providers/*`;
+> - where the Eleven Labs `agent_id` + override-enabled fields are stored (e.g. `MJ: AI Configuration Params`);
 > - the exact name of the unified client-or-server tool-metadata type used by `RegisterTools`.
 
 ### Open questions
