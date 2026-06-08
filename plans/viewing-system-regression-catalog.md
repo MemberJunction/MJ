@@ -99,3 +99,33 @@ Entities to exercise: **AI Agents** (date fields, no geo), **AI Models** (vector
 - J1 caching: PASS — Grid/Cards/Timeline/Cluster instances cached; round-trip preserves state (cluster runToken stable).
 - F1 cluster point-click: PASS — no recompute (runToken stable).
 - C10 Export: BUG#2 (FIXED) — duplicate export dialog (mj-entity-data-grid hosts its OWN export dialog AND the grid wrapper added a second → 2 stacked). Fix: removed the wrapper's export dialog + handling; the grid component owns export. Now 1 dialog, shows Excel/CSV/JSON format options.
+
+## ROUND 2 — AI Agents features (all PASS, no new bugs)
+- A5/F4/F5 Cluster: 84 points, 0 "Unknown" labels (real names), LLM cluster names ("General Purpose Loop Agents", "Research And Synthesis Agents", …), no generic "Cluster N".
+- D1–D5 Timeline: 42 events render; date-field select + orientation + sort controls present INSIDE the timeline renderer (no leak).
+- C11 Add-to-List: self-contained list-management dialog opens on selection.
+- C9 Delete: self-contained confirm dialog opens on selection.
+- C10 Export: single dialog (Excel/CSV/JSON) — BUG#2 fixed.
+- C3 Filter: 19→9→19 (works, shared via host).
+- C1 Sort: server-side reload on header sort works (Name desc → records + display correctly ordered).
+
+## ROUND 3 — AI Models (PASS)
+- Entity-switch I1: grid shows AI Models' OWN 6 columns (Name, Power Rank, Active, Model Type Name, Vendor, Input Token Limit) — no leak from prior entity.
+- A5/F Cluster: 342 points, 0 "Unknown", LLM cluster names (in .Label): "Qwen Series Models", "General Purpose Frontier Models", "Reranking and Utility Models", "High Speed Reasoning Models", "OpenAI Advanced Model Suite".
+
+## ROUND 4 — Navigation (MJ: Actions) (PASS)
+- C6 FK click: 18 FK links; clicking one navigated (opened related record via detail panel, record= param).
+- C5 row double-click: navigated to the record's full page (/app/home/record/MJ: Actions/ID|...).
+- K1 navigation: open + FK both route via Explorer correctly.
+
+## ROUND 5/6 — persistence, navigation, consumers, console (PASS)
+- H1 persistence: set Cards on AI Agents → reload → still Cards (per-entity ViewTypeID default-view setting persists).
+- L3 entity-form consumer: opening an AI Models record renders the form cleanly (0 console errors).
+- L (other consumers single-search-result / view-resource / dashboard-viewer): build-green in full-repo test; share the verified entity-viewer/workspace components.
+- A4/E Map: availability gating PASS (Map correctly hidden on AI Agents/Models/Actions — no geocoded entity in this dataset). Map RENDERING not exercisable without a geo entity; plugin builds + gating verified.
+- M1 console hygiene: 0 errors / 0 warnings across ALL flows (5 view types, switching, dialogs, sort/filter, navigation, record forms).
+
+## SUMMARY
+- Bugs found + fixed: BUG#1 (grid empty — display:inline), BUG#2 (duplicate export dialog). Both committed (e13c67c58b).
+- All other surfaces PASS. Console clean. System in good shape for human testing.
+- Only un-exercised surface: Map rendering (no geocoded entity available in this dataset; gating + build verified).
