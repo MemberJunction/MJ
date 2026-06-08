@@ -45,6 +45,13 @@
       "isSecret": false,
       "order": 5,
       "default": "https://demo.docusign.net/restapi"
+    },
+    "connectHmacKey": {
+      "type": "string",
+      "title": "Connect HMAC Key",
+      "description": "Optional DocuSign Connect HMAC secret. Required ONLY if you enable inbound status webhooks: inbound webhooks are rejected unless their X-DocuSign-Signature-1 HMAC verifies against this key. Configure the matching key in DocuSign Admin > Connect.",
+      "isSecret": true,
+      "order": 6
     }
   },
   "required": ["integrationKey", "userId", "accountId", "privateKey"]

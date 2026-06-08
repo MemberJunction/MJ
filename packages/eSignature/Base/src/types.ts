@@ -19,7 +19,8 @@ export type SignatureOperation =
     | 'CreateEmbeddedSigningUrl'
     | 'ApplyTemplate'
     | 'ResendNotification'
-    | 'ParseWebhookEvent';
+    | 'ParseWebhookEvent'
+    | 'VerifyWebhookSignature';
 
 /**
  * Normalized envelope lifecycle status. Each provider maps its own status vocabulary onto
@@ -53,6 +54,13 @@ export interface SignatureProviderConfig {
     accountName?: string;
     /** Invoked by the provider after an OAuth token refresh so the engine can persist tokens. */
     onTokenRefresh?: SignatureTokenRefreshCallback;
+    /**
+     * Shared secret used to verify inbound webhook signatures (e.g. DocuSign Connect HMAC,
+     * Dropbox Sign / PandaDoc callback HMAC). Lives in the account's encrypted MJ: Credentials row
+     * alongside the other provider secrets — never an environment variable. When absent, strict
+     * webhook verification fails closed (the engine rejects the event).
+     */
+    connectHmacKey?: string;
     /** Provider-specific config + decrypted credential values (integrationKey, privateKey, …). */
     [key: string]: unknown;
 }
@@ -159,6 +167,18 @@ export interface TemplateEnvelopeRequest {
     sendImmediately?: boolean;
     metadata?: Record<string, string>;
 }
+
+/**
+ * Outcome of {@link BaseSignatureProvider.VerifyWebhookSignature}. Three-state so the engine can
+ * distinguish "no secret configured" (verification not possible) from "configured but the signature
+ * didn't match" — enabling a verify-if-configured policy:
+ *   - `Verified`      — a secret is configured and the signature matched. Accept.
+ *   - `Failed`        — a secret is configured but the signature was missing/invalid. **Reject.**
+ *   - `NotConfigured` — no secret is configured, so authenticity can't be checked. Accept with a
+ *                       logged warning (the endpoint still functions during setup; tightens to
+ *                       strict automatically once a key is set).
+ */
+export type WebhookVerificationResult = 'Verified' | 'Failed' | 'NotConfigured';
 
 /**
  * A normalized inbound webhook event (DocuSign Connect, Adobe events, …) after the driver has

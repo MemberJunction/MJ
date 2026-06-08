@@ -58,7 +58,8 @@ async function handleWebhook(req: express.Request, res: express.Response): Promi
     try {
         await SignatureEngine.Instance.Config(false, contextUser);
         const headers = normalizeHeaders(req.headers);
-        const result = await SignatureEngine.Instance.RecordWebhookEvent(driverKey, req.body, headers, contextUser);
+        const rawBody = (req as RawBodyRequest).rawBody;
+        const result = await SignatureEngine.Instance.RecordWebhookEvent(driverKey, req.body, headers, contextUser, rawBody);
 
         if (!result.Success) {
             // 202: we received it but couldn't act (e.g. unrecognized payload / no matching envelope).

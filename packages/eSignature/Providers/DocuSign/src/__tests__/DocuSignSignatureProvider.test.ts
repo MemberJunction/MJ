@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createHmac } from 'node:crypto';
 import { DocuSignSignatureProvider, mapDocuSignStatus } from '../DocuSignSignatureProvider';
 import type { SignatureProviderConfig } from '@memberjunction/esignature';
 
@@ -108,6 +109,95 @@ describe('DocuSignSignatureProvider', () => {
             );
             expect(provider.supportsOperation('ApplyTemplate')).toBe(true);
             expect(provider.supportsOperation('ResendNotification')).toBe(false);
+        });
+
+        it('advertises webhook parse + verify', () => {
+            expect(provider.supportsOperation('ParseWebhookEvent')).toBe(true);
+            expect(provider.supportsOperation('VerifyWebhookSignature')).toBe(true);
+        });
+    });
+
+    describe('ParseWebhookEvent', () => {
+        it('parses the Connect JSON-SIM shape (data.envelopeSummary)', () => {
+            const event = provider.ParseWebhookEvent(
+                {
+                    event: 'envelope-completed',
+                    data: {
+                        envelopeId: 'ENV-77',
+                        envelopeSummary: { status: 'completed', statusChangedDateTime: '2026-06-06T12:00:00Z' },
+                    },
+                },
+                {},
+            );
+            expect(event).not.toBeNull();
+            expect(event?.externalEnvelopeId).toBe('ENV-77');
+            expect(event?.status).toBe('Completed');
+            expect(event?.occurredAt).toBe('2026-06-06T12:00:00Z');
+        });
+
+        it('parses a flat legacy envelope payload', () => {
+            const event = provider.ParseWebhookEvent(
+                { envelopeId: 'ENV-5', status: 'sent', statusChangedDateTime: '2026-06-06T01:00:00Z' },
+                {},
+            );
+            expect(event?.externalEnvelopeId).toBe('ENV-5');
+            expect(event?.status).toBe('Sent');
+        });
+
+        it('returns null when no envelope id is present', () => {
+            expect(provider.ParseWebhookEvent({ event: 'recipient-only', data: {} }, {})).toBeNull();
+            expect(provider.ParseWebhookEvent(null, {})).toBeNull();
+            expect(provider.ParseWebhookEvent('not-an-object', {})).toBeNull();
+        });
+    });
+
+    describe('VerifyWebhookSignature', () => {
+        const HMAC_KEY = 'connect-secret';
+        const RAW = Buffer.from('{"event":"envelope-completed"}');
+
+        function signatureFor(body: Buffer, key: string): string {
+            return createHmac('sha256', key).update(new Uint8Array(body)).digest('base64');
+        }
+
+        it('accepts a valid DocuSign Connect HMAC over the raw body', async () => {
+            await provider.initialize({ ...VALID_CONFIG, connectHmacKey: HMAC_KEY });
+            const headers = { 'x-docusign-signature-1': signatureFor(RAW, HMAC_KEY) };
+            expect(provider.VerifyWebhookSignature(RAW, headers)).toBe('Verified');
+        });
+
+        it('matches the header case-insensitively', async () => {
+            await provider.initialize({ ...VALID_CONFIG, connectHmacKey: HMAC_KEY });
+            const headers = { 'X-DocuSign-Signature-1': signatureFor(RAW, HMAC_KEY) };
+            expect(provider.VerifyWebhookSignature(RAW, headers)).toBe('Verified');
+        });
+
+        it('fails (key set) on a tampered body', async () => {
+            await provider.initialize({ ...VALID_CONFIG, connectHmacKey: HMAC_KEY });
+            const headers = { 'x-docusign-signature-1': signatureFor(RAW, HMAC_KEY) };
+            expect(provider.VerifyWebhookSignature(Buffer.from('{"event":"forged"}'), headers)).toBe('Failed');
+        });
+
+        it('fails (key set) on a signature made with the wrong key', async () => {
+            await provider.initialize({ ...VALID_CONFIG, connectHmacKey: HMAC_KEY });
+            const headers = { 'x-docusign-signature-1': signatureFor(RAW, 'wrong-key') };
+            expect(provider.VerifyWebhookSignature(RAW, headers)).toBe('Failed');
+        });
+
+        it('reports NotConfigured when no HMAC key is set (verify-if-configured policy)', async () => {
+            await provider.initialize(VALID_CONFIG); // no connectHmacKey
+            const headers = { 'x-docusign-signature-1': signatureFor(RAW, HMAC_KEY) };
+            expect(provider.VerifyWebhookSignature(RAW, headers)).toBe('NotConfigured');
+        });
+
+        it('fails (key set) when the raw body is unavailable', async () => {
+            await provider.initialize({ ...VALID_CONFIG, connectHmacKey: HMAC_KEY });
+            const headers = { 'x-docusign-signature-1': signatureFor(RAW, HMAC_KEY) };
+            expect(provider.VerifyWebhookSignature(undefined, headers)).toBe('Failed');
+        });
+
+        it('fails (key set) when the signature header is missing', async () => {
+            await provider.initialize({ ...VALID_CONFIG, connectHmacKey: HMAC_KEY });
+            expect(provider.VerifyWebhookSignature(RAW, {})).toBe('Failed');
         });
     });
 

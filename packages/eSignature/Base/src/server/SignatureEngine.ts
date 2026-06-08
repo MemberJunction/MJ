@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import {
     MJSignatureRequestDocumentEntity,
@@ -14,8 +14,9 @@ import {
     SignatureDocumentInput,
     SignatureRecipientInput,
 } from '../types';
-import { SignatureAccountWithProvider, SignatureEngineBase } from './SignatureEngineBase';
+import { SignatureAccountWithProvider, SignatureEngineBase } from '../SignatureEngineBase';
 import { initializeDriverWithAccountCredentials } from './util';
+import { loadArtifactVersionBytes, writeSignedArtifact } from './artifacts';
 
 /**
  * The DB-persistable subset of {@link EnvelopeStatus} — matches the `Status` CHECK constraint /
@@ -206,9 +207,18 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         if (!account) {
             return { Success: false, ErrorMessage: `Signature account '${options.signatureAccountId}' not found.` };
         }
-        if (!options.documents?.length) {
-            return { Success: false, ErrorMessage: 'No documents supplied.' };
+
+        // Resolve documents: prefer caller-supplied bytes; otherwise pull from a referenced Artifact
+        // Version (so a document already in MJ — e.g. produced by an agent run — can be sent by
+        // reference instead of re-uploading base64).
+        const documents = await this.resolveDocuments(options);
+        if (!documents.length) {
+            return {
+                Success: false,
+                ErrorMessage: 'No documents supplied. Provide `documents`, or an `artifactVersionId` (or `artifactId`) to send.',
+            };
         }
+        options = { ...options, documents };
 
         const request = await this.createRequestRecord(options, account);
         if (!request) {
@@ -297,7 +307,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
             if (!result.Success || !result.document) {
                 return { Success: false, ErrorMessage: result.ErrorMessage ?? 'Provider returned no document.' };
             }
-            await this.recordSignedDocument(request.ID, result.document.filename, contextUser, provider);
+            await this.recordSignedDocument(request, result.document, contextUser, provider);
             return { Success: true, document: result.document };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -340,21 +350,30 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
     // ---- Webhook ----------------------------------------------------------------------------------
 
     /**
-     * Normalize an inbound provider webhook (via the driver's ParseWebhookEvent) and apply the status.
-     * `driverKey` selects the provider; the matching request is found by ExternalEnvelopeID.
+     * Normalize an inbound provider webhook and apply the status — fail-closed on authenticity.
+     *
+     * Flow (no env vars; HMAC secret lives in the account credential):
+     *  1. Parse the payload on a bare driver (parsing needs no secret) to discover the envelope.
+     *  2. Find the owning MJ: Signature Request, hence its account.
+     *  3. Resolve the account's *credential-initialized* driver and require
+     *     {@link BaseSignatureProvider.VerifyWebhookSignature} to pass over the raw bytes.
+     *  4. Only then apply the status.
+     *
+     * @param rawBody The exact request bytes, required for byte-accurate HMAC verification.
      */
     public async RecordWebhookEvent(
         driverKey: string,
         payload: unknown,
         headers: Record<string, string>,
         contextUser: UserInfo,
+        rawBody?: Buffer,
         provider?: IMetadataProvider,
     ): Promise<{ Success: boolean; event?: NormalizedSignatureEvent; ErrorMessage?: string }> {
-        const driver = this.resolveDriverByKey(driverKey, contextUser);
-        if (!driver) {
+        const parser = this.resolveDriverByKey(driverKey, contextUser);
+        if (!parser) {
             return { Success: false, ErrorMessage: `No signature provider registered for driver key '${driverKey}'.` };
         }
-        const event = driver.ParseWebhookEvent(payload, headers);
+        const event = parser.ParseWebhookEvent(payload, headers);
         if (!event) {
             return { Success: false, ErrorMessage: 'Webhook payload was not handled by the provider.' };
         }
@@ -363,6 +382,22 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         if (!request) {
             await this.logOperation(null, 'Webhook', false, null, event.status, `No request for envelope '${event.externalEnvelopeId}'.`, contextUser, provider);
             return { Success: false, event, ErrorMessage: 'No matching signature request for the webhook envelope.' };
+        }
+
+        // Authenticity: verify on the credential-initialized driver for the owning account, under a
+        // verify-if-configured policy. A configured-but-invalid signature is rejected; an account
+        // with no HMAC secret configured is accepted (logged) so the endpoint works pre-setup.
+        const verifier = await this.GetDriver(request.SignatureAccountID, contextUser);
+        const verification = verifier.VerifyWebhookSignature(rawBody, headers, payload);
+        if (verification === 'Failed') {
+            await this.logOperation(request.ID, 'Webhook', false, request.Status as EnvelopeStatus, event.status, 'Webhook signature verification failed.', contextUser, provider);
+            return { Success: false, event, ErrorMessage: 'Webhook signature verification failed.' };
+        }
+        if (verification === 'NotConfigured') {
+            LogStatus(
+                `[eSignature] Webhook for envelope '${event.externalEnvelopeId}' accepted WITHOUT signature verification ` +
+                    `(no HMAC key configured on account '${request.SignatureAccountID}'). Configure a webhook secret to enforce authenticity.`,
+            );
         }
 
         const before = request.Status as EnvelopeStatus;
@@ -374,6 +409,22 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
     // ─────────────────────────────────────────────────────────────────────────
     // Persistence helpers
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Resolve the documents to send. Caller-supplied `documents` win; if none are given and an
+     * `artifactVersionId` is provided, load that version's bytes from the Artifacts subsystem.
+     * (`artifactId` without a version is recorded as provenance only — we don't guess a version.)
+     */
+    private async resolveDocuments(options: SendForSignatureOptions): Promise<SignatureDocumentInput[]> {
+        if (options.documents?.length) {
+            return options.documents;
+        }
+        if (options.artifactVersionId) {
+            const doc = await loadArtifactVersionBytes(options.artifactVersionId, options.contextUser, options.provider);
+            return doc ? [doc] : [];
+        }
+        return [];
+    }
 
     private async createRequestRecord(
         options: SendForSignatureOptions,
@@ -448,18 +499,43 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         await this.saveOrThrow(request, 'persist sent signature request');
     }
 
+    /**
+     * Record the executed document: write the bytes back into the Artifacts subsystem (new Artifact
+     * + Version) and add a `Role='Signed'` document row linked to that version. If no File Storage
+     * Account is configured, fall back to recording the row without an artifact link (the caller
+     * still receives the bytes) — a successful download is never lost over missing storage setup.
+     */
     private async recordSignedDocument(
-        requestId: string,
-        filename: string,
+        request: MJSignatureRequestEntity,
+        document: { bytes: Buffer; filename: string; contentType: string },
         contextUser: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<void> {
+        let artifactVersionId: string | undefined;
+        try {
+            const written = await writeSignedArtifact({
+                filename: document.filename,
+                bytes: document.bytes,
+                contentType: document.contentType,
+                title: `${request.Title} (signed)`,
+                contextUser,
+                provider,
+            });
+            artifactVersionId = written?.artifactVersionId;
+        } catch (e) {
+            // Artifact write-back is best-effort; log and still record the document row.
+            LogError(`SignatureEngine: failed to write signed document to Artifacts: ${e instanceof Error ? e.message : String(e)}`);
+        }
+
         const md = provider ?? Metadata.Provider;
         const row = await md.GetEntityObject<MJSignatureRequestDocumentEntity>('MJ: Signature Request Documents', contextUser);
-        row.SignatureRequestID = requestId;
-        row.Name = filename;
+        row.SignatureRequestID = request.ID;
+        row.Name = document.filename;
         row.Sequence = 1;
         row.Role = 'Signed';
+        if (artifactVersionId) {
+            row.ArtifactVersionID = artifactVersionId;
+        }
         await this.saveOrThrow(row, 'record signed document');
     }
 

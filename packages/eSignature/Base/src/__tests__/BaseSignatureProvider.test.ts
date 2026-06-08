@@ -100,6 +100,15 @@ describe('BaseSignatureProvider', () => {
         it('returns null for unhandled payloads by default', () => {
             expect(provider.ParseWebhookEvent({ anything: true }, {})).toBeNull();
         });
+
+        it('VerifyWebhookSignature defaults to NotConfigured (verify-if-configured policy)', () => {
+            // A driver that doesn't implement verification has no secret to check; the engine treats
+            // NotConfigured as "accept with a logged warning" so the endpoint works pre-setup, and
+            // tightens to strict automatically once a driver/account has a key. A configured-but-bad
+            // signature still returns 'Failed' (tested per-driver) and is rejected.
+            expect(provider.VerifyWebhookSignature(Buffer.from('x'), {})).toBe('NotConfigured');
+            expect(provider.VerifyWebhookSignature(undefined, {}, { some: 'payload' })).toBe('NotConfigured');
+        });
     });
 
     describe('initialize / IsConfigured', () => {

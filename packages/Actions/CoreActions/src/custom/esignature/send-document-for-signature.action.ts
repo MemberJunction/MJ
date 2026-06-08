@@ -34,6 +34,8 @@ export class SendDocumentForSignatureAction extends BaseSignatureAction {
         const title = this.getStringParam(params, 'Title');
         const documents = this.parseDocuments(params);
         const recipients = this.parseRecipients(params);
+        const artifactId = this.getStringParam(params, 'ArtifactID');
+        const artifactVersionId = this.getStringParam(params, 'ArtifactVersionID');
 
         if (!signatureAccountId) {
             return this.fail('ACCOUNT_NOT_FOUND', "Parameter 'SignatureAccountID' is required.");
@@ -41,8 +43,13 @@ export class SendDocumentForSignatureAction extends BaseSignatureAction {
         if (!title) {
             return this.fail('PROVIDER_ERROR', "Parameter 'Title' is required.");
         }
-        if (!documents.length) {
-            return this.fail('MISSING_DOCUMENT', "Parameter 'Documents' must contain at least one document with contentBase64.");
+        // Documents may be supplied inline (base64) OR by reference to an Artifact Version already
+        // in MJ. Require at least one source.
+        if (!documents.length && !artifactVersionId) {
+            return this.fail(
+                'MISSING_DOCUMENT',
+                "Provide 'Documents' (each with contentBase64) or an 'ArtifactVersionID' to send a document already in MemberJunction.",
+            );
         }
         if (!recipients.length) {
             return this.fail('PROVIDER_ERROR', "Parameter 'Recipients' must contain at least one recipient with an email.");
@@ -56,8 +63,8 @@ export class SendDocumentForSignatureAction extends BaseSignatureAction {
                 message: this.getStringParam(params, 'Message'),
                 documents,
                 recipients,
-                artifactId: this.getStringParam(params, 'ArtifactID'),
-                artifactVersionId: this.getStringParam(params, 'ArtifactVersionID'),
+                artifactId,
+                artifactVersionId,
                 entityId: this.getStringParam(params, 'EntityID'),
                 recordId: this.getStringParam(params, 'RecordID'),
                 sendImmediately: this.getBooleanParam(params, 'SendImmediately', true),

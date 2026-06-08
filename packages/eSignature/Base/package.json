@@ -37,6 +37,7 @@
     "@memberjunction/global": "5.39.0",
     "@memberjunction/core": "5.39.0",
     "@memberjunction/core-entities": "5.39.0",
-    "@memberjunction/credentials": "5.39.0"
+    "@memberjunction/credentials": "5.39.0",
+    "@memberjunction/storage": "5.39.0"
   }
 }

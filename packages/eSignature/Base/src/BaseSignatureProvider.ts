@@ -10,6 +10,7 @@ import {
     SignedDocumentResult,
     SigningUrlResult,
     TemplateEnvelopeRequest,
+    WebhookVerificationResult,
 } from './types';
 
 /**
@@ -83,13 +84,47 @@ export abstract class BaseSignatureProvider {
     // ---- Inbound webhook (Connect / event callbacks) --------------------------------------------
 
     /**
-     * Verify a provider webhook payload (signature/HMAC) and normalize it onto our vocabulary.
-     * Returns `null` for payloads this driver doesn't handle. Default: not handled.
+     * Normalize a provider webhook payload onto our vocabulary. This is the *parse* step only — it
+     * needs no secret, so the engine can call it on a bare driver to discover which envelope an
+     * event refers to. Returns `null` for payloads this driver doesn't handle. Default: not handled.
+     *
+     * Authenticity is checked separately by {@link VerifyWebhookSignature}, which runs on a
+     * credential-initialized driver.
      */
     public ParseWebhookEvent(
         _payload: unknown,
         _headers: Record<string, string>,
     ): NormalizedSignatureEvent | null {
         return null;
+    }
+
+    /**
+     * Verify the authenticity of an inbound webhook (HMAC / signature). The eSignature webhook
+     * endpoint is unauthenticated and mutates signature-request status, so the engine consults this
+     * before applying any event under a **verify-if-configured** policy:
+     *   - `Verified`      → a secret is configured and the signature matched → engine accepts.
+     *   - `Failed`        → a secret is configured but the signature was missing/invalid → **reject.**
+     *   - `NotConfigured` → no secret configured → engine accepts (logged), so the endpoint works
+     *                       during setup and tightens to strict automatically once a key is set.
+     *
+     * Default is `NotConfigured`: a driver that doesn't implement verification has no secret to
+     * check. Implementations read their shared secret from `this.config` (e.g.
+     * {@link SignatureProviderConfig.connectHmacKey}) — sourced from the account's encrypted
+     * credential, never an environment variable.
+     *
+     * Providers verify in whichever way their API prescribes:
+     *   - over the EXACT raw bytes (DocuSign Connect HMAC) — use `rawBody`;
+     *   - over fields inside the parsed payload (Dropbox Sign `event_hash`) — use `payload`.
+     *
+     * @param _rawBody The exact bytes received, for byte-accurate HMAC. Undefined if unavailable.
+     * @param _headers Inbound headers (may carry the provider signature header).
+     * @param _payload The parsed payload, for providers that sign payload fields rather than bytes.
+     */
+    public VerifyWebhookSignature(
+        _rawBody: Buffer | undefined,
+        _headers: Record<string, string>,
+        _payload?: unknown,
+    ): WebhookVerificationResult {
+        return 'NotConfigured';
     }
 }
