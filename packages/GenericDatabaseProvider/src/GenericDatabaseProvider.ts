@@ -2617,8 +2617,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
         }
 
-        // Validate that the user has read permission on every entity referenced by this query
-        if (user) {
+        // When a query has explicit Query Permissions, it acts like a stored procedure — the query
+        // author has intentionally granted access to specific roles, which may include users who lack
+        // direct entity read permissions. Skip entity-level checks in this case.
+        // When no Query Permissions are defined (open access), enforce entity read permissions as a safety net.
+        const hasExplicitQueryPermissions = query.QueryPermissions && query.QueryPermissions.length > 0;
+        if (user && !hasExplicitQueryPermissions) {
             this.ValidateQueryEntityPermissions(query, user);
         }
 
