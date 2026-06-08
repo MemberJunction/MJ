@@ -9,6 +9,7 @@ import {
   inject,
 } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   TimelineGroup,
@@ -256,7 +257,7 @@ export class TimelineViewRendererComponent
   /** The entity whose records are being rendered. Re-detects date fields + rebuilds groups on change. */
   @Input()
   set entity(value: EntityInfo | null) {
-    const changed = value?.ID !== this._entity?.ID;
+    const changed = !UUIDsEqual(value?.ID, this._entity?.ID);
     this._entity = value;
     if (changed) {
       this.detectDateFields();
