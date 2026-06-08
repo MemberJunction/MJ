@@ -7028,6 +7028,11 @@ export const MJAPIKeySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    KeyPrefix: z.string().nullable().describe(`
+        * * Field Name: KeyPrefix
+        * * Display Name: Key Prefix
+        * * SQL Data Type: nvarchar(20)
+        * * Description: A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -46575,6 +46580,19 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: KeyPrefix
+    * * Display Name: Key Prefix
+    * * SQL Data Type: nvarchar(20)
+    * * Description: A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.
+    */
+    get KeyPrefix(): string | null {
+        return this.Get('KeyPrefix');
+    }
+    set KeyPrefix(value: string | null) {
+        this.Set('KeyPrefix', value);
     }
 
     /**
