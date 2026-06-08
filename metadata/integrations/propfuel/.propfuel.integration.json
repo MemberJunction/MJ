@@ -1,0 +1,1026 @@
+[
+  {
+    "fields": {
+      "Name": "PropFuel",
+      "Description": "PropFuel (re:Members) member-engagement platform connector. File-feed export pull connector covering three data streams: checkin_questions (Q&A responses, mutable), clicks (link-click events, insert-only), and opens (email/message open events, insert-only). Incremental sync driven by microtime filename watermark. Read-only by default; ack cursor-advance available for production sync.",
+      "ClassName": "PropFuelConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://app.propfuel.com",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint",
+      "Icon": "fa-solid fa-comments",
+      "BatchMaxRequestCount": null,
+      "BatchRequestWaitTime": null,
+      "Configuration": {
+        "AuthFlow": "api-key",
+        "AuthHeaderPattern": "Authorization: Bearer <token>",
+        "FileFeedBasePath": "https://app.propfuel.com/dataexport/{AccountID}",
+        "FileFeedListPath": "/dataexport/{AccountID}/list",
+        "FileFeedDownloadPath": "/dataexport/{AccountID}/download/{file}",
+        "FileFeedAckPath": "/dataexport/{AccountID}/ack/{file}",
+        "WatermarkMechanism": "Feed-level cursor: microtime filename prefix",
+        "WatermarkDescription": "Files named \"<microtime>-<datatype>.json\" where microtime is Unix seconds with sub-second precision (e.g. 1777565710.1224). Files returned by list endpoint in chronological order (oldest first). The connector advances its feed cursor by acknowledging processed files via POST /dataexport/{AccountID}/ack/{file}; the highest-acked microtime is the durable feed cursor. Proven from filenames in propfuel-probe-1780682837 sample: [\"1777565710.1224-checkin_questions.json\", \"1777565714.4161-clicks.json\", \"1777565718.7132-opens.json\"]. Record-level watermark (checkin_questions only): checkin_question.updated_at — used as IncrementalWatermarkField for in-record incremental sync within the mutable stream. Clicks and opens have no per-record watermark; they use AppendOnlyCursor with StableOrderingKey (click.id / open.id respectively).",
+        "WatermarkSampleFilenames": [
+          "1777565710.1224-checkin_questions.json",
+          "1777565714.4161-clicks.json",
+          "1777565718.7132-opens.json"
+        ],
+        "PaginationDefaults": {
+          "type": "none",
+          "note": "File list endpoint returns all available unacked files in a single response; no page cursor or offset needed."
+        },
+        "IncrementalSyncCapability": true,
+        "IncrementalSyncNote": "Incremental sync is driven by the microtime filename prefix. The connector processes files in chronological order (oldest first) and advances the watermark by acking each file after full processing. Partial failure leaves the watermark unchanged; the next sync resumes from the same point.",
+        "WebhooksAvailable": false,
+        "BulkOperationsAvailable": false,
+        "APIVersioningStrategy": "none",
+        "TokenRefreshStrategy": "none",
+        "ErrorResponseShape": {
+          "note": "Not documented by vendor. Standard HTTP status codes. 401 on invalid token, 404 on unknown file."
+        },
+        "WriteCapability": {
+          "Create": false,
+          "Update": false,
+          "Delete": false,
+          "AckCursorAdvance": true,
+          "AckNote": "POST /dataexport/{AccountID}/ack/{file} marks a file as consumed (cursor advance only). This is feed-management, NOT record-level write. MUST NOT be called during testing."
+        },
+        "ConcurrencyControl": "none",
+        "DeleteSemantics": "soft",
+        "DeleteSemanticsDetail": {
+          "checkin_questions": "soft — deleted_at field is set on tombstoned records. Connector must upsert-by-identity (checkin_question.id) and treat deleted_at != null as a tombstone.",
+          "clicks": "none — insert-only event stream; no delete mechanism.",
+          "opens": "none — insert-only event stream; no delete mechanism."
+        },
+        "DefaultSyncDirection": "Pull",
+        "DefaultConflictResolution": "SourceWins",
+        "DefaultConflictResolutionNote": "No ETag or version field on file-feed records; MostRecent cannot be safely applied. In practice this connector is pull-only and conflict resolution is not exercised.",
+        "universalPK": {
+          "fieldName": "id",
+          "note": "Vendor-wide convention: every data stream root object uses an integer 'id' field as primary key. Per-stream paths: checkin_question.id (checkin_questions), click.id (clicks), open.id (opens). All idCandidates score=1 from live discovery (propfuel-discover-1780683251).",
+          "checkin_questions": "checkin_question.id",
+          "clicks": "click.id",
+          "opens": "open.id"
+        },
+        "FeedSchedule": "approximately once per hour",
+        "DataStreams": [
+          "checkin_questions",
+          "clicks",
+          "opens"
+        ],
+        "DataStreamNote": "Exact filename token strings confirmed from live broker results: 1777565710.1224-checkin_questions.json, 1777565714.4161-clicks.json, 1777565718.7132-opens.json. (BrokerResultRef: propfuel-probe-1780682837)",
+        "MutableStreams": {
+          "checkin_questions": {
+            "mutations": [
+              "create",
+              "update",
+              "delete"
+            ],
+            "upsertKey": "checkin_question.id",
+            "tombstoneField": "deleted_at",
+            "note": "Records created when question is sent, updated when answered, deleted on bot-click detection or multiple answers. Connector MUST upsert by checkin_question.id and apply tombstones.",
+            "liveScanEvidence": "518 answered records, 517 with updated_at != created_at, 1 recurring identity in 2318-record scan (propfuel-lifecycle-1780683380)."
+          },
+          "clicks": {
+            "mutations": [
+              "create"
+            ],
+            "note": "Insert-only event stream. No update_at or deleted_at analogues. No recurrence observed in scan."
+          },
+          "opens": {
+            "mutations": [
+              "create"
+            ],
+            "note": "Insert-only event stream. No update_at or deleted_at analogues. No recurrence observed in scan."
+          }
+        },
+        "CredentialFields": [
+          "Token",
+          "AccountID"
+        ],
+        "CredentialNote": "Token: bearer token for Authorization header. AccountID: numeric tenant ID embedded in all URL paths (e.g. 2019). Both are required.",
+        "BrokerResultRefs": [
+          "propfuel-probe-1780682837",
+          "propfuel-health-1780689140"
+        ]
+      }
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "Name": "opens",
+            "APIPath": "/dataexport/{AccountID}/download/{file}",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": false,
+            "IncrementalWatermarkField": null,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "SupportsRead": true,
+            "SyncStrategy": "AppendOnlyCursor",
+            "IsMutable": false,
+            "IsAppendOnly": true,
+            "ContentHashApplicable": false,
+            "StableOrderingKey": "open_id",
+            "Status": "Active",
+            "AdditionalObservations": [
+              {
+                "Key": "StreamFilenameToken",
+                "Value": "opens",
+                "Provenance": "SOURCES.json liveDiscovery.ConfirmedStreamTokens; filename 1777565718.7132-opens.json (propfuel-probe-1780682837)"
+              },
+              {
+                "Key": "open.type-observed-value",
+                "Value": "checkin_notification",
+                "Provenance": "SOURCE_STUDY.md \"Stream: opens\" signal fields"
+              },
+              {
+                "Key": "checkin_notification.type-observed-value",
+                "Value": "prompt",
+                "Provenance": "SOURCE_STUDY.md \"Stream: opens\" signal fields"
+              },
+              {
+                "Key": "WatermarkMechanism",
+                "Value": "file-level microtime filename prefix (not a per-record column); surfaced as AppendOnlyCursor + StableOrderingKey, NOT as SupportsIncrementalSync (no per-record watermark field exists)",
+                "Provenance": "SOURCES.json liveDiscovery.WatermarkMechanism"
+              },
+              {
+                "Key": "MutationModel",
+                "Value": "insert-only; recurringIdentities=0 in discovery scan (propfuel-discover-1780683251)",
+                "Provenance": "SOURCES.json liveDiscovery.MutationModel.opens"
+              }
+            ]
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "open_id",
+                  "Type": "Integer",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "open_type",
+                  "Type": "NVARCHAR",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "open_checkin_id",
+                  "Type": "Integer",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "open_opened_at",
+                  "Type": "NVARCHAR",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_id",
+                  "Type": "Integer",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_name",
+                  "Type": "NVARCHAR",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_email",
+                  "Type": "NVARCHAR",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "campaign_id",
+                  "Type": "Integer",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "campaign_name",
+                  "Type": "NVARCHAR",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_notification_id",
+                  "Type": "Integer",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_notification_type",
+                  "Type": "NVARCHAR",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsForeignKey": false,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "checkin_questions",
+            "DisplayName": "Check-in Questions",
+            "Description": "PropFuel check-in question (Q&A) records from the scheduled data-export file feed. Mutable upsert-with-soft-delete stream: a record is created when a question is sent, updated in place when the contact answers (answered_at / response / rating / selection fill), and soft-deleted (deleted_at set) on bot-click detection or multiple answers. Sourced from list->download .json files named [microtime]-checkin_questions.json. Live-proven: 838 files, 2318-record lifecycle scan (518 answered, 517 updated, 1 recurring identity).",
+            "Category": "Engagement",
+            "APIPath": null,
+            "ResponseDataKey": null,
+            "DefaultPageSize": null,
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "checkin_question.updated_at",
+            "SupportsWrite": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateBodyKey": null,
+            "CreateIDLocation": null,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateBodyKey": null,
+            "UpdateIDLocation": null,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null,
+            "DefaultQueryParams": null,
+            "Sequence": 10,
+            "Status": "Active",
+            "Configuration": {
+              "StreamToken": "checkin_questions",
+              "SourceMechanism": "file-feed-export",
+              "SyncStrategy": "WatermarkIncremental",
+              "SyncStrategyNote": "Mutable upsert-with-soft-delete. Record identity = checkin_question.id; in-record modified field = updated_at; soft-delete tombstone = deleted_at. Feed-level cursor is the microtime filename prefix; record-level incremental watermark is checkin_question.updated_at.",
+              "IsMutable": true,
+              "IsAppendOnly": false,
+              "ContentHashApplicable": false,
+              "UpsertKey": "checkin_question.id",
+              "TombstoneField": "checkin_question.deleted_at",
+              "UpdateSignalField": "checkin_question.answered_at",
+              "StableOrderingKey": "checkin_question.id",
+              "FeedFilenamePattern": "[microtime]-checkin_questions.json",
+              "RecordShape": "flattened nested objects (checkin_question, contact, question, campaign) into dotted IOF names",
+              "BrokerResultRefs": [
+                "propfuel-discover-1780683251",
+                "propfuel-lifecycle-1780683380",
+                "propfuel-probe-1780682837",
+                "propfuel-schema-union-1780737815"
+              ],
+              "AdditionalObservations": [
+                {
+                  "Key": "lifecycleScan",
+                  "Value": "84 files / 2318 records; answered=518; updatedDiffersCreated=517; recurringIdentities=1; deleted=0",
+                  "Provenance": "broker-result:propfuel-lifecycle-1780683380"
+                },
+                {
+                  "Key": "deletedNotObserved",
+                  "Value": "deleted_at column present in schema + documented soft-delete, but 0 deleted records in the 84-file sample window",
+                  "Provenance": "SOURCE_STUDY.md Gap 4"
+                }
+              ]
+            },
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "checkin_question.id",
+                  "DisplayName": "id",
+                  "Description": "Primary key of the check-in question record. Live-proven identity field (idCandidates score=1; recurring-identity scan confirms record re-emission on state change). Connector source declares IsPrimaryKey:true.",
+                  "Type": "Integer",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "IsPrimaryKey": true,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 1,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.checkin_id",
+                  "DisplayName": "checkin_id",
+                  "Description": "Identifier of the parent check-in this question belongs to.",
+                  "Type": "Integer",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 2,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.rating",
+                  "DisplayName": "rating",
+                  "Description": "Numeric rating supplied by the contact when answering. Null until answered.",
+                  "Type": "Integer",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 3,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.selection",
+                  "DisplayName": "selection",
+                  "Description": "Selected choice value when the contact answers a selection-type question. Null until answered.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 4,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.response",
+                  "DisplayName": "response",
+                  "Description": "Free-text / typed response from the contact. Null until answered.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 5,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.answered_at",
+                  "DisplayName": "answered_at",
+                  "Description": "Timestamp the contact answered. Null until answered; population is the update signal (518 of 2318).",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 6,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.created_at",
+                  "DisplayName": "created_at",
+                  "Description": "Timestamp the record was created (question sent). Always present.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 7,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.updated_at",
+                  "DisplayName": "updated_at",
+                  "Description": "Timestamp of last in-record update. Record-level incremental watermark field; 517 of 2318 differ from created_at.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 8,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_question.deleted_at",
+                  "DisplayName": "deleted_at",
+                  "Description": "Soft-delete tombstone timestamp. Non-null => record is deleted (bot-click detection or multiple answers). 0 observed in sample window.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "checkin_question",
+                  "Sequence": 9,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact.id",
+                  "DisplayName": "id",
+                  "Description": "Identifier of the contact the check-in question was sent to.",
+                  "Type": "Integer",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "contact",
+                  "Sequence": 10,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact.name",
+                  "DisplayName": "name",
+                  "Description": "Display name of the contact.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "contact",
+                  "Sequence": 11,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact.email",
+                  "DisplayName": "email",
+                  "Description": "Email address of the contact.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "contact",
+                  "Sequence": 12,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact.external_ids",
+                  "DisplayName": "external_ids",
+                  "Description": "External identifier mapping for the contact. Observed only as null; populated type unknown.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "contact",
+                  "Sequence": 13,
+                  "Status": "Active",
+                  "Configuration": {
+                    "TypeUnknown": true,
+                    "Note": "Observed only as null across all sampled records; populated type unknown. Treated as nullable String blob.",
+                    "Provenance": "SOURCE_STUDY.md Gap 2"
+                  },
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "question.id",
+                  "DisplayName": "id",
+                  "Description": "Identifier of the underlying question definition.",
+                  "Type": "Integer",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "question",
+                  "Sequence": 14,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "question.display",
+                  "DisplayName": "display",
+                  "Description": "Display text of the question. Nullable: observed as null in some records across 851-file union scan (propfuel-schema-union-1780737815).",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "question",
+                  "Sequence": 15,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "question.follow_up",
+                  "DisplayName": "follow_up",
+                  "Description": "Follow-up prompt text. Observed only as null; populated type unknown.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": true,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "question",
+                  "Sequence": 16,
+                  "Status": "Active",
+                  "Configuration": {
+                    "TypeUnknown": true,
+                    "Note": "Observed only as null across all sampled records; populated type unknown. Treated as nullable String blob.",
+                    "Provenance": "SOURCE_STUDY.md Gap 3"
+                  },
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "question.response_type",
+                  "DisplayName": "response_type",
+                  "Description": "Response type of the question (e.g. selection / rating / free-text).",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "question",
+                  "Sequence": 17,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "campaign.id",
+                  "DisplayName": "id",
+                  "Description": "Identifier of the campaign the check-in belongs to.",
+                  "Type": "Integer",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "campaign",
+                  "Sequence": 18,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "campaign.name",
+                  "DisplayName": "name",
+                  "Description": "Name of the campaign.",
+                  "Type": "String",
+                  "Length": null,
+                  "Precision": null,
+                  "Scale": null,
+                  "AllowsNull": false,
+                  "DefaultValue": null,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "IsPrimaryKey": false,
+                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectFieldName": null,
+                  "Category": "campaign",
+                  "Sequence": 19,
+                  "Status": "Active",
+                  "IsForeignKey": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "clicks",
+            "DisplayName": "Clicks",
+            "Description": "PropFuel link-click event stream. Insert-only append feed: each record is a click on a link within a check-in notification. Sourced from [microtime]-clicks.json export files via list→download. SyncStrategy=AppendOnlyCursor (no per-record modified field; stable ordering key=click.id; feed-level microtime filename watermark). Pull-only — no create/update/delete on records.",
+            "APIPath": "/dataexport/{AccountID}/download/{file}",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "Source": "Declared",
+            "IncludeInActionGeneration": false,
+            "IncrementalWatermarkField": null,
+            "SupportsPagination": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "SupportsRead": true,
+            "PaginationType": "None",
+            "SyncStrategy": "AppendOnlyCursor",
+            "IsMutable": false,
+            "IsAppendOnly": true,
+            "ContentHashApplicable": false,
+            "StableOrderingKey": "click_id",
+            "Status": "Active",
+            "ResponseDataKey": null,
+            "Category": "Engagement",
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateBodyKey": null,
+            "CreateIDLocation": null,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateBodyKey": null,
+            "UpdateIDLocation": null,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "click_id",
+                  "Description": "Source path: click.id (live-discovery PerStreamSchema.clicks, observed JSON type: number).",
+                  "Type": "int",
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "click_type",
+                  "Description": "Source path: click.type (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "nvarchar",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "click_checkin_id",
+                  "Description": "Source path: click.checkin_id (live-discovery PerStreamSchema.clicks, observed JSON type: number).",
+                  "Type": "int",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "click_clicked_at",
+                  "Description": "Source path: click.clicked_at (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "datetimeoffset",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "click_link",
+                  "Description": "Source path: click.link (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "nvarchar-url",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_id",
+                  "Description": "Source path: contact.id (live-discovery PerStreamSchema.clicks, observed JSON type: number).",
+                  "Type": "int",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_name",
+                  "Description": "Source path: contact.name (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "nvarchar",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_email",
+                  "Description": "Source path: contact.email (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "nvarchar-email",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "campaign_id",
+                  "Description": "Source path: campaign.id (live-discovery PerStreamSchema.clicks, observed JSON type: number).",
+                  "Type": "int",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "campaign_name",
+                  "Description": "Source path: campaign.name (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "nvarchar",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_notification_id",
+                  "Description": "Source path: checkin_notification.id (live-discovery PerStreamSchema.clicks, observed JSON type: number).",
+                  "Type": "int",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_notification_type",
+                  "Description": "Source path: checkin_notification.type (live-discovery PerStreamSchema.clicks, observed JSON type: string).",
+                  "Type": "nvarchar",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
