@@ -4,7 +4,6 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IViewRenderer } from '../view-type.contracts';
 import { CardTemplate, RecordSelectedEvent, RecordOpenedEvent } from '../../types';
 import { EntityCardsComponent } from '../../entity-cards/entity-cards.component';
-import { EntityViewerModule } from '../../../module';
 
 /**
  * CardsViewRendererComponent
@@ -27,24 +26,20 @@ import { EntityViewerModule } from '../../../module';
  * This adapter therefore extracts `.record` and re-emits just that object, matching the
  * other plug-in renderers (e.g. the Cluster renderer emits raw record objects).
  *
- * **Why import `EntityViewerModule` rather than `EntityCardsComponent` directly:**
- * {@link EntityCardsComponent} is an NgModule-declared (`standalone: false`) component, so
- * Angular forbids placing it directly in a standalone component's `imports` array (NG6008).
- * The supported way for a standalone component to consume a non-standalone component is to
- * import the NgModule that exports it — here {@link EntityViewerModule}. We import the module
- * class via its relative path (not the package barrel) to avoid a package-level circular
- * import. `EntityCardsComponent` is still imported above so its `@Input`/`@Output` types stay
- * referenced and the file documents exactly which component it adapts.
+ * This is an NgModule-declared (`standalone: false`) component, declared in `EntityViewerModule`
+ * alongside {@link EntityCardsComponent} — so it renders `<mj-entity-cards>` directly from the
+ * module's compilation scope with no `imports` array and no self-import of the module (the module
+ * loads the view-type descriptors, which reference these wrappers, so a wrapper importing the
+ * module back would form a runtime import cycle — NG0919).
  *
  * Inputs use the camelCase names mandated by the {@link IViewRenderer} contract (the host
- * binds them by those exact names), rather than MJ's usual PascalCase for public members —
- * mirroring the Cluster renderer.
+ * binds them by those exact names via `setInput`), rather than MJ's usual PascalCase for public
+ * members — mirroring the Cluster renderer.
  */
 @Component({
-  standalone: true,
+  standalone: false,
   selector: 'mj-cards-view-renderer',
   encapsulation: ViewEncapsulation.None,
-  imports: [EntityViewerModule],
   template: `
     <mj-entity-cards
       [Provider]="Provider"

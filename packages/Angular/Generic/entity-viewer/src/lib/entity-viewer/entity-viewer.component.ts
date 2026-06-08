@@ -1,11 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone, ViewContainerRef, ComponentRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone, ViewContainerRef, ComponentRef, reflectComponentType } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
-import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
+import { buildCompositeKey, buildPkString } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import {
   EntityViewerConfig,
@@ -171,20 +171,33 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const previousEntity = this._entity;
     this._entity = value;
 
-    // Recompute available view types for the new entity from the registry (if loaded).
-    // Falls back silently when the registry has no data.
+    const entityChanged = !!(this._initialized && value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID));
+
+    // On a real entity change, drop per-entity state BEFORE we recompute view types + re-seed config,
+    // so the new entity starts clean:
+    //  - The per-view-type config map (grid columnSettings, timeline date field, …) is per-ENTITY.
+    //    Keeping the old entity's config applies its columnSettings to the new entity, so only fields
+    //    common to both survive (e.g. just Name/Description) — the "no/too-few columns" symptom.
+    //  - The loaded UserView record belongs to the old entity; clear it so re-seeding reads the new
+    //    entity's saved view / per-user default-view setting.
+    //  - Sort state references old-entity fields and would produce an invalid ORDER BY.
+    if (entityChanged) {
+      if (this._viewEntity && value && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
+        this._viewEntity = null;
+      }
+      this.viewTypeConfigById.clear();
+      this.InternalSortState = null;
+      // Throw out the cached plug-in instances — they belong to the previous entity. The next
+      // selection rebuilds them fresh for the new entity (correct columns / date fields / geo).
+      this.clearDynamicRendererCache();
+    }
+
+    // Recompute available view types for the new entity from the registry (if loaded). This also
+    // re-seeds the per-view-type config from the NEW entity's saved view / default-view setting
+    // (now that the stale map was cleared above). Falls back silently when the registry has no data.
     this.refreshAvailableViewTypes();
 
     if (this._initialized) {
-      // If entity changed to a different entity, clear all stale state from the old entity
-      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
-        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
-          this._viewEntity = null;
-        }
-        // Clear sort state — it references fields from the old entity (e.g., FirstName)
-        // and would produce invalid ORDER BY on the new entity
-        this.InternalSortState = null;
-      }
 
       if (value && !this._records) {
         // Reset state for new entity - synchronously clear all data and force change detection
@@ -203,6 +216,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         this.FilteredRecordCount = 0;
         this.resetPaginationState();
         this.cdr.detectChanges();
+      }
+
+      // The cache was thrown out above, so re-create the active view type FRESH for the new entity
+      // (unless refreshAvailableViewTypes already re-selected because the active type became
+      // unavailable). This rebuilds columns / date fields / geo cleanly; records flow in via the
+      // deferred reload. The container stays generic — it re-creates whatever plug-in is active
+      // without knowing what it is.
+      if (entityChanged && !this.dynamicRendererRef) {
+        const activeOption = this.AvailableViewTypes.find(o => o.key === this.ActiveViewTypeKey) ?? this.AvailableViewTypes[0];
+        if (activeOption) {
+          this.ActiveViewTypeKey = activeOption.key;
+          this.ActiveDynamicOption = activeOption;
+          this.selectDynamicRenderer(activeOption);
+        }
       }
     }
   }
@@ -363,11 +390,32 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return this._viewEntity;
   }
   set ViewEntity(value: MJUserViewEntityExtended | null) {
+    const previousViewId = this._viewEntity?.ID ?? null;
+    const nextViewId = value?.ID ?? null;
+    const viewChanged = this._initialized && previousViewId !== nextViewId;
     this._viewEntity = value;
+
+    // A changed view (including default↔saved and saved↔different) is a new data context: throw out
+    // the cached plug-in instances + per-view-type config so they rebuild/re-seed from the new view.
+    if (viewChanged) {
+      this.viewTypeConfigById.clear();
+      this.clearDynamicRendererCache();
+    }
 
     // Re-resolve available view types + the initial view type/config from the new view record
     // (self-contained: the viewer reads ViewTypeID + DisplayState.viewTypeConfigs off the record).
     this.refreshAvailableViewTypes();
+
+    // If the cache was thrown out but refreshAvailableViewTypes didn't re-select (active type still
+    // valid), re-create the active view type fresh for the new view.
+    if (viewChanged && !this.dynamicRendererRef) {
+      const activeOption = this.AvailableViewTypes.find(o => o.key === this.ActiveViewTypeKey) ?? this.AvailableViewTypes[0];
+      if (activeOption) {
+        this.ActiveViewTypeKey = activeOption.key;
+        this.ActiveDynamicOption = activeOption;
+        this.selectDynamicRenderer(activeOption);
+      }
+    }
 
     if (this._initialized && this._entity && !this._records) {
       // Apply view's sort state if available, then defer the reload.
@@ -553,8 +601,22 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /** Anchor for dynamically-mounted plug-in view renderers. */
   @ViewChild('dynamicViewHost', { read: ViewContainerRef }) private dynamicViewHost?: ViewContainerRef;
 
-  /** The currently-mounted plug-in renderer, if any. */
+  /** The currently-ACTIVE (visible) plug-in renderer, if any. */
   private dynamicRendererRef: ComponentRef<IViewRenderer> | null = null;
+
+  /** Input names the active plug-in declares (from `reflectComponentType`), used to push only the
+   *  generic inputs it accepts. Mirrors the active cache entry's input set. */
+  private dynamicInputNames = new Set<string>();
+
+  /**
+   * Cache of mounted plug-in renderer instances for the CURRENT data context (entity + view),
+   * keyed by `MJ: View Types` row ID. Switching view types within the same entity+view SHOWS/HIDES
+   * cached instances (preserving their state — e.g. a computed cluster scatter, grid scroll) instead
+   * of destroy/recreate. The whole cache is destroyed + rebuilt only when the data context changes:
+   * entity change, or view (record / ViewID, including default↔saved) change. See
+   * {@link clearDynamicRendererCache}.
+   */
+  private dynamicRendererCache = new Map<string, { ref: ComponentRef<IViewRenderer>; inputs: Set<string> }>();
 
   public InternalFilterText: string = '';
   public DebouncedFilterText: string = '';
@@ -887,7 +949,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   ngOnDestroy(): void {
-    this.unmountDynamicRenderer();
+    this.clearDynamicRendererCache();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -1071,7 +1133,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entity.Name,
         ResultType: 'simple',
-        Fields: computeFieldsList(entity, this.GridState),
+        // Load the FULL field set. The container is a generic plug-in host: different view types need
+        // different fields (the grid shows its columns, but Timeline needs the date field, Map needs
+        // lat/long, etc.). It cannot restrict to any one plug-in's columns, so it fetches all fields and
+        // lets each plug-in pick what it needs. (Omitting `Fields` on a 'simple' RunView returns all
+        // entity fields.) Previously this used `computeFieldsList(entity, GridState)` — correct when the
+        // host WAS the grid, but it dropped `__mj_*` date fields, leaving Timeline with "no events".
         MaxRows: maxRows,
         StartRow: startRow,
         OrderBy: orderBy,
@@ -1317,7 +1384,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const typeChanged = this.ActiveViewTypeKey !== option.key;
     this.ActiveViewTypeKey = option.key;
     this.ActiveDynamicOption = option;
-    this.mountDynamicRenderer(option);
+    this.selectDynamicRenderer(option);
 
     // On a real type switch, drop any prior load-all mode and reload page-based data so the newly
     // mounted plug-in starts from the standard paginated set. A plug-in needing everything (e.g. a
@@ -1497,21 +1564,49 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   // ========================================
 
   /**
-   * Mounts a plug-in view type's RendererComponent into the dynamic host, wires the generic
-   * {@link IViewRenderer} inputs, and subscribes to its generic outputs. The container has zero
-   * knowledge of which plug-in this is — it only knows the contract. Replaces any previously-mounted
-   * renderer.
+   * Makes `option`'s plug-in the ACTIVE view: reuses its cached instance when present (preserving
+   * state), otherwise creates it. All other cached instances are hidden (kept mounted). The container
+   * has zero knowledge of which plug-in this is — it only knows the {@link IViewRenderer} contract.
    */
-  private mountDynamicRenderer(option: ViewModeOption): void {
-    this.unmountDynamicRenderer();
+  private selectDynamicRenderer(option: ViewModeOption): void {
     const host = this.dynamicViewHost;
-    const componentType = option.descriptor.RendererComponent;
-    if (!host || !componentType) {
+    if (!host || !option.descriptor.RendererComponent) {
       return;
     }
 
+    // Hide every cached instance; the active one is shown below. Hidden instances stay mounted so
+    // their state survives a round-trip (e.g. switch Grid → Cluster → Grid without re-clustering).
+    for (const entry of this.dynamicRendererCache.values()) {
+      this.setRendererVisible(entry.ref, false);
+    }
+
+    let entry = this.dynamicRendererCache.get(option.viewTypeId);
+    if (!entry) {
+      entry = this.createDynamicRenderer(option);
+    }
+    this.dynamicRendererRef = entry.ref;
+    this.dynamicInputNames = entry.inputs;
+    this.setRendererVisible(entry.ref, true);
+    this.pushDynamicRendererInputs();
+    entry.ref.changeDetectorRef.detectChanges();
+  }
+
+  /**
+   * Creates a plug-in renderer instance, wires its generic outputs, captures its declared inputs,
+   * and caches it by `MJ: View Types` row ID. (Does not show/activate it — {@link selectDynamicRenderer}
+   * does that.)
+   */
+  private createDynamicRenderer(option: ViewModeOption): { ref: ComponentRef<IViewRenderer>; inputs: Set<string> } {
+    const host = this.dynamicViewHost!;
+    const componentType = option.descriptor.RendererComponent;
     const ref = host.createComponent<IViewRenderer>(componentType as never);
-    this.dynamicRendererRef = ref;
+
+    // Capture the set of input names this plug-in actually declares, so we only push the generic
+    // inputs it accepts. A lean plug-in (e.g. Timeline/Cards) won't declare grid-only inputs like
+    // `totalRecordCount`/`page` — calling `setInput` for those logs NG0303 in dev (the log fires
+    // before the throw, so a try/catch can't suppress it). Pre-checking with the reflected metadata
+    // keeps the console clean and the container plug-in-agnostic.
+    const inputs = new Set<string>(reflectComponentType(componentType)?.inputs.map(i => i.templateName) ?? []);
 
     // Wire the generic IViewRenderer outputs. All are optional on lean plug-ins, so guard each
     // with `?.`. Only navigation (record open / related-record / create) bubbles to the outer app;
@@ -1532,16 +1627,31 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       ?.pipe(takeUntil(this.destroy$))
       .subscribe((req: ViewDataRequest) => this.onDynamicDataRequest(req));
 
-    this.pushDynamicRendererInputs();
-    ref.changeDetectorRef.detectChanges();
+    const created = { ref, inputs };
+    this.dynamicRendererCache.set(option.viewTypeId, created);
+    return created;
   }
 
-  /** Destroys the mounted plug-in renderer (if any) and clears the host. */
-  private unmountDynamicRenderer(): void {
-    if (this.dynamicRendererRef) {
-      this.dynamicRendererRef.destroy();
-      this.dynamicRendererRef = null;
+  /** Toggle a cached renderer's host element visibility without destroying it (preserves state). */
+  private setRendererVisible(ref: ComponentRef<IViewRenderer>, visible: boolean): void {
+    const el = ref.location.nativeElement as HTMLElement | undefined;
+    if (el) {
+      el.style.display = visible ? '' : 'none';
     }
+  }
+
+  /**
+   * Destroys ALL cached plug-in instances and clears the host. Called when the data context changes
+   * (entity change / view (record / ViewID) change) so the next selection rebuilds fresh. NOT called
+   * on a plain view-type switch within the same context — that path reuses cached instances.
+   */
+  private clearDynamicRendererCache(): void {
+    for (const entry of this.dynamicRendererCache.values()) {
+      entry.ref.destroy();
+    }
+    this.dynamicRendererCache.clear();
+    this.dynamicRendererRef = null;
+    this.dynamicInputNames = new Set<string>();
     this.dynamicViewHost?.clear();
   }
 
@@ -1570,14 +1680,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Guarded `setInput`: lean plug-ins implement only the core contract, so setting an optional
-   * input they don't declare throws. We swallow that so the container stays plug-in-agnostic.
+   * Guarded `setInput`: lean plug-ins implement only the core contract, so we only set an input the
+   * mounted plug-in actually declares (per {@link dynamicInputNames}, captured at mount via
+   * `reflectComponentType`). This avoids NG0303 dev errors for optional inputs the plug-in omits and
+   * keeps the container plug-in-agnostic.
    */
   private setDynamicInput(ref: ComponentRef<IViewRenderer>, name: string, value: unknown): void {
-    try {
+    if (this.dynamicInputNames.has(name)) {
       ref.setInput(name, value);
-    } catch {
-      // Plug-in doesn't declare this optional input — fine, skip it.
     }
   }
 

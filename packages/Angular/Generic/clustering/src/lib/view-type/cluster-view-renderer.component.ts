@@ -137,9 +137,17 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
   private _config: Record<string, unknown> = {};
   @Input()
   set config(value: Record<string, unknown>) {
+    const next = toClusterViewConfig(value ?? {});
+    // Only re-cluster when the clustering-relevant config actually changed. The host re-pushes the
+    // (unchanged) config on unrelated events — notably when a point is clicked / selection changes —
+    // and re-clustering on every push made clicking a point recompute the whole scatter. Comparing
+    // the normalized config keeps clustering stable across those no-op re-pushes.
+    const changed = JSON.stringify(next) !== JSON.stringify(this.activeConfig);
     this._config = value ?? {};
-    this.activeConfig = toClusterViewConfig(this._config);
-    this.scheduleRecluster();
+    this.activeConfig = next;
+    if (changed) {
+      this.scheduleRecluster();
+    }
   }
   get config(): Record<string, unknown> {
     return this._config;

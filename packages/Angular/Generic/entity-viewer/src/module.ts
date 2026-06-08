@@ -6,6 +6,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MjSlidePanelComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -29,6 +30,10 @@ import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.comp
 import { ViewSelectorComponent } from './lib/view-selector/view-selector.component';
 import { ViewWorkspaceComponent } from './lib/view-workspace/view-workspace.component';
 import { ViewTypeSwitcherComponent } from './lib/view-type-switcher/view-type-switcher.component';
+import { CardsViewRendererComponent } from './lib/view-types/renderers/cards-view-renderer.component';
+import { GridViewRendererComponent } from './lib/view-types/renderers/grid-view-renderer.component';
+import { TimelineViewRendererComponent } from './lib/view-types/renderers/timeline-view-renderer.component';
+import { MapViewRendererComponent } from './lib/view-types/renderers/map-view-renderer.component';
 import { LoadViewTypeDescriptors } from './lib/view-types';
 
 // Register the built-in view-type descriptors with the ClassFactory at module load.
@@ -76,7 +81,11 @@ LoadViewTypeDescriptors();
     RecycleBinChipComponent,
     ViewSelectorComponent,
     ViewWorkspaceComponent,
-    ViewTypeSwitcherComponent
+    ViewTypeSwitcherComponent,
+    CardsViewRendererComponent,
+    GridViewRendererComponent,
+    TimelineViewRendererComponent,
+    MapViewRendererComponent
   ],
   imports: [
     CommonModule,
@@ -86,6 +95,7 @@ LoadViewTypeDescriptors();
     PaginationComponent,
     TimelineModule,
     ExportServiceModule,
+    ListManagementModule,
     MapViewModule,
     RecordChangesModule,
     MjSlidePanelComponent,

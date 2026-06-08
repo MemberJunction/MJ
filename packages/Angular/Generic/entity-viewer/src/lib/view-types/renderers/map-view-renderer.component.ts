@@ -3,7 +3,6 @@ import { EntityInfo } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   MapViewComponent,
-  MapViewModule,
   MapRenderMode,
   MapDisplayState,
   MapMarkerClickEvent,
@@ -63,10 +62,9 @@ export interface MapViewConfig {
  * Cards and Cluster renderers.
  */
 @Component({
-  standalone: true,
+  standalone: false,
   selector: 'mj-map-view-renderer',
   encapsulation: ViewEncapsulation.None,
-  imports: [MapViewModule],
   template: `
     @if (entity) {
       <mj-map-view

@@ -11,7 +11,6 @@ import {
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
-  TimelineModule,
   TimelineGroup,
   TimeSegmentGrouping,
   TimelineSortOrder,
@@ -69,10 +68,9 @@ export interface TimelineViewConfig {
  * them by those exact names) rather than MJ's usual PascalCase for public members.
  */
 @Component({
-  standalone: true,
+  standalone: false,
   selector: 'mj-timeline-view-renderer',
   encapsulation: ViewEncapsulation.None,
-  imports: [TimelineModule],
   template: `
     <!-- Chrome row: date-field selector + orientation toggle + sort toggle.
          Always rendered — this plug-in only mounts when Timeline is the active view. -->
@@ -534,7 +532,12 @@ export class TimelineViewRendererComponent
    * when there is no entity or no selected date field.
    */
   private updateTimelineGroups(): void {
-    if (!this._entity || !this.SelectedTimelineDateField) {
+    // Emit NO group until there is an entity, a resolved date field, AND records. Emitting an empty
+    // group (records not loaded yet) makes the inner <mj-timeline> run its first refresh with zero
+    // events and mark itself loaded; the later records-populated update can then be dropped by its
+    // concurrent-refresh / already-loaded guards, leaving "No events to display". Waiting for records
+    // means its first real load happens with data.
+    if (!this._entity || !this.SelectedTimelineDateField || this._records.length === 0) {
       this.TimelineGroups = [];
       return;
     }

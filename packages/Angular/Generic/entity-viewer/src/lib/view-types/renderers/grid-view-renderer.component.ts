@@ -2,9 +2,9 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, C
 import { EntityInfo, RunViewParams, LogError } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { ExportServiceModule, ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
+import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
 import { ExportColumn, ExportData } from '@memberjunction/export-engine';
-import { ListManagementModule, ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
+import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
 import { IViewRenderer, ViewDataRequest, ViewRelatedRecordNavigation } from '../view-type.contracts';
 import { ViewGridState } from '../../types';
 import { GridSelectionMode, GridToolbarConfig, ForeignKeyClickEvent } from '../../entity-data-grid/models/grid-types';
@@ -12,7 +12,6 @@ import { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterSortEventArg
 import { GridStateChangedEvent } from '../../types';
 import { buildPkString, buildCompositeKey } from '../../utils/record.util';
 import { EntityDataGridComponent } from '../../entity-data-grid/entity-data-grid.component';
-import { EntityViewerModule } from '../../../module';
 
 /**
  * Opaque per-view configuration for the Grid view type.
@@ -94,25 +93,22 @@ export interface GridViewConfig {
  * checkbox selection, add-to-list on, pager on. The grid never loads its own data
  * (`[AllowLoad]="false"`) — the host owns the fetch.
  *
- * **Why import the dialog *modules* rather than the components directly:**
- * {@link EntityDataGridComponent}, `ExportDialogComponent`, `ListManagementDialogComponent`, and
- * `ConfirmDialogComponent` are all NgModule-declared (`standalone: false`) components, so Angular
- * forbids placing them directly in a standalone component's `imports` array (NG6008). The supported
- * way for a standalone component to consume a non-standalone component is to import the NgModule that
- * exports it — here {@link EntityViewerModule} (grid + confirm dialog), {@link ExportServiceModule}
- * (export dialog), and {@link ListManagementModule} (list dialog). We import {@link EntityViewerModule}
- * via its relative path (`../../../module`, not the package barrel) to avoid a package-level circular
- * import, mirroring the sibling renderers.
+ * This is an NgModule-declared (`standalone: false`) component, declared in `EntityViewerModule`.
+ * It renders `<mj-entity-data-grid>` + the Generic `<mj-export-dialog>` / `<mj-list-management-dialog>`
+ * / `<mj-ev-confirm-dialog>` straight from the module's compilation scope (the module imports
+ * `ExportServiceModule` + `ListManagementModule` and declares the grid + confirm dialog) — so there's
+ * no `imports` array and, crucially, no self-import of `EntityViewerModule`: the module loads the
+ * view-type descriptors, which reference these wrappers, so a wrapper importing the module back would
+ * form a runtime import cycle (NG0919).
  *
  * Inputs use the camelCase names mandated by the {@link IViewRenderer} contract (the host binds them
- * by those exact names), rather than MJ's usual PascalCase for public members — mirroring the Cards
- * and Cluster renderers.
+ * by those exact names via `setInput`), rather than MJ's usual PascalCase for public members —
+ * mirroring the Cards and Cluster renderers.
  */
 @Component({
-  standalone: true,
+  standalone: false,
   selector: 'mj-grid-view-renderer',
   encapsulation: ViewEncapsulation.None,
-  imports: [EntityViewerModule, ExportServiceModule, ListManagementModule],
   template: `
     <mj-entity-data-grid
       #grid
