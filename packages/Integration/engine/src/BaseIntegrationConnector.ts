@@ -20,6 +20,12 @@ import type {
     ListContext,
     ListResult,
 } from './types.js';
+import {
+    discoverFromStream,
+    pickPrimaryKeyFromStats,
+    type StreamDiscoveryOptions,
+    type PkPickOptions,
+} from './StreamingDiscovery.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -264,6 +270,17 @@ export interface RateLimitPolicy {
     Burst?: number;
     /** Multiplicative-decrease factor applied on a throttle signal (0 < f < 1). */
     ThrottleBackoffFactor?: number;
+    /**
+     * How fast the effective rate ramps back up per successful call after a throttle (additive
+     * increase). Lower = more conservative recovery. Default: TokensPerSec/10 (≈10 successes to
+     * fully recover). Set low for an API that stays throttled for a while after a 429.
+     */
+    SuccessRampPerCall?: number;
+    /**
+     * Floor the effective rate never drops below, even after repeated throttles (tokens/sec).
+     * Default: TokensPerSec/20. Set when the vendor guarantees a minimum service rate.
+     */
+    MinTokensPerSec?: number;
 }
 
 export abstract class BaseIntegrationConnector {
@@ -443,6 +460,67 @@ export abstract class BaseIntegrationConnector {
      * applies target-type constraint enforcement; this is the connector-side complement.
      */
     public PostProcessRecord(record: ExternalRecord): ExternalRecord { return record; }
+
+    /**
+     * Stage-2 field discovery for sources WITHOUT a describe/introspection endpoint (file feeds,
+     * undocumented JSON list endpoints): stream the source's actual records — READ-ONLY, no save,
+     * no ack — and derive the full field set + data-informed PK/uniqueness/nullability from the
+     * gathered statistics. The connector supplies whatever read-only fetch yields the records; this
+     * helper turns that stream into `ExternalFieldSchema[]`.
+     *
+     * Why data-informed instead of nominal: streaming the real values lets us prove which column is
+     * unique + non-null over a statistically significant N (`pickPrimaryKeyFromStats`, p<0.05) and
+     * pick the PK from evidence rather than a name guess. The scan is time-bounded — it stops on
+     * exhaustion OR `opts.Discovery.TimeBudgetMs`, whichever comes first, and uses what it gathered;
+     * more rows simply mean stronger claims.
+     *
+     * Provable-only encoding into the standard flags:
+     *  - `IsPrimaryKey` — set ONLY on the single statistics-first pick. Multiple equally-ranked unique
+     *    columns leave PK unset here (ambiguous → the pipeline's `SoftPKClassifier` LLM tiebreaker
+     *    decides, fed these same stats). Zero unique columns → no PK is fabricated.
+     *  - `IsUniqueKey` — set when the column was all-distinct over the scan AND uniqueness was provable
+     *    (the distinct-cap wasn't hit).
+     *  - `AllowsNull` — asserted `true` ONLY when a null/absent value was actually observed; otherwise
+     *    left undefined (permissive default). Never fabricates NOT NULL — critical under a time-capped
+     *    partial scan where unseen rows could still be null.
+     *
+     * The PK emitted here is SOFT (it rides additionalSchemaInfo via the persist + DDL path; it is
+     * NEVER a hard DB key), so a wrong inference can never reject a valid row — the engine dedupes via
+     * the record-map. `IsReadOnly` defaults to true (stream discovery targets read feeds); a writable
+     * source overrides via `opts.ReadOnly`.
+     *
+     * @param records - A read-only sync/async iterable of source records (the caller's fetch yields them).
+     * @param opts.Discovery - Time budget / sample caps for the scan (see {@link StreamDiscoveryOptions}).
+     * @param opts.Pk - Significance threshold + naming-rank tiebreaker (see {@link PkPickOptions}).
+     * @param opts.ReadOnly - Whether discovered fields are read-only. Default true.
+     */
+    protected async DiscoverFieldsViaStream(
+        records: AsyncIterable<Record<string, unknown>> | Iterable<Record<string, unknown>>,
+        opts: { Discovery?: StreamDiscoveryOptions; Pk?: PkPickOptions; ReadOnly?: boolean } = {}
+    ): Promise<ExternalFieldSchema[]> {
+        const scan = await discoverFromStream(records, opts.Discovery);
+        const pk = pickPrimaryKeyFromStats(scan.Columns, opts.Pk);
+        const readOnly = opts.ReadOnly ?? true;
+
+        return scan.Columns.map(c => {
+            const provablyUnique = !c.DistinctCapped && c.Occurrences > 0 && c.DistinctNonNull === c.Occurrences;
+            const sawNull = c.Occurrences < c.TotalRows;
+            const field: ExternalFieldSchema = {
+                Name: c.Key,
+                Label: c.Key,
+                DataType: c.Inferred.SchemaFieldType,
+                IsRequired: false,
+                IsUniqueKey: provablyUnique,
+                IsReadOnly: readOnly,
+            };
+            // Provable-only: only assert nullability we actually observed; never fabricate NOT NULL.
+            if (sawNull) field.AllowsNull = true;
+            // Statistics-first PK: set only on the unambiguous pick; defer ties to the LLM tiebreaker.
+            if (pk.Field === c.Key) field.IsPrimaryKey = true;
+            if (c.Inferred.MaxLength != null) field.MaxLength = c.Inferred.MaxLength;
+            return field;
+        });
+    }
 
     // ─── Core Abstract Methods ───────────────────────────────────────
 

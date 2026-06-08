@@ -190,8 +190,10 @@ describe('MatchEngine', () => {
             expect(results[0].MatchedMJRecordID).toBe('mj-multi-key');
 
             const callArgs = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
-            expect(callArgs.ExtraFilter).toContain('[Email]');
-            expect(callArgs.ExtraFilter).toContain('[CompanyName]');
+            // Plain (unbracketed) identifiers — dialect-agnostic; SQL-Server brackets break Postgres.
+            expect(callArgs.ExtraFilter).toContain('Email =');
+            expect(callArgs.ExtraFilter).toContain('CompanyName =');
+            expect(callArgs.ExtraFilter).not.toContain('[Email]');
             expect(callArgs.ExtraFilter).toContain('AND');
         });
     });

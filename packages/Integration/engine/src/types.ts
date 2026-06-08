@@ -111,6 +111,15 @@ export interface MappedRecord {
     ChangeType: RecordChangeType;
     /** ID of an existing MJ record if matched */
     MatchedMJRecordID?: string;
+    /**
+     * Source keys the record returned that have NO active field map — the "extra" fields
+     * the target table has no column for (yet). Computed at {@link MapSingleRecord} as
+     * `keys(ExternalRecord.Fields) − active map SourceFieldNames`. Empty/undefined in the
+     * common case (everything mapped). When non-empty, the engine parks it as JSON in the
+     * `__mj_integration_CustomOverflow` system column so a post-sync RSU pass can promote
+     * pervasive keys to real columns. Backend staging only — see {@link CustomOverflow}.
+     */
+    UnmappedFields?: Record<string, unknown>;
 }
 
 /** Aggregate result of a sync operation */
@@ -141,7 +150,52 @@ export interface SyncResult {
     EntityMapResults?: EntityMapSyncResult[];
     /** Duration of the sync in milliseconds */
     Duration?: number;
+    /**
+     * True if this map hit a rate-limit/throttle during fetch. Feeds the per-layer AIMD controller
+     * so a throttle (not just a per-request token-bucket backoff) also reduces in-flight concurrency.
+     * Transient signal — not persisted.
+     */
+    Throttled?: boolean;
+    /**
+     * Outcome of the post-sync custom-column promotion pass (gaps.md §2). Present only when a
+     * promotion callback is registered AND ran; undefined for a customs-free sync (the common
+     * case). Lets the resolver surface SchemaUpdatePending to the client.
+     */
+    SchemaUpdate?: SchemaPromotionResult;
 }
+
+/** Outcome of the post-sync custom-column promotion pass (gaps.md §2 / M2). */
+export interface SchemaPromotionResult {
+    /** Whether any new column was promoted to real schema this run. */
+    Promoted: boolean;
+    /** The columns promoted, per target entity. */
+    ColumnsAdded: Array<{ EntityName: string; ColumnName: string }>;
+    /**
+     * Whether a schema change was applied that needs an MJAPI restart for the new columns to
+     * be exposed over GraphQL — surfaced so the client reads the restart as intentional, not a
+     * crash. False when nothing was promoted. (Restart orchestration itself: M3.)
+     */
+    SchemaUpdatePending: boolean;
+    /** Non-fatal detail when promotion was attempted but partially/fully failed. */
+    Message?: string;
+}
+
+/**
+ * Server-registered hook that runs the post-sync custom-column promotion (gaps.md §2). The
+ * engine never depends on RSU/CodeGen — the server registers an implementation that performs
+ * the coverage scan → RSU ADD COLUMN → IOF/field-map. Self-gated INSIDE the callback: a cheap
+ * EXISTS over the overflow column means a customs-free sync does no promotion work, so the
+ * two-stage process collapses to single-stage (1×) when there is nothing to promote.
+ *
+ * ContextUser/Provider are typed `unknown` to avoid a circular import; the engine passes a real
+ * UserInfo / IMetadataProvider and the server implementation narrows them back.
+ */
+export type PostSyncSchemaPromotionCallback = (ctx: {
+    CompanyIntegrationID: string;
+    ContextUser: unknown;
+    SyncedEntityNames: string[];
+    Provider?: unknown;
+}) => Promise<SchemaPromotionResult>;
 
 /** Per-entity-map result within a sync run */
 export interface EntityMapSyncResult {

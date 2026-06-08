@@ -189,6 +189,41 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         return raw;
     }
 
+    /**
+     * Source keys a connector DELIBERATELY removes in its {@link TransformRecord} override
+     * (vendor noise, a flattened parent blob, a nested child collection emitted as its own object).
+     * These are the only sanctioned drops — excluded from the {@link applyTransformPreservingKeys}
+     * re-add. Default: none. Override per-object to declare intentional removals.
+     */
+    protected ExcludedSourceKeys(_objectName: string): string[] {
+        return [];
+    }
+
+    /**
+     * Runs {@link TransformRecord}, then RE-ADDS any source key the transform dropped (present in
+     * `raw`, absent from the output) unless declared in {@link ExcludedSourceKeys}. This makes the
+     * base-fetch path structurally full-record (§0 forward-compat contract): a TransformRecord
+     * override may reshape/coerce but cannot SILENTLY drop a source key from `ExternalRecord.Fields`,
+     * so the framework's custom-column capture sees everything the source returned. The default
+     * identity transform returns `raw` unchanged → fast-path no-op (zero overhead, zero behavior
+     * change for connectors that don't override TransformRecord).
+     */
+    protected applyTransformPreservingKeys(
+        raw: Record<string, unknown>,
+        obj: MJIntegrationObjectEntity,
+        fields: MJIntegrationObjectFieldEntity[]
+    ): Record<string, unknown> {
+        const transformed = this.TransformRecord(raw, obj, fields);
+        if (transformed === raw) return raw; // identity (default) — nothing dropped
+        const excluded = new Set(this.ExcludedSourceKeys(obj.Name));
+        const out: Record<string, unknown> = { ...transformed };
+        for (const key of Object.keys(raw)) {
+            if (key in out || excluded.has(key)) continue;
+            out[key] = raw[key]; // re-add a key the transform dropped but did not exclude
+        }
+        return out;
+    }
+
     // ── BaseIntegrationConnector implementations ─────────────────────
 
     /**
@@ -393,7 +428,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         }
         const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
         if (records.length === 0) return null;
-        const transformed = this.TransformRecord(records[0], obj, fields);
+        const transformed = this.applyTransformPreservingKeys(records[0], obj, fields);
         return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields));
     }
 
@@ -494,7 +529,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
         return {
             Records: result.Records.map(r => this.ToExternalRecord(
-                this.TransformRecord(r, obj, fields),
+                this.applyTransformPreservingKeys(r, obj, fields),
                 ctx.ObjectName,
                 pkFieldNames
             )),
@@ -588,7 +623,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
             for (const r of result.Records) {
                 for (const [k, v] of Object.entries(fkTags)) r[k] = v;
-                const transformed = this.TransformRecord(r, obj, fields);
+                const transformed = this.applyTransformPreservingKeys(r, obj, fields);
                 out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
             }
             return;

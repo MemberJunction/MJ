@@ -92,7 +92,68 @@ export interface ConnectorCreationPipelineResult {
  * `__mj.Entity`. The pipeline emits `entity.skipped-no-pk` events for visibility.
  */
 export class IntegrationConnectorCreationPipeline {
+    /** In-flight runs by CompanyIntegrationID — coalesces a concurrent duplicate onto the same promise. */
+    private static readonly inFlightRuns = new Map<string, Promise<ConnectorCreationPipelineResult>>();
+    /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
+    private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
+    /** Default coalesce window (ms) when the env override is unset/invalid. */
+    private static readonly DEFAULT_COALESCE_WINDOW_MS = 5000;
+
+    /**
+     * How long a just-completed run is reused for a duplicate invocation of the SAME CompanyIntegration.
+     * Sized only to absorb the create-time double-fire (the `IsActive` Save-hook runs the pipeline, then
+     * `IntegrationCreateConnection` calls it again milliseconds later) — short enough that a genuine,
+     * later operator-initiated re-refresh always runs fresh. Override via the
+     * `MJ_CONNECTOR_PIPELINE_COALESCE_WINDOW_MS` env var (a positive integer of milliseconds; set 0/unset
+     * to use the default). Env-based, matching the RSU env-var convention (RSU_WORK_DIR, etc.).
+     */
+    private static get COALESCE_WINDOW_MS(): number {
+        const override = Number(process.env.MJ_CONNECTOR_PIPELINE_COALESCE_WINDOW_MS);
+        return Number.isFinite(override) && override > 0 ? override : IntegrationConnectorCreationPipeline.DEFAULT_COALESCE_WINDOW_MS;
+    }
+
+    /**
+     * Public entry. De-dups the known create-time double-invocation: the connection's `IsActive`
+     * false→true Save fires the entity-server hook (which runs this pipeline WITH LLM PK inference),
+     * and the create resolver then calls it again. Both converge here, so we run the pipeline ONCE
+     * per CompanyIntegration and hand both callers the same result — no double introspect/persist/
+     * classify, no double live API calls, and the resolver still gets a real summary. A legitimate
+     * re-refresh later (outside the window) runs fresh.
+     */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
+        const ciID = opts.CompanyIntegration?.ID;
+        if (!ciID) return this.runInternal(opts); // no key to de-dup on — run directly
+
+        const cls = IntegrationConnectorCreationPipeline;
+        const inFlight = cls.inFlightRuns.get(ciID);
+        if (inFlight) return inFlight; // a concurrent run is already going — share it
+
+        cls.pruneRecentRuns();
+        const recent = cls.recentRuns.get(ciID);
+        if (recent) return recent.result; // a run just completed (within the window) — reuse it
+
+        const promise = this.runInternal(opts);
+        cls.inFlightRuns.set(ciID, promise);
+        try {
+            const result = await promise;
+            cls.recentRuns.set(ciID, { result, at: Date.now() });
+            return result;
+        } finally {
+            cls.inFlightRuns.delete(ciID);
+        }
+    }
+
+    /** Drops recent-run entries older than the coalesce window so the map stays bounded. */
+    private static pruneRecentRuns(): void {
+        const now = Date.now();
+        for (const [key, entry] of IntegrationConnectorCreationPipeline.recentRuns) {
+            if (now - entry.at >= IntegrationConnectorCreationPipeline.COALESCE_WINDOW_MS) {
+                IntegrationConnectorCreationPipeline.recentRuns.delete(key);
+            }
+        }
+    }
+
+    private async runInternal(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const runID = opts.RunID ?? IntegrationProgressEmitter.newRunID('connector');
         const manifest: IntegrationRunManifest = {
             runID,
