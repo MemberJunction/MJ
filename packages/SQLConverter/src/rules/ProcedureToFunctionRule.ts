@@ -14,6 +14,22 @@ import {
 } from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
 
+/**
+ * Views referenced via `RETURNS SETOF` by CRUD sprocs for deprecated entities
+ * whose backing view is no longer created by any migration. PostgreSQL resolves
+ * the SETOF return type at function-CREATE time, so emitting these sprocs against
+ * a nonexistent view fails the apply. Because the entity is deprecated (the view
+ * exists in no baseline or migration), the sproc is intentionally skipped rather
+ * than emitted. Mirrors the targeted-skip precedent in CatalogViewRule
+ * (vwFlywayVersionHistoryParsed). Add a view here only when its sproc is a true
+ * orphan — the default for every other view is to emit the sproc regardless (see
+ * determineReturnType), so live sprocs are never silently dropped.
+ */
+const ORPHANED_RETURN_VIEWS = new Set<string>([
+  'vwEntityBehaviors',
+  'vwEntityBehaviorTypes',
+]);
+
 export class ProcedureToFunctionRule implements IConversionRule {
   Name = 'ProcedureToFunctionRule';
   SourceDialect = 'tsql';
@@ -533,13 +549,20 @@ export class ProcedureToFunctionRule implements IConversionRule {
   // Return type detection
   // ---------------------------------------------------------------------------
 
-  private determineReturnType(body: string, _procName: string, context: ConversionContext): string {
+  private determineReturnType(body: string, procName: string, context: ConversionContext): string {
     // Check for SELECT * FROM __mj.vwViewName → RETURNS SETOF
     const viewMatch = body.match(
       /SELECT\s+(?:\*|[\w\s,.*]+)\s+FROM\s+\[?__mj\]?\.\[?(vw\w+)\]?/i
     );
     if (viewMatch) {
       const viewName = viewMatch[1];
+      // A handful of CRUD sprocs reference views for deprecated entities that no
+      // migration creates. PG resolves the SETOF return type at CREATE time, so
+      // emitting them fails the apply. Skip these specific orphans (gate-approved
+      // INTENTIONAL marker) rather than emit broken DDL.
+      if (ORPHANED_RETURN_VIEWS.has(viewName)) {
+        return `-- SKIPPED (INTENTIONAL): ${procName} — return view __mj."${viewName}" is a deprecated/orphaned entity view not created by any migration (PG requires the RETURNS SETOF view to exist at function-CREATE time)`;
+      }
       // Emit the sproc regardless of whether the view is in this file — it
       // typically lives in the baseline or an earlier migration, and by the
       // time this migration runs sequentially the view already exists in the
