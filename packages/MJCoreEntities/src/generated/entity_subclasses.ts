@@ -76360,6 +76360,59 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
     }
 
     /**
+    * Validate() method override for MJ: Magic Link Invites entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: An email address must be provided if the identity mode is set to 'email'.
+    * * Table-Level: The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEmailRequiredForEmailIdentityMode(result);
+        this.ValidateUseCountWithinMaxUsesLimit(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * An email address must be provided if the identity mode is set to 'email'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEmailRequiredForEmailIdentityMode(result: ValidationResult) {
+    	if (this.IdentityMode && this.IdentityMode.toLowerCase() === 'email' && (this.Email == null || this.Email.trim() === '')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Email",
+    			"An email address is required when the identity mode is set to 'email'.",
+    			this.Email,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUseCountWithinMaxUsesLimit(result: ValidationResult) {
+    	if (this.UseCount != null && this.MaxUses != null) {
+    		if (this.UseCount < 0 || this.UseCount > this.MaxUses) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UseCount",
+    				"The use count must be between 0 and the maximum allowed uses of " + this.MaxUses + ".",
+    				this.UseCount,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
