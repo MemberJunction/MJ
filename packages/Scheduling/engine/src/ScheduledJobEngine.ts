@@ -967,7 +967,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      *   own parameters are bound by name to the positional `@pN` placeholders the
      *   provider substitutes by index.
      * PostgreSQL: `SELECT * FROM schema."name"($1, $2, …)` — the lock sprocs are
-     *   ported to plpgsql functions (see the v5.39.x scheduling-engine PG
+     *   ported to plpgsql functions (see the v5.40.x scheduling-engine PG
      *   migration) and `pg` binds `$N` placeholders positionally.
      *
      * In BOTH cases the SAME positional value array is handed to ExecuteSQL;

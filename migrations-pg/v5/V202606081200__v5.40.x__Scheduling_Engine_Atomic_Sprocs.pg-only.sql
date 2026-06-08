@@ -1,5 +1,5 @@
 -- =============================================================================
--- V202606022336__v5.39.x__Scheduling_Engine_Atomic_Sprocs.pg-only.sql
+-- V202606081200__v5.40.x__Scheduling_Engine_Atomic_Sprocs.pg-only.sql
 -- =============================================================================
 --
 -- WHY THIS MIGRATION EXISTS:
