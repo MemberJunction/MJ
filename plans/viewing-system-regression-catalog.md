@@ -90,3 +90,12 @@ Entities to exercise: **AI Agents** (date fields, no geo), **AI Models** (vector
 ---
 ## Bug log (filled during the run)
 (rounds appended below; each round: bug list → fixes → re-run result)
+
+## ROUND 1 — AI Agents (results)
+- A1 Grid: BUG#1 (FIXED) — grid rendered empty (display:inline under ViewEncapsulation.None made AG Grid viewport 0-width). Fix: setRendererVisible forces display:block+height:100%. Now 10 cols/19 rows, survives caching round-trip.
+- A2 Cards: PASS (renders + data).
+- A3 Timeline: PASS (42 events on first switch; controls inside timeline area).
+- B1 switcher availability: PASS — [Cluster, Grid, Cards, Timeline]; Map correctly excluded (no geocoding).
+- J1 caching: PASS — Grid/Cards/Timeline/Cluster instances cached; round-trip preserves state (cluster runToken stable).
+- F1 cluster point-click: PASS — no recompute (runToken stable).
+- C10 Export: BUG#2 (FIXED) — duplicate export dialog (mj-entity-data-grid hosts its OWN export dialog AND the grid wrapper added a second → 2 stacked). Fix: removed the wrapper's export dialog + handling; the grid component owns export. Now 1 dialog, shows Excel/CSV/JSON format options.

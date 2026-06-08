@@ -2,8 +2,6 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, C
 import { EntityInfo, RunViewParams, LogError } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
-import { ExportColumn, ExportData } from '@memberjunction/export-engine';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
 import { IViewRenderer, ViewDataRequest, ViewRelatedRecordNavigation } from '../view-type.contracts';
 import { ViewGridState } from '../../types';
@@ -63,10 +61,10 @@ export interface GridViewConfig {
  * set of generic outputs. There is **no opaque `hostAction` channel** — everything a grid does is
  * resolved through one of these three categories:
  *
- *   1. **Self-contained (owned end-to-end by this wrapper via Generic dialogs — never bubbles up):**
- *      - **Export** → hosts `<mj-export-dialog>` ({@link ExportServiceModule}). On `(ExportButtonClick)`
- *        the wrapper builds {@link ExportColumn}s from the visible grid columns + {@link ExportData}
- *        from its own {@link records}, then opens the dialog. The dialog downloads the file itself.
+ *   1. **Self-contained (owned end-to-end — never bubbles up):**
+ *      - **Export** → owned entirely by `<mj-entity-data-grid>` itself (its `onExportClick` opens its
+ *        OWN export dialog with format/sampling via `ExportService`). This wrapper does NOT host an
+ *        export dialog — doing so produced two stacked dialogs.
  *      - **Add to List** → hosts `<mj-list-management-dialog>` ({@link ListManagementModule}). On
  *        `(AddToListRequested)` the wrapper builds a {@link ListManagementDialogConfig} from the
  *        entity + selected records and opens the dialog.
@@ -94,9 +92,9 @@ export interface GridViewConfig {
  * (`[AllowLoad]="false"`) — the host owns the fetch.
  *
  * This is an NgModule-declared (`standalone: false`) component, declared in `EntityViewerModule`.
- * It renders `<mj-entity-data-grid>` + the Generic `<mj-export-dialog>` / `<mj-list-management-dialog>`
- * / `<mj-ev-confirm-dialog>` straight from the module's compilation scope (the module imports
- * `ExportServiceModule` + `ListManagementModule` and declares the grid + confirm dialog) — so there's
+ * It renders `<mj-entity-data-grid>` + the Generic `<mj-list-management-dialog>` / `<mj-ev-confirm-dialog>`
+ * straight from the module's compilation scope (the module imports `ListManagementModule` and declares
+ * the grid + confirm dialog; the grid component brings its own export dialog) — so there's
  * no `imports` array and, crucially, no self-import of `EntityViewerModule`: the module loads the
  * view-type descriptors, which reference these wrappers, so a wrapper importing the module back would
  * form a runtime import cycle (NG0919).
@@ -135,15 +133,15 @@ export interface GridViewConfig {
       (NewButtonClick)="onNewButtonClick()"
       (RefreshButtonClick)="onRefreshButtonClick()"
       (DeleteButtonClick)="onDeleteButtonClick($event)"
-      (ExportButtonClick)="onExportButtonClick()"
       (AddToListRequested)="onAddToListRequested($event)"
       (ForeignKeyClick)="onForeignKeyClick($event)"
       (PageChange)="onPageChange($event)"
     >
     </mj-entity-data-grid>
 
-    <!-- Self-contained Export dialog (Generic) — owned by this wrapper, never bubbles up. -->
-    <mj-export-dialog [visible]="showExportDialog" [config]="exportDialogConfig" (closed)="onExportDialogClosed($event)"> </mj-export-dialog>
+    <!-- NOTE: Export is NOT handled here — mj-entity-data-grid hosts its OWN export dialog
+         (its onExportClick opens it with formats/sampling via ExportService). Adding a second
+         dialog here produced two stacked export dialogs. The grid owns export self-contained. -->
 
     <!-- Self-contained Add-to-List dialog (Generic) — owned by this wrapper, never bubbles up. -->
     @if (listManagementConfig) {
@@ -239,18 +237,6 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   @Output() createRecordRequested = new EventEmitter<void>();
 
   /**
-   * Optional notification before an export proceeds. Self-contained — export works without any parent
-   * involvement; this is a courtesy hook for hosts that want to observe the action.
-   */
-  @Output() BeforeExport = new EventEmitter<void>();
-
-  /**
-   * Optional notification after an export dialog closes. Carries the dialog's {@link ExportDialogResult}
-   * (including whether the user actually exported). Self-contained — purely informational.
-   */
-  @Output() AfterExport = new EventEmitter<ExportDialogResult>();
-
-  /**
    * Reference to the hosted grid. Currently only retained for parity / future selection resolution;
    * selection is mapped from the {@link records} input rather than read from the grid, per contract.
    */
@@ -259,12 +245,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   // ================================================================
   // Self-contained dialog state (never surfaced to the host)
   // ================================================================
-
-  /** Whether the export dialog is visible. Toggled internally by {@link onExportButtonClick}. */
-  protected showExportDialog = false;
-
-  /** Config fed into `<mj-export-dialog>`. Built from {@link records} + visible grid columns. */
-  protected exportDialogConfig: ExportDialogConfig | null = null;
+  // NOTE: Export has no state here — mj-entity-data-grid owns its export dialog.
 
   /** Whether the add-to-list dialog is visible. Toggled internally by {@link onAddToListRequested}. */
   protected showListManagementDialog = false;
@@ -422,111 +403,10 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   }
 
   // ================================================================
-  // Self-contained: Export (hosts <mj-export-dialog>)
+  // Export: handled entirely by mj-entity-data-grid (its onExportClick opens its own export dialog
+  // via ExportService). This wrapper intentionally does NOT host an export dialog — doing so produced
+  // two stacked dialogs. Nothing to do here.
   // ================================================================
-
-  /**
-   * Export button → build the export {@link ExportColumn}s + {@link ExportData} from THIS wrapper's
-   * {@link records} input and its `config.gridState`, then open the Generic export dialog. The dialog
-   * handles format/sampling selection and downloads the file itself — nothing bubbles up.
-   */
-  onExportButtonClick(): void {
-    if (!this.entity) {
-      return;
-    }
-    this.BeforeExport.emit();
-
-    const columns = this.buildExportColumns();
-    const data = this.buildExportData();
-    const fileName = `${this.entity.Name}_${new Date().toISOString().split('T')[0]}`;
-
-    this.exportDialogConfig = {
-      data,
-      columns,
-      defaultFileName: fileName,
-      availableFormats: ['excel', 'csv', 'json'],
-      defaultFormat: 'excel',
-      showSamplingOptions: true,
-      defaultSamplingMode: 'all',
-      dialogTitle: `Export ${this.entity.Name}`,
-    };
-    this.showExportDialog = true;
-    this.cdr.detectChanges();
-  }
-
-  /** Export dialog closed → tear down state and surface the (informational) {@link AfterExport} hook. */
-  onExportDialogClosed(result: ExportDialogResult): void {
-    this.showExportDialog = false;
-    this.exportDialogConfig = null;
-    this.AfterExport.emit(result);
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Build the export columns from the current grid state's visible columns when available, falling
-   * back to the entity's non-virtual fields. Mirrors the construction the legacy host did in
-   * `data-explorer-dashboard`'s `getExportColumns()`, adapted to this wrapper's inputs.
-   */
-  private buildExportColumns(): ExportColumn[] {
-    const entity = this.entity;
-    if (!entity) {
-      return [];
-    }
-
-    // Priority 1: current grid state's column settings (reflects what the user actually sees).
-    const columnSettings = this.config.gridState?.columnSettings;
-    if (columnSettings && columnSettings.length > 0) {
-      return columnSettings
-        .filter((col) => col.hidden !== true)
-        .map((col) => {
-          const field = entity.Fields.find((f) => f.Name === col.Name);
-          return {
-            name: col.Name,
-            displayName: col.DisplayName || col.Name,
-            dataType: this.mapFieldTypeToExportType(field?.Type),
-          };
-        });
-    }
-
-    // Priority 2: all non-virtual fields.
-    return entity.Fields.filter((f) => !f.IsVirtual).map((f) => ({
-      name: f.Name,
-      displayName: f.DisplayNameOrName,
-      dataType: this.mapFieldTypeToExportType(f.Type),
-    }));
-  }
-
-  /**
-   * Build the export data straight from the loaded {@link records}. The grid is host-fed, so the
-   * wrapper exports exactly the records it was given (already filtered / sorted / paged by the host).
-   */
-  private buildExportData(): ExportData {
-    return this.records;
-  }
-
-  /**
-   * Map a MemberJunction field type string onto an {@link ExportColumn} data-type hint. Mirrors the
-   * legacy host's `mapFieldTypeToExportType()`.
-   */
-  private mapFieldTypeToExportType(fieldType?: string): ExportColumn['dataType'] {
-    if (!fieldType) {
-      return 'string';
-    }
-    const type = fieldType.toLowerCase();
-    if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
-      return 'number';
-    }
-    if (type.includes('date') || type.includes('time')) {
-      return 'date';
-    }
-    if (type.includes('bit') || type.includes('bool')) {
-      return 'boolean';
-    }
-    if (type.includes('money') || type.includes('currency')) {
-      return 'currency';
-    }
-    return 'string';
-  }
 
   // ================================================================
   // Self-contained: Add to List (hosts <mj-list-management-dialog>)

@@ -1632,11 +1632,21 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return created;
   }
 
-  /** Toggle a cached renderer's host element visibility without destroying it (preserves state). */
+  /**
+   * Toggle a cached renderer's host element visibility without destroying it (preserves state).
+   * When visible, force `display: block` + `height: 100%` rather than clearing the style: the wrapper
+   * components use `ViewEncapsulation.None`, under which their `:host { display:block; height:100% }`
+   * rule is a no-op, so a custom element defaults to `display: inline` — which gives AG Grid a
+   * zero-width viewport (no rows/columns render), especially after a hide → show cycle. Forcing block
+   * here guarantees every view-type plug-in gets a full-size block container.
+   */
   private setRendererVisible(ref: ComponentRef<IViewRenderer>, visible: boolean): void {
     const el = ref.location.nativeElement as HTMLElement | undefined;
     if (el) {
-      el.style.display = visible ? '' : 'none';
+      el.style.display = visible ? 'block' : 'none';
+      if (visible) {
+        el.style.height = '100%';
+      }
     }
   }
 
