@@ -1,0 +1,38 @@
+{
+  "name": "@memberjunction/clustering-engine",
+  "type": "module",
+  "version": "5.39.0",
+  "description": "MemberJunction: Framework-agnostic clustering + dimensionality-reduction engine with persistence to Cluster Analysis entities",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/ai-core-plus": "5.39.0",
+    "@memberjunction/ai-prompts": "5.39.0",
+    "@memberjunction/ai-vectors-memory": "5.39.0",
+    "@memberjunction/core": "5.39.0",
+    "@memberjunction/core-entities": "5.39.0",
+    "@memberjunction/global": "5.39.0",
+    "umap-js": "^1.4.0",
+    "@memberjunction/ai-engine-base": "5.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

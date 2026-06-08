@@ -970,10 +970,10 @@
             <div class="data-viewer-container">
               @if (entity) {
                 <mj-entity-viewer
-                  [entity]="entity"
-                  [showGridToolbar]="true"
-                  (recordOpened)="OnRecordOpened($event)"
-                  (addRequested)="OnAddRequested()">
+                  [Entity]="entity"
+                  [Provider]="Provider"
+                  (RecordOpened)="OnRecordOpened($event)"
+                  (CreateRecordRequested)="OnAddRequested()">
                 </mj-entity-viewer>
               }
             </div>

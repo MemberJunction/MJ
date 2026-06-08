@@ -24,8 +24,9 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -391,6 +392,7 @@ type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type'
 export class TagsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
 
     // ── Global state ──
@@ -1059,6 +1061,10 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         ]);
         this.loadClassifyPreferences();
         this.applyIncomingConfiguration();
+        // Restoring a non-default saved tab here changes ActiveTab (and the derived
+        // header subtitle) after the first render already checked the default 'tags'.
+        // Flush it in its own pass so the bindings don't trip NG0100.
+        this.cdr.detectChanges();
 
         // Tags dashboard's default landing is the Tag Library — load that data
         // (and the entity-record-document cache used by drill-down) up front.
@@ -1069,6 +1075,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         if (this.ActiveTab !== 'tags' && !this.tabDataLoaded.has(this.ActiveTab)) {
             await this.loadTabData(this.ActiveTab);
             this.tabDataLoaded.add(this.ActiveTab);
+            // The eager load updates header-subtitle inputs (e.g. taxonomy tag
+            // count); flush so the new subtitle doesn't trip NG0100 on next check.
+            this.cdr.detectChanges();
         }
 
         this.IsLoading = false;
@@ -1223,7 +1232,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     public get currentTabSubtitle(): string {
         switch (this.ActiveTab) {
             case 'tags':        return `${this.TagRows.length} unique tags across all content sources`;
-            case 'taxonomy':    return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
+            case 'taxonomy':    return 'Manage tag hierarchy, resolve duplicates, and monitor taxonomy health';
             case 'suggestions': return `${this.SuggestionRows.length} pending · select rows for bulk approve / reject`;
             case 'health':      return 'Automated signals about taxonomy quality';
         }
@@ -3406,14 +3415,20 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
      */
     private async loadTaxonomyData(): Promise<void> {
         try {
+            // Tags come from the TagEngineBase cache (browser-safe BaseEngine that
+            // caches MJ: Tags and stays fresh via BaseEntity save/delete events) —
+            // no need to RunView them here. Only tagged-items + audit logs are fetched.
+            await TagEngineBase.Instance.Config(false, undefined, this.ProviderToUse);
+
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const [tagsResult, taggedItemsResult, auditResult] = await rv.RunViews([
-                { EntityName: 'MJ: Tags', OrderBy: 'Name', ResultType: 'simple' },
+            const [taggedItemsResult, auditResult] = await rv.RunViews([
                 { EntityName: 'MJ: Tagged Items', ResultType: 'simple' },
                 { EntityName: 'MJ: Tag Audit Logs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 200, ResultType: 'simple' }
             ]);
 
-            this.tagsRaw = tagsResult.Success ? tagsResult.Results : [];
+            this.tagsRaw = TagEngineBase.Instance.Tags
+                .map(t => t.GetAll())
+                .sort((a, b) => String(a['Name'] ?? '').localeCompare(String(b['Name'] ?? '')));
             this.taggedItemsRaw = taggedItemsResult.Success ? taggedItemsResult.Results : [];
             this.tagAuditLogsRaw = auditResult.Success ? auditResult.Results : [];
 
@@ -5469,6 +5484,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         if (this.HealthRunning) return;
         this.HealthRunning = true;
         this.cdr.detectChanges();
+        const activityID = this.activityService.Start('Tag health check', { icon: 'fa-solid fa-heart-pulse' });
+        let healthOk = false;
         try {
             const provider = this.ProviderToUse as GraphQLDataProvider;
             if (!provider) throw new Error('No GraphQL provider available.');
@@ -5498,10 +5515,17 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             );
             // Pull in the new pending suggestions so Duplicates / Orphans / Suggestions all reflect
             await this.loadSuggestions();
+            healthOk = true;
+            this.activityService.Complete(activityID, 'success',
+                `${r.MergeCount} merge · ${r.LowUsageCount} low-usage · ${r.WideNodeCount} wide-node`);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             MJNotificationService.Instance.CreateSimpleNotification(`Tag Health failed: ${msg}`, 'error', 5000);
+            this.activityService.Complete(activityID, 'error', msg);
         } finally {
+            if (!healthOk && this.activityService.Activities.find(a => a.ID === activityID && a.Status === 'running')) {
+                this.activityService.Complete(activityID, 'error');
+            }
             this.HealthRunning = false;
             this.cdr.detectChanges();
         }

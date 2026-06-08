@@ -1,0 +1,158 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "677F4E7E-9EB6-4335-A2D6-01D759AD79DD"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.045Z",
+      "checksum": "a458a46fb3643a898ac7e32570534e20b6abb0debb3e74c802fa2af4dad39875"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspace Items",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "68F43C79-53AF-43D5-9434-47CBE82C2276"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.065Z",
+      "checksum": "189fbb3b3baba895d3f943afe8d0ef408ca842d18bc0f773a6da80d975a142a4"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Settings",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "E658EA96-64F8-473E-9EBC-0EE92672237A"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.084Z",
+      "checksum": "4ea45c1c6a7b57983fd8dd0dda10aed7505bafb7839006022fe36d1119cdc2a5"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Favorites",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "BFD5321D-B170-432F-945B-223A92EA35E2"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.102Z",
+      "checksum": "12798142d1a212dcf365fcd8d7eec2073115854fffedcf3755e1a539354f8784"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Record Logs",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "B48D8799-C03E-43CA-ADD6-BB77C160B31A"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.120Z",
+      "checksum": "f43076d10cbb69242ef9042478523ad96198a876e6a1502b56335f1946dd6c11"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notification Preferences",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "F8388976-E46E-4710-95AA-28C63D66B16E"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.137Z",
+      "checksum": "55c83b489f0903667f9be1381251fa1c1bf77f17a6ac1961eb58aa8eadb8ccbf"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "83A2DB79-1F88-4483-A647-ED80EB458CAF"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.170Z",
+      "checksum": "328d6375145afb2b5829e6dc8803b109ca7aeb6fc19f813501ec18a5f5ea33d1"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Applications",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "D9976037-BE90-4E42-969D-3F556C8E47D4"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.187Z",
+      "checksum": "7f5126882b7e4a74926e41db5af2c2b4e0afae2f403ccafb266c92500e4112e5"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Application Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Magic Link Baseline",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Application Roles"
+    },
+    "primaryKey": {
+      "ID": "3B6D257A-10CC-412B-9372-6DDA3E66A353"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T19:36:56.202Z",
+      "checksum": "6b43ad0f9ccf2ed20b57fe820c11d7d822abda933a1ba55c3b8e5322332f645d"
+    }
+  }
+]

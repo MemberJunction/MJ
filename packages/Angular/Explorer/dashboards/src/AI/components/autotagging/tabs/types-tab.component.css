@@ -6,3 +6,7 @@
  * renders inside the host shell. Tab-specific rules live here as the shared CSS
  * is partitioned during the host-slim step.
  */
+
+.at-org-ctx-wrap {
+    margin-bottom: 16px;
+}
