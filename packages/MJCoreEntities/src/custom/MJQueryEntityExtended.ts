@@ -1,4 +1,4 @@
-import { BaseEntity, UserInfo, QueryCacheConfig, Metadata } from "@memberjunction/core";
+import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
     MJQueryEntity,
@@ -162,9 +162,9 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         const deniedEntities: string[] = [];
         const queryEntities = this.QueryEntities;
         if (queryEntities && queryEntities.length > 0) {
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             for (const qe of queryEntities) {
-                const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, qe.EntityID));
+                const entityInfo = md.EntityByID(qe.EntityID);
                 if (!entityInfo) continue;  // Stale reference — skip
 
                 const perms = entityInfo.GetUserPermisions(user);
