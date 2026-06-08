@@ -181,6 +181,9 @@ To allow channels (text, audio, canvas, video, etc.) to connect dynamically as p
 
 Implemented by the server-side channel plugin. Responsible for managing the WebSockets/WebRTC session host connections and streaming data back and forth.
 
+> [!IMPORTANT]
+> The interface below is the **conceptual** contract. The [Unified Session Transport](#unified-session-transport) section that follows **refines** it: channels do **not** own the client-facing socket (`Socket`/`OnClientConnect`/`SendToClient` are removed), and the loosely-typed `any` payloads are replaced with a typed `SessionEnvelope`. A channel is handed an injected `ISessionTransport` and becomes pure routing/translation logic. Read both together — the unified version is the one we build.
+
 ```typescript
 export interface IAgentChannelServer {
     /** The active Session ID */
@@ -283,6 +286,149 @@ To support both server-side LLM tool execution (like Gemini Live's native functi
    The `IAgentChannelServer` plugin acts as the translation layer between the MemberJunction Agent's tool definition and the channel's protocol:
    * **Upstream Tool Calls (e.g., Gemini Live / OpenAI Realtime)**: The plugin registers the agent's tools with the LLM provider's WebSocket during session handshake. When the provider's API emits a `tool_call` frame, the server plugin intercepts it, executes the MJ tool, and sends the `tool_response` frame back upstream.
    * **Downstream Tool Calls (Client UI Actions)**: When the agent invokes a UI-oriented tool, the server plugin forwards a JSON execution payload downstream over the `ClientControl` channel to the client application, returning the client's response to the agent.
+
+---
+
+## Unified Session Transport
+
+> [!IMPORTANT]
+> This is the single most important integration decision in the proposal. MemberJunction **already** ships a real-time, bi-directional, session-scoped transport — and most of what "Channels" needs is a generalization of it, not a new parallel stack. This section defines how all socket traffic (existing and new) is unified.
+
+### What already exists (and must be reused, not duplicated)
+
+The current agent runtime already streams to clients and accepts mid-run callbacks over a **graphql-ws subscription + in-process PubSub** transport, scoped by a per-connection `sessionID` (the browser-generated `x-session-id` value). Today this is fragmented across **two separate subscriptions plus inbound mutations**:
+
+| Concern | Current wire | Source |
+|---|---|---|
+| Progress / token streaming / completion | `subscription statusUpdates(sessionId)` | `GraphQLDataProvider.PushStatusUpdates`, `RunAIAgentResolver.PublishProgressUpdate` |
+| Client tool **requests** (server → client) | `subscription ClientToolRequest(sessionID)` | `GraphQLDataProvider.ClientToolRequests`, `ClientToolRequestManager` |
+| Client tool **responses** + run triggers (client → server) | `RespondToClientToolRequest`, `RunAIAgent`, `UpdateClientToolDefinitions` mutations | `MJServer` resolvers |
+| Server-side fan-out bus | in-process `PubSubEngine` | `PubSubManager` |
+
+The "ClientControl" / "TextChat" channels in this proposal are, functionally, a re-skin of the above. Voice (binary audio) is the **only** genuinely new transport need. The unification goal: collapse the fragmentation into one model and add new transport *only* for media.
+
+### ⚠️ Two different things both named `sessionID`
+
+There is a **naming collision** that must be resolved before implementation:
+
+- **Transport `sessionID`** (exists today): a per-browser-connection correlation id (localStorage UUID → `x-session-id` header). Scopes PubSub delivery to one socket. **Not persisted.**
+- **`AIAgentSession.ID`** (this proposal): a persisted, long-lived session record.
+
+These are orthogonal — one connection can outlive/underlie many agent sessions, and reconnects change the transport id while the agent session persists. **Decision:** the persisted concept is referred to everywhere as **`AgentSessionID`** (param) / **`AgentSessionID`** (column), and the existing transport id keeps the name `sessionID` (or is renamed `connectionID`). They are carried side-by-side, never merged.
+
+### Core principle: channels are logical streams; the session owns the transport; one envelope for everything
+
+Instead of each feature owning its own wire, **a session owns one client-facing transport, and progress / tokens / tool calls / text / control / signaling are all just typed messages multiplexed over it by `ChannelID`.** A channel never touches the client-facing socket; it is handed a transport and calls `Send`.
+
+#### Layer 1 — One envelope
+
+The three ad-hoc JSON shapes collapse into a single discriminated-union envelope (note: no `any`, per MJ typing rules):
+
+```typescript
+/** JSON-safe value type used throughout channel payloads. */
+export type JSONValue =
+    | string | number | boolean | null
+    | JSONValue[] | { [key: string]: JSONValue };
+
+/** Every message on every channel, in or out, is one of these. */
+export interface SessionEnvelope<TPayload extends ChannelPayload = ChannelPayload> {
+    /** Persisted AIAgentSession.ID — NOT the transport/connection id. */
+    AgentSessionID: string;
+    /** Which logical channel (AIAgentChannel.ID). */
+    ChannelID: string;
+    /** Per-channel ordering / dedupe. */
+    Seq: number;
+    Direction: 'ToClient' | 'ToServer';
+    Payload: TPayload;
+}
+
+/** Discriminated union, keyed by Type. Channels add their own variants. */
+export type ChannelPayload =
+    | { Type: 'progress'; Step: string; Message: string }
+    | { Type: 'streaming'; Content: string; IsComplete: boolean }
+    | { Type: 'tool-request'; RequestID: string; ToolName: string; Params: string }
+    | { Type: 'tool-response'; RequestID: string; Success: boolean; Result?: string }
+    | { Type: 'text'; Role: 'user' | 'assistant'; Content: string }
+    | { Type: 'control'; Command: string; Args: Record<string, JSONValue> }
+    | { Type: 'signaling'; SDP?: string; ICE?: JSONValue };  // WebRTC negotiation
+```
+
+Today's `statusUpdates.message` (a JSON string) and the `ClientToolRequest` payload both become `SessionEnvelope` variants. New channels add new `Payload` members — they do **not** add new subscriptions.
+
+#### Layer 2 — One transport interface, swappable implementation
+
+This is the actual "unify the sockets" move. The transport is owned by the **Session Host**, not by individual channels:
+
+```typescript
+export interface ISessionTransport {
+    readonly AgentSessionID: string;
+    /** Push an envelope toward the client. */
+    Send(envelope: SessionEnvelope): Promise<void>;
+    /** Fires when an inbound envelope arrives from the client. */
+    OnMessage(handler: (envelope: SessionEnvelope) => void): void;
+    Close(): Promise<void>;
+}
+```
+
+The server channel interface then **loses all socket ownership** and just receives the injected transport:
+
+```typescript
+export interface IAgentChannelServer<TConfig extends Record<string, JSONValue> = Record<string, JSONValue>> {
+    readonly ChannelID: string;
+    Config: TConfig;
+    Initialize(transport: ISessionTransport, config: TConfig): Promise<void>;
+    /** Inbound payload for THIS channel, already demultiplexed by the host. */
+    OnClientMessage(payload: ChannelPayload): Promise<void>;
+    Close(): Promise<void>;
+    // To talk to the client, the channel calls transport.Send(...). It owns no client-facing socket.
+}
+```
+
+Two implementations to start:
+
+- **`PubSubSessionTransport`** (default): wraps the *existing* `PubSubManager` + graphql-ws subscription. `Send` publishes the envelope to the session's topic; inbound arrives via a single generalized `SendSessionMessage(envelope)` mutation. This is a refactor of what `RunAIAgentResolver` and `ClientToolRequestManager` already do — the two existing subscriptions collapse into one session multiplex.
+- **`WebRTCSessionTransport`**: instantiated **only** for channels that need binary/low-latency media. Its signaling rides the PubSub transport (`'signaling'` payload); only audio/video bytes go peer-to-peer.
+
+#### Layer 3 — Three planes (this is where the realtime-LLM upstream fits)
+
+The proposal's [Parallel Channel Orchestration & Tool Routing](#parallel-channel-orchestration--tool-routing) section introduces a **third** connection axis — the server plugin's socket to a realtime LLM provider (Gemini Live / OpenAI Realtime). It is essential to keep these planes distinct:
+
+| Plane | Endpoints | Carries | Transport | Owner |
+|---|---|---|---|---|
+| **Control** | Server ↔ Client | progress, tokens, tool req/resp, text, control commands, **WebRTC signaling** | `PubSubSessionTransport` (existing graphql-ws pipe, multiplexed) | Session Host |
+| **Media** | Server ↔ Client | raw audio/video frames | `WebRTCSessionTransport`, negotiated *over* the control plane | Session Host |
+| **Upstream provider** | Server ↔ LLM provider | provider realtime socket, native `tool_call`/`tool_response` frames | provider SDK / WebSocket | **the Channel plugin** |
+
+This refines the "channels don't own sockets" rule precisely: a channel does **not** own the **client-facing** socket (that is the unified `ISessionTransport`), but a realtime-voice channel **may** own an **upstream** connection to its external provider. The upstream socket is a channel-internal implementation detail and is never exposed to the client directly.
+
+So a `VoiceAudio` channel backed by Gemini Live is really doing three things at once: holding an upstream provider socket (plane 3), pumping audio over WebRTC (plane 2), and emitting transcripts / receiving tool results over the shared control plane (plane 1).
+
+#### Unified tool routing: one registry, three delivery edges
+
+The tool-routing behavior described earlier becomes a single abstraction over the MJ tool registry, with the channel choosing the delivery edge per tool:
+
+1. **Server-side tool** → normal MJ action execution inside the run (no socket).
+2. **Downstream (client UI) tool** → control-plane `tool-request` / `tool-response` envelope, reusing **`ClientToolRequestManager`**'s existing promise-tracking (it keeps its in-memory `Map`; it just publishes through `ISessionTransport` instead of a hardcoded topic). This is the proposal's "Downstream Tool Calls".
+3. **Upstream (provider-native) tool** → the channel translates between the MJ tool definition and the provider's frame format on its upstream socket. This is the proposal's "Upstream Tool Calls".
+
+All three resolve to the same MJ tool definition + execution; only the edge differs.
+
+### How existing pieces fold in
+
+- **`ClientToolRequestManager`** keeps its role (pending-promise tracking by `RequestID`) but emits via `transport.Send({ Payload: { Type: 'tool-request', ... } })`; `RespondToClientToolRequest` becomes one `Payload.Type` on the generic inbound mutation.
+- **`RunAIAgentResolver`** progress/streaming callbacks emit `progress` / `streaming` envelopes instead of bespoke JSON.
+- **Client `AgentClientSession`** subscribes once and demultiplexes by `ChannelID`, replacing the two separate `PushStatusUpdates()` + `ClientToolRequests()` subscriptions. The proposal's `IAgentChannelClient` should be implemented **by / composed into** this existing client session — not stood up as a second client-session concept.
+
+### Scaling unlock
+
+Because everything now publishes through one `ISessionTransport` / `PubSubManager`, making the **control plane** multi-instance is a single swap: back `PubSubManager` with Redis pub/sub and every JSON channel becomes cross-node at once. The **media plane** (WebRTC) and the **upstream provider** socket are inherently node-local, so those — and only those — require session affinity (sticky routing) at the load balancer. This is now an explicit, contained constraint rather than an implicit one.
+
+### Incremental, non-breaking rollout
+
+1. Introduce `SessionEnvelope` + `ISessionTransport`; implement `PubSubSessionTransport` over the *current* topics/subscriptions (no wire change yet).
+2. Refactor `RunAIAgentResolver` + `ClientToolRequestManager` to emit/consume envelopes through the transport. Behavior identical; the two subscriptions collapse to one multiplex.
+3. Add the generic `SendSessionMessage` inbound mutation; migrate `RespondToClientToolRequest` onto it (keep the old mutation as a thin shim for one release).
+4. Only then add `WebRTCSessionTransport` + the `VoiceAudio` channel and any upstream-provider channels. Voice becomes purely additive on top of a unified, already-proven control plane.
 
 ---
 
