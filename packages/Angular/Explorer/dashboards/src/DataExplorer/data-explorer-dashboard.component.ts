@@ -388,6 +388,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    try {
     // Ensure UserInfoEngine is configured before we try to access user settings
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
@@ -490,9 +491,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Push initial state to URL (covers deepLink and persisted state)
     this.pushCurrentStateToUrl();
-
-    // Notify that loading is complete (for resource wrapper integration)
-    this.NotifyLoadComplete();
+    } catch (err) {
+      // Never let a setup failure hang the app loading screen — log it and still signal completion.
+      console.error('[DataExplorer] ngOnInit setup failed (signaling load complete anyway):', err);
+    } finally {
+      // ALWAYS notify load complete — the loading screen waits on this; a thrown/awaited error before
+      // it would otherwise hang the screen forever on a direct-URL (deep-link) refresh.
+      this.NotifyLoadComplete();
+    }
   }
 
   /**

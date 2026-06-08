@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone, ViewContainerRef, ComponentRef, reflectComponentType } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ElementRef, ViewChild, NgZone, ViewContainerRef, ComponentRef, reflectComponentType } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
@@ -130,7 +130,7 @@ export type ViewPersistenceTarget = 'record' | 'user-settings' | 'none';
     'style': 'display: block; height: 100%;'
   }
 })
-export class EntityViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
+export class EntityViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit  {
   /**
    * Safety cap on the number of records loaded when a plug-in renderer asks the container to
    * load the full set (via a {@link ViewDataRequest} with `loadAll: true`). Prevents unbounded
@@ -647,8 +647,13 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /** Track if this is the first load (vs. load more) */
   private isInitialLoad: boolean = true;
 
-  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone, private elementRef: ElementRef<HTMLElement>) {
   super();}
+
+  /** IntersectionObserver used to detect when this viewer is re-attached/re-shown (Explorer caches +
+   *  reattaches resource components without firing Angular lifecycle hooks). See {@link ngAfterViewInit}. */
+  private _visibilityObserver: IntersectionObserver | null = null;
+  private _wasVisible = false;
 
   // ========================================
   // PUBLIC METHODS
@@ -948,7 +953,60 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     });
   }
 
+  ngAfterViewInit(): void {
+    // CRITICAL: the active view type is selected during ngOnInit (Entity setter → refreshAvailableViewTypes
+    // → applyViewTypeSelection → selectDynamicRenderer), but `dynamicViewHost` is a NON-static @ViewChild
+    // that only resolves now (ngAfterViewInit). So that earlier selectDynamicRenderer() returned early
+    // (host undefined) and never created the renderer — leaving a stale ActiveDynamicOption with no
+    // mounted ref (symptom: "171 records" header but an empty grid, pushInputs SKIPPED ref=null). Now
+    // that the host exists, mount the active renderer if it hasn't been.
+    if (this.ActiveDynamicOption && !this.dynamicRendererRef && this.dynamicViewHost) {
+      this.selectDynamicRenderer(this.ActiveDynamicOption);
+    }
+
+    // Detect re-attach: Explorer caches resource components and detaches/re-attaches their VIEW
+    // without firing ngOnInit/ngOnDestroy. When the dashboard tab is re-focused, this viewer's host
+    // re-enters the DOM/viewport — but the mounted plug-in (e.g. AG Grid) was rendered while detached
+    // and may show an empty body even though the data is still loaded. An IntersectionObserver gives
+    // us a reliable "became visible again" signal with no lifecycle hook.
+    if (typeof IntersectionObserver !== 'undefined' && this.elementRef?.nativeElement) {
+      this.ngZone.runOutsideAngular(() => {
+        this._visibilityObserver = new IntersectionObserver((entries) => {
+          const visible = entries.some(e => e.isIntersecting);
+          if (visible && !this._wasVisible) {
+            this._wasVisible = true;
+            this.ngZone.run(() => this.onViewerReattached());
+          } else if (!visible) {
+            this._wasVisible = false;
+          }
+        });
+        this._visibilityObserver.observe(this.elementRef.nativeElement);
+      });
+    }
+  }
+
+  /**
+   * Called when the viewer becomes visible again after being detached (cached-tab reattach). Mounts
+   * the active plug-in if it was never created (host wasn't ready at selection time), or re-pushes the
+   * current inputs so a host-fed grid re-renders its rows (the "N records in header but empty grid on
+   * return" symptom).
+   */
+  private onViewerReattached(): void {
+    const active = this.ActiveDynamicOption;
+    if (active && !this.dynamicRendererRef && this.dynamicViewHost) {
+      // Active view type selected but never mounted (host wasn't ready at selection time) — mount now.
+      this.selectDynamicRenderer(active);
+    } else if (active && this.dynamicRendererRef) {
+      // Re-assert visibility (force display:block) + re-push inputs so the mounted renderer re-renders.
+      this.setRendererVisible(this.dynamicRendererRef, true);
+      this.pushDynamicRendererInputs();
+      this.dynamicRendererRef.changeDetectorRef.detectChanges();
+    }
+  }
+
   ngOnDestroy(): void {
+    this._visibilityObserver?.disconnect();
+    this._visibilityObserver = null;
     this.clearDynamicRendererCache();
     this.destroy$.next();
     this.destroy$.complete();
