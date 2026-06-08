@@ -89,12 +89,12 @@ describe('magic-link core', () => {
         firstName: 'Ext',
         lastName: 'User',
         applicationId: 'APP-1',
-        roleName: 'External App User',
+        roleName: 'Magic Link Baseline',
         nowSeconds: 1000,
         ttlSeconds: 3600,
       });
       expect(claims.mj_app_id).toBe('APP-1');
-      expect(claims.mj_role).toBe('External App User');
+      expect(claims.mj_role).toBe('Magic Link Baseline');
       expect(claims.mj_magic_link).toBe(true);
       expect(claims.sub).toBe('magic-link|INVITE-1');
       expect(claims.exp - claims.iat).toBe(3600);
@@ -105,7 +105,7 @@ describe('magic-link core', () => {
     it('carries mj_invited_by when an inviter is supplied (attribution claim)', () => {
       const claims = buildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
-        applicationId: 'APP-1', roleName: 'External App User',
+        applicationId: 'APP-1', roleName: 'Magic Link Baseline',
         invitedByUserId: 'USER-42', nowSeconds: 1000, ttlSeconds: 3600,
       });
       expect(claims.mj_invited_by).toBe('USER-42');
@@ -114,7 +114,7 @@ describe('magic-link core', () => {
     it('omits mj_invited_by when no inviter is supplied', () => {
       const claims = buildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
-        applicationId: 'APP-1', roleName: 'External App User',
+        applicationId: 'APP-1', roleName: 'Magic Link Baseline',
         nowSeconds: 1000, ttlSeconds: 3600,
       });
       expect(claims.mj_invited_by).toBeUndefined();
@@ -123,9 +123,9 @@ describe('magic-link core', () => {
     it('always emits a single-entry mj_scopes for the current link', () => {
       const claims = buildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
-        applicationId: 'APP-1', roleName: 'External App User', nowSeconds: 1000, ttlSeconds: 3600,
+        applicationId: 'APP-1', roleName: 'Magic Link Baseline', nowSeconds: 1000, ttlSeconds: 3600,
       });
-      expect(claims.mj_scopes).toEqual([{ inviteId: 'INVITE-1', appId: 'APP-1', role: 'External App User', resourceType: undefined, resourceId: undefined }]);
+      expect(claims.mj_scopes).toEqual([{ inviteId: 'INVITE-1', appId: 'APP-1', role: 'Magic Link Baseline', resourceType: undefined, resourceId: undefined }]);
     });
 
     it('marks anonymous sessions and carries the per-session id + prior-scope union', () => {
@@ -144,7 +144,7 @@ describe('magic-link core', () => {
     it('does NOT mark mj_anon for email sessions', () => {
       const claims = buildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
-        applicationId: 'APP-1', roleName: 'External App User', nowSeconds: 1000, ttlSeconds: 3600,
+        applicationId: 'APP-1', roleName: 'Magic Link Baseline', nowSeconds: 1000, ttlSeconds: 3600,
       });
       expect(claims.mj_anon).toBeUndefined();
     });
@@ -235,13 +235,13 @@ describe('magic-link core', () => {
     });
 
     it('Owner-only by default: a non-Owner with no configured issuer roles is denied', () => {
-      expect(canIssueInvites('User', ['Developer', 'External App User'], [])).toBe(false);
+      expect(canIssueInvites('User', ['Developer', 'Magic Link Baseline'], [])).toBe(false);
     });
 
     it('denies an external user holding the restricted role (the escalation we are blocking)', () => {
       // restricted role is never an issuer role, so this stays false even if someone
       // mistakenly leaves issuerRoleNames empty
-      expect(canIssueInvites('User', ['External App User'], [])).toBe(false);
+      expect(canIssueInvites('User', ['Magic Link Baseline'], [])).toBe(false);
     });
 
     it('allows a non-Owner only when one of their roles is a configured issuer role', () => {
@@ -257,11 +257,11 @@ describe('magic-link core', () => {
   });
 
   describe('isRoleGrantable', () => {
-    const restricted = 'External App User';
+    const restricted = 'Magic Link Baseline';
 
     it('always allows the restricted role (case/space-insensitive)', () => {
-      expect(isRoleGrantable('External App User', restricted, [])).toBe(true);
-      expect(isRoleGrantable(' external app user ', restricted, [])).toBe(true);
+      expect(isRoleGrantable('Magic Link Baseline', restricted, [])).toBe(true);
+      expect(isRoleGrantable(' magic link baseline ', restricted, [])).toBe(true);
     });
 
     it('rejects a privileged role by default — blocks roleId=Owner escalation', () => {
@@ -333,7 +333,7 @@ describe('MagicLinkKeyManager', () => {
       inviteId: 'INVITE-1',
       email: 'ext@client.com',
       applicationId: 'APP-1',
-      roleName: 'External App User',
+      roleName: 'Magic Link Baseline',
       nowSeconds: Math.floor(Date.now() / 1000),
       ttlSeconds: 3600,
     });
@@ -370,7 +370,7 @@ describe('MagicLinkKeyManager', () => {
       inviteId: 'INVITE-2',
       email: 'ext@client.com',
       applicationId: 'APP-1',
-      roleName: 'External App User',
+      roleName: 'Magic Link Baseline',
       nowSeconds: Math.floor(Date.now() / 1000),
       ttlSeconds: 3600,
     });

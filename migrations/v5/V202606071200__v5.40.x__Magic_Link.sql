@@ -297,7 +297,7 @@ EXEC sp_addextendedproperty @name=N'MS_Description',
 GO
 
 -- Migration: Seed Row-Level Security filters for the magic-link boot baseline
--- Description: The External App User (deny-all external) role is granted entity-wide
+-- Description: The Magic Link Baseline (deny-all external) role is granted entity-wide
 --   READ on three identity/scope-resolution entities (User Roles, User Applications,
 --   Application Roles) so a magic-link guest can boot. Without row filtering those
 --   reads expose every row in those tables. These two RLS filters scope the reads to
@@ -323,7 +323,7 @@ BEGIN
         'B3717817-E88C-4C79-87D8-0C2D4B869873',
         'Magic Link: Own Rows by UserID',
         'UserID = ''{{UserID}}''',
-        'Restricts an entity (keyed by UserID) to the current user''s own rows. Attached to the External App User role''s read permission on User Roles and User Applications so a magic-link guest resolves only its own identity/app scope, never the whole table.'
+        'Restricts an entity (keyed by UserID) to the current user''s own rows. Attached to the Magic Link Baseline role''s read permission on User Roles and User Applications so a magic-link guest resolves only its own identity/app scope, never the whole table.'
     );
 END;
 
@@ -335,7 +335,7 @@ BEGIN
         'C04BCFB7-B880-44A6-9D6E-1633A4D03469',
         'Magic Link: Own Application Roles',
         'RoleID IN (SELECT RoleID FROM ${flyway:defaultSchema}.vwUserRoles WHERE UserID = ''{{UserID}}'')',
-        'Restricts Application Roles to rows for roles the current user actually holds (Application Roles has no UserID column, so it scopes via the user''s roles). Attached to the External App User role''s read permission on Application Roles so a magic-link guest can confirm its role can reach its app without reading every application''s role grants.'
+        'Restricts Application Roles to rows for roles the current user actually holds (Application Roles has no UserID column, so it scopes via the user''s roles). Attached to the Magic Link Baseline role''s read permission on Application Roles so a magic-link guest can confirm its role can reach its app without reading every application''s role grants.'
     );
 END;
 

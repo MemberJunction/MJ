@@ -131,7 +131,7 @@ MJ generates an invite (scope = app + role + email + expiry + single-use), email
 
 5. **Provisioning** — at **redemption** (not lazily in `verifyUserRecord`): find-or-create the MJ user by the invite's email, assign **only** the invite's `RoleID`, create a single `MJ: User Applications` record for the invite's `ApplicationID`. This keeps the hot validation path untouched and the domain-whitelist logic in `verifyUserRecord` bypassed for this path. A dedicated context user (config) owns the writes.
 
-6. **Restricted role** — a seeded role (e.g. `External App User`) whose **Entity Permissions** grant read (and only the needed CRUD) on exactly the entities the shared app exposes. This is the actual security boundary. Seeded via metadata files (not SQL inserts), per repo convention.
+6. **Restricted role** — a seeded role (e.g. `Magic Link Baseline`) whose **Entity Permissions** grant read (and only the needed CRUD) on exactly the entities the shared app exposes. This is the actual security boundary. Seeded via metadata files (not SQL inserts), per repo convention.
 
 7. **Explorer UI confinement** (`packages/Angular/Explorer/base-application/src/lib/application-manager.ts` already filters nav by `User Applications`). Additional: detect magic-link sessions (claim) and hide the app switcher / global nav so a single-app user can't navigate to chrome they have no data for. Cosmetic layer **on top of** the role enforcement.
 
@@ -145,7 +145,7 @@ MJ generates an invite (scope = app + role + email + expiry + single-use), email
   "email": "external.user@client.com",
   "given_name": "...", "family_name": "...",
   "mj_app_id": "<ApplicationID>",         // custom claim: scope
-  "mj_role": "External App User",         // custom claim: restricted role
+  "mj_role": "Magic Link Baseline",         // custom claim: restricted role
   "mj_magic_link": true,                  // marks session for UI confinement
   "exp": 1234567890                        // short-ish session (see O3)
 }
@@ -172,7 +172,7 @@ New table **`MagicLinkInvite`** in the MJ core schema. Business columns only —
 | `Status` | nvarchar(20) | `Active` / `Consumed` / `Revoked` / `Expired` (computed/maintained) |
 
 - Consolidate into a single `ALTER`/`CREATE`; add `sp_addextendedproperty` for every column.
-- Seed the **`External App User`** role + its Entity Permissions and the request-type/lookup data via **metadata files** (`/metadata/...`), not migration INSERTs.
+- Seed the **`Magic Link Baseline`** role + its Entity Permissions and the request-type/lookup data via **metadata files** (`/metadata/...`), not migration INSERTs.
 - Migration goes in the highest `migrations/v*/` folder; timestamp re-stamped at merge time per repo rules.
 - **Do not** write any TS against new columns until the migration runs + CodeGen regenerates entity types (no `.Get()`/`.Set()` stand-ins).
 
@@ -199,7 +199,7 @@ magicLink: {
   rsaPrivateKey: process.env.MJ_MAGIC_LINK_PRIVATE_KEY,  // PEM; public half served via JWKS
   defaultExpiresInHours: 72,
   sessionTokenTtlHours: 8,
-  restrictedRoleName: 'External App User',
+  restrictedRoleName: 'Magic Link Baseline',
   contextUserForProvisioning: 'system@company.com',
   communicationProvider: 'SendGrid',                     // CommunicationEngine provider name
   emailTemplate: 'magic-link-invite',
@@ -236,8 +236,8 @@ magicLink: {
 
 **Phase 1 — server mechanism, verified end-to-end (priority):**
 
-1. **Migration + metadata seed** — `MagicLinkInvite` table, `External App User` role + entity permissions. Run migrate + CodeGen. *(Requires a database — see note below.)*
-   - ✅ **Authored (DB-independent):** `migrations/v5/V202605291600__v5.38.x__Magic_Link_Invites.sql` (table), `metadata/roles/.mj-sync.json` + `metadata/roles/.roles.json` (deny-all `External App User` role, pull-scoped via `filter`).
+1. **Migration + metadata seed** — `MagicLinkInvite` table, `Magic Link Baseline` role + entity permissions. Run migrate + CodeGen. *(Requires a database — see note below.)*
+   - ✅ **Authored (DB-independent):** `migrations/v5/V202605291600__v5.38.x__Magic_Link_Invites.sql` (table), `metadata/roles/.mj-sync.json` + `metadata/roles/.roles.json` (deny-all `Magic Link Baseline` role, pull-scoped via `filter`).
    - ⏳ **Pending DB:** run flyway migrate + CodeGen to generate the `MagicLinkInvite` entity types; `mj sync push --include=roles` to seed the role; attach **app-specific Entity Permissions** to the role (deploy-time, target app's entities — not seeded generically). Migration timestamp to be re-stamped against `next` at merge.
 2. ✅ **Server core** — built & compiling:
    - `packages/AuthProviders/src/providers/MagicLinkProvider.ts` — `@RegisterClass(BaseAuthProvider,'magic-link')`, registered in `AuthProviderFactory` + exported.
@@ -253,8 +253,8 @@ magicLink: {
    - redeem → 200, provisions `recruiter@agency.com`, mints RS256 JWT (correct `mj_app_id`/`mj_role`/`mj_magic_link` claims)
    - **single-use**: second redeem → 410 `consumed`
    - **auth works**: GraphQL with the minted JWT → 200 (token validates via JWKS, provisioned user resolves); bogus token → 401
-   - **DB scoping confirmed**: user has exactly the `External App User` role + the one `Admin` app; invite `Consumed` 1/1
-   - ✅ **Scoped-read + cross-entity denial proven** (2026-05-30): granted `External App User` read on `MJ: AI Models` via metadata (`metadata/entity-permissions/`). Recruiter session then: `AllMJAIModels` → 200, 167 rows; `AllMJUsers` / `AllMJApplications` → `"User recruiter@agency.com does not have read permissions on MJ: <Entity>"`. The §8 denial assertion holds — the restricted role is the enforced boundary at the GraphQL/entity layer.
+   - **DB scoping confirmed**: user has exactly the `Magic Link Baseline` role + the one `Admin` app; invite `Consumed` 1/1
+   - ✅ **Scoped-read + cross-entity denial proven** (2026-05-30): granted `Magic Link Baseline` read on `MJ: AI Models` via metadata (`metadata/entity-permissions/`). Recruiter session then: `AllMJAIModels` → 200, 167 rows; `AllMJUsers` / `AllMJApplications` → `"User recruiter@agency.com does not have read permissions on MJ: <Entity>"`. The §8 denial assertion holds — the restricted role is the enforced boundary at the GraphQL/entity layer.
 
 **Phase 2 — end-user "Share" experience (follow-up, same branch):**
 
@@ -273,5 +273,5 @@ All resolved 2026-05-29:
 - **O2 (RESOLVED):** ✅ **Both, phased.** Build the server endpoint + provisioning + token path first and verify end-to-end, then add the in-app "Share" UI as a follow-up phase in the same branch.
 - **O3 (RESOLVED — default):** Single short-lived session JWT (`sessionTokenTtlHours`, ~8h); recipient re-redeems the link to return. **No refresh tokens** for external users.
 - **O4 (RESOLVED — default):** v1 revocation = set invite `Status = Revoked` (kills unconsumed links) + rely on short session TTL. RS256 **key rotation** is the nuclear option for already-issued sessions. No per-session deny-list in v1.
-- **O5 (RESOLVED — default):** Seed **one** `External App User` role for v1; schema keeps per-link `RoleID` so multiple roles can be added later without migration.
+- **O5 (RESOLVED — default):** Seed **one** `Magic Link Baseline` role for v1; schema keeps per-link `RoleID` so multiple roles can be added later without migration.
 - **O6 (RESOLVED):** Plug into MJ's existing **email provider system** (`CommunicationEngine`) — provider name + template are config-driven (`magicLink.communicationProvider` / `magicLink.emailTemplate`), so delivery is swappable and does not block the auth mechanism.

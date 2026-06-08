@@ -250,7 +250,7 @@ const magicLinkSchema = z.object({
   /** Hours the minted session JWT remains valid after redemption. No refresh tokens. Default 8. */
   sessionTokenTtlHours: z.coerce.number().optional().default(8),
   /** Name of the restricted Role assigned to redeeming users when an invite does not specify one. */
-  restrictedRoleName: z.string().optional().default('External App User'),
+  restrictedRoleName: z.string().optional().default('Magic Link Baseline'),
   /**
    * Role names (besides Owner) whose members may issue invites via POST /create.
    * Empty (default) means Owner-only — the secure default. The restricted role

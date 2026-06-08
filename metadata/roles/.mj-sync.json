@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "Name='External App User'",
+    "filter": "Name='Magic Link Baseline'",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,

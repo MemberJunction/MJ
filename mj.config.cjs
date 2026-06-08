@@ -49,7 +49,7 @@ module.exports = {
     // Off by default — opt-in feature. Flip to true locally to exercise the
     // dev/e2e flow (ephemeral key, link returned in the create response).
     enabled: false,
-    restrictedRoleName: 'External App User',
+    restrictedRoleName: 'Magic Link Baseline',
     defaultExpiresInHours: 72,
     sessionTokenTtlHours: 8,
     audience: 'mj-magic-link',

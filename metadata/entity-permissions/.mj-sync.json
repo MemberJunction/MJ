@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name='External App User')",
+    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name='Magic Link Baseline')",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,

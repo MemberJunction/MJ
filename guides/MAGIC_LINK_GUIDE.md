@@ -20,7 +20,7 @@ There are two distinct layers, and conflating them is the most common mistake:
 
 | Layer | Where it lives | What it is | Lifecycle |
 |---|---|---|---|
-| **Mechanism** | The MJ framework (this feature) | Magic-link issuing/redemption, RS256 token minting, the auth provider, a baseline `External App User` role | Ships once, reused everywhere |
+| **Mechanism** | The MJ framework (this feature) | Magic-link issuing/redemption, RS256 token minting, the auth provider, a baseline `Magic Link Baseline` role | Ships once, reused everywhere |
 | **Scenario config** | **Your deployment's metadata** | A named role (e.g. `Recruiter`) + its Entity Permissions (e.g. *read Candidates*) + the target Application | Authored per client/app |
 | **The external people** | **Runtime** (provisioned on redemption) | The actual recruiter/guest user records | Created when a link is redeemed; never seeded |
 
@@ -80,7 +80,7 @@ module.exports = {
     rsaPrivateKey: process.env.MJ_MAGIC_LINK_PRIVATE_KEY,
     defaultExpiresInHours: 72,        // unredeemed-link lifetime
     sessionTokenTtlHours: 8,          // minted session lifetime (no refresh tokens)
-    restrictedRoleName: 'External App User',   // default role when an invite omits roleId
+    restrictedRoleName: 'Magic Link Baseline',   // default role when an invite omits roleId
     // Authorization (secure defaults — see §9):
     //   Who may call POST /create: Owners always; plus members of any role named here.
     //   Empty (default) ⇒ Owner-only. NEVER list the restricted role here.
@@ -116,7 +116,7 @@ This is the reusable part. Example: AGU wants recruiters to look up candidates.
 
 ### Step 1 — Define the restricted role (metadata)
 
-Either reuse the baseline `External App User` role (shipped in
+Either reuse the baseline `Magic Link Baseline` role (shipped in
 [`metadata/roles/`](../metadata/roles/)) or create a scenario-specific one. A
 named role is clearer when you have several external scenarios:
 
@@ -168,7 +168,7 @@ Dashboards, Queries, Encryption, Integrations, etc. — a deny-all guest simply
 as a permanent condition and loads that engine *empty* instead of hanging (see
 [§ Engine degradation](#engine-degradation)). So the baseline shipped in
 [`metadata/entity-permissions/.entity-permissions.json`](../metadata/entity-permissions/.entity-permissions.json)
-for `External App User` is just these **9** grants:
+for `Magic Link Baseline` is just these **9** grants:
 
 | Entity | Grant | Why |
 |---|---|---|
@@ -181,7 +181,7 @@ for `External App User` is just these **9** grants:
 This baseline is **framework-level** (every magic-link Explorer user needs it) and
 is distinct from the **scenario data perms** in Step 2 (your `Candidates`-style
 grants, per-deployment). If you define a scenario-specific role instead of reusing
-`External App User`, **copy this baseline onto that role too**, or the shell won't
+`Magic Link Baseline`, **copy this baseline onto that role too**, or the shell won't
 boot. It grants no business data — only the shell plumbing and the app-scope tables.
 
 > The three `Read` grants (`User Roles`, `User Applications`, `Application Roles`)
@@ -232,7 +232,7 @@ read on a different entity set), repeat with a new role — invites carry a per-
 > **Where this metadata lives:** if `Candidates` is *your client's* entity (not a
 > core MJ entity), these permission records belong in **that deployment's**
 > metadata, authored once the entity exists — not in the MJ framework repo. The
-> framework ships the mechanism, the baseline `External App User` role, and the
+> framework ships the mechanism, the baseline `Magic Link Baseline` role, and the
 > Explorer boot baseline (Step 2a); the **scenario data perms (Step 2) are yours.**
 
 ---
@@ -378,7 +378,7 @@ No new mechanism — it's reads over existing data:
 | `rateLimitWindowMs` | `60000` | Rate-limit window for `/redeem` + `/create` |
 | `redeemRateLimitMax` | `20` | Max `/redeem` attempts per IP per window |
 | `createRateLimitMax` | `30` | Max `/create` requests per IP per window |
-| `restrictedRoleName` | `External App User` | Default role when an invite omits `roleId` |
+| `restrictedRoleName` | `Magic Link Baseline` | Default role when an invite omits `roleId` |
 | `inviteIssuerRoleNames` | `[]` | Roles (besides Owner) allowed to call `/create`. Empty ⇒ Owner-only |
 | `grantableRoleNames` | `[]` | Roles (besides the restricted role) an invite may grant |
 | `contextUserForProvisioning` | — | User context for provisioning writes |
@@ -397,4 +397,4 @@ No new mechanism — it's reads over existing data:
   - `MagicLinkService.ts` — create / redeem / provision / email
   - `MagicLinkRouter.ts` — Express routes + provider registration
 - `migrations/v5/V202605291600__v5.39.x__Magic_Link_Invites.sql` — `MagicLinkInvite` table (+ appended CodeGen objects)
-- `metadata/roles/` — baseline `External App User` role
+- `metadata/roles/` — baseline `Magic Link Baseline` role
