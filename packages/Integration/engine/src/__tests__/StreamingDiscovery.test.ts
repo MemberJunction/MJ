@@ -88,13 +88,39 @@ describe('pickPrimaryKeyFromStats', () => {
         expect(v.Field).toBeNull();
     });
 
-    it('does not trust uniqueness over too small a sample', () => {
+    it('picks a thin-sample near-unique convention column as a SOFT best-available key (no hard significance gate)', () => {
+        // Soft policy: a small sample no longer blocks the pick — a PK-less object stalls CodeGen, and
+        // the key is soft (can't reject a row). `id` here is all-distinct + non-null + convention-named.
         const v = pickPrimaryKeyFromStats([col({ Key: 'id', Occurrences: 5, TotalRows: 5, DistinctNonNull: 5 })], { MinRowsForSignificance: 50 });
+        expect(v.Field).toBe('id');
+        expect(v.AmbiguousForLLM).toBe(false);
+    });
+
+    it('does NOT pick a distinct-capped column with no convention name (uniqueness unprovable, no signal)', () => {
+        const v = pickPrimaryKeyFromStats([col({ Key: 'payload', DistinctCapped: true })]);
         expect(v.Field).toBeNull();
     });
 
-    it('does not treat a distinct-capped column as a candidate (uniqueness unprovable)', () => {
+    it('picks a distinct-capped HIGH-cardinality column when its name matches the convention (soft)', () => {
+        // capped `id` = more distinct values than the cap, literally named id → overwhelmingly the key.
         const v = pickPrimaryKeyFromStats([col({ Key: 'id', DistinctCapped: true })]);
+        expect(v.Field).toBe('id');
+    });
+
+    it('takes a near-unique (not perfectly unique) convention column as a soft key when none is confident', () => {
+        // 99/100 distinct — a couple of dup/edge rows, no confident candidate, but plainly the identity.
+        const v = pickPrimaryKeyFromStats([
+            col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctNonNull: 99 }),
+            col({ Key: 'status', Occurrences: 100, TotalRows: 100, DistinctNonNull: 3 }),
+        ]);
+        expect(v.Field).toBe('id');
+    });
+
+    it('still returns no PK when nothing is plausibly identifying (no fabrication)', () => {
+        const v = pickPrimaryKeyFromStats([
+            col({ Key: 'status', DistinctNonNull: 3 }),
+            col({ Key: 'note', Occurrences: 30, TotalRows: 100, DistinctNonNull: 30 }), // mostly null, unnamed
+        ]);
         expect(v.Field).toBeNull();
     });
 

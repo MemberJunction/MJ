@@ -84,10 +84,12 @@ describe('BaseIntegrationConnector.DiscoverFieldsViaStream', () => {
         expect(find(fields, 'a').AllowsNull).toBeUndefined();
     });
 
-    it('fabricates no PK when nothing is provably unique (sub-threshold sample)', async () => {
-        // Only 3 rows; default significance is 50 → no column clears the bar.
+    it('picks a SOFT PK on a sub-threshold sample (convention id) — best-available, no hard gate', async () => {
+        // Only 3 rows (below the confidence threshold), but `id` is all-distinct + convention-named →
+        // soft best-available key. A PK-less object stalls CodeGen; the key is soft (can't reject a row).
+        // The genuine "no unique column at all → no PK" case is covered by the large-sample test above.
         const fields = await connector.Run(sampleRows(3));
-        expect(fields.some(f => f.IsPrimaryKey)).toBe(false);
+        expect(find(fields, 'id').IsPrimaryKey).toBe(true);
     });
 
     it('fabricates no PK when no column is unique even over a large sample', async () => {

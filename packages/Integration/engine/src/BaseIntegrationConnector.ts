@@ -469,11 +469,12 @@ export abstract class BaseIntegrationConnector {
      * gathered statistics. The connector supplies whatever read-only fetch yields the records; this
      * helper turns that stream into `ExternalFieldSchema[]`.
      *
-     * Why data-informed instead of nominal: streaming the real values lets us prove which column is
-     * unique + non-null over a statistically significant N (`pickPrimaryKeyFromStats`, p<0.05) and
-     * pick the PK from evidence rather than a name guess. The scan is time-bounded — it stops on
-     * exhaustion OR `opts.Discovery.TimeBudgetMs`, whichever comes first, and uses what it gathered;
-     * more rows simply mean stronger claims.
+     * Why data-informed: streaming the real values lets `pickPrimaryKeyFromStats` pick the PK from
+     * evidence (uniqueness/non-null statistics) COMBINED with the naming convention, rather than a
+     * name guess alone. The PK is a SOFT key, so the pick is best-available, not strict-significance:
+     * a confident unique+non-null column wins outright; otherwise a near-unique / convention-named
+     * column is taken as a soft key (a PK-less object would stall CodeGen). The scan is time-bounded —
+     * it stops on exhaustion OR `opts.Discovery.TimeBudgetMs`; more rows simply mean stronger claims.
      *
      * Provable-only encoding into the standard flags:
      *  - `IsPrimaryKey` — set ONLY on the single statistics-first pick. Multiple equally-ranked unique
