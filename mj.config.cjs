@@ -46,7 +46,9 @@ module.exports = {
    * instead of emailing it. Provisioning context user falls back to an Owner.
    */
   magicLink: {
-    enabled: true,
+    // Off by default — opt-in feature. Flip to true locally to exercise the
+    // dev/e2e flow (ephemeral key, link returned in the create response).
+    enabled: false,
     restrictedRoleName: 'External App User',
     defaultExpiresInHours: 72,
     sessionTokenTtlHours: 8,
