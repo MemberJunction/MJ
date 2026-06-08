@@ -31,14 +31,19 @@ import type {
     IntegrationSyncOptions,
     EntityMapSyncResult,
     SyncProgressSnapshot,
+    SchemaPromotionResult,
+    PostSyncSchemaPromotionCallback,
 } from './types.js';
-import { ClassifyError } from './types.js';
+import { ClassifyError, IsRetryableError } from './types.js';
+import { WithRetry } from './RetryRunner.js';
+import { WithTimeout, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { CUSTOM_OVERFLOW_COLUMN, hasUnmappedFields } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
@@ -48,6 +53,41 @@ import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from '.
 
 /** Default batch size for fetching records from external systems */
 const DEFAULT_BATCH_SIZE = 200;
+
+/**
+ * Hard ceiling on records the opt-in partitionReconcile (Merkle) mode may accumulate in RAM
+ * before it fails loud rather than risking an OOM crash. That mode buffers the ENTIRE fetched
+ * set (see applyViaPartitionReconcile) — intended for watermark-less small/medium objects. This
+ * cap is generous (well above the "tens of thousands" the mode targets); crossing it means the
+ * object is too large for partitionReconcile and the operator should disable it (the default
+ * streaming path has no such limit). Turns a silent OOM into an actionable error.
+ */
+const PARTITION_RECONCILE_MAX_ACCUMULATION = 500_000;
+
+/**
+ * Ceiling on the in-memory set of fetched ExternalIDs used for full-sync orphan detection. Past this,
+ * we stop tracking + skip the orphan sweep for that entity-map (surfaced as a SyncWarning) rather than
+ * grow the set unbounded and risk OOM on a multi-million-row full sync. Incremental syncs don't build
+ * this set; only full-sync / partition-reconcile do. Generous on purpose — most objects never hit it.
+ */
+const ORPHAN_DETECTION_MAX_IDS = 1_000_000;
+
+/**
+ * Cap on the retained per-record error SAMPLE in the aggregate run result. RecordsErrored keeps the
+ * true count; only this many error objects are kept for diagnostics (FinalizeRun persists the first
+ * 100). Prevents a multi-million-row failing run from holding every error object in RAM.
+ */
+const MAX_AGGREGATE_ERRORS = 200;
+
+/**
+ * In-memory safety ceiling for a FULL push (every row of an MJ entity is loaded into RAM before
+ * pushing). Past this we fail loud + actionable instead of risking an OOM. Env-overridable for the
+ * rare legitimate large full push. The proper long-term fix is a streaming/keyset push.
+ */
+const FULL_PUSH_MAX_RECORDS = (() => {
+    const override = Number(process.env.MJ_INTEGRATION_FULL_PUSH_MAX_RECORDS);
+    return Number.isFinite(override) && override > 0 ? Math.floor(override) : 1_000_000;
+})();
 
 /**
  * Server-side Integration Engine.
@@ -120,6 +160,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /** Optional provider override; falls back to Metadata.Provider when not set. */
     private _provider?: IMetadataProvider;
+
+    /**
+     * Server-registered hook for post-sync custom-column promotion (gaps.md §2 / M2). The
+     * engine has no dependency on RSU/CodeGen — the server registers an implementation via
+     * {@link SetPostSyncSchemaPromotionCallback}. Undefined ⇒ promotion is simply not wired
+     * (e.g. unit tests, non-server hosts), which is a no-op.
+     */
+    private postSyncSchemaPromotionCallback?: PostSyncSchemaPromotionCallback;
+
+    /** Registers (or clears, with undefined) the post-sync custom-column promotion hook. */
+    public SetPostSyncSchemaPromotionCallback(callback: PostSyncSchemaPromotionCallback | undefined): void {
+        this.postSyncSchemaPromotionCallback = callback;
+    }
 
     /** Returns the active provider — explicit override if set, otherwise the global default. */
     protected get ProviderToUse(): IMetadataProvider {
@@ -419,6 +472,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
             }
             await this.FinalizeRun(run, result, contextUser, onNotification, abortSignal?.aborted);
+            // Post-sync custom-column promotion (gaps.md §2 / M2). Self-gated server-side: a
+            // customs-free sync does no work. Skipped for an aborted run. Never throws into the sync.
+            if (!abortSignal?.aborted) {
+                result.SchemaUpdate = await this.invokePostSyncPromotionSafe(companyIntegrationID, contextUser, result);
+                // Restart-signal (M3): when columns were promoted, surface it on the structured
+                // stream so a watching client (IntegrationTailRunEvents) knows an MJAPI restart is
+                // needed to expose the new columns over GraphQL — read as intentional, not a crash.
+                // No new columns ⇒ no event ⇒ no restart (the convergence/1× guarantee). The new
+                // columns are already usable by the NEXT sync without a restart (metadata refreshed).
+                if (result.SchemaUpdate?.SchemaUpdatePending) {
+                    logger.emit('sync.schema_update', {
+                        columnsAdded: result.SchemaUpdate.ColumnsAdded,
+                        restartRequiredForGraphQL: true,
+                    });
+                }
+            }
             const summary = this.buildSyncResultBody(config.companyIntegration.Integration, result);
             logger.emit('sync.run.complete', {
                 success: result.Success && result.RecordsErrored === 0,
@@ -690,8 +759,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Per-map processing. Extracted so it can run sequentially OR concurrently within a
         // dependency layer. Aggregate mutations run when each promise resolves — atomic under
         // single-threaded async, so concurrent maps in a layer are safe.
-        const processOne = async (entityMap: ICompanyIntegrationEntityMap): Promise<boolean> => {
-            if (abortSignal?.aborted) return true;
+        const processOne = async (entityMap: ICompanyIntegrationEntityMap): Promise<{ ok: boolean; throttled: boolean }> => {
+            if (abortSignal?.aborted) return { ok: true, throttled: false };
             const i = globalIndex++;
             const mapStartTime = Date.now();
             const direction = config.syncDirection ?? entityMap.SyncDirection ?? 'Pull';
@@ -723,7 +792,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     recordsErrored: mapResult.RecordsErrored,
                 });
                 this.checkSecondLayerEmpty(entityMap, mapResult, depGraph, processedByIoId, ioNameById, ioCategoryById, logger);
-                return mapResult.Success;
+                return { ok: mapResult.Success, throttled: mapResult.Throttled === true };
             } catch (err) {
                 const objName = entityMap.ExternalObjectName ?? entityMap.ID;
                 const errMsg = err instanceof Error ? err.message : String(err);
@@ -758,7 +827,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     RecordsSkipped: 0,
                     Duration: Date.now() - mapStartTime,
                 });
-                return false;
+                return { ok: false, throttled: ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED' };
             }
         };
 
@@ -774,7 +843,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // MaxConcurrencyHint on clean maps, cut on map failure. With no hint and default
         // syncConcurrency=1, min=max=1 → strictly sequential (unchanged behavior). The per-request
         // RateLimiter is the backstop that keeps the source within its real rate as parallelism rises.
-        const maxConcurrency = Math.max(concurrency, config.connector.MaxConcurrencyHint ?? concurrency);
+        // Configuration override (IntegrationSetSyncConfig) wins over the connector's MaxConcurrencyHint constant.
+        const maxConcurrency = Math.max(concurrency, this.getConfigOverrides(config).maxConcurrency ?? config.connector.MaxConcurrencyHint ?? concurrency);
         const concController = new AdaptiveConcurrencyController({ start: concurrency, min: 1, max: maxConcurrency });
 
         // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
@@ -792,6 +862,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
 
+        // §4 OPT-IN: cross-layer pipelining overlaps independent DAG branches (a child starts when ITS
+        // parents finish, not when the whole parent layer does). Default OFF → the strict layer-barrier
+        // loop below (unchanged). Falls back to the barrier if the per-map dependency graph can't build.
+        const mapDeps = this.getCrossLayerPipelineEnabled(config) ? this.buildMapDependencies(config) : null;
+        if (mapDeps) {
+            logger?.emit('sync.config.loaded', { crossLayerPipeline: true, totalMaps });
+            await this.runPipelinedDAG(config.entityMaps, mapDeps, concController, processOne, abortSignal);
+            if (abortSignal?.aborted) {
+                aggregate.Success = false;
+                aggregate.ErrorMessage = 'Sync cancelled by user';
+            }
+            return aggregate;
+        }
+
         for (const layer of layers) {
             if (abortSignal?.aborted) {
                 console.log(`[IntegrationEngine] Sync cancelled (${globalIndex}/${totalMaps} maps processed)`);
@@ -801,12 +885,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             await RunAdaptive(layer, async (m) => {
                 if (abortSignal?.aborted) return { ok: true, throttled: false };
-                const ok = await processOne(m);
-                // A data failure (FK/validation/transform) must NOT cut the in-flight cap — only a
-                // real source throttle should, and the per-request RateLimiter already backs off on
-                // 429s. We have no clean per-map 429 signal here (fetch 429s break the loop), so we
-                // never mark `throttled` from a plain failure; concurrency only ramps UP on success.
-                return { ok, throttled: false };
+                const { ok, throttled } = await processOne(m);
+                // §5 Gap 2: a real source throttle (RATE_LIMIT_EXCEEDED on fetch) now also cuts the
+                // per-layer in-flight cap, not just the per-request token bucket. A plain data failure
+                // (FK/validation/transform) carries throttled=false, so concurrency only drops on an
+                // actual rate-limit signal — never on ordinary record errors.
+                return { ok, throttled };
             }, concController);
         }
 
@@ -968,6 +1052,100 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return 1;
     }
 
+    /**
+     * §4 OPT-IN cross-layer pipelining (CompanyIntegration.Configuration {"crossLayerPipeline": true}).
+     * Default OFF → strict layer-barrier execution (unchanged). When ON, a child map starts as soon as
+     * ITS OWN parents finish, instead of waiting for the entire parent LAYER — overlapping independent
+     * branches of the DAG. Correctness is preserved because a child still gates on parent COMPLETION
+     * (the parent's row writes are committed and its record-count recorded before the child begins).
+     * Off by default because the throughput win is only measurable against a live run.
+     */
+    private getCrossLayerPipelineEnabled(config: RunConfiguration): boolean {
+        try {
+            const raw = config.companyIntegration.Configuration;
+            if (raw) return (JSON.parse(raw) as { crossLayerPipeline?: boolean }).crossLayerPipeline === true;
+        } catch { /* fall through */ }
+        return false;
+    }
+
+    /**
+     * Per-map parent dependencies (entityMap.ID → set of parent entityMap.IDs) from the FK graph.
+     * Used by the §4 pipelined scheduler. Returns null when the graph can't be resolved (caller then
+     * falls back to layer-barrier execution).
+     */
+    private buildMapDependencies(config: RunConfiguration): Map<string, Set<string>> | null {
+        const graph = this.computeSelectedDependencyGraph(config);
+        if (!graph) return null;
+        const { mapToIoId, parentsByIoId } = graph;
+        // Invert mapToIoId: IO.ID → the maps targeting it (an IO can back more than one map).
+        const mapsByIoId = new Map<string, string[]>();
+        for (const [mapId, ioId] of mapToIoId) {
+            if (!mapsByIoId.has(ioId)) mapsByIoId.set(ioId, []);
+            mapsByIoId.get(ioId)!.push(mapId);
+        }
+        const deps = new Map<string, Set<string>>();
+        for (const m of config.entityMaps) {
+            const ioId = mapToIoId.get(m.ID);
+            const parentMapIds = new Set<string>();
+            if (ioId) {
+                for (const parentIoId of parentsByIoId.get(ioId) ?? []) {
+                    for (const pm of mapsByIoId.get(parentIoId) ?? []) {
+                        if (pm !== m.ID) parentMapIds.add(pm);
+                    }
+                }
+            }
+            deps.set(m.ID, parentMapIds);
+        }
+        return deps;
+    }
+
+    /**
+     * §4 dependency-aware scheduler: runs every map concurrently, but each map first awaits its
+     * parents' completion, THEN gates on the live AIMD cap before doing work. Deadlock-free even at
+     * cap=1: a map awaiting parents does NOT hold a concurrency slot (the slot is acquired only AFTER
+     * the parent-await resolves), so parents always get to run. The cap gate counts only ACTIVE work.
+     */
+    private async runPipelinedDAG(
+        maps: ICompanyIntegrationEntityMap[],
+        mapDeps: Map<string, Set<string>>,
+        controller: AdaptiveConcurrencyController,
+        process: (m: ICompanyIntegrationEntityMap) => Promise<{ ok: boolean; throttled: boolean }>,
+        abortSignal?: AbortSignal,
+    ): Promise<void> {
+        const resolvers = new Map<string, () => void>();
+        const donePromises = new Map<string, Promise<void>>();
+        for (const m of maps) donePromises.set(m.ID, new Promise<void>(r => resolvers.set(m.ID, r)));
+        const inFlight = { count: 0 };
+
+        const scheduleOne = async (m: ICompanyIntegrationEntityMap): Promise<void> => {
+            try {
+                const deps = mapDeps.get(m.ID);
+                if (deps && deps.size > 0) {
+                    await Promise.all([...deps].map(d => donePromises.get(d)).filter((p): p is Promise<void> => !!p));
+                }
+                if (abortSignal?.aborted) return;
+                // Gate on the LIVE cap (yield on a macrotask so in-flight I/O isn't starved — mirrors
+                // adaptiveWorker). Only ACTIVE work counts toward the cap; waiting-on-parents does not.
+                while (inFlight.count >= controller.Cap) {
+                    await new Promise<void>(r => setTimeout(r, 0));
+                    if (abortSignal?.aborted) return;
+                }
+                inFlight.count++;
+                try {
+                    const outcome = await process(m);
+                    if (outcome.throttled || !outcome.ok) controller.OnThrottleOrError();
+                    else controller.OnSuccess();
+                } finally {
+                    inFlight.count--;
+                }
+            } finally {
+                resolvers.get(m.ID)!();   // unblock children whether we ran, aborted, or threw
+            }
+        };
+
+        await Promise.all(maps.map(m => scheduleOne(m)));
+    }
+
     /** Runs `fn` over items with at most `cap` concurrent executions. cap&lt;=1 → strictly sequential. */
     private async runBounded<T>(items: T[], cap: number, fn: (item: T) => Promise<void>): Promise<void> {
         if (cap <= 1) {
@@ -1018,19 +1196,48 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * the same vendor have independent budgets and must not share one bucket. {@link reportRateOutcome}
      * feeds 429s/successes back so the rate auto-tunes (AIMD).
      */
+    /**
+     * Per-connection numeric tuning overrides from CompanyIntegration.Configuration — the typed
+     * fields the IntegrationSetSyncConfig GraphQL mutation writes. These let an operator override
+     * the connector's code-constant rate limit / concurrency / discovery budget per connection,
+     * via the API, instead of editing code. Only positive finite values are honored.
+     */
+    private getConfigOverrides(config: RunConfiguration): {
+        maxConcurrency?: number; rateLimitTokensPerSec?: number; rateLimitBurst?: number; discoveryTimeBudgetMs?: number;
+    } {
+        try {
+            const raw = config.companyIntegration.Configuration;
+            if (!raw) return {};
+            const p = JSON.parse(raw) as Record<string, unknown>;
+            const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
+            return {
+                maxConcurrency: num(p.maxConcurrency),
+                rateLimitTokensPerSec: typeof p.rateLimitTokensPerSec === 'number' && p.rateLimitTokensPerSec > 0 ? p.rateLimitTokensPerSec : undefined,
+                rateLimitBurst: num(p.rateLimitBurst),
+                discoveryTimeBudgetMs: num(p.discoveryTimeBudgetMs),
+            };
+        } catch { return {}; }
+    }
+
     private getRateLimiter(config: RunConfiguration): RateLimiter {
         const key = config.companyIntegration.ID as string;
         let rl = this._rateLimiters.get(key);
         if (!rl) {
             const policy = config.connector.RateLimitPolicy;
+            const overrides = this.getConfigOverrides(config);
             const spacingMs = this.getRequestSpacingMs(config);
-            const tokensPerSec = policy?.TokensPerSec ?? (spacingMs > 0 ? 1000 / spacingMs : 10);
+            // Configuration override wins over the connector's code constant (the "not just constants" goal).
+            const tokensPerSec = overrides.rateLimitTokensPerSec ?? policy?.TokensPerSec ?? (spacingMs > 0 ? 1000 / spacingMs : 10);
             rl = new RateLimiter({
                 TokensPerSec: tokensPerSec,
                 // Floor Burst at 1 so a slow-spacing integration (fractional tokens/sec) still gets
                 // one immediate token instead of stalling ~1s on the very first request.
-                Burst: Math.max(1, policy?.Burst ?? Math.ceil(tokensPerSec)),
+                Burst: Math.max(1, overrides.rateLimitBurst ?? policy?.Burst ?? Math.ceil(tokensPerSec)),
                 ThrottleBackoffFactor: policy?.ThrottleBackoffFactor,
+                // Thread the connector's recovery tuning through; RateLimiter applies its own sane
+                // defaults (ramp = rate/10, floor = rate/20) when these are omitted.
+                SuccessRampPerCall: policy?.SuccessRampPerCall,
+                MinTokensPerSec: policy?.MinTokensPerSec,
             });
             this._rateLimiters.set(key, rl);
         }
@@ -1217,8 +1424,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let batchCount = 0;
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
+        let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
         const MAX_BATCHES_PER_MAP = 5000;
+        const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
+        let orphanTrackingOverflowed = false; // set if the ID set exceeds ORPHAN_DETECTION_MAX_IDS → skip the sweep, don't OOM
         const accumulatedMapped: MappedRecord[] = []; // partition-reconcile mode: collect mapped records, apply post-loop
 
         while (hasMore) {
@@ -1261,7 +1471,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const fetchStart = Date.now();
             try {
                 await this.rateLimit(config);
-                batch = await config.connector.FetchChanges(ctx);
+                // Resilient fetch: bound each attempt with a timeout (a hung vendor API must not
+                // hold the sync lock forever) and retry only transient errors (network/throttle/DB).
+                // A non-retryable error (auth, 4xx, parse) throws immediately as before.
+                batch = await WithRetry(
+                    () => WithTimeout(
+                        config.connector.FetchChanges(ctx),
+                        DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs,
+                        `FetchChanges(${entityMap.ExternalObjectName})`,
+                    ),
+                    undefined,
+                    (err) => IsRetryableError(ClassifyError(err).Code),
+                    (attempt, err, delayMs) => logger?.emit('sync.fetch.retry', {
+                        externalObjectName: entityMap.ExternalObjectName,
+                        batchIndex: batchCount,
+                        attempt,
+                        delayMs,
+                        error: err instanceof Error ? err.message : String(err),
+                    }),
+                );
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
                 // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
                 // record values to their resolved formats before mapping + write.
@@ -1271,8 +1499,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             } catch (fetchErr) {
                 const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
                 // A throttle (429 / rate-limit) backs the adaptive limiter off (honoring Retry-After);
-                // other errors don't touch the rate.
-                if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') this.reportRateOutcome(config, fetchErr);
+                // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
+                // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
+                if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {
+                    this.reportRateOutcome(config, fetchErr);
+                    result.Throttled = true;
+                }
                 console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
                 logger?.emit('sync.record.error', {
                     phase: 'fetch',
@@ -1326,8 +1558,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 previousBatchFingerprint = fingerprint;
             }
 
-            for (const rec of batch.Records) {
-                fetchedExternalIDs.add(rec.ExternalID);
+            if (!orphanTrackingOverflowed) {
+                for (const rec of batch.Records) {
+                    fetchedExternalIDs.add(rec.ExternalID);
+                }
+                // OOM guard: a multi-million-row full sync would grow this set without bound. Past the
+                // ceiling, drop it + flag so orphan detection is skipped (a SyncWarning is emitted below)
+                // rather than risk crashing the run.
+                if (fetchedExternalIDs.size > ORPHAN_DETECTION_MAX_IDS) {
+                    orphanTrackingOverflowed = true;
+                    fetchedExternalIDs.clear();
+                }
             }
 
             const mapped = this.fieldMappingEngine.Apply(
@@ -1335,7 +1576,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             );
             // Partition (Merkle) reconcile defers match + apply: accumulate mapped records now; the
             // partition-diff + selective apply runs once after the full fetch (applyViaPartitionReconcile).
-            if (partitionReconcile) accumulatedMapped.push(...mapped);
+            if (partitionReconcile) {
+                accumulatedMapped.push(...mapped);
+                // OOM guard: this mode buffers the ENTIRE fetched set in RAM. Past a generous ceiling,
+                // fail loud (caught by the per-map error path → other maps continue) instead of crashing
+                // the whole run with an OOM. The default streaming path has no such limit.
+                if (accumulatedMapped.length > PARTITION_RECONCILE_MAX_ACCUMULATION) {
+                    throw new Error(
+                        `partitionReconcile accumulated ${accumulatedMapped.length} records for ` +
+                        `${entityMap.ExternalObjectName} (cap ${PARTITION_RECONCILE_MAX_ACCUMULATION}). This mode ` +
+                        `buffers the whole set in RAM and is unsafe at this size — disable Configuration.partitionReconcile ` +
+                        `for this object to stream via per-record content-hash instead.`
+                    );
+                }
+            }
             const resolved = partitionReconcile
                 ? []
                 : await this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser);
@@ -1427,6 +1681,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     await this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser);
                 }
             }
+            // P3-D: a connector returning empty pages with HasMore=true would otherwise spin silently
+            // to MAX_BATCHES_PER_MAP. Surface a structured warning once the empty streak crosses the
+            // threshold so the connector bug is visible, not buried.
+            if (batch.Records.length === 0 && batch.HasMore === true) {
+                consecutiveEmptyBatches++;
+                if (consecutiveEmptyBatches === EMPTY_BATCH_WARN_THRESHOLD) {
+                    logger?.warning(
+                        entityMap.ExternalObjectName ?? entityMap.ID,
+                        'CONSECUTIVE_EMPTY_BATCHES',
+                        `'${entityMap.ExternalObjectName}' returned ${EMPTY_BATCH_WARN_THRESHOLD} empty batches in a row while still reporting HasMore=true ` +
+                        `(batch ${batchCount}/${MAX_BATCHES_PER_MAP}). Likely a connector pagination bug (cursor not advancing / HasMore stuck true).`,
+                        { batchCount, consecutiveEmptyBatches },
+                    );
+                }
+            } else {
+                consecutiveEmptyBatches = 0;
+            }
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
@@ -1491,6 +1762,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if ((config.fullSync || partitionReconcile) && fetchedExternalIDs.size > 0 && fetchCompletedCleanly) {
             await this.DeleteOrphanedRecords(
                 config.companyIntegration, entityMap, fetchedExternalIDs, result, contextUser, logger
+            );
+        } else if (orphanTrackingOverflowed && fetchCompletedCleanly) {
+            // We deliberately stopped tracking IDs to avoid OOM — orphan/delete detection can't run
+            // safely this pass (a partial set would delete live records). Surface it, don't hide it.
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'ORPHAN_DETECTION_SKIPPED_TOO_LARGE',
+                `'${entityMap.ExternalObjectName}' returned more than ${ORPHAN_DETECTION_MAX_IDS.toLocaleString()} records, ` +
+                `so orphan/delete detection was skipped this run to avoid excessive memory use. Records were synced normally; ` +
+                `deletions in the source will not be reflected until a smaller/incremental run or a raised cap.`,
+                { cap: ORPHAN_DETECTION_MAX_IDS },
             );
         }
 
@@ -1705,13 +1987,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<Array<{ RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>> {
         const rv = new RunView();
 
-        // Load all records from the MJ entity
+        // Load all records from the MJ entity. OOM SAFETY VALVE: a full push materializes every row of
+        // the MJ entity in RAM. Past a generous ceiling, fail LOUD + actionable (caught by the per-map
+        // error path → other maps continue) rather than risk an OOM that kills the whole run. A genuine
+        // full push of a multi-million-row entity should use incremental push or raise the limit; we do
+        // NOT silently partial-push (that would advance the watermark past unsent rows → dropped data).
+        // NOTE: a true streaming/keyset push refactor is the proper long-term fix; this guard makes the
+        // failure mode safe in the meantime without touching the delicate push-watermark clamp logic.
         const allResult = await rv.RunView<Record<string, unknown>>({
             EntityName: entityMap.Entity,
             ResultType: 'simple',
+            MaxRows: FULL_PUSH_MAX_RECORDS + 1,   // +1 so we can detect "exceeded" vs "exactly at cap"
         }, contextUser);
 
         if (!allResult.Success || allResult.Results.length === 0) return [];
+        if (allResult.Results.length > FULL_PUSH_MAX_RECORDS) {
+            throw new Error(
+                `Full push of '${entityMap.Entity}' exceeds the in-memory safety limit of ` +
+                `${FULL_PUSH_MAX_RECORDS.toLocaleString()} records. A full push loads every row into memory; ` +
+                `use incremental push (set a push watermark) or raise MJ_INTEGRATION_FULL_PUSH_MAX_RECORDS. ` +
+                `Refusing to partial-push (that would advance the watermark past unsent rows and drop data).`
+            );
+        }
 
         // Load existing record maps to know which records already exist externally
         const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
@@ -1992,7 +2289,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 resolution,
             });
             if (manualConflict) {
-                await this.markConflictOnMJRecord(change.RecordID, entityMap, conflictFields, contextUser);
+                await this.markConflictOnMJRecord(change.RecordID, entityMap, conflictFields, contextUser, logger);
                 return { action: 'skip', attributes: {} };
             }
         }
@@ -2023,7 +2320,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         mjRecordID: string,
         entityMap: ICompanyIntegrationEntityMap,
         conflictFields: string[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        logger?: SyncLogger
     ): Promise<void> {
         try {
             const md = this.ProviderToUse;
@@ -2038,9 +2336,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (hasField('__mj_integration_SyncMessage')) {
                 entity.Set('__mj_integration_SyncMessage', `Bidirectional conflict: external changed ${conflictFields.join(', ')} since last sync; awaiting manual resolution.`);
             }
-            await entity.Save();
-        } catch {
-            // best-effort
+            // Surface a failed conflict-mark: the engine thinks the row is quarantined, but without the
+            // marker the operator has no signal. A silent failure here leaves the record in limbo.
+            const ok = await entity.Save();
+            if (!ok) {
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                    'CONFLICT_MARK_FAILED',
+                    `Could not mark MJ record ${mjRecordID} in-conflict: ${entity.LatestResult?.CompleteMessage ?? 'Save() returned false'}`,
+                    { mjRecordID, conflictFields },
+                );
+            }
+        } catch (markErr) {
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                'CONFLICT_MARK_FAILED',
+                `Could not mark MJ record ${mjRecordID} in-conflict: ${markErr instanceof Error ? markErr.message : String(markErr)}`,
+                { mjRecordID, conflictFields },
+            );
         }
     }
 
@@ -2770,25 +3083,42 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (!entityInfo) return undefined;
         if (!entityInfo.Fields.some(f => f.Name === CONTENT_HASH_COLUMN)) return undefined;
         const pkFields = entityInfo.PrimaryKeys ?? [];
-        if (pkFields.length !== 1) return undefined; // single-PK fast path only
-        const pk = pkFields[0].Name;
+        if (pkFields.length === 0) return undefined;
+        // Map keys must match `record.MatchedMJRecordID`, which is the PK value(s) joined by '|' in
+        // PrimaryKeys order (single value for single-PK, "v1|v2" for composite — see MatchEngine).
+        const pkNames = pkFields.map(f => f.Name);
 
         try {
-            const escaped = ids.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
             const rv = new RunView();
+            let extraFilter: string;
+            if (pkNames.length === 1) {
+                // Single-PK fast path: WHERE pk IN (...).
+                const escaped = ids.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
+                extraFilter = `${pkNames[0]} IN (${escaped})`;
+            } else {
+                // Composite-PK: each MatchedMJRecordID is "v1|v2|..." in PrimaryKeys order. Build
+                // an OR of per-record (pk1='v1' AND pk2='v2') clauses — bounded by batch size.
+                // Plain (unbracketed) identifiers → dialect-agnostic (SS brackets break Postgres).
+                extraFilter = ids.map(mid => {
+                    const parts = String(mid).split('|');
+                    return '(' + pkNames.map((name, i) =>
+                        `${name} = '${String(parts[i] ?? '').replace(/'/g, "''")}'`).join(' AND ') + ')';
+                }).join(' OR ');
+            }
             const res = await rv.RunView<Record<string, string>>({
                 EntityName: entityName,
-                Fields: [pk, CONTENT_HASH_COLUMN],
-                ExtraFilter: `${pk} IN (${escaped})`,
+                Fields: [...pkNames, CONTENT_HASH_COLUMN],
+                ExtraFilter: extraFilter,
                 ResultType: 'simple',
             }, contextUser);
             if (!res.Success) return undefined;
             const map = new Map<string, string>();
             for (const row of res.Results) {
-                const id = row[pk];
+                // Re-key by the same '|'-join the matcher produced, so the lookup in ApplySingleRecord hits.
+                const key = pkNames.map(n => row[n] ?? '').join('|');
                 const hash = row[CONTENT_HASH_COLUMN];
-                if (id != null && typeof hash === 'string' && hash.length > 0) {
-                    map.set(String(id), hash);
+                if (typeof hash === 'string' && hash.length > 0) {
+                    map.set(key, hash);
                 }
             }
             return map;
@@ -3072,6 +3402,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (hasField(CONTENT_HASH_COLUMN)) {
             entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
         }
+        // Custom-overflow capture (gaps.md §2): park any source keys with no field map as JSON,
+        // in THIS same row write (no extra round-trip → a customs-free sync stays byte-identical).
+        // Only written when there ARE extras; when empty, this is the signal that no post-sync RSU
+        // promotion is needed for this row. Backend staging only — never user-facing metadata until
+        // a key is promoted to a real column. No-op on tables predating the column. See CustomOverflow.
+        if (hasField(CUSTOM_OVERFLOW_COLUMN) && hasUnmappedFields(record.UnmappedFields)) {
+            entity.Set(CUSTOM_OVERFLOW_COLUMN, JSON.stringify(record.UnmappedFields));
+        }
 
         // ── Per-record sync ledger (plan §2.5) ───────────────────────────────────────
         // The external system's version token for optimistic-concurrency on bidirectional
@@ -3180,11 +3518,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         detail.Action = result.RecordsCreated > 0 ? 'INSERT' : 'UPDATE';
         detail.IsSuccess = result.RecordsErrored === 0;
 
-        const detailSaved = await detail.Save();
-        if (!detailSaved) {
-            console.warn(
-                `[IntegrationEngine] Failed to save run detail for entity map ${entityMap.ID}: ` +
-                `${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`
+        // Retry: this row IS the per-entity-map audit trail the GraphQL GetRun API reads. A lost save
+        // makes a working sync look like it processed zero maps. Retry transient failures before giving up.
+        try {
+            await WithRetry(
+                async () => {
+                    const ok = await detail.Save();
+                    if (!ok) throw new Error(detail.LatestResult?.CompleteMessage ?? 'detail.Save() returned false');
+                    return true;
+                },
+                { MaxAttempts: 3, InitialBackoffMs: 500, MaxBackoffMs: 5000, JitterFraction: 0.1 },
+            );
+        } catch (detailErr) {
+            console.error(
+                `[IntegrationEngine] Failed to save run detail for entity map ${entityMap.ID} after retries: ` +
+                `${detailErr instanceof Error ? detailErr.message : String(detailErr)}. ` +
+                `The run's per-map audit row is missing; GetRun will under-report processed maps.`
             );
         }
     }
@@ -3197,9 +3546,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         aggregate.RecordsCreated += mapResult.RecordsCreated;
         aggregate.RecordsUpdated += mapResult.RecordsUpdated;
         aggregate.RecordsDeleted += mapResult.RecordsDeleted;
-        aggregate.RecordsErrored += mapResult.RecordsErrored;
+        aggregate.RecordsErrored += mapResult.RecordsErrored;   // true count, always exact
         aggregate.RecordsSkipped += mapResult.RecordsSkipped;
-        aggregate.Errors.push(...mapResult.Errors);
+        // Bound the retained error SAMPLE: only the first MAX_AGGREGATE_ERRORS are ever persisted
+        // (FinalizeRun slices to 100). Accumulating every per-record error across a multi-million-row
+        // failing run would hold the whole set in RAM for no gain — RecordsErrored already has the count.
+        if (aggregate.Errors.length < MAX_AGGREGATE_ERRORS && mapResult.Errors.length > 0) {
+            const room = MAX_AGGREGATE_ERRORS - aggregate.Errors.length;
+            aggregate.Errors.push(...mapResult.Errors.slice(0, room));
+        }
 
         if (mapResult.RecordsErrored > 0) {
             aggregate.Success = false;
@@ -3257,11 +3612,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
             }
         }
-        const saved = await run.Save();
-        if (!saved) {
-            console.warn(
-                `[IntegrationEngine] Failed to finalize run ${run.ID}: ` +
-                `${run.LatestResult?.CompleteMessage ?? 'unknown error'}`
+        // Retry the finalize save: a failed save leaves the run 'In Progress', which ResumeOrphanedSyncs
+        // re-queues on next startup → the whole sync re-runs (re-fetch + re-apply). Worth a few retries to
+        // make the terminal status durable. Both a thrown infra error and a `false` logical-failure retry.
+        try {
+            await WithRetry(
+                async () => {
+                    const ok = await run.Save();
+                    if (!ok) throw new Error(run.LatestResult?.CompleteMessage ?? 'run.Save() returned false');
+                    return true;
+                },
+                { MaxAttempts: 3, InitialBackoffMs: 500, MaxBackoffMs: 5000, JitterFraction: 0.1 },
+            );
+        } catch (saveErr) {
+            console.error(
+                `[IntegrationEngine] Failed to finalize run ${run.ID} after retries: ` +
+                `${saveErr instanceof Error ? saveErr.message : String(saveErr)}. ` +
+                `Run may remain 'In Progress' and be re-queued as orphaned on next startup.`
             );
         }
 
@@ -3396,6 +3763,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             callback(notification);
         } catch (notifyErr) {
             console.warn('[IntegrationEngine] Notification callback threw:', notifyErr);
+        }
+    }
+
+    /**
+     * Invokes the post-sync custom-column promotion hook (gaps.md §2 / M2) without ever
+     * propagating an exception into the sync — a promotion failure must never fail a sync that
+     * already landed its data. Returns undefined when no hook is registered (a no-op host) or
+     * the hook throws. The hook is self-gated: a customs-free sync does no work.
+     */
+    private async invokePostSyncPromotionSafe(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        result: SyncResult
+    ): Promise<SchemaPromotionResult | undefined> {
+        if (!this.postSyncSchemaPromotionCallback) return undefined;
+        try {
+            const syncedEntityNames = [
+                ...new Set((result.EntityMapResults ?? []).map(r => r.EntityName).filter(Boolean)),
+            ];
+            return await this.postSyncSchemaPromotionCallback({
+                CompanyIntegrationID: companyIntegrationID,
+                ContextUser: contextUser,
+                SyncedEntityNames: syncedEntityNames,
+                Provider: this._provider,
+            });
+        } catch (promoteErr) {
+            console.warn('[IntegrationEngine] Post-sync schema promotion callback threw:', promoteErr);
+            return undefined;
         }
     }
 

@@ -16,7 +16,19 @@ export interface EmitterOptions {
     rootDir?: string;
     /** Optional human-facing console mirror (default false — file is the primary record). */
     consoleMirror?: boolean;
+    /**
+     * Max number of per-run subdirs to retain under rootDir. On each new run, older run dirs beyond
+     * this count (by mtime) are pruned so the logs directory never grows unbounded across runs.
+     * Defaults to MJ_INTEGRATION_MAX_RUN_DIRS env or 200. Set 0 to disable pruning.
+     */
+    maxRunDirs?: number;
 }
+
+/** Default retained run-dir count; env-overridable. Prevents unbounded logs/ growth over many runs. */
+const DEFAULT_MAX_RUN_DIRS = (() => {
+    const n = Number(process.env.MJ_INTEGRATION_MAX_RUN_DIRS);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 200;
+})();
 
 /**
  * Side-channel hook invoked for EVERY emitted event. The server layer registers this once at
@@ -62,16 +74,20 @@ export class IntegrationProgressEmitter {
         IntegrationProgressEmitter._publishHook = hook;
     }
 
+    private readonly root: string;
+    private readonly maxRunDirs: number;
+
     constructor(
         private readonly manifest: IntegrationRunManifest,
         opts: EmitterOptions = {}
     ) {
-        const root = opts.rootDir ?? join(process.cwd(), 'logs', 'integration-runs');
-        this.runDir = join(root, this.manifest.runID);
+        this.root = opts.rootDir ?? join(process.cwd(), 'logs', 'integration-runs');
+        this.runDir = join(this.root, this.manifest.runID);
         this.progressPath = join(this.runDir, 'progress.jsonl');
         this.manifestPath = join(this.runDir, 'manifest.json');
         this.resultPath = join(this.runDir, 'result.json');
         this.consoleMirror = opts.consoleMirror ?? false;
+        this.maxRunDirs = opts.maxRunDirs ?? DEFAULT_MAX_RUN_DIRS;
         this.writeChain = this.bootstrap();
     }
 
@@ -235,6 +251,36 @@ export class IntegrationProgressEmitter {
     private async bootstrap(): Promise<void> {
         await fs.mkdir(this.runDir, { recursive: true });
         await fs.writeFile(this.manifestPath, JSON.stringify(this.manifest, null, 2), 'utf-8');
+        // Retention: prune oldest run dirs so logs/ never grows unbounded across runs. Best-effort —
+        // a pruning failure must never break the run (the new run dir is already created above).
+        await this.pruneOldRuns().catch(() => { /* best-effort retention */ });
+    }
+
+    /**
+     * Deletes the oldest per-run subdirs under the root, keeping the most recent `maxRunDirs` (by
+     * mtime). Disabled when maxRunDirs <= 0. Never removes the current run dir (it's the newest).
+     */
+    private async pruneOldRuns(): Promise<void> {
+        if (this.maxRunDirs <= 0) return;
+        let entries: import('node:fs').Dirent[];
+        try {
+            entries = await fs.readdir(this.root, { withFileTypes: true });
+        } catch {
+            return; // root not readable yet — nothing to prune
+        }
+        const dirs = entries.filter(e => e.isDirectory());
+        if (dirs.length <= this.maxRunDirs) return;
+        // Stat each for mtime, newest-first; delete everything past the retention count.
+        const withTime = await Promise.all(dirs.map(async d => {
+            const p = join(this.root, d.name);
+            try { return { p, mtime: (await fs.stat(p)).mtimeMs }; }
+            catch { return { p, mtime: 0 }; }
+        }));
+        withTime.sort((a, b) => b.mtime - a.mtime);
+        const toDelete = withTime.slice(this.maxRunDirs);
+        await Promise.all(toDelete.map(d =>
+            fs.rm(d.p, { recursive: true, force: true }).catch(() => { /* best-effort */ })
+        ));
     }
 
     private async writeTerminal(partial: { success: boolean; exitReason: IntegrationRunResult['exitReason'] }): Promise<void> {

@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
+import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
 import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
@@ -568,6 +568,34 @@ class CreateConnectionOutput {
 class MutationResultOutput {
     @Field() Success: boolean;
     @Field() Message: string;
+}
+
+// ─── Typed sync-config (rate-limit / concurrency / time-budget as STRUCTURED fields, not a raw
+//     Configuration JSON blob). These map to the CompanyIntegration.Configuration keys the engine
+//     reads at runtime, so they are customizable per-connection via the API instead of hidden code
+//     constants. Set merges (preserves other Configuration keys); Get reads them back typed. ──────
+@InputType()
+class IntegrationSyncConfigInput {
+    @Field(() => Int, { nullable: true, description: 'Entity maps processed concurrently within a dependency layer (clamped 1-16). Default 1 (sequential).' }) SyncConcurrency?: number;
+    @Field(() => Int, { nullable: true, description: 'Upper bound the per-layer AIMD controller ramps toward. Default = connector MaxConcurrencyHint.' }) MaxConcurrency?: number;
+    @Field(() => Float, { nullable: true, description: 'Override the source rate limit (requests/sec). Default = connector RateLimitPolicy / derived.' }) RateLimitTokensPerSec?: number;
+    @Field(() => Int, { nullable: true, description: 'Override the rate-limiter burst capacity (tokens).' }) RateLimitBurst?: number;
+    @Field(() => Boolean, { nullable: true, description: '§4 cross-layer pipelining: a child map starts when ITS parents finish, not the whole layer.' }) CrossLayerPipeline?: boolean;
+    @Field(() => Boolean, { nullable: true, description: 'Merkle/partition hash-diff reconcile for watermark-less change detection (buffers the set in RAM).' }) PartitionReconcile?: boolean;
+    @Field(() => Int, { nullable: true, description: 'Time budget (ms) for stage-2 streaming field discovery before it stops and uses what it gathered.' }) DiscoveryTimeBudgetMs?: number;
+}
+
+@ObjectType()
+class IntegrationSyncConfigOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => Int, { nullable: true }) SyncConcurrency?: number;
+    @Field(() => Int, { nullable: true }) MaxConcurrency?: number;
+    @Field(() => Float, { nullable: true }) RateLimitTokensPerSec?: number;
+    @Field(() => Int, { nullable: true }) RateLimitBurst?: number;
+    @Field(() => Boolean, { nullable: true }) CrossLayerPipeline?: boolean;
+    @Field(() => Boolean, { nullable: true }) PartitionReconcile?: boolean;
+    @Field(() => Int, { nullable: true }) DiscoveryTimeBudgetMs?: number;
 }
 
 @InputType()
@@ -2571,6 +2599,81 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationUpdateConnection error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+    }
+
+    /**
+     * Sets the per-connection sync tuning (rate limit, concurrency, time budget, pipeline flags) as
+     * STRUCTURED typed fields, merged into CompanyIntegration.Configuration (other keys preserved).
+     * These are the exact keys the IntegrationEngine reads at runtime, so they become customizable
+     * via the API instead of hidden code constants. Returns the merged config typed.
+     */
+    @Mutation(() => IntegrationSyncConfigOutput)
+    async IntegrationSetSyncConfig(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("config", () => IntegrationSyncConfigInput) config: IntegrationSyncConfigInput,
+        @Ctx() ctx: AppContext
+    ): Promise<IntegrationSyncConfigOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (!await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID))) {
+                return { Success: false, Message: 'CompanyIntegration not found' };
+            }
+            let cfg: Record<string, unknown> = {};
+            try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { cfg = {}; }
+            const set = (key: string, val: unknown) => { if (val !== undefined && val !== null) cfg[key] = val; };
+            set('syncConcurrency', config.SyncConcurrency);
+            set('maxConcurrency', config.MaxConcurrency);
+            set('rateLimitTokensPerSec', config.RateLimitTokensPerSec);
+            set('rateLimitBurst', config.RateLimitBurst);
+            set('crossLayerPipeline', config.CrossLayerPipeline);
+            set('partitionReconcile', config.PartitionReconcile);
+            set('discoveryTimeBudgetMs', config.DiscoveryTimeBudgetMs);
+            ci.Configuration = JSON.stringify(cfg);
+            if (!await ci.Save()) return { Success: false, Message: `Failed to save: ${ci.LatestResult?.CompleteMessage ?? 'unknown'}` };
+            return { Success: true, Message: 'Sync config updated', ...this.readSyncConfig(cfg) };
+        } catch (e) {
+            LogError(`IntegrationSetSyncConfig error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /** Reads the per-connection sync tuning back as STRUCTURED typed fields. */
+    @Query(() => IntegrationSyncConfigOutput)
+    async IntegrationGetSyncConfig(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<IntegrationSyncConfigOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (!await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID))) {
+                return { Success: false, Message: 'CompanyIntegration not found' };
+            }
+            let cfg: Record<string, unknown> = {};
+            try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { cfg = {}; }
+            return { Success: true, Message: 'OK', ...this.readSyncConfig(cfg) };
+        } catch (e) {
+            LogError(`IntegrationGetSyncConfig error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /** Extracts the typed sync-config fields from a parsed Configuration object (type-guarded). */
+    private readSyncConfig(cfg: Record<string, unknown>): Partial<IntegrationSyncConfigOutput> {
+        const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+        const bool = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
+        return {
+            SyncConcurrency: num(cfg.syncConcurrency),
+            MaxConcurrency: num(cfg.maxConcurrency),
+            RateLimitTokensPerSec: num(cfg.rateLimitTokensPerSec),
+            RateLimitBurst: num(cfg.rateLimitBurst),
+            CrossLayerPipeline: bool(cfg.crossLayerPipeline),
+            PartitionReconcile: bool(cfg.partitionReconcile),
+            DiscoveryTimeBudgetMs: num(cfg.discoveryTimeBudgetMs),
+        };
     }
 
     /**
@@ -5024,13 +5127,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 return { Success: false, Message: 'Transaction failed — all deletes rolled back' };
             }
 
-            if (deleteData) {
-                LogError(`IntegrationDeleteConnection: deleteData=true requested but table deletion not yet implemented for ${companyIntegrationID}`);
-            }
+            // deleteData=true asks us to also DROP the physical mirror tables. We deliberately do NOT:
+            // RuntimeSchemaManager rejects DROP TABLE on the __mj schema by design (a destructive-op
+            // safety guard), and there is no DROP generator. Dropping integration tables is real data
+            // loss and must be an explicit, separately-designed operation — not a silent side effect of
+            // removing a connection. So we delete the connection + all METADATA (maps/fields/schedules/
+            // credential) and RETAIN the data tables, and we say so honestly rather than claim otherwise.
+            const dataNote = deleteData
+                ? ' The physical data tables were RETAINED (dropping integration tables is not performed automatically — it is a separate, explicit operation).'
+                : '';
 
             return {
                 Success: true,
-                Message: `Deleted connection and all associated records`,
+                Message: `Deleted connection and all associated metadata records.${dataNote}`,
                 EntityMapsDeleted: entityMapsDeleted,
                 FieldMapsDeleted: fieldMapsDeleted,
                 SchedulesDeleted: schedulesDeleted,

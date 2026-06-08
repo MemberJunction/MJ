@@ -1,4 +1,5 @@
 import { MJLruCache } from '@memberjunction/global';
+import { computeUnmappedFields } from './CustomOverflow.js';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
 import type {
@@ -59,19 +60,28 @@ export class FieldMappingEngine {
         entityName: string
     ): MappedRecord {
         const mappedFields: Record<string, unknown> = {};
+        const mappedSourceNames = new Set<string>();
 
         for (const fieldMap of fieldMaps) {
+            mappedSourceNames.add(fieldMap.SourceFieldName);
             const value = this.ApplyFieldMapping(record, fieldMap);
             if (value !== undefined) {
                 mappedFields[fieldMap.DestinationFieldName] = value;
             }
         }
 
+        // Capture the source keys with no field map (gaps.md §2). Cheap O(columns) diff;
+        // the result is empty (and discarded by the writer) in the common all-mapped case,
+        // so this adds no measurable cost to a customs-free sync. The engine parks any extras
+        // in the __mj_integration_CustomOverflow system column — see {@link CustomOverflow}.
+        const unmappedFields = computeUnmappedFields(record.Fields, mappedSourceNames);
+
         return {
             ExternalRecord: record,
             MJEntityName: entityName,
             MappedFields: mappedFields,
             ChangeType: record.IsDeleted ? 'Delete' : 'Create',
+            UnmappedFields: unmappedFields,
         };
     }
 

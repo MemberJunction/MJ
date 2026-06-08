@@ -46,6 +46,7 @@ export type SyncLogEvent =
     | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'
     | 'sync.fetch.batch.complete'
+    | 'sync.fetch.retry'
     | 'sync.record.decision'
     | 'sync.record.saved'
     | 'sync.record.error'
@@ -58,6 +59,7 @@ export type SyncLogEvent =
     | 'sync.run.complete'
     | 'sync.run.fail'
     | 'sync.run.cancelled'
+    | 'sync.schema_update'
     | 'sync.warning';
 
 import type { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
