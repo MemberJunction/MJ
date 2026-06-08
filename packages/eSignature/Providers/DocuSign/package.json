@@ -23,5 +23,9 @@
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

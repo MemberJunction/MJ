@@ -33,6 +33,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
     "@memberjunction/global": "5.39.0",
     "@memberjunction/core": "5.39.0",
