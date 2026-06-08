@@ -115,7 +115,7 @@ export interface ExecutionMonitoringState {
         </div>
       </div>
 
-      <!-- Main Dashboard with Kendo Splitter -->
+      <!-- Main Dashboard with Splitter -->
       <as-split direction="vertical" class="dashboard-splitter">
         <!-- Top Row: System Health and Trends Chart -->
         <as-split-area [size]="45">

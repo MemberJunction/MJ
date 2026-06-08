@@ -10,7 +10,7 @@
     </button>
 
     <!-- Nav Bar Apps: Left of App Switcher -->
-    @if (leftOfSwitcherApps.length > 0) {
+    @if (leftOfSwitcherApps.length > 0 && !appSwitchingLocked) {
       <div class="nav-bar-apps left-of-switcher">
         @for (app of leftOfSwitcherApps; track app) {
           <button
@@ -26,13 +26,15 @@
       </div>
     }
 
-    <!-- App Switcher -->
-    <mj-app-switcher
-      [activeApp]="activeApp"
-      [isViewingSystemTab]="isViewingSystemTab"
-      [loadingAppId]="loadingAppId"
-      (appSelected)="onAppSwitch($event)">
-    </mj-app-switcher>
+    <!-- App Switcher (hidden for app-locked sessions, e.g. magic-link) -->
+    @if (!appSwitchingLocked) {
+      <mj-app-switcher
+        [activeApp]="activeApp"
+        [isViewingSystemTab]="isViewingSystemTab"
+        [loadingAppId]="loadingAppId"
+        (appSelected)="onAppSwitch($event)">
+      </mj-app-switcher>
+    }
 
     <!-- App Navigation (desktop only) -->
     @if (activeApp) {
@@ -62,8 +64,46 @@
     }
     <!-- Spacer -->
     <div class="spacer"></div>
-    <!-- Actions (notifications, user menu) -->
+    <!-- Actions (activity, notifications, user menu) -->
     <div class="header-actions">
+      <!-- Global Activity indicator -->
+      @if (activityItems.length > 0) {
+        <div class="activity-wrap">
+          <button class="icon-btn desktop-only activity-btn" title="Activity" (click)="toggleActivity($event)">
+            <i class="fa-solid fa-wave-square" [class.activity-pulse]="activityRunningCount > 0"></i>
+            @if (activityRunningCount > 0) {
+              <span class="activity-badge">{{ activityRunningCount }}</span>
+            }
+          </button>
+          @if (activityOpen) {
+            <div class="activity-drawer" (click)="$event.stopPropagation()">
+              <div class="activity-drawer-head">
+                <span>Activity</span>
+                <button class="activity-clear" (click)="clearFinishedActivity()" title="Clear finished">
+                  <i class="fa-solid fa-broom"></i>
+                </button>
+              </div>
+              <div class="activity-list">
+                @for (a of activityItems; track a.ID) {
+                  <div class="activity-row" [class.is-error]="a.Status === 'error'">
+                    <i class="activity-row-icon"
+                       [class]="a.Status === 'running' ? 'fa-solid fa-spinner fa-spin'
+                              : a.Status === 'error' ? 'fa-solid fa-circle-exclamation'
+                              : 'fa-solid fa-circle-check'"></i>
+                    <div class="activity-row-body">
+                      <div class="activity-row-label">{{ a.Label }}</div>
+                      @if (a.Detail) { <div class="activity-row-detail">{{ a.Detail }}</div> }
+                      @if (a.Status === 'running' && a.Progress != null) {
+                        <div class="activity-bar"><div class="activity-bar-fill" [style.width.%]="a.Progress"></div></div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
       <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
         <i class="fa-solid fa-bell"></i>
         @if (unreadNotificationCount > 0) {

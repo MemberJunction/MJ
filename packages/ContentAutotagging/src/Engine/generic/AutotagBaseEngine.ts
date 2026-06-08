@@ -15,6 +15,7 @@ import pdfParse from 'pdf-parse'
 import officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
+import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from './ClassificationContextResolver'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
@@ -70,6 +71,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public static get Instance(): AutotagBaseEngine {
         return super.getInstance<AutotagBaseEngine>();
     }
+
+    /**
+     * Internal LLMResults key under which the AIPromptRun ID that produced the
+     * accumulated keyword set is stashed. Used to stamp ContentItemTag.AIPromptRunID
+     * for tag→prompt-run lineage. Prefixed with `__` so it never collides with a
+     * real LLM-produced field and is excluded by the attribute-save skip set.
+     */
+    private static readonly AI_PROMPT_RUN_ID_KEY = '__aiPromptRunID';
 
     // Cached metadata unique to this engine — loaded by BaseEngine.Config()
     private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
@@ -315,6 +324,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
         processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
         processingParams.contentTypeID = contentItem.ContentTypeID;
+        processingParams.contentSourceID = contentItem.ContentSourceID;
 
         const { modelID, minTags, maxTags } = this.GetContentItemParams(processingParams.contentTypeID);
         processingParams.modelID = modelID;
@@ -511,6 +521,24 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
+     * Build the existing-taxonomy markdown from the LIVE TagEngine cache at the
+     * moment a prompt is constructed — NOT a once-per-run snapshot.
+     *
+     * TagEngine wraps the process-global TagEngineBase cache, which stays current
+     * as tags are created during the run (each tag Save fires BaseEntity events
+     * that update the shared cache). Reading it per item means every item sees the
+     * tags created by earlier items and can reuse / nest into them, so a real
+     * hierarchy emerges instead of a flat list of near-duplicates. (The old
+     * `TaxonomyContext` snapshot was built once and, on a from-empty run, never —
+     * leaving the LLM blind for the whole run.)
+     */
+    private getLiveTaxonomyMarkdown(): string | undefined {
+        const tags = TagEngine.Instance.Tags;
+        if (!tags || tags.length === 0) return undefined;
+        return this.buildTaxonomyMarkdown(TagEngine.Instance.GetTaxonomyTree());
+    }
+
+    /**
      * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
      * Uses TagEngine.ResolveTag() in auto-grow mode by default.
      *
@@ -524,22 +552,35 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            // If parent tag is suggested by LLM, resolve it through the mutex too
-            // to prevent duplicate parent tags from concurrent batch processing
+            // If the LLM suggested a parent tag, resolve it first (through the same
+            // mutex, to prevent duplicate parents under concurrent batch processing)
+            // and CAPTURE its ID so a NEWLY-created child can be nested under it.
+            // Previously the parent's ID was discarded and children were always
+            // created flat — which is why the generated taxonomy came out as one big
+            // flat list with no parent/child nesting.
+            let parentTagID: string | null = null;
             if (parentTagName) {
-                await TagEngine.Instance.ResolveTag(
+                const parentTag = await TagEngine.Instance.ResolveTag(
                     parentTagName, 0, 'auto-grow', null, 0.80, contextUser
                 );
+                parentTagID = parentTag?.ID ?? null;
             }
 
-            // Resolve the tag using auto-grow mode (create if no match)
+            // Resolve the tag with rootID=null so matching searches the WHOLE
+            // taxonomy (reusing an existing tag wherever possible — passing the
+            // parent as rootID would scope the search to that subtree and spawn
+            // duplicates of existing root-level tags). parentIDForNew nests a
+            // freshly-created tag under the LLM-suggested parent and runs it
+            // through ValidateAutoGrow governance (MaxChildren / depth), so nesting
+            // is deterministically rule-compliant. Existing tags keep their place.
             const formalTag = await TagEngine.Instance.ResolveTag(
                 contentItemTag.Tag,
                 contentItemTag.Weight,
                 'auto-grow',
-                null,   // no root constraint
+                null,   // global search — reuse existing tags, avoid duplicates
                 0.80,   // similarity threshold — lower to catch plurals/variants like "AI Agent" vs "AI Agents"
-                contextUser
+                contextUser,
+                parentTagID ? { parentIDForNew: parentTagID } : undefined
             );
 
             if (formalTag) {
@@ -667,14 +708,63 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             minTags: params.minTags,
             maxTags: params.maxTags,
             additionalAttributePrompts,
-            existingTaxonomy: this.TaxonomyContext ?? undefined,
+            existingTaxonomy: this.getLiveTaxonomyMarkdown(),
+            classificationContext: params.classificationContext ?? undefined,
             contentText: chunk,
             previousResults: hasPreviousResults ? JSON.stringify(previousResults) : undefined,
         };
     }
 
+    /**
+     * Resolve the effective classification context for a content item by combining
+     * the org / content-type / source scopes via {@link ClassificationContextResolver}.
+     * Returns undefined when no scope supplies context. Best-effort: any failure is
+     * logged and treated as "no context" so the autotag run is never blocked.
+     */
+    private async resolveClassificationContext(
+        params: ContentItemProcessParams,
+        contextUser: UserInfo,
+    ): Promise<string | undefined> {
+        try {
+            const sourceConfig = this.getSourceClassificationConfig(params.contentSourceID);
+            return await ClassificationContextResolver.ResolveEffectiveContext(
+                sourceConfig,
+                params.contentTypeID,
+                this.ContentTypes,
+                contextUser,
+                this.ProviderToUse,
+            );
+        } catch (e) {
+            LogError(`[Autotag] Failed to resolve classification context for item ${params.contentItemID}: ${e instanceof Error ? e.message : String(e)}`);
+            return undefined;
+        }
+    }
+
+    /**
+     * Look up the parsed ContentSource configuration (with the classification-context
+     * extension keys) for a given source ID from the cached KnowledgeHub sources.
+     */
+    private getSourceClassificationConfig(
+        contentSourceID: string | undefined,
+    ): IContentSourceClassificationConfiguration | null {
+        if (!contentSourceID) {
+            return null;
+        }
+        const source = this.khEngine.ContentSources.find(s => UUIDsEqual(s.ID, contentSourceID));
+        if (!source) {
+            return null;
+        }
+        // ConfigurationObject is the CodeGen-generated typed accessor; the classification
+        // extension keys ride along in the same JSON and are surfaced via the extended interface.
+        return (source.ConfigurationObject as IContentSourceClassificationConfiguration | null) ?? null;
+    }
+
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
         await AIEngine.Instance.Config(false, contextUser);
+
+        // Resolve the effective classification context once per item (async lookup);
+        // buildPromptData reads it from params for each chunk.
+        params.classificationContext = await this.resolveClassificationContext(params, contextUser);
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
@@ -774,6 +864,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
         }
 
+        // Capture the AIPromptRun ID that produced this chunk's tags so the
+        // tag-persistence path can stamp ContentItemTag.AIPromptRunID for lineage.
+        // Tags are merged across chunks; the last successful chunk's run is the
+        // one whose keyword set is persisted, so the last-write-wins value here
+        // matches the keywords actually saved.
+        if (result.promptRun?.ID) {
+            LLMResults[AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY] = result.promptRun.ID;
+        }
+
         return LLMResults;
     }
 
@@ -868,19 +967,29 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
 
+        // AIPromptRun lineage: the run that produced this keyword set was stashed on
+        // LLMResults during chunk processing. Stamped on each ContentItemTag for audit.
+        const rawPromptRunID = LLMResults[AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY];
+        const aiPromptRunID: string | null = typeof rawPromptRunID === 'string' && rawPromptRunID.length > 0
+            ? rawPromptRunID
+            : null;
+
         // Normalize keywords — support both formats:
         //   Old: ["keyword1", "keyword2"]
         //   New: [{ tag: "keyword1", weight: 0.95 }, { tag: "keyword2", weight: 0.7 }]
         //   New with parentTag: [{ tag: "keyword1", weight: 0.95, parentTag: "parent" }]
-        const normalizedTags: Array<{ tag: string; weight: number; parentTag: string | null }> = keywords.map((kw: unknown) => {
+        //   New with reasoning: [{ tag: "keyword1", weight: 0.95, reasoning: "why..." }]
+        const normalizedTags: Array<{ tag: string; weight: number; parentTag: string | null; reasoning: string | null }> = keywords.map((kw: unknown) => {
             if (typeof kw === 'string') {
-                return { tag: kw, weight: 1.0, parentTag: null };
+                return { tag: kw, weight: 1.0, parentTag: null, reasoning: null };
             }
-            const obj = kw as { tag?: string; keyword?: string; weight?: number; parentTag?: string };
+            const obj = kw as { tag?: string; keyword?: string; weight?: number; parentTag?: string; reasoning?: string; rationale?: string };
+            const rawReasoning = obj.reasoning ?? obj.rationale;
             return {
                 tag: obj.tag || obj.keyword || String(kw),
                 weight: typeof obj.weight === 'number' ? Math.max(0, Math.min(1, obj.weight)) : 0.5,
                 parentTag: obj.parentTag ?? null,
+                reasoning: typeof rawReasoning === 'string' && rawReasoning.trim().length > 0 ? rawReasoning.trim() : null,
             };
         });
 
@@ -892,7 +1001,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 contentItemTag.NewRecord();
                 contentItemTag.ItemID = contentItemID;
                 contentItemTag.Tag = item.tag;
-                contentItemTag.Set('Weight', item.weight);
+                contentItemTag.Weight = item.weight;
+                // Phase 4 lineage/audit — only set when available, both columns nullable.
+                if (aiPromptRunID) {
+                    contentItemTag.AIPromptRunID = aiPromptRunID;
+                }
+                if (item.reasoning) {
+                    contentItemTag.Reasoning = item.reasoning;
+                }
                 const saved = await contentItemTag.Save();
 
                 // Invoke taxonomy bridge callback if set
@@ -915,7 +1031,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const contentItemID = LLMResults.contentItemID as string;
-        const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent']);
+        const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent', AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY]);
 
         // Update title and description on the content item.
         // For entity-sourced items (EntityRecordDocumentID is set), preserve the

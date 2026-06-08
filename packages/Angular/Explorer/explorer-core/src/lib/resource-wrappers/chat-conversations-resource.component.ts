@@ -26,6 +26,10 @@ import { Subject, takeUntil } from 'rxjs';
   template: `
     @if (isReady) {
       <div class="chat-conversations-container">
+        <!-- Mobile backdrop: tap to close the slide-over sidebar -->
+        @if (isMobileView && !isSidebarCollapsed && isSidebarSettingsLoaded) {
+          <div class="mobile-sidebar-backdrop" (click)="collapseSidebar()"></div>
+        }
         <!-- Left sidebar: Conversation list -->
         @if (isSidebarSettingsLoaded) {
           <div class="conversation-sidebar"
@@ -175,6 +179,57 @@ import { Subject, takeUntil } from 'rxjs';
       width: 100%;
       height: 100%;
       flex: 1;
+    }
+
+    /* Mobile: sidebar slides over the chat instead of squishing it.
+       The chat area always fills the full width; the sidebar overlays on
+       top and is dismissed by tapping the backdrop. */
+    @media (max-width: 767px) {
+      .conversation-sidebar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        height: 100%;
+        width: min(85%, 320px) !important;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 12px color-mix(in srgb, var(--mj-text-primary) 25%, transparent);
+      }
+
+      /* Keep a fixed width in both states so only the transform animates
+         (avoids text reflow during the slide). */
+      .conversation-sidebar.collapsed {
+        width: min(85%, 320px) !important;
+        border-right: 1px solid var(--mj-border-default);
+        overflow-y: auto;
+      }
+
+      .conversation-sidebar:not(.collapsed) {
+        transform: translateX(0);
+      }
+
+      /* No drag-resize on mobile */
+      .sidebar-resize-handle {
+        display: none;
+      }
+
+      .mobile-sidebar-backdrop {
+        position: absolute;
+        inset: 0;
+        background: var(--mj-bg-overlay);
+        z-index: 999;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        animation: chatBackdropFade 0.2s ease;
+      }
+
+      @keyframes chatBackdropFade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
     }
   `],
   encapsulation: ViewEncapsulation.None

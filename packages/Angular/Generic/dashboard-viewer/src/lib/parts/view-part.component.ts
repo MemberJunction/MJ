@@ -4,8 +4,7 @@ import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { EntityInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
-import { MapRenderMode } from '@memberjunction/ng-map-view';
+import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 
 /**
  * Runtime renderer for View dashboard parts.
@@ -44,14 +43,11 @@ import { MapRenderMode } from '@memberjunction/ng-map-view';
           <!-- Entity Viewer -->
           @if (!IsLoading && !ErrorMessage && hasView && entityInfo) {
             <mj-entity-viewer
-              [entity]="entityInfo"
-              [viewEntity]="viewEntity"
-              [(viewMode)]="viewMode"
-              [mapRenderMode]="mapRenderMode"
-              [gridSelectionMode]="selectionMode"
-              [showGridToolbar]="false"
-              (recordSelected)="onRecordSelected($event)"
-              (recordOpened)="onRecordOpened($event)">
+              [Entity]="entityInfo"
+              [ViewEntity]="viewEntity"
+              (RecordSelected)="onRecordSelected($event)"
+              (RecordOpened)="onRecordOpened($event)"
+              (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)">
             </mj-entity-viewer>
           }
         </div>
@@ -115,9 +111,6 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
     public hasView = false;
     public viewEntity: MJUserViewEntityExtended | null = null;
     public entityInfo: EntityInfo | null = null;
-    public viewMode: EntityViewMode = 'grid';
-    public mapRenderMode: MapRenderMode = 'point';
-    public selectionMode: 'single' | 'multiple' = 'single';
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
@@ -144,11 +137,6 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
 
         try {
             const p = this.ProviderToUse;
-
-            // Set view mode from config
-            this.viewMode = (config?.['displayMode'] as EntityViewMode) || 'grid';
-            this.mapRenderMode = (config?.['mapRenderMode'] as MapRenderMode) || 'point';
-            this.selectionMode = config?.['selectionMode'] === 'multiple' ? 'multiple' : 'single';
 
             if (viewId) {
                 // Load saved view by ID
@@ -215,6 +203,24 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
             this.RequestOpenEntityRecord(
                 event.entity.Name,
                 event.compositeKey.ToURLSegment(),
+                'view',
+                false
+            );
+        }
+    }
+
+    /**
+     * Handle a plug-in renderer's request (bubbled up via the inner entity-viewer) to open a
+     * *related* record on a (possibly different) entity — e.g. a grid foreign-key drill-through.
+     * Requests navigation through the dashboard-part routing contract.
+     *
+     * @param nav the related-record navigation payload: the target entity name and the record's key.
+     */
+    public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+        if (nav?.entityName && nav.recordKey != null) {
+            this.RequestOpenEntityRecord(
+                nav.entityName,
+                String(nav.recordKey),
                 'view',
                 false
             );

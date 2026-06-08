@@ -761,8 +761,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
 
         try {
-            // Clear unified sub-agents array
-            this.allSubAgents = [];
+            // Build into a LOCAL array and assign this.allSubAgents ONCE at the end (after the awaits
+            // below). The synchronous child-agent population runs inside ngOnInit's await chain, which
+            // still sits within the host's CD pass — mutating this.allSubAgents incrementally there
+            // changes totalSubAgentCount 0→N mid-pass and trips NG0100. Building locally keeps the
+            // bound count stable until we swap in the final list outside the CD pass.
+            const newSubAgents: UnifiedSubAgent[] = [];
 
             // Track agent IDs we've already added so the same agent doesn't appear twice
             // when it's both a structural child (ParentID) AND has an entry in the
@@ -780,7 +784,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const key = NormalizeUUID(agent.ID);
                 if (seenSubAgentIds.has(key)) continue;
                 seenSubAgentIds.add(key);
-                this.allSubAgents.push({
+                newSubAgents.push({
                     agent,
                     type: 'child'
                 });
@@ -809,7 +813,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     // active Relationship row pointing to the same SubAgentID.
                     if (seenSubAgentIds.has(key)) continue;
                     seenSubAgentIds.add(key);
-                    this.allSubAgents.push({
+                    newSubAgents.push({
                         agent,
                         type: 'related',
                         relationship
@@ -818,12 +822,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             }
 
             // Sort: child agents first, then by name
-            this.allSubAgents.sort((a, b) => {
+            newSubAgents.sort((a, b) => {
                 if (a.type !== b.type) {
                     return a.type === 'child' ? -1 : 1;
                 }
                 return (a.agent.Name || '').localeCompare(b.agent.Name || '');
             });
+
+            // Single assignment — happens AFTER the awaits above, i.e. outside the host's CD pass, so
+            // totalSubAgentCount changes exactly once against settled state (no NG0100).
+            this.allSubAgents = newSubAgents;
 
             this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
                 const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));

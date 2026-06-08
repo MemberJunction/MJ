@@ -223,7 +223,11 @@ vi.mock('@memberjunction/aiengine', () => ({
   },
 }));
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+  // Spread the real module so transitively-imported exports (e.g.
+  // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
+  // otherwise adding any new core-entities export breaks this mock's load.
+  const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
   const mockVectorIndexes = [
     { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
   ];
@@ -238,6 +242,7 @@ vi.mock('@memberjunction/core-entities', () => {
     ),
   };
   return {
+    ...actual,
     MJContentSourceEntity: vi.fn(),
     MJContentItemEntity: vi.fn(),
     MJContentFileTypeEntity: vi.fn(),
@@ -599,6 +604,90 @@ describe('AutotagBaseEngine', () => {
 
       // Should not throw
       await expect(engine.saveLLMResults(results, mockUser)).resolves.not.toThrow();
+    });
+  });
+
+  describe('saveContentItemTags — lineage + reasoning (Phase 4)', () => {
+    type CapturedTag = {
+      ItemID?: string;
+      Tag?: string;
+      Weight?: number;
+      AIPromptRunID?: string | null;
+      Reasoning?: string | null;
+    };
+
+    // Install a provider whose GetEntityObject returns inspectable tag records.
+    function installCapturingProvider(): CapturedTag[] {
+      const captured: CapturedTag[] = [];
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() {
+          return {
+            GetEntityObject: vi.fn().mockImplementation(async () => {
+              const rec: CapturedTag & { NewRecord: () => void; Save: () => Promise<boolean> } = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+              } as never;
+              captured.push(rec);
+              return rec;
+            }),
+          };
+        },
+        configurable: true,
+      });
+      return captured;
+    }
+
+    it('stamps AIPromptRunID from LLMResults onto every tag', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        __aiPromptRunID: 'run-123',
+        keywords: [
+          { tag: 'alpha', weight: 0.9 },
+          { tag: 'beta', weight: 0.4 },
+        ],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      expect(captured).toHaveLength(2);
+      expect(captured.every(c => c.AIPromptRunID === 'run-123')).toBe(true);
+      expect(captured.map(c => c.Tag)).toEqual(['alpha', 'beta']);
+      expect(captured.map(c => c.Weight)).toEqual([0.9, 0.4]);
+    });
+
+    it('captures per-tag reasoning when present (reasoning or rationale)', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        __aiPromptRunID: 'run-xyz',
+        keywords: [
+          { tag: 'alpha', weight: 0.9, reasoning: 'central topic' },
+          { tag: 'beta', weight: 0.4, rationale: 'mentioned once' },
+          { tag: 'gamma', weight: 0.2 },
+        ],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      const byTag = new Map(captured.map(c => [c.Tag, c]));
+      expect(byTag.get('alpha')?.Reasoning).toBe('central topic');
+      expect(byTag.get('beta')?.Reasoning).toBe('mentioned once');
+      // No reasoning supplied → property left unset (nullable-safe).
+      expect(byTag.get('gamma')?.Reasoning).toBeUndefined();
+    });
+
+    it('leaves AIPromptRunID unset when no prompt run id is present', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        keywords: [{ tag: 'alpha', weight: 0.5 }],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].AIPromptRunID).toBeUndefined();
     });
   });
 
