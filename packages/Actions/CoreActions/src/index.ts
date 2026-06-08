@@ -78,6 +78,13 @@ export * from './custom/integration/gamma-generate-presentation.action';
 export * from './custom/integration/integration-action-executor';
 export * from './custom/integration/generate-integration-action.action';
 
+// eSignature Actions
+export * from './custom/esignature/base-esignature.action';
+export * from './custom/esignature/send-document-for-signature.action';
+export * from './custom/esignature/get-signature-status.action';
+export * from './custom/esignature/download-signed-document.action';
+export * from './custom/esignature/void-signature-request.action';
+
 // Security Actions
 export * from './custom/security/password-strength.action';
 
