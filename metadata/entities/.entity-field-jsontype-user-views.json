@@ -91,7 +91,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=DisplayState"
           },
           "sync": {
-            "lastModified": "2026-06-07T18:42:25.443Z",
+            "lastModified": "2026-06-08T19:36:55.886Z",
             "checksum": "c531fa39bc0c9ff676c5e0f38c3d10471bb1b61f28e034e84f4d798ad7a86301"
           }
         }
