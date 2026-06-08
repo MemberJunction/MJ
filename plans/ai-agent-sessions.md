@@ -14,28 +14,28 @@ Under this design, any existing agent can be executed within the context of a se
 
 ```mermaid
 graph TD
-    subgraph Client [Client Application / Browser]
+    subgraph Client ["Client Application / Browser"]
         V_UI["Voice UI (Audio Input/Output)"]
         C_UI["Chat UI (Text Input/Output)"]
         CC_UI["Client Controls (Navigation / Actions)"]
     end
 
-    subgraph Sessions [AI Agent Session Layer]
+    subgraph Sessions ["AI Agent Session Layer"]
         SessionHost["Session Host / Session Manager"]
         
-        subgraph Channels [Active Modal Channels]
+        subgraph Channels ["Active Modal Channels"]
             Ch_Voice["VoiceAudio Channel<br/>(WebSockets / WebRTC)"]
             Ch_Chat["TextChat Channel<br/>(SSE / WebSockets)"]
             Ch_Control["ClientControl Channel<br/>(Bi-directional Socket)"]
         end
     end
 
-    subgraph AgentFramework [@memberjunction/ai-agents]
+    subgraph AgentFramework ["@memberjunction/ai-agents"]
         Runner["AgentRunner.ExecuteAgent()"]
         Agent["BaseAgent (Loop / Flow Agent)"]
     end
 
-    subgraph Data [Data Layer]
+    subgraph Data ["Data Layer"]
         D_Session["AIAgentSession Record<br/>(+ AIAgentSessionChannel rows)"]
         D_Run["AIAgentRun Record"]
     end
