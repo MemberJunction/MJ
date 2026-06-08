@@ -164,6 +164,9 @@ CREATE TABLE [__mj].[AIAgentSession] (
     [UserID] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES [__mj].[User]([ID]),
     [Status] NVARCHAR(20) NOT NULL DEFAULT 'Active',
     [ConversationID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[Conversation]([ID]),
+    -- When a user resumes a prior (closed) session, this points at it. Mirrors
+    -- AIAgentRun.LastRunID — a new session is created, chained to its predecessor.
+    [LastSessionID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[AIAgentSession]([ID]),
     -- The server node currently hosting this session's in-memory sockets (for affinity / janitor reconciliation).
     [HostInstanceID] NVARCHAR(200) NULL,
     [Config] NVARCHAR(MAX) NULL, -- JSON block for session-specific state/variables
@@ -519,77 +522,94 @@ On `SIGTERM`/redeploy, the instance runs the janitor's close path for its own se
 
 ---
 
-## Voice as a Model Capability
+## Real-Time Modality
 
-Voice is **not** hardcoded into the Session Host. MJ already has a capability-typed AI driver system — `packages/AI/Core/src/generic/` defines sibling base classes (`baseLLM`, `baseEmbeddings`, `baseAudio`, `baseImage`, `baseVideo`, `baseDiffusion`, `baseReranker`), and `AIEngine` resolves any of them uniformly through the ClassFactory by `AIModelType` + `DriverClass`:
+Real-time interaction (voice today, video later) does **not** run through the standard loop agent. The loop agent is intentionally **asynchronous and long-running** — forcing it to drive a live, low-latency conversation produces a poor experience, and modern real-time models (Gemini Live, GPT Realtime, the Eleven Labs stack) own the listen-reason-speak loop themselves. So we keep the loop agent exactly as it is and introduce a **new agent type** that wraps a real-time model and runs inside a session.
 
-```typescript
-// AIEngine.ts — same pattern for every capability
-const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
-```
+Critically, this still gives us broad coverage. Rather than rebuilding every agent for voice, we ship a single generic **Voice Co-Agent** that can supplement **any** existing agent (see below) — so adding real-time to a new agent is configuration, not code.
 
-The `VoiceAudio` channel resolves its speech drivers the same way an agent resolves its LLM. Provider selection, priority/fallback, API-key resolution (`GetAIAPIKey(DriverClass)`), and per-minute cost tracking (`MJ: AI Model Costs`) all come for free.
+### The model primitive: `BaseRealtimeModel`
 
-### Two voice modes
+A new sibling base class alongside the existing capability classes in `packages/AI/Core/src/generic/` (`baseLLM`, `baseEmbeddings`, `baseAudio`, `baseImage`, `baseVideo`, …), resolved like all of them through the ClassFactory by `AIModelType` + `DriverClass`. It is the **lowest-level primitive** — the native way to talk to a streaming, bidirectional model.
 
-| Mode | Pipeline | Models used | Loop owner | Transport planes |
-|---|---|---|---|---|
-| **Pipelined** | STT → MJ agent turn (`AIAgentRun`) → TTS | three `AIModel`s (audio + LLM + audio) | MJ `BaseAgent` | control (transcripts/tokens) + media (audio) |
-| **Realtime-native** | one duplex provider socket | one `BaseRealtimeVoice` model | the provider | upstream-provider + media + control |
-
-### Decision rule: when is realtime a new method vs. a new class?
-
-The line is **request/response vs. stateful duplex session**:
-
-- **Streaming STT / streaming TTS** — same one-shot operation, just chunked over time — is a **new method on `BaseAudioGenerator`**, advertised via the existing `GetSupportedMethods()` capability flag (the class already ships this exact mechanism for "some audio models support X, some don't"). No new class. This is the natural upgrade of the pipelined mode.
-- **Full-duplex conversational models** (Gemini Live, OpenAI Realtime) — one socket that listens, reasons, calls tools, and speaks with barge-in — get a **new sibling subclass of `BaseModel`** and a new `AIModelType`. Reasons: the contract returns a *stateful session handle*, not a `SpeechResult`; it is selected/resolved as its own capability; it is really a streaming multimodal LLM that happens to speak (modeling it as an audio generator is a category error); and it would force every TTS-only provider to stub out a session lifecycle it never implements. This is consistent with MJ's existing sibling-per-capability precedent.
-
-### Reuse: `BaseAudioGenerator` (pipelined mode — zero new model code)
-
-Already present in `baseAudio.ts`:
+> [!NOTE]
+> **Naming:** it is `BaseRealtimeModel`, **not** `BaseRealtimeVoice`/audio. The contract is *streaming, full-duplex, tool-calling* — modality-agnostic — so the same primitive covers voice now and video later. If a modality ever needs specialization we can add `audio`/`video` subclasses, but the base stays generic. (Distinct from `baseAudio.ts`'s `BaseAudioGenerator`, which is request/response STT/TTS — a different shape, and not the real-time path.)
 
 ```typescript
-export abstract class BaseAudioGenerator extends BaseModel {
-    public abstract CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult>;   // TTS
-    public abstract SpeechToText(params: SpeechToTextParams): Promise<SpeechResult>;   // STT
-    public abstract GetVoices(): Promise<VoiceInfo[]>;
-    public abstract GetSupportedMethods(): Promise<string[]>;
-    // ...
-}
-```
-
-Pipelined voice (Deepgram/Whisper for STT, ElevenLabs/OpenAI-TTS for output) needs **no new model class** — only metadata registration.
-
-### New capability: `BaseRealtimeVoice` (realtime-native mode)
-
-A new sibling base class added alongside the others in `packages/AI/Core/src/generic/`:
-
-```typescript
-export abstract class BaseRealtimeVoice extends BaseModel {
+export abstract class BaseRealtimeModel extends BaseModel {
     /** Opens a stateful duplex session; the returned handle is the long-lived object. */
-    public abstract StartSession(params: RealtimeSessionParams): Promise<IRealtimeVoiceSession>;
+    public abstract StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession>;
 }
 
-export interface IRealtimeVoiceSession {
-    SendAudio(chunk: ArrayBuffer): void;                          // client mic frames in
-    RegisterTools(tools: ClientToolMetadata[]): Promise<void>;   // provider-native tool registration
-    OnAudio(handler: (chunk: ArrayBuffer) => void): void;        // agent speech out → media plane
-    OnTranscript(handler: (t: RealtimeTranscript) => void): void;// → control plane + ConversationDetail
+export interface IRealtimeSession {
+    SendInput(chunk: ArrayBuffer): void;                          // client media frames in (audio now, video later)
+    /** Register the agent's tools with the provider, in the provider's native function-calling format.
+     *  Uses the unified client-or-server tool metadata — NOT the client-specific ClientToolMetadata. */
+    RegisterTools(tools: AgentToolMetadata[]): Promise<void>;
+    OnOutput(handler: (chunk: ArrayBuffer) => void): void;        // model media out → media plane
+    OnTranscript(handler: (t: RealtimeTranscript) => void): void;// text stream → control plane + ConversationDetail
     OnToolCall(handler: (call: RealtimeToolCall) => void): void; // → MJ tool execution under contextUser
     OnInterruption(handler: () => void): void;                   // barge-in → cancellationToken
+    OnUsage(handler: (u: RealtimeUsage) => void): void;          // token/usage telemetry → AIPromptRun
     Close(): Promise<void>;
 }
 ```
 
-The `VoiceAudio` channel, in realtime-native mode, wraps an `IRealtimeVoiceSession`: it bridges audio to the **media plane**, transcripts to the **control plane** (and into `ConversationDetail`), and `OnToolCall` into MJ tool execution under the session's `contextUser` (see [Authorization & Socket Security](#authorization--socket-security)). A single provider may register **both** an audio driver and a realtime driver (e.g. an OpenAI TTS model *and* an OpenAI Realtime model) — different model rows, different types, same vendor.
+The driver translates MJ tool definitions into the provider's native function schema and provider `tool_call` frames back into MJ tool execution — this is the **upstream-provider plane** from [Parallel Channel Orchestration & Tool Routing](#parallel-channel-orchestration--tool-routing). New `AIModelType`: **`Realtime`**.
 
-### Metadata additions (no migration — `/metadata` + `mj sync`)
+### The `Realtime` agent type & the Voice Co-Agent
 
-These are **reference-data changes, authored as metadata files and applied with `mj sync push`** — not a SQL migration (consistent with how `metadata/ai-models/` and `metadata/ai-vendors/` are already managed).
+We add a new **agent type** named **`Realtime`** — a first-class peer of Loop and Flow, with its own class, that drives a `BaseRealtimeModel` session instead of an iterative reasoning loop. Because it is a *real MJ agent type*, it inherits the entire framework for free: server tools (actions), client tools, artifacts, prompts, memory, permissions, observability. We are not building a parallel runtime — just a new agent type.
 
-1. **New `AIModelType`: `Realtime`.** There is currently no metadata folder for model types (they pre-date the metadata-seeding convention), so add one — `metadata/ai-model-types/` with a `.mj-sync.json` bound to entity **`MJ: AI Model Types`** — and seed the `Realtime` type there. (Per the CLAUDE.md "Seeding New Lookup/Reference Tables" rule.)
+The first agent we ship of this type is the **Voice Co-Agent** (working name — chosen to avoid "impersonation", which can read badly and can make models refuse). It is framed as a **companion / co-agent** that voices *on behalf of* a target agent:
 
-2. **Two new `MJ: AI Models`** in `metadata/ai-models/`, each typed `Realtime` and carrying an `MJ: AI Model Vendors` association whose `DriverClass` points at the realtime driver (mirroring the existing `xAILLM` / `AnthropicLLM` convention):
+- **Generic by design — the target is a runtime parameter.** One Voice Co-Agent definition can front **any** MJ agent. You point it at Sage, at Query Builder, at anything, and it "just works" — that is how we recover the universal-voice goal without forking every agent.
+- **The co-agent's job:** hold a natural, low-latency conversation as the target agent's voice. It is told who it is acting for, what that agent can do, the conversation so far, and the user's memory. It is explicitly told it cannot do everything synchronously, but it can **invoke the real agent** to do actual work (seconds → minutes) and narrate while that runs.
+- **Prompt-safety:** the system prompt must use *companion / "voice for"* framing, never "pretend to be / impersonate" — otherwise the model may refuse ("I'm not allowed to do that").
+- **Future:** a co-agent could blend **two or more** agents' capabilities into one voice persona. Out of scope for the first build — start with a single target.
+
+### Why "just another MJ agent" is the whole point
+
+Because the Voice Co-Agent is a normal agent, tool wiring is already solved:
+
+- **Primary tool — invoke the target agent.** The co-agent's headline capability is a tool that runs the full async (loop/flow) agent and feeds results back to the model. Sub-agents are **not** exposed — the co-agent only talks to the top-level agent (the target's own loop handles its sub-agents).
+- **Plus normal server & client tools and artifacts.** Just like any agent, a Voice Co-Agent can be given fast server tools (actions), client tools, and artifact capabilities directly — no special plumbing.
+
+### Execution model & run topology
+
+- **One prompt run per session.** The entire real-time session is a single `AIPromptRun` (the full prior conversation dumped in as initial context) wrapped in a single long-lived `AIAgentRun`. It streams both directions with **no JSON intermediation** — inputs go straight to the model, outputs stream straight back. Usage/telemetry accrues over the session and is finalized at close (`OnUsage` → the prompt run).
+- **Delegated work is normal runs.** When the co-agent invokes the target agent, that is its own `AIAgentRun`, linked to the co-agent's run via **`ParentRunID`** and sharing the same **`AgentSessionID`** — so the delegation tree is visible and everything groups under the session.
+- **Long-running tools.** The pattern is *fire the tool call → keep talking / fill the space → push the result when ready*. The exact async-function semantics differ per provider (Gemini Live vs GPT Realtime vs Eleven Labs); the driver owns that mapping. **Open item** (see below) — very long work (minutes) is a known weak spot for voice.
+
+### Context & memory injection (shared helper — build in this PR)
+
+The co-agent needs the **same context the loop agent already assembles**: relevant notes/examples (the MJ memory system) plus the conversation history up to the session start. Today that orchestration lives in `BaseAgent.InjectContextMemory` (and the nearby `InjectPreExecutionRAG`) in `packages/AI/Agents/src/base-agent.ts`. The underlying retrieval (`AgentContextInjector`, reranking) is **already a reusable class**; what is not shared is the wrapper that reads the agent's inject flags, builds the scope params, and formats the system message.
+
+**Task for this PR:** extract that orchestration into a shared helper (e.g. `AgentMemoryContextBuilder`) callable from **both** `BaseAgent` and the new `Realtime` agent type, so the co-agent injects memory identically — no duplicated logic. The front-end is responsible for assembling and passing the initial context payload (conversation context + memory hints) when it starts the session.
+
+### Channel composition
+
+`Realtime` is an **agent type, not a channel.** Within a session, the I/O surfaces are channels: a **VoiceAudio** channel (media plane — the realtime model binds to it and owns the provider socket per the upstream plane), and optionally **TextChat** and **Whiteboard** channels running in parallel. Channels open and close independently during the session's life.
+
+- **Whiteboard** is the next concrete channel after voice — implemented as its own channel with **separate channel state** (shared state + tool calls to draw/update), *not* via the block system, to keep separation of concerns clean.
+- **Video** is explicitly deferred (quality isn't there yet) but `BaseRealtimeModel`'s modality-agnostic contract anticipates it.
+
+### Persistence, continuation & UX
+
+- **Every turn persists.** Each user/assistant turn in the realtime session is written as a `ConversationDetail` stamped with `AgentSessionID`, exactly like text chat. Delegated agent runs and any artifacts they produce are recorded in conversation history too (not interrupted into the live voice UI unless a channel like Whiteboard explicitly surfaces them).
+- **Session continuation.** A closed session can be resumed by starting a **new** session whose **`LastSessionID`** points at the prior one — mirroring `AIAgentRun.LastRunID` (we deliberately reuse that chaining nomenclature). The conversation is the durable thread; sessions are the time-boxed real-time episodes along it.
+- **UX — needs world-class treatment in `@memberjunction/ng-conversations`.** A realtime session sitting in the overall conversation timeline must be **collapsed by default** — you do *not* see the full back-and-forth transcript and every nested agent run inline. You can expand the session to see the full detail and runs, and resume it later (as a new, `LastSessionID`-chained session). This timeline/overlay design is a first-class UX deliverable, not an afterthought.
+
+### Metadata registrations (no migration — `/metadata` + `mj sync`)
+
+**Reference-data changes authored as metadata files and applied with `mj sync push`** — not a SQL migration (consistent with how `metadata/ai-models/` and `metadata/ai-vendors/` are managed).
+
+1. **New `AIModelType`: `Realtime`.** No metadata folder exists for model types yet (they pre-date the seeding convention), so add `metadata/ai-model-types/` with a `.mj-sync.json` bound to entity **`MJ: AI Model Types`**, and seed the `Realtime` type (per the CLAUDE.md "Seeding New Lookup/Reference Tables" rule).
+
+2. **Three new `MJ: AI Models`**, each typed `Realtime`, with an `MJ: AI Model Vendors` association whose `DriverClass` points at the realtime driver (mirroring the existing `xAILLM` / `AnthropicLLM` convention):
+   - **Gemini Live** → `DriverClass: GeminiRealtime`
+   - **GPT Realtime** → `DriverClass: OpenAIRealtime`
+   - **Eleven Labs (full stack)** → `DriverClass: ElevenLabsRealtime` — the bundled STT+LLM+TTS stack run entirely in the Eleven Labs cloud (what powers the production Grace experience) counts as a real-time model here. (Running Eleven Labs as *separate* STT/TTS components is the slower, non-real-time path and is **not** part of this design.)
 
    ```jsonc
    {
@@ -614,22 +634,29 @@ These are **reference-data changes, authored as metadata files and applied with 
        ]
      }
    }
-   // …and a sibling record for "GPT Realtime" → DriverClass "OpenAIRealtime",
-   //    VendorID @lookup MJ: AI Vendors.Name=OpenAI
+   // …sibling records for "GPT Realtime" (OpenAIRealtime / OpenAI) and
+   //    "Eleven Labs" (ElevenLabsRealtime / ElevenLabs).
    ```
-
-   Pipelined STT/TTS models (Whisper, Deepgram, ElevenLabs) are registered the same way under existing audio model type(s) — no schema work, just metadata.
 
 3. Apply with: `npx mj sync push --dir=metadata --include="ai-model-types,ai-models"`.
 
-The driver classes themselves (`GeminiRealtime`, `OpenAIRealtime`, implementing `BaseRealtimeVoice`) ship as code in the respective `packages/AI/Providers/*` packages and self-register via `@RegisterClass(BaseRealtimeVoice, 'GeminiRealtime')`.
+The driver classes (`GeminiRealtime`, `OpenAIRealtime`, `ElevenLabsRealtime`, implementing `BaseRealtimeModel`) ship as code in the respective `packages/AI/Providers/*` packages and self-register via `@RegisterClass(BaseRealtimeModel, 'GeminiRealtime')`.
 
 > [!IMPORTANT]
-> **To verify during implementation:** the names in the snippet above are placeholders. Before authoring the real metadata files, confirm against current metadata/data:
-> - the exact `MJ: AI Vendors` row names (e.g. is it `Google` / `Google AI` / `Gemini`? `OpenAI`?) used in the `@lookup:MJ: AI Vendors.Name=…` references;
+> **To verify during implementation:** the names in the snippet are placeholders. Before authoring the real metadata files, confirm against current metadata/data:
+> - the exact `MJ: AI Vendors` row names (`Google` / `Google AI` / `Gemini`? `OpenAI`? `ElevenLabs` / `Eleven Labs`?) for the `@lookup` references;
 > - that a `MJ: AI Vendor Type Definitions` row named `Inference Provider` exists (existing records use `Model Developer`);
-> - the canonical model display names (`Gemini Live 2.5 Flash`, `GPT Realtime`) against the providers' current model IDs;
-> - the final `DriverClass` naming convention (`GeminiRealtime` / `OpenAIRealtime` vs. a `*Realtime` suffix style) to match sibling drivers in `packages/AI/Providers/*`.
+> - the canonical model display names against the providers' current model IDs;
+> - the final `DriverClass` naming convention to match sibling drivers in `packages/AI/Providers/*`;
+> - the exact name of the unified client-or-server tool-metadata type used by `RegisterTools`.
+
+### Open questions
+
+- **Long-running tools in real-time.** How long is "too long" before voice stops making sense? The fill-the-space technique + smarter models help; very long work (e.g. multi-minute code generation) likely shouldn't be voiced at all. Needs real-world testing to find where it breaks.
+- **Multi-agent blend co-agent.** A future co-agent that fronts 2+ agents at once — deferred; start with a single target.
+- **Personality/capabilities above agent type.** A floated future idea to lift identity/personality into a generic layer above the agent type (via the agent-type parent-ID / subclassing). Deferred in favor of the co-agent approach, which is more durable for now.
+- **Multi-party sessions** — out of scope (see [Authorization & Socket Security](#authorization--socket-security)).
+- **Observability tradeoff.** Inside the provider's real-time environment we have less granularity than a normal MJ run; the one-prompt-run wrapper + usage telemetry is how we claw back what we can.
 
 ---
 
@@ -662,49 +689,31 @@ When a realtime provider drives the loop and emits a native `tool_call`, MJ must
 
 ## Detailed Execution & Streaming Flow
 
-Here is how a real-time voice and UI interaction flows through the layered session architecture:
+Here is how a real-time voice + UI interaction flows through the layered session architecture, using the `Realtime` agent type (Voice Co-Agent) fronting a target agent (e.g. Sage):
 
-1. **Session Setup**:
-   * The client application requests a session. The server creates an `AIAgentSession` and configures two channels: `VoiceAudio` and `ClientControl`.
-   * WebSockets/WebRTC connections are established between the client and the **Session Host**.
-2. **Audio Streaming & User Transcript Creation (Client $\rightarrow$ Server)**:
-   * The user talks. Raw audio chunks flow over the `VoiceAudio` socket to the Session Host.
-   * The Session Host runs local voice activity detection (VAD). Once the user stops speaking:
-     * The audio is transcribed to text (STT).
-     * The Session Host **creates a new `MJConversationDetail` record** in the database:
-       * `Role = 'user'`
-       * `Message = [transcribed text]`
-       * `SessionID = [active Session ID]`
-     * (Optional) The raw user audio clip is saved to MemberJunction file storage and linked to the conversation detail via `MJConversationDetailAttachment` to support voice playback.
-3. **Execution Trigger**:
-   * The Session Host calls `AgentRunner.ExecuteAgent(params)`, passing the newly created user message/transcript and the `agentSessionID` to trigger the agent's turn.
-4. **Agent Execution Loop & Assistant Transcript Creation**:
-   * The agent plans its steps. Suppose it decides it needs to query the database and show a chart.
-   * **Client Tool Push (Mid-Run)**:
-     * The agent invokes the `ShowChart` client tool.
-     * Because `agentSessionID` is present, the framework dispatches a `tool-request` envelope over the session's `ClientControl` channel (see [Unified Session Transport](#unified-session-transport)): `{"Type": "tool-request", "ToolName": "ShowChart", "Params": "{...}"}`.
-     * The client application receives this socket message and renders the chart immediately.
-     * The client sends the success response back over the `ClientControl` socket: `{"type": "client-tool-response", "success": true}`.
-     * The agent receives the response via socket, resolves the step, and continues to the next step.
-   * **Multimodal / Voice Output**:
-     * When generating the final response, the LLM starts streaming text tokens.
-     * The Session Host routes these tokens through a Text-to-Speech (TTS) engine (or streams the raw audio tokens from a voice-native LLM) and writes the audio stream chunks directly to the `VoiceAudio` channel socket.
-     * The user hears the agent speak in real-time while seeing the chart update on the screen.
-     * Once the response is fully generated:
-       * The Session Host **creates a new `MJConversationDetail` record** in the database:
-         * `Role = 'assistant'`
-         * `Message = [complete assistant response text]`
-         * `SessionID = [active Session ID]`
-       * (Optional) The synthesized response audio is saved to storage and linked to this conversation detail via `MJConversationDetailAttachment`.
-5. **Run Finalization & Session Recording**:
-   * The `AIAgentRun` finishes, saves its steps (non-blocking), and associates itself with the `AgentSessionID` for history tracking.
-   * When the user hangs up or the session is closed, the Session Host can optionally upload a compiled recording of the entire call session and link it directly to the `AIAgentSession` record.
+1. **Session setup**:
+   * The client requests a session for a target agent. The server checks `CanRun` on that agent (see [Authorization & Socket Security](#authorization--socket-security)), creates an `AIAgentSession`, and opens the channels — e.g. `VoiceAudio` and `ClientControl` (and `Whiteboard` if requested).
+   * The front-end assembles the **initial context payload** — the conversation history up to this point + memory hints — via the shared memory-context helper. The control plane is established; the `VoiceAudio` media plane is negotiated.
+2. **Co-Agent run starts (one prompt run for the whole session)**:
+   * A single `Realtime` agent run begins as one streaming `AIPromptRun`. Its system prompt is the companion framing: *"You are the voice for Sage. Here is who Sage is, what Sage can do, the conversation so far, and the user's memory. Converse naturally; when real work is needed, invoke Sage."*
+   * The driver registers the agent's tools with the provider in its native function format (primary tool: **invoke the target agent**; plus any server/client tools). Full prior context is fed into the model.
+3. **Live conversation (bidirectional streaming, no intermediation)**:
+   * The user speaks; media frames stream straight to the realtime model (`SendInput`). The model streams audio back (`OnOutput` → media plane) and text (`OnTranscript`).
+   * Each user/assistant turn is persisted as a `ConversationDetail` stamped with `AgentSessionID`. (Optionally, raw audio is saved to file storage and linked via `MJ: Conversation Detail Attachments` for playback.) Barge-in (`OnInterruption`) maps to `cancellationToken`.
+4. **Delegating real work (mid-conversation tool call)**:
+   * The model decides it needs Sage to actually do something and emits a native `tool_call` (`OnToolCall`). The driver routes it to MJ tool execution under the session's `contextUser`.
+   * **Invoke-target-agent tool** → a full `AIAgentRun` for Sage executes, linked via `ParentRunID` to the co-agent run and sharing `AgentSessionID`. It runs asynchronously; the co-agent **fills the space** conversationally while it works.
+   * **UI tool** (e.g. `ShowChart`) → dispatched as a `tool-request` envelope over the `ClientControl` channel (see [Unified Session Transport](#unified-session-transport)); the client renders and responds.
+   * Results are fed back to the realtime model as the `tool_response`. The model narrates the outcome in its own voice. Delegated runs and any artifacts are **recorded** in conversation history but not interrupted into the live voice UI (unless a channel like `Whiteboard` explicitly surfaces them).
+5. **Finalization & continuation**:
+   * On hang-up / timeout / close, the co-agent's prompt run is finalized with accumulated usage/telemetry (`OnUsage`), the `AIAgentSession` is set `Closed`, and channels are torn down (see [Session Lifecycle](#session-lifecycle-heartbeat--reconciliation)).
+   * The conversation and all its `ConversationDetail` records (including the delegated runs) remain. Resuming later creates a **new** session chained via `LastSessionID`. In the timeline, the whole episode renders as a single **collapsed** voice-session block, expandable to the full transcript + runs.
 
 ---
 
 ## Benefits of This Approach
 
-1. **Zero Forking**: Existing Loop and Flow agents immediately gain voice, audio, and real-time canvas capabilities without rewriting their core execution engines.
-2. **True Multi-Channel Coordination**: Users can speak to the agent while simultaneously typing text or interacting with canvas elements, and the agent can update the client UI mid-run.
+1. **Zero Forking**: Loop and Flow agents are untouched and stay asynchronous. Real-time is a *new* `Realtime` agent type that wraps a `BaseRealtimeModel`; the generic **Voice Co-Agent** fronts any existing agent by configuration, so we get broad voice coverage without rewriting a single agent.
+2. **True Multi-Channel Coordination**: Users can speak to the agent while simultaneously typing text or interacting with a whiteboard, and the agent can update the client UI mid-conversation.
 3. **Decoupled Sockets**: The heavy lifting of socket connection maintenance, WebRTC negotiation, and Twilio/telephony integration is isolated in the Session Host layer, keeping the core AI Agent package (`@memberjunction/ai-agents`) lightweight and focused on reasoning/actions.
 4. **Natural Continuation of Client Tools**: Client tools already have an asynchronous, event-driven request/response lifecycle. In standard HTTP runs, they rely on database polling/PubSub. In Session mode, they flow instantly over the established WebSocket, dropping round-trip latency to milliseconds.
