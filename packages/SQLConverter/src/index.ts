@@ -13,11 +13,12 @@ export type {
   BoundaryMethod,
   FileRouting,
 } from './MigrationSplitter.js';
-export { convertMigration } from './MigrationConverter.js';
+export { convertMigration, extractKeptTSQL } from './MigrationConverter.js';
 export type {
   MigrationConversionResult,
   ConversionStatus,
   ConvertMigrationOptions,
+  KeptTSQL,
 } from './MigrationConverter.js';
 export { splitByStatement, summarizeStatements } from './MigrationStatementSplitter.js';
 export type { StatementBatch, StatementKind } from './MigrationStatementSplitter.js';

@@ -89,6 +89,55 @@ export function convertMigration(
   return buildConvertedResult(split, droppedCodeGenLines, options);
 }
 
+/**
+ * The kept (T-SQL, NOT yet transpiled) content of a migration after classification —
+ * codegen objects and mj-sync metadata dropped, hand-procedural flagged. This is the
+ * input handed to the AST dialect (`mj_postgres.py`) for transpilation, keeping
+ * classification (TS) and transpilation (AST) cleanly separated.
+ */
+export interface KeptTSQL {
+  fileName: string;
+  status: ConversionStatus;
+  /** The kept SQL-Server SQL to transpile (schema DDL + comments). '' when nothing to keep. */
+  tsql: string;
+  /** Hand-written routines that need a human PG version (names). */
+  handProcedural: string[];
+}
+
+/** Classify a migration and return the kept T-SQL to transpile — the AST-path entry point. */
+export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
+  const split = splitMigration(sql, fileName);
+  const stmts = splitByStatement(sql);
+  const isUnbanneredSnapshot =
+    split.boundaryMethod === 'no-codegen-block' && stmts.some((s) => s.kind === 'codegen-object');
+
+  if (isUnbanneredSnapshot) {
+    const KEEP = new Set(['schema-ddl', 'comment', 'role-setup']);
+    const kept = stmts.filter((s) => KEEP.has(s.kind)).map((s) => s.sql);
+    const hand = stmts.filter((s) => s.kind === 'hand-procedural').map((s) => s.evidence);
+    return {
+      fileName,
+      status: hand.length ? 'needs-hand-authoring' : 'converted',
+      tsql: kept.join('\nGO\n'),
+      handProcedural: hand,
+    };
+  }
+
+  if (split.routing === 'needs-hand-authoring') {
+    const hand = split.handAuthoredRegions.filter((r) => r.kind === 'hand-procedural').map((r) => `${r.evidence}@${r.line}`);
+    return { fileName, status: 'needs-hand-authoring', tsql: split.handAuthored, handProcedural: hand };
+  }
+
+  const has = (k: string) => split.handAuthoredRegions.some((r) => r.kind === k);
+  const translatable = has('schema-ddl') || (has('data-dml') && !has('metadata-sync'));
+  return {
+    fileName,
+    status: translatable ? 'converted' : 'reseed-or-regen-only',
+    tsql: translatable ? split.handAuthored : '',
+    handProcedural: [],
+  };
+}
+
 /** Statement-mode (baseline / unbannered snapshot): keep tables/indexes/comments, drop the rest. */
 function buildStatementModeResult(
   split: MigrationSplitResult,

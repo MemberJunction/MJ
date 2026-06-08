@@ -76,19 +76,77 @@ def _rewrite_functions(node: exp.Expression) -> exp.Expression:
     """Rewrite SS-specific functions to PG equivalents in the AST."""
     if isinstance(node, exp.Anonymous) and node.name and node.name.upper() in _FUNC_REWRITES:
         return exp.func(_FUNC_REWRITES[node.name.upper()])
-    # Some SS funcs parse to typed nodes rather than Anonymous.
-    if isinstance(node, (exp.CurrentTimestamp,)):
+    # Some SS funcs parse to typed nodes rather than Anonymous. SYSDATETIMEOFFSET()
+    # parses to CurrentTimestampLTZ; GETDATE() to CurrentTimestamp.
+    if isinstance(node, (exp.CurrentTimestamp, exp.CurrentTimestampLTZ)):
         return exp.func("NOW")
     return node
 
 
+def _strip_national(node: exp.Expression) -> exp.Expression:
+    """N'...' (exp.National) → plain string literal; PG has no N-prefixed literals."""
+    if isinstance(node, exp.National):
+        return exp.Literal.string(node.name)
+    return node
+
+
+def _strip_nulls_ordering(node: exp.Expression) -> exp.Expression:
+    """sqlglot adds NULLS FIRST to ordered PK/index columns; drop it to match PG defaults."""
+    if isinstance(node, exp.Ordered) and node.args.get("nulls_first") is not None:
+        node.set("nulls_first", None)
+    return node
+
+
+def _strip_collate(node: exp.Expression) -> exp.Expression:
+    """Drop SS collations (SQL_Latin1_…/_CI_/_CS_/_BIN) — PG doesn't have them."""
+    if isinstance(node, exp.ColumnDef):
+        kept = [
+            c for c in node.args.get("constraints", [])
+            if not (isinstance(c, exp.ColumnConstraint) and isinstance(c.kind, exp.CollateColumnConstraint))
+        ]
+        node.set("constraints", kept)
+    return node
+
+
+def _fold_clustered_constraints(node: exp.Expression) -> exp.Expression:
+    """`PRIMARY KEY CLUSTERED (cols)` / `UNIQUE NONCLUSTERED (cols)` → PG `PRIMARY KEY (cols)` / `UNIQUE (cols)`.
+
+    SQL Server's CLUSTERED/NONCLUSTERED qualifier parses into a sibling
+    Clustered/NonClusteredColumnConstraint that holds the columns; PG has no such
+    qualifier, so fold the columns into the PK/UNIQUE and drop the qualifier.
+    """
+    def cols_of(clustered):
+        return [o.this if isinstance(o, exp.Ordered) else o for o in (clustered.this or [])]
+
+    # PK CLUSTERED: PrimaryKeyColumnConstraint + ClusteredColumnConstraint are siblings.
+    if isinstance(node, exp.Constraint):
+        exprs = node.args.get("expressions") or []
+        clustered = next((e for e in exprs if isinstance(e, exp.ClusteredColumnConstraint)), None)
+        if clustered is not None and any(isinstance(e, exp.PrimaryKeyColumnConstraint) for e in exprs):
+            node.set("expressions", [exp.PrimaryKey(expressions=cols_of(clustered))])
+        return node
+
+    # UNIQUE NONCLUSTERED: UniqueColumnConstraint wraps a NonClusteredColumnConstraint holding the cols.
+    if isinstance(node, exp.UniqueColumnConstraint) and isinstance(node.this, exp.NonClusteredColumnConstraint):
+        node.set("this", exp.Schema(expressions=cols_of(node.this)))
+    return node
+
+
 def _rewrite_boolean_defaults(node: exp.Expression) -> exp.Expression:
-    """A BIT column defaulting to 1/0 becomes a BOOLEAN defaulting to TRUE/FALSE."""
+    """A BIT column defaulting to 1/0 becomes a BOOLEAN defaulting to TRUE/FALSE.
+
+    SQL Server wraps defaults in parens (`DEFAULT ((1))`), so unwrap before checking.
+    """
     if isinstance(node, exp.ColumnDef) and node.kind and node.kind.this == exp.DataType.Type.BIT:
         for constraint in node.constraints:
             ck = constraint.kind
-            if isinstance(ck, exp.DefaultColumnConstraint) and isinstance(ck.this, exp.Literal) and not ck.this.is_string:
-                ck.set("this", exp.true() if ck.this.name == "1" else exp.false())
+            if not isinstance(ck, exp.DefaultColumnConstraint):
+                continue
+            val = ck.this
+            while isinstance(val, exp.Paren):
+                val = val.this
+            if isinstance(val, exp.Literal) and not val.is_string and val.name in ("0", "1"):
+                ck.set("this", exp.true() if val.name == "1" else exp.false())
     return node
 
 
@@ -148,17 +206,41 @@ def _extprop_arg(args: str, name: str) -> str | None:
     return _unquote_tsql_string(m.group(1)) if m else None
 
 
-def _transpile_sp_addextendedproperty(args: str) -> str | None:
-    """EXEC sp_addextendedproperty(MS_Description) → COMMENT ON COLUMN/TABLE."""
-    if (_extprop_arg(args, "name") or "").upper() != "MS_DESCRIPTION":
+def _extprop_positional(args: str) -> dict | None:
+    """Parse positional sp_addextendedproperty args: name, value, l0type, l0name, l1type, l1name[, l2type, l2name]."""
+    vals = [_unquote_tsql_string(m.group(1)) for m in _re.finditer(r"(N?'(?:[^']|'')*')", args)]
+    if len(vals) < 6:
         return None
-    value = _extprop_arg(args, "value")
-    schema = _extprop_arg(args, "level0name") or FLYWAY_MACRO
-    table = _extprop_arg(args, "level1name")
-    col = _extprop_arg(args, "level2name")
-    col_type = (_extprop_arg(args, "level2type") or "").upper()
+    d = {"name": vals[0], "value": vals[1], "level0name": vals[3], "level1name": vals[5]}
+    if len(vals) >= 8:
+        d["level2type"], d["level2name"] = vals[6], vals[7]
+    return d
+
+
+def _transpile_sp_addextendedproperty(args: str) -> str | None:
+    """EXEC sp_addextendedproperty(MS_Description) → COMMENT ON COLUMN/TABLE. Handles named and positional forms."""
+    # Named form (@name=N'…'); fall back to positional (N'MS_Description', N'…', …).
+    if _extprop_arg(args, "name") is not None:
+        get = lambda k: _extprop_arg(args, k)  # noqa: E731
+    else:
+        p = _extprop_positional(args)
+        if p is None:
+            return None
+        get = lambda k: p.get(k)  # noqa: E731
+
+    if (get("name") or "").upper() != "MS_DESCRIPTION":
+        return None
+    value = get("value")
+    schema = get("level0name") or FLYWAY_MACRO
+    table = get("level1name")
+    col = get("level2name")
+    col_type = (get("level2type") or ("COLUMN" if col else "")).upper()
     if value is None or not table:
         return None
+    # Comments on CodeGen views (vw*) are regenerated by `mj codegen` — skip them so we
+    # don't COMMENT ON a view that doesn't exist yet at apply time.
+    if table.startswith("vw"):
+        return ""
     if col and col_type == "COLUMN":
         return f'COMMENT ON COLUMN {schema}."{table}"."{col}" IS {_pg_string(value)};'
     return f'COMMENT ON TABLE {schema}."{table}" IS {_pg_string(value)};'
@@ -176,9 +258,22 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
         if stmt is None:
             continue
         if isinstance(stmt, exp.Command):
-            unhandled.append({"kind": _first_keyword(stmt.sql(dialect="tsql")), "snippet": stmt.sql(dialect="tsql")[:80]})
+            txt = stmt.sql(dialect="tsql")
+            # SQL Server batch-control noise — not needed on PG, drop silently.
+            if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
+                continue
+            unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
             continue
-        stmt = stmt.transform(_rewrite_functions).transform(_rewrite_boolean_defaults)
+        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "NONCLUSTERED INDEX":
+            stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
+        stmt = (
+            stmt.transform(_rewrite_functions)
+            .transform(_rewrite_boolean_defaults)
+            .transform(_strip_national)
+            .transform(_strip_collate)
+            .transform(_fold_clustered_constraints)
+            .transform(_strip_nulls_ordering)
+        )
         out.append(stmt.sql(dialect=MJPostgres, pretty=False, identify=True))
     return (";\n".join(out) + (";" if out else "")), unhandled
 
@@ -227,6 +322,19 @@ def _transpile_batch(batch: str) -> tuple[list[str], list[dict]]:
     """Scan one GO batch into envelope chunks + plain SQL, transpiling each in order."""
     out: list[str] = []
     unhandled: list[dict] = []
+
+    # Pure comment block: sp_addextendedproperty wrapped in BEGIN TRY…END CATCH error
+    # handling (DECLARE @msg / SELECT @x=ERROR_*() / RAISERROR / SET NOEXEC). Emit only
+    # the COMMENT ON; the entire error-handling wrapper is SS noise — drop it.
+    if _SP_EXTPROP.search(batch) and not _re.search(r"\bCREATE\s+TABLE|\bALTER\s+TABLE\b", batch, _re.IGNORECASE):
+        for m in _SP_EXTPROP.finditer(batch):
+            comment = _transpile_sp_addextendedproperty(m.group("args"))
+            if comment:
+                out.append(comment)
+            elif comment is None:
+                unhandled.append({"kind": "sp_addextendedproperty", "snippet": m.group(0)[:80]})
+        return out, unhandled
+
     pos = 0
     # Walk the batch, alternating between recognized envelopes and plain SQL gaps.
     while pos < len(batch):
