@@ -45,6 +45,7 @@ function MakeExistingTable(columns: Array<{ Name: string; SqlType: string; IsNul
         { Name: '__mj_integration_LastSyncedSnapshot', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
         { Name: '__mj_integration_SyncMessage', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
         { Name: '__mj_integration_ContentHash', SqlType: 'NVARCHAR(64)', IsNullable: true },
+        { Name: '__mj_integration_CustomOverflow', SqlType: 'NVARCHAR(MAX)', IsNullable: true },
         // Per-record sync ledger (plan §2.5)
         { Name: '__mj_integration_ExternalVersion', SqlType: 'NVARCHAR(255)', IsNullable: true },
         { Name: '__mj_integration_LastSeenModifiedValue', SqlType: 'NVARCHAR(255)', IsNullable: true },

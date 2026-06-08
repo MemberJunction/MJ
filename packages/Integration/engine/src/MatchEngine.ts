@@ -177,7 +177,10 @@ export class MatchEngine {
                 const value = record.MappedFields[pkField.Name];
                 if (value == null) continue;
                 const escaped = String(value).replace(/'/g, "''");
-                const clause = `[${pkField.Name}] = '${escaped}'`;
+                // Plain (unbracketed) identifier — RunView resolves it per active dialect.
+                // SQL-Server `[brackets]` are a syntax error on Postgres; every other
+                // ExtraFilter in this engine uses plain names, so match that.
+                const clause = `${pkField.Name} = '${escaped}'`;
                 if (!filterClauses.includes(clause)) {
                     filterClauses.push(clause);
                 }
@@ -214,7 +217,8 @@ export class MatchEngine {
             const value = record.MappedFields[kf.DestinationFieldName];
             if (value == null) continue;
             const escaped = String(value).replace(/'/g, "''");
-            clauses.push(`[${kf.DestinationFieldName}] = '${escaped}'`);
+            // Plain (unbracketed) identifier — dialect-agnostic; see CompositePK note above.
+            clauses.push(`${kf.DestinationFieldName} = '${escaped}'`);
         }
         return clauses;
     }
