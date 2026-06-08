@@ -187,52 +187,6 @@
   overflow: auto;
 }
 
-/* Timeline Date Field Selector */
-.timeline-date-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--mj-text-secondary);
-}
-
-.timeline-date-selector i {
-  color: var(--mj-text-disabled);
-}
-
-.date-field-label {
-  color: var(--mj-text-secondary);
-  font-weight: 500;
-}
-
-.date-field-select {
-  padding: 4px 8px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 4px;
-  font-size: 13px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.date-field-select:hover {
-  border-color: var(--mj-border-strong);
-}
-
-.date-field-select:focus {
-  border-color: var(--mj-brand-primary);
-}
-
-/* Timeline Orientation Toggle */
-.timeline-orientation-toggle {
-  display: flex;
-  background: var(--mj-bg-surface-card);
-  border-radius: 6px;
-  padding: 2px;
-}
-
 /* Content */
 .viewer-content {
   flex: 1;
@@ -292,23 +246,7 @@
   font-size: 14px;
 }
 
-/* Hidden components should not display - ensure [hidden] attribute works properly */
-mj-entity-cards[hidden],
-mj-timeline[hidden],
-mj-map-view[hidden] {
-  display: none !important;
-}
-
-/* Visible view components should fill available space */
-mj-entity-cards:not([hidden]),
-mj-timeline:not([hidden]),
-mj-map-view:not([hidden]) {
-  display: block;
-  height: 100%;
-  width: 100%;
-}
-
-/* Hide map toggle when entity does not support geocoding */
-.toggle-btn.geo-hidden {
+/* Hide the dynamic host when no plug-in is mounted (no entity) */
+.dynamic-view-host[hidden] {
   display: none !important;
 }

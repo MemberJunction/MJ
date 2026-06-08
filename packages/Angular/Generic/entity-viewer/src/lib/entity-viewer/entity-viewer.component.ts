@@ -2,63 +2,47 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
-import { MapDisplayState, MapRenderMode } from '@memberjunction/ng-map-view';
 import {
-  EntityViewMode,
   EntityViewerConfig,
   DEFAULT_VIEWER_CONFIG,
   RecordSelectedEvent,
   RecordOpenedEvent,
   DataLoadedEvent,
   FilteredCountChangedEvent,
-  CardTemplate,
-  GridColumnDef,
   SortState,
-  SortChangedEvent,
   PaginationState,
-  ViewGridState,
-  GridStateChangedEvent,
-  TimelineSegmentGrouping,
-  TimelineOrientation,
-  TimelineState
+  ViewGridState
 } from '../types';
-import {
-  AfterRowClickEventArgs,
-  AfterRowDoubleClickEventArgs,
-  AfterSortEventArgs
-} from '../entity-data-grid/events/grid-events';
-import { GridToolbarConfig, GridSelectionMode, ForeignKeyClickEvent } from '../entity-data-grid/models/grid-types';
-import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
-import { IViewTypeDescriptor, IViewRenderer, ViewTypeEngine } from '../view-types';
+import { IViewTypeDescriptor, IViewRenderer, ViewTypeEngine, ViewDataRequest, ViewRelatedRecordNavigation } from '../view-types';
 
 /**
- * A single entry in the view-mode switcher. Built either from the registry
- * (ViewTypeEngine descriptors) or from the hardcoded fallback list.
+ * A single entry in the view-type switcher, built from the {@link ViewTypeEngine} registry
+ * (`MJ: View Types`). Every view type is a dynamic-mounted plug-in implementing `IViewRenderer`;
+ * the container has zero knowledge of any specific view type — it mounts the descriptor's
+ * `RendererComponent` and feeds it the generic contract.
  */
 export interface ViewModeOption {
   /**
    * Stable key for this option — the descriptor's `Name` (== `MJ: View Types.DriverClass`),
    * e.g. "GridViewType", "ClusterViewType". Used as the `@for` track key and to identify the
-   * active option independent of the legacy {@link EntityViewMode}.
+   * active option.
    */
   key: string;
   /**
-   * The legacy EntityViewMode the host's built-in [hidden]-based rendering switches on, for
-   * the four built-in view types (Grid/Cards/Timeline/Map). `null` for plug-in view types
-   * (Cluster, third-party) which are dynamic-mounted via the descriptor's RendererComponent.
+   * Always `null` — retained on the interface only so any external reader doesn't break. Every
+   * view type is now dynamic-mounted; there is no legacy built-in render mode.
    */
-  mode: EntityViewMode | null;
+  mode: null;
   /** User-facing label. */
   label: string;
   /** Font Awesome icon class. */
   icon: string;
-  /** True when this view type has no built-in block and must be dynamic-mounted. */
+  /** Always `true` — every view type is dynamic-mounted via the descriptor's RendererComponent. */
   isDynamic: boolean;
   /** The resolved descriptor (carries the RendererComponent + PropSheetComponent). */
   descriptor: IViewTypeDescriptor;
@@ -67,19 +51,43 @@ export interface ViewModeOption {
 }
 
 /**
- * Maps a registered view-type descriptor's DriverClass Name to the legacy
- * EntityViewMode the host's [hidden] rendering still switches on this round.
- * Returns null for view types that have no legacy rendering yet (Cluster, Tag Cloud).
+ * Event payload for the view-type change lifecycle. Emitted (cancelable) via
+ * {@link EntityViewerComponent.BeforeViewTypeChange} and (notification) via
+ * {@link EntityViewerComponent.AfterViewTypeChange}. A handler may set `Cancel = true` on the
+ * *Before* event to veto the switch (mirrors the grid's `BeforeRowClick` / `BeforeCellEdit`
+ * cancelable pattern).
  */
-function driverClassToViewMode(name: string): EntityViewMode | null {
-  switch (name) {
-    case 'GridViewType': return 'grid';
-    case 'CardsViewType': return 'cards';
-    case 'TimelineViewType': return 'timeline';
-    case 'MapViewType': return 'map';
-    default: return null;
-  }
+export interface ViewTypeChangeEventArgs {
+  /** The `MJ: View Types` row ID being switched to. */
+  ViewTypeID: string;
+  /** The descriptor `DriverClass` / Name being switched to (e.g. "ClusterViewType"). */
+  DriverClass: string;
+  /** The `MJ: View Types` row ID being switched FROM (null on the first selection). */
+  PreviousViewTypeID: string | null;
+  /** Set to true in a {@link EntityViewerComponent.BeforeViewTypeChange} handler to veto the switch. */
+  Cancel: boolean;
 }
+
+/**
+ * Event payload for the per-view-type configuration change lifecycle.
+ */
+export interface ViewTypeConfigChangeEventArgs {
+  /** The `MJ: View Types` row ID whose config changed. */
+  ViewTypeID: string;
+  /** The new configuration payload (shape owned by the plug-in). */
+  Config: Record<string, unknown>;
+  /** Set to true in a {@link EntityViewerComponent.BeforeViewTypeConfigChange} handler to veto. */
+  Cancel: boolean;
+}
+
+/**
+ * Where the entity viewer persists view-type/render-state when {@link EntityViewerComponent.AutoSaveView}
+ * is enabled:
+ * - `'record'` — onto the loaded `UserView` row (shared; everyone who opens that view sees it).
+ * - `'user-settings'` — per-user via `UserInfoEngine` (the default-view case, or a personal layer).
+ * - `'none'` — nothing to persist to (no view + settings disabled).
+ */
+export type ViewPersistenceTarget = 'record' | 'user-settings' | 'none';
 
 /**
  * EntityViewerComponent - Full-featured composite component for viewing entity data
@@ -97,20 +105,19 @@ function driverClassToViewMode(name: string): EntityViewMode | null {
  * ```html
  * <!-- Basic usage - loads data automatically -->
  * <mj-entity-viewer
- *   [entity]="selectedEntity"
- *   (recordSelected)="onRecordSelected($event)"
- *   (recordOpened)="onRecordOpened($event)">
+ *   [Entity]="selectedEntity"
+ *   (RecordSelected)="onRecordSelected($event)"
+ *   (RecordOpened)="onRecordOpened($event)">
  * </mj-entity-viewer>
  *
  * <!-- With external state control (like Data Explorer) -->
  * <mj-entity-viewer
- *   [entity]="selectedEntity"
- *   [(viewMode)]="state.viewMode"
- *   [filterText]="state.filterText"
- *   [selectedRecordId]="state.selectedRecordId"
- *   (recordSelected)="onRecordSelected($event)"
- *   (recordOpened)="onRecordOpened($event)"
- *   (sortChanged)="onSortChanged($event)">
+ *   [Entity]="selectedEntity"
+ *   [ViewTypeID]="state.viewTypeId"
+ *   [FilterText]="state.filterText"
+ *   [SelectedRecordID]="state.selectedRecordId"
+ *   (RecordSelected)="onRecordSelected($event)"
+ *   (RecordOpened)="onRecordOpened($event)">
  * </mj-entity-viewer>
  * ```
  */
@@ -125,11 +132,11 @@ function driverClassToViewMode(name: string): EntityViewMode | null {
 })
 export class EntityViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   /**
-   * Maximum records to load in map mode. Map view needs all records for
-   * geographic visualization — paging doesn't make sense for maps. This cap
-   * prevents unbounded queries on very large entities.
+   * Safety cap on the number of records loaded when a plug-in renderer asks the container to
+   * load the full set (via a {@link ViewDataRequest} with `loadAll: true`). Prevents unbounded
+   * queries on very large entities. Generic — not tied to any specific view type.
    */
-  private static readonly MAP_MAX_RECORDS = 10000;
+  private static readonly LOAD_ALL_MAX_RECORDS = 10000;
 
   // ========================================
   // INPUTS (using getter/setter pattern)
@@ -138,12 +145,17 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _entity: EntityInfo | null = null;
   private _records: Record<string, unknown>[] | null = null;
   private _config: Partial<EntityViewerConfig> = {};
-  private _viewMode: EntityViewMode | null = null;
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
   private _viewEntity: MJUserViewEntityExtended | null = null;
-  private _timelineConfig: TimelineState | null = null;
   private _initialized = false;
+
+  /**
+   * When true, the next {@link LoadData} loads the full record set (up to
+   * {@link LOAD_ALL_MAX_RECORDS}) instead of paginating. Set generically from a plug-in's
+   * {@link ViewDataRequest} (`loadAll`) — never from any view-type check.
+   */
+  private _loadAllRecords = false;
 
   /** Whether a deferred reload has been queued via deferReload() */
   private _reloadDeferred = false;
@@ -152,18 +164,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * The entity to display records for
    */
   @Input()
-  get entity(): EntityInfo | null {
+  get Entity(): EntityInfo | null {
     return this._entity;
   }
-  set entity(value: EntityInfo | null) {
+  set Entity(value: EntityInfo | null) {
     const previousEntity = this._entity;
     this._entity = value;
-
-    // Detect date fields for timeline support
-    this.detectDateFields();
-
-    // Detect geocoding support for map view
-    this.updateGeoCodingSupport();
 
     // Recompute available view types for the new entity from the registry (if loaded).
     // Falls back silently when the registry has no data.
@@ -177,27 +183,70 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         }
         // Clear sort state — it references fields from the old entity (e.g., FirstName)
         // and would produce invalid ORDER BY on the new entity
-        this.internalSortState = null;
+        this.InternalSortState = null;
       }
 
       if (value && !this._records) {
         // Reset state for new entity - synchronously clear all data and force change detection
         // before starting the async load to prevent stale data display
         this.resetPaginationState();
-        this.internalRecords = [];
-        this.totalRecordCount = 0;
-        this.filteredRecordCount = 0;
+        this.InternalRecords = [];
+        this.TotalRecordCount = 0;
+        this.FilteredRecordCount = 0;
         this.cdr.detectChanges();
         // Defer the actual load so all input bindings (viewEntity, gridState, etc.)
         // complete before we fire the RunView — prevents duplicate loads with stale state
         this.deferReload();
       } else if (!value) {
-        this.internalRecords = [];
-        this.totalRecordCount = 0;
-        this.filteredRecordCount = 0;
+        this.InternalRecords = [];
+        this.TotalRecordCount = 0;
+        this.FilteredRecordCount = 0;
         this.resetPaginationState();
         this.cdr.detectChanges();
       }
+    }
+  }
+
+  /**
+   * Convenience input: the entity to display by **name**. Resolved internally to an `EntityInfo`
+   * via the active provider and applied through the {@link entity} setter. Use this OR `[entity]`
+   * OR `[EntityID]` — whichever is most convenient for the consumer.
+   */
+  @Input()
+  set EntityName(value: string | null) {
+    if (!value) {
+      return;
+    }
+    const resolved = this.ProviderToUse?.EntityByName(value) ?? null;
+    if (resolved) {
+      this.Entity = resolved;
+    }
+  }
+
+  /**
+   * Convenience input: the entity to display by **ID**. Resolved internally to an `EntityInfo`
+   * and applied through the {@link entity} setter.
+   */
+  @Input()
+  set EntityID(value: string | null) {
+    if (!value) {
+      return;
+    }
+    const resolved = this.ProviderToUse?.Entities.find(e => UUIDsEqual(e.ID, value)) ?? null;
+    if (resolved) {
+      this.Entity = resolved;
+    }
+  }
+
+  /**
+   * Convenience input: load and display a saved view by its `MJ: User Views` **ID**. The viewer
+   * loads the record via the active provider and applies it through the {@link viewEntity} setter
+   * (which also resolves the entity if `[entity]`/`[EntityName]`/`[EntityID]` weren't supplied).
+   */
+  @Input()
+  set ViewID(value: string | null) {
+    if (value) {
+      void this.loadViewById(value);
     }
   }
 
@@ -205,18 +254,17 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Pre-loaded records (optional - if not provided, component loads data)
    */
   @Input()
-  get records(): Record<string, unknown>[] | null {
+  get Records(): Record<string, unknown>[] | null {
     return this._records;
   }
-  set records(value: Record<string, unknown>[] | null) {
+  set Records(value: Record<string, unknown>[] | null) {
     this._records = value;
 
     if (value) {
-      this.internalRecords = value;
-      this.totalRecordCount = value.length;
-      this.filteredRecordCount = value.length;
-      // Update timeline with new records
-      this.updateTimelineGroups();
+      this.InternalRecords = value;
+      this.TotalRecordCount = value.length;
+      this.FilteredRecordCount = value.length;
+      this.pushDynamicRendererInputs();
     }
   }
 
@@ -224,10 +272,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Configuration options for the viewer
    */
   @Input()
-  get config(): Partial<EntityViewerConfig> {
+  get Config(): Partial<EntityViewerConfig> {
     return this._config;
   }
-  set config(value: Partial<EntityViewerConfig>) {
+  set Config(value: Partial<EntityViewerConfig>) {
     this._config = value;
     this.applyConfig();
   }
@@ -235,56 +283,38 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /**
    * Currently selected record ID (primary key string)
    */
-  @Input() selectedRecordId: string | null = null;
-
-  /**
-   * External view mode - allows parent to control view mode
-   * Supports two-way binding: [(viewMode)]="state.viewMode"
-   */
   @Input()
-  get viewMode(): EntityViewMode | null {
-    return this._viewMode;
+  get SelectedRecordID(): string | null {
+    return this._selectedRecordId;
   }
-  set viewMode(value: EntityViewMode | null) {
-    const previousEffective = this.effectiveViewMode;
-    this._viewMode = value;
-    if (value !== null) {
-      this.internalViewMode = value;
-    }
-    // Map mode uses different RunView params (MaxRows = MAP_MAX_RECORDS, no pagination)
-    // and different field set (includes BoundaryGeoJSON when entity.SupportsGeoCoding=1).
-    // If the parent flips us into/out of map mode via two-way binding we need to reload —
-    // otherwise the map gets the grid's paginated data without per-record geometry.
-    const newEffective = this.effectiveViewMode;
-    if (this._initialized && previousEffective !== newEffective &&
-        (newEffective === 'map' || previousEffective === 'map')) {
-      this.resetPaginationState();
-      this.loadData();
-    }
+  set SelectedRecordID(value: string | null) {
+    this._selectedRecordId = value;
+    this.pushDynamicRendererInputs();
   }
+  private _selectedRecordId: string | null = null;
 
   /**
    * External filter text - allows parent to control filter
    * Supports two-way binding: [(filterText)]="state.filterText"
    */
   @Input()
-  get filterText(): string | null {
+  get FilterText(): string | null {
     return this._filterText;
   }
-  set filterText(value: string | null) {
-    const oldFilter = this.debouncedFilterText;
+  set FilterText(value: string | null) {
+    const oldFilter = this.DebouncedFilterText;
     this._filterText = value;
 
     const newFilter = value ?? '';
-    this.internalFilterText = newFilter;
-    this.debouncedFilterText = newFilter;
+    this.InternalFilterText = newFilter;
+    this.DebouncedFilterText = newFilter;
 
     if (this._initialized) {
       // If server-side filtering and filter changed, reload from page 1
       // Keep existing records visible during refresh for better UX
-      if (this.effectiveConfig.serverSideFiltering && newFilter !== oldFilter && !this._records) {
+      if (this.EffectiveConfig.serverSideFiltering && newFilter !== oldFilter && !this._records) {
         this.resetPaginationState(false);
-        this.loadData();
+        this.LoadData();
       } else {
         this.updateFilteredCount();
       }
@@ -296,27 +326,27 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * External sort state - allows parent to control sorting
    */
   @Input()
-  get sortState(): SortState | null {
+  get SortState(): SortState | null {
     return this._sortState;
   }
-  set sortState(value: SortState | null) {
-    const oldSort = this.internalSortState;
+  set SortState(value: SortState | null) {
+    const oldSort = this.InternalSortState;
     this._sortState = value;
 
     if (value !== null) {
-      this.internalSortState = value;
+      this.InternalSortState = value;
 
       if (this._initialized) {
         // If sort changed and using server-side sorting, reload
         // Keep existing records visible during refresh for better UX
-        if (this.effectiveConfig.serverSideSorting && !this._records) {
+        if (this.EffectiveConfig.serverSideSorting && !this._records) {
           const sortChanged = !oldSort || !value ||
             oldSort.field !== value.field ||
             oldSort.direction !== value.direction;
 
           if (sortChanged) {
             this.resetPaginationState(false);
-            this.loadData();
+            this.LoadData();
           }
         }
       }
@@ -324,26 +354,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Custom grid column definitions
-   */
-  @Input() gridColumns: GridColumnDef[] = [];
-
-  /**
-   * Custom card template
-   */
-  @Input() cardTemplate: CardTemplate | null = null;
-
-  /**
    * Optional User View entity that provides view configuration
    * When provided, the component will use the view's WhereClause, GridState, SortState, etc.
    * The view's filter is additive - UserSearchString is applied ON TOP of the view's WhereClause
    */
   @Input()
-  get viewEntity(): MJUserViewEntityExtended | null {
+  get ViewEntity(): MJUserViewEntityExtended | null {
     return this._viewEntity;
   }
-  set viewEntity(value: MJUserViewEntityExtended | null) {
+  set ViewEntity(value: MJUserViewEntityExtended | null) {
     this._viewEntity = value;
+
+    // Re-resolve available view types + the initial view type/config from the new view record
+    // (self-contained: the viewer reads ViewTypeID + DisplayState.viewTypeConfigs off the record).
+    this.refreshAvailableViewTypes();
 
     if (this._initialized && this._entity && !this._records) {
       // Apply view's sort state if available, then defer the reload.
@@ -359,61 +383,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Grid state configuration from a User View
    * Controls column visibility, widths, order, and sort settings
    */
-  @Input() gridState: ViewGridState | null = null;
-
-  /**
-   * Timeline configuration state
-   * Controls which date field is used and segment grouping
-   */
-  @Input()
-  get timelineConfig(): TimelineState | null {
-    return this._timelineConfig;
-  }
-  set timelineConfig(value: TimelineState | null) {
-    const prev = this._timelineConfig;
-    // Compare by value, not reference
-    const isEqual = (prev === null && value === null) ||
-      (prev !== null && value !== null &&
-        prev.dateFieldName === value.dateFieldName &&
-        prev.sortOrder === value.sortOrder &&
-        prev.orientation === value.orientation &&
-        prev.segmentGrouping === value.segmentGrouping);
-
-    if (!isEqual) {
-      this._timelineConfig = value;
-      if (value && this._entity) {
-        this.configureTimeline();
-        this.cdr.markForCheck();
-      }
-    }
-  }
-
-  /**
-   * Whether to show the grid toolbar.
-   * When false, the grid is displayed without its own toolbar - useful when
-   * entity-viewer provides its own filter/actions in the header.
-   * @default false
-   */
-  @Input() showGridToolbar: boolean = false;
-
-  /**
-   * Grid toolbar configuration - controls which buttons are shown and their behavior
-   * When not provided, uses sensible defaults
-   */
-  @Input() gridToolbarConfig: Partial<GridToolbarConfig> | null = null;
-
-  /**
-   * Grid selection mode
-   * @default 'single'
-   */
-  @Input() gridSelectionMode: GridSelectionMode = 'single';
-
-  /**
-   * Show the "Add to List" button in the grid toolbar.
-   * Requires gridSelectionMode to be 'multiple' for best UX.
-   * @default false
-   */
-  @Input() showAddToListButton: boolean = false;
+  @Input() GridState: ViewGridState | null = null;
 
   /**
    * Whether to render the Recycle Bin chip in the viewer header.
@@ -431,87 +401,42 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /**
    * Emitted when a record is selected (single click)
    */
-  @Output() recordSelected = new EventEmitter<RecordSelectedEvent>();
+  @Output() RecordSelected = new EventEmitter<RecordSelectedEvent>();
 
   /**
    * Emitted when a record should be opened (double-click or open button)
    */
-  @Output() recordOpened = new EventEmitter<RecordOpenedEvent>();
+  @Output() RecordOpened = new EventEmitter<RecordOpenedEvent>();
 
   /**
    * Emitted when data is loaded
    */
-  @Output() dataLoaded = new EventEmitter<DataLoadedEvent>();
-
-  /**
-   * Emitted when the view mode changes (for two-way binding)
-   */
-  @Output() viewModeChange = new EventEmitter<EntityViewMode>();
+  @Output() DataLoaded = new EventEmitter<DataLoadedEvent>();
 
   /**
    * Emitted when filter text changes (for two-way binding)
    */
-  @Output() filterTextChange = new EventEmitter<string>();
+  @Output() FilterTextChange = new EventEmitter<string>();
 
   /**
    * Emitted when filtered count changes
    */
-  @Output() filteredCountChanged = new EventEmitter<FilteredCountChangedEvent>();
+  @Output() FilteredCountChanged = new EventEmitter<FilteredCountChangedEvent>();
 
   /**
-   * Emitted when sort state changes
+   * NAVIGATION request bubbled up from a plug-in renderer to open a *related* record on a
+   * (possibly different) entity — e.g. a grid foreign-key drill-through. Routing lives in the
+   * outer app, so this is one of the few signals that legitimately bubbles up. The container
+   * forwards it untouched.
    */
-  @Output() sortChanged = new EventEmitter<SortChangedEvent>();
+  @Output() OpenRelatedRecordRequested = new EventEmitter<ViewRelatedRecordNavigation>();
 
   /**
-   * Emitted when grid state changes (column resize, reorder, etc.)
+   * NAVIGATION request bubbled up from a plug-in renderer to create a new record of the current
+   * entity (e.g. a grid's "New" button). Opening the create form is a routing concern owned by
+   * the outer app; the container forwards it without acting on it.
    */
-  @Output() gridStateChanged = new EventEmitter<GridStateChangedEvent>();
-
-  /**
-   * Emitted when timeline configuration changes (date field, grouping, etc.)
-   */
-  @Output() timelineConfigChange = new EventEmitter<TimelineState>();
-
-  /**
-   * Emitted when the Add/New button is clicked in the grid toolbar
-   */
-  @Output() addRequested = new EventEmitter<void>();
-
-  /**
-   * Emitted when the Delete button is clicked in the grid toolbar
-   * Includes the selected records to be deleted
-   */
-  @Output() deleteRequested = new EventEmitter<{ records: Record<string, unknown>[] }>();
-
-  /**
-   * Emitted when the Refresh button is clicked in the grid toolbar
-   */
-  @Output() refreshRequested = new EventEmitter<void>();
-
-  /**
-   * Emitted when the Export button is clicked in the grid toolbar
-   */
-  @Output() exportRequested = new EventEmitter<{ format: 'excel' | 'csv' | 'json' }>();
-
-  /**
-   * Emitted when the Add to List button is clicked in the grid toolbar.
-   * Parent components should handle this to show the list management dialog.
-   */
-  @Output() addToListRequested = new EventEmitter<{
-    entityInfo: EntityInfo;
-    records: Record<string, unknown>[];
-    recordIds: string[];
-  }>();
-
-  /**
-   * Emitted when grid selection changes.
-   * Parent components can use this to track selected records for their own toolbar buttons.
-   */
-  @Output() selectionChanged = new EventEmitter<{
-    records: Record<string, unknown>[];
-    recordIds: string[];
-  }>();
+  @Output() CreateRecordRequested = new EventEmitter<void>();
 
   /**
    * The initial/active view type to open in, by `MJ: View Types` row ID. Hosts that persist
@@ -523,9 +448,9 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   set ViewTypeID(value: string | null) {
     this._initialViewTypeId = value;
     // If options are already loaded, apply immediately; otherwise refreshAvailableViewTypes will.
-    if (value && this.availableViewTypes.length > 0) {
-      const opt = this.availableViewTypes.find(o => o.viewTypeId === value);
-      if (opt && opt.key !== this.activeViewTypeKey) {
+    if (value && this.AvailableViewTypes.length > 0) {
+      const opt = this.AvailableViewTypes.find(o => o.viewTypeId === value);
+      if (opt && opt.key !== this.ActiveViewTypeKey) {
         this.applyViewTypeSelection(opt, false);
       }
     }
@@ -539,50 +464,34 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   // INTERNAL STATE
   // ========================================
 
-  public internalViewMode: EntityViewMode = 'grid';
+  /**
+   * The view-type options shown in the switcher, sourced from {@link ViewTypeEngine}
+   * (the `MJ: View Types` registry), filtered by each descriptor's availability predicate.
+   * Every option is a dynamic-mounted plug-in.
+   */
+  public AvailableViewTypes: ViewModeOption[] = [];
+
+  /** Whether the registry (ViewTypeEngine) successfully sourced the available view types. */
+  public ViewTypesFromRegistry: boolean = false;
 
   /**
-   * The view-mode options shown in the switcher. Sourced from {@link ViewTypeEngine}
-   * (the `MJ: View Types` registry) when available, falling back to the hardcoded set
-   * when the registry has no data (View Types not yet seeded). The template renders the
-   * switcher from this list when it's populated, and from the legacy hardcoded buttons
-   * otherwise — keeping behavior unchanged on un-seeded systems.
-   *
-   * NOTE (deferred): rendering itself is still [hidden]-based against the legacy
-   * EntityViewMode union. A future round will mount the descriptor's RendererComponent
-   * dynamically off the registry instead of hardcoding the four child components.
+   * The currently-active view type's stable key (descriptor Name). Null until the registry resolves.
    */
-  public availableViewTypes: ViewModeOption[] = [];
-
-  /** Whether the registry (ViewTypeEngine) successfully sourced the available modes. */
-  public viewTypesFromRegistry: boolean = false;
+  public ActiveViewTypeKey: string | null = null;
 
   /**
-   * The currently-active view type's stable key (descriptor Name). Tracks selection
-   * independent of the legacy {@link EntityViewMode} so plug-in (dynamic) view types
-   * are first-class. Null until the registry resolves.
+   * The currently-active view type's option (the plug-in being mounted). Null until the
+   * registry resolves / a type is selected. Drives the dynamic-mount host in the template.
    */
-  public activeViewTypeKey: string | null = null;
+  public ActiveDynamicOption: ViewModeOption | null = null;
 
-  /**
-   * The active option when a plug-in (dynamic) view type is selected; null when a built-in
-   * (Grid/Cards/Timeline/Map) is active. Drives the dynamic-mount host in the template.
-   */
-  public activeDynamicOption: ViewModeOption | null = null;
-
-  /** True when a plug-in view type is mounted (built-in blocks hide). */
-  public get isDynamicViewActive(): boolean {
-    return this.activeDynamicOption !== null;
+  /** True once a plug-in view type is mounted (drives the dynamic host's visibility). */
+  public get IsDynamicViewActive(): boolean {
+    return this.ActiveDynamicOption !== null;
   }
 
-  /** Whether to render the switcher as a dropdown (many types) vs. an icon strip (few). */
-  public viewTypeDropdownOpen = false;
-
-  /**
-   * At or below this many available view types, the switcher renders as an icon strip;
-   * above it, as a compact dropdown to save horizontal space (Amith's real-estate concern).
-   */
-  public readonly viewTypeStripThreshold = 5;
+  /** Whether the view-type dropdown menu is currently open. */
+  public ViewTypeDropdownOpen = false;
 
   /**
    * Per-view-type configuration payloads, keyed by `MJ: View Types` row ID. Seeded from
@@ -604,22 +513,42 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         this.viewTypeConfigById.set(entry.viewTypeId, entry.config ?? {});
       }
     }
-    if (this.dynamicRendererRef && this.activeDynamicOption) {
+    if (this.dynamicRendererRef && this.ActiveDynamicOption) {
       this.pushDynamicRendererInputs();
     }
   }
 
   /**
-   * Emitted when the active view type changes (built-in OR plug-in). Hosts persist this to
-   * `UserView.ViewTypeID`. Carries both the row ID and the DriverClass for convenience.
+   * When true, the viewer persists view-type/config changes itself — to the loaded `UserView`
+   * record (when a `ViewEntity`/`ViewID` is present) or to per-user User Settings (the default-view
+   * case). When false (the default), the viewer only emits the `Before…`/`After…` events and the
+   * consumer is responsible for persistence. Persistence is provider-based (generic-safe) — never
+   * routing, which stays with the host app.
    */
-  @Output() ViewTypeChange = new EventEmitter<{ viewTypeId: string; driverClass: string }>();
+  @Input() AutoSaveView: boolean = false;
 
   /**
-   * Emitted when a plug-in renderer mutates its own configuration. Hosts persist this into
-   * `UserView.DisplayState.viewTypeConfigs` (keyed by `viewTypeId`).
+   * Emitted (cancelable) BEFORE the active view type changes. A handler may set
+   * `args.Cancel = true` to veto the switch. Fires for both built-in and plug-in types.
    */
-  @Output() ViewTypeConfigChange = new EventEmitter<{ viewTypeId: string; config: Record<string, unknown> }>();
+  @Output() BeforeViewTypeChange = new EventEmitter<ViewTypeChangeEventArgs>();
+
+  /**
+   * Emitted AFTER the active view type has changed (and, when {@link AutoSaveView} is on, after
+   * it has been persisted). Notification only.
+   */
+  @Output() AfterViewTypeChange = new EventEmitter<ViewTypeChangeEventArgs>();
+
+  /**
+   * Emitted (cancelable) BEFORE a plug-in renderer's configuration change is applied/persisted.
+   */
+  @Output() BeforeViewTypeConfigChange = new EventEmitter<ViewTypeConfigChangeEventArgs>();
+
+  /**
+   * Emitted AFTER a plug-in renderer's configuration change has been applied (and persisted when
+   * {@link AutoSaveView} is on).
+   */
+  @Output() AfterViewTypeConfigChange = new EventEmitter<ViewTypeConfigChangeEventArgs>();
 
   /** Anchor for dynamically-mounted plug-in view renderers. */
   @ViewChild('dynamicViewHost', { read: ViewContainerRef }) private dynamicViewHost?: ViewContainerRef;
@@ -627,27 +556,22 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /** The currently-mounted plug-in renderer, if any. */
   private dynamicRendererRef: ComponentRef<IViewRenderer> | null = null;
 
-  public internalFilterText: string = '';
-  public debouncedFilterText: string = '';
-  public isLoading: boolean = false;
-  public loadingMessage: string = 'Loading...';
-  public internalRecords: Record<string, unknown>[] = [];
-  public totalRecordCount: number = 0;
-  public filteredRecordCount: number = 0;
+  public InternalFilterText: string = '';
+  public DebouncedFilterText: string = '';
+  public IsLoading: boolean = false;
+  public LoadingMessage: string = 'Loading...';
+  public InternalRecords: Record<string, unknown>[] = [];
+  public TotalRecordCount: number = 0;
+  public FilteredRecordCount: number = 0;
 
   /** Track which records matched on hidden (non-visible) fields */
-  public hiddenFieldMatches = new Map<string, string>();
+  public HiddenFieldMatches = new Map<string, string>();
 
   /** Current sort state */
-  public internalSortState: SortState | null = null;
-
-  /** Cached grid params to avoid recreating object on every change detection */
-  private _cachedGridParams: RunViewParams | null = null;
-  private _lastGridParamsEntity: string | null = null;
-  private _lastGridParamsViewEntity: MJUserViewEntityExtended | null = null;
+  public InternalSortState: SortState | null = null;
 
   /** Pagination state */
-  public pagination: PaginationState = {
+  public Pagination: PaginationState = {
     currentPage: 0,
     pageSize: 100,
     totalRecords: 0,
@@ -655,60 +579,11 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     isLoading: false
   };
 
-  // ========================================
-  // TIMELINE STATE
-  // ========================================
-
-  /** Whether the current entity has date fields available for timeline view */
-  public hasDateFields: boolean = false;
-
-  /** Whether the current entity supports geocoding (has SupportsGeoCoding = 1) */
-  public HasGeoCoding: boolean = false;
-
-  /** Available date fields from the entity (sorted by priority) */
-  public availableDateFields: EntityFieldInfo[] = [];
-
-  /** Timeline groups configuration for the timeline component */
-  get timelineGroups(): TimelineGroup<Record<string, unknown>>[] {
-    return this._timelineGroups;
-  }
-  set timelineGroups(value: TimelineGroup<Record<string, unknown>>[]) {
-    const prev = this._timelineGroups;
-    this._timelineGroups = value;
-
-    // Detect meaningful changes to trigger refresh in child timeline component
-    const hasChanged = prev !== value ||
-      (prev.length > 0 && value.length > 0 &&
-        (prev[0].EntityObjects !== value[0]?.EntityObjects ||
-         prev[0].DateFieldName !== value[0]?.DateFieldName));
-
-    if (hasChanged) {
-      // Force change detection to propagate to child timeline component
-      this.cdr.markForCheck();
-    }
-  }
-  private _timelineGroups: TimelineGroup<Record<string, unknown>>[] = [];
-
-  /** Timeline sort order */
-  public timelineSortOrder: TimelineSortOrder = 'desc';
-
-  /** Timeline segment grouping */
-  public timelineSegmentGrouping: TimeSegmentGrouping = 'month';
-
-  /** Timeline orientation (vertical or horizontal) */
-  public timelineOrientation: TimelineOrientation = 'vertical';
-
-  /** Currently selected date field for timeline */
-  public selectedTimelineDateField: string | null = null;
-
   private destroy$ = new Subject<void>();
   private filterInput$ = new Subject<string>();
 
   /** Track if this is the first load (vs. load more) */
   private isInitialLoad: boolean = true;
-
-  /** Reference to the data grid component for flushing pending changes */
-  @ViewChild(EntityDataGridComponent) private dataGridRef: EntityDataGridComponent | undefined;
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
   super();}
@@ -718,11 +593,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   // ========================================
 
   /**
-   * Ensures any pending grid state changes are saved immediately without waiting for debounce.
-   * Call this before switching views or entities to ensure changes are saved.
+   * Hook retained for hosts (e.g. the workspace) that call this before switching views/entities.
+   * View-type-specific persistence (e.g. a grid's live column/sort state) is now owned by the
+   * mounted plug-in renderer, so the container has nothing to flush — this is a no-op.
    */
   public EnsurePendingChangesSaved(): void {
-    this.dataGridRef?.EnsurePendingChangesSaved();
+    // no-op: plug-in renderers own their own pending-state persistence
   }
 
   // ========================================
@@ -734,13 +610,13 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * This allows callers to provide just a viewEntity without explicitly setting the entity input.
    * Uses fallback resolution when ViewEntityInfo is not available.
    */
-  get effectiveEntity(): EntityInfo | null {
-    if (this.entity) {
-      return this.entity;
+  get EffectiveEntity(): EntityInfo | null {
+    if (this.Entity) {
+      return this.Entity;
     }
     // Auto-derive from viewEntity if available
-    if (this.viewEntity) {
-      return this.getEntityInfoFromViewEntity(this.viewEntity);
+    if (this.ViewEntity) {
+      return this.getEntityInfoFromViewEntity(this.ViewEntity);
     }
     return null;
   }
@@ -781,137 +657,50 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Get the effective view mode (external or internal)
-   */
-  get effectiveViewMode(): EntityViewMode {
-    return this.viewMode ?? this.internalViewMode;
-  }
-
-  /**
    * Get the effective filter text (external or internal)
    */
-  get effectiveFilterText(): string {
-    return this.filterText ?? this.internalFilterText;
-  }
-
-  /**
-   * Get the raw ID value from selectedRecordId for timeline selection.
-   * The selectedRecordId is in composite key format (e.g., "ID|abc-123" or "ID=abc-123"),
-   * but the timeline stores just the raw ID value.
-   */
-  get timelineSelectedEventId(): string | null {
-    if (!this.selectedRecordId) return null;
-
-    // Handle "ID|value" format (pipe separator)
-    if (this.selectedRecordId.includes('|')) {
-      const parts = this.selectedRecordId.split('|');
-      return parts.length > 1 ? parts[1] : this.selectedRecordId;
-    }
-
-    // Handle "ID=value" format (equals separator)
-    if (this.selectedRecordId.includes('=')) {
-      const parts = this.selectedRecordId.split('=');
-      return parts.length > 1 ? parts[1] : this.selectedRecordId;
-    }
-
-    // Return as-is if no separator found
-    return this.selectedRecordId;
+  get EffectiveFilterText(): string {
+    return this.FilterText ?? this.InternalFilterText;
   }
 
   /**
    * Get the effective sort state (external or internal)
    */
-  get effectiveSortState(): SortState | null {
-    return this.sortState ?? this.internalSortState;
-  }
-
-  /**
-   * Get the OrderBy string for mj-entity-data-grid from the effective sort state
-   */
-  get effectiveSortOrderBy(): string {
-    const sortState = this.effectiveSortState;
-    if (!sortState?.field || !sortState.direction) {
-      return '';
-    }
-    return `${sortState.field} ${sortState.direction.toUpperCase()}`;
+  get EffectiveSortState(): SortState | null {
+    return this.SortState ?? this.InternalSortState;
   }
 
   /**
    * Get merged configuration with defaults
    */
-  get effectiveConfig(): Required<EntityViewerConfig> {
-    return { ...DEFAULT_VIEWER_CONFIG, ...this.config };
-  }
-
-  /**
-   * Get cached grid params - only recreates object when entity or viewEntity changes
-   * This prevents Angular from seeing a new object reference on every change detection
-   * which would cause the grid to reinitialize
-   */
-  get gridParams(): RunViewParams | null {
-    const entity = this.effectiveEntity;
-    if (!entity) {
-      return null;
-    }
-
-    // Check if we need to recreate the params object
-    const entityChanged = this._lastGridParamsEntity !== entity.Name;
-    const viewEntityChanged = this._lastGridParamsViewEntity !== this.viewEntity;
-
-    if (entityChanged || viewEntityChanged || !this._cachedGridParams) {
-      this._lastGridParamsEntity = entity.Name;
-      this._lastGridParamsViewEntity = this.viewEntity ?? null;
-      this._cachedGridParams = {
-        EntityName: entity.Name,
-        ViewEntity: this.viewEntity || undefined
-      };
-    }
-
-    return this._cachedGridParams;
-  }
-
-  /**
-   * Get the effective grid toolbar configuration
-   * Merges user-provided config with defaults appropriate for entity-viewer context
-   */
-  get effectiveGridToolbarConfig(): GridToolbarConfig {
-    const defaults: GridToolbarConfig = {
-      showSearch: false, // Entity-viewer has its own filter
-      showRefresh: true,
-      showAdd: true,
-      showDelete: true,
-      showExport: true,
-      showColumnChooser: true,
-      showRowCount: true,
-      showSelectionCount: true
-    };
-    return { ...defaults, ...this.gridToolbarConfig };
+  get EffectiveConfig(): Required<EntityViewerConfig> {
+    return { ...DEFAULT_VIEWER_CONFIG, ...this.Config };
   }
 
   /**
    * Get the records to display (external or internal)
    */
-  get displayRecords(): Record<string, unknown>[] {
-    return this.records ?? this.internalRecords;
+  get DisplayRecords(): Record<string, unknown>[] {
+    return this.Records ?? this.InternalRecords;
   }
 
   /**
    * Get filtered records - when using server-side filtering, records are already filtered
    * When using client-side filtering, apply filter locally
    */
-  get filteredRecords(): Record<string, unknown>[] {
-    const records = this.displayRecords;
+  get FilteredRecords(): Record<string, unknown>[] {
+    const records = this.DisplayRecords;
 
     // If server-side filtering is enabled, records are already filtered
-    if (this.effectiveConfig.serverSideFiltering) {
+    if (this.EffectiveConfig.serverSideFiltering) {
       return records;
     }
 
     // Client-side filtering fallback
-    const filterText = this.debouncedFilterText?.trim().toLowerCase();
-    this.hiddenFieldMatches.clear();
+    const filterText = this.DebouncedFilterText?.trim().toLowerCase();
+    this.HiddenFieldMatches.clear();
 
-    if (!filterText || !this.entity) {
+    if (!filterText || !this.Entity) {
       return records;
     }
 
@@ -920,8 +709,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return records.filter(record => {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
-        const recordKey = buildPkString(record, this.entity!);
-        this.hiddenFieldMatches.set(recordKey, matchResult.matchedField);
+        const recordKey = buildPkString(record, this.Entity!);
+        this.HiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
       return matchResult.matches;
     });
@@ -935,12 +724,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     filterText: string,
     visibleFields: Set<string>
   ): { matches: boolean; matchedField: string | null; matchedInVisibleField: boolean } {
-    if (!this.entity) return { matches: true, matchedField: null, matchedInVisibleField: false };
+    if (!this.Entity) return { matches: true, matchedField: null, matchedInVisibleField: false };
 
     let matchedField: string | null = null;
     let matchedInVisibleField = false;
 
-    for (const field of this.entity.Fields) {
+    for (const field of this.Entity.Fields) {
       if (!this.shouldSearchField(field)) continue;
 
       const value = record[field.Name];
@@ -998,16 +787,16 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   private getVisibleFieldNames(): Set<string> {
     const visible = new Set<string>();
-    if (!this.entity) return visible;
+    if (!this.Entity) return visible;
 
-    for (const field of this.entity.Fields) {
+    for (const field of this.Entity.Fields) {
       if (field.DefaultInView === true) {
         visible.add(field.Name);
       }
     }
 
-    if (this.entity.NameField) {
-      visible.add(this.entity.NameField.Name);
+    if (this.Entity.NameField) {
+      visible.add(this.Entity.NameField.Name);
     }
 
     return visible;
@@ -1016,19 +805,19 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /**
    * Check if a record matched on a hidden field
    */
-  public hasHiddenFieldMatch(record: Record<string, unknown>): boolean {
-    if (!this.debouncedFilterText || !this.entity) return false;
-    return this.hiddenFieldMatches.has(buildPkString(record, this.entity));
+  public HasHiddenFieldMatch(record: Record<string, unknown>): boolean {
+    if (!this.DebouncedFilterText || !this.Entity) return false;
+    return this.HiddenFieldMatches.has(buildPkString(record, this.Entity));
   }
 
   /**
    * Get the name of the hidden field that matched for display
    */
-  public getHiddenMatchFieldName(record: Record<string, unknown>): string {
-    if (!this.entity) return '';
-    const fieldName = this.hiddenFieldMatches.get(buildPkString(record, this.entity));
-    if (!fieldName || !this.entity) return '';
-    const field = this.entity.Fields.find(f => f.Name === fieldName);
+  public GetHiddenMatchFieldName(record: Record<string, unknown>): string {
+    if (!this.Entity) return '';
+    const fieldName = this.HiddenFieldMatches.get(buildPkString(record, this.Entity));
+    if (!fieldName || !this.Entity) return '';
+    const field = this.Entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
   }
 
@@ -1041,15 +830,15 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setupFilterDebounce();
 
     // Initialize debounced filter from external filter text if provided
-    if (this.filterText !== null) {
-      this.debouncedFilterText = this.filterText;
+    if (this.FilterText !== null) {
+      this.DebouncedFilterText = this.FilterText;
     }
 
     // Initialize sort state from config
-    if (this.effectiveConfig.defaultSortField) {
-      this.internalSortState = {
-        field: this.effectiveConfig.defaultSortField,
-        direction: this.effectiveConfig.defaultSortDirection ?? 'asc'
+    if (this.EffectiveConfig.defaultSortField) {
+      this.InternalSortState = {
+        field: this.EffectiveConfig.defaultSortField,
+        direction: this.EffectiveConfig.defaultSortDirection ?? 'asc'
       };
     }
 
@@ -1087,7 +876,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     Promise.resolve().then(async () => {
       try {
         if (this._initialized && this._entity && !this._records) {
-          await this.loadData();
+          await this.LoadData();
         }
       } finally {
         // Clear only after loadData fully completes (including the async RunView).
@@ -1114,14 +903,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   private applySortStateFromView(view: MJUserViewEntityExtended | null): void {
     if (!view) {
-      this.internalSortState = null;
+      this.InternalSortState = null;
       return;
     }
 
     // Priority 1: SortState column (via ViewSortInfo)
     const viewSortInfo = view.ViewSortInfo;
     if (viewSortInfo && viewSortInfo.length > 0) {
-      this.internalSortState = {
+      this.InternalSortState = {
         field: viewSortInfo[0].field,
         direction: viewSortInfo[0].direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
       };
@@ -1133,7 +922,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       const gridState = view.GridStateObject;
       if (gridState?.sortSettings && gridState.sortSettings.length > 0) {
         const firstSort = gridState.sortSettings[0];
-        this.internalSortState = {
+        this.InternalSortState = {
           field: firstSort.field,
           direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
         };
@@ -1142,35 +931,31 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     }
 
     // No sort defined — reset to prevent stale sort from previous view
-    this.internalSortState = null;
+    this.InternalSortState = null;
   }
 
   private applyConfig(): void {
-    const config = this.effectiveConfig;
-    this.pagination.pageSize = config.pageSize;
-
-    if (this.viewMode === null) {
-      this.internalViewMode = config.defaultViewMode;
-    }
+    const config = this.EffectiveConfig;
+    this.Pagination.pageSize = config.pageSize;
   }
 
   private setupFilterDebounce(): void {
     this.filterInput$
       .pipe(
-        debounceTime(this.effectiveConfig.filterDebounceMs),
+        debounceTime(this.EffectiveConfig.filterDebounceMs),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(filterText => {
-        const oldFilter = this.debouncedFilterText;
-        this.debouncedFilterText = filterText;
-        this.filterTextChange.emit(filterText);
+        const oldFilter = this.DebouncedFilterText;
+        this.DebouncedFilterText = filterText;
+        this.FilterTextChange.emit(filterText);
 
         // If server-side filtering and filter changed, reload from page 1
         // Keep existing records visible during refresh for better UX
-        if (this.effectiveConfig.serverSideFiltering && filterText !== oldFilter && !this.records) {
+        if (this.EffectiveConfig.serverSideFiltering && filterText !== oldFilter && !this.Records) {
           this.resetPaginationState(false);
-          this.loadData();
+          this.LoadData();
         } else {
           this.updateFilteredCount();
         }
@@ -1183,12 +968,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Update the filtered record count and emit event
    */
   private updateFilteredCount(): void {
-    const newCount = this.filteredRecords.length;
-    if (this.filteredRecordCount !== newCount) {
-      this.filteredRecordCount = newCount;
-      this.filteredCountChanged.emit({
+    const newCount = this.FilteredRecords.length;
+    if (this.FilteredRecordCount !== newCount) {
+      this.FilteredRecordCount = newCount;
+      this.FilteredCountChanged.emit({
         filteredCount: newCount,
-        totalCount: this.totalRecordCount
+        totalCount: this.TotalRecordCount
       });
     }
   }
@@ -1199,17 +984,17 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * When clearRecords is false, keeps existing records visible during refresh - use for sort/filter changes.
    */
   private resetPaginationState(clearRecords: boolean = true): void {
-    this.pagination = {
+    this.Pagination = {
       currentPage: 0,
-      pageSize: this.effectiveConfig.pageSize,
-      totalRecords: clearRecords ? 0 : this.pagination.totalRecords,
+      pageSize: this.EffectiveConfig.pageSize,
+      totalRecords: clearRecords ? 0 : this.Pagination.totalRecords,
       hasMore: false,
       isLoading: false
     };
     if (clearRecords) {
-      this.internalRecords = [];
-      this.totalRecordCount = 0;
-      this.filteredRecordCount = 0;
+      this.InternalRecords = [];
+      this.TotalRecordCount = 0;
+      this.FilteredRecordCount = 0;
     }
     this.isInitialLoad = true;
   }
@@ -1226,12 +1011,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /**
    * Load data for the current entity with server-side filtering/sorting/pagination
    */
-  public async loadData(): Promise<void> {
-    const entity = this.effectiveEntity;
+  public async LoadData(): Promise<void> {
+    const entity = this.EffectiveEntity;
     if (!entity) {
-      this.internalRecords = [];
-      this.totalRecordCount = 0;
-      this.filteredRecordCount = 0;
+      this.InternalRecords = [];
+      this.TotalRecordCount = 0;
+      this.FilteredRecordCount = 0;
       return;
     }
 
@@ -1241,18 +1026,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     // If a load is already in progress, set a flag so we reload once the current
     // load completes. We can't use deferReload() here because the microtask would
     // fire while isLoading is still true, causing an infinite loop.
-    if (this.isLoading) {
+    if (this.IsLoading) {
       this._pendingReload = true;
       return;
     }
 
-    this.isLoading = true;
-    this.pagination.isLoading = true;
-    this.loadingMessage = `Loading ${entity.Name}...`;
+    this.IsLoading = true;
+    this.Pagination.isLoading = true;
+    this.LoadingMessage = `Loading ${entity.Name}...`;
     this.cdr.detectChanges();
 
     const startTime = Date.now();
-    const config = this.effectiveConfig;
+    const config = this.EffectiveConfig;
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1261,40 +1046,40 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       // Priority: 1) External/internal sort state  2) View's OrderByClause
       //           3) GridState.sortSettings (saved user defaults)  4) undefined
       let orderBy: string | undefined;
-      const sortState = this.effectiveSortState;
+      const sortState = this.EffectiveSortState;
       if (config.serverSideSorting && sortState?.field && sortState.direction) {
         orderBy = `${sortState.field} ${sortState.direction.toUpperCase()}`;
-      } else if (this.viewEntity?.OrderByClause) {
-        orderBy = this.viewEntity.OrderByClause;
-      } else if (this.gridState?.sortSettings?.length) {
-        orderBy = this.gridState.sortSettings
+      } else if (this.ViewEntity?.OrderByClause) {
+        orderBy = this.ViewEntity.OrderByClause;
+      } else if (this.GridState?.sortSettings?.length) {
+        orderBy = this.GridState.sortSettings
           .map(s => `${s.field} ${(s.dir || 'asc').toUpperCase()}`)
           .join(', ');
       }
 
-      // Map mode loads all records (up to MAP_MAX_RECORDS) since paging
-      // doesn't make sense for geographic visualization. Other modes use
-      // standard page-based pagination.
-      const isMapMode = this.effectiveViewMode === 'map';
-      const maxRows = isMapMode ? EntityViewerComponent.MAP_MAX_RECORDS : config.pageSize;
-      const startRow = isMapMode ? 0 : this.pagination.currentPage * config.pageSize;
+      // When a plug-in renderer has asked the container to load the full set (via a generic
+      // ViewDataRequest with loadAll:true), load all records up to the safety cap and skip
+      // pagination. Otherwise use standard page-based pagination. This is fully view-type-agnostic
+      // — the container never inspects which plug-in is mounted.
+      const maxRows = this._loadAllRecords ? EntityViewerComponent.LOAD_ALL_MAX_RECORDS : config.pageSize;
+      const startRow = this._loadAllRecords ? 0 : this.Pagination.currentPage * config.pageSize;
 
       // Build ExtraFilter from view's WhereClause if available
       // The view's WhereClause is the "business filter" - UserSearchString is additive
-      const extraFilter = this.viewEntity?.WhereClause || undefined;
+      const extraFilter = this.ViewEntity?.WhereClause || undefined;
 
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entity.Name,
         ResultType: 'simple',
-        Fields: computeFieldsList(entity, this.gridState),
+        Fields: computeFieldsList(entity, this.GridState),
         MaxRows: maxRows,
         StartRow: startRow,
         OrderBy: orderBy,
         ExtraFilter: extraFilter,
         // Only use UserSearchString for regular text search, NOT for smart filters
         // Smart filters generate WhereClause via AI on the server, so the prompt text should not be passed as UserSearchString
-        UserSearchString: config.serverSideFiltering && !this.viewEntity?.SmartFilterEnabled
-          ? this.debouncedFilterText || undefined
+        UserSearchString: config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
+          ? this.DebouncedFilterText || undefined
           : undefined
       });
 
@@ -1306,52 +1091,46 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       if (result.Success) {
 
         // Always replace records (page-based navigation, not accumulation)
-        this.internalRecords = result.Results;
+        this.InternalRecords = result.Results;
 
-        this.totalRecordCount = result.TotalRowCount;
-        this.filteredRecordCount = this.internalRecords.length;
+        this.TotalRecordCount = result.TotalRowCount;
+        this.FilteredRecordCount = this.InternalRecords.length;
 
         // Update pagination state
-        this.pagination.totalRecords = result.TotalRowCount;
-        this.pagination.hasMore = false; // No longer used with page-based paging
+        this.Pagination.totalRecords = result.TotalRowCount;
+        this.Pagination.hasMore = false; // No longer used with page-based paging
 
-        // Re-check geo support after data loads (effectiveEntity may have resolved via viewEntity)
-        this.updateGeoCodingSupport();
-
-        this.dataLoaded.emit({
+        this.DataLoaded.emit({
           totalRowCount: result.TotalRowCount,
-          loadedRowCount: this.internalRecords.length,
+          loadedRowCount: this.InternalRecords.length,
           loadTime: Date.now() - startTime,
-          records: this.internalRecords
+          records: this.InternalRecords
         });
 
-        this.filteredCountChanged.emit({
-          filteredCount: this.internalRecords.length,
+        this.FilteredCountChanged.emit({
+          filteredCount: this.InternalRecords.length,
           totalCount: result.TotalRowCount
         });
-
-        // Update timeline groups with new data
-        this.updateTimelineGroups();
       } else {
         if (this.isInitialLoad) {
-          this.internalRecords = [];
+          this.InternalRecords = [];
         }
-        this.totalRecordCount = 0;
-        this.filteredRecordCount = 0;
+        this.TotalRecordCount = 0;
+        this.FilteredRecordCount = 0;
       }
     } catch (error) {
       if (this.isInitialLoad) {
-        this.internalRecords = [];
+        this.InternalRecords = [];
       }
-      this.totalRecordCount = 0;
-      this.filteredRecordCount = 0;
+      this.TotalRecordCount = 0;
+      this.FilteredRecordCount = 0;
     } finally {
       // Use ngZone.run() to ensure state changes trigger change detection.
       // With es2022 native async/await + zone.js 0.16, the await resumes
       // outside Angular's zone, so detectChanges() alone may not flush properly.
       this.ngZone.run(() => {
-        this.isLoading = false;
-        this.pagination.isLoading = false;
+        this.IsLoading = false;
+        this.Pagination.isLoading = false;
         this.isInitialLoad = false;
         this.pushDynamicRendererInputs();   // keep a mounted plug-in renderer in sync with new data
         this.cdr.detectChanges();
@@ -1362,7 +1141,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       if (this._pendingReload) {
         this._pendingReload = false;
         this.resetPaginationState();
-        this.loadData();
+        this.LoadData();
       }
     }
   }
@@ -1370,20 +1149,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /**
    * Handle page change from PaginationComponent
    */
-  public onPageChange(event: PageChangeEvent): void {
-    this.pagination.currentPage = event.PageNumber - 1; // Convert 1-based to 0-based
+  public OnPageChange(event: PageChangeEvent): void {
+    this.Pagination.currentPage = event.PageNumber - 1; // Convert 1-based to 0-based
     this.isInitialLoad = true; // Treat page navigation as a fresh load for loading state
-    this.loadData();
+    this.LoadData();
   }
 
   /**
    * Refresh data (re-load from server, starting at page 1)
    * Keeps existing records visible during refresh for better UX
    */
-  public refresh(): void {
-    if (!this.records) {
+  public Refresh(): void {
+    if (!this.Records) {
       this.resetPaginationState(false);
-      this.loadData();
+      this.LoadData();
     }
   }
 
@@ -1393,8 +1172,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Loads the ViewTypeEngine once, then recomputes the available view types for the
-   * current entity. Fire-and-forget from lifecycle/setters — failures fall back to the
-   * hardcoded modes so behavior is unchanged when View Types aren't seeded.
+   * current entity. Fire-and-forget from lifecycle/setters — failures simply leave the
+   * switcher empty until the registry is available.
    */
   private async ensureViewTypesLoaded(): Promise<void> {
     try {
@@ -1404,24 +1183,26 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       await ViewTypeEngine.Instance.EnsureAvailabilityData(provider ?? undefined);
       this.refreshAvailableViewTypes();
     } catch {
-      // Engine unavailable / not seeded — keep the hardcoded fallback.
-      this.viewTypesFromRegistry = false;
+      // Engine unavailable / not seeded — leave the switcher empty.
+      this.ViewTypesFromRegistry = false;
     }
   }
 
   /**
-   * Recomputes {@link availableViewTypes} from the registry for the current entity.
-   * Sets {@link viewTypesFromRegistry} true only when the registry yields at least one
-   * descriptor that maps to a legacy EntityViewMode (so the template can choose between
-   * registry-sourced and hardcoded switchers).
+   * Recomputes {@link AvailableViewTypes} from the registry for the current entity. Every
+   * available view type is a dynamic-mounted plug-in. Reconciles the active selection when the
+   * previously-active type is no longer available (e.g. the entity changed).
    */
   private refreshAvailableViewTypes(): void {
-    const entity = this.effectiveEntity;
+    const entity = this.EffectiveEntity;
     if (!entity) {
-      this.availableViewTypes = [];
-      this.viewTypesFromRegistry = false;
+      this.AvailableViewTypes = [];
+      this.ViewTypesFromRegistry = false;
       return;
     }
+    // Self-contained config seeding: pull per-view-type config from the loaded view record or
+    // the per-user default-view setting when the consumer didn't supply it via [ViewTypeConfigs].
+    this.seedViewTypeConfigsIfEmpty();
 
     let rows: Array<{ ViewType: { ID: string }; Descriptor: IViewTypeDescriptor }> = [];
     try {
@@ -1432,29 +1213,28 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
     const options: ViewModeOption[] = [];
     for (const { ViewType, Descriptor } of rows) {
-      const mode = driverClassToViewMode(Descriptor.Name);
       options.push({
         key: Descriptor.Name,
-        mode,                          // null for plug-in (dynamic) view types
+        mode: null,                    // every view type is dynamic-mounted
         label: Descriptor.DisplayName,
         icon: Descriptor.Icon ?? '',
-        isDynamic: mode === null,
+        isDynamic: true,
         descriptor: Descriptor,
         viewTypeId: ViewType.ID,
       });
     }
 
-    this.availableViewTypes = options;
-    this.viewTypesFromRegistry = options.length > 0;
+    this.AvailableViewTypes = options;
+    this.ViewTypesFromRegistry = options.length > 0;
 
     // Keep the active key valid: if the previously-active type is no longer available
-    // (entity changed), select — in priority order — the host-persisted ViewTypeID, then the
-    // option matching the current built-in mode, then the first available type.
-    if (options.length > 0 && !options.some(o => o.key === this.activeViewTypeKey)) {
-      const persisted = this._initialViewTypeId
-        ? options.find(o => o.viewTypeId === this._initialViewTypeId)
-        : undefined;
-      const fallback = persisted ?? options.find(o => o.mode === this.effectiveViewMode) ?? options[0];
+    // (entity changed), select — in priority order — the resolved initial ViewTypeID
+    // (explicit input → loaded view record → per-user default-view setting), then the first
+    // available type.
+    if (options.length > 0 && !options.some(o => o.key === this.ActiveViewTypeKey)) {
+      const desiredId = this.resolveInitialViewTypeId();
+      const desired = desiredId ? options.find(o => o.viewTypeId === desiredId) : undefined;
+      const fallback = desired ?? options[0];
       this.applyViewTypeSelection(fallback, false);
     }
 
@@ -1465,8 +1245,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Returns the switcher option for the active view type (for the current-type chip in the
    * switcher), or null before the registry resolves.
    */
-  get activeViewTypeOption(): ViewModeOption | null {
-    return this.availableViewTypes.find(o => o.key === this.activeViewTypeKey) ?? null;
+  get ActiveViewTypeOption(): ViewModeOption | null {
+    return this.AvailableViewTypes.find(o => o.key === this.ActiveViewTypeKey) ?? null;
   }
 
   /**
@@ -1475,34 +1255,241 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * dynamic-mounted via the descriptor's RendererComponent. Emits {@link viewTypeChange}
    * so hosts can persist `UserView.ViewTypeID`.
    */
-  selectViewType(option: ViewModeOption): void {
-    this.viewTypeDropdownOpen = false;
+  SelectViewType(option: ViewModeOption): void {
+    this.ViewTypeDropdownOpen = false;
     this.applyViewTypeSelection(option, true);
   }
 
   /**
-   * Applies a view-type selection. `emit` controls whether {@link viewTypeChange} fires
-   * (true for user actions, false for internal reconciliation).
+   * Selects a view type by its `MJ: View Types` row ID. This is the entry point used by external
+   * chrome (e.g. the workspace toolbar's {@link ViewTypeSwitcherComponent}) that surfaces the
+   * switcher outside the viewer's own header. Resolves the matching available option and applies
+   * it through the same lifecycle as a header-driven switch (cancelable events + persistence).
+   * No-op when the ID isn't an available view type or is already active.
+   *
+   * @param viewTypeId the `MJ: View Types` row ID to switch to.
+   */
+  public SelectViewTypeById(viewTypeId: string | null): void {
+    if (!viewTypeId) {
+      return;
+    }
+    const option = this.AvailableViewTypes.find(o => o.viewTypeId === viewTypeId);
+    if (option && option.key !== this.ActiveViewTypeKey) {
+      this.applyViewTypeSelection(option, true);
+    }
+  }
+
+  /**
+   * The `MJ: View Types` row ID of the currently-active view type, or null before the registry
+   * resolves. Lets external chrome (the workspace toolbar switcher) reflect the viewer's active
+   * type without reaching into the viewer's internal {@link ViewModeOption}s.
+   */
+  public get ActiveViewTypeId(): string | null {
+    return this.ActiveViewTypeOption?.viewTypeId ?? null;
+  }
+
+  /**
+   * Applies a view-type selection. `emit` is true for user-initiated switches (fires the
+   * cancelable {@link BeforeViewTypeChange}, persists when {@link AutoSaveView} is on, then fires
+   * {@link AfterViewTypeChange}) and false for internal reconciliation (no events, no persist).
+   *
+   * Every view type is a dynamic-mounted plug-in: this tears down the previous renderer and mounts
+   * the selected descriptor's `RendererComponent`. The container resets its generic load mode (a
+   * fresh plug-in that needs the full set will re-request it via `dataRequest({loadAll:true})`) and
+   * reloads page-based data when the active type changes.
    */
   private applyViewTypeSelection(option: ViewModeOption, emit: boolean): void {
-    this.activeViewTypeKey = option.key;
+    const previousViewTypeId = this.ActiveViewTypeOption?.viewTypeId ?? null;
 
-    if (option.isDynamic) {
-      this.activeDynamicOption = option;
-      this.mountDynamicRenderer(option);
-    } else {
-      // Built-in: tear down any plug-in renderer and use the legacy [hidden] block.
-      this.unmountDynamicRenderer();
-      this.activeDynamicOption = null;
-      if (option.mode) {
-        this.setViewMode(option.mode);
+    if (emit) {
+      const before: ViewTypeChangeEventArgs = {
+        ViewTypeID: option.viewTypeId,
+        DriverClass: option.key,
+        PreviousViewTypeID: previousViewTypeId,
+        Cancel: false,
+      };
+      this.BeforeViewTypeChange.emit(before);
+      if (before.Cancel) {
+        return; // a handler vetoed the switch — leave the switcher unchanged
       }
     }
 
+    const typeChanged = this.ActiveViewTypeKey !== option.key;
+    this.ActiveViewTypeKey = option.key;
+    this.ActiveDynamicOption = option;
+    this.mountDynamicRenderer(option);
+
+    // On a real type switch, drop any prior load-all mode and reload page-based data so the newly
+    // mounted plug-in starts from the standard paginated set. A plug-in needing everything (e.g. a
+    // map) re-asks via dataRequest on its own init. Skip the reload for the initial reconciliation
+    // (no prior type) — the regular entity/view data-load path already handles the first load.
+    if (typeChanged && previousViewTypeId !== null && this._loadAllRecords && !this._records) {
+      this._loadAllRecords = false;
+      this.resetPaginationState(false);
+      this.LoadData();
+    }
+
     if (emit) {
-      this.ViewTypeChange.emit({ viewTypeId: option.viewTypeId, driverClass: option.key });
+      if (this.AutoSaveView) {
+        void this.persistActiveViewType(option);
+      }
+      this.AfterViewTypeChange.emit({
+        ViewTypeID: option.viewTypeId,
+        DriverClass: option.key,
+        PreviousViewTypeID: previousViewTypeId,
+        Cancel: false,
+      });
     }
     this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // VIEW-TYPE PERSISTENCE (provider-based; never routing)
+  // ========================================
+
+  /**
+   * Where view-type/config persists when {@link AutoSaveView} is on: a loaded `UserView` record,
+   * per-user User Settings (the default-view case), or nowhere.
+   */
+  private persistenceTarget(): ViewPersistenceTarget {
+    if (this._viewEntity?.ID) {
+      return 'record';
+    }
+    if (this.EffectiveEntity) {
+      return 'user-settings';
+    }
+    return 'none';
+  }
+
+  /** Persist the active view-type selection to the resolved target. */
+  private async persistActiveViewType(option: ViewModeOption): Promise<void> {
+    const target = this.persistenceTarget();
+    if (target === 'record') {
+      const ve = this._viewEntity!;
+      ve.ViewTypeID = option.viewTypeId;
+      await this.saveViewEntity(ve);
+    } else if (target === 'user-settings') {
+      this.saveDefaultViewSetting();
+    }
+  }
+
+  /** Persist a per-view-type config change to the resolved target. */
+  private async persistViewTypeConfig(viewTypeId: string): Promise<void> {
+    const target = this.persistenceTarget();
+    if (target === 'record') {
+      const ve = this._viewEntity!;
+      const displayState = ve.DisplayStateObject ?? { defaultMode: 'grid' };
+      const configs = (displayState.viewTypeConfigs ?? []).filter(c => c.viewTypeId !== viewTypeId);
+      configs.push({ viewTypeId, config: this.viewTypeConfigById.get(viewTypeId) ?? {} });
+      displayState.viewTypeConfigs = configs;
+      ve.DisplayStateObject = displayState;
+      await this.saveViewEntity(ve);
+    } else if (target === 'user-settings') {
+      this.saveDefaultViewSetting();
+    }
+  }
+
+  /** Save the loaded view record, logging (not throwing) on failure. */
+  private async saveViewEntity(viewEntity: MJUserViewEntityExtended): Promise<void> {
+    const saved = await viewEntity.Save();
+    if (!saved) {
+      LogError(`EntityViewer: failed to persist view: ${viewEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+  }
+
+  /** User Settings key for this entity's per-user default-view state. */
+  private defaultViewSettingKey(): string | null {
+    const entity = this.EffectiveEntity;
+    return entity ? `mj.entityViewer.${entity.ID.toLowerCase()}.view` : null;
+  }
+
+  /** Persist the per-user default-view state (active view type + per-type configs) to User Settings. */
+  private saveDefaultViewSetting(): void {
+    const key = this.defaultViewSettingKey();
+    if (!key) {
+      return;
+    }
+    const payload = {
+      viewTypeId: this.ActiveViewTypeOption?.viewTypeId ?? null,
+      viewTypeConfigs: this.serializeViewTypeConfigs(),
+    };
+    UserInfoEngine.Instance.SetSettingDebounced(key, JSON.stringify(payload));
+  }
+
+  /** Convert the in-memory per-view-type config map to the persisted array shape. */
+  private serializeViewTypeConfigs(): Array<{ viewTypeId: string; config: Record<string, unknown> }> {
+    return Array.from(this.viewTypeConfigById.entries()).map(([viewTypeId, config]) => ({ viewTypeId, config }));
+  }
+
+  /**
+   * Resolve which view type the viewer should open in, in priority order:
+   * explicit `ViewTypeID` input → the loaded `UserView` record's `ViewTypeID` → the per-user
+   * default-view setting (User Settings). Returns null to let the caller fall back to the legacy
+   * mode / first available type. This is how the viewer is self-contained for both the saved-view
+   * and default-view cases without the consumer wiring anything.
+   */
+  private resolveInitialViewTypeId(): string | null {
+    if (this._initialViewTypeId) {
+      return this._initialViewTypeId;
+    }
+    if (this._viewEntity?.ViewTypeID) {
+      return this._viewEntity.ViewTypeID;
+    }
+    return this.readDefaultViewSetting()?.viewTypeId ?? null;
+  }
+
+  /**
+   * Load a saved view by ID via the active provider and apply it through the {@link viewEntity}
+   * setter. Backs the {@link ViewID} convenience input. Logs (does not throw) on failure.
+   */
+  private async loadViewById(viewId: string): Promise<void> {
+    const provider = this.ProviderToUse;
+    if (!provider) {
+      return;
+    }
+    const view = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', provider.CurrentUser);
+    const loaded = await view.Load(viewId);
+    if (loaded) {
+      this.ViewEntity = view;
+    } else {
+      LogError(`EntityViewer: failed to load view ${viewId}: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+  }
+
+  /** Read the per-user default-view setting for the current entity (or null). */
+  private readDefaultViewSetting(): { viewTypeId: string | null; viewTypeConfigs?: Array<{ viewTypeId: string; config: Record<string, unknown> }> } | null {
+    const key = this.defaultViewSettingKey();
+    if (!key) {
+      return null;
+    }
+    const raw = UserInfoEngine.Instance.GetSetting(key);
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Seed the in-memory per-view-type config map from the available sources when the consumer
+   * hasn't supplied them via the {@link ViewTypeConfigs} input: the loaded `UserView` record's
+   * `DisplayState.viewTypeConfigs` (saved-view case) or the per-user default-view setting.
+   * Only seeds when the map is empty, so an explicit input always wins.
+   */
+  private seedViewTypeConfigsIfEmpty(): void {
+    if (this.viewTypeConfigById.size > 0) {
+      return;
+    }
+    const fromRecord = this._viewEntity?.DisplayStateObject?.viewTypeConfigs;
+    const source = fromRecord ?? this.readDefaultViewSetting()?.viewTypeConfigs ?? [];
+    for (const entry of source) {
+      if (entry?.viewTypeId) {
+        this.viewTypeConfigById.set(entry.viewTypeId, entry.config ?? {});
+      }
+    }
   }
 
   // ========================================
@@ -1510,9 +1497,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   // ========================================
 
   /**
-   * Mounts a plug-in view type's RendererComponent into the dynamic host, wires the
-   * {@link IViewRenderer} inputs, and subscribes to its selection/open/config outputs.
-   * Replaces any previously-mounted plug-in renderer.
+   * Mounts a plug-in view type's RendererComponent into the dynamic host, wires the generic
+   * {@link IViewRenderer} inputs, and subscribes to its generic outputs. The container has zero
+   * knowledge of which plug-in this is — it only knows the contract. Replaces any previously-mounted
+   * renderer.
    */
   private mountDynamicRenderer(option: ViewModeOption): void {
     this.unmountDynamicRenderer();
@@ -1525,13 +1513,24 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const ref = host.createComponent<IViewRenderer>(componentType as never);
     this.dynamicRendererRef = ref;
 
-    // Wire outputs (the renderer's IViewRenderer EventEmitters).
+    // Wire the generic IViewRenderer outputs. All are optional on lean plug-ins, so guard each
+    // with `?.`. Only navigation (record open / related-record / create) bubbles to the outer app;
+    // config and dataRequest are generic plug-in↔container coordination.
     const inst = ref.instance;
     inst.recordSelected?.pipe(takeUntil(this.destroy$)).subscribe((r: unknown) => this.onDynamicRecordSelected(r));
     inst.recordOpened?.pipe(takeUntil(this.destroy$)).subscribe((r: unknown) => this.onDynamicRecordOpened(r));
     inst.configChanged
       ?.pipe(takeUntil(this.destroy$))
       .subscribe((cfg: unknown) => this.onDynamicConfigChanged(option.viewTypeId, (cfg ?? {}) as Record<string, unknown>));
+    inst.openRelatedRecordRequested
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe((nav: ViewRelatedRecordNavigation) => this.OpenRelatedRecordRequested.emit(nav));
+    inst.createRecordRequested
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.CreateRecordRequested.emit());
+    inst.dataRequest
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe((req: ViewDataRequest) => this.onDynamicDataRequest(req));
 
     this.pushDynamicRendererInputs();
     ref.changeDetectorRef.detectChanges();
@@ -1547,74 +1546,116 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Pushes the current data/selection/config into the mounted plug-in renderer via
-   * `setInput` (which triggers the renderer's change detection correctly).
+   * Pushes the current generic data-context into the mounted plug-in renderer via `setInput`.
+   * Every input is part of the generic {@link IViewRenderer} contract; lean plug-ins may not declare
+   * all of them, so each `setInput` is wrapped in try/catch (Angular throws on undeclared inputs).
    */
   private pushDynamicRendererInputs(): void {
     const ref = this.dynamicRendererRef;
-    const option = this.activeDynamicOption;
+    const option = this.ActiveDynamicOption;
     if (!ref || !option) {
       return;
     }
-    ref.setInput('entity', this.effectiveEntity);
-    ref.setInput('records', this.filteredRecords);
-    ref.setInput('selectedRecordId', this.selectedRecordId);
-    ref.setInput('filterText', this.debouncedFilterText);
-    ref.setInput('config', this.viewTypeConfigById.get(option.viewTypeId) ?? {});
+    this.setDynamicInput(ref, 'entity', this.EffectiveEntity);
+    this.setDynamicInput(ref, 'provider', this.ProviderToUse);
+    this.setDynamicInput(ref, 'Provider', this.Provider);
+    this.setDynamicInput(ref, 'records', this.FilteredRecords);
+    this.setDynamicInput(ref, 'selectedRecordId', this.SelectedRecordID);
+    this.setDynamicInput(ref, 'filterText', this.DebouncedFilterText);
+    this.setDynamicInput(ref, 'config', this.viewTypeConfigById.get(option.viewTypeId) ?? {});
+    this.setDynamicInput(ref, 'totalRecordCount', this.TotalRecordCount);
+    this.setDynamicInput(ref, 'page', this.Pagination.currentPage + 1);
+    this.setDynamicInput(ref, 'pageSize', this.Pagination.pageSize);
+    this.setDynamicInput(ref, 'isLoading', this.IsLoading);
+  }
+
+  /**
+   * Guarded `setInput`: lean plug-ins implement only the core contract, so setting an optional
+   * input they don't declare throws. We swallow that so the container stays plug-in-agnostic.
+   */
+  private setDynamicInput(ref: ComponentRef<IViewRenderer>, name: string, value: unknown): void {
+    try {
+      ref.setInput(name, value);
+    } catch {
+      // Plug-in doesn't declare this optional input — fine, skip it.
+    }
   }
 
   private onDynamicRecordSelected(record: unknown): void {
-    const entity = this.effectiveEntity;
+    const entity = this.EffectiveEntity;
     if (entity && record) {
       const row = record as Record<string, unknown>;
-      this.recordSelected.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+      this.RecordSelected.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
     }
   }
 
   private onDynamicRecordOpened(record: unknown): void {
-    const entity = this.effectiveEntity;
+    const entity = this.EffectiveEntity;
     if (entity && record) {
       const row = record as Record<string, unknown>;
-      this.recordOpened.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+      this.RecordOpened.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
     }
   }
 
   private onDynamicConfigChanged(viewTypeId: string, config: Record<string, unknown>): void {
+    const before: ViewTypeConfigChangeEventArgs = { ViewTypeID: viewTypeId, Config: config, Cancel: false };
+    this.BeforeViewTypeConfigChange.emit(before);
+    if (before.Cancel) {
+      return;
+    }
     this.viewTypeConfigById.set(viewTypeId, config);
-    this.ViewTypeConfigChange.emit({ viewTypeId, config });
+    if (this.AutoSaveView) {
+      void this.persistViewTypeConfig(viewTypeId);
+    }
+    this.AfterViewTypeConfigChange.emit({ ViewTypeID: viewTypeId, Config: config, Cancel: false });
   }
 
   /**
-   * Set the view mode and emit change event
+   * Honors a generic {@link ViewDataRequest} from the mounted plug-in. Fully view-type-agnostic —
+   * the container applies whatever is present (sort / page / pageSize / loadAll) against its
+   * existing generic data-loading path. No per-view-type branching.
    */
-  setViewMode(mode: EntityViewMode): void {
-    // Switching to a built-in mode always tears down any active plug-in renderer and
-    // syncs the registry selection key so the switcher highlight stays correct, even when
-    // the parent drives this via the legacy [(viewMode)] binding or a timeline/map fallback.
-    if (this.isDynamicViewActive) {
-      this.unmountDynamicRenderer();
-      this.activeDynamicOption = null;
-    }
-    const matchingOption = this.availableViewTypes.find(o => o.mode === mode);
-    if (matchingOption) {
-      this.activeViewTypeKey = matchingOption.key;
+  private onDynamicDataRequest(req: ViewDataRequest): void {
+    if (!req || this._records) {
+      // Nothing to do when records are externally supplied (no internal RunView to retrigger).
+      return;
     }
 
-    const previousMode = this.effectiveViewMode;
-    if (previousMode !== mode) {
-      this.internalViewMode = mode;
-      this.viewModeChange.emit(mode);
+    // loadAll → switch the data loader into full-set mode (replaces the old map-specific branch).
+    if (req.loadAll === true && !this._loadAllRecords) {
+      this._loadAllRecords = true;
+      this.resetPaginationState(false);
+      this.LoadData();
+      return;
+    }
+    if (req.loadAll === false && this._loadAllRecords) {
+      this._loadAllRecords = false;
+      this.resetPaginationState(false);
+      this.LoadData();
+      return;
+    }
 
-      // Reload data when switching to/from map mode because map loads all
-      // records (up to MAP_MAX_RECORDS) while other modes use page-based pagination.
-      const switchingToMap = mode === 'map' && previousMode !== 'map';
-      const switchingFromMap = mode !== 'map' && previousMode === 'map';
-      if (switchingToMap || switchingFromMap) {
-        this.resetPaginationState();
-        this.loadData();
-      } else {
-        this.cdr.detectChanges();
+    // sort → set the host's internal sort state and reload via the server-side-sort path.
+    if (req.sort) {
+      const first = req.sort.length > 0 ? req.sort[0] : null;
+      const newSort: SortState | null = first ? { field: first.field, direction: first.direction } : null;
+      const oldSort = this.InternalSortState;
+      this.InternalSortState = newSort;
+      const sortChanged = !oldSort || !newSort ||
+        oldSort.field !== newSort.field || oldSort.direction !== newSort.direction;
+      if (this.EffectiveConfig.serverSideSorting && sortChanged) {
+        this.resetPaginationState(false);
+        this.LoadData();
       }
+      return;
+    }
+
+    // page / pageSize → load that page via the existing pager path.
+    if (req.pageSize != null && req.pageSize !== this.Pagination.pageSize) {
+      this.Pagination.pageSize = req.pageSize;
+    }
+    if (req.page != null) {
+      this.OnPageChange({ PageNumber: req.page, PageSize: req.pageSize ?? this.Pagination.pageSize } as PageChangeEvent);
     }
   }
 
@@ -1625,584 +1666,17 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   /**
    * Handle filter input change
    */
-  onFilterChange(value: string): void {
-    this.internalFilterText = value;
+  OnFilterChange(value: string): void {
+    this.InternalFilterText = value;
     this.filterInput$.next(value);
   }
 
   /**
    * Clear the filter
    */
-  clearFilter(): void {
-    this.internalFilterText = '';
+  ClearFilter(): void {
+    this.InternalFilterText = '';
     this.filterInput$.next('');
     this.cdr.detectChanges();
   }
-
-  // ========================================
-  // SORTING
-  // ========================================
-
-  /**
-   * Handle sort change from grid component
-   */
-  onSortChanged(event: SortChangedEvent): void {
-    const oldSort = this.internalSortState;
-    this.internalSortState = event.sort;
-    this.sortChanged.emit(event);
-
-    // If server-side sorting, reload from page 1
-    // Keep existing records visible during refresh for better UX
-    if (this.effectiveConfig.serverSideSorting && !this.records) {
-      const sortChanged = !oldSort || !event.sort ||
-        oldSort.field !== event.sort?.field ||
-        oldSort.direction !== event.sort?.direction;
-
-      if (sortChanged) {
-        this.resetPaginationState(false);
-        this.loadData();
-      }
-    }
-  }
-
-  // ========================================
-  // EVENT HANDLERS
-  // ========================================
-
-  /**
-   * Handle record selection from child components (grid or cards)
-   */
-  onRecordSelected(event: RecordSelectedEvent): void {
-    this.recordSelected.emit(event);
-  }
-
-  /**
-   * Handle record opened from child components (grid or cards)
-   */
-  onRecordOpened(event: RecordOpenedEvent): void {
-    this.recordOpened.emit(event);
-  }
-
-  /**
-   * Handle grid state changes (column resize, reorder, etc.)
-   */
-  onGridStateChanged(event: GridStateChangedEvent): void {
-    this.gridStateChanged.emit(event);
-  }
-
-  /**
-   * Handle page change from the data grid's pager
-   */
-  onGridPageChange(event: PageChangeEvent): void {
-    this.onPageChange(event);
-  }
-
-  // ========================================
-  // DATA GRID EVENT HANDLERS
-  // ========================================
-
-  /**
-   * Handle row click from mj-entity-data-grid
-   * Maps to recordSelected event for parent components
-   */
-  onDataGridRowClick(event: AfterRowClickEventArgs): void {
-    const entity = this.effectiveEntity;
-    if (!entity || !event.row) return;
-
-    this.recordSelected.emit({
-      record: event.row,
-      entity: entity,
-      compositeKey: buildCompositeKey(event.row, entity)
-    });
-  }
-
-  /**
-   * Handle row double-click from mj-entity-data-grid
-   * Maps to recordOpened event for parent components
-   */
-  onDataGridRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
-    const entity = this.effectiveEntity;
-    if (!entity || !event.row) return;
-
-    this.recordOpened.emit({
-      record: event.row,
-      entity: entity,
-      compositeKey: buildCompositeKey(event.row, entity)
-    });
-  }
-
-  /**
-   * Handle sort changed from mj-entity-data-grid
-   * Maps to sortChanged event for parent components
-   */
-  onDataGridSortChanged(event: AfterSortEventArgs): void {
-    // Convert the data grid's sort state to our SortState format
-    const newSort: SortState | null = event.newSortState && event.newSortState.length > 0
-      ? {
-          field: event.newSortState[0].field,
-          direction: event.newSortState[0].direction
-        }
-      : null;
-
-    this.internalSortState = newSort;
-    this.sortChanged.emit({ sort: newSort });
-
-    // If server-side sorting, reload from page 1.
-    // Use deferReload() so that if a view-switch reload is already in-flight
-    // (e.g., AG Grid fired an async sortChanged from applySortStateToGrid),
-    // we don't trigger a redundant second RunView.
-    // For normal user-initiated column-header clicks, no deferred reload is
-    // pending so deferReload() fires immediately — no UX difference.
-    if (this.effectiveConfig.serverSideSorting && !this.records) {
-      this.resetPaginationState(false);
-      this.deferReload();
-    }
-  }
-
-  /**
-   * Handle foreign key link click from mj-entity-data-grid
-   * Bubbles the event up for parent components to handle navigation
-   */
-  /**
-   * Handle foreign key link click from mj-entity-data-grid
-   * Converts to recordOpened event for seamless navigation integration
-   */
-  onForeignKeyClick(event: ForeignKeyClickEvent): void {
-    // Look up the related entity by name
-    const md = this.ProviderToUse;
-    const relatedEntity = event.relatedEntityName
-      ? md.Entities.find(e => e.Name === event.relatedEntityName)
-      : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));
-
-    if (!relatedEntity) {
-      return;
-    }
-
-    // Create composite key using the target entity's actual primary key field name
-    const pkFieldName = relatedEntity.FirstPrimaryKey?.Name || 'ID';
-    const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
-
-    // Emit recordOpened for the related entity (record is undefined since it's not loaded)
-    this.recordOpened.emit({
-      entity: relatedEntity,
-      compositeKey
-    });
-  }
-
-  /**
-   * Handle Add/New button click from data grid toolbar
-   */
-  onGridAddRequested(): void {
-    this.addRequested.emit();
-  }
-
-  /**
-   * Handle Refresh button click from data grid toolbar
-   */
-  onGridRefreshRequested(): void {
-    this.refreshRequested.emit();
-    // Also trigger an internal refresh
-    this.refresh();
-  }
-
-  /**
-   * Handle Delete button click from data grid toolbar
-   */
-  onGridDeleteRequested(records: Record<string, unknown>[]): void {
-    this.deleteRequested.emit({ records });
-  }
-
-  /**
-   * Handle Export button click from data grid toolbar
-   */
-  onGridExportRequested(): void {
-    this.exportRequested.emit({ format: 'excel' });
-  }
-
-  /**
-   * Handle Add to List button click from data grid toolbar.
-   * Forwards the event to parent components for list management.
-   */
-  onGridAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
-    this.addToListRequested.emit(event);
-  }
-
-  /**
-   * Handle selection change from data grid.
-   * Converts selected keys to records and forwards to parent components.
-   */
-  onGridSelectionChange(selectedKeys: string[]): void {
-    const entity = this.effectiveEntity;
-    if (!entity) return;
-
-    // Find the actual records from our filtered records
-    const records = this.filteredRecords.filter(record => {
-      const key = buildPkString(record, entity);
-      return selectedKeys.includes(key);
-    });
-
-    // Get the raw primary key values for list management
-    const recordIds = records.map(record =>
-      String(record[entity.PrimaryKeys[0].Name])
-    );
-
-    this.selectionChanged.emit({ records, recordIds });
-  }
-
-  // ========================================
-  // TIMELINE METHODS
-  // ========================================
-
-  /**
-   * Handle timeline event click - emit as record selection
-   */
-  onTimelineEventClick(event: AfterEventClickArgs): void {
-    const record = event.event.entity as Record<string, unknown>;
-    const entity = this.effectiveEntity;
-    if (record && entity) {
-      this.recordSelected.emit({
-        record,
-        entity: entity,
-        compositeKey: buildCompositeKey(record, entity)
-      });
-    }
-  }
-
-  /**
-   * Update HasGeoCoding based on the current effectiveEntity.
-   * Called from entity setter and after data loads (when effectiveEntity may resolve via viewEntity).
-   */
-  private updateGeoCodingSupport(): void {
-    const entity = this.effectiveEntity;
-    const newValue = !!(entity && entity.SupportsGeoCoding);
-    if (newValue !== this.HasGeoCoding) {
-      this.HasGeoCoding = newValue;
-      this.fallbackFromMapIfNeeded();
-      this.cdr.detectChanges();
-    }
-  }
-
-  /**
-   * Handle map marker click — emit the record for the parent to handle (open record, etc.)
-   */
-  onMapMarkerClick(event: { RecordID: string; Latitude: number; Longitude: number; Record: Record<string, unknown> }): void {
-    const entity = this.effectiveEntity;
-    if (event.Record && entity) {
-      const compositeKey = buildCompositeKey(event.Record, entity);
-      // Emit both recordSelected (for detail panels) and recordOpened (for navigation)
-      this.recordSelected.emit({
-        record: event.Record,
-        entity: entity,
-        compositeKey
-      });
-      this.recordOpened.emit({
-        record: event.Record,
-        entity: entity,
-        compositeKey
-      });
-    }
-  }
-
-  /** Map display state (zoom, center) — passed from parent for persistence across reloads. */
-  @Input() mapDisplayState: Partial<MapDisplayState> | null = null;
-
-  /** Map render mode — separate from DisplayState for clear single-source-of-truth. */
-  @Input() mapRenderMode: MapRenderMode = 'point';
-
-  /** Emitted when the map's display state changes (zoom, center). */
-  @Output() mapDisplayStateChange = new EventEmitter<MapDisplayState>();
-
-  /** Emitted when the map's render mode changes (user clicks mode buttons). */
-  @Output() mapRenderModeChange = new EventEmitter<MapRenderMode>();
-
-  /**
-   * Handle map display state changes — bubble up to parent for persistence.
-   */
-  onMapDisplayStateChange(state: MapDisplayState): void {
-    this.mapDisplayStateChange.emit(state);
-  }
-
-  onMapRenderModeChange(mode: MapRenderMode): void {
-    this.mapRenderModeChange.emit(mode);
-  }
-
-  /**
-   * Toggle timeline orientation between vertical and horizontal
-   */
-  toggleTimelineOrientation(): void {
-    this.timelineOrientation = this.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
-
-    // Emit config change so parent can persist the preference
-    this.emitTimelineConfigChange();
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Toggle timeline sort order between newest first (desc) and oldest first (asc)
-   */
-  toggleTimelineSortOrder(): void {
-    this.timelineSortOrder = this.timelineSortOrder === 'desc' ? 'asc' : 'desc';
-
-    // Emit config change so parent can persist the preference
-    this.emitTimelineConfigChange();
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Change the date field used for the timeline
-   */
-  setTimelineDateField(fieldName: string): void {
-    if (this.availableDateFields.some(f => f.Name === fieldName)) {
-      this.selectedTimelineDateField = fieldName;
-      this.updateTimelineGroups();
-      this.emitTimelineConfigChange();
-      this.cdr.detectChanges();
-    }
-  }
-
-  /**
-   * Get the display name of the currently selected timeline date field
-   */
-  get selectedDateFieldDisplayName(): string {
-    if (!this.selectedTimelineDateField) return '';
-    const field = this.availableDateFields.find(f => f.Name === this.selectedTimelineDateField);
-    return field?.DisplayNameOrName || this.selectedTimelineDateField;
-  }
-
-  /**
-   * Emit the current timeline configuration for persistence
-   */
-  private emitTimelineConfigChange(): void {
-    if (this.selectedTimelineDateField) {
-      this.timelineConfigChange.emit({
-        dateFieldName: this.selectedTimelineDateField,
-        sortOrder: this.timelineSortOrder,
-        segmentGrouping: this.timelineSegmentGrouping as TimelineSegmentGrouping,
-        orientation: this.timelineOrientation
-      });
-    }
-  }
-
-  /**
-   * Detect and configure timeline based on entity's date fields
-   * Called when entity changes
-   */
-  private detectDateFields(): void {
-    if (!this.entity) {
-      this.hasDateFields = false;
-      this.availableDateFields = [];
-      this.timelineGroups = [];
-      this.fallbackFromTimelineIfNeeded();
-      return;
-    }
-
-    // Find all date fields - include __mj_CreatedAt and __mj_UpdatedAt as they're useful for timelines
-    const dateFields = this.entity.Fields.filter(
-      f => f.TSType === EntityFieldTSType.Date
-    );
-
-    if (dateFields.length === 0) {
-      this.hasDateFields = false;
-      this.availableDateFields = [];
-      this.timelineGroups = [];
-      this.fallbackFromTimelineIfNeeded();
-      return;
-    }
-
-    // Sort by priority: DefaultInView date fields first (by Sequence), then others (by Sequence)
-    this.availableDateFields = this.sortDateFieldsByPriority(dateFields);
-    this.hasDateFields = true;
-
-    // Configure timeline with the best date field
-    this.configureTimeline();
-  }
-
-  /**
-   * If currently on timeline view but timeline is no longer available,
-   * fall back to grid view
-   */
-  private fallbackFromTimelineIfNeeded(): void {
-    if (this.effectiveViewMode === 'timeline' && !this.hasDateFields) {
-      this.setViewMode('grid');
-    }
-  }
-
-  /**
-   * If currently on map view but geocoding is no longer available,
-   * fall back to grid view
-   */
-  private fallbackFromMapIfNeeded(): void {
-    if (this.effectiveViewMode === 'map' && !this.HasGeoCoding) {
-      this.setViewMode('grid');
-    }
-  }
-
-  /**
-   * Sort date fields by priority:
-   * 1. DefaultInView=true fields, sorted by Sequence (lowest first)
-   * 2. Other date fields, sorted by Sequence (lowest first)
-   */
-  private sortDateFieldsByPriority(dateFields: EntityFieldInfo[]): EntityFieldInfo[] {
-    const defaultInView = dateFields.filter(f => f.DefaultInView).sort((a, b) => a.Sequence - b.Sequence);
-    const others = dateFields.filter(f => !f.DefaultInView).sort((a, b) => a.Sequence - b.Sequence);
-    return [...defaultInView, ...others];
-  }
-
-  /**
-   * Configure the timeline with the current date field and records
-   */
-  private configureTimeline(): void {
-    if (!this.entity || !this.hasDateFields || this.availableDateFields.length === 0) {
-      this.timelineGroups = [];
-      return;
-    }
-
-    // Determine which date field to use
-    const dateFieldName = this.getEffectiveTimelineDateField();
-    this.selectedTimelineDateField = dateFieldName;
-
-    // Apply timeline config if provided
-    if (this.timelineConfig) {
-      this.timelineSortOrder = (this.timelineConfig.sortOrder || 'desc') as TimelineSortOrder;
-      this.timelineSegmentGrouping = (this.timelineConfig.segmentGrouping || 'month') as TimeSegmentGrouping;
-      this.timelineOrientation = this.timelineConfig.orientation || 'vertical';
-    }
-
-    // Create a timeline group for the current entity's data
-    this.updateTimelineGroups();
-  }
-
-  /**
-   * Get the effective date field to use for timeline
-   * Priority: timelineConfig > first available date field
-   */
-  private getEffectiveTimelineDateField(): string {
-    // If we have a config with a specific date field, use it if valid
-    if (this.timelineConfig?.dateFieldName) {
-      const configField = this.availableDateFields.find(f => f.Name === this.timelineConfig!.dateFieldName);
-      if (configField) {
-        return configField.Name;
-      }
-    }
-
-    // Otherwise use the first available date field (already sorted by priority)
-    return this.availableDateFields[0].Name;
-  }
-
-  /**
-   * Update timeline groups with current records
-   * Called when records change
-   */
-  private updateTimelineGroups(): void {
-    if (!this.entity || !this.selectedTimelineDateField) {
-      this.timelineGroups = [];
-      return;
-    }
-
-    // Find title field - prefer NameField, then first string field with DefaultInView
-    const titleField = this.findTitleField();
-
-    // Create a single group for the current data
-    const group = new TimelineGroup<Record<string, unknown>>();
-    group.DataSourceType = 'array';
-    group.EntityObjects = this.filteredRecords;
-    group.TitleFieldName = titleField;
-    group.DateFieldName = this.selectedTimelineDateField;
-    group.IdFieldName = 'ID';
-    group.GroupLabel = this.entity.Name;
-
-    // Find a suitable description field
-    const descField = this.findDescriptionField();
-    if (descField) {
-      group.DescriptionFieldName = descField;
-    }
-
-    // Find a suitable subtitle field
-    const subtitleField = this.findSubtitleField(titleField);
-    if (subtitleField) {
-      group.SubtitleFieldName = subtitleField;
-    }
-
-    // Configure card display
-    group.CardConfig = {
-      collapsible: true,
-      defaultExpanded: false,
-      showDate: true,
-      dateFormat: 'MMM d, yyyy h:mm a'
-    };
-
-    this.timelineGroups = [group];
-  }
-
-  /**
-   * Find the best field to use as the title
-   */
-  private findTitleField(): string {
-    if (!this.entity) return 'ID';
-
-    // Prefer the entity's NameField
-    if (this.entity.NameField) {
-      return this.entity.NameField.Name;
-    }
-
-    // Look for common name patterns in DefaultInView string fields
-    const stringFields = this.entity.Fields.filter(
-      f => f.TSType === EntityFieldTSType.String && f.DefaultInView && !f.Name.startsWith('__mj_')
-    ).sort((a, b) => a.Sequence - b.Sequence);
-
-    const namePatterns = ['name', 'title', 'subject', 'label'];
-    for (const pattern of namePatterns) {
-      const match = stringFields.find(f => f.Name.toLowerCase().includes(pattern));
-      if (match) return match.Name;
-    }
-
-    // Fall back to first string field
-    return stringFields.length > 0 ? stringFields[0].Name : 'ID';
-  }
-
-  /**
-   * Find a suitable description field
-   */
-  private findDescriptionField(): string | null {
-    if (!this.entity) return null;
-
-    // Look for common description patterns
-    const descPatterns = ['description', 'notes', 'summary', 'content', 'body', 'details'];
-    const textFields = this.entity.Fields.filter(
-      f => (f.TSType === EntityFieldTSType.String) && !f.Name.startsWith('__mj_')
-    );
-
-    for (const pattern of descPatterns) {
-      const match = textFields.find(f => f.Name.toLowerCase().includes(pattern));
-      if (match) return match.Name;
-    }
-
-    return null;
-  }
-
-  /**
-   * Find a suitable subtitle field (different from title)
-   */
-  private findSubtitleField(excludeField: string): string | null {
-    if (!this.entity) return null;
-
-    // Look for status, type, category, or other short classification fields
-    const patterns = ['status', 'type', 'category', 'state', 'priority'];
-    const fields = this.entity.Fields.filter(
-      f => f.TSType === EntityFieldTSType.String &&
-           f.DefaultInView &&
-           f.Name !== excludeField &&
-           !f.Name.startsWith('__mj_')
-    ).sort((a, b) => a.Sequence - b.Sequence);
-
-    for (const pattern of patterns) {
-      const match = fields.find(f => f.Name.toLowerCase().includes(pattern));
-      if (match) return match.Name;
-    }
-
-    // Use the first string field that's not the title field
-    const firstOther = fields.find(f => f.Name !== excludeField);
-    return firstOther?.Name || null;
-  }
 }
-

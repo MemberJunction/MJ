@@ -8,7 +8,8 @@ import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
-import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -25,6 +26,9 @@ import { DuplicateViewDialogComponent } from './lib/duplicate-view-dialog/duplic
 import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
 import { RecycleBinComponent } from './lib/recycle-bin/recycle-bin.component';
 import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.component';
+import { ViewSelectorComponent } from './lib/view-selector/view-selector.component';
+import { ViewWorkspaceComponent } from './lib/view-workspace/view-workspace.component';
+import { ViewTypeSwitcherComponent } from './lib/view-type-switcher/view-type-switcher.component';
 import { LoadViewTypeDescriptors } from './lib/view-types';
 
 // Register the built-in view-type descriptors with the ClassFactory at module load.
@@ -69,7 +73,10 @@ LoadViewTypeDescriptors();
     DuplicateViewDialogComponent,
     SharedViewWarningDialogComponent,
     RecycleBinComponent,
-    RecycleBinChipComponent
+    RecycleBinChipComponent,
+    ViewSelectorComponent,
+    ViewWorkspaceComponent,
+    ViewTypeSwitcherComponent
   ],
   imports: [
     CommonModule,
@@ -81,7 +88,9 @@ LoadViewTypeDescriptors();
     ExportServiceModule,
     MapViewModule,
     RecordChangesModule,
-    MjSlidePanelComponent
+    MjSlidePanelComponent,
+    MJButtonDirective,
+    FilterBuilderModule
   ],
   exports: [
     EntityCardsComponent,
@@ -97,7 +106,10 @@ LoadViewTypeDescriptors();
     ViewHeaderComponent,
     DuplicateViewDialogComponent,
     SharedViewWarningDialogComponent,
-    RecycleBinComponent
+    RecycleBinComponent,
+    ViewSelectorComponent,
+    ViewWorkspaceComponent,
+    ViewTypeSwitcherComponent
   ]
 })
 export class EntityViewerModule { }

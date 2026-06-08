@@ -62,17 +62,14 @@
         <!-- Entity Viewer -->
         <mj-entity-viewer
             #entityViewer
-            [entity]="entityInfo"
-            [viewEntity]="viewEntity"
-            [gridState]="gridState"
-            [viewMode]="configuredViewMode"
-            [ViewTypeID]="configuredViewTypeId"
-            [ViewTypeConfigs]="viewTypeConfigs"
-            [mapRenderMode]="configuredMapRenderMode"
-            (recordOpened)="onRecordOpened($any($event))"
-            (ViewTypeChange)="onViewTypeChange($event)"
-            (ViewTypeConfigChange)="onViewTypeConfigChange($event)"
-            (dataLoaded)="onDataLoaded()">
+            [Entity]="entityInfo"
+            [Provider]="Provider"
+            [ViewEntity]="viewEntity"
+            [GridState]="gridState"
+            [AutoSaveView]="true"
+            (RecordOpened)="onRecordOpened($any($event))"
+            (OpenRelatedRecordRequested)="onOpenRelatedRecord($event)"
+            (DataLoaded)="onDataLoaded()">
         </mj-entity-viewer>
 
         <!-- Save-as-List dialog -->

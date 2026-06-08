@@ -44,6 +44,7 @@
     "@memberjunction/ng-base-types": "5.39.0",
     "@memberjunction/ng-export-service": "5.39.0",
     "@memberjunction/ng-filter-builder": "5.39.0",
+    "@memberjunction/ng-list-management": "5.39.0",
     "@memberjunction/ng-map-view": "5.39.0",
     "@memberjunction/ng-pagination": "5.39.0",
     "@memberjunction/ng-record-changes": "5.39.0",

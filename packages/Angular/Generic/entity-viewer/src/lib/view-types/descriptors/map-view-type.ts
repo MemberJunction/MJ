@@ -1,8 +1,8 @@
 import { Type } from '@angular/core';
 import { EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MapViewComponent } from '@memberjunction/ng-map-view';
 import { BaseViewTypeDescriptor } from '../view-type.contracts';
+import { MapViewRendererComponent } from '../renderers/map-view-renderer.component';
 
 /**
  * Map view type — renders geocoded records as markers on an interactive map. Available
@@ -17,7 +17,7 @@ export class MapViewType extends BaseViewTypeDescriptor {
   readonly Name = 'MapViewType';
   readonly DisplayName = 'Map';
   readonly Icon = 'fa-solid fa-map-location-dot';
-  readonly RendererComponent: Type<unknown> = MapViewComponent;
+  readonly RendererComponent: Type<unknown> = MapViewRendererComponent;
 
   override IsAvailableFor(entity: EntityInfo, _provider?: IMetadataProvider): boolean {
     return !!(entity && entity.SupportsGeoCoding);

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
-import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import { NormalizeUUID } from '@memberjunction/global';
 import {
   DEFAULT_CLUSTER_VIEW_CONFIG,
   toClusterViewConfig,
@@ -17,14 +17,13 @@ function entity(id: string): EntityInfo {
   return { ID: id, Name: `Entity ${id}` } as unknown as EntityInfo;
 }
 
-// Minimal Entity Document stand-in — only EntityID is read.
-function doc(entityId: string): MJEntityDocumentEntity {
-  return { EntityID: entityId } as unknown as MJEntityDocumentEntity;
-}
-
-/** Seed the availability engine's private cache without hitting the database. */
-function seedDocs(docs: MJEntityDocumentEntity[]): void {
-  (EntityDocumentAvailabilityEngine.Instance as unknown as { _entityDocuments: MJEntityDocumentEntity[] })._entityDocuments = docs;
+/**
+ * Seed the engine's vector-presence cache (the set of entity IDs that have populated vectors)
+ * without hitting the database. Mirrors what `loadVectorPresence` produces.
+ */
+function seedEntitiesWithVectors(entityIds: string[]): void {
+  (EntityDocumentAvailabilityEngine.Instance as unknown as { _entityIDsWithVectors: Set<string> })._entityIDsWithVectors =
+    new Set(entityIds.map(id => NormalizeUUID(id)));
 }
 
 describe('toClusterViewConfig', () => {
@@ -54,26 +53,26 @@ describe('toClusterViewConfig', () => {
   });
 });
 
-describe('EntityDocumentAvailabilityEngine.HasActiveDocumentForEntity', () => {
-  beforeEach(() => seedDocs([]));
+describe('EntityDocumentAvailabilityEngine.HasVectorsForEntity', () => {
+  beforeEach(() => seedEntitiesWithVectors([]));
 
   it('returns false when no entity is supplied', () => {
-    expect(EntityDocumentAvailabilityEngine.Instance.HasActiveDocumentForEntity(null)).toBe(false);
+    expect(EntityDocumentAvailabilityEngine.Instance.HasVectorsForEntity(null)).toBe(false);
   });
 
-  it('returns false when the entity has no active document', () => {
-    seedDocs([doc('AAAAAAAA-0000-0000-0000-000000000001')]);
-    expect(EntityDocumentAvailabilityEngine.Instance.HasActiveDocumentForEntity(entity('BBBBBBBB-0000-0000-0000-000000000002'))).toBe(false);
+  it('returns false when the entity has no populated vectors', () => {
+    seedEntitiesWithVectors(['AAAAAAAA-0000-0000-0000-000000000001']);
+    expect(EntityDocumentAvailabilityEngine.Instance.HasVectorsForEntity(entity('BBBBBBBB-0000-0000-0000-000000000002'))).toBe(false);
   });
 
-  it('returns true when the entity has an active document', () => {
+  it('returns true when the entity has populated vectors', () => {
     const id = 'AAAAAAAA-0000-0000-0000-000000000001';
-    seedDocs([doc(id)]);
-    expect(EntityDocumentAvailabilityEngine.Instance.HasActiveDocumentForEntity(entity(id))).toBe(true);
+    seedEntitiesWithVectors([id]);
+    expect(EntityDocumentAvailabilityEngine.Instance.HasVectorsForEntity(entity(id))).toBe(true);
   });
 
   it('matches UUIDs case-insensitively (SQL Server vs PostgreSQL casing)', () => {
-    seedDocs([doc('aaaaaaaa-0000-0000-0000-000000000001')]);
-    expect(EntityDocumentAvailabilityEngine.Instance.HasActiveDocumentForEntity(entity('AAAAAAAA-0000-0000-0000-000000000001'))).toBe(true);
+    seedEntitiesWithVectors(['aaaaaaaa-0000-0000-0000-000000000001']);
+    expect(EntityDocumentAvailabilityEngine.Instance.HasVectorsForEntity(entity('AAAAAAAA-0000-0000-0000-000000000001'))).toBe(true);
   });
 });

@@ -15,9 +15,22 @@
     gap: 0;
     width: 100%;
 }
+/* Each step is a row: the numbered circle + (for non-last steps) a growing connector line.
+   The circle must NOT be the flex container that also hosts the connector — otherwise the
+   connector renders inside the circle and squishes/clips the number. */
 .wiz-step-dot {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;               /* steps share the row; the connector consumes the slack */
+}
+.wiz-step-dot:last-child {
+    flex: 0 0 auto;               /* last step is just the circle (no trailing connector) */
+}
+/* The numbered circle — fixed size so it never shrinks or clips the number. */
+.wiz-step-num {
     width: 30px;
     height: 30px;
+    flex: 0 0 30px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -27,10 +40,9 @@
     border: 1px solid var(--mj-border-default);
     font-size: 0.8rem;
     font-weight: 600;
-    flex: 0 0 auto;
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-/* Connector line between dots so the indicator reads as a single track. */
+/* Connector line AFTER each non-last circle so the indicator reads as a single track. */
 .wiz-step-dot:not(:last-child)::after {
     content: '';
     flex: 1 1 auto;
@@ -39,16 +51,12 @@
     min-width: 16px;
     background: var(--mj-border-default);
 }
-.wiz-step-dot {
-    /* allow the ::after connector to consume free space between dots */
-    flex: 0 1 auto;
-}
-.wiz-step-dot.active {
+.wiz-step-dot.active .wiz-step-num {
     background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
     border-color: var(--mj-brand-primary);
 }
-.wiz-step-dot.done {
+.wiz-step-dot.done .wiz-step-num {
     background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
     color: var(--mj-brand-primary);
     border-color: var(--mj-brand-primary);

@@ -1,8 +1,8 @@
 import { Type } from '@angular/core';
 import { EntityInfo, EntityFieldTSType, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { TimelineComponent } from '@memberjunction/ng-timeline';
 import { BaseViewTypeDescriptor } from '../view-type.contracts';
+import { TimelineViewRendererComponent } from '../renderers/timeline-view-renderer.component';
 
 /**
  * Timeline view type — plots records along a chronological axis. Available only for
@@ -18,7 +18,7 @@ export class TimelineViewType extends BaseViewTypeDescriptor {
   readonly Name = 'TimelineViewType';
   readonly DisplayName = 'Timeline';
   readonly Icon = 'fa-solid fa-timeline';
-  readonly RendererComponent: Type<unknown> = TimelineComponent;
+  readonly RendererComponent: Type<unknown> = TimelineViewRendererComponent;
 
   override IsAvailableFor(entity: EntityInfo, _provider?: IMetadataProvider): boolean {
     if (!entity) {

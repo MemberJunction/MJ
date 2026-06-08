@@ -103,14 +103,96 @@ export interface IViewRenderer<TConfig = unknown> {
   /** View-type-specific configuration. */
   config: TConfig;
 
-  /** Emitted when a record is selected (single click). */
+  /**
+   * Optional: the metadata provider, handed to plug-ins that issue their own data calls
+   * (multi-provider safety). Generic — not specific to any one view type.
+   */
+  provider?: IMetadataProvider | null;
+
+  /**
+   * Optional generic data-context the host supplies alongside {@link records}. These are
+   * universal "a view of records" concepts (counts, current page, loading) — NOT specific to any
+   * view type — so a renderer that paginates or shows a total can read them, and one that doesn't
+   * simply ignores them. The host owns the actual data fetch; these describe its current result.
+   */
+  totalRecordCount?: number;
+  /** One-based current page of {@link records} when the host is paginating. */
+  page?: number;
+  /** Page size the host is using. */
+  pageSize?: number;
+  /** Whether the host is currently (re)loading the record set. */
+  isLoading?: boolean;
+
+  /** Emitted when a record is selected (single click). Payload is the raw record object. */
   recordSelected: EventEmitter<unknown>;
 
-  /** Emitted when a record should be opened (double-click / open). */
+  /**
+   * Emitted when THIS entity's record should be opened (double-click / open). Payload is the raw
+   * record. This is a NAVIGATION request — the only category of signal that legitimately bubbles
+   * to the outer app (routing lives there). Everything else a view does (export, add-to-list,
+   * delete, …) is self-contained in the plug-in via Generic dialogs and never bubbles up.
+   */
   recordOpened: EventEmitter<unknown>;
 
-  /** Emitted when the renderer mutates its own configuration (e.g. timeline date field). */
+  /**
+   * Optional: NAVIGATION request to open a *related* record on a DIFFERENT entity (e.g. a
+   * foreign-key drill-through in a grid cell). Bubbles to the outer app for routing. Generic —
+   * the container forwards it without acting on it.
+   */
+  openRelatedRecordRequested?: EventEmitter<ViewRelatedRecordNavigation>;
+
+  /**
+   * Optional: NAVIGATION request to create a new record of the current entity (e.g. a grid's
+   * "New" button) — opening the create form is a routing concern owned by the outer app. Bubbles
+   * up; the container forwards it without acting on it.
+   */
+  createRecordRequested?: EventEmitter<void>;
+
+  /**
+   * Emitted when the renderer mutates its own opaque {@link config} (e.g. timeline date field,
+   * grid columns/sort/widths, map render mode). The container persists the blob verbatim against
+   * the active `ViewTypeID` and never inspects it. (Container ↔ plug-in coordination inside the
+   * Generic layer — NOT a signal that drives the outer app.)
+   */
   configChanged: EventEmitter<TConfig>;
+
+  /**
+   * Optional: ask the container to (re)load the record set differently. The ONLY data-access
+   * channel a plug-in has, fully generic — the container honors the request (sort / page /
+   * load-all) without knowing which plug-in asked or why. A grid emits sort/page; a map emits
+   * `{ loadAll: true }`; a plug-in happy with the records it's given emits nothing. The container
+   * owns the actual `RunView`; no per-view-type branching. (Container ↔ plug-in coordination —
+   * NOT a signal that drives the outer app.)
+   */
+  dataRequest?: EventEmitter<ViewDataRequest>;
+}
+
+/**
+ * A generic, view-type-agnostic request from a renderer for the host to change how it loads the
+ * record set. Every field is optional; the host applies whatever is present. No field names a
+ * specific view type — these are universal data-access concepts.
+ */
+export interface ViewDataRequest {
+  /** Desired sort, applied to the host's RunView OrderBy. Empty/omitted clears sorting. */
+  sort?: Array<{ field: string; direction: 'asc' | 'desc' }>;
+  /** One-based page to load (for paginated views). */
+  page?: number;
+  /** Page size to load. */
+  pageSize?: number;
+  /** When true, the host loads the full result set (up to its safety cap) instead of paginating. */
+  loadAll?: boolean;
+}
+
+/**
+ * A NAVIGATION request to open a record on a (possibly different) entity — the generic payload
+ * for {@link IViewRenderer.openRelatedRecordRequested}. Routing lives in the outer app, so this
+ * is one of the few signals that legitimately bubbles up. The container forwards it untouched.
+ */
+export interface ViewRelatedRecordNavigation {
+  /** The entity whose record should be opened. */
+  entityName: string;
+  /** The record's key — a composite-key string or the raw key value(s). Opaque to the container. */
+  recordKey: unknown;
 }
 
 /**

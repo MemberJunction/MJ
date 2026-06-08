@@ -62,10 +62,20 @@ export class ViewTypeEngine extends BaseEngine<ViewTypeEngine> {
     if (!driverClass) {
       return null;
     }
-    return MJGlobal.Instance.ClassFactory.CreateInstance<BaseViewTypeDescriptor>(
+    const descriptor = MJGlobal.Instance.ClassFactory.CreateInstance<BaseViewTypeDescriptor>(
       BaseViewTypeDescriptor,
       driverClass
     );
+    // When no concrete descriptor is registered for this DriverClass, the ClassFactory falls
+    // back to instantiating the abstract BaseViewTypeDescriptor itself — which yields a useless
+    // instance with undefined Name/DisplayName/Icon/RendererComponent (and IsAvailableFor()===true
+    // by default). That would render as a blank, clickable item in the switcher. Treat that
+    // fallback as "not registered" so unimplemented view types (e.g. a seeded TagCloud row with
+    // no TagCloudViewType class) are simply omitted.
+    if (!descriptor || !descriptor.RendererComponent || descriptor.Name !== driverClass) {
+      return null;
+    }
+    return descriptor;
   }
 
   /**

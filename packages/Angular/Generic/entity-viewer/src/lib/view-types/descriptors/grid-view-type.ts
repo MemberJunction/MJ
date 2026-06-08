@@ -1,7 +1,7 @@
 import { Type } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseViewTypeDescriptor } from '../view-type.contracts';
-import { EntityDataGridComponent } from '../../entity-data-grid/entity-data-grid.component';
+import { GridViewRendererComponent } from '../renderers/grid-view-renderer.component';
 
 /**
  * Grid view type — the classic tabular AG-Grid renderer. Available for every entity.
@@ -14,7 +14,7 @@ export class GridViewType extends BaseViewTypeDescriptor {
   readonly Name = 'GridViewType';
   readonly DisplayName = 'Grid';
   readonly Icon = 'fa-solid fa-table';
-  readonly RendererComponent: Type<unknown> = EntityDataGridComponent;
+  readonly RendererComponent: Type<unknown> = GridViewRendererComponent;
 
   // IsAvailableFor inherits the base "always available" behavior.
 }

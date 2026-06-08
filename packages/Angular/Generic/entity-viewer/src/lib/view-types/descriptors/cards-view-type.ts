@@ -1,7 +1,7 @@
 import { Type } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseViewTypeDescriptor } from '../view-type.contracts';
-import { EntityCardsComponent } from '../../entity-cards/entity-cards.component';
+import { CardsViewRendererComponent } from '../renderers/cards-view-renderer.component';
 
 /**
  * Cards view type — renders each record as a card in a responsive grid. Available for
@@ -15,7 +15,7 @@ export class CardsViewType extends BaseViewTypeDescriptor {
   readonly Name = 'CardsViewType';
   readonly DisplayName = 'Cards';
   readonly Icon = 'fa-solid fa-grip';
-  readonly RendererComponent: Type<unknown> = EntityCardsComponent;
+  readonly RendererComponent: Type<unknown> = CardsViewRendererComponent;
 
   // IsAvailableFor inherits the base "always available" behavior.
 }

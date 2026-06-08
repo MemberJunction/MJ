@@ -3,7 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, EntityViewMode } from '@memberjunction/ng-entity-viewer';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
@@ -145,18 +145,6 @@ export class UserViewResource extends BaseResourceComponent {
     public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
-    /** View mode from dashboard configuration (grid/cards/timeline/map) */
-    public configuredViewMode: EntityViewMode | null = null;
-
-    /** The persisted active view type (UserView.ViewTypeID) — source of truth for which type opens. */
-    public configuredViewTypeId: string | null = null;
-
-    /** Per-view-type configuration from UserView.DisplayState.viewTypeConfigs. */
-    public viewTypeConfigs: Array<{ viewTypeId: string; config: Record<string, unknown> }> = [];
-
-    /** Map render mode from dashboard configuration */
-    public configuredMapRenderMode: 'point' | 'choropleth' | 'heatmap' = 'point';
-
     // Export state
     public isExporting: boolean = false;
 
@@ -182,20 +170,8 @@ export class UserViewResource extends BaseResourceComponent {
         const newRecordId = value?.ResourceRecordID;
         const newEntity = value?.Configuration?.Entity;
 
-        // Read view mode and map render mode from configuration if provided
-        const viewMode = value?.Configuration?.['viewMode'] as string | undefined;
-        if (viewMode && ['grid', 'cards', 'timeline', 'map'].includes(viewMode)) {
-            this.configuredViewMode = viewMode as EntityViewMode;
-        } else {
-            this.configuredViewMode = null;
-        }
-
-        const mapMode = value?.Configuration?.['mapRenderMode'] as string | undefined;
-        if (mapMode && ['point', 'choropleth', 'heatmap'].includes(mapMode)) {
-            this.configuredMapRenderMode = mapMode as 'point' | 'choropleth' | 'heatmap';
-        } else {
-            this.configuredMapRenderMode = 'point';
-        }
+        // View-type (grid/cards/timeline/map) and per-view-type config are now resolved
+        // internally by mj-entity-viewer from the saved view's ViewTypeID — nothing to read here.
 
         // Load on first set, or when the view/entity has changed
         if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
@@ -296,47 +272,9 @@ export class UserViewResource extends BaseResourceComponent {
             }
         }
 
-        // Active view type (source of truth) + per-view-type config from DisplayState.
-        this.configuredViewTypeId = this.viewEntity.ViewTypeID || null;
-        this.viewTypeConfigs = this.viewEntity.DisplayStateObject?.viewTypeConfigs ?? [];
-    }
-
-    /**
-     * Persist the user's active view-type selection to UserView.ViewTypeID. Fire-and-forget;
-     * only saved views (with an ID) are persisted — ad-hoc/dynamic views just keep it in memory.
-     */
-    public async onViewTypeChange(event: { viewTypeId: string; driverClass: string }): Promise<void> {
-        this.configuredViewTypeId = event.viewTypeId;
-        const view = this.viewEntity;
-        if (!view?.ID || view.ViewTypeID === event.viewTypeId) {
-            return;
-        }
-        view.ViewTypeID = event.viewTypeId;
-        const saved = await view.Save();
-        if (!saved) {
-            console.warn(`Failed to persist ViewTypeID: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        }
-    }
-
-    /**
-     * Persist a per-view-type config change into UserView.DisplayState.viewTypeConfigs (keyed by
-     * the view type's row ID), preserving the rest of DisplayState. Saved views only.
-     */
-    public async onViewTypeConfigChange(event: { viewTypeId: string; config: Record<string, unknown> }): Promise<void> {
-        const view = this.viewEntity;
-        if (!view?.ID) {
-            return;
-        }
-        const displayState = view.DisplayStateObject ?? { defaultMode: 'grid' };
-        const configs = (displayState.viewTypeConfigs ?? []).filter(c => c.viewTypeId !== event.viewTypeId);
-        configs.push({ viewTypeId: event.viewTypeId, config: event.config });
-        displayState.viewTypeConfigs = configs;
-        view.DisplayStateObject = displayState;
-        this.viewTypeConfigs = configs;
-        const saved = await view.Save();
-        if (!saved) {
-            console.warn(`Failed to persist view-type config: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        }
+        // View-type + per-view-type config persistence is fully owned by mj-entity-viewer
+        // (it reads ViewTypeID + DisplayState.viewTypeConfigs off the [viewEntity] and, with
+        // [AutoSaveView]="true", saves changes back) — nothing to wire here.
     }
 
     /**
@@ -365,6 +303,16 @@ export class UserViewResource extends BaseResourceComponent {
     public onRecordOpened(event: RecordOpenedEvent): void {
         if (event && event.entity && event.compositeKey) {
             this.navigationService.OpenEntityRecord(event.entity.Name, event.compositeKey);
+        }
+    }
+
+    /**
+     * Handle a related-record navigation requested from within a view-type renderer
+     * (e.g. a foreign-key cell) - open the target record in a new tab.
+     */
+    public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
+        if (nav?.entityName && nav.recordKey != null) {
+            this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromID(String(nav.recordKey)));
         }
     }
 
@@ -464,7 +412,7 @@ export class UserViewResource extends BaseResourceComponent {
         // Best-effort record-count hint — the entity-viewer exposes the
         // grid's row count on its gridState; we surface it so the dialog's
         // confirm button can say "Save List (476 records)".
-        this.saveAsListRecordCount = this.entityViewerRef?.totalRecordCount ?? null;
+        this.saveAsListRecordCount = this.entityViewerRef?.TotalRecordCount ?? null;
         this.saveAsListDialogVisible = true;
         this.cdr.detectChanges();
     }

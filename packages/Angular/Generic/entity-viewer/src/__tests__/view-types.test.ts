@@ -67,6 +67,21 @@ describe('ViewTypeEngine', () => {
     expect(d?.Name).toBe('TestAvailViewType');
   });
 
+  it('GetDescriptor returns null for an unregistered DriverClass (no blank-item fallback)', () => {
+    // A seeded MJ: View Types row whose descriptor class was never built (e.g. TagCloudViewType)
+    // must NOT resolve to the abstract base fallback — that would render a blank switcher item.
+    expect(ViewTypeEngine.Instance.GetDescriptor('TotallyUnregisteredViewType')).toBeNull();
+  });
+
+  it('GetAvailableViewTypeRows omits rows whose descriptor is unregistered', () => {
+    seedViewTypes([
+      { ID: 'VT1', DriverClass: 'TestAvailViewType', Name: 'Test' },
+      { ID: 'VT2', DriverClass: 'TotallyUnregisteredViewType', Name: 'Ghost' },
+    ]);
+    const rows = ViewTypeEngine.Instance.GetAvailableViewTypeRows(entity());
+    expect(rows.map(r => r.ViewType.ID)).toEqual(['VT1']);
+  });
+
   it('GetAvailableViewTypeRows pairs the row with its descriptor when available', () => {
     const rows = ViewTypeEngine.Instance.GetAvailableViewTypeRows(entity());
     expect(rows).toHaveLength(1);

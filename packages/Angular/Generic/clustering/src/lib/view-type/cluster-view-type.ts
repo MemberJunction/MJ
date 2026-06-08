@@ -31,7 +31,7 @@ export class ClusterViewType extends BaseViewTypeDescriptor {
   override readonly PropSheetComponent: Type<unknown> = ClusterViewPropSheetComponent;
 
   override IsAvailableFor(entity: EntityInfo, _provider?: IMetadataProvider): boolean {
-    return EntityDocumentAvailabilityEngine.Instance.HasActiveDocumentForEntity(entity);
+    return EntityDocumentAvailabilityEngine.Instance.HasVectorsForEntity(entity);
   }
 
   override async EnsureAvailabilityData(provider?: IMetadataProvider): Promise<void> {
