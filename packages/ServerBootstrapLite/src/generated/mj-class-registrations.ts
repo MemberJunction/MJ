@@ -166,7 +166,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (352 classes)
+// @memberjunction/core-entities (358 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -1775,7 +1775,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 754;
+export const CLASS_REGISTRATIONS_COUNT = 760;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
