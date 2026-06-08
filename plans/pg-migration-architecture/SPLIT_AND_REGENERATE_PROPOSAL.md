@@ -151,9 +151,26 @@ Step 5 is the linchpin: every view/sproc/permission that category A would have t
 | Census + validation harnesses (`scripts/migration-census.mts`, `convert-validate.mts`) | ✅ built; produced the numbers above |
 | Backlog validation: 144 files, 2.0% transpile surface, 0 errors/TODOs | ✅ done |
 | mj-sync re-seed viability (does `mj sync push` reproduce metadata on PG?) | ✅ answered — **yes** for mj-sync-owned data; Entity/Field catalog comes from CodeGen; `Backfill_*` is plain DML (already routed to transpile) |
-| Assemble/verify on a **live PG** (`mj migrate → codegen → sync push → diff`) | ⏳ not run — needs a PG instance (workbench `postgres-claude`) |
+| **AST MJ dialect** (`SQLGlotTS/src/python/mj_postgres.py`) — Category-B transpile, AST-native | ✅ built, 7 regression tests. Encodes types/functions/boolean-defaults/`${flyway}` round-trip + `sp_addextendedproperty`→`COMMENT ON` + `IF…BEGIN`→`DO $$`. Lifts 7→37 fully-clean of 78 Category-B hand regions |
+| **Live-PG validation** (codegen regenerates Category A on PG) | ✅ run — see §6.6 |
+| `mj migrate convert --split` end-to-end on live PG (apply DDL + reseed M) | ⏳ partial — codegen-A proven; full new-way build not assembled |
 | Hand-author the 11 Category-C `.pg.sql` files | ⏳ not done — manual, one-time |
 | Retire the 6-phase Docker `/pg-migrate` skill | ⏳ pending cutover after parallel-run |
+
+## 6.6 Live-PG validation results
+
+Built PG_A (known-good oracle) by applying the committed `migrations-pg/v5` via Skyway to a fresh `postgres-claude` DB, snapshotted it, then ran `mj codegen --skipfiles` against an intact clone and diffed:
+
+```
+                tables   cols   constraints   views   column-comments   routines
+known-good (A)    326    3880      3916        334        2309           1354
+after codegen     326    3880      3916        334        2309           1716  (+362)
+diff               0       0         0           0          0           +362 (all legit CodeGen fns)
+```
+
+**Findings:**
+1. **CodeGen runs cleanly against PostgreSQL** (324 entities, ~41s) and is **schema-preserving** — tables, columns, constraints, views, and all 2,309 column comments are byte-identical. The +362 routines are `fn_*_get_root_id` self-FK helpers + 2 sprocs the older committed set predated — legitimate CodeGen output, not drift. → **Category A regenerates correctly on PG.** ✅
+2. **Column descriptions must be transpiled, not dropped.** A subagent traced the data flow: on PG, CodeGen *reads* `col_description()` into `EntityField.Description` (`B202605241137…Baseline.pg.sql:32312`; `PostgreSQLCodeGenProvider.ts:2436`) and **never emits** `COMMENT ON COLUMN`. Drop the comments → blank descriptions. Hence the `sp_addextendedproperty`→`COMMENT ON` transform is **required** (now implemented in the dialect).
 
 ## 7. Risks & open questions
 

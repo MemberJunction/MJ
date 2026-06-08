@@ -5,6 +5,20 @@
  */
 export { ConversionPipeline } from './ConversionPipeline.js';
 export { SQLFileSplitter } from './SQLFileSplitter.js';
+export { splitMigration } from './MigrationSplitter.js';
+export type {
+  MigrationSplitResult,
+  MigrationRegionKind,
+  RegionFinding,
+  BoundaryMethod,
+  FileRouting,
+} from './MigrationSplitter.js';
+export { convertMigration } from './MigrationConverter.js';
+export type {
+  MigrationConversionResult,
+  ConversionStatus,
+  ConvertMigrationOptions,
+} from './MigrationConverter.js';
 export { DatabaseAuditRunner } from './DatabaseAuditor.js';
 export { NoOpLLMFallback } from './LLMFallback.js';
 export type {
