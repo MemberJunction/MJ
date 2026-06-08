@@ -64,6 +64,12 @@ export {
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
 export {
+  VisualizeResourceComponent,
+  LoadVisualizeResource
+} from './KnowledgeHub/components/visualize/visualize-resource.component';
+export { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+export { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
+export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';

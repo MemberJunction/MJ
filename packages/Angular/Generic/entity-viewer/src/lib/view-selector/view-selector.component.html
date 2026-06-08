@@ -1,37 +1,37 @@
 <div class="vs-container">
   <!-- Backdrop for closing panel -->
-  @if (isDropdownOpen) {
-    <div class="vs-backdrop" (click)="closeDropdown()"></div>
+  @if (IsDropdownOpen) {
+    <div class="vs-backdrop" (click)="CloseDropdown()"></div>
   }
 
   <!-- Main View Selector Button -->
   <div class="vs-wrapper">
     <button
       class="vs-button"
-      [class.modified]="viewModified"
-      [class.open]="isDropdownOpen"
-      (click)="toggleDropdown()"
-      [disabled]="isLoading"
+      [class.modified]="ViewModified"
+      [class.open]="IsDropdownOpen"
+      (click)="ToggleDropdown()"
+      [disabled]="IsLoading"
       title="Select a saved view">
       <i class="fa-solid fa-layer-group vs-btn-icon"></i>
-      <span class="vs-btn-name">{{ displayName }}</span>
-      @if (viewModified) {
+      <span class="vs-btn-name">{{ DisplayName }}</span>
+      @if (ViewModified) {
         <span class="vs-modified-dot" title="View has unsaved changes">•</span>
       }
-      <i class="fa-solid fa-chevron-down vs-arrow" [class.rotated]="isDropdownOpen"></i>
+      <i class="fa-solid fa-chevron-down vs-arrow" [class.rotated]="IsDropdownOpen"></i>
     </button>
 
     <!-- Rich View Panel -->
-    @if (isDropdownOpen) {
+    @if (IsDropdownOpen) {
       <div class="vs-panel">
         <!-- Panel Header -->
         <div class="vs-panel-header">
           <i class="fa-solid fa-table-list vs-header-icon"></i>
           <span class="vs-panel-title">Views</span>
-          @if (entity) {
-            <span class="vs-entity-badge">{{ entity.DisplayNameOrName }}</span>
+          @if (Entity) {
+            <span class="vs-Entity-badge">{{ Entity.DisplayNameOrName }}</span>
           }
-          <button class="vs-close-btn" (click)="closeDropdown()" title="Close">
+          <button class="vs-close-btn" (click)="CloseDropdown()" title="Close">
             <i class="fa-solid fa-times"></i>
           </button>
         </div>
@@ -42,8 +42,8 @@
             type="text"
             class="vs-search-input"
             placeholder="Search views..."
-            [(ngModel)]="searchText"
-            (keydown.escape)="searchText = ''"
+            [(ngModel)]="SearchText"
+            (keydown.escape)="SearchText = ''"
           />
         </div>
 
@@ -53,34 +53,34 @@
           <div class="vs-section">
             <div
               class="vs-card"
-              [class.active]="!selectedViewId"
-              (click)="selectDefault()">
-              <div class="vs-card-icon" [class.active]="!selectedViewId">
+              [class.active]="!SelectedViewID"
+              (click)="SelectDefault()">
+              <div class="vs-card-icon" [class.active]="!SelectedViewID">
                 <i class="fa-solid fa-table"></i>
               </div>
               <div class="vs-card-content">
                 <div class="vs-card-name">(Default)</div>
               </div>
-              @if (!selectedViewId) {
+              @if (!SelectedViewID) {
                 <i class="fa-solid fa-check vs-card-check"></i>
               }
             </div>
           </div>
 
           <!-- My Views Section -->
-          @if (filteredMyViews.length > 0) {
+          @if (FilteredMyViews.length > 0) {
             <div class="vs-section">
               <div class="vs-section-header">
                 <i class="fa-solid fa-user"></i>
                 <span>My Views</span>
-                <span class="vs-section-count">{{ filteredMyViews.length }}</span>
+                <span class="vs-section-count">{{ FilteredMyViews.length }}</span>
               </div>
-              @for (view of filteredMyViews; track view.id) {
+              @for (view of FilteredMyViews; track view.id) {
                 <div
                   class="vs-card"
-                  [class.active]="selectedViewId === view.id"
-                  (click)="selectView(view)">
-                  <div class="vs-card-icon" [class.active]="selectedViewId === view.id">
+                  [class.active]="SelectedViewID === view.id"
+                  (click)="SelectView(view)">
+                  <div class="vs-card-icon" [class.active]="SelectedViewID === view.id">
                     <i class="fa-solid fa-table-list"></i>
                   </div>
                   <div class="vs-card-content">
@@ -93,16 +93,16 @@
                     @if (view.entity.Description) {
                       <div class="vs-card-desc">{{ view.entity.Description }}</div>
                     }
-                    @if (getViewFilterCount(view) > 0 || getViewColumnCount(view) > 0 || getViewSortInfo(view)) {
+                    @if (GetViewFilterCount(view) > 0 || GetViewColumnCount(view) > 0 || GetViewSortInfo(view)) {
                       <div class="vs-card-meta">
-                        @if (getViewFilterCount(view) > 0) {
-                          <span><i class="fa-solid fa-filter"></i> {{ getViewFilterCount(view) }} filter{{ getViewFilterCount(view) !== 1 ? 's' : '' }}</span>
+                        @if (GetViewFilterCount(view) > 0) {
+                          <span><i class="fa-solid fa-filter"></i> {{ GetViewFilterCount(view) }} filter{{ GetViewFilterCount(view) !== 1 ? 's' : '' }}</span>
                         }
-                        @if (getViewColumnCount(view) > 0) {
-                          <span><i class="fa-solid fa-table-columns"></i> {{ getViewColumnCount(view) }} col{{ getViewColumnCount(view) !== 1 ? 's' : '' }}</span>
+                        @if (GetViewColumnCount(view) > 0) {
+                          <span><i class="fa-solid fa-table-columns"></i> {{ GetViewColumnCount(view) }} col{{ GetViewColumnCount(view) !== 1 ? 's' : '' }}</span>
                         }
-                        @if (getViewSortInfo(view)) {
-                          <span><i class="fa-solid fa-arrow-down-short-wide"></i> {{ getViewSortInfo(view) }}</span>
+                        @if (GetViewSortInfo(view)) {
+                          <span><i class="fa-solid fa-arrow-down-short-wide"></i> {{ GetViewSortInfo(view) }}</span>
                         }
                       </div>
                     }
@@ -110,24 +110,24 @@
                   <div class="vs-card-actions">
                     <button
                       class="vs-action-btn"
-                      (click)="onDuplicateView(view.id, $event)"
+                      (click)="OnDuplicateView(view.id, $event)"
                       title="Duplicate">
                       <i class="fa-regular fa-copy"></i>
                     </button>
                     <button
                       class="vs-action-btn"
-                      (click)="onConfigureViewById(view.id, $event)"
+                      (click)="OnConfigureViewById(view.id, $event)"
                       title="Configure">
                       <i class="fa-solid fa-sliders"></i>
                     </button>
                     <button
                       class="vs-action-btn"
-                      (click)="onOpenViewInTab(view.id, $event)"
+                      (click)="OnOpenViewInTab(view.id, $event)"
                       title="Open in Tab">
                       <i class="fa-solid fa-up-right-from-square"></i>
                     </button>
                   </div>
-                  @if (selectedViewId === view.id) {
+                  @if (SelectedViewID === view.id) {
                     <i class="fa-solid fa-check vs-card-check"></i>
                   }
                 </div>
@@ -136,18 +136,18 @@
           }
 
           <!-- Shared Views Section -->
-          @if (filteredSharedViews.length > 0) {
+          @if (FilteredSharedViews.length > 0) {
             <div class="vs-section">
               <div class="vs-section-header">
                 <i class="fa-solid fa-share-nodes"></i>
                 <span>Shared With Me</span>
-                <span class="vs-section-count">{{ filteredSharedViews.length }}</span>
+                <span class="vs-section-count">{{ FilteredSharedViews.length }}</span>
               </div>
-              @for (view of filteredSharedViews; track view.id) {
+              @for (view of FilteredSharedViews; track view.id) {
                 <div
                   class="vs-card"
-                  [class.active]="selectedViewId === view.id"
-                  (click)="selectView(view)">
+                  [class.active]="SelectedViewID === view.id"
+                  (click)="SelectView(view)">
                   <div class="vs-card-icon shared">
                     <i class="fa-solid fa-users"></i>
                   </div>
@@ -163,13 +163,13 @@
                     @if (view.entity.Description) {
                       <div class="vs-card-desc">{{ view.entity.Description }}</div>
                     }
-                    @if (getViewFilterCount(view) > 0 || getViewColumnCount(view) > 0) {
+                    @if (GetViewFilterCount(view) > 0 || GetViewColumnCount(view) > 0) {
                       <div class="vs-card-meta">
-                        @if (getViewFilterCount(view) > 0) {
-                          <span><i class="fa-solid fa-filter"></i> {{ getViewFilterCount(view) }} filter{{ getViewFilterCount(view) !== 1 ? 's' : '' }}</span>
+                        @if (GetViewFilterCount(view) > 0) {
+                          <span><i class="fa-solid fa-filter"></i> {{ GetViewFilterCount(view) }} filter{{ GetViewFilterCount(view) !== 1 ? 's' : '' }}</span>
                         }
-                        @if (getViewColumnCount(view) > 0) {
-                          <span><i class="fa-solid fa-table-columns"></i> {{ getViewColumnCount(view) }} col{{ getViewColumnCount(view) !== 1 ? 's' : '' }}</span>
+                        @if (GetViewColumnCount(view) > 0) {
+                          <span><i class="fa-solid fa-table-columns"></i> {{ GetViewColumnCount(view) }} col{{ GetViewColumnCount(view) !== 1 ? 's' : '' }}</span>
                         }
                       </div>
                     }
@@ -177,20 +177,20 @@
                   <div class="vs-card-actions">
                     <button
                       class="vs-action-btn"
-                      (click)="onDuplicateView(view.id, $event)"
+                      (click)="OnDuplicateView(view.id, $event)"
                       title="Duplicate as My View">
                       <i class="fa-regular fa-copy"></i>
                     </button>
                     @if (view.userCanEdit) {
                       <button
                         class="vs-action-btn"
-                        (click)="onConfigureViewById(view.id, $event)"
+                        (click)="OnConfigureViewById(view.id, $event)"
                         title="Configure">
                         <i class="fa-solid fa-sliders"></i>
                       </button>
                     }
                   </div>
-                  @if (selectedViewId === view.id) {
+                  @if (SelectedViewID === view.id) {
                     <i class="fa-solid fa-check vs-card-check"></i>
                   }
                 </div>
@@ -199,7 +199,7 @@
           }
 
           <!-- No Views Message -->
-          @if (!hasViews && !isLoading) {
+          @if (!HasViews && !IsLoading) {
             <div class="vs-empty-message">
               <i class="fa-solid fa-bookmark"></i>
               <div class="vs-empty-text">
@@ -210,15 +210,15 @@
           }
 
           <!-- No Search Results -->
-          @if (hasViews && filteredMyViews.length === 0 && filteredSharedViews.length === 0 && searchText) {
+          @if (HasViews && FilteredMyViews.length === 0 && FilteredSharedViews.length === 0 && SearchText) {
             <div class="vs-empty-message">
               <i class="fa-solid fa-search"></i>
-              <span>No views match "{{ searchText }}"</span>
+              <span>No views match "{{ SearchText }}"</span>
             </div>
           }
 
           <!-- Loading Indicator -->
-          @if (isLoading) {
+          @if (IsLoading) {
             <div class="vs-loading">
               <i class="fa-solid fa-spinner fa-spin"></i>
               <span>Loading views...</span>
@@ -230,14 +230,14 @@
         <div class="vs-panel-footer">
           <button
             class="vs-panel-btn primary"
-            (click)="onQuickSave()"
+            (click)="OnQuickSave()"
             title="Save current view configuration">
             <i class="fa-solid fa-plus"></i>
             <span>New View</span>
           </button>
           <button
             class="vs-panel-btn"
-            (click)="onResetToDefault()"
+            (click)="OnResetToDefault()"
             title="Reset to default view">
             <i class="fa-solid fa-arrow-rotate-left"></i>
             <span>Reset to Default</span>
@@ -248,10 +248,10 @@
   </div>
 
   <!-- Open in Tab Button (only visible when a view is selected) -->
-  @if (selectedViewId) {
+  @if (SelectedViewID) {
     <button
       class="vs-icon-btn"
-      (click)="onOpenInTab()"
+      (click)="OnOpenInTab()"
       title="Open this view in a new tab">
       <i class="fa-solid fa-external-link-alt"></i>
     </button>
@@ -260,7 +260,7 @@
   <!-- Configure View Button -->
   <button
     class="vs-icon-btn"
-    (click)="onConfigureView()"
+    (click)="OnConfigureView()"
     title="Configure view settings (columns, filters, sorting)">
     <i class="fa-solid fa-sliders-h"></i>
   </button>
@@ -268,7 +268,7 @@
   <!-- Create New Record Button -->
   <button
     class="vs-icon-btn"
-    (click)="onCreateNewRecord()"
+    (click)="OnCreateNewRecord()"
     title="Create new record">
     <i class="fa-solid fa-plus"></i>
   </button>
@@ -276,7 +276,7 @@
   <!-- Export Button -->
   <button
     class="vs-icon-btn vs-export-btn"
-    (click)="onExport()"
+    (click)="OnExport()"
     title="Export to Excel">
     <i class="fa-solid fa-file-excel"></i>
   </button>

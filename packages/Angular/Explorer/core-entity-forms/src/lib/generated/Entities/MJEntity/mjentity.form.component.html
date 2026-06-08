@@ -2157,6 +2157,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Cluster Analysis Section -->
+    <mj-collapsible-panel
+        SectionKey="mJClusterAnalysis"
+        SectionName="Cluster Analysis"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJClusterAnalysis')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Cluster Analysis','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis')"
+                [AllowLoad]="IsSectionExpanded('mJClusterAnalysis')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJClusterAnalysis', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

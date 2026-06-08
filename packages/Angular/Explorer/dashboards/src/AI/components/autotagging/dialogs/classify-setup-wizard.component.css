@@ -1,0 +1,192 @@
+.wiz {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    /* Guarantees a comfortable form column even if the dialog is constrained;
+       the dialog container itself is sized via [Width]. */
+    min-width: min(620px, 100%);
+}
+
+/* ── Step indicator row ── */
+.wiz-progress {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+}
+/* Each step is a row: the numbered circle + (for non-last steps) a growing connector line.
+   The circle must NOT be the flex container that also hosts the connector — otherwise the
+   connector renders inside the circle and squishes/clips the number. */
+.wiz-step-dot {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;               /* steps share the row; the connector consumes the slack */
+}
+.wiz-step-dot:last-child {
+    flex: 0 0 auto;               /* last step is just the circle (no trailing connector) */
+}
+/* The numbered circle — fixed size so it never shrinks or clips the number. */
+.wiz-step-num {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 1px solid var(--mj-border-default);
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+/* Connector line AFTER each non-last circle so the indicator reads as a single track. */
+.wiz-step-dot:not(:last-child)::after {
+    content: '';
+    flex: 1 1 auto;
+    height: 2px;
+    margin: 0 6px;
+    min-width: 16px;
+    background: var(--mj-border-default);
+}
+.wiz-step-dot.active .wiz-step-num {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+}
+.wiz-step-dot.done .wiz-step-num {
+    background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+}
+.wiz-step-dot.done:not(:last-child)::after,
+.wiz-step-dot.active:not(:last-child)::after {
+    background: color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
+}
+
+.wiz-step-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.wiz-step-title .wiz-step-counter {
+    color: var(--mj-text-muted);
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+/* ── Body ── */
+.wiz-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 220px;
+    width: 100%;
+}
+.wiz-help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--mj-text-muted);
+    line-height: 1.5;
+}
+.wiz-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-info-border, var(--mj-border-default));
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--mj-text-secondary);
+    line-height: 1.45;
+}
+.wiz-callout i { color: var(--mj-status-info); margin-top: 2px; }
+.wiz-callout.ok { background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface)); }
+.wiz-callout.ok i { color: var(--mj-status-success); }
+.wiz-field-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+.wiz-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.85rem;
+    color: var(--mj-text-primary);
+    cursor: pointer;
+}
+.wiz-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 8px;
+    background: var(--mj-bg-surface-card);
+}
+.wiz-toggle-t {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.wiz-toggle-d {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    margin-top: 3px;
+    line-height: 1.4;
+}
+.wiz-review {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.wiz-review-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 11px 16px;
+    font-size: 0.86rem;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+.wiz-review-row:last-child { border-bottom: none; }
+.wiz-review-row span { color: var(--mj-text-muted); }
+.wiz-review-row strong { color: var(--mj-text-primary); }
+
+/* ── Footer actions: primary LEFT, Back, Cancel pushed RIGHT (MJ convention) ── */
+.wiz-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+.wiz-actions .wiz-actions-spacer {
+    flex: 1 1 auto;
+}
+
+/* ── Form fields ── */
+.at-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+.at-form-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+}
+.at-form-group .mj-input,
+.at-form-group .mj-textarea {
+    width: 100%;
+}

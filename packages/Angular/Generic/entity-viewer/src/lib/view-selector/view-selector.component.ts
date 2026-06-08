@@ -23,8 +23,8 @@ export interface ViewListItem {
  * Event emitted when a view is selected
  */
 export interface ViewSelectedEvent {
-  viewId: string | null;
-  view: MJUserViewEntityExtended | null;
+  ViewID: string | null;
+  View: MJUserViewEntityExtended | null;
 }
 
 /**
@@ -32,7 +32,7 @@ export interface ViewSelectedEvent {
  */
 export interface SaveViewRequestedEvent {
   /** True if user wants to save as a new view */
-  saveAsNew: boolean;
+  SaveAsNew: boolean;
 }
 
 /**
@@ -55,76 +55,76 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * The entity to load views for
    */
-  @Input() entity: EntityInfo | null = null;
+  @Input() Entity: EntityInfo | null = null;
 
   /**
    * Currently selected view ID (null = default view)
    */
-  @Input() selectedViewId: string | null = null;
+  @Input() SelectedViewID: string | null = null;
 
   /**
    * Whether the current view has unsaved modifications
    */
-  @Input() viewModified: boolean = false;
+  @Input() ViewModified: boolean = false;
 
   /**
    * Emitted when a view is selected
    */
-  @Output() viewSelected = new EventEmitter<ViewSelectedEvent>();
+  @Output() ViewSelected = new EventEmitter<ViewSelectedEvent>();
 
   /**
    * Emitted when user requests to save the current view
    */
-  @Output() saveViewRequested = new EventEmitter<SaveViewRequestedEvent>();
+  @Output() SaveViewRequested = new EventEmitter<SaveViewRequestedEvent>();
 
   /**
    * Emitted when user wants to open the view management panel
    */
-  @Output() manageViewsRequested = new EventEmitter<void>();
+  @Output() ManageViewsRequested = new EventEmitter<void>();
 
   /**
    * Emitted when user wants to open the current view in its own tab
    */
-  @Output() openInTabRequested = new EventEmitter<string>();
+  @Output() OpenInTabRequested = new EventEmitter<string>();
 
   /**
    * Emitted when user wants to configure the current view
    */
-  @Output() configureViewRequested = new EventEmitter<void>();
+  @Output() ConfigureViewRequested = new EventEmitter<void>();
 
   /**
    * Emitted when user wants to create a new record
    */
-  @Output() createNewRecordRequested = new EventEmitter<void>();
+  @Output() CreateNewRecordRequested = new EventEmitter<void>();
 
   /**
    * Emitted when user wants to export data to Excel
    */
-  @Output() exportRequested = new EventEmitter<void>();
+  @Output() ExportRequested = new EventEmitter<void>();
 
   /**
    * Emitted when user wants to duplicate a view (F-005)
    */
-  @Output() duplicateViewRequested = new EventEmitter<string>();
+  @Output() DuplicateViewRequested = new EventEmitter<string>();
 
   /**
    * Emitted when user wants to use the quick save dialog (F-001)
    * Emits true when user explicitly requested "Save As New", false for general save
    */
-  @Output() quickSaveRequested = new EventEmitter<boolean>();
+  @Output() QuickSaveRequested = new EventEmitter<boolean>();
 
   /**
    * Emitted when user wants to revert to saved state (F-007)
    */
-  @Output() revertRequested = new EventEmitter<void>();
+  @Output() RevertRequested = new EventEmitter<void>();
 
   // Internal state
-  public isLoading: boolean = false;
-  public isDropdownOpen: boolean = false;
-  public myViews: ViewListItem[] = [];
-  public sharedViews: ViewListItem[] = [];
-  public selectedView: MJUserViewEntityExtended | null = null;
-  public searchText: string = '';
+  public IsLoading: boolean = false;
+  public IsDropdownOpen: boolean = false;
+  public MyViews: ViewListItem[] = [];
+  public SharedViews: ViewListItem[] = [];
+  public SelectedView: MJUserViewEntityExtended | null = null;
+  public SearchText: string = '';
 
   private destroy$ = new Subject<void>();
   private get metadata() { return this.ProviderToUse; }
@@ -132,17 +132,17 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   constructor(private cdr: ChangeDetectorRef) { super(); }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['entity']) {
-      if (this.entity) {
-        this.loadViews();
+    if (changes['Entity']) {
+      if (this.Entity) {
+        this.LoadViews();
       } else {
-        this.myViews = [];
-        this.sharedViews = [];
-        this.selectedView = null;
+        this.MyViews = [];
+        this.SharedViews = [];
+        this.SelectedView = null;
       }
     }
 
-    if (changes['selectedViewId'] && this.selectedViewId) {
+    if (changes['SelectedViewID'] && this.SelectedViewID) {
       // If we have a selected view ID and it's in our lists, update selectedView
       this.updateSelectedViewFromId();
     }
@@ -156,12 +156,12 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Load views for the current entity
    */
-  public async loadViews(): Promise<void> {
-    if (!this.entity) {
+  public async LoadViews(): Promise<void> {
+    if (!this.Entity) {
       return;
     }
 
-    this.isLoading = true;
+    this.IsLoading = true;
     this.cdr.detectChanges();
 
     try {
@@ -171,14 +171,14 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
       // The engine is initialized once and caches all views; GetAccessibleViewsForEntity()
       // already filters by owned + shared and checks UserCanView.
       await UserViewEngine.Instance.Config(false);
-      const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(this.entity.ID);
+      const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(this.Entity.ID);
 
       // Separate into owned and shared
-      this.myViews = accessibleViews
+      this.MyViews = accessibleViews
         .filter(v => UUIDsEqual(v.UserID, userId))
         .map(v => this.mapViewToListItem(v, true));
 
-      this.sharedViews = accessibleViews
+      this.SharedViews = accessibleViews
         .filter(v => !UUIDsEqual(v.UserID, userId))
         .map(v => this.mapViewToListItem(v, false));
 
@@ -187,7 +187,7 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
     } catch (error) {
       console.error('Failed to load views:', error);
     } finally {
-      this.isLoading = false;
+      this.IsLoading = false;
       this.cdr.detectChanges();
     }
   }
@@ -211,34 +211,34 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
    * Update the selectedView reference based on selectedViewId
    */
   private updateSelectedViewFromId(): void {
-    if (!this.selectedViewId) {
-      this.selectedView = null;
+    if (!this.SelectedViewID) {
+      this.SelectedView = null;
       return;
     }
 
     // Search in both lists
-    const myView = this.myViews.find(v => v.id === this.selectedViewId);
+    const myView = this.MyViews.find(v => v.id === this.SelectedViewID);
     if (myView) {
-      this.selectedView = myView.entity;
+      this.SelectedView = myView.entity;
       return;
     }
 
-    const sharedView = this.sharedViews.find(v => v.id === this.selectedViewId);
+    const sharedView = this.SharedViews.find(v => v.id === this.SelectedViewID);
     if (sharedView) {
-      this.selectedView = sharedView.entity;
+      this.SelectedView = sharedView.entity;
       return;
     }
 
     // View not in lists yet - it might need to be loaded
-    this.selectedView = null;
+    this.SelectedView = null;
   }
 
   /**
    * Get the display name for the current selection
    */
-  get displayName(): string {
-    if (this.selectedView) {
-      return this.selectedView.Name;
+  get DisplayName(): string {
+    if (this.SelectedView) {
+      return this.SelectedView.Name;
     }
     return '(Default)';
   }
@@ -246,135 +246,135 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Toggle dropdown open/closed
    */
-  toggleDropdown(): void {
-    this.isDropdownOpen = !this.isDropdownOpen;
+  ToggleDropdown(): void {
+    this.IsDropdownOpen = !this.IsDropdownOpen;
     this.cdr.detectChanges();
   }
 
   /**
    * Close the dropdown
    */
-  closeDropdown(): void {
-    this.isDropdownOpen = false;
-    this.searchText = '';
+  CloseDropdown(): void {
+    this.IsDropdownOpen = false;
+    this.SearchText = '';
     this.cdr.detectChanges();
   }
 
   /**
    * Select the default view (no saved view)
    */
-  selectDefault(): void {
-    this.selectedView = null;
-    this.viewSelected.emit({ viewId: null, view: null });
-    this.closeDropdown();
+  SelectDefault(): void {
+    this.SelectedView = null;
+    this.ViewSelected.emit({ ViewID: null, View: null });
+    this.CloseDropdown();
   }
 
   /**
    * Select a view from the list
    */
-  selectView(item: ViewListItem): void {
-    this.selectedView = item.entity;
-    this.viewSelected.emit({ viewId: item.id, view: item.entity });
-    this.closeDropdown();
+  SelectView(item: ViewListItem): void {
+    this.SelectedView = item.entity;
+    this.ViewSelected.emit({ ViewID: item.id, View: item.entity });
+    this.CloseDropdown();
   }
 
   /**
    * Request to save the current view
    */
-  onSaveView(): void {
-    this.saveViewRequested.emit({ saveAsNew: false });
-    this.closeDropdown();
+  OnSaveView(): void {
+    this.SaveViewRequested.emit({ SaveAsNew: false });
+    this.CloseDropdown();
   }
 
   /**
    * Request to save as a new view - opens Quick Save dialog in "Save As New" mode
    */
-  onSaveAsNewView(): void {
-    this.quickSaveRequested.emit(true);
-    this.closeDropdown();
+  OnSaveAsNewView(): void {
+    this.QuickSaveRequested.emit(true);
+    this.CloseDropdown();
   }
 
   /**
    * Request to manage views
    */
-  onManageViews(): void {
-    this.manageViewsRequested.emit();
-    this.closeDropdown();
+  OnManageViews(): void {
+    this.ManageViewsRequested.emit();
+    this.CloseDropdown();
   }
 
   /**
    * Request to open the current view in a tab
    */
-  onOpenInTab(): void {
-    if (this.selectedViewId) {
-      this.openInTabRequested.emit(this.selectedViewId);
+  OnOpenInTab(): void {
+    if (this.SelectedViewID) {
+      this.OpenInTabRequested.emit(this.SelectedViewID);
     }
   }
 
   /**
    * Request to configure the current view
    */
-  onConfigureView(): void {
-    this.configureViewRequested.emit();
+  OnConfigureView(): void {
+    this.ConfigureViewRequested.emit();
   }
 
   /**
    * Request to create a new record
    */
-  onCreateNewRecord(): void {
-    this.createNewRecordRequested.emit();
+  OnCreateNewRecord(): void {
+    this.CreateNewRecordRequested.emit();
   }
 
   /**
    * Request to export data to Excel
    */
-  onExport(): void {
-    this.exportRequested.emit();
+  OnExport(): void {
+    this.ExportRequested.emit();
   }
 
   /**
    * Request to duplicate a view (F-005)
    */
-  onDuplicateView(viewId: string, event: MouseEvent): void {
+  OnDuplicateView(viewId: string, event: MouseEvent): void {
     event.stopPropagation(); // Don't select the view
-    this.duplicateViewRequested.emit(viewId);
-    this.closeDropdown();
+    this.DuplicateViewRequested.emit(viewId);
+    this.CloseDropdown();
   }
 
   /**
    * Request to open the quick save dialog (F-001)
    */
-  onQuickSave(): void {
-    this.quickSaveRequested.emit(false);
-    this.closeDropdown();
+  OnQuickSave(): void {
+    this.QuickSaveRequested.emit(false);
+    this.CloseDropdown();
   }
 
   /**
    * Request to revert view to saved state (F-007)
    */
-  onRevert(): void {
-    this.revertRequested.emit();
+  OnRevert(): void {
+    this.RevertRequested.emit();
   }
 
   /**
    * Check if there are any views to show
    */
-  get hasViews(): boolean {
-    return this.myViews.length > 0 || this.sharedViews.length > 0;
+  get HasViews(): boolean {
+    return this.MyViews.length > 0 || this.SharedViews.length > 0;
   }
 
   /**
    * Check if the current user can edit the selected view
    */
-  get canEditSelectedView(): boolean {
-    return this.selectedView?.UserCanEdit ?? false;
+  get CanEditSelectedView(): boolean {
+    return this.SelectedView?.UserCanEdit ?? false;
   }
 
   /**
    * Handle click outside to close dropdown
    */
-  onClickOutside(event: Event): void {
-    this.closeDropdown();
+  OnClickOutside(event: Event): void {
+    this.CloseDropdown();
   }
 
   // ========================================
@@ -384,10 +384,10 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * My views filtered by search text
    */
-  get filteredMyViews(): ViewListItem[] {
-    if (!this.searchText.trim()) return this.myViews;
-    const term = this.searchText.toLowerCase();
-    return this.myViews.filter(v =>
+  get FilteredMyViews(): ViewListItem[] {
+    if (!this.SearchText.trim()) return this.MyViews;
+    const term = this.SearchText.toLowerCase();
+    return this.MyViews.filter(v =>
       v.name.toLowerCase().includes(term) ||
       (v.entity.Description || '').toLowerCase().includes(term)
     );
@@ -396,10 +396,10 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Shared views filtered by search text
    */
-  get filteredSharedViews(): ViewListItem[] {
-    if (!this.searchText.trim()) return this.sharedViews;
-    const term = this.searchText.toLowerCase();
-    return this.sharedViews.filter(v =>
+  get FilteredSharedViews(): ViewListItem[] {
+    if (!this.SearchText.trim()) return this.SharedViews;
+    const term = this.SearchText.toLowerCase();
+    return this.SharedViews.filter(v =>
       v.name.toLowerCase().includes(term) ||
       (v.entity.Description || '').toLowerCase().includes(term)
     );
@@ -408,7 +408,7 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Get the number of filters configured in a view by parsing its FilterState
    */
-  getViewFilterCount(view: ViewListItem): number {
+  GetViewFilterCount(view: ViewListItem): number {
     try {
       const filterState = view.entity.FilterState;
       if (!filterState) return 0;
@@ -425,7 +425,7 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Get the number of visible columns in a view by parsing GridState
    */
-  getViewColumnCount(view: ViewListItem): number {
+  GetViewColumnCount(view: ViewListItem): number {
     try {
       const gridState = view.entity.GridState;
       if (!gridState) return 0;
@@ -442,7 +442,7 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Get sort info string from a view's SortState
    */
-  getViewSortInfo(view: ViewListItem): string {
+  GetViewSortInfo(view: ViewListItem): string {
     try {
       const sortState = view.entity.SortState;
       if (!sortState) return '';
@@ -459,31 +459,31 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   /**
    * Select a specific view and open the config panel for it
    */
-  onConfigureViewById(viewId: string, event: MouseEvent): void {
+  OnConfigureViewById(viewId: string, event: MouseEvent): void {
     event.stopPropagation();
     // First select the view, then open config
-    const item = this.myViews.find(v => v.id === viewId) || this.sharedViews.find(v => v.id === viewId);
+    const item = this.MyViews.find(v => v.id === viewId) || this.SharedViews.find(v => v.id === viewId);
     if (item) {
-      this.selectedView = item.entity;
-      this.viewSelected.emit({ viewId: item.id, view: item.entity });
+      this.SelectedView = item.entity;
+      this.ViewSelected.emit({ ViewID: item.id, View: item.entity });
     }
-    this.configureViewRequested.emit();
-    this.closeDropdown();
+    this.ConfigureViewRequested.emit();
+    this.CloseDropdown();
   }
 
   /**
    * Open a specific view in a new tab
    */
-  onOpenViewInTab(viewId: string, event: MouseEvent): void {
+  OnOpenViewInTab(viewId: string, event: MouseEvent): void {
     event.stopPropagation();
-    this.openInTabRequested.emit(viewId);
-    this.closeDropdown();
+    this.OpenInTabRequested.emit(viewId);
+    this.CloseDropdown();
   }
 
   /**
    * Reset to default view (select no view)
    */
-  onResetToDefault(): void {
-    this.selectDefault();
+  OnResetToDefault(): void {
+    this.SelectDefault();
   }
 }
