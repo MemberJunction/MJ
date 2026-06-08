@@ -3030,6 +3030,11 @@ each time the agent processes a prompt step.`),
         * * Display Name: Cache Write Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
+    LastHeartbeatAt: z.date().nullable().describe(`
+        * * Field Name: LastHeartbeatAt
+        * * Display Name: Last Heartbeat At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Details
@@ -18216,6 +18221,360 @@ export const MJListSchema = z.object({
 });
 
 export type MJListEntityType = z.infer<typeof MJListSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Magic Link Invite Allowed Domains
+ */
+export const MJMagicLinkInviteAllowedDomainSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    InviteID: z.string().describe(`
+        * * Field Name: InviteID
+        * * Display Name: Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to the MagicLinkInvite this allowed-domain belongs to.`),
+    Domain: z.string().describe(`
+        * * Field Name: Domain
+        * * Display Name: Domain
+        * * SQL Data Type: nvarchar(255)
+        * * Description: An allowed host/origin (e.g. https://partner.example.com) where the link may be framed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJMagicLinkInviteAllowedDomainEntityType = z.infer<typeof MJMagicLinkInviteAllowedDomainSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Magic Link Invite Allowed Paths
+ */
+export const MJMagicLinkInviteAllowedPathSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    InviteID: z.string().describe(`
+        * * Field Name: InviteID
+        * * Display Name: Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to the MagicLinkInvite this allowed-path belongs to.`),
+    Path: z.string().describe(`
+        * * Field Name: Path
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: An allowed FE path (after the Explorer base URL) the session may navigate to. UX confinement only.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJMagicLinkInviteAllowedPathEntityType = z.infer<typeof MJMagicLinkInviteAllowedPathSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Magic Link Invite Applications
+ */
+export const MJMagicLinkInviteApplicationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    InviteID: z.string().describe(`
+        * * Field Name: InviteID
+        * * Display Name: Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to the MagicLinkInvite this application grant belongs to.`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to the Application this invite grants access to.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJMagicLinkInviteApplicationEntityType = z.infer<typeof MJMagicLinkInviteApplicationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Magic Link Invite Roles
+ */
+export const MJMagicLinkInviteRoleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    InviteID: z.string().describe(`
+        * * Field Name: InviteID
+        * * Display Name: Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to the MagicLinkInvite this role grant belongs to.`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Foreign key to the Role this invite grants to the redeeming user.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJMagicLinkInviteRoleEntityType = z.infer<typeof MJMagicLinkInviteRoleSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Magic Link Invites
+ */
+export const MJMagicLinkInviteSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TokenHash: z.string().describe(`
+        * * Field Name: TokenHash
+        * * Display Name: Token Hash
+        * * SQL Data Type: nvarchar(128)
+        * * Description: SHA-256 hash of the raw magic-link token, base64url-encoded (43 chars). The raw token is delivered only in the emailed URL and is never persisted. Lookups hash the incoming token and match against this column. Unique.`),
+    Email: z.string().nullable().describe(`
+        * * Field Name: Email
+        * * Display Name: Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Email address the invite was issued to and delivered at. Becomes the provisioned user's email on first redemption.`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to Application — the single app this invite grants access to. The provisioned user receives exactly one User Application record for this app.`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Foreign key to Role — the restricted role assigned to the redeeming user. This role's entity permissions are the real authorization boundary that confines the external user to the shared app's data.`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Hard expiry for the link. After this instant the invite cannot be redeemed regardless of Status.`),
+    ConsumedAt: z.date().nullable().describe(`
+        * * Field Name: ConsumedAt
+        * * Display Name: Consumed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the first successful redemption. NULL while unconsumed. Set in the same transaction that mints the session JWT to enforce single-use semantics.`),
+    MaxUses: z.number().describe(`
+        * * Field Name: MaxUses
+        * * Display Name: Max Uses
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Maximum number of times this invite may be redeemed. Defaults to 1 (true single-use). Set higher only for intentionally multi-use links.`),
+    UseCount: z.number().describe(`
+        * * Field Name: UseCount
+        * * Display Name: Use Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of times this invite has been redeemed so far. Incremented on each successful redemption; redemption is rejected once UseCount reaches MaxUses.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to User — the internal user who created/shared this invite. Audit trail for who granted external access.`),
+    Status: z.union([z.literal('Active'), z.literal('Consumed'), z.literal('Expired'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Consumed
+    *   * Expired
+    *   * Revoked
+        * * Description: Lifecycle status: Active (redeemable), Consumed (single-use link fully redeemed), Revoked (manually disabled), Expired (past ExpiresAt). Revoking an unconsumed link is the primary revocation mechanism.`),
+    IdentityMode: z.union([z.literal('anonymous'), z.literal('email')]).describe(`
+        * * Field Name: IdentityMode
+        * * Display Name: Identity Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: email
+    * * Value List Type: List
+    * * Possible Values 
+    *   * anonymous
+    *   * email
+        * * Description: Identity resolution mode. 'email' (default, legacy): redemption provisions/links a per-email user and enforcement rides that user's DB roles. 'anonymous': all redemptions resolve to the shared Anonymous principal (an attribution anchor, not a permission holder); scope is carried per-session in the minted JWT claims, never as roles on that user.`),
+    Kind: z.union([z.literal('anonymous-embed'), z.literal('app-session'), z.literal('resource-share')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: app-session
+    * * Value List Type: List
+    * * Possible Values 
+    *   * anonymous-embed
+    *   * app-session
+    *   * resource-share
+        * * Description: Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. 'app-session' (default): the legacy app+role session. 'resource-share': scoped to a single resource (ResourceTypeID/ResourceID). 'anonymous-embed': framed in an external site (requires allowed domains + tier capability).`),
+    ResourceTypeID: z.string().nullable().describe(`
+        * * Field Name: ResourceTypeID
+        * * Display Name: Resource Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Resource Types (vwResourceTypes.ID)
+        * * Description: For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link's reach to dependent data is admitted at runtime via FK-reachable resource-pinned row-level security, not an enumerated list. NULL for app-session invites.`),
+    ResourceID: z.string().nullable().describe(`
+        * * Field Name: ResourceID
+        * * Display Name: Resource ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource's key type). NULL for app-session invites.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+    ResourceType: z.string().nullable().describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMagicLinkInviteEntityType = z.infer<typeof MJMagicLinkInviteSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Magic Link Redemptions
+ */
+export const MJMagicLinkRedemptionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    InviteID: z.string().nullable().describe(`
+        * * Field Name: InviteID
+        * * Display Name: Invite ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+        * * Description: Foreign key to MagicLinkInvite. NULLABLE: a redemption attempt against a token that matches no invite (not_found — the signature of scanning/brute-force) has no invite to reference but is still logged.`),
+    AttemptedAt: z.date().describe(`
+        * * Field Name: AttemptedAt
+        * * Display Name: Attempted At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysutcdatetime()
+        * * Description: Timestamp of the redemption attempt (UTC). Defaults to the time of insert.`),
+    Outcome: z.union([z.literal('consumed'), z.literal('expired'), z.literal('invalid'), z.literal('not_found'), z.literal('provisioning_failed'), z.literal('revoked'), z.literal('server_error'), z.literal('success')]).describe(`
+        * * Field Name: Outcome
+        * * Display Name: Outcome
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * consumed
+    *   * expired
+    *   * invalid
+    *   * not_found
+    *   * provisioning_failed
+    *   * revoked
+    *   * server_error
+    *   * success
+        * * Description: Outcome of the attempt: 'success', or one of the redemption error codes (not_found, expired, consumed, revoked, invalid, provisioning_failed, server_error). Mirrors the RedeemErrorCode union in the server code.`),
+    IPAddress: z.string().nullable().describe(`
+        * * Field Name: IPAddress
+        * * Display Name: IP Address
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment's magicLink.audit.ipStorage policy. NULL when unavailable or policy is 'none'.`),
+    UserAgent: z.string().nullable().describe(`
+        * * Field Name: UserAgent
+        * * Display Name: User Agent
+        * * SQL Data Type: nvarchar(512)
+        * * Description: User-Agent header of the redeeming client. NULL when unavailable.`),
+    Origin: z.string().nullable().describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(512)
+        * * Description: Origin header of the redemption request. Retained for embed/domain forensics (which host framed or initiated the redemption). NULL for direct (non-embedded) redemptions.`),
+    ProvisionedUserID: z.string().nullable().describe(`
+        * * Field Name: ProvisionedUserID
+        * * Display Name: Provisioned User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the User provisioned/linked by a SUCCESSFUL redemption. NULL on failed attempts and on (future) anonymous redemptions that resolve to a shared principal rather than a per-email user.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ProvisionedUser: z.string().nullable().describe(`
+        * * Field Name: ProvisionedUser
+        * * Display Name: Provisioned User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJMagicLinkRedemptionEntityType = z.infer<typeof MJMagicLinkRedemptionSchema>;
 
 /**
  * zod schema definition for the entity MJ: MCP Server Connection Permissions
@@ -35316,6 +35675,19 @@ each time the agent processes a prompt step.
     }
     set TotalCacheWriteTokensUsed(value: number | null) {
         this.Set('TotalCacheWriteTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: LastHeartbeatAt
+    * * Display Name: Last Heartbeat At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.
+    */
+    get LastHeartbeatAt(): Date | null {
+        return this.Get('LastHeartbeatAt');
+    }
+    set LastHeartbeatAt(value: Date | null) {
+        this.Set('LastHeartbeatAt', value);
     }
 
     /**
@@ -74898,6 +75270,879 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     */
     get LastRefreshedByUser(): string | null {
         return this.Get('LastRefreshedByUser');
+    }
+}
+
+
+/**
+ * MJ: Magic Link Invite Allowed Domains - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MagicLinkInviteAllowedDomain
+ * * Base View: vwMagicLinkInviteAllowedDomains
+ * * @description An external host (origin) where this invite may be embedded in an IFRAME. Enforced server-side via Content-Security-Policy frame-ancestors plus Origin/Referer checks on embed responses. Multiple rows = multiple allowed hosts.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Allowed Domains')
+export class MJMagicLinkInviteAllowedDomainEntity extends BaseEntity<MJMagicLinkInviteAllowedDomainEntityType> {
+    /**
+    * Loads the MJ: Magic Link Invite Allowed Domains record from the database
+    * @param ID: string - primary key value to load the MJ: Magic Link Invite Allowed Domains record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMagicLinkInviteAllowedDomainEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: InviteID
+    * * Display Name: Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to the MagicLinkInvite this allowed-domain belongs to.
+    */
+    get InviteID(): string {
+        return this.Get('InviteID');
+    }
+    set InviteID(value: string) {
+        this.Set('InviteID', value);
+    }
+
+    /**
+    * * Field Name: Domain
+    * * Display Name: Domain
+    * * SQL Data Type: nvarchar(255)
+    * * Description: An allowed host/origin (e.g. https://partner.example.com) where the link may be framed.
+    */
+    get Domain(): string {
+        return this.Get('Domain');
+    }
+    set Domain(value: string) {
+        this.Set('Domain', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Magic Link Invite Allowed Paths - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MagicLinkInviteAllowedPath
+ * * Base View: vwMagicLinkInviteAllowedPaths
+ * * @description An Explorer FE path (after the base URL) this link is confined to in the UI. This is UX confinement only — the real authorization boundary is server-side entity/resource permissions. Multiple rows = multiple allowed paths.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Allowed Paths')
+export class MJMagicLinkInviteAllowedPathEntity extends BaseEntity<MJMagicLinkInviteAllowedPathEntityType> {
+    /**
+    * Loads the MJ: Magic Link Invite Allowed Paths record from the database
+    * @param ID: string - primary key value to load the MJ: Magic Link Invite Allowed Paths record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMagicLinkInviteAllowedPathEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: InviteID
+    * * Display Name: Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to the MagicLinkInvite this allowed-path belongs to.
+    */
+    get InviteID(): string {
+        return this.Get('InviteID');
+    }
+    set InviteID(value: string) {
+        this.Set('InviteID', value);
+    }
+
+    /**
+    * * Field Name: Path
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: An allowed FE path (after the Explorer base URL) the session may navigate to. UX confinement only.
+    */
+    get Path(): string {
+        return this.Get('Path');
+    }
+    set Path(value: string) {
+        this.Set('Path', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Magic Link Invite Applications - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MagicLinkInviteApplication
+ * * Base View: vwMagicLinkInviteApplications
+ * * @description Join row granting a magic-link invite access to one Application. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.ApplicationID) while multi-scope enforcement is being designed.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Applications')
+export class MJMagicLinkInviteApplicationEntity extends BaseEntity<MJMagicLinkInviteApplicationEntityType> {
+    /**
+    * Loads the MJ: Magic Link Invite Applications record from the database
+    * @param ID: string - primary key value to load the MJ: Magic Link Invite Applications record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMagicLinkInviteApplicationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: InviteID
+    * * Display Name: Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to the MagicLinkInvite this application grant belongs to.
+    */
+    get InviteID(): string {
+        return this.Get('InviteID');
+    }
+    set InviteID(value: string) {
+        this.Set('InviteID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to the Application this invite grants access to.
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+}
+
+
+/**
+ * MJ: Magic Link Invite Roles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MagicLinkInviteRole
+ * * Base View: vwMagicLinkInviteRoles
+ * * @description Join row granting a magic-link invite a Role. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.RoleID) while multi-scope enforcement is being designed.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Magic Link Invite Roles')
+export class MJMagicLinkInviteRoleEntity extends BaseEntity<MJMagicLinkInviteRoleEntityType> {
+    /**
+    * Loads the MJ: Magic Link Invite Roles record from the database
+    * @param ID: string - primary key value to load the MJ: Magic Link Invite Roles record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMagicLinkInviteRoleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: InviteID
+    * * Display Name: Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to the MagicLinkInvite this role grant belongs to.
+    */
+    get InviteID(): string {
+        return this.Get('InviteID');
+    }
+    set InviteID(value: string) {
+        this.Set('InviteID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Foreign key to the Role this invite grants to the redeeming user.
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+}
+
+
+/**
+ * MJ: Magic Link Invites - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MagicLinkInvite
+ * * Base View: vwMagicLinkInvites
+ * * @description A shareable, single-use, app-scoped magic-link invite for an external user. Bound to one Application and one restricted Role; redeeming it provisions/links a user with that scope and mints a short-lived MJ-issued JWT. The raw token is never stored — only its SHA-256 hash.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Magic Link Invites')
+export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityType> {
+    /**
+    * Loads the MJ: Magic Link Invites record from the database
+    * @param ID: string - primary key value to load the MJ: Magic Link Invites record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMagicLinkInviteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TokenHash
+    * * Display Name: Token Hash
+    * * SQL Data Type: nvarchar(128)
+    * * Description: SHA-256 hash of the raw magic-link token, base64url-encoded (43 chars). The raw token is delivered only in the emailed URL and is never persisted. Lookups hash the incoming token and match against this column. Unique.
+    */
+    get TokenHash(): string {
+        return this.Get('TokenHash');
+    }
+    set TokenHash(value: string) {
+        this.Set('TokenHash', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Email address the invite was issued to and delivered at. Becomes the provisioned user's email on first redemption.
+    */
+    get Email(): string | null {
+        return this.Get('Email');
+    }
+    set Email(value: string | null) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to Application — the single app this invite grants access to. The provisioned user receives exactly one User Application record for this app.
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Foreign key to Role — the restricted role assigned to the redeeming user. This role's entity permissions are the real authorization boundary that confines the external user to the shared app's data.
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Hard expiry for the link. After this instant the invite cannot be redeemed regardless of Status.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: ConsumedAt
+    * * Display Name: Consumed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the first successful redemption. NULL while unconsumed. Set in the same transaction that mints the session JWT to enforce single-use semantics.
+    */
+    get ConsumedAt(): Date | null {
+        return this.Get('ConsumedAt');
+    }
+    set ConsumedAt(value: Date | null) {
+        this.Set('ConsumedAt', value);
+    }
+
+    /**
+    * * Field Name: MaxUses
+    * * Display Name: Max Uses
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Maximum number of times this invite may be redeemed. Defaults to 1 (true single-use). Set higher only for intentionally multi-use links.
+    */
+    get MaxUses(): number {
+        return this.Get('MaxUses');
+    }
+    set MaxUses(value: number) {
+        this.Set('MaxUses', value);
+    }
+
+    /**
+    * * Field Name: UseCount
+    * * Display Name: Use Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of times this invite has been redeemed so far. Incremented on each successful redemption; redemption is rejected once UseCount reaches MaxUses.
+    */
+    get UseCount(): number {
+        return this.Get('UseCount');
+    }
+    set UseCount(value: number) {
+        this.Set('UseCount', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to User — the internal user who created/shared this invite. Audit trail for who granted external access.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Consumed
+    *   * Expired
+    *   * Revoked
+    * * Description: Lifecycle status: Active (redeemable), Consumed (single-use link fully redeemed), Revoked (manually disabled), Expired (past ExpiresAt). Revoking an unconsumed link is the primary revocation mechanism.
+    */
+    get Status(): 'Active' | 'Consumed' | 'Expired' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Consumed' | 'Expired' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: IdentityMode
+    * * Display Name: Identity Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: email
+    * * Value List Type: List
+    * * Possible Values 
+    *   * anonymous
+    *   * email
+    * * Description: Identity resolution mode. 'email' (default, legacy): redemption provisions/links a per-email user and enforcement rides that user's DB roles. 'anonymous': all redemptions resolve to the shared Anonymous principal (an attribution anchor, not a permission holder); scope is carried per-session in the minted JWT claims, never as roles on that user.
+    */
+    get IdentityMode(): 'anonymous' | 'email' {
+        return this.Get('IdentityMode');
+    }
+    set IdentityMode(value: 'anonymous' | 'email') {
+        this.Set('IdentityMode', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: app-session
+    * * Value List Type: List
+    * * Possible Values 
+    *   * anonymous-embed
+    *   * app-session
+    *   * resource-share
+    * * Description: Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. 'app-session' (default): the legacy app+role session. 'resource-share': scoped to a single resource (ResourceTypeID/ResourceID). 'anonymous-embed': framed in an external site (requires allowed domains + tier capability).
+    */
+    get Kind(): 'anonymous-embed' | 'app-session' | 'resource-share' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'anonymous-embed' | 'app-session' | 'resource-share') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: ResourceTypeID
+    * * Display Name: Resource Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Resource Types (vwResourceTypes.ID)
+    * * Description: For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link's reach to dependent data is admitted at runtime via FK-reachable resource-pinned row-level security, not an enumerated list. NULL for app-session invites.
+    */
+    get ResourceTypeID(): string | null {
+        return this.Get('ResourceTypeID');
+    }
+    set ResourceTypeID(value: string | null) {
+        this.Set('ResourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: ResourceID
+    * * Display Name: Resource ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource's key type). NULL for app-session invites.
+    */
+    get ResourceID(): string | null {
+        return this.Get('ResourceID');
+    }
+    set ResourceID(value: string | null) {
+        this.Set('ResourceID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResourceType(): string | null {
+        return this.Get('ResourceType');
+    }
+}
+
+
+/**
+ * MJ: Magic Link Redemptions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MagicLinkRedemption
+ * * Base View: vwMagicLinkRedemptions
+ * * @description One row per magic-link redemption ATTEMPT (success or failure). Provides per-use redemption history and forensic visibility into token scanning/brute-force. Distinct from MagicLinkInvite, which keeps only an aggregate UseCount + last ConsumedAt.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Magic Link Redemptions')
+export class MJMagicLinkRedemptionEntity extends BaseEntity<MJMagicLinkRedemptionEntityType> {
+    /**
+    * Loads the MJ: Magic Link Redemptions record from the database
+    * @param ID: string - primary key value to load the MJ: Magic Link Redemptions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMagicLinkRedemptionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: InviteID
+    * * Display Name: Invite ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Magic Link Invites (vwMagicLinkInvites.ID)
+    * * Description: Foreign key to MagicLinkInvite. NULLABLE: a redemption attempt against a token that matches no invite (not_found — the signature of scanning/brute-force) has no invite to reference but is still logged.
+    */
+    get InviteID(): string | null {
+        return this.Get('InviteID');
+    }
+    set InviteID(value: string | null) {
+        this.Set('InviteID', value);
+    }
+
+    /**
+    * * Field Name: AttemptedAt
+    * * Display Name: Attempted At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysutcdatetime()
+    * * Description: Timestamp of the redemption attempt (UTC). Defaults to the time of insert.
+    */
+    get AttemptedAt(): Date {
+        return this.Get('AttemptedAt');
+    }
+    set AttemptedAt(value: Date) {
+        this.Set('AttemptedAt', value);
+    }
+
+    /**
+    * * Field Name: Outcome
+    * * Display Name: Outcome
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * consumed
+    *   * expired
+    *   * invalid
+    *   * not_found
+    *   * provisioning_failed
+    *   * revoked
+    *   * server_error
+    *   * success
+    * * Description: Outcome of the attempt: 'success', or one of the redemption error codes (not_found, expired, consumed, revoked, invalid, provisioning_failed, server_error). Mirrors the RedeemErrorCode union in the server code.
+    */
+    get Outcome(): 'consumed' | 'expired' | 'invalid' | 'not_found' | 'provisioning_failed' | 'revoked' | 'server_error' | 'success' {
+        return this.Get('Outcome');
+    }
+    set Outcome(value: 'consumed' | 'expired' | 'invalid' | 'not_found' | 'provisioning_failed' | 'revoked' | 'server_error' | 'success') {
+        this.Set('Outcome', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment's magicLink.audit.ipStorage policy. NULL when unavailable or policy is 'none'.
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(512)
+    * * Description: User-Agent header of the redeeming client. NULL when unavailable.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: Origin
+    * * Display Name: Origin
+    * * SQL Data Type: nvarchar(512)
+    * * Description: Origin header of the redemption request. Retained for embed/domain forensics (which host framed or initiated the redemption). NULL for direct (non-embedded) redemptions.
+    */
+    get Origin(): string | null {
+        return this.Get('Origin');
+    }
+    set Origin(value: string | null) {
+        this.Set('Origin', value);
+    }
+
+    /**
+    * * Field Name: ProvisionedUserID
+    * * Display Name: Provisioned User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User provisioned/linked by a SUCCESSFUL redemption. NULL on failed attempts and on (future) anonymous redemptions that resolve to a shared principal rather than a per-email user.
+    */
+    get ProvisionedUserID(): string | null {
+        return this.Get('ProvisionedUserID');
+    }
+    set ProvisionedUserID(value: string | null) {
+        this.Set('ProvisionedUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ProvisionedUser
+    * * Display Name: Provisioned User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ProvisionedUser(): string | null {
+        return this.Get('ProvisionedUser');
     }
 }
 

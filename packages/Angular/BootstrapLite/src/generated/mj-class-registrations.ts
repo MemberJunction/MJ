@@ -17,7 +17,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (349 classes)
+// @memberjunction/core-entities (355 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -249,6 +249,12 @@ import {
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMagicLinkInviteAllowedDomainEntity,
+    MJMagicLinkInviteAllowedPathEntity,
+    MJMagicLinkInviteApplicationEntity,
+    MJMagicLinkInviteEntity,
+    MJMagicLinkInviteRoleEntity,
+    MJMagicLinkRedemptionEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -423,11 +429,12 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (4 classes)
+// @memberjunction/ng-auth-services (5 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
+    MJMagicLinkProvider,
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
@@ -721,6 +728,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMagicLinkInviteAllowedDomainEntity,
+    MJMagicLinkInviteAllowedPathEntity,
+    MJMagicLinkInviteApplicationEntity,
+    MJMagicLinkInviteEntity,
+    MJMagicLinkInviteRoleEntity,
+    MJMagicLinkRedemptionEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -872,6 +885,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
+    MJMagicLinkProvider,
     MJOktaProvider,
     FlowAgentFormSectionComponent,
     MJAIAgentFormComponentExtended,
@@ -915,7 +929,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 420;
+export const CLASS_REGISTRATIONS_COUNT = 427;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
