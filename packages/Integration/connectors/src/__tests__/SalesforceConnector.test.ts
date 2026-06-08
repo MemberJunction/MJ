@@ -592,3 +592,106 @@ describe('SalesforceConnector (mocked API)', () => {
         });
     });
 });
+
+// ─── Create-path response-body validation (BuildCreatedResult + composite) ─────────
+//
+// CreateBulkJob and ExecuteCompositeRequest are private; this test connector overrides
+// the HTTP transport boundary (MakeHTTPRequest) and exposes thin public wrappers so the
+// CRUD logic above the wire runs for real. Mirrors the HubSpot silent-failure-guard tests.
+
+interface MockRESTResponse {
+    Status: number;
+    Body: unknown;
+    Headers: Record<string, string>;
+}
+
+class TestSalesforceConnector extends SalesforceConnector {
+    public NextResponse: MockRESTResponse = { Status: 200, Body: {}, Headers: {} };
+
+    protected override async MakeHTTPRequest(): Promise<MockRESTResponse> {
+        return this.NextResponse;
+    }
+
+    private get fakeAuth() {
+        return { Token: 't', InstanceUrl: 'https://na1.salesforce.com', ApiVersion: '61.0', Config: {} };
+    }
+
+    /** Public wrapper around the private CreateBulkJob for testing. */
+    public async CallCreateBulkJob(attrs: Record<string, unknown>) {
+        const self = this as unknown as {
+            CreateBulkJob: (auth: unknown, family: string, attrs: Record<string, unknown>) => Promise<{ Success: boolean; ExternalID?: string; ErrorMessage?: string; StatusCode: number }>;
+        };
+        return self.CreateBulkJob(this.fakeAuth, 'bulk_ingest', attrs);
+    }
+
+    /** Public wrapper around the private ExecuteCompositeRequest for testing. */
+    public async CallExecuteCompositeRequest(attrs: Record<string, unknown>) {
+        const self = this as unknown as {
+            ExecuteCompositeRequest: (auth: unknown, attrs: Record<string, unknown>) => Promise<{ Success: boolean; ExternalID?: string; ErrorMessage?: string; StatusCode: number }>;
+        };
+        return self.ExecuteCompositeRequest(this.fakeAuth, attrs);
+    }
+}
+
+describe('SalesforceConnector.CreateBulkJob (response-body validation)', () => {
+    it('returns Success=false when a 2xx response carries no job id (silent-loss guard)', async () => {
+        const connector = new TestSalesforceConnector();
+        connector.NextResponse = { Status: 200, Body: {}, Headers: {} }; // no id field
+
+        const result = await connector.CallCreateBulkJob({ object: 'Account', operation: 'insert' });
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('no record ID');
+    });
+
+    it('returns Success=true with the job id on a clean create', async () => {
+        const connector = new TestSalesforceConnector();
+        connector.NextResponse = { Status: 200, Body: { id: '750ABC' }, Headers: {} };
+
+        const result = await connector.CallCreateBulkJob({ object: 'Account', operation: 'insert' });
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('750ABC');
+    });
+});
+
+describe('SalesforceConnector.ExecuteCompositeRequest (sub-request error validation)', () => {
+    it('returns Success=false when the envelope is 200 but a sub-request failed (batch-error-swallow guard)', async () => {
+        const connector = new TestSalesforceConnector();
+        // SF returns HTTP 200 for the overall composite call even though a sub-request 400'd.
+        connector.NextResponse = {
+            Status: 200,
+            Body: {
+                compositeResponse: [
+                    { referenceId: 'ref1', httpStatusCode: 201, body: { id: '001ABC', success: true } },
+                    { referenceId: 'ref2', httpStatusCode: 400, body: [{ errorCode: 'REQUIRED_FIELD_MISSING', message: 'Required fields are missing: [Name]' }] },
+                ],
+            },
+            Headers: {},
+        };
+
+        const result = await connector.CallExecuteCompositeRequest({ allOrNone: true, compositeRequest: [] });
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('ref2');
+        expect(result.ErrorMessage).toContain('REQUIRED_FIELD_MISSING');
+    });
+
+    it('returns Success=true when all sub-requests succeeded', async () => {
+        const connector = new TestSalesforceConnector();
+        connector.NextResponse = {
+            Status: 200,
+            Body: {
+                compositeResponse: [
+                    { referenceId: 'ref1', httpStatusCode: 201, body: { id: '001ABC', success: true } },
+                ],
+            },
+            Headers: {},
+        };
+
+        const result = await connector.CallExecuteCompositeRequest({ allOrNone: true, compositeRequest: [] });
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('composite');
+    });
+});

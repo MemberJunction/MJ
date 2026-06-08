@@ -18,6 +18,8 @@ export interface PromptRunRecord {
   TokensUsed: number | null;
   TokensPrompt: number | null;
   TokensCompletion: number | null;
+  TokensCacheRead: number | null;
+  TokensCacheWrite: number | null;
   ExecutionTimeMS: number | null;
   ModelID: string | null;
   Model: string | null;
@@ -43,7 +45,7 @@ export interface AgentRunRecord {
 /** Fields to request for prompt runs — only what the dashboard needs for aggregation */
 const PROMPT_RUN_FIELDS = [
   'ID', 'RunAt', 'CompletedAt', 'Success', 'Cost', 'TokensUsed',
-  'TokensPrompt', 'TokensCompletion', 'ExecutionTimeMS',
+  'TokensPrompt', 'TokensCompletion', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS',
   'ModelID', 'Model', 'AgentID', 'Agent', 'Prompt', 'ErrorMessage'
 ];
 
@@ -66,6 +68,7 @@ export interface DashboardKPIs {
   topAgent: string;
   errorRate: number;
   dailyCostBurn: number;
+  cacheHitRate: number;
 }
 
 export interface TrendData {
@@ -258,8 +261,21 @@ export class AIInstrumentationService {
       topModel: this.getTopModel(promptRuns),
       topAgent: this.getTopAgent(agentRuns),
       errorRate: 1 - successRate,
-      dailyCostBurn: this.calculateDailyCostBurn(promptRuns, agentRuns)
+      dailyCostBurn: this.calculateDailyCostBurn(promptRuns, agentRuns),
+      cacheHitRate: this.calculateCacheHitRate(promptRuns)
     };
+  }
+
+  /** Share of input tokens served from the provider's prompt cache across the period's prompt runs. */
+  private calculateCacheHitRate(promptRuns: PromptRunRecord[]): number {
+    let uncached = 0, read = 0, write = 0;
+    for (const r of promptRuns) {
+      uncached += r.TokensPrompt || 0;
+      read += r.TokensCacheRead || 0;
+      write += r.TokensCacheWrite || 0;
+    }
+    const totalInput = uncached + read + write;
+    return totalInput > 0 ? read / totalInput : 0;
   }
 
   // ─── Trend Computation ────────────────────────────────────────────

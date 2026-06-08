@@ -846,21 +846,8 @@
 }
 
 @media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-  }
-
-  .header-info {
-    justify-content: space-between;
-    flex-wrap: wrap;
-  }
-
-  .header-controls {
-    justify-content: space-between;
-  }
-
+  /* Header chrome is owned by the shared <mj-page-header> — page-header.scss.
+     No per-component header rules here. */
   .configurations-grid {
     grid-template-columns: 1fr;
   }

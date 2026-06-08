@@ -1,0 +1,707 @@
+[
+  {
+    "fields": {
+      "Name": "Send Document for Signature",
+      "Description": "Send one or more documents through a configured signature account/provider (e.g. DocuSign) and create the envelope lifecycle record. Documents are supplied as base64. Optionally links to an originating record (EntityID/RecordID) and an Artifact for provenance.",
+      "DriverClass": "Send Document for Signature",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=eSignature",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-signature"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignatureAccountID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "ID of the MJ: Signature Accounts row to send through."
+          },
+          "primaryKey": {
+            "ID": "C2BE600E-786E-468D-9FA2-04C75FF8FA3F"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.371Z",
+            "checksum": "93ac9778fce3ae53a81bd95bf333466a33f50f7d377ff4cd1ba2359421bb31a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Envelope title / email subject."
+          },
+          "primaryKey": {
+            "ID": "E9C57C2E-17DA-4EC4-8C80-9335F7FB31E5"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.409Z",
+            "checksum": "dc50babd329d4ee8d6053dd118eab3e2c1ba690eb503223869e888c5e4957e10"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Documents",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": true,
+            "Description": "Array of documents: [{ filename, contentType?, contentBase64 }]. contentBase64 is the base64-encoded document bytes."
+          },
+          "primaryKey": {
+            "ID": "ADADBC35-ED26-46F6-B87D-6078582DBDF6"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.443Z",
+            "checksum": "8089d5d9e9d500430069858b57c8401488d3be4fd53d73930d7e936e28a58b35"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Recipients",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": true,
+            "Description": "Array of signers: [{ email, name?, routingOrder?, role? }]."
+          },
+          "primaryKey": {
+            "ID": "75F9E07C-C193-4F3E-BB38-73201F0BE507"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.480Z",
+            "checksum": "409ca7c9c6fc5c8d4fedecdc4dd7c3f4ae2643e1ec6e1bacaadb57bd7179edc8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Message",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional email body sent with the envelope."
+          },
+          "primaryKey": {
+            "ID": "2173F1AE-1987-45D9-B5C0-9678F229C226"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.514Z",
+            "checksum": "321f623bbdf48314a73e7163567b63aa422ccff424f68914691e3938df51be65"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Polymorphic originating record: the Entity ID."
+          },
+          "primaryKey": {
+            "ID": "35C7D1E4-51B5-4EE8-8A05-C48682734E13"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.548Z",
+            "checksum": "60683065e22db62ca7e01481870e188b59ea926239690b127dbb42750cc39d55"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Polymorphic originating record: the record's primary key value."
+          },
+          "primaryKey": {
+            "ID": "CFA830D5-6F7D-4CE8-9F73-B821AB56CFE9"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.582Z",
+            "checksum": "8beb59074e6c5fe8123f0d0e2e2307c4df7b90adccc1c185de73731d1941f3f0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional MJ: Artifacts ID recorded against the first document for provenance."
+          },
+          "primaryKey": {
+            "ID": "84678ED7-16C6-4973-ACEE-A46A18A4757D"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.616Z",
+            "checksum": "64fa9312dac99544046ea8b6ade40f6a88ae6aecd2f6ab6a012034b10b4f3204"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactVersionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional MJ: Artifact Versions ID pinning the exact version sent."
+          },
+          "primaryKey": {
+            "ID": "16CDD498-99F5-480E-99D9-661AEF971A3F"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.651Z",
+            "checksum": "65f393b9914fc65cae4929cda5a9aa20097dc65f9c9954944426bf86cedc45ad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SendImmediately",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "true (default) sends the envelope; false creates it as a draft."
+          },
+          "primaryKey": {
+            "ID": "38F4A5A7-EFB1-4CD4-8E26-33756856BB1A"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.684Z",
+            "checksum": "90b9c9b17800f1804509f9496e90c9860311a014288ff3919a6e219751a1ccde"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Metadata",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional key/value object of provider custom fields."
+          },
+          "primaryKey": {
+            "ID": "4FA26FA1-C473-44C3-BB90-A3222A8DD467"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.728Z",
+            "checksum": "917207ccfec81f4329dc08e055dd8abda6b42adc3216ffc4b6db96709be27a46"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignatureRequestID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the created MJ: Signature Requests row."
+          },
+          "primaryKey": {
+            "ID": "7CEA53A6-5C09-42DE-9BB9-A5F854928677"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.762Z",
+            "checksum": "d0c2d6216a28b4b5e698edccb3773e1703b3fbf6c03346d375c41cdf507f841f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalEnvelopeID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Provider-side envelope identifier."
+          },
+          "primaryKey": {
+            "ID": "F2457A42-0473-49A8-93D4-9DADB8E8C117"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.796Z",
+            "checksum": "b09eb259428a935901c85cce7975b8eb98092c46b020401956d0bc3fa350272c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Resulting envelope status."
+          },
+          "primaryKey": {
+            "ID": "01DE30C3-416F-4F14-AF21-2CFDB59184E7"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.829Z",
+            "checksum": "ee8f5925db14137ddfa9e5a1ac0d7d7a03ce93aa203e858979c1c39553b5f898"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SENT",
+            "IsSuccess": true,
+            "Description": "Envelope was created and sent."
+          },
+          "primaryKey": {
+            "ID": "8A02D0AA-F7AD-4060-92ED-19FDBDA1FB70"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.869Z",
+            "checksum": "4d3decb2c926cf526c65d2b249122c6105ef77864979bf8e41a839df6e33d40b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DRAFT_CREATED",
+            "IsSuccess": true,
+            "Description": "Envelope was created as a draft (SendImmediately=false)."
+          },
+          "primaryKey": {
+            "ID": "DE227089-DE69-4732-9630-FA7AA3D629E6"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.891Z",
+            "checksum": "d377636de248cfe7284ee13e6add0f022ceea41bd2fb2e709cc47e7326fe0793"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DOCUMENT",
+            "IsSuccess": false,
+            "Description": "No valid documents were supplied."
+          },
+          "primaryKey": {
+            "ID": "1076C494-1C74-4575-9365-196153D65593"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.913Z",
+            "checksum": "6ff68ec8499aef3c2019845cd409390add64ec660643e5c5ca6315aa1512911e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ACCOUNT_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The specified signature account was not found."
+          },
+          "primaryKey": {
+            "ID": "821EFC59-5AB0-47C5-9C3E-99766C7601C5"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.933Z",
+            "checksum": "f14c5cbc13774d453790893708242eccd559279b07a808b5ea9b1cf80e184498"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_ERROR",
+            "IsSuccess": false,
+            "Description": "The provider rejected the request or another error occurred."
+          },
+          "primaryKey": {
+            "ID": "94ECE3BC-73EE-4789-84B2-788A8AD73A4A"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.953Z",
+            "checksum": "d17ec84fcaa9dc30db013f879f93773c9814b8c7331fcbe336d3d36b0e9cae01"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F4052558-D554-49D2-8E69-EC2B4C860816"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T17:35:11.257Z",
+      "checksum": "e24fbac28b9d671372c365392b08b2ae219ce49cbe2bab9e3b9002693694866c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Signature Status",
+      "Description": "Poll the provider for the current envelope status of a signature request and persist it (including recipient statuses).",
+      "DriverClass": "Get Signature Status",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=eSignature",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignatureRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "ID of the MJ: Signature Requests row to refresh."
+          },
+          "primaryKey": {
+            "ID": "1CD9E213-BFAC-4325-8804-CA71F0B28334"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:11.974Z",
+            "checksum": "fa962acd5b8fd66afd1d62d196dad1b9478b14b08b84fe52214e2916f1154e5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Current normalized envelope status."
+          },
+          "primaryKey": {
+            "ID": "83EEF146-EF77-41C0-A646-532D68BCAA61"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.018Z",
+            "checksum": "3d7d088f3078a2562445fe16e2b3b18e486cc9bf50446fa5b5fb84d62191f58d"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OK",
+            "IsSuccess": true,
+            "Description": "Status retrieved and persisted."
+          },
+          "primaryKey": {
+            "ID": "E6890D33-54C1-45B3-84FB-6393E7AEACD5"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.050Z",
+            "checksum": "d499fdc1abb53484f60d9cd9dc1b76b20e5ce573b2636c83cd0f5a4184c69759"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_SENT",
+            "IsSuccess": false,
+            "Description": "The request has not been sent yet, so there is no status to fetch."
+          },
+          "primaryKey": {
+            "ID": "74DB8CC4-F678-424B-B0B0-1C7162F7F1C0"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.071Z",
+            "checksum": "d24f300c978a3e95dac25d9ebeb6ba4040eabd261357733bc150ca7956a9f006"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_ERROR",
+            "IsSuccess": false,
+            "Description": "The provider could not return a status or another error occurred."
+          },
+          "primaryKey": {
+            "ID": "B45D243C-6333-4D01-9F47-815FDE261E9C"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.093Z",
+            "checksum": "79562898d2a568690fce9d2c479c8b30fcee4c9e8d41d8ab68cc8958f7fcd6fa"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F813E3D5-4204-4428-A633-A2048A38B364"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T17:35:11.284Z",
+      "checksum": "48380c72149494e95515033cca060fcc60f2439715eaa7348d77611e35da40a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Download Signed Document",
+      "Description": "Download the executed/signed document for a completed signature request and record it as a Signed-role document. Returns the document as base64.",
+      "DriverClass": "Download Signed Document",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=eSignature",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-arrow-down"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignatureRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "ID of the MJ: Signature Requests row whose signed document to download."
+          },
+          "primaryKey": {
+            "ID": "DB15309D-43E4-4B71-8A5F-824819376A73"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.115Z",
+            "checksum": "f01d369cec76cd5df4a6c261190f56dd83396d4a74b7463358cc1727f6a1e91c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DocumentBase64",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Base64-encoded executed document bytes."
+          },
+          "primaryKey": {
+            "ID": "25B14445-F8D9-425C-9BB8-85F1B090F99B"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.147Z",
+            "checksum": "28cd716e9dc43b8a2a57f39120d901bcf45af727dc083c4e20c1331223991bf4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Filename",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Filename of the executed document."
+          },
+          "primaryKey": {
+            "ID": "E14D9BF8-B693-4405-854C-2282829B3129"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.181Z",
+            "checksum": "e0f26d0c9605882211c21118d3a453d75d13837719003d770d23e5b191ca0b40"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContentType",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "MIME type of the executed document."
+          },
+          "primaryKey": {
+            "ID": "2E6D90BC-7113-46AA-B9E7-3CB742ACF289"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.215Z",
+            "checksum": "4d8d572dbaef025e8ceef712e504f0608f016fc436221c95d166cc084d03ea8c"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OK",
+            "IsSuccess": true,
+            "Description": "Signed document downloaded."
+          },
+          "primaryKey": {
+            "ID": "6F4F9205-1663-4F08-8A32-C1DC1CB6DCD2"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.246Z",
+            "checksum": "f987f3c8ad37666c24e4d6b1165986f2e2368900e35a2ba9014aff7f2771bfd6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_COMPLETED",
+            "IsSuccess": false,
+            "Description": "The request is not in a state where a signed document is available."
+          },
+          "primaryKey": {
+            "ID": "80DAD837-8805-4C65-9CCF-AE5FB51EA962"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.266Z",
+            "checksum": "8c49cc7bc14a649e164f378b38a8708d43782c59e19f7131902dc107bd0b225f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_ERROR",
+            "IsSuccess": false,
+            "Description": "The provider could not return the document or another error occurred."
+          },
+          "primaryKey": {
+            "ID": "531FBFE7-4A28-4C75-A0B8-95570A90A611"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.293Z",
+            "checksum": "111855ac4014a2a36a7307fdfa95e904584e3a6160883591e5113c17c3aeecdc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F9DF86CA-158D-43AE-9EC5-CD2CEB176DFF"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T17:35:11.310Z",
+      "checksum": "ea0ffb42a3a696d8f8e2017e7768a81df86d2702090e2b1c42be2b4b98c3fb8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Void Signature Request",
+      "Description": "Void/cancel an in-flight signature request with a reason.",
+      "DriverClass": "Void Signature Request",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=eSignature",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-ban"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignatureRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "ID of the MJ: Signature Requests row to void."
+          },
+          "primaryKey": {
+            "ID": "E76AF870-79BF-4A51-BC57-C42E75B404D8"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.314Z",
+            "checksum": "c7715d00234e060467fcfb5570f7494065d111b93dc006e11682bac6b8962bbb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Reason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Reason for voiding the envelope."
+          },
+          "primaryKey": {
+            "ID": "903D1CE3-D439-4BBF-A921-E476544FF0A7"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.348Z",
+            "checksum": "689c627f97e4b24c1656d293886e8494c192f39095cb4c32d00f76bf01d5d082"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Resulting status (Voided)."
+          },
+          "primaryKey": {
+            "ID": "C7112A29-8173-4777-B9A9-D883DD10D95A"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.382Z",
+            "checksum": "785c1b02b151221e13f5f11e4df804b349fbd8f8b682078d567d8941a8fb1448"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VOIDED",
+            "IsSuccess": true,
+            "Description": "Envelope was voided."
+          },
+          "primaryKey": {
+            "ID": "FE3BDBCE-1DB9-4A3E-8289-0B8C95F9255E"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.413Z",
+            "checksum": "bea9e48c6a779d68e41b25a9513868863af6e3325cc5abba535baecc8a017c3a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_ERROR",
+            "IsSuccess": false,
+            "Description": "The provider could not void the envelope or another error occurred."
+          },
+          "primaryKey": {
+            "ID": "F17CA4CE-4B6B-4450-B2B0-2BE92CF39AD5"
+          },
+          "sync": {
+            "lastModified": "2026-06-05T17:35:12.431Z",
+            "checksum": "d03fd8830d20d9f6b0c7bbf7ce9b56e53a88ac339059d18cc774e18c121dea7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "439D33F8-A1F6-4391-B1DD-E43F2F75CE56"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T17:35:11.332Z",
+      "checksum": "2fb2b0b876383b286ec1a31794f9635a5e944c11c33136c3d01d8f4f11160bf8"
+    }
+  }
+]

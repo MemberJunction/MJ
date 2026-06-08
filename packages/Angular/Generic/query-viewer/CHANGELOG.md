@@ -1,5 +1,33 @@
 # @memberjunction/ng-query-viewer
 
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [4bc6fb4]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [5b4102c]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ng-shared-generic@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/ng-markdown@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-code-editor@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/ng-export-service@5.39.0
+  - @memberjunction/ng-pagination@5.39.0
+  - @memberjunction/export-engine@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

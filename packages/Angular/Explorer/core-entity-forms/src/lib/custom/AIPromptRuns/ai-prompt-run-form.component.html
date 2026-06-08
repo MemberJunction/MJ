@@ -183,13 +183,22 @@
                                 <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
                             </div>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item" title="Total tokens the model processed, including cached input">
                             <i class="fa-solid fa-coins"></i>
                             <div class="metric-content">
                                 <div class="metric-label">Total Tokens</div>
-                                <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
+                                <div class="metric-value">{{ formatTokens(TotalTokensProcessed) }}</div>
                             </div>
                         </div>
+                        @if (record.TokensCacheRead) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-bolt"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Cached</div>
+                                    <div class="metric-value">{{ formatTokens(record.TokensCacheRead) }}</div>
+                                </div>
+                            </div>
+                        }
                         <div class="metric-item">
                             <i class="fa-solid fa-dollar-sign"></i>
                             <div class="metric-content">
@@ -217,13 +226,22 @@
                                 <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
                             </div>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item" title="Total tokens the model processed, including cached input">
                             <i class="fa-solid fa-coins"></i>
                             <div class="metric-content">
                                 <div class="metric-label">Total Tokens</div>
-                                <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
+                                <div class="metric-value">{{ formatTokens(TotalTokensProcessed) }}</div>
                             </div>
                         </div>
+                        @if (record.TokensCacheRead) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-bolt"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Cached</div>
+                                    <div class="metric-value">{{ formatTokens(record.TokensCacheRead) }}</div>
+                                </div>
+                            </div>
+                        }
                         <div class="metric-item">
                             <i class="fa-solid fa-dollar-sign"></i>
                             <div class="metric-content">
@@ -507,7 +525,12 @@
                                             <i class="fa-solid fa-message"></i>
                                             <h4>Prompt Tokens</h4>
                                         </div>
-                                        <div class="metric-value large">{{ formatTokens(record.TokensPrompt) }}</div>
+                                        <div class="metric-value large" title="Full input the model processed — uncached (new) prompt tokens plus any cached tokens">{{ formatTokens(FullPromptTokens) }}</div>
+                                        @if (CachedTokens > 0) {
+                                            <div class="metric-rollup">
+                                                <span>incl. {{ formatTokens(CachedTokens) }} cached</span>
+                                            </div>
+                                        }
                                         @if (record.TokensPromptRollup && record.TokensPromptRollup !== record.TokensPrompt) {
                                             <div class="metric-rollup">
                                                 <span>Rollup: {{ formatTokens(record.TokensPromptRollup) }}</span>
@@ -533,14 +556,41 @@
                                             <i class="fa-solid fa-coins"></i>
                                             <h4>Total Tokens</h4>
                                         </div>
-                                        <div class="metric-value large">{{ formatTokens(record.TokensUsed) }}</div>
+                                        <div class="metric-value large" title="Prompt + completion + cached tokens — the full amount the model processed">{{ formatTokens(TotalTokensProcessed) }}</div>
+                                        @if (CachedTokens > 0) {
+                                            <div class="metric-rollup">
+                                                <span>incl. {{ formatTokens(CachedTokens) }} cached</span>
+                                            </div>
+                                        }
                                         @if (record.TokensUsedRollup && record.TokensUsedRollup !== record.TokensUsed) {
                                             <div class="metric-rollup">
-                                                <span>Rollup: {{ formatTokens(record.TokensUsedRollup) }}</span>
+                                                <span>Net rollup: {{ formatTokens(record.TokensUsedRollup) }}</span>
                                             </div>
                                         }
                                     </div>
-                                    
+
+                                    <!-- Prompt-cache tokens (provider cache reads = hits, writes = cache creation).
+                                         Only rendered when the provider reported cache usage. -->
+                                    @if (record.TokensCacheRead != null || record.TokensCacheWrite != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-bolt"></i>
+                                                <h4>Cache Read</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatTokens(record.TokensCacheRead) }}</div>
+                                            @if (record.TokensCacheWrite) {
+                                                <div class="metric-rollup">
+                                                    <span>Write: {{ formatTokens(record.TokensCacheWrite) }}</span>
+                                                </div>
+                                            }
+                                            @if (record.TokensCacheRead || record.TokensCacheWrite) {
+                                                <div class="metric-rollup">
+                                                    <span>{{ CacheHitRatePct | number:'1.0-0' }}% hit rate</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
                                     <div class="metric-card">
                                         <div class="metric-header">
                                             <i class="fa-solid fa-dollar-sign"></i>

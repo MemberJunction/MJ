@@ -2782,9 +2782,9 @@ export class ManageMetadataBase {
             if (primaryKeys.length > 0) {
                for (const pk of primaryKeys) {
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
-                                    ${this.qi('IsPrimaryKey')} = 1,
-                                    ${this.qi('IsSoftPrimaryKey')} = 1
+                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                                    ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
+                                    ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
 
@@ -2812,10 +2812,10 @@ export class ManageMetadataBase {
                   const relatedEntityId = relatedEntityResult.recordset[0].ID;
 
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
+                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
                                     ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
                                     ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
-                                    ${this.qi('IsSoftForeignKey')} = 1
+                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
 
@@ -3184,7 +3184,7 @@ export class ManageMetadataBase {
                const namingOptions = configInfo.entityNaming?.normalizeFieldNames !== false ? this.getEntityNamingOptions() : undefined;
                const sDisplayName = stripTrailingChars(createDisplayName(field.Name, namingOptions), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
+                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
                }
             }
@@ -5019,6 +5019,15 @@ export class ManageMetadataBase {
 
       for (const nfName of nameFieldNames) {
          const nameField = fields.find(f => f.Name === nfName);
+         if (nameField && !this.isFieldEligibleForNameField(nameField)) {
+            // The LLM proposed a field that can never be a sensible display name
+            // (primary key, uniqueidentifier, non-text, or unbounded blob). Skip
+            // it silently — this is a guardrail, not a bug. Without this, a PK can
+            // be flagged IsNameField, which corrupts every FK-name virtual field
+            // that joins to this entity (it resolves to the uniqueidentifier PK
+            // instead of the real name column).
+            continue;
+         }
          if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
@@ -5033,6 +5042,26 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Returns true if the field is a sensible target for IsNameField (i.e. could
+    * serve as the entity's human-readable display name). A name field must be
+    * BOUNDED TEXT — so we reject primary keys, uniqueidentifiers, all non-text
+    * types, and unbounded (MAX) text. This stops Smart Field Identification from
+    * flagging a PK/uniqueidentifier as a name field, which would corrupt every
+    * related-entity name virtual field that joins to this entity (those resolve
+    * their SQL type from the related entity's NameField).
+    */
+   protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
+      if (field.IsPrimaryKey === true) return false;
+      const type = (field.Type as string | undefined ?? '').toLowerCase();
+      const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
+      if (!textTypes.has(type)) return false;
+      // Unbounded text (NVARCHAR(MAX) → Length -1) is never a good name field.
+      const length = field.Length as number | undefined;
+      if (length === -1) return false;
+      return true;
+   }
+
+   /**
     * Generate SQL UPDATEs for DefaultInView on the identified default view fields
     */
    protected applyDefaultInViewUpdates(
@@ -5040,11 +5069,15 @@ export class ManageMetadataBase {
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): void {
+      // Guard against a malformed LLM result that omits the array entirely.
+      // Mirrors the defensive handling in the sibling apply* methods.
+      const defaultInView: string[] = result.defaultInView ?? [];
+
       const defaultInViewFields = fields.filter(f =>
-         result.defaultInView.includes(f.Name as string) && f.AutoUpdateDefaultInView && f.ID
+         defaultInView.includes(f.Name as string) && f.AutoUpdateDefaultInView && f.ID
       );
 
-      const missingFields = result.defaultInView.filter(name =>
+      const missingFields = defaultInView.filter(name =>
          !fields.some(f => f.Name === name)
       );
       if (missingFields.length > 0) {
@@ -5286,10 +5319,14 @@ export class ManageMetadataBase {
    ): Promise<void> {
       const existingCategories = this.buildExistingCategorySet(fields);
 
-      await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
+      // Defensive: a malformed LLM result can leave fieldCategories undefined or
+      // non-array; both consumers below iterate it, so coerce to a safe array.
+      const fieldCategories = Array.isArray(result.fieldCategories) ? result.fieldCategories : [];
+
+      await this.applyFieldCategories(pool, entity, fields, fieldCategories, existingCategories);
 
       // Auto-detect geo-capable entities and set SupportsGeoCoding
-      await this.detectAndSetGeoCodingSupport(pool, entity, result.fieldCategories);
+      await this.detectAndSetGeoCodingSupport(pool, entity, fieldCategories);
 
       if (result.entityIcon) {
          await this.applyEntityIcon(pool, entity.ID, result.entityIcon);

@@ -1,9 +1,12 @@
 import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
-import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
+import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
-import { FireAndForgetHelper } from "./fireAndForgetHelper";
+import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
+
+/** Mutable holder for the most recent run id observed on the PubSub stream. */
+interface RunIdRef { id?: string; }
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -311,6 +314,7 @@ export class GraphQLAIClient {
             // Enable fire-and-forget to avoid Azure proxy timeouts
             variables.fireAndForget = true;
 
+            const runIdRef: RunIdRef = {};
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
                 dataProvider: this._dataProvider,
                 mutation,
@@ -320,9 +324,11 @@ export class GraphQLAIClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
-                onMessage: params.onProgress
-                    ? (parsed) => this.forwardAgentProgress(parsed, params.onProgress!)
-                    : undefined,
+                onMessage: (parsed) => {
+                    this.captureAgentRunId(parsed, runIdRef);
+                    if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
+                },
+                onStall: () => this.reconcileAgentRun(runIdRef.id ? `ID='${runIdRef.id}'` : undefined),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
         } catch (e) {
@@ -511,6 +517,10 @@ export class GraphQLAIClient {
                 onMessage: params.onProgress
                     ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
                     : undefined,
+                // Reconcile by the caller-known ConversationDetailID rather than a run id scraped off
+                // the shared session stream: that key is operation-specific, so concurrent
+                // conversation-detail runs on one session can never cross-resolve to each other.
+                onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
         } catch (e) {
@@ -621,6 +631,71 @@ export class GraphQLAIClient {
             parsed.type === 'StreamingContent' &&
             data?.type === 'complete' &&
             data?.conversationDetailId === conversationDetailId;
+    }
+
+    // ===== Agent Run Reconciliation (idle-stall recovery) =====
+
+    /**
+     * Capture the agent run id from any PubSub message so the reconciliation hook has a
+     * handle even before progress flows. Used only by the plain RunAIAgent path, which
+     * has no conversationDetailId to reconcile on (the conversation-detail path reconciles
+     * by ConversationDetailID instead). Heartbeats carry `data.runId`;
+     * progress/streaming/completion carry `data.agentRunId`. Ignores the 'unknown'
+     * placeholder used by background error events.
+     */
+    private captureAgentRunId(parsed: Record<string, unknown>, ref: RunIdRef): void {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const id = (data?.agentRunId ?? data?.runId) as string | undefined;
+        if (id && id !== 'unknown') {
+            ref.id = id;
+        }
+    }
+
+    /**
+     * Reconcile against the persisted AI Agent Run when the client idle timer expires.
+     * `filter` selects the run: the plain path passes `ID='<captured run id>'`; the
+     * conversation-detail path passes `ConversationDetailID='<id>'` (a stable,
+     * operation-specific key). 'Running' means execution is genuinely in progress (keep
+     * waiting); any other status means executeAIAgent already returned, so we resolve
+     * from the record — recovering a completion event lost to a socket blip.
+     *
+     * The recovered result rehydrates `payload` from the run's persisted Result so a
+     * programmatic caller still receives the agent's output. The interactive
+     * `responseForm` / actionable + automatic commands are intentionally NOT
+     * reconstructed here: they live on the response ConversationDetail and the
+     * conversation UI renders them from that record, independent of this return value.
+     */
+    private async reconcileAgentRun(filter: string | undefined): Promise<StallDecision<ExecuteAgentResult>> {
+        if (!filter) {
+            return 'continue'; // no handle yet — bounded by maxStallReconciles
+        }
+
+        const view = await this._dataProvider.RunView<MJAIAgentRunEntityExtended>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: filter,
+            OrderBy: '__mj_CreatedAt DESC', // newest run wins if a conversation detail was retried
+            ResultType: 'entity_object',
+            BypassCache: true, // true DB state — server wrote this via a different provider
+        });
+
+        const run = view.Success ? view.Results?.[0] : undefined;
+        if (!run) {
+            return 'continue'; // run not created yet / transient read miss — bounded by maxStallReconciles
+        }
+
+        if (run.Status === 'Running') {
+            return 'continue';
+        }
+
+        const success = run.Status === 'Completed' || run.Status === 'Paused' || run.Status === 'AwaitingFeedback';
+        return {
+            resolve: {
+                success,
+                agentRun: run,
+                payload: run.Result ? SafeJSONParse(run.Result) ?? undefined : undefined,
+                errorMessage: run.ErrorMessage ?? undefined,
+            } as ExecuteAgentResult,
+        };
     }
 
     // ===== Agent Result Extraction =====

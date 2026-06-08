@@ -12,6 +12,17 @@
       </mj-stat-badge>
     </div>
     <div actions>
+      <button mjButton variant="primary" size="sm" (click)="createNewAgent()" title="Create New Agent">
+        <i class="fa-solid fa-plus"></i>
+        <span class="action-btn-label">New Agent</span>
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search agents..."
+        [Value]="currentFilters.searchTerm"
+        (ValueChange)="onSearchTermChange($event)">
+      </mj-page-search>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -36,24 +47,11 @@
           </mj-filter-field>
         </mj-filter-panel>
       </mj-filter-popover>
-
       <mj-view-toggle
         [Options]="agentViewOptions"
         [ActiveKey]="viewMode"
         (KeyChange)="setViewMode($any($event))">
       </mj-view-toggle>
-
-      <button mjButton variant="primary" size="sm" (click)="createNewAgent()" title="Create New Agent">
-        <i class="fa-solid fa-plus"></i>
-        New Agent
-      </button>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search agents..."
-        [Value]="currentFilters.searchTerm"
-        (ValueChange)="onSearchTermChange($event)">
-      </mj-page-search>
     </div>
   </mj-page-header>
 

@@ -6,9 +6,9 @@
     <div actions>
       <button mjButton variant="primary" size="sm" (click)="RunPipeline()" [disabled]="IsRunning">
         @if (IsRunning) {
-          <i class="fa-solid fa-spinner fa-spin"></i> Running…
+          <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Running…</span>
         } @else {
-          <i class="fa-solid fa-play"></i> Run Pipeline
+          <i class="fa-solid fa-play"></i> <span class="action-btn-label">Run Pipeline</span>
         }
       </button>
     </div>
@@ -19,6 +19,7 @@
   <div class="at-dashboard">
 
     <mj-left-nav
+      MobileTitle="Sections"
       [Sections]="navSections"
       [ActiveId]="ActiveTab"
       (ItemClicked)="onNavItemClicked($event)">
@@ -28,7 +29,14 @@
 
     @switch (ActiveTab) {
       @case ('history') {
-        <classify-history-tab [Runs]="ContentRunsRaw" [Provider]="ProviderToUse"></classify-history-tab>
+        <classify-history-tab
+            [Runs]="ContentRunsRaw"
+            [TotalRunCount]="TotalRunHistoryCount"
+            [IsLoadingMore]="IsLoadingMoreRuns"
+            [Provider]="ProviderToUse"
+            (RefreshRequested)="ReloadRunHistory()"
+            (LoadMoreRequested)="LoadMoreRunHistory()"
+            (ItemSelected)="OpenItemDrilldown($event)"></classify-history-tab>
       }
       @case ('types') {
         <classify-types-tab
@@ -61,6 +69,7 @@
             [EntityRecordDocCache]="EntityRecordDocCacheMap"
             [Provider]="ProviderToUse"
             (AddSourceRequested)="OpenAddSourceForm()"
+            (AddSourceGuidedRequested)="OpenSetupWizard()"
             (EditSourceRequested)="OpenEditSourceForm($event)"
             (RunSourceRequested)="RunPipelineForSource($event)"
             (OpenContentItemRequested)="OpenContentItemDetail($event)"
@@ -129,6 +138,47 @@
         </div>
       }
       @case ('pipeline') {
+        @if (ShowOnboarding && !OnboardingDismissed) {
+          <div class="kh-onboarding">
+            <div class="kh-onboarding-head">
+              <div class="kh-onboarding-title">
+                <i class="fa-solid fa-rocket"></i>
+                <div>
+                  <h3>Let's get your Knowledge Hub classifying</h3>
+                  <p>Three quick steps to go from an empty hub to auto-tagged content.</p>
+                </div>
+              </div>
+              <button class="kh-onboarding-dismiss" (click)="DismissOnboarding()" title="Dismiss">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div class="kh-onboarding-steps">
+              @for (step of OnboardingSteps; track step.N) {
+                <div class="kh-step"
+                     [class.kh-step-done]="step.Done"
+                     [class.kh-step-active]="!step.Done && step.N - 1 === OnboardingActiveStep">
+                  <div class="kh-step-marker">
+                    @if (step.Done) { <i class="fa-solid fa-check"></i> } @else { {{ step.N }} }
+                  </div>
+                  <div class="kh-step-body">
+                    <div class="kh-step-title">{{ step.Title }}</div>
+                    <div class="kh-step-desc">{{ step.Desc }}</div>
+                    @if (step.Action && !step.Done && step.N - 1 === OnboardingActiveStep) {
+                      <div class="kh-step-actions">
+                        <button mjButton variant="primary" size="sm" (click)="OnOnboardingAction(step.Action)">{{ step.Cta }}</button>
+                        @if (step.Action === 'run') {
+                          <button mjButton variant="secondary" size="sm" (click)="OnOnboardingAction('seed')">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generate starter taxonomy
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
         <classify-pipeline-tab
             [KPIMetrics]="KPIMetrics"
             [PipelineStages]="PipelineStages"
@@ -136,6 +186,8 @@
             [SourceMinis]="SourceMinis"
             [TrendingTags]="TrendingTags"
             [LiveRunDetailRows]="LiveRunDetailRows"
+            [TotalItemCount]="TotalContentItemCount"
+            [IsLoadingMoreItems]="IsLoadingMoreItems"
             [IsRunning]="IsRunning"
             [IsPaused]="IsPaused"
             [RunProgress]="RunProgress"
@@ -146,6 +198,7 @@
             [ShowPipelineConfig]="ShowPipelineConfig"
             [Provider]="ProviderToUse"
             (RefreshRequested)="LoadPipelineData()"
+            (LoadMoreItemsRequested)="LoadMoreContentItems()"
             (PauseRequested)="PausePipeline()"
             (ResumeRequested)="ResumePipeline()"
             (CancelRequested)="CancelPipeline()"
@@ -185,6 +238,12 @@
         (NavigateToRecordRequested)="onFormNavigateToRecord($event)">
     </classify-source-type-form-dialog>
 
+    <!-- ══════ GUIDED SETUP WIZARD ══════ -->
+    <classify-setup-wizard #setupWizard
+        [Provider]="ProviderToUse"
+        (Created)="onWizardCreated($event)">
+    </classify-setup-wizard>
+
     <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
     <classify-item-detail-dialog
         [Item]="SelectedFeedItem"
@@ -192,6 +251,25 @@
         (Closed)="CloseItemDetail()"
         (OpenRecordRequested)="OpenRecordFromItem($event)"
         [Provider]="ProviderToUse"></classify-item-detail-dialog>
+
+    <!-- ══════ ITEM DRILLDOWN SLIDE-IN (Phase 4 audit/analytics) ══════ -->
+    @if (ShowItemDrilldown && DrilldownItemID) {
+      <div class="at-slide-overlay" (click)="CloseItemDrilldown()"></div>
+      <div class="at-slide-panel at-detail-panel">
+        <div class="at-slide-header">
+          <h3><i class="fa-solid fa-magnifying-glass-chart"></i> Item Drilldown</h3>
+          <button class="at-slide-close" aria-label="Close item drilldown" (click)="CloseItemDrilldown()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="at-slide-body">
+          <classify-item-drilldown
+              [ItemID]="DrilldownItemID"
+              [Provider]="ProviderToUse"
+              (OpenRecordRequested)="OpenDrilldownRecord($event)"></classify-item-drilldown>
+        </div>
+      </div>
+    }
 
     <!-- No Content Types Warning Dialog (z-index above slide-in panel) -->
     <classify-no-content-type-warning

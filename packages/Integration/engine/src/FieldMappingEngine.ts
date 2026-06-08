@@ -119,7 +119,10 @@ export class FieldMappingEngine {
         value: unknown,
         allFields: Record<string, unknown>
     ): TransformStepResult {
-        const onError: TransformOnError = step.OnError ?? 'Fail';
+        // Grace by default (§8 "still get as much data"): an unconfigured transform that errors on one
+        // record's value nulls that FIELD and lets the record sync, rather than failing the record/batch.
+        // An author can still opt into strict 'Fail' or 'Skip' explicitly per step.
+        const onError: TransformOnError = step.OnError ?? 'Null';
 
         try {
             const transformed = this.DispatchTransform(step, value, allFields);
@@ -229,10 +232,16 @@ export class FieldMappingEngine {
     private ApplyFormat(value: unknown, config: FormatConfig): unknown {
         if (config.FormatType === 'date') {
             const dateVal = value instanceof Date ? value : new Date(String(value));
+            // Throw a CONTROLLED error on an unparseable date — vs the raw RangeError FormatDate→toISOString()
+            // would throw — so ExecuteTransformStep's OnError strategy handles it uniformly (default 'Null').
+            if (isNaN(dateVal.getTime())) throw new Error(`Cannot format "${String(value)}" as a date`);
             return this.FormatDate(dateVal, config.FormatString);
         }
         if (config.FormatType === 'number') {
             const numVal = Number(value);
+            // Throw on non-numeric — was: emitted the literal string "NaN", which BYPASSED OnError and then
+            // failed SQL numeric binding (corrupting the write). OnError now handles it (default 'Null').
+            if (!Number.isFinite(numVal)) throw new Error(`Cannot format "${String(value)}" as a number`);
             return numVal.toFixed(Number(config.FormatString) || 0);
         }
         return String(value ?? '');
@@ -259,8 +268,13 @@ export class FieldMappingEngine {
                 return this.CoerceToNumber(value);
             case 'boolean':
                 return this.CoerceToBoolean(value);
-            case 'date':
-                return new Date(String(value));
+            case 'date': {
+                // Throw on unparseable — was: returned an Invalid Date that corrupted the write, bypassing
+                // OnError. OnError handles it now (default 'Null' → field nulled, record syncs).
+                const d = new Date(String(value));
+                if (isNaN(d.getTime())) throw new Error(`Cannot coerce "${String(value)}" to date`);
+                return d;
+            }
             default:
                 throw new Error(`Unknown coerce target type: ${config.TargetType}`);
         }
@@ -271,6 +285,8 @@ export class FieldMappingEngine {
      */
     private CoerceToNumber(value: unknown): number {
         const num = Number(value);
+        // Throw on unparseable so OnError decides (default 'Null' → field nulled, record syncs; 'Fail' → strict).
+        // The throw is caught by ExecuteTransformStep and never escapes to fail the record/batch.
         if (isNaN(num)) {
             throw new Error(`Cannot coerce "${String(value)}" to number`);
         }

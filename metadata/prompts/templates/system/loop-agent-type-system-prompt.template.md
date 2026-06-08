@@ -39,9 +39,13 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
+{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
+        /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
+        pipeline?: { steps: Array<Record<string, unknown>> };
+{% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
         clientTools?: Array<{ Name: string; Params: Record<string, unknown> }>;
@@ -512,12 +516,6 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
 {% endif %}
 
-{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
-## Current Date/Time
-- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
-- **Time**: {{ _CURRENT_TIME }}
-{% endif %}
-
 # Agent Definition
 Your name is {{ agentName }}
 
@@ -589,25 +587,6 @@ Client tools run **in the user's browser** and interact with the user and their 
 {{ appContext | safe }}
 {% endif %}
 
-{% if __agentTypePromptParams.includePayloadInPrompt != false %}
-## Current State
-**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
-```json
-{{ _CURRENT_PAYLOAD | dump | safe }}
-```
-{% endif %}
-
-{% if __agentTypePromptParams.includeScratchpadDocs != false %}
-## Scratchpad State
-Your private working memory. Manage via `scratchpad` in your response.
-
-### Notes
-{{ _SCRATCHPAD_NOTES | safe }}
-
-### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
-{{ _SCRATCHPAD_TASKS | safe }}
-{% endif %}
-
 {% if __agentTypePromptParams.includeArtifactToolsDocs != false and _ARTIFACT_MANIFEST %}
 ## Artifact Tools
 Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
@@ -625,4 +604,40 @@ your visible history; just read it.
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}
+{{ _PIPELINE_TOOLS | safe }}
+{% endif %}
+
+{# ── Volatile blocks intentionally placed LAST ──────────────────────────────
+   The date/time, scratchpad, and payload change every turn (time per-minute,
+   payload/scratchpad per-turn). Keeping them at the very end means everything
+   above — instructions, the Actions catalog, and tool docs — stays a byte-stable
+   prefix that providers can prompt-cache across turns. Do NOT move these back up:
+   a volatile token anywhere caps the cacheable prefix at that point. Payload is
+   last (closest to the response = recency). #}
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
+## Current Date/Time
+- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
+- **Time**: {{ _CURRENT_TIME }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+## Scratchpad State
+Your private working memory. Manage via `scratchpad` in your response.
+
+### Notes
+{{ _SCRATCHPAD_NOTES | safe }}
+
+### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
+{{ _SCRATCHPAD_TASKS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includePayloadInPrompt != false %}
+## Current State
+**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
+```json
+{{ _CURRENT_PAYLOAD | dump | safe }}
+```
 {% endif %}

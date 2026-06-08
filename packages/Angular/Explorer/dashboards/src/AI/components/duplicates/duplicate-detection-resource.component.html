@@ -1,8 +1,8 @@
 <mj-page-layout>
   <mj-page-header
-    Title="Duplicate Detection"
+    Title="Record Duplicates"
     Icon="fa-solid fa-clone"
-    Subtitle="Find and merge near-duplicate records using semantic similarity">
+    Subtitle="Find and merge near-duplicate entity records using semantic similarity">
     <div actions>
       <select class="mj-input kh-doc-select"
               [(ngModel)]="SelectedEntityDocumentID"
@@ -16,9 +16,9 @@
               (click)="RunDetection()"
               [disabled]="IsDetecting || !SelectedEntityDocumentID">
           @if (IsDetecting) {
-              <i class="fa-solid fa-spinner fa-spin"></i> Detecting…
+              <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Detecting…</span>
           } @else {
-              <i class="fa-solid fa-magnifying-glass"></i> Run Detection
+              <i class="fa-solid fa-magnifying-glass"></i> <span class="action-btn-label">Run Detection</span>
           }
       </button>
     </div>

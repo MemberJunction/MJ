@@ -21,7 +21,16 @@ vi.mock('@memberjunction/core', () => ({
     })),
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
-    IsVerboseLoggingEnabled: vi.fn(() => false)
+    IsVerboseLoggingEnabled: vi.fn(() => false),
+    // Added in v5.39 for decoupling fix — the engine imports these even on
+    // code paths these existing tests don't exercise. Minimal class stubs
+    // so module-load doesn't fail.
+    IMetadataProvider: class {},
+    RunView: class {
+        async RunView(): Promise<{ Success: boolean; Results: unknown[] }> {
+            return { Success: true, Results: [] };
+        }
+    }
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -113,7 +122,17 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         GetJobTypeByName: vi.fn(),
         GetJobTypeByDriverClass: vi.fn(),
         GetJobsByType: vi.fn().mockReturnValue([]),
-        GetRunsForJob: vi.fn().mockReturnValue([])
+        GetRunsForJob: vi.fn().mockReturnValue([]),
+        // Added in v5.39 for the decoupling fix. Provider doubles as both an
+        // IMetadataProvider and a DatabaseProviderBase via the engine's cast.
+        // Default ExecuteSQL returns the permission-probe "OK" shape so the
+        // probe call in StartPolling doesn't warn.
+        ContextUser: { ID: 'user-1' },
+        ProviderToUse: {
+            MJCoreSchemaName: '__mj',
+            ExecuteSQL: vi.fn().mockResolvedValue([{ permission_name: 'EXECUTE' }])
+        },
+        RunViewProviderToUse: {}
     };
 
     return {
@@ -184,36 +203,46 @@ describe('SchedulingEngine', () => {
     });
 
     describe('StopPolling', () => {
-        it('should do nothing when not polling', () => {
+        it('should do nothing when not polling', async () => {
             expect(engine.IsPolling).toBe(false);
-            engine.StopPolling();
+            await engine.StopPolling();
             expect(engine.IsPolling).toBe(false);
         });
 
-        it('should set IsPolling to false when called', () => {
-            // Start polling first
+        it('should set IsPolling to false when called', async () => {
+            // Start polling first. v5.39: StartPolling is async, and requires
+            // at least one active job to actually set isPolling=true (otherwise
+            // it short-circuits with "no active jobs, polling not started").
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
-            engine.StopPolling();
+            await engine.StopPolling();
             expect(engine.IsPolling).toBe(false);
+            mockBase.ScheduledJobs = [];
         });
     });
 
     describe('StartPolling', () => {
-        it('should set IsPolling to true', () => {
+        it('should set IsPolling to true', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
         });
 
-        it('should not start double polling if already polling', () => {
+        it('should not start double polling if already polling', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             const firstPollingState = engine.IsPolling;
             // Calling again should be a no-op
-            engine.StartPolling(mockUser);
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(firstPollingState);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
         });
     });
 

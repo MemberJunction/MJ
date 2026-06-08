@@ -491,15 +491,20 @@ export class AptifyConnector extends BaseRESTIntegrationConnector {
 
         const obj = APT_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
+        return obj.Fields.map(f => {
+            const fkTarget = this.ResolveForeignKeyTarget(f.Description);
+            return {
+                Name: f.Name,
+                Label: f.DisplayName,
+                Description: f.Description,
+                DataType: f.Type,
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.IsPrimaryKey,
+                IsReadOnly: f.IsReadOnly,
+                IsForeignKey: fkTarget != null,
+                ForeignKeyTarget: fkTarget,
+            };
+        });
     }
 
     /** Pull a sample record's keys + values, overlay any static PK/FK metadata we have for the object. */
@@ -509,6 +514,7 @@ export class AptifyConnector extends BaseRESTIntegrationConnector {
 
         return Object.entries(sample).map(([key, value]) => {
             const overlay = staticMap.get(key.toLowerCase());
+            const fkTarget = this.ResolveForeignKeyTarget(overlay?.Description);
             return {
                 Name: key,
                 Label: overlay?.DisplayName ?? key,
@@ -517,9 +523,25 @@ export class AptifyConnector extends BaseRESTIntegrationConnector {
                 IsRequired: overlay?.IsRequired ?? false,
                 IsUniqueKey: overlay?.IsPrimaryKey ?? false,
                 IsReadOnly: overlay?.IsReadOnly ?? false,
-                IsForeignKey: overlay?.Description?.startsWith('FK') ?? false,
+                IsForeignKey: fkTarget != null,
+                ForeignKeyTarget: fkTarget,
             };
         });
+    }
+
+    /**
+     * Promotes a foreign-key target that this connector already declares in a field's
+     * `Description` (the `FK → <Object>` convention used throughout APT_OBJECTS) into the
+     * proper `ForeignKeyTarget` slot. Only resolves when the named target is itself a
+     * sibling object declared in APT_OBJECTS — otherwise returns null (no guessing).
+     */
+    private ResolveForeignKeyTarget(description?: string): string | null {
+        if (!description || !description.startsWith('FK')) return null;
+        const match = description.match(/FK\s*→\s*(\S+)/);
+        const target = match?.[1];
+        if (!target) return null;
+        const sibling = APT_OBJECTS.find(o => o.Name.toLowerCase() === target.toLowerCase());
+        return sibling ? sibling.Name : null;
     }
 
     private InferType(value: unknown): string {
@@ -594,7 +616,7 @@ export class AptifyConnector extends BaseRESTIntegrationConnector {
 
         if (response.Status >= 200 && response.Status < 300) {
             const body = (response.Body ?? {}) as Record<string, unknown>;
-            return { Success: true, ExternalID: this.ExtractIdFromRecord(body), StatusCode: response.Status };
+            return this.BuildCreatedResult(this.ExtractIdFromRecord(body), response.Status, ctx.ObjectName);
         }
         return this.BuildCRUDError(response, 'CreateRecord', ctx.ObjectName);
     }

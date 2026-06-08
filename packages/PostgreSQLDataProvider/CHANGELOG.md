@@ -1,5 +1,26 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.39.0
+
+### Patch Changes
+
+- 7dfacc7: Add support for storing and querying embeddings inside the application's own database instead of a separate vector service. `VectorDBBase` gains an `IColocatedVectorHost` adapter (implemented by the PostgreSQL and SQL Server data providers) and a `ColocatedQuery` API; the new `PgVectorColocated` provider does vector + keyword (RRF) search in one statement, and the new `@memberjunction/ai-vectors-sqlserver` package adds a SQL Server 2025 native `VECTOR` provider with sibling-table and entity-column storage modes. `VectorSearchProvider` and `EntityVectorSyncer` route these indexes through the borrowed connection.
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/query-processor@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

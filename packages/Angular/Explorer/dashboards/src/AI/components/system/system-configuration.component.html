@@ -11,6 +11,14 @@
       </mj-stat-badge>
     </div>
     <div actions>
+      <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()"></mj-refresh-button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search configurations..."
+        [Value]="currentFilters.searchTerm"
+        (ValueChange)="onSearchTermChange($event)">
+      </mj-page-search>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -22,21 +30,11 @@
           (Reset)="resetPopoverFilters()">
         </mj-filter-panel>
       </mj-filter-popover>
-
       <mj-view-toggle
         [Options]="configViewOptions"
         [ActiveKey]="viewMode"
         (KeyChange)="setViewMode($any($event))">
       </mj-view-toggle>
-
-      <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()"></mj-refresh-button>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search configurations..."
-        [Value]="currentFilters.searchTerm"
-        (ValueChange)="onSearchTermChange($event)">
-      </mj-page-search>
     </div>
   </mj-page-header>
 

@@ -101,7 +101,7 @@ class ExpressionParser {
     private pos = 0;
 
     /** Parse `expression` into an AST. Throws Error with a human-readable message on failure. */
-    parse(expression: string): ExprNode {
+    Parse(expression: string): ExprNode {
         this.tokens = this.tokenize(expression);
         this.pos = 0;
         if (this.tokens.length === 0) {
@@ -699,7 +699,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
         let ast: ExprNode;
         try {
-            ast = new ExpressionParser().parse(expression);
+            ast = new ExpressionParser().Parse(expression);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             return this.errorResult(`Could not parse expression "${expression}": ${msg}`);
