@@ -18996,6 +18996,10 @@ export class MJAPIKey_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.`}) 
+    @MaxLength(20)
+    KeyPrefix?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -19047,6 +19051,9 @@ export class CreateMJAPIKeyInput {
     @Field({ nullable: true })
     CreatedByUserID?: string;
 
+    @Field({ nullable: true })
+    KeyPrefix: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -19083,6 +19090,9 @@ export class UpdateMJAPIKeyInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    KeyPrefix?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
