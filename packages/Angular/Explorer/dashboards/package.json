@@ -147,6 +147,8 @@
     "@memberjunction/skip-types": "5.39.0",
     "@memberjunction/templates-base-types": "5.39.0",
     "@memberjunction/testing-engine-base": "5.39.0",
+    "ag-grid-angular": "^35.0.1",
+    "ag-grid-community": "^35.0.1",
     "angular-split": "^20.0.0",
     "codemirror": "^6.0.2",
     "d3": "^7.8.5",

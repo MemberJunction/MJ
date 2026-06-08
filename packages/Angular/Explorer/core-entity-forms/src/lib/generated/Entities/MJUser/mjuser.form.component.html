@@ -2687,6 +2687,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Cluster Analysis Section -->
+    <mj-collapsible-panel
+        SectionKey="mJClusterAnalysis"
+        SectionName="Cluster Analysis"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJClusterAnalysis')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Cluster Analysis','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis')"
+                [AllowLoad]="IsSectionExpanded('mJClusterAnalysis')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJClusterAnalysis', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Magic Link Redemptions Section -->
     <mj-collapsible-panel
         SectionKey="mJMagicLinkRedemptions"

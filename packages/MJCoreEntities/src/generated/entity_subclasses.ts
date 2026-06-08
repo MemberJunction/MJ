@@ -7246,11 +7246,12 @@ export const MJApplicationSettingSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    ApplicationID: z.string().describe(`
+    ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
         * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)`),
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to Application. When NULL the row is a GLOBAL setting that applies across all applications; when set, the setting is scoped to that single application. Resolution should prefer an app-scoped row over the global fallback for the same Name.`),
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
@@ -7274,7 +7275,7 @@ export const MJApplicationSettingSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
@@ -8545,6 +8546,161 @@ export const MJAuthorizationSchema = z.object({
 });
 
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Cluster Analysis
+ */
+export const MJClusterAnalysisSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name for this saved analysis (e.g. "Members by skill embedding — June").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of what this analysis explores and how to interpret it.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the User who owns this analysis. The owner has full control; other users gain access only via explicit ResourcePermission share rows (owner-private sharing model).`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the primary Entity whose records were clustered. Drives drilldown (click a point -> open that record) and view-type qualification. Nullable for analyses not bound to a single entity; the full source definition (including multi-document selections) lives in Configuration.`),
+    Algorithm: z.union([z.literal('DBSCAN'), z.literal('Hierarchical'), z.literal('KMeans')]).describe(`
+        * * Field Name: Algorithm
+        * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: KMeans
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DBSCAN
+    *   * Hierarchical
+    *   * KMeans
+        * * Description: Clustering algorithm used: KMeans, DBSCAN, or Hierarchical. Stored as a top-level column for filtering/reporting; the full parameter set is captured in Configuration.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the configuration this analysis was run with: algorithm parameters (k / epsilon / minPoints), distance metric, the Entity Document ID(s) supplying the vectors, max record count, any record filter, and whether LLM cluster naming was requested. A complete, self-describing record of how to interpret (or re-run) the analysis.`),
+    Metrics: z.string().nullable().describe(`
+        * * Field Name: Metrics
+        * * Display Name: Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.`),
+    ProjectedPoints: z.string().nullable().describe(`
+        * * Field Name: ProjectedPoints
+        * * Display Name: Projected Points
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.`),
+    ViewportState: z.string().nullable().describe(`
+        * * Field Name: ViewportState
+        * * Display Name: Viewport State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.`),
+    Status: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+        * * Description: Lifecycle status of the analysis run: Pending (queued / running), Complete (results available), or Failed (run errored; see Metrics/Configuration for diagnostics).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJClusterAnalysisEntityType = z.infer<typeof MJClusterAnalysisSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Cluster Analysis Clusters
+ */
+export const MJClusterAnalysisClusterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ClusterAnalysisID: z.string().describe(`
+        * * Field Name: ClusterAnalysisID
+        * * Display Name: Cluster Analysis ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Cluster Analysis (vwClusterAnalysis.ID)
+        * * Description: Foreign key to the parent ClusterAnalysis. Cluster rows are deleted with their analysis (cascade).`),
+    ClusterIndex: z.number().describe(`
+        * * Field Name: ClusterIndex
+        * * Display Name: Cluster Index
+        * * SQL Data Type: int
+        * * Description: Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.`),
+    MemberCount: z.number().describe(`
+        * * Field Name: MemberCount
+        * * Display Name: Member Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records (points) assigned to this cluster.`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Color used to render this cluster in the scatter visualization (e.g. a hex string or token reference).`),
+    IsUserEdited: z.boolean().describe(`
+        * * Field Name: IsUserEdited
+        * * Display Name: Is User Edited
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ClusterAnalysis: z.string().describe(`
+        * * Field Name: ClusterAnalysis
+        * * Display Name: Cluster Analysis
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJClusterAnalysisClusterEntityType = z.infer<typeof MJClusterAnalysisClusterSchema>;
 
 /**
  * zod schema definition for the entity MJ: Collection Artifacts
@@ -10553,6 +10709,17 @@ export const MJContentItemTagSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
         * * Description: Optional link to the formal MJ Tag taxonomy. When set, this free-text tag has been matched (via semantic similarity or exact match) to a curated Tag record. NULL means the tag is unmatched free text only.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: Foreign key to the AI Prompt Run that produced this tag, populated by the autotagging pipeline at tag-creation time. Provides a direct, reliable edge from a tag back to the exact extraction run, replacing the previous fragile time-correlation heuristic. Nullable for tags created outside the LLM pipeline (e.g. manual tagging) or backfilled rows.`),
+    Reasoning: z.string().nullable().describe(`
+        * * Field Name: Reasoning
+        * * Display Name: Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.`),
     Item: z.string().nullable().describe(`
         * * Field Name: Item
         * * Display Name: Item Name
@@ -10560,6 +10727,10 @@ export const MJContentItemTagSchema = z.object({
     Tag_Virtual: z.string().nullable().describe(`
         * * Field Name: Tag_Virtual
         * * Display Name: Tag (Virtual)
+        * * SQL Data Type: nvarchar(255)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -23661,6 +23832,441 @@ export const MJSearchScopeSchema = z.object({
 export type MJSearchScopeEntityType = z.infer<typeof MJSearchScopeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Signature Accounts
+ */
+export const MJSignatureAccountSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable account name (e.g. "Acme Prod DocuSign").`),
+    SignatureProviderID: z.string().describe(`
+        * * Field Name: SignatureProviderID
+        * * Display Name: Signature Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Signature Providers (vwSignatureProviders.ID)`),
+    CredentialID: z.string().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this account is available for use. Inactive accounts are not pre-initialized by the engine driver cache.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Default Account
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this is the default account for its provider (and Company, when scoped).`),
+    DefaultFromName: z.string().nullable().describe(`
+        * * Field Name: DefaultFromName
+        * * Display Name: Default From Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Default sender display name for envelopes from this account.`),
+    DefaultFromEmail: z.string().nullable().describe(`
+        * * Field Name: DefaultFromEmail
+        * * Display Name: Default From Email
+        * * SQL Data Type: nvarchar(320)
+        * * Description: Default sender email for envelopes from this account.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of non-secret per-account overrides (e.g. accountId, restBase). Merged over provider Configuration and under decrypted credential values at driver initialize().`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SignatureProvider: z.string().describe(`
+        * * Field Name: SignatureProvider
+        * * Display Name: Signature Provider
+        * * SQL Data Type: nvarchar(100)`),
+    Credential: z.string().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJSignatureAccountEntityType = z.infer<typeof MJSignatureAccountSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Signature Providers
+ */
+export const MJSignatureProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display name of the eSignature provider type (e.g. DocuSign, Adobe Sign).`),
+    ServerDriverKey: z.string().describe(`
+        * * Field Name: ServerDriverKey
+        * * Display Name: Server Driver Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. 'DocuSign').`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this provider type is available for use. Inactive providers are skipped by the engine.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Selection priority when multiple providers could apply. Lower number = higher priority.`),
+    RequiresOAuth: z.boolean().describe(`
+        * * Field Name: RequiresOAuth
+        * * Display Name: Requires OAuth
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this provider requires OAuth-based credentials (vs. a static API key).`),
+    SupportsTemplates: z.boolean().describe(`
+        * * Field Name: SupportsTemplates
+        * * Display Name: Supports Templates
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this provider supports creating envelopes from provider-hosted templates (ApplyTemplate operation).`),
+    SupportsEmbeddedSigning: z.boolean().describe(`
+        * * Field Name: SupportsEmbeddedSigning
+        * * Display Name: Supports Embedded Signing
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this provider supports embedded (in-app) signing URLs (CreateEmbeddedSigningUrl operation).`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of non-secret provider-type defaults (e.g. oauthBase, restBase). Merged under per-account Configuration and decrypted credential values at driver initialize().`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJSignatureProviderEntityType = z.infer<typeof MJSignatureProviderSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Signature Request Documents
+ */
+export const MJSignatureRequestDocumentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SignatureRequestID: z.string().describe(`
+        * * Field Name: SignatureRequestID
+        * * Display Name: Signature Request
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)`),
+    ArtifactID: z.string().nullable().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
+    ArtifactVersionID: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Document Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Document filename as presented to the provider / signer.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Ordering of this document within the envelope (1-based).`),
+    Role: z.union([z.literal('Signed'), z.literal('Source')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Source
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Signed
+    *   * Source
+        * * Description: Document role: Source = the document sent for signature; Signed = the executed document downloaded after completion (written back as a new Artifact Version).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Artifact: z.string().nullable().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJSignatureRequestDocumentEntityType = z.infer<typeof MJSignatureRequestDocumentSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Signature Request Logs
+ */
+export const MJSignatureRequestLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SignatureRequestID: z.string().nullable().describe(`
+        * * Field Name: SignatureRequestID
+        * * Display Name: Signature Request
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)`),
+    Operation: z.string().describe(`
+        * * Field Name: Operation
+        * * Display Name: Operation
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The provider operation logged (e.g. CreateEnvelope, GetEnvelopeStatus, DownloadSignedDocument, VoidEnvelope, Webhook).`),
+    Success: z.boolean().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the operation succeeded.`),
+    StatusBefore: z.string().nullable().describe(`
+        * * Field Name: StatusBefore
+        * * Display Name: Status Before
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Signature request status immediately before the operation, when applicable.`),
+    StatusAfter: z.string().nullable().describe(`
+        * * Field Name: StatusAfter
+        * * Display Name: Status After
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Signature request status immediately after the operation, when applicable.`),
+    Detail: z.string().nullable().describe(`
+        * * Field Name: Detail
+        * * Display Name: Detail
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form detail: error text on failure, or normalized event JSON for webhook entries.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJSignatureRequestLogEntityType = z.infer<typeof MJSignatureRequestLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Signature Request Recipients
+ */
+export const MJSignatureRequestRecipientSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SignatureRequestID: z.string().describe(`
+        * * Field Name: SignatureRequestID
+        * * Display Name: Signature Request
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)`),
+    Email: z.string().describe(`
+        * * Field Name: Email
+        * * Display Name: Email
+        * * SQL Data Type: nvarchar(320)
+        * * Description: Recipient email address.`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Recipient display name.`),
+    RoutingOrder: z.number().describe(`
+        * * Field Name: RoutingOrder
+        * * Display Name: Routing Order
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Signing order; lower routes first (1-based).`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Template role name for this recipient, when the envelope was created from a provider template.`),
+    Status: z.union([z.literal('Created'), z.literal('Declined'), z.literal('Delivered'), z.literal('Sent'), z.literal('Signed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Created
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Created
+    *   * Declined
+    *   * Delivered
+    *   * Sent
+    *   * Signed
+        * * Description: Per-recipient status: Created, Sent, Delivered, Signed, or Declined.`),
+    SignedAt: z.date().nullable().describe(`
+        * * Field Name: SignedAt
+        * * Display Name: Signed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp this recipient signed.`),
+    ExternalRecipientID: z.string().nullable().describe(`
+        * * Field Name: ExternalRecipientID
+        * * Display Name: External Recipient ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Provider-side recipient identifier, for correlation with provider events.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJSignatureRequestRecipientEntityType = z.infer<typeof MJSignatureRequestRecipientSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Signature Requests
+ */
+export const MJSignatureRequestSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SignatureAccountID: z.string().describe(`
+        * * Field Name: SignatureAccountID
+        * * Display Name: Signature Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Signature Accounts (vwSignatureAccounts.ID)`),
+    Title: z.string().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Envelope title / email subject.`),
+    Message: z.string().nullable().describe(`
+        * * Field Name: Message
+        * * Display Name: Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional email body / message sent to recipients with the envelope.`),
+    Status: z.union([z.literal('Completed'), z.literal('Declined'), z.literal('Delivered'), z.literal('Draft'), z.literal('Sent'), z.literal('Signed'), z.literal('Voided')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Declined
+    *   * Delivered
+    *   * Draft
+    *   * Sent
+    *   * Signed
+    *   * Voided
+        * * Description: Normalized envelope lifecycle status: Draft, Sent, Delivered, Signed, Completed, Declined, or Voided.`),
+    ExternalEnvelopeID: z.string().nullable().describe(`
+        * * Field Name: ExternalEnvelopeID
+        * * Display Name: External Envelope ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Provider-side envelope identifier (e.g. DocuSign envelopeId), assigned after the envelope is created.`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.`),
+    RecordID: z.string().nullable().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Polymorphic reference (record half): the primary key value of the originating business record in the entity named by EntityID. NULL for standalone requests.`),
+    SentAt: z.date().nullable().describe(`
+        * * Field Name: SentAt
+        * * Display Name: Sent At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp the envelope was sent to recipients.`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp the envelope reached a terminal completed state (all recipients signed).`),
+    VoidReason: z.string().nullable().describe(`
+        * * Field Name: VoidReason
+        * * Display Name: Void Reason
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Reason supplied when the envelope was voided/cancelled.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SignatureAccount: z.string().describe(`
+        * * Field Name: SignatureAccount
+        * * Display Name: Signature Account Name
+        * * SQL Data Type: nvarchar(200)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJSignatureRequestEntityType = z.infer<typeof MJSignatureRequestSchema>;
+
+/**
  * zod schema definition for the entity MJ: Skills
  */
 export const MJSkillSchema = z.object({
@@ -26698,6 +27304,12 @@ export const MJUserViewSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJUserViewEntity_IDisplayState
         * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`),
+    ViewTypeID: z.string().nullable().describe(`
+        * * Field Name: ViewTypeID
+        * * Display Name: View Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: View Types (vwViewTypes.ID)
+        * * Description: Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
@@ -27311,6 +27923,77 @@ export const MJVersionLabelSchema = z.object({
 });
 
 export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: View Types
+ */
+export const MJViewTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.`),
+    DisplayName: z.string().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: User-facing label shown in the view-mode switcher (e.g. "Tag Cloud").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what the view type does and when it is useful.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.`),
+    PropertySheetDriverClass: z.string().nullable().describe(`
+        * * Field Name: PropertySheetDriverClass
+        * * Display Name: Property Sheet Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class shown next to the view type in the mode switcher (e.g. "fa-solid fa-diagram-project").`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order of the view type in the mode switcher (ascending).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 0, the view type is registered but hidden from users (e.g. disabled or under development).`),
+    SupportsConfiguration: z.boolean().describe(`
+        * * Field Name: SupportsConfiguration
+        * * Display Name: Supports Configuration
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the view type exposes a configuration prop-sheet (see PropertySheetDriverClass) and the host shows a settings affordance for it; when 0, the view type renders with no user-editable options.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJViewTypeEntityType = z.infer<typeof MJViewTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: Workflow Engines
@@ -47078,11 +47761,12 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
     * * Display Name: Application ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to Application. When NULL the row is a GLOBAL setting that applies across all applications; when set, the setting is scoped to that single application. Resolution should prefer an app-scoped row over the global fallback for the same Name.
     */
-    get ApplicationID(): string {
+    get ApplicationID(): string | null {
         return this.Get('ApplicationID');
     }
-    set ApplicationID(value: string) {
+    set ApplicationID(value: string | null) {
         this.Set('ApplicationID', value);
     }
 
@@ -47148,7 +47832,7 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 }
@@ -50342,6 +51026,388 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Cluster Analysis - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ClusterAnalysis
+ * * Base View: vwClusterAnalysis
+ * * @description A saved cluster analysis: the configuration, computed metrics, and projected 2D/3D layout of a clustering run over an entity's embedding vectors. First-class, queryable, and shareable — replaces the prior approach of stashing analyses in a User Settings JSON blob / browser localStorage. Owner-private; explicit shares are recorded in ResourcePermission against the "Cluster Analysis" ResourceType.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Cluster Analysis')
+export class MJClusterAnalysisEntity extends BaseEntity<MJClusterAnalysisEntityType> {
+    /**
+    * Loads the MJ: Cluster Analysis record from the database
+    * @param ID: string - primary key value to load the MJ: Cluster Analysis record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJClusterAnalysisEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name for this saved analysis (e.g. "Members by skill embedding — June").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of what this analysis explores and how to interpret it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User who owns this analysis. The owner has full control; other users gain access only via explicit ResourcePermission share rows (owner-private sharing model).
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the primary Entity whose records were clustered. Drives drilldown (click a point -> open that record) and view-type qualification. Nullable for analyses not bound to a single entity; the full source definition (including multi-document selections) lives in Configuration.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Algorithm
+    * * Display Name: Algorithm
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: KMeans
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DBSCAN
+    *   * Hierarchical
+    *   * KMeans
+    * * Description: Clustering algorithm used: KMeans, DBSCAN, or Hierarchical. Stored as a top-level column for filtering/reporting; the full parameter set is captured in Configuration.
+    */
+    get Algorithm(): 'DBSCAN' | 'Hierarchical' | 'KMeans' {
+        return this.Get('Algorithm');
+    }
+    set Algorithm(value: 'DBSCAN' | 'Hierarchical' | 'KMeans') {
+        this.Set('Algorithm', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the configuration this analysis was run with: algorithm parameters (k / epsilon / minPoints), distance metric, the Entity Document ID(s) supplying the vectors, max record count, any record filter, and whether LLM cluster naming was requested. A complete, self-describing record of how to interpret (or re-run) the analysis.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Metrics
+    * * Display Name: Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.
+    */
+    get Metrics(): string | null {
+        return this.Get('Metrics');
+    }
+    set Metrics(value: string | null) {
+        this.Set('Metrics', value);
+    }
+
+    /**
+    * * Field Name: ProjectedPoints
+    * * Display Name: Projected Points
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.
+    */
+    get ProjectedPoints(): string | null {
+        return this.Get('ProjectedPoints');
+    }
+    set ProjectedPoints(value: string | null) {
+        this.Set('ProjectedPoints', value);
+    }
+
+    /**
+    * * Field Name: ViewportState
+    * * Display Name: Viewport State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.
+    */
+    get ViewportState(): string | null {
+        return this.Get('ViewportState');
+    }
+    set ViewportState(value: string | null) {
+        this.Set('ViewportState', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    * * Description: Lifecycle status of the analysis run: Pending (queued / running), Complete (results available), or Failed (run errored; see Metrics/Configuration for diagnostics).
+    */
+    get Status(): 'Complete' | 'Failed' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'Failed' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Cluster Analysis Clusters - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ClusterAnalysisCluster
+ * * Base View: vwClusterAnalysisClusters
+ * * @description One named cluster within a saved ClusterAnalysis. Holds the cluster's label (LLM-generated or user-edited), member count, and display color, so labels can be regenerated or hand-edited per cluster without re-running the whole analysis.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Cluster Analysis Clusters')
+export class MJClusterAnalysisClusterEntity extends BaseEntity<MJClusterAnalysisClusterEntityType> {
+    /**
+    * Loads the MJ: Cluster Analysis Clusters record from the database
+    * @param ID: string - primary key value to load the MJ: Cluster Analysis Clusters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJClusterAnalysisClusterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ClusterAnalysisID
+    * * Display Name: Cluster Analysis ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Cluster Analysis (vwClusterAnalysis.ID)
+    * * Description: Foreign key to the parent ClusterAnalysis. Cluster rows are deleted with their analysis (cascade).
+    */
+    get ClusterAnalysisID(): string {
+        return this.Get('ClusterAnalysisID');
+    }
+    set ClusterAnalysisID(value: string) {
+        this.Set('ClusterAnalysisID', value);
+    }
+
+    /**
+    * * Field Name: ClusterIndex
+    * * Display Name: Cluster Index
+    * * SQL Data Type: int
+    * * Description: Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.
+    */
+    get ClusterIndex(): number {
+        return this.Get('ClusterIndex');
+    }
+    set ClusterIndex(value: number) {
+        this.Set('ClusterIndex', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: MemberCount
+    * * Display Name: Member Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records (points) assigned to this cluster.
+    */
+    get MemberCount(): number {
+        return this.Get('MemberCount');
+    }
+    set MemberCount(value: number) {
+        this.Set('MemberCount', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Color used to render this cluster in the scatter visualization (e.g. a hex string or token reference).
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: IsUserEdited
+    * * Display Name: Is User Edited
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.
+    */
+    get IsUserEdited(): boolean {
+        return this.Get('IsUserEdited');
+    }
+    set IsUserEdited(value: boolean) {
+        this.Set('IsUserEdited', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ClusterAnalysis
+    * * Display Name: Cluster Analysis
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ClusterAnalysis(): string {
+        return this.Get('ClusterAnalysis');
     }
 }
 
@@ -55351,6 +56417,33 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     }
 
     /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: Foreign key to the AI Prompt Run that produced this tag, populated by the autotagging pipeline at tag-creation time. Provides a direct, reliable edge from a tag back to the exact extraction run, replacing the previous fragile time-correlation heuristic. Nullable for tags created outside the LLM pipeline (e.g. manual tagging) or backfilled rows.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: Reasoning
+    * * Display Name: Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.
+    */
+    get Reasoning(): string | null {
+        return this.Get('Reasoning');
+    }
+    set Reasoning(value: string | null) {
+        this.Set('Reasoning', value);
+    }
+
+    /**
     * * Field Name: Item
     * * Display Name: Item Name
     * * SQL Data Type: nvarchar(250)
@@ -55366,6 +56459,15 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     */
     get Tag_Virtual(): string | null {
         return this.Get('Tag_Virtual');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
     }
 }
 
@@ -75693,6 +76795,59 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
     }
 
     /**
+    * Validate() method override for MJ: Magic Link Invites entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: An email address must be provided if the identity mode is set to 'email'.
+    * * Table-Level: The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEmailRequiredForEmailIdentityMode(result);
+        this.ValidateUseCountWithinMaxUsesLimit(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * An email address must be provided if the identity mode is set to 'email'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEmailRequiredForEmailIdentityMode(result: ValidationResult) {
+    	if (this.IdentityMode && this.IdentityMode.toLowerCase() === 'email' && (this.Email == null || this.Email.trim() === '')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Email",
+    			"An email address is required when the identity mode is set to 'email'.",
+    			this.Email,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUseCountWithinMaxUsesLimit(result: ValidationResult) {
+    	if (this.UseCount != null && this.MaxUses != null) {
+    		if (this.UseCount < 0 || this.UseCount > this.MaxUses) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UseCount",
+    				"The use count must be between 0 and the maximum allowed uses of " + this.MaxUses + ".",
+    				this.UseCount,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -89529,6 +90684,1098 @@ export class MJSearchScopeEntity extends BaseEntity<MJSearchScopeEntityType> {
 
 
 /**
+ * MJ: Signature Accounts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SignatureAccount
+ * * Base View: vwSignatureAccounts
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Signature Accounts')
+export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntityType> {
+    /**
+    * Loads the MJ: Signature Accounts record from the database
+    * @param ID: string - primary key value to load the MJ: Signature Accounts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSignatureAccountEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable account name (e.g. "Acme Prod DocuSign").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: SignatureProviderID
+    * * Display Name: Signature Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Signature Providers (vwSignatureProviders.ID)
+    */
+    get SignatureProviderID(): string {
+        return this.Get('SignatureProviderID');
+    }
+    set SignatureProviderID(value: string) {
+        this.Set('SignatureProviderID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this account is available for use. Inactive accounts are not pre-initialized by the engine driver cache.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Default Account
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this is the default account for its provider (and Company, when scoped).
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: DefaultFromName
+    * * Display Name: Default From Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Default sender display name for envelopes from this account.
+    */
+    get DefaultFromName(): string | null {
+        return this.Get('DefaultFromName');
+    }
+    set DefaultFromName(value: string | null) {
+        this.Set('DefaultFromName', value);
+    }
+
+    /**
+    * * Field Name: DefaultFromEmail
+    * * Display Name: Default From Email
+    * * SQL Data Type: nvarchar(320)
+    * * Description: Default sender email for envelopes from this account.
+    */
+    get DefaultFromEmail(): string | null {
+        return this.Get('DefaultFromEmail');
+    }
+    set DefaultFromEmail(value: string | null) {
+        this.Set('DefaultFromEmail', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of non-secret per-account overrides (e.g. accountId, restBase). Merged over provider Configuration and under decrypted credential values at driver initialize().
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SignatureProvider
+    * * Display Name: Signature Provider
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SignatureProvider(): string {
+        return this.Get('SignatureProvider');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string {
+        return this.Get('Credential');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+}
+
+
+/**
+ * MJ: Signature Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SignatureProvider
+ * * Base View: vwSignatureProviders
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Signature Providers')
+export class MJSignatureProviderEntity extends BaseEntity<MJSignatureProviderEntityType> {
+    /**
+    * Loads the MJ: Signature Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Signature Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSignatureProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name of the eSignature provider type (e.g. DocuSign, Adobe Sign).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ServerDriverKey
+    * * Display Name: Server Driver Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. 'DocuSign').
+    */
+    get ServerDriverKey(): string {
+        return this.Get('ServerDriverKey');
+    }
+    set ServerDriverKey(value: string) {
+        this.Set('ServerDriverKey', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this provider type is available for use. Inactive providers are skipped by the engine.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Selection priority when multiple providers could apply. Lower number = higher priority.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: RequiresOAuth
+    * * Display Name: Requires OAuth
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this provider requires OAuth-based credentials (vs. a static API key).
+    */
+    get RequiresOAuth(): boolean {
+        return this.Get('RequiresOAuth');
+    }
+    set RequiresOAuth(value: boolean) {
+        this.Set('RequiresOAuth', value);
+    }
+
+    /**
+    * * Field Name: SupportsTemplates
+    * * Display Name: Supports Templates
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this provider supports creating envelopes from provider-hosted templates (ApplyTemplate operation).
+    */
+    get SupportsTemplates(): boolean {
+        return this.Get('SupportsTemplates');
+    }
+    set SupportsTemplates(value: boolean) {
+        this.Set('SupportsTemplates', value);
+    }
+
+    /**
+    * * Field Name: SupportsEmbeddedSigning
+    * * Display Name: Supports Embedded Signing
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this provider supports embedded (in-app) signing URLs (CreateEmbeddedSigningUrl operation).
+    */
+    get SupportsEmbeddedSigning(): boolean {
+        return this.Get('SupportsEmbeddedSigning');
+    }
+    set SupportsEmbeddedSigning(value: boolean) {
+        this.Set('SupportsEmbeddedSigning', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of non-secret provider-type defaults (e.g. oauthBase, restBase). Merged under per-account Configuration and decrypted credential values at driver initialize().
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Signature Request Documents - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SignatureRequestDocument
+ * * Base View: vwSignatureRequestDocuments
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Signature Request Documents')
+export class MJSignatureRequestDocumentEntity extends BaseEntity<MJSignatureRequestDocumentEntityType> {
+    /**
+    * Loads the MJ: Signature Request Documents record from the database
+    * @param ID: string - primary key value to load the MJ: Signature Request Documents record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSignatureRequestDocumentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SignatureRequestID
+    * * Display Name: Signature Request
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)
+    */
+    get SignatureRequestID(): string {
+        return this.Get('SignatureRequestID');
+    }
+    set SignatureRequestID(value: string) {
+        this.Set('SignatureRequestID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    */
+    get ArtifactID(): string | null {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string | null) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    */
+    get ArtifactVersionID(): string | null {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string | null) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Document Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Document filename as presented to the provider / signer.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Ordering of this document within the envelope (1-based).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Source
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Signed
+    *   * Source
+    * * Description: Document role: Source = the document sent for signature; Signed = the executed document downloaded after completion (written back as a new Artifact Version).
+    */
+    get Role(): 'Signed' | 'Source' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Signed' | 'Source') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
+}
+
+
+/**
+ * MJ: Signature Request Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SignatureRequestLog
+ * * Base View: vwSignatureRequestLogs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Signature Request Logs')
+export class MJSignatureRequestLogEntity extends BaseEntity<MJSignatureRequestLogEntityType> {
+    /**
+    * Loads the MJ: Signature Request Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Signature Request Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSignatureRequestLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SignatureRequestID
+    * * Display Name: Signature Request
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)
+    */
+    get SignatureRequestID(): string | null {
+        return this.Get('SignatureRequestID');
+    }
+    set SignatureRequestID(value: string | null) {
+        this.Set('SignatureRequestID', value);
+    }
+
+    /**
+    * * Field Name: Operation
+    * * Display Name: Operation
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The provider operation logged (e.g. CreateEnvelope, GetEnvelopeStatus, DownloadSignedDocument, VoidEnvelope, Webhook).
+    */
+    get Operation(): string {
+        return this.Get('Operation');
+    }
+    set Operation(value: string) {
+        this.Set('Operation', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the operation succeeded.
+    */
+    get Success(): boolean {
+        return this.Get('Success');
+    }
+    set Success(value: boolean) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: StatusBefore
+    * * Display Name: Status Before
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Signature request status immediately before the operation, when applicable.
+    */
+    get StatusBefore(): string | null {
+        return this.Get('StatusBefore');
+    }
+    set StatusBefore(value: string | null) {
+        this.Set('StatusBefore', value);
+    }
+
+    /**
+    * * Field Name: StatusAfter
+    * * Display Name: Status After
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Signature request status immediately after the operation, when applicable.
+    */
+    get StatusAfter(): string | null {
+        return this.Get('StatusAfter');
+    }
+    set StatusAfter(value: string | null) {
+        this.Set('StatusAfter', value);
+    }
+
+    /**
+    * * Field Name: Detail
+    * * Display Name: Detail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form detail: error text on failure, or normalized event JSON for webhook entries.
+    */
+    get Detail(): string | null {
+        return this.Get('Detail');
+    }
+    set Detail(value: string | null) {
+        this.Set('Detail', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Signature Request Recipients - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SignatureRequestRecipient
+ * * Base View: vwSignatureRequestRecipients
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Signature Request Recipients')
+export class MJSignatureRequestRecipientEntity extends BaseEntity<MJSignatureRequestRecipientEntityType> {
+    /**
+    * Loads the MJ: Signature Request Recipients record from the database
+    * @param ID: string - primary key value to load the MJ: Signature Request Recipients record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSignatureRequestRecipientEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SignatureRequestID
+    * * Display Name: Signature Request
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)
+    */
+    get SignatureRequestID(): string {
+        return this.Get('SignatureRequestID');
+    }
+    set SignatureRequestID(value: string) {
+        this.Set('SignatureRequestID', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email
+    * * SQL Data Type: nvarchar(320)
+    * * Description: Recipient email address.
+    */
+    get Email(): string {
+        return this.Get('Email');
+    }
+    set Email(value: string) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Recipient display name.
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: RoutingOrder
+    * * Display Name: Routing Order
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Signing order; lower routes first (1-based).
+    */
+    get RoutingOrder(): number {
+        return this.Get('RoutingOrder');
+    }
+    set RoutingOrder(value: number) {
+        this.Set('RoutingOrder', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Template role name for this recipient, when the envelope was created from a provider template.
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+    set Role(value: string | null) {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Created
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Created
+    *   * Declined
+    *   * Delivered
+    *   * Sent
+    *   * Signed
+    * * Description: Per-recipient status: Created, Sent, Delivered, Signed, or Declined.
+    */
+    get Status(): 'Created' | 'Declined' | 'Delivered' | 'Sent' | 'Signed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Created' | 'Declined' | 'Delivered' | 'Sent' | 'Signed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: SignedAt
+    * * Display Name: Signed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp this recipient signed.
+    */
+    get SignedAt(): Date | null {
+        return this.Get('SignedAt');
+    }
+    set SignedAt(value: Date | null) {
+        this.Set('SignedAt', value);
+    }
+
+    /**
+    * * Field Name: ExternalRecipientID
+    * * Display Name: External Recipient ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Provider-side recipient identifier, for correlation with provider events.
+    */
+    get ExternalRecipientID(): string | null {
+        return this.Get('ExternalRecipientID');
+    }
+    set ExternalRecipientID(value: string | null) {
+        this.Set('ExternalRecipientID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Signature Requests - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SignatureRequest
+ * * Base View: vwSignatureRequests
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Signature Requests')
+export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntityType> {
+    /**
+    * Loads the MJ: Signature Requests record from the database
+    * @param ID: string - primary key value to load the MJ: Signature Requests record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSignatureRequestEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SignatureAccountID
+    * * Display Name: Signature Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Signature Accounts (vwSignatureAccounts.ID)
+    */
+    get SignatureAccountID(): string {
+        return this.Get('SignatureAccountID');
+    }
+    set SignatureAccountID(value: string) {
+        this.Set('SignatureAccountID', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Envelope title / email subject.
+    */
+    get Title(): string {
+        return this.Get('Title');
+    }
+    set Title(value: string) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Message
+    * * Display Name: Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional email body / message sent to recipients with the envelope.
+    */
+    get Message(): string | null {
+        return this.Get('Message');
+    }
+    set Message(value: string | null) {
+        this.Set('Message', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Declined
+    *   * Delivered
+    *   * Draft
+    *   * Sent
+    *   * Signed
+    *   * Voided
+    * * Description: Normalized envelope lifecycle status: Draft, Sent, Delivered, Signed, Completed, Declined, or Voided.
+    */
+    get Status(): 'Completed' | 'Declined' | 'Delivered' | 'Draft' | 'Sent' | 'Signed' | 'Voided' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'Declined' | 'Delivered' | 'Draft' | 'Sent' | 'Signed' | 'Voided') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExternalEnvelopeID
+    * * Display Name: External Envelope ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Provider-side envelope identifier (e.g. DocuSign envelopeId), assigned after the envelope is created.
+    */
+    get ExternalEnvelopeID(): string | null {
+        return this.Get('ExternalEnvelopeID');
+    }
+    set ExternalEnvelopeID(value: string | null) {
+        this.Set('ExternalEnvelopeID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Polymorphic reference (record half): the primary key value of the originating business record in the entity named by EntityID. NULL for standalone requests.
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: SentAt
+    * * Display Name: Sent At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp the envelope was sent to recipients.
+    */
+    get SentAt(): Date | null {
+        return this.Get('SentAt');
+    }
+    set SentAt(value: Date | null) {
+        this.Set('SentAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp the envelope reached a terminal completed state (all recipients signed).
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: VoidReason
+    * * Display Name: Void Reason
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Reason supplied when the envelope was voided/cancelled.
+    */
+    get VoidReason(): string | null {
+        return this.Get('VoidReason');
+    }
+    set VoidReason(value: string | null) {
+        this.Set('VoidReason', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SignatureAccount
+    * * Display Name: Signature Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SignatureAccount(): string {
+        return this.Get('SignatureAccount');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
  * MJ: Skills - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Skill
@@ -97468,6 +99715,30 @@ export interface MJUserViewEntity_IDisplayState {
     cards?: MJUserViewEntity_IDisplayCardState;
     /** Grid-specific configuration */
     grid?: MJUserViewEntity_IGridDisplayState;
+    /**
+     * Per-view-type configuration, one entry per view type the user has configured.
+     * Keyed by the `MJ: View Types` row ID so each type (Grid, Cards, Timeline, Map,
+     * Cluster, …) keeps its own settings in parallel — switching from one type to another
+     * and back preserves each type's config. The *active* view type is stored on
+     * `UserView.ViewTypeID` (the source of truth), not here; this array holds only the
+     * per-type configuration payloads.
+     */
+    viewTypeConfigs?: MJUserViewEntity_IViewTypeConfigEntry[];
+}
+
+/**
+ * A single per-view-type configuration entry within {@link MJUserViewEntity_IDisplayState}.viewTypeConfigs.
+ *
+ * `config` is intentionally an open map: each view-type plug-in owns the shape of its own
+ * configuration (e.g. the Cluster plug-in stores algorithm/K/dimensions; a Map plug-in stores
+ * lat/long field names). The host persists/loads it opaquely and hands it to the plug-in's
+ * renderer + prop-sheet, which interpret it with their own typed config interface.
+ */
+export interface MJUserViewEntity_IViewTypeConfigEntry {
+    /** The `MJ: View Types` row ID this configuration applies to. */
+    viewTypeId: string;
+    /** The view-type-specific configuration payload (shape owned by the plug-in). */
+    config: Record<string, unknown>;
 }
 
 /**
@@ -97950,6 +100221,20 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.DisplayState = raw;
         this._DisplayStateObject_cached = value;
         this._DisplayStateObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: ViewTypeID
+    * * Display Name: View Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: View Types (vwViewTypes.ID)
+    * * Description: Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.
+    */
+    get ViewTypeID(): string | null {
+        return this.Get('ViewTypeID');
+    }
+    set ViewTypeID(value: string | null) {
+        this.Set('ViewTypeID', value);
     }
 
     /**
@@ -99464,6 +101749,191 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: View Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ViewType
+ * * Base View: vwViewTypes
+ * * @description Registry of available view types (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...) for the entity-viewer plugin system. Each row binds a logical view to its renderer and (optionally) its configuration prop-sheet, so adding a new way to visualize records is a metadata row plus a registered driver class — no change to the host viewer. Whether a given view type is offered for a given entity is decided at runtime by the driver's availability predicate (e.g. Timeline needs a date field, Map needs geocoding, Cluster needs an Entity Document with vectors).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: View Types')
+export class MJViewTypeEntity extends BaseEntity<MJViewTypeEntityType> {
+    /**
+    * Loads the MJ: View Types record from the database
+    * @param ID: string - primary key value to load the MJ: View Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJViewTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: User-facing label shown in the view-mode switcher (e.g. "Tag Cloud").
+    */
+    get DisplayName(): string {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what the view type does and when it is useful.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: PropertySheetDriverClass
+    * * Display Name: Property Sheet Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.
+    */
+    get PropertySheetDriverClass(): string | null {
+        return this.Get('PropertySheetDriverClass');
+    }
+    set PropertySheetDriverClass(value: string | null) {
+        this.Set('PropertySheetDriverClass', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class shown next to the view type in the mode switcher (e.g. "fa-solid fa-diagram-project").
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of the view type in the mode switcher (ascending).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 0, the view type is registered but hidden from users (e.g. disabled or under development).
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: SupportsConfiguration
+    * * Display Name: Supports Configuration
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the view type exposes a configuration prop-sheet (see PropertySheetDriverClass) and the host shows a settings affordance for it; when 0, the view type renders with no user-editable options.
+    */
+    get SupportsConfiguration(): boolean {
+        return this.Get('SupportsConfiguration');
+    }
+    set SupportsConfiguration(value: boolean) {
+        this.Set('SupportsConfiguration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

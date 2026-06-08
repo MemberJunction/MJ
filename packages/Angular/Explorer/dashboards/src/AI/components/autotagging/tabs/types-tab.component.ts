@@ -7,7 +7,7 @@
  * count). The slide-in CRUD form stays in the host — this tab emits
  * Add/Edit intents up via @Output and the host opens its existing form.
  */
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Input, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ContentTypeCard } from '../shared/classify.types';
 import { formatNumber } from '../shared/classify.format';
@@ -19,6 +19,11 @@ import { formatNumber } from '../shared/classify.format';
     styleUrls: ['./types-tab.component.css']
 })
 export class ClassifyTypesTabComponent extends BaseAngularComponent {
+    private cdr = inject(ChangeDetectorRef);
+
+    /** Shown while a manual Refresh() recomputes the content-type cards. */
+    public IsLoading = false;
+
     /** Raw `MJ: Content Types` rows — the primary source for the cards. */
     private _contentTypes: Record<string, unknown>[] = [];
     @Input()
@@ -71,6 +76,19 @@ export class ClassifyTypesTabComponent extends BaseAngularComponent {
     /** Bubble Add/Edit intents to the host, which owns the slide-in CRUD form. */
     @Output() AddTypeRequested = new EventEmitter<void>();
     @Output() EditTypeRequested = new EventEmitter<ContentTypeCard>();
+
+    /**
+     * Recompute the content-type cards from the current host-supplied inputs. The
+     * data is host-owned (flows in via @Input); Refresh rebuilds the view models
+     * and surfaces a brief loading state for user feedback.
+     */
+    public async Refresh(): Promise<void> {
+        this.IsLoading = true;
+        this.cdr.detectChanges();
+        this.rebuild();
+        this.IsLoading = false;
+        this.cdr.detectChanges();
+    }
 
     public onAddType(): void {
         this.AddTypeRequested.emit();

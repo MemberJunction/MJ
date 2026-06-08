@@ -35,6 +35,7 @@ import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
+import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 
 import { resolve } from 'node:path';
@@ -112,6 +113,8 @@ export * from './resolvers/SearchKnowledgeResolver.js';
 export * from './resolvers/SearchKnowledgeStreamResolver.js';
 export * from './resolvers/AvailableSearchProvidersResolver.js';
 export * from './resolvers/FetchEntityVectorsResolver.js';
+export * from './resolvers/RunClusterAnalysisResolver.js';
+export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
@@ -925,6 +928,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     app.use('/oauth', oauthCors, callbackRouter);
     console.log('[OAuth] Callback route registered at /oauth/callback');
   }
+
+  // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
+  // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
+  // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
+  app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
+  console.log('[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
 
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
