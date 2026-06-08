@@ -624,6 +624,13 @@ These are **reference-data changes, authored as metadata files and applied with 
 
 The driver classes themselves (`GeminiRealtime`, `OpenAIRealtime`, implementing `BaseRealtimeVoice`) ship as code in the respective `packages/AI/Providers/*` packages and self-register via `@RegisterClass(BaseRealtimeVoice, 'GeminiRealtime')`.
 
+> [!IMPORTANT]
+> **To verify during implementation:** the names in the snippet above are placeholders. Before authoring the real metadata files, confirm against current metadata/data:
+> - the exact `MJ: AI Vendors` row names (e.g. is it `Google` / `Google AI` / `Gemini`? `OpenAI`?) used in the `@lookup:MJ: AI Vendors.Name=…` references;
+> - that a `MJ: AI Vendor Type Definitions` row named `Inference Provider` exists (existing records use `Model Developer`);
+> - the canonical model display names (`Gemini Live 2.5 Flash`, `GPT Realtime`) against the providers' current model IDs;
+> - the final `DriverClass` naming convention (`GeminiRealtime` / `OpenAIRealtime` vs. a `*Realtime` suffix style) to match sibling drivers in `packages/AI/Providers/*`.
+
 ---
 
 ## Authorization & Socket Security
