@@ -26,6 +26,7 @@ import {
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
+import { AdaptiveConcurrencyController, RunAdaptive, type AdaptiveItemOutcome } from './AdaptiveConcurrency.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -665,108 +666,99 @@ export abstract class BaseIntegrationConnector {
         const objects = wanted ? allObjects.filter(o => wanted.has(o.Name)) : allObjects;
         const result: SourceSchemaInfo = { Objects: [] };
 
-        // Parallel describe — sequential is brutal when a connector has
-        // hundreds of objects to introspect (Sage Intacct can run ~30 minutes
-        // sequentially on a large catalog). 8-way is a safe default that
-        // mirrors the Salesforce override and respects most APIs' rate limits.
-        const CONCURRENCY = 8;
+        // Parallel describe via the SAME control law the sync engine uses for its layers —
+        // `RunAdaptive` + `AdaptiveConcurrencyController` (AIMD). Discovery IS the sync read path with
+        // the save removed, so it shares the concurrency machinery rather than a separate fixed pool:
+        // it ramps UP on clean describes and CUTS on a throttle (detected via the connector's
+        // `ExtractRetryAfterMs`). The cap honors the connector's `MaxConcurrencyHint` + a per-connection
+        // `Configuration.maxConcurrency` override (the same `IntegrationSetSyncConfig` knob that tunes
+        // sync). Default start is 8 — a read-only introspection sweep tolerates more parallelism than
+        // the write path's default of 1; sequential introspection is brutal (Sage Intacct ~30 min).
         const total = objects.length;
         const startMs = Date.now();
-        let nextIdx = 0;
         let succeeded = 0;
         let skipped = 0;
 
-        const worker = async (): Promise<void> => {
-            while (true) {
-                const myIdx = nextIdx++;
-                if (myIdx >= total) return;
-                const obj = objects[myIdx];
-                const objStart = Date.now();
-                console.log(JSON.stringify({
-                    ts: new Date().toISOString(),
-                    event: 'introspect.object.start',
-                    objectIndex: myIdx + 1,
-                    total,
-                    objectName: obj.Name,
-                }));
-                let fields: ExternalFieldSchema[];
-                try {
-                    fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
-                } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
-                    console.log(JSON.stringify({
-                        ts: new Date().toISOString(),
-                        event: 'introspect.object.skipped',
-                        objectIndex: myIdx + 1,
-                        total,
-                        objectName: obj.Name,
-                        error: msg,
-                        durationMs: Date.now() - objStart,
-                    }));
-                    skipped++;
-                    continue;
-                }
-                console.log(JSON.stringify({
-                    ts: new Date().toISOString(),
-                    event: 'introspect.object.complete',
-                    objectIndex: myIdx + 1,
-                    total,
-                    objectName: obj.Name,
-                    fieldsDiscovered: fields.length,
-                    primaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
-                    foreignKeyFields: fields.filter(f => f.IsForeignKey).length,
-                    durationMs: Date.now() - objStart,
-                }));
-                result.Objects.push({
-                    ExternalName: obj.Name,
-                    ExternalLabel: obj.Label,
-                    Description: obj.Description,
-                    Fields: fields.map(f => ({
-                        Name: f.Name,
-                        Label: f.Label,
-                        Description: f.Description,
-                        SourceType: f.DataType,
-                        IsRequired: f.IsRequired,
-                        AllowsNull: f.AllowsNull,
-                        MaxLength: f.MaxLength ?? null,
-                        Precision: f.Precision ?? null,
-                        Scale: f.Scale ?? null,
-                        DefaultValue: f.DefaultValue ?? null,
-                        IsPrimaryKey: f.IsPrimaryKey ?? false,
-                        IsUniqueKey: f.IsUniqueKey,
-                        IsReadOnly: f.IsReadOnly,
-                        IsForeignKey: f.IsForeignKey ?? false,
-                        ForeignKeyTarget: f.ForeignKeyTarget ?? null,
-                    })),
-                    // Honest PK selection: only IsPrimaryKey=true fields qualify.
-                    // Prior behavior used IsUniqueKey which is wrong — an object
-                    // can have multiple unique fields (e.g. email + phone) of which
-                    // only one is the PK. Connectors that don't yet set IsPrimaryKey
-                    // on their DiscoverFields output will return an empty PrimaryKeyFields;
-                    // the runtime PK classifier (Phase 0 D2/D4) handles the residual.
-                    PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
-                    Relationships: fields
-                        .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
-                        .map(f => ({
-                            FieldName: f.Name,
-                            TargetObject: f.ForeignKeyTarget!,
-                            TargetField: 'ID',
-                        })),
-                });
-                succeeded++;
-                const done = succeeded + skipped;
-                if (done % 100 === 0 || done === total) {
-                    const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
-                    console.log(
-                        `[IntrospectSchema] progress: ${done}/${total} (ok=${succeeded}, skipped=${skipped}) — ${elapsedSec}s elapsed`
-                    );
-                }
+        const DEFAULT_DISCOVERY_CONCURRENCY = 8;
+        let maxConcurrency = Math.max(DEFAULT_DISCOVERY_CONCURRENCY, this.MaxConcurrencyHint ?? 0);
+        try {
+            const raw = companyIntegration.Configuration;
+            if (raw) {
+                const m = (JSON.parse(raw) as { maxConcurrency?: number }).maxConcurrency;
+                if (typeof m === 'number' && Number.isFinite(m) && m >= 1) maxConcurrency = Math.floor(m);
             }
+        } catch { /* malformed Configuration → defaults */ }
+        const controller = new AdaptiveConcurrencyController({
+            start: Math.min(DEFAULT_DISCOVERY_CONCURRENCY, Math.max(1, maxConcurrency)),
+            min: 1,
+            max: Math.max(1, maxConcurrency),
+        });
+
+        const introspectOne = async (obj: ExternalObjectSchema): Promise<AdaptiveItemOutcome> => {
+            const objStart = Date.now();
+            console.log(JSON.stringify({
+                ts: new Date().toISOString(), event: 'introspect.object.start', objectName: obj.Name, total,
+            }));
+            let fields: ExternalFieldSchema[];
+            try {
+                fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
+                console.log(JSON.stringify({
+                    ts: new Date().toISOString(), event: 'introspect.object.skipped',
+                    objectName: obj.Name, total, error: msg, durationMs: Date.now() - objStart,
+                }));
+                skipped++;
+                // A real rate-limit failure cuts the in-flight cap (AIMD); a plain describe error does not.
+                return { ok: false, throttled: this.ExtractRetryAfterMs(err) !== undefined };
+            }
+            console.log(JSON.stringify({
+                ts: new Date().toISOString(), event: 'introspect.object.complete',
+                objectName: obj.Name, total, fieldsDiscovered: fields.length,
+                primaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                foreignKeyFields: fields.filter(f => f.IsForeignKey).length, durationMs: Date.now() - objStart,
+            }));
+            // Single-threaded async → these mutations are atomic across concurrent introspectOne calls
+            // (same safety the sync engine's per-map aggregate mutations rely on).
+            result.Objects.push({
+                ExternalName: obj.Name,
+                ExternalLabel: obj.Label,
+                Description: obj.Description,
+                Fields: fields.map(f => ({
+                    Name: f.Name,
+                    Label: f.Label,
+                    Description: f.Description,
+                    SourceType: f.DataType,
+                    IsRequired: f.IsRequired,
+                    AllowsNull: f.AllowsNull,
+                    MaxLength: f.MaxLength ?? null,
+                    Precision: f.Precision ?? null,
+                    Scale: f.Scale ?? null,
+                    DefaultValue: f.DefaultValue ?? null,
+                    IsPrimaryKey: f.IsPrimaryKey ?? false,
+                    IsUniqueKey: f.IsUniqueKey,
+                    IsReadOnly: f.IsReadOnly,
+                    IsForeignKey: f.IsForeignKey ?? false,
+                    ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+                })),
+                // Honest PK selection: only IsPrimaryKey=true fields qualify (an object can have several
+                // unique fields of which only one is the PK). Connectors that don't set IsPrimaryKey
+                // return an empty PrimaryKeyFields; the runtime PK classifier (D2/D4) handles the residual.
+                PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                Relationships: fields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
+            });
+            succeeded++;
+            const done = succeeded + skipped;
+            if (done % 100 === 0 || done === total) {
+                console.log(`[IntrospectSchema] progress: ${done}/${total} (ok=${succeeded}, skipped=${skipped}) — ${((Date.now() - startMs) / 1000).toFixed(1)}s elapsed`);
+            }
+            return { ok: true, throttled: false };
         };
 
-        const workerCount = Math.min(CONCURRENCY, total);
-        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+        await RunAdaptive(objects, introspectOne, controller);
 
         return result;
     }
