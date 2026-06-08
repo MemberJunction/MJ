@@ -6,3 +6,9 @@
  * renders inside the host shell. Tab-specific rules live here as the shared CSS
  * is partitioned during the host-slim step.
  */
+
+.at-run-items-section {
+    margin-top: 16px;
+    border-top: 1px solid var(--mj-border-subtle);
+    padding-top: 12px;
+}
