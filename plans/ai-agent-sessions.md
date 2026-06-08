@@ -273,6 +273,19 @@ export interface IAgentChannelClient {
 
 ---
 
+## Parallel Channel Orchestration & Tool Routing
+
+To support both server-side LLM tool execution (like Gemini Live's native function calling) and client-side UI updates (like showing a dashboard chart), tool calling is routed dynamically depending on the channel's nature:
+
+1. **Parallel Channel Coordination**:
+   Within a single `AIAgentSession`, multiple channel plugins run concurrently. For example, a `VoiceAudio` channel handles the continuous duplex stream of raw audio, while a `ClientControl` channel handles structured JSON events.
+2. **Channel-Specific Tool Translators**:
+   The `IAgentChannelServer` plugin acts as the translation layer between the MemberJunction Agent's tool definition and the channel's protocol:
+   * **Upstream Tool Calls (e.g., Gemini Live / OpenAI Realtime)**: The plugin registers the agent's tools with the LLM provider's WebSocket during session handshake. When the provider's API emits a `tool_call` frame, the server plugin intercepts it, executes the MJ tool, and sends the `tool_response` frame back upstream.
+   * **Downstream Tool Calls (Client UI Actions)**: When the agent invokes a UI-oriented tool, the server plugin forwards a JSON execution payload downstream over the `ClientControl` channel to the client application, returning the client's response to the agent.
+
+---
+
 ## Detailed Execution & Streaming Flow
 
 Here is how a real-time voice and UI interaction flows through the layered session architecture:
