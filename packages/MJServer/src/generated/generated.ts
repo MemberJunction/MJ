@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -15361,6 +15361,9 @@ export class MJAIPromptRun_ {
     @Field(() => [MJAIResultCache_])
     MJAIResultCache_PromptRunIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
     
+    @Field(() => [MJContentItemTag_])
+    MJContentItemTags_AIPromptRunIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
+    
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
@@ -16004,6 +16007,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIResultCaches')} WHERE ${provider.QuoteIdentifier('PromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Result Cache', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItemTag_])
+    async MJContentItemTags_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -18983,6 +18996,10 @@ export class MJAPIKey_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.`}) 
+    @MaxLength(20)
+    KeyPrefix?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -19034,6 +19051,9 @@ export class CreateMJAPIKeyInput {
     @Field({ nullable: true })
     CreatedByUserID?: string;
 
+    @Field({ nullable: true })
+    KeyPrefix: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -19070,6 +19090,9 @@ export class UpdateMJAPIKeyInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    KeyPrefix?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19826,9 +19849,9 @@ export class MJApplicationSetting_ {
     @MaxLength(36)
     ID: string;
         
-    @Field() 
+    @Field({nullable: true, description: `Foreign key to Application. When NULL the row is a GLOBAL setting that applies across all applications; when set, the setting is scoped to that single application. Resolution should prefer an app-scoped row over the global fallback for the same Name.`}) 
     @MaxLength(36)
-    ApplicationID: string;
+    ApplicationID?: string;
         
     @Field() 
     @MaxLength(100)
@@ -19846,9 +19869,9 @@ export class MJApplicationSetting_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    Application: string;
+    Application?: string;
         
 }
 
@@ -19861,7 +19884,7 @@ export class CreateMJApplicationSettingInput {
     ID?: string;
 
     @Field({ nullable: true })
-    ApplicationID?: string;
+    ApplicationID: string | null;
 
     @Field({ nullable: true })
     Name?: string;
@@ -19886,7 +19909,7 @@ export class UpdateMJApplicationSettingInput {
     ID: string;
 
     @Field({ nullable: true })
-    ApplicationID?: string;
+    ApplicationID?: string | null;
 
     @Field({ nullable: true })
     Name?: string;
@@ -20078,6 +20101,12 @@ export class MJApplication_ {
     
     @Field(() => [MJConversation_])
     MJConversations_ApplicationIDArray: MJConversation_[]; // Link to MJConversations
+    
+    @Field(() => [MJMagicLinkInviteApplication_])
+    MJMagicLinkInviteApplications_ApplicationIDArray: MJMagicLinkInviteApplication_[]; // Link to MJMagicLinkInviteApplications
+    
+    @Field(() => [MJMagicLinkInvite_])
+    MJMagicLinkInvites_ApplicationIDArray: MJMagicLinkInvite_[]; // Link to MJMagicLinkInvites
     
 }
 
@@ -20333,6 +20362,26 @@ export class MJApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInviteApplication_])
+    async MJMagicLinkInviteApplications_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Applications', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInvite_])
+    async MJMagicLinkInvites_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -22419,6 +22468,9 @@ export class MJArtifactVersion_ {
     @Field(() => [MJConversationDetailAttachment_])
     MJConversationDetailAttachments_ArtifactVersionIDArray: MJConversationDetailAttachment_[]; // Link to MJConversationDetailAttachments
     
+    @Field(() => [MJSignatureRequestDocument_])
+    MJSignatureRequestDocuments_ArtifactVersionIDArray: MJSignatureRequestDocument_[]; // Link to MJSignatureRequestDocuments
+    
 }
 
 //****************************************************************************
@@ -22646,6 +22698,16 @@ export class MJArtifactVersionResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJSignatureRequestDocument_])
+    async MJSignatureRequestDocuments_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ArtifactVersionID')}='${mjartifactversion_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJArtifactVersion_)
     async CreateMJArtifactVersion(
         @Arg('input', () => CreateMJArtifactVersionInput) input: CreateMJArtifactVersionInput,
@@ -22733,6 +22795,9 @@ export class MJArtifact_ {
     
     @Field(() => [MJArtifactPermission_])
     MJArtifactPermissions_ArtifactIDArray: MJArtifactPermission_[]; // Link to MJArtifactPermissions
+    
+    @Field(() => [MJSignatureRequestDocument_])
+    MJSignatureRequestDocuments_ArtifactIDArray: MJSignatureRequestDocument_[]; // Link to MJSignatureRequestDocuments
     
 }
 
@@ -22880,6 +22945,16 @@ export class MJArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactPermissions')} WHERE ${provider.QuoteIdentifier('ArtifactID')}='${mjartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureRequestDocument_])
+    async MJSignatureRequestDocuments_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ArtifactID')}='${mjartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -23791,6 +23866,445 @@ export class MJAuthorizationResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Authorizations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Cluster Analysis
+//****************************************************************************
+@ObjectType({ description: `A saved cluster analysis: the configuration, computed metrics, and projected 2D/3D layout of a clustering run over an entity\'s embedding vectors. First-class, queryable, and shareable — replaces the prior approach of stashing analyses in a User Settings JSON blob / browser localStorage. Owner-private; explicit shares are recorded in ResourcePermission against the "Cluster Analysis" ResourceType.` })
+export class MJClusterAnalysis_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name for this saved analysis (e.g. "Members by skill embedding — June").`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional longer description of what this analysis explores and how to interpret it.`}) 
+    Description?: string;
+        
+    @Field({description: `Foreign key to the User who owns this analysis. The owner has full control; other users gain access only via explicit ResourcePermission share rows (owner-private sharing model).`}) 
+    @MaxLength(36)
+    UserID: string;
+        
+    @Field({nullable: true, description: `Foreign key to the primary Entity whose records were clustered. Drives drilldown (click a point -> open that record) and view-type qualification. Nullable for analyses not bound to a single entity; the full source definition (including multi-document selections) lives in Configuration.`}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({description: `Clustering algorithm used: KMeans, DBSCAN, or Hierarchical. Stored as a top-level column for filtering/reporting; the full parameter set is captured in Configuration.`}) 
+    @MaxLength(50)
+    Algorithm: string;
+        
+    @Field({nullable: true, description: `JSON snapshot of the configuration this analysis was run with: algorithm parameters (k / epsilon / minPoints), distance metric, the Entity Document ID(s) supplying the vectors, max record count, any record filter, and whether LLM cluster naming was requested. A complete, self-describing record of how to interpret (or re-run) the analysis.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.`}) 
+    Metrics?: string;
+        
+    @Field({nullable: true, description: `JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.`}) 
+    ProjectedPoints?: string;
+        
+    @Field({nullable: true, description: `JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.`}) 
+    ViewportState?: string;
+        
+    @Field({description: `Lifecycle status of the analysis run: Pending (queued / running), Complete (results available), or Failed (run errored; see Metrics/Configuration for diagnostics).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field(() => [MJClusterAnalysisCluster_])
+    MJClusterAnalysisClusters_ClusterAnalysisIDArray: MJClusterAnalysisCluster_[]; // Link to MJClusterAnalysisClusters
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis
+//****************************************************************************
+@InputType()
+export class CreateMJClusterAnalysisInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    Algorithm?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    Metrics: string | null;
+
+    @Field({ nullable: true })
+    ProjectedPoints: string | null;
+
+    @Field({ nullable: true })
+    ViewportState: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis
+//****************************************************************************
+@InputType()
+export class UpdateMJClusterAnalysisInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    Algorithm?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    Metrics?: string | null;
+
+    @Field({ nullable: true })
+    ProjectedPoints?: string | null;
+
+    @Field({ nullable: true })
+    ViewportState?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Cluster Analysis
+//****************************************************************************
+@ObjectType()
+export class RunMJClusterAnalysisViewResult {
+    @Field(() => [MJClusterAnalysis_])
+    Results: MJClusterAnalysis_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJClusterAnalysis_)
+export class MJClusterAnalysisResolver extends ResolverBase {
+    @Query(() => RunMJClusterAnalysisViewResult)
+    async RunMJClusterAnalysisViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisViewResult)
+    async RunMJClusterAnalysisViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisViewResult)
+    async RunMJClusterAnalysisDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Cluster Analysis';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJClusterAnalysis_, { nullable: true })
+    async MJClusterAnalysis(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJClusterAnalysis_ | null> {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Cluster Analysis', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJClusterAnalysisCluster_])
+    async MJClusterAnalysisClusters_ClusterAnalysisIDArray(@Root() mjclusteranalysis_: MJClusterAnalysis_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis Clusters', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ClusterAnalysisID')}='${mjclusteranalysis_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis Clusters', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJClusterAnalysis_)
+    async CreateMJClusterAnalysis(
+        @Arg('input', () => CreateMJClusterAnalysisInput) input: CreateMJClusterAnalysisInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Cluster Analysis', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJClusterAnalysis_)
+    async UpdateMJClusterAnalysis(
+        @Arg('input', () => UpdateMJClusterAnalysisInput) input: UpdateMJClusterAnalysisInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Cluster Analysis', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJClusterAnalysis_)
+    async DeleteMJClusterAnalysis(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Cluster Analysis', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@ObjectType({ description: `One named cluster within a saved ClusterAnalysis. Holds the cluster\'s label (LLM-generated or user-edited), member count, and display color, so labels can be regenerated or hand-edited per cluster without re-running the whole analysis.` })
+export class MJClusterAnalysisCluster_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the parent ClusterAnalysis. Cluster rows are deleted with their analysis (cascade).`}) 
+    @MaxLength(36)
+    ClusterAnalysisID: string;
+        
+    @Field(() => Int, {description: `Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.`}) 
+    ClusterIndex: number;
+        
+    @Field({nullable: true, description: `Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.`}) 
+    @MaxLength(255)
+    Label?: string;
+        
+    @Field(() => Int, {description: `Number of records (points) assigned to this cluster.`}) 
+    MemberCount: number;
+        
+    @Field({nullable: true, description: `Color used to render this cluster in the scatter visualization (e.g. a hex string or token reference).`}) 
+    @MaxLength(20)
+    Color?: string;
+        
+    @Field(() => Boolean, {description: `True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.`}) 
+    IsUserEdited: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    ClusterAnalysis: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@InputType()
+export class CreateMJClusterAnalysisClusterInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ClusterAnalysisID?: string;
+
+    @Field(() => Int, { nullable: true })
+    ClusterIndex?: number;
+
+    @Field({ nullable: true })
+    Label: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MemberCount?: number;
+
+    @Field({ nullable: true })
+    Color: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsUserEdited?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@InputType()
+export class UpdateMJClusterAnalysisClusterInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ClusterAnalysisID?: string;
+
+    @Field(() => Int, { nullable: true })
+    ClusterIndex?: number;
+
+    @Field({ nullable: true })
+    Label?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MemberCount?: number;
+
+    @Field({ nullable: true })
+    Color?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsUserEdited?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Cluster Analysis Clusters
+//****************************************************************************
+@ObjectType()
+export class RunMJClusterAnalysisClusterViewResult {
+    @Field(() => [MJClusterAnalysisCluster_])
+    Results: MJClusterAnalysisCluster_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJClusterAnalysisCluster_)
+export class MJClusterAnalysisClusterResolver extends ResolverBase {
+    @Query(() => RunMJClusterAnalysisClusterViewResult)
+    async RunMJClusterAnalysisClusterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisClusterViewResult)
+    async RunMJClusterAnalysisClusterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJClusterAnalysisClusterViewResult)
+    async RunMJClusterAnalysisClusterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Cluster Analysis Clusters';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJClusterAnalysisCluster_, { nullable: true })
+    async MJClusterAnalysisCluster(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJClusterAnalysisCluster_ | null> {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis Clusters', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Cluster Analysis Clusters', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJClusterAnalysisCluster_)
+    async CreateMJClusterAnalysisCluster(
+        @Arg('input', () => CreateMJClusterAnalysisClusterInput) input: CreateMJClusterAnalysisClusterInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Cluster Analysis Clusters', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJClusterAnalysisCluster_)
+    async UpdateMJClusterAnalysisCluster(
+        @Arg('input', () => UpdateMJClusterAnalysisClusterInput) input: UpdateMJClusterAnalysisClusterInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Cluster Analysis Clusters', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJClusterAnalysisCluster_)
+    async DeleteMJClusterAnalysisCluster(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Cluster Analysis Clusters', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -25564,6 +26078,9 @@ export class MJCompany_ {
     @Field(() => [MJAIAgentExample_])
     MJAIAgentExamples_CompanyIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
     
+    @Field(() => [MJSignatureAccount_])
+    MJSignatureAccounts_CompanyIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
+    
 }
 
 //****************************************************************************
@@ -25738,6 +26255,16 @@ export class MJCompanyResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentExamples')} WHERE ${provider.QuoteIdentifier('CompanyID')}='${mjcompany_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Examples', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Examples', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureAccount_])
+    async MJSignatureAccounts_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CompanyID')}='${mjcompany_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -29655,6 +30182,13 @@ export class MJContentItemTag_ {
     @MaxLength(36)
     TagID?: string;
         
+    @Field({nullable: true, description: `Foreign key to the AI Prompt Run that produced this tag, populated by the autotagging pipeline at tag-creation time. Provides a direct, reliable edge from a tag back to the exact extraction run, replacing the previous fragile time-correlation heuristic. Nullable for tags created outside the LLM pipeline (e.g. manual tagging) or backfilled rows.`}) 
+    @MaxLength(36)
+    AIPromptRunID?: string;
+        
+    @Field({nullable: true, description: `The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.`}) 
+    Reasoning?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     Item?: string;
@@ -29662,6 +30196,10 @@ export class MJContentItemTag_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Tag_Virtual?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIPromptRun?: string;
         
 }
 
@@ -29684,6 +30222,12 @@ export class CreateMJContentItemTagInput {
 
     @Field({ nullable: true })
     TagID: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    Reasoning: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -29709,6 +30253,12 @@ export class UpdateMJContentItemTagInput {
 
     @Field({ nullable: true })
     TagID?: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    Reasoning?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -35082,6 +35632,9 @@ export class MJCredential_ {
     @Field(() => [MJCompanyIntegration_])
     MJCompanyIntegrations_CredentialIDArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
     
+    @Field(() => [MJSignatureAccount_])
+    MJSignatureAccounts_CredentialIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
+    
 }
 
 //****************************************************************************
@@ -35302,6 +35855,16 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrations')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integrations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureAccount_])
+    async MJSignatureAccounts_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -40601,6 +41164,12 @@ export class MJEntity_ {
     @Field(() => [MJEntityFormOverride_])
     MJEntityFormOverrides_EntityIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
     
+    @Field(() => [MJClusterAnalysis_])
+    MJClusterAnalysis_EntityIDArray: MJClusterAnalysis_[]; // Link to MJClusterAnalysis
+    
+    @Field(() => [MJSignatureRequest_])
+    MJSignatureRequests_EntityIDArray: MJSignatureRequest_[]; // Link to MJSignatureRequests
+    
 }
 
 //****************************************************************************
@@ -41655,6 +42224,26 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJClusterAnalysis_])
+    async MJClusterAnalysis_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureRequest_])
+    async MJSignatureRequests_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Requests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Requests', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -52803,6 +53392,1170 @@ export class MJListResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Lists', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Magic Link Invite Allowed Domains
+//****************************************************************************
+@ObjectType({ description: `An external host (origin) where this invite may be embedded in an IFRAME. Enforced server-side via Content-Security-Policy frame-ancestors plus Origin/Referer checks on embed responses. Multiple rows = multiple allowed hosts.` })
+export class MJMagicLinkInviteAllowedDomain_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the MagicLinkInvite this allowed-domain belongs to.`}) 
+    @MaxLength(36)
+    InviteID: string;
+        
+    @Field({description: `An allowed host/origin (e.g. https://partner.example.com) where the link may be framed.`}) 
+    @MaxLength(255)
+    Domain: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Allowed Domains
+//****************************************************************************
+@InputType()
+export class CreateMJMagicLinkInviteAllowedDomainInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    Domain?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Allowed Domains
+//****************************************************************************
+@InputType()
+export class UpdateMJMagicLinkInviteAllowedDomainInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    Domain?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Magic Link Invite Allowed Domains
+//****************************************************************************
+@ObjectType()
+export class RunMJMagicLinkInviteAllowedDomainViewResult {
+    @Field(() => [MJMagicLinkInviteAllowedDomain_])
+    Results: MJMagicLinkInviteAllowedDomain_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMagicLinkInviteAllowedDomain_)
+export class MJMagicLinkInviteAllowedDomainResolver extends ResolverBase {
+    @Query(() => RunMJMagicLinkInviteAllowedDomainViewResult)
+    async RunMJMagicLinkInviteAllowedDomainViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteAllowedDomainViewResult)
+    async RunMJMagicLinkInviteAllowedDomainViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteAllowedDomainViewResult)
+    async RunMJMagicLinkInviteAllowedDomainDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Magic Link Invite Allowed Domains';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMagicLinkInviteAllowedDomain_, { nullable: true })
+    async MJMagicLinkInviteAllowedDomain(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteAllowedDomain_ | null> {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Domains', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedDomains')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Domains', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Domains', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMagicLinkInviteAllowedDomain_)
+    async CreateMJMagicLinkInviteAllowedDomain(
+        @Arg('input', () => CreateMJMagicLinkInviteAllowedDomainInput) input: CreateMJMagicLinkInviteAllowedDomainInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Magic Link Invite Allowed Domains', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMagicLinkInviteAllowedDomain_)
+    async UpdateMJMagicLinkInviteAllowedDomain(
+        @Arg('input', () => UpdateMJMagicLinkInviteAllowedDomainInput) input: UpdateMJMagicLinkInviteAllowedDomainInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Magic Link Invite Allowed Domains', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMagicLinkInviteAllowedDomain_)
+    async DeleteMJMagicLinkInviteAllowedDomain(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Magic Link Invite Allowed Domains', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Magic Link Invite Allowed Paths
+//****************************************************************************
+@ObjectType({ description: `An Explorer FE path (after the base URL) this link is confined to in the UI. This is UX confinement only — the real authorization boundary is server-side entity/resource permissions. Multiple rows = multiple allowed paths.` })
+export class MJMagicLinkInviteAllowedPath_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the MagicLinkInvite this allowed-path belongs to.`}) 
+    @MaxLength(36)
+    InviteID: string;
+        
+    @Field({description: `An allowed FE path (after the Explorer base URL) the session may navigate to. UX confinement only.`}) 
+    @MaxLength(1000)
+    Path: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Allowed Paths
+//****************************************************************************
+@InputType()
+export class CreateMJMagicLinkInviteAllowedPathInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    Path?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Allowed Paths
+//****************************************************************************
+@InputType()
+export class UpdateMJMagicLinkInviteAllowedPathInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    Path?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Magic Link Invite Allowed Paths
+//****************************************************************************
+@ObjectType()
+export class RunMJMagicLinkInviteAllowedPathViewResult {
+    @Field(() => [MJMagicLinkInviteAllowedPath_])
+    Results: MJMagicLinkInviteAllowedPath_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMagicLinkInviteAllowedPath_)
+export class MJMagicLinkInviteAllowedPathResolver extends ResolverBase {
+    @Query(() => RunMJMagicLinkInviteAllowedPathViewResult)
+    async RunMJMagicLinkInviteAllowedPathViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteAllowedPathViewResult)
+    async RunMJMagicLinkInviteAllowedPathViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteAllowedPathViewResult)
+    async RunMJMagicLinkInviteAllowedPathDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Magic Link Invite Allowed Paths';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMagicLinkInviteAllowedPath_, { nullable: true })
+    async MJMagicLinkInviteAllowedPath(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteAllowedPath_ | null> {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Paths', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedPaths')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Paths', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMagicLinkInviteAllowedPath_)
+    async CreateMJMagicLinkInviteAllowedPath(
+        @Arg('input', () => CreateMJMagicLinkInviteAllowedPathInput) input: CreateMJMagicLinkInviteAllowedPathInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Magic Link Invite Allowed Paths', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMagicLinkInviteAllowedPath_)
+    async UpdateMJMagicLinkInviteAllowedPath(
+        @Arg('input', () => UpdateMJMagicLinkInviteAllowedPathInput) input: UpdateMJMagicLinkInviteAllowedPathInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Magic Link Invite Allowed Paths', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMagicLinkInviteAllowedPath_)
+    async DeleteMJMagicLinkInviteAllowedPath(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Magic Link Invite Allowed Paths', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Magic Link Invite Applications
+//****************************************************************************
+@ObjectType({ description: `Join row granting a magic-link invite access to one Application. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.ApplicationID) while multi-scope enforcement is being designed.` })
+export class MJMagicLinkInviteApplication_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the MagicLinkInvite this application grant belongs to.`}) 
+    @MaxLength(36)
+    InviteID: string;
+        
+    @Field({description: `Foreign key to the Application this invite grants access to.`}) 
+    @MaxLength(36)
+    ApplicationID: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Application: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Applications
+//****************************************************************************
+@InputType()
+export class CreateMJMagicLinkInviteApplicationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Applications
+//****************************************************************************
+@InputType()
+export class UpdateMJMagicLinkInviteApplicationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Magic Link Invite Applications
+//****************************************************************************
+@ObjectType()
+export class RunMJMagicLinkInviteApplicationViewResult {
+    @Field(() => [MJMagicLinkInviteApplication_])
+    Results: MJMagicLinkInviteApplication_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMagicLinkInviteApplication_)
+export class MJMagicLinkInviteApplicationResolver extends ResolverBase {
+    @Query(() => RunMJMagicLinkInviteApplicationViewResult)
+    async RunMJMagicLinkInviteApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteApplicationViewResult)
+    async RunMJMagicLinkInviteApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteApplicationViewResult)
+    async RunMJMagicLinkInviteApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Magic Link Invite Applications';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMagicLinkInviteApplication_, { nullable: true })
+    async MJMagicLinkInviteApplication(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteApplication_ | null> {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Applications', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMagicLinkInviteApplication_)
+    async CreateMJMagicLinkInviteApplication(
+        @Arg('input', () => CreateMJMagicLinkInviteApplicationInput) input: CreateMJMagicLinkInviteApplicationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Magic Link Invite Applications', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMagicLinkInviteApplication_)
+    async UpdateMJMagicLinkInviteApplication(
+        @Arg('input', () => UpdateMJMagicLinkInviteApplicationInput) input: UpdateMJMagicLinkInviteApplicationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Magic Link Invite Applications', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMagicLinkInviteApplication_)
+    async DeleteMJMagicLinkInviteApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Magic Link Invite Applications', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Magic Link Invite Roles
+//****************************************************************************
+@ObjectType({ description: `Join row granting a magic-link invite a Role. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.RoleID) while multi-scope enforcement is being designed.` })
+export class MJMagicLinkInviteRole_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the MagicLinkInvite this role grant belongs to.`}) 
+    @MaxLength(36)
+    InviteID: string;
+        
+    @Field({description: `Foreign key to the Role this invite grants to the redeeming user.`}) 
+    @MaxLength(36)
+    RoleID: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(50)
+    Role: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Roles
+//****************************************************************************
+@InputType()
+export class CreateMJMagicLinkInviteRoleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invite Roles
+//****************************************************************************
+@InputType()
+export class UpdateMJMagicLinkInviteRoleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InviteID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Magic Link Invite Roles
+//****************************************************************************
+@ObjectType()
+export class RunMJMagicLinkInviteRoleViewResult {
+    @Field(() => [MJMagicLinkInviteRole_])
+    Results: MJMagicLinkInviteRole_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMagicLinkInviteRole_)
+export class MJMagicLinkInviteRoleResolver extends ResolverBase {
+    @Query(() => RunMJMagicLinkInviteRoleViewResult)
+    async RunMJMagicLinkInviteRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteRoleViewResult)
+    async RunMJMagicLinkInviteRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteRoleViewResult)
+    async RunMJMagicLinkInviteRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Magic Link Invite Roles';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMagicLinkInviteRole_, { nullable: true })
+    async MJMagicLinkInviteRole(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteRole_ | null> {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Roles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Roles', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMagicLinkInviteRole_)
+    async CreateMJMagicLinkInviteRole(
+        @Arg('input', () => CreateMJMagicLinkInviteRoleInput) input: CreateMJMagicLinkInviteRoleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Magic Link Invite Roles', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMagicLinkInviteRole_)
+    async UpdateMJMagicLinkInviteRole(
+        @Arg('input', () => UpdateMJMagicLinkInviteRoleInput) input: UpdateMJMagicLinkInviteRoleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Magic Link Invite Roles', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMagicLinkInviteRole_)
+    async DeleteMJMagicLinkInviteRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Magic Link Invite Roles', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Magic Link Invites
+//****************************************************************************
+@ObjectType({ description: `A shareable, single-use, app-scoped magic-link invite for an external user. Bound to one Application and one restricted Role; redeeming it provisions/links a user with that scope and mints a short-lived MJ-issued JWT. The raw token is never stored — only its SHA-256 hash.` })
+export class MJMagicLinkInvite_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `SHA-256 hash of the raw magic-link token, base64url-encoded (43 chars). The raw token is delivered only in the emailed URL and is never persisted. Lookups hash the incoming token and match against this column. Unique.`}) 
+    @MaxLength(128)
+    TokenHash: string;
+        
+    @Field({nullable: true, description: `Email address the invite was issued to and delivered at. Becomes the provisioned user's email on first redemption.`}) 
+    @MaxLength(255)
+    Email?: string;
+        
+    @Field({description: `Foreign key to Application — the single app this invite grants access to. The provisioned user receives exactly one User Application record for this app.`}) 
+    @MaxLength(36)
+    ApplicationID: string;
+        
+    @Field({description: `Foreign key to Role — the restricted role assigned to the redeeming user. This role's entity permissions are the real authorization boundary that confines the external user to the shared app's data.`}) 
+    @MaxLength(36)
+    RoleID: string;
+        
+    @Field({description: `Hard expiry for the link. After this instant the invite cannot be redeemed regardless of Status.`}) 
+    ExpiresAt: Date;
+        
+    @Field({nullable: true, description: `Timestamp of the first successful redemption. NULL while unconsumed. Set in the same transaction that mints the session JWT to enforce single-use semantics.`}) 
+    ConsumedAt?: Date;
+        
+    @Field(() => Int, {description: `Maximum number of times this invite may be redeemed. Defaults to 1 (true single-use). Set higher only for intentionally multi-use links.`}) 
+    MaxUses: number;
+        
+    @Field(() => Int, {description: `Number of times this invite has been redeemed so far. Incremented on each successful redemption; redemption is rejected once UseCount reaches MaxUses.`}) 
+    UseCount: number;
+        
+    @Field({description: `Foreign key to User — the internal user who created/shared this invite. Audit trail for who granted external access.`}) 
+    @MaxLength(36)
+    CreatedByUserID: string;
+        
+    @Field({description: `Lifecycle status: Active (redeemable), Consumed (single-use link fully redeemed), Revoked (manually disabled), Expired (past ExpiresAt). Revoking an unconsumed link is the primary revocation mechanism.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({description: `Identity resolution mode. 'email' (default, legacy): redemption provisions/links a per-email user and enforcement rides that user's DB roles. 'anonymous': all redemptions resolve to the shared Anonymous principal (an attribution anchor, not a permission holder); scope is carried per-session in the minted JWT claims, never as roles on that user.`}) 
+    @MaxLength(20)
+    IdentityMode: string;
+        
+    @Field({description: `Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. 'app-session' (default): the legacy app+role session. 'resource-share': scoped to a single resource (ResourceTypeID/ResourceID). 'anonymous-embed': framed in an external site (requires allowed domains + tier capability).`}) 
+    @MaxLength(30)
+    Kind: string;
+        
+    @Field({nullable: true, description: `For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link's reach to dependent data is admitted at runtime via FK-reachable resource-pinned row-level security, not an enumerated list. NULL for app-session invites.`}) 
+    @MaxLength(36)
+    ResourceTypeID?: string;
+        
+    @Field({nullable: true, description: `For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource's key type). NULL for app-session invites.`}) 
+    @MaxLength(450)
+    ResourceID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Application: string;
+        
+    @Field() 
+    @MaxLength(50)
+    Role: string;
+        
+    @Field() 
+    @MaxLength(100)
+    CreatedByUser: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ResourceType?: string;
+        
+    @Field(() => [MJMagicLinkInviteAllowedDomain_])
+    MJMagicLinkInviteAllowedDomains_InviteIDArray: MJMagicLinkInviteAllowedDomain_[]; // Link to MJMagicLinkInviteAllowedDomains
+    
+    @Field(() => [MJMagicLinkInviteAllowedPath_])
+    MJMagicLinkInviteAllowedPaths_InviteIDArray: MJMagicLinkInviteAllowedPath_[]; // Link to MJMagicLinkInviteAllowedPaths
+    
+    @Field(() => [MJMagicLinkInviteApplication_])
+    MJMagicLinkInviteApplications_InviteIDArray: MJMagicLinkInviteApplication_[]; // Link to MJMagicLinkInviteApplications
+    
+    @Field(() => [MJMagicLinkInviteRole_])
+    MJMagicLinkInviteRoles_InviteIDArray: MJMagicLinkInviteRole_[]; // Link to MJMagicLinkInviteRoles
+    
+    @Field(() => [MJMagicLinkRedemption_])
+    MJMagicLinkRedemptions_InviteIDArray: MJMagicLinkRedemption_[]; // Link to MJMagicLinkRedemptions
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invites
+//****************************************************************************
+@InputType()
+export class CreateMJMagicLinkInviteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TokenHash?: string;
+
+    @Field({ nullable: true })
+    Email: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    ConsumedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxUses?: number;
+
+    @Field(() => Int, { nullable: true })
+    UseCount?: number;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    IdentityMode?: string;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    ResourceTypeID: string | null;
+
+    @Field({ nullable: true })
+    ResourceID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Invites
+//****************************************************************************
+@InputType()
+export class UpdateMJMagicLinkInviteInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TokenHash?: string;
+
+    @Field({ nullable: true })
+    Email?: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    ConsumedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxUses?: number;
+
+    @Field(() => Int, { nullable: true })
+    UseCount?: number;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    IdentityMode?: string;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    ResourceTypeID?: string | null;
+
+    @Field({ nullable: true })
+    ResourceID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Magic Link Invites
+//****************************************************************************
+@ObjectType()
+export class RunMJMagicLinkInviteViewResult {
+    @Field(() => [MJMagicLinkInvite_])
+    Results: MJMagicLinkInvite_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMagicLinkInvite_)
+export class MJMagicLinkInviteResolver extends ResolverBase {
+    @Query(() => RunMJMagicLinkInviteViewResult)
+    async RunMJMagicLinkInviteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteViewResult)
+    async RunMJMagicLinkInviteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkInviteViewResult)
+    async RunMJMagicLinkInviteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Magic Link Invites';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMagicLinkInvite_, { nullable: true })
+    async MJMagicLinkInvite(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInvite_ | null> {
+        this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invites', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMagicLinkInviteAllowedDomain_])
+    async MJMagicLinkInviteAllowedDomains_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Domains', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedDomains')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Domains', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Domains', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInviteAllowedPath_])
+    async MJMagicLinkInviteAllowedPaths_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Paths', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedPaths')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Paths', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInviteApplication_])
+    async MJMagicLinkInviteApplications_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Applications', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Applications', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInviteRole_])
+    async MJMagicLinkInviteRoles_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Roles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Roles', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkRedemption_])
+    async MJMagicLinkRedemptions_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Redemptions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Redemptions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMagicLinkInvite_)
+    async CreateMJMagicLinkInvite(
+        @Arg('input', () => CreateMJMagicLinkInviteInput) input: CreateMJMagicLinkInviteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Magic Link Invites', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMagicLinkInvite_)
+    async UpdateMJMagicLinkInvite(
+        @Arg('input', () => UpdateMJMagicLinkInviteInput) input: UpdateMJMagicLinkInviteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Magic Link Invites', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMagicLinkInvite_)
+    async DeleteMJMagicLinkInvite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Magic Link Invites', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Magic Link Redemptions
+//****************************************************************************
+@ObjectType({ description: `One row per magic-link redemption ATTEMPT (success or failure). Provides per-use redemption history and forensic visibility into token scanning/brute-force. Distinct from MagicLinkInvite, which keeps only an aggregate UseCount + last ConsumedAt.` })
+export class MJMagicLinkRedemption_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `Foreign key to MagicLinkInvite. NULLABLE: a redemption attempt against a token that matches no invite (not_found — the signature of scanning/brute-force) has no invite to reference but is still logged.`}) 
+    @MaxLength(36)
+    InviteID?: string;
+        
+    @Field({description: `Timestamp of the redemption attempt (UTC). Defaults to the time of insert.`}) 
+    AttemptedAt: Date;
+        
+    @Field({description: `Outcome of the attempt: 'success', or one of the redemption error codes (not_found, expired, consumed, revoked, invalid, provisioning_failed, server_error). Mirrors the RedeemErrorCode union in the server code.`}) 
+    @MaxLength(30)
+    Outcome: string;
+        
+    @Field({nullable: true, description: `Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment's magicLink.audit.ipStorage policy. NULL when unavailable or policy is 'none'.`}) 
+    @MaxLength(64)
+    IPAddress?: string;
+        
+    @Field({nullable: true, description: `User-Agent header of the redeeming client. NULL when unavailable.`}) 
+    @MaxLength(512)
+    UserAgent?: string;
+        
+    @Field({nullable: true, description: `Origin header of the redemption request. Retained for embed/domain forensics (which host framed or initiated the redemption). NULL for direct (non-embedded) redemptions.`}) 
+    @MaxLength(512)
+    Origin?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the User provisioned/linked by a SUCCESSFUL redemption. NULL on failed attempts and on (future) anonymous redemptions that resolve to a shared principal rather than a per-email user.`}) 
+    @MaxLength(36)
+    ProvisionedUserID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ProvisionedUser?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Redemptions
+//****************************************************************************
+@InputType()
+export class CreateMJMagicLinkRedemptionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InviteID: string | null;
+
+    @Field({ nullable: true })
+    AttemptedAt?: Date;
+
+    @Field({ nullable: true })
+    Outcome?: string;
+
+    @Field({ nullable: true })
+    IPAddress: string | null;
+
+    @Field({ nullable: true })
+    UserAgent: string | null;
+
+    @Field({ nullable: true })
+    Origin: string | null;
+
+    @Field({ nullable: true })
+    ProvisionedUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Magic Link Redemptions
+//****************************************************************************
+@InputType()
+export class UpdateMJMagicLinkRedemptionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InviteID?: string | null;
+
+    @Field({ nullable: true })
+    AttemptedAt?: Date;
+
+    @Field({ nullable: true })
+    Outcome?: string;
+
+    @Field({ nullable: true })
+    IPAddress?: string | null;
+
+    @Field({ nullable: true })
+    UserAgent?: string | null;
+
+    @Field({ nullable: true })
+    Origin?: string | null;
+
+    @Field({ nullable: true })
+    ProvisionedUserID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Magic Link Redemptions
+//****************************************************************************
+@ObjectType()
+export class RunMJMagicLinkRedemptionViewResult {
+    @Field(() => [MJMagicLinkRedemption_])
+    Results: MJMagicLinkRedemption_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMagicLinkRedemption_)
+export class MJMagicLinkRedemptionResolver extends ResolverBase {
+    @Query(() => RunMJMagicLinkRedemptionViewResult)
+    async RunMJMagicLinkRedemptionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkRedemptionViewResult)
+    async RunMJMagicLinkRedemptionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMagicLinkRedemptionViewResult)
+    async RunMJMagicLinkRedemptionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Magic Link Redemptions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMagicLinkRedemption_, { nullable: true })
+    async MJMagicLinkRedemption(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkRedemption_ | null> {
+        this.CheckUserReadPermissions('MJ: Magic Link Redemptions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Redemptions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMagicLinkRedemption_)
+    async CreateMJMagicLinkRedemption(
+        @Arg('input', () => CreateMJMagicLinkRedemptionInput) input: CreateMJMagicLinkRedemptionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Magic Link Redemptions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMagicLinkRedemption_)
+    async UpdateMJMagicLinkRedemption(
+        @Arg('input', () => UpdateMJMagicLinkRedemptionInput) input: UpdateMJMagicLinkRedemptionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Magic Link Redemptions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMagicLinkRedemption_)
+    async DeleteMJMagicLinkRedemption(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Magic Link Redemptions', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -64082,6 +65835,9 @@ export class MJResourceType_ {
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_ResourceTypeIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
     
+    @Field(() => [MJMagicLinkInvite_])
+    MJMagicLinkInvites_ResourceTypeIDArray: MJMagicLinkInvite_[]; // Link to MJMagicLinkInvites
+    
 }
 
 //****************************************************************************
@@ -64251,6 +66007,16 @@ export class MJResourceTypeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJMagicLinkInvite_])
+    async MJMagicLinkInvites_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ResourceTypeID')}='${mjresourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJResourceType_)
     async CreateMJResourceType(
         @Arg('input', () => CreateMJResourceTypeInput) input: CreateMJResourceTypeInput,
@@ -64345,6 +66111,12 @@ export class MJRole_ {
     
     @Field(() => [MJEntityFormOverride_])
     MJEntityFormOverrides_RoleIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
+    @Field(() => [MJMagicLinkInviteRole_])
+    MJMagicLinkInviteRoles_RoleIDArray: MJMagicLinkInviteRole_[]; // Link to MJMagicLinkInviteRoles
+    
+    @Field(() => [MJMagicLinkInvite_])
+    MJMagicLinkInvites_RoleIDArray: MJMagicLinkInvite_[]; // Link to MJMagicLinkInvites
     
 }
 
@@ -64584,6 +66356,26 @@ export class MJRoleResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInviteRole_])
+    async MJMagicLinkInviteRoles_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invite Roles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Roles', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInvite_])
+    async MJMagicLinkInvites_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -68362,6 +70154,1338 @@ export class MJSearchScopeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Search Scopes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Signature Accounts
+//****************************************************************************
+@ObjectType()
+export class MJSignatureAccount_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable account name (e.g. "Acme Prod DocuSign").`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field() 
+    @MaxLength(36)
+    SignatureProviderID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    CredentialID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CompanyID?: string;
+        
+    @Field(() => Boolean, {description: `Whether this account is available for use. Inactive accounts are not pre-initialized by the engine driver cache.`}) 
+    IsActive: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this is the default account for its provider (and Company, when scoped).`}) 
+    IsDefault: boolean;
+        
+    @Field({nullable: true, description: `Default sender display name for envelopes from this account.`}) 
+    @MaxLength(200)
+    DefaultFromName?: string;
+        
+    @Field({nullable: true, description: `Default sender email for envelopes from this account.`}) 
+    @MaxLength(320)
+    DefaultFromEmail?: string;
+        
+    @Field({nullable: true, description: `JSON of non-secret per-account overrides (e.g. accountId, restBase). Merged over provider Configuration and under decrypted credential values at driver initialize().`}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    SignatureProvider: string;
+        
+    @Field() 
+    @MaxLength(200)
+    Credential: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Company?: string;
+        
+    @Field(() => [MJSignatureRequest_])
+    MJSignatureRequests_SignatureAccountIDArray: MJSignatureRequest_[]; // Link to MJSignatureRequests
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Accounts
+//****************************************************************************
+@InputType()
+export class CreateMJSignatureAccountInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    SignatureProviderID?: string;
+
+    @Field({ nullable: true })
+    CredentialID?: string;
+
+    @Field({ nullable: true })
+    CompanyID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    DefaultFromName: string | null;
+
+    @Field({ nullable: true })
+    DefaultFromEmail: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Accounts
+//****************************************************************************
+@InputType()
+export class UpdateMJSignatureAccountInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    SignatureProviderID?: string;
+
+    @Field({ nullable: true })
+    CredentialID?: string;
+
+    @Field({ nullable: true })
+    CompanyID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    DefaultFromName?: string | null;
+
+    @Field({ nullable: true })
+    DefaultFromEmail?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Signature Accounts
+//****************************************************************************
+@ObjectType()
+export class RunMJSignatureAccountViewResult {
+    @Field(() => [MJSignatureAccount_])
+    Results: MJSignatureAccount_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSignatureAccount_)
+export class MJSignatureAccountResolver extends ResolverBase {
+    @Query(() => RunMJSignatureAccountViewResult)
+    async RunMJSignatureAccountViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureAccountViewResult)
+    async RunMJSignatureAccountViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureAccountViewResult)
+    async RunMJSignatureAccountDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Signature Accounts';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSignatureAccount_, { nullable: true })
+    async MJSignatureAccount(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureAccount_ | null> {
+        this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Signature Accounts', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJSignatureRequest_])
+    async MJSignatureRequests_SignatureAccountIDArray(@Root() mjsignatureaccount_: MJSignatureAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Requests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('SignatureAccountID')}='${mjsignatureaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Requests', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJSignatureAccount_)
+    async CreateMJSignatureAccount(
+        @Arg('input', () => CreateMJSignatureAccountInput) input: CreateMJSignatureAccountInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Signature Accounts', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSignatureAccount_)
+    async UpdateMJSignatureAccount(
+        @Arg('input', () => UpdateMJSignatureAccountInput) input: UpdateMJSignatureAccountInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Signature Accounts', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSignatureAccount_)
+    async DeleteMJSignatureAccount(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Signature Accounts', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Signature Providers
+//****************************************************************************
+@ObjectType()
+export class MJSignatureProvider_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of the eSignature provider type (e.g. DocuSign, Adobe Sign).`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. 'DocuSign').`}) 
+    @MaxLength(100)
+    ServerDriverKey: string;
+        
+    @Field(() => Boolean, {description: `Whether this provider type is available for use. Inactive providers are skipped by the engine.`}) 
+    IsActive: boolean;
+        
+    @Field(() => Int, {description: `Selection priority when multiple providers could apply. Lower number = higher priority.`}) 
+    Priority: number;
+        
+    @Field(() => Boolean, {description: `Whether this provider requires OAuth-based credentials (vs. a static API key).`}) 
+    RequiresOAuth: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this provider supports creating envelopes from provider-hosted templates (ApplyTemplate operation).`}) 
+    SupportsTemplates: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this provider supports embedded (in-app) signing URLs (CreateEmbeddedSigningUrl operation).`}) 
+    SupportsEmbeddedSigning: boolean;
+        
+    @Field({nullable: true, description: `JSON of non-secret provider-type defaults (e.g. oauthBase, restBase). Merged under per-account Configuration and decrypted credential values at driver initialize().`}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJSignatureAccount_])
+    MJSignatureAccounts_SignatureProviderIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Providers
+//****************************************************************************
+@InputType()
+export class CreateMJSignatureProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ServerDriverKey?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresOAuth?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsTemplates?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsEmbeddedSigning?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Providers
+//****************************************************************************
+@InputType()
+export class UpdateMJSignatureProviderInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ServerDriverKey?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresOAuth?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsTemplates?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsEmbeddedSigning?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Signature Providers
+//****************************************************************************
+@ObjectType()
+export class RunMJSignatureProviderViewResult {
+    @Field(() => [MJSignatureProvider_])
+    Results: MJSignatureProvider_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSignatureProvider_)
+export class MJSignatureProviderResolver extends ResolverBase {
+    @Query(() => RunMJSignatureProviderViewResult)
+    async RunMJSignatureProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureProviderViewResult)
+    async RunMJSignatureProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureProviderViewResult)
+    async RunMJSignatureProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Signature Providers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSignatureProvider_, { nullable: true })
+    async MJSignatureProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureProvider_ | null> {
+        this.CheckUserReadPermissions('MJ: Signature Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureProviders')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Signature Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJSignatureAccount_])
+    async MJSignatureAccounts_SignatureProviderIDArray(@Root() mjsignatureprovider_: MJSignatureProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('SignatureProviderID')}='${mjsignatureprovider_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJSignatureProvider_)
+    async CreateMJSignatureProvider(
+        @Arg('input', () => CreateMJSignatureProviderInput) input: CreateMJSignatureProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Signature Providers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSignatureProvider_)
+    async UpdateMJSignatureProvider(
+        @Arg('input', () => UpdateMJSignatureProviderInput) input: UpdateMJSignatureProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Signature Providers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSignatureProvider_)
+    async DeleteMJSignatureProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Signature Providers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Signature Request Documents
+//****************************************************************************
+@ObjectType()
+export class MJSignatureRequestDocument_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    SignatureRequestID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ArtifactID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ArtifactVersionID?: string;
+        
+    @Field({description: `Document filename as presented to the provider / signer.`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field(() => Int, {description: `Ordering of this document within the envelope (1-based).`}) 
+    Sequence: number;
+        
+    @Field({description: `Document role: Source = the document sent for signature; Signed = the executed document downloaded after completion (written back as a new Artifact Version).`}) 
+    @MaxLength(20)
+    Role: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Artifact?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Request Documents
+//****************************************************************************
+@InputType()
+export class CreateMJSignatureRequestDocumentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SignatureRequestID?: string;
+
+    @Field({ nullable: true })
+    ArtifactID: string | null;
+
+    @Field({ nullable: true })
+    ArtifactVersionID: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Request Documents
+//****************************************************************************
+@InputType()
+export class UpdateMJSignatureRequestDocumentInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SignatureRequestID?: string;
+
+    @Field({ nullable: true })
+    ArtifactID?: string | null;
+
+    @Field({ nullable: true })
+    ArtifactVersionID?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Signature Request Documents
+//****************************************************************************
+@ObjectType()
+export class RunMJSignatureRequestDocumentViewResult {
+    @Field(() => [MJSignatureRequestDocument_])
+    Results: MJSignatureRequestDocument_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSignatureRequestDocument_)
+export class MJSignatureRequestDocumentResolver extends ResolverBase {
+    @Query(() => RunMJSignatureRequestDocumentViewResult)
+    async RunMJSignatureRequestDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestDocumentViewResult)
+    async RunMJSignatureRequestDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestDocumentViewResult)
+    async RunMJSignatureRequestDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Signature Request Documents';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSignatureRequestDocument_, { nullable: true })
+    async MJSignatureRequestDocument(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequestDocument_ | null> {
+        this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Signature Request Documents', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJSignatureRequestDocument_)
+    async CreateMJSignatureRequestDocument(
+        @Arg('input', () => CreateMJSignatureRequestDocumentInput) input: CreateMJSignatureRequestDocumentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Signature Request Documents', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSignatureRequestDocument_)
+    async UpdateMJSignatureRequestDocument(
+        @Arg('input', () => UpdateMJSignatureRequestDocumentInput) input: UpdateMJSignatureRequestDocumentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Signature Request Documents', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSignatureRequestDocument_)
+    async DeleteMJSignatureRequestDocument(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Signature Request Documents', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Signature Request Logs
+//****************************************************************************
+@ObjectType()
+export class MJSignatureRequestLog_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SignatureRequestID?: string;
+        
+    @Field({description: `The provider operation logged (e.g. CreateEnvelope, GetEnvelopeStatus, DownloadSignedDocument, VoidEnvelope, Webhook).`}) 
+    @MaxLength(50)
+    Operation: string;
+        
+    @Field(() => Boolean, {description: `Whether the operation succeeded.`}) 
+    Success: boolean;
+        
+    @Field({nullable: true, description: `Signature request status immediately before the operation, when applicable.`}) 
+    @MaxLength(20)
+    StatusBefore?: string;
+        
+    @Field({nullable: true, description: `Signature request status immediately after the operation, when applicable.`}) 
+    @MaxLength(20)
+    StatusAfter?: string;
+        
+    @Field({nullable: true, description: `Free-form detail: error text on failure, or normalized event JSON for webhook entries.`}) 
+    Detail?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Request Logs
+//****************************************************************************
+@InputType()
+export class CreateMJSignatureRequestLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SignatureRequestID: string | null;
+
+    @Field({ nullable: true })
+    Operation?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean;
+
+    @Field({ nullable: true })
+    StatusBefore: string | null;
+
+    @Field({ nullable: true })
+    StatusAfter: string | null;
+
+    @Field({ nullable: true })
+    Detail: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Request Logs
+//****************************************************************************
+@InputType()
+export class UpdateMJSignatureRequestLogInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SignatureRequestID?: string | null;
+
+    @Field({ nullable: true })
+    Operation?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean;
+
+    @Field({ nullable: true })
+    StatusBefore?: string | null;
+
+    @Field({ nullable: true })
+    StatusAfter?: string | null;
+
+    @Field({ nullable: true })
+    Detail?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Signature Request Logs
+//****************************************************************************
+@ObjectType()
+export class RunMJSignatureRequestLogViewResult {
+    @Field(() => [MJSignatureRequestLog_])
+    Results: MJSignatureRequestLog_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSignatureRequestLog_)
+export class MJSignatureRequestLogResolver extends ResolverBase {
+    @Query(() => RunMJSignatureRequestLogViewResult)
+    async RunMJSignatureRequestLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestLogViewResult)
+    async RunMJSignatureRequestLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestLogViewResult)
+    async RunMJSignatureRequestLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Signature Request Logs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSignatureRequestLog_, { nullable: true })
+    async MJSignatureRequestLog(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequestLog_ | null> {
+        this.CheckUserReadPermissions('MJ: Signature Request Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestLogs')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Signature Request Logs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJSignatureRequestLog_)
+    async CreateMJSignatureRequestLog(
+        @Arg('input', () => CreateMJSignatureRequestLogInput) input: CreateMJSignatureRequestLogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Signature Request Logs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSignatureRequestLog_)
+    async UpdateMJSignatureRequestLog(
+        @Arg('input', () => UpdateMJSignatureRequestLogInput) input: UpdateMJSignatureRequestLogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Signature Request Logs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSignatureRequestLog_)
+    async DeleteMJSignatureRequestLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Signature Request Logs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Signature Request Recipients
+//****************************************************************************
+@ObjectType()
+export class MJSignatureRequestRecipient_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    SignatureRequestID: string;
+        
+    @Field({description: `Recipient email address.`}) 
+    @MaxLength(320)
+    Email: string;
+        
+    @Field({nullable: true, description: `Recipient display name.`}) 
+    @MaxLength(200)
+    Name?: string;
+        
+    @Field(() => Int, {description: `Signing order; lower routes first (1-based).`}) 
+    RoutingOrder: number;
+        
+    @Field({nullable: true, description: `Template role name for this recipient, when the envelope was created from a provider template.`}) 
+    @MaxLength(100)
+    Role?: string;
+        
+    @Field({description: `Per-recipient status: Created, Sent, Delivered, Signed, or Declined.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Timestamp this recipient signed.`}) 
+    SignedAt?: Date;
+        
+    @Field({nullable: true, description: `Provider-side recipient identifier, for correlation with provider events.`}) 
+    @MaxLength(255)
+    ExternalRecipientID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Request Recipients
+//****************************************************************************
+@InputType()
+export class CreateMJSignatureRequestRecipientInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SignatureRequestID?: string;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    Name: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RoutingOrder?: number;
+
+    @Field({ nullable: true })
+    Role: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    SignedAt: Date | null;
+
+    @Field({ nullable: true })
+    ExternalRecipientID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Request Recipients
+//****************************************************************************
+@InputType()
+export class UpdateMJSignatureRequestRecipientInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SignatureRequestID?: string;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    Name?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RoutingOrder?: number;
+
+    @Field({ nullable: true })
+    Role?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    SignedAt?: Date | null;
+
+    @Field({ nullable: true })
+    ExternalRecipientID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Signature Request Recipients
+//****************************************************************************
+@ObjectType()
+export class RunMJSignatureRequestRecipientViewResult {
+    @Field(() => [MJSignatureRequestRecipient_])
+    Results: MJSignatureRequestRecipient_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSignatureRequestRecipient_)
+export class MJSignatureRequestRecipientResolver extends ResolverBase {
+    @Query(() => RunMJSignatureRequestRecipientViewResult)
+    async RunMJSignatureRequestRecipientViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestRecipientViewResult)
+    async RunMJSignatureRequestRecipientViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestRecipientViewResult)
+    async RunMJSignatureRequestRecipientDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Signature Request Recipients';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSignatureRequestRecipient_, { nullable: true })
+    async MJSignatureRequestRecipient(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequestRecipient_ | null> {
+        this.CheckUserReadPermissions('MJ: Signature Request Recipients', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestRecipients')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Recipients', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Signature Request Recipients', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJSignatureRequestRecipient_)
+    async CreateMJSignatureRequestRecipient(
+        @Arg('input', () => CreateMJSignatureRequestRecipientInput) input: CreateMJSignatureRequestRecipientInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Signature Request Recipients', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSignatureRequestRecipient_)
+    async UpdateMJSignatureRequestRecipient(
+        @Arg('input', () => UpdateMJSignatureRequestRecipientInput) input: UpdateMJSignatureRequestRecipientInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Signature Request Recipients', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSignatureRequestRecipient_)
+    async DeleteMJSignatureRequestRecipient(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Signature Request Recipients', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Signature Requests
+//****************************************************************************
+@ObjectType()
+export class MJSignatureRequest_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    SignatureAccountID: string;
+        
+    @Field({description: `Envelope title / email subject.`}) 
+    @MaxLength(255)
+    Title: string;
+        
+    @Field({nullable: true, description: `Optional email body / message sent to recipients with the envelope.`}) 
+    Message?: string;
+        
+    @Field({description: `Normalized envelope lifecycle status: Draft, Sent, Delivered, Signed, Completed, Declined, or Voided.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Provider-side envelope identifier (e.g. DocuSign envelopeId), assigned after the envelope is created.`}) 
+    @MaxLength(255)
+    ExternalEnvelopeID?: string;
+        
+    @Field({nullable: true, description: `Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.`}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({nullable: true, description: `Polymorphic reference (record half): the primary key value of the originating business record in the entity named by EntityID. NULL for standalone requests.`}) 
+    @MaxLength(450)
+    RecordID?: string;
+        
+    @Field({nullable: true, description: `Timestamp the envelope was sent to recipients.`}) 
+    SentAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp the envelope reached a terminal completed state (all recipients signed).`}) 
+    CompletedAt?: Date;
+        
+    @Field({nullable: true, description: `Reason supplied when the envelope was voided/cancelled.`}) 
+    @MaxLength(500)
+    VoidReason?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    SignatureAccount: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field(() => [MJSignatureRequestLog_])
+    MJSignatureRequestLogs_SignatureRequestIDArray: MJSignatureRequestLog_[]; // Link to MJSignatureRequestLogs
+    
+    @Field(() => [MJSignatureRequestDocument_])
+    MJSignatureRequestDocuments_SignatureRequestIDArray: MJSignatureRequestDocument_[]; // Link to MJSignatureRequestDocuments
+    
+    @Field(() => [MJSignatureRequestRecipient_])
+    MJSignatureRequestRecipients_SignatureRequestIDArray: MJSignatureRequestRecipient_[]; // Link to MJSignatureRequestRecipients
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Requests
+//****************************************************************************
+@InputType()
+export class CreateMJSignatureRequestInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SignatureAccountID?: string;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    Message: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ExternalEnvelopeID: string | null;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    RecordID: string | null;
+
+    @Field({ nullable: true })
+    SentAt: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field({ nullable: true })
+    VoidReason: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Signature Requests
+//****************************************************************************
+@InputType()
+export class UpdateMJSignatureRequestInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SignatureAccountID?: string;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    Message?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ExternalEnvelopeID?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    RecordID?: string | null;
+
+    @Field({ nullable: true })
+    SentAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    VoidReason?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Signature Requests
+//****************************************************************************
+@ObjectType()
+export class RunMJSignatureRequestViewResult {
+    @Field(() => [MJSignatureRequest_])
+    Results: MJSignatureRequest_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSignatureRequest_)
+export class MJSignatureRequestResolver extends ResolverBase {
+    @Query(() => RunMJSignatureRequestViewResult)
+    async RunMJSignatureRequestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestViewResult)
+    async RunMJSignatureRequestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSignatureRequestViewResult)
+    async RunMJSignatureRequestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Signature Requests';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSignatureRequest_, { nullable: true })
+    async MJSignatureRequest(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequest_ | null> {
+        this.CheckUserReadPermissions('MJ: Signature Requests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Signature Requests', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJSignatureRequestLog_])
+    async MJSignatureRequestLogs_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Request Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestLogs')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}='${mjsignaturerequest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureRequestDocument_])
+    async MJSignatureRequestDocuments_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}='${mjsignaturerequest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureRequestRecipient_])
+    async MJSignatureRequestRecipients_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Request Recipients', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestRecipients')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}='${mjsignaturerequest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Recipients', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Recipients', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJSignatureRequest_)
+    async CreateMJSignatureRequest(
+        @Arg('input', () => CreateMJSignatureRequestInput) input: CreateMJSignatureRequestInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Signature Requests', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSignatureRequest_)
+    async UpdateMJSignatureRequest(
+        @Arg('input', () => UpdateMJSignatureRequestInput) input: UpdateMJSignatureRequestInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Signature Requests', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSignatureRequest_)
+    async DeleteMJSignatureRequest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Signature Requests', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -77570,6 +80694,10 @@ export class MJUserView_ {
     @Field({nullable: true, description: `JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`}) 
     DisplayState?: string;
         
+    @Field({nullable: true, description: `Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.`}) 
+    @MaxLength(36)
+    ViewTypeID?: string;
+        
     @Field() 
     @MaxLength(100)
     UserName: string;
@@ -77676,6 +80804,9 @@ export class CreateMJUserViewInput {
     @Field({ nullable: true })
     DisplayState: string | null;
 
+    @Field({ nullable: true })
+    ViewTypeID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -77748,6 +80879,9 @@ export class UpdateMJUserViewInput {
 
     @Field({ nullable: true })
     DisplayState?: string | null;
+
+    @Field({ nullable: true })
+    ViewTypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -78274,6 +81408,15 @@ export class MJUser_ {
     
     @Field(() => [MJEntityFormOverride_])
     MJEntityFormOverrides_UserIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
+    
+    @Field(() => [MJClusterAnalysis_])
+    MJClusterAnalysis_UserIDArray: MJClusterAnalysis_[]; // Link to MJClusterAnalysis
+    
+    @Field(() => [MJMagicLinkRedemption_])
+    MJMagicLinkRedemptions_ProvisionedUserIDArray: MJMagicLinkRedemption_[]; // Link to MJMagicLinkRedemptions
+    
+    @Field(() => [MJMagicLinkInvite_])
+    MJMagicLinkInvites_CreatedByUserIDArray: MJMagicLinkInvite_[]; // Link to MJMagicLinkInvites
     
 }
 
@@ -79427,6 +82570,36 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJClusterAnalysis_])
+    async MJClusterAnalysis_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkRedemption_])
+    async MJMagicLinkRedemptions_ProvisionedUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Redemptions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('ProvisionedUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Redemptions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMagicLinkInvite_])
+    async MJMagicLinkInvites_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -80890,6 +84063,236 @@ export class MJVersionLabelResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Version Labels', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: View Types
+//****************************************************************************
+@ObjectType({ description: `Registry of available view types (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...) for the entity-viewer plugin system. Each row binds a logical view to its renderer and (optionally) its configuration prop-sheet, so adding a new way to visualize records is a metadata row plus a registered driver class — no change to the host viewer. Whether a given view type is offered for a given entity is decided at runtime by the driver\'s availability predicate (e.g. Timeline needs a date field, Map needs geocoding, Cluster needs an Entity Document with vectors).` })
+export class MJViewType_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({description: `User-facing label shown in the view-mode switcher (e.g. "Tag Cloud").`}) 
+    @MaxLength(255)
+    DisplayName: string;
+        
+    @Field({nullable: true, description: `Optional description of what the view type does and when it is useful.`}) 
+    Description?: string;
+        
+    @Field({description: `Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.`}) 
+    @MaxLength(255)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.`}) 
+    @MaxLength(255)
+    PropertySheetDriverClass?: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class shown next to the view type in the mode switcher (e.g. "fa-solid fa-diagram-project").`}) 
+    @MaxLength(100)
+    Icon?: string;
+        
+    @Field(() => Int, {description: `Display order of the view type in the mode switcher (ascending).`}) 
+    Sequence: number;
+        
+    @Field(() => Boolean, {description: `When 0, the view type is registered but hidden from users (e.g. disabled or under development).`}) 
+    IsActive: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, the view type exposes a configuration prop-sheet (see PropertySheetDriverClass) and the host shows a settings affordance for it; when 0, the view type renders with no user-editable options.`}) 
+    SupportsConfiguration: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJUserView_])
+    MJUserViews_ViewTypeIDArray: MJUserView_[]; // Link to MJUserViews
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: View Types
+//****************************************************************************
+@InputType()
+export class CreateMJViewTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    PropertySheetDriverClass: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsConfiguration?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: View Types
+//****************************************************************************
+@InputType()
+export class UpdateMJViewTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    PropertySheetDriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsConfiguration?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: View Types
+//****************************************************************************
+@ObjectType()
+export class RunMJViewTypeViewResult {
+    @Field(() => [MJViewType_])
+    Results: MJViewType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJViewType_)
+export class MJViewTypeResolver extends ResolverBase {
+    @Query(() => RunMJViewTypeViewResult)
+    async RunMJViewTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJViewTypeViewResult)
+    async RunMJViewTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJViewTypeViewResult)
+    async RunMJViewTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: View Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJViewType_, { nullable: true })
+    async MJViewType(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJViewType_ | null> {
+        this.CheckUserReadPermissions('MJ: View Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwViewTypes')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: View Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: View Types', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJUserView_])
+    async MJUserViews_ViewTypeIDArray(@Root() mjviewtype_: MJViewType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Views', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserViews')} WHERE ${provider.QuoteIdentifier('ViewTypeID')}='${mjviewtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Views', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJViewType_)
+    async CreateMJViewType(
+        @Arg('input', () => CreateMJViewTypeInput) input: CreateMJViewTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: View Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJViewType_)
+    async UpdateMJViewType(
+        @Arg('input', () => UpdateMJViewTypeInput) input: UpdateMJViewTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: View Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJViewType_)
+    async DeleteMJViewType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: View Types', key, options, provider, userPayload, pubSub);
     }
     
 }

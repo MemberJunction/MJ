@@ -24,7 +24,8 @@ export class MJResourceTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'mJWorkspaceItems', sectionName: 'Workspace Items', isExpanded: false },
             { sectionKey: 'mJUserNotifications', sectionName: 'User Notifications', isExpanded: false },
             { sectionKey: 'mJResourceLinks', sectionName: 'Resource Links', isExpanded: false },
-            { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false }
+            { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
+            { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false }
         ]);
     }
 }

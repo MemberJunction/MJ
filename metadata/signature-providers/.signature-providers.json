@@ -1,0 +1,66 @@
+[
+  {
+    "fields": {
+      "Name": "DocuSign",
+      "ServerDriverKey": "DocuSign",
+      "IsActive": true,
+      "Priority": 0,
+      "RequiresOAuth": true,
+      "SupportsTemplates": true,
+      "SupportsEmbeddedSigning": true,
+      "Configuration": {
+        "oauthBase": "account-d.docusign.com",
+        "restBase": "https://demo.docusign.net/restapi"
+      }
+    },
+    "primaryKey": {
+      "ID": "D6D9D6AB-FAD3-40B1-B3EE-281298645370"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T16:15:23.081Z",
+      "checksum": "c127d12d79743041c22244e4089b33306670a0f77a4a401e02cd76a1c0c26c41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dropbox Sign",
+      "ServerDriverKey": "DropboxSign",
+      "IsActive": true,
+      "Priority": 10,
+      "RequiresOAuth": false,
+      "SupportsTemplates": true,
+      "SupportsEmbeddedSigning": true,
+      "Configuration": {
+        "restBase": "https://api.hellosign.com/v3"
+      }
+    },
+    "primaryKey": {
+      "ID": "2F09CE29-49D3-4C57-A470-4A364BE4175E"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T16:15:23.047Z",
+      "checksum": "c48c9d29fb3f736b939ca2a2a3fdbeb869e2b1836d9ea7100aed6a992dd6b036"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PandaDoc",
+      "ServerDriverKey": "PandaDoc",
+      "IsActive": true,
+      "Priority": 20,
+      "RequiresOAuth": false,
+      "SupportsTemplates": true,
+      "SupportsEmbeddedSigning": false,
+      "Configuration": {
+        "restBase": "https://api.pandadoc.com/public/v1"
+      }
+    },
+    "primaryKey": {
+      "ID": "B26FE7F1-3E12-4820-8913-9EB8B82774A7"
+    },
+    "sync": {
+      "lastModified": "2026-06-08T16:15:23.062Z",
+      "checksum": "eca4650a9ca4971e6b09631d5c223e09cb27422f063027fa25f87b78c727e37d"
+    }
+  }
+]

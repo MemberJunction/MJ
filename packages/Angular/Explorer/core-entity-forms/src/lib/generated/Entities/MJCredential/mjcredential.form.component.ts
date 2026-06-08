@@ -26,7 +26,8 @@ export class MJCredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
             { sectionKey: 'mJVectorDatabases', sectionName: 'Vector Databases', isExpanded: false },
             { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false },
-            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false }
+            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
+            { sectionKey: 'mJSignatureAccounts', sectionName: 'Signature Accounts', isExpanded: false }
         ]);
     }
 }

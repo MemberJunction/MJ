@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -63,6 +63,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+
+  // Global Activity indicator (P3)
+  activityItems: ActivityItem[] = [];
+  activityRunningCount = 0;
+  activityOpen = false;
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
@@ -179,7 +184,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private homePinService: HomeAppPinService,
     private fileOpenService: FileOpenService,
     private feedbackDialogService: FeedbackDialogService,
-    private feedbackService: FeedbackService
+    private feedbackService: FeedbackService,
+    private activityService: ActivityService
   ) {
     super();
 
@@ -283,6 +289,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       })
     );
 
+    // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
+    this.subscriptions.push(
+      this.activityService.Activities$.subscribe(items => {
+        this.activityItems = items;
+        this.activityRunningCount = items.filter(i => i.Status === 'running').length;
+        if (items.length === 0) this.activityOpen = false;
+        this.cdr.detectChanges();
+      })
+    );
+
     // Subscribe to unread notification count changes
     this.subscriptions.push(
       MJNotificationService.UnreadCount$.subscribe(count => {
@@ -334,6 +350,26 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
           return;
+        }
+
+        // App-locked session (e.g. magic-link): ignore whatever app the URL names
+        // (including a pasted /app/home) and keep the user on their scoped app.
+        const lockedId = this.authBase.GetSessionScope()?.restrictedToApplicationId;
+        if (lockedId) {
+          const scopedApp = this.appManager.GetAppById(lockedId);
+          if (scopedApp) {
+            // Resolve the app the URL currently names and compare by ID — never
+            // string-match a hand-rolled name slug, which diverges from a custom
+            // Path and would loop the redirect. (navigateToApp uses app.Path.)
+            const path = (this.router.url || '').split('#')[0].split('?')[0];
+            const urlAppPath = path.match(/\/app\/([^\/?#]+)/)?.[1];
+            const currentApp = urlAppPath ? this.appManager.GetAppByPath(decodeURIComponent(urlAppPath)) : undefined;
+            if (!currentApp || !UUIDsEqual(currentApp.ID, lockedId)) {
+              await this.navigateToApp(scopedApp);
+              return;
+            }
+            // already on the scoped app — fall through to normal handling below
+          }
         }
 
         // Check if URL specifies an app by parsing the browser URL
@@ -1408,6 +1444,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * a race condition in components we DO NOT control, so while the naming
    * is intended to imply the goal it doesn't "hurt" to have this work this way
    */
+  /**
+   * True when the auth session is locked to a single application (e.g. a
+   * magic-link session). The header hides app-switching chrome so the external
+   * user stays within their scoped app. Data access is still enforced
+   * server-side by the user's role; this is the UI-confinement layer.
+   */
+  public get appSwitchingLocked(): boolean {
+    return !!this.authBase.GetSessionScope()?.restrictedToApplicationId;
+  }
+
   onFirstResourceLoadComplete(): void {
     this.waitingForFirstResource = false;
     this.loading = false;
@@ -2635,6 +2681,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Show notifications page as a tab
    */
+  /** Toggle the global Activity drawer. */
+  toggleActivity(event: MouseEvent): void {
+    event.stopPropagation();
+    this.activityOpen = !this.activityOpen;
+    this.cdr.detectChanges();
+  }
+
+  /** Clear finished activities from the tracker. */
+  clearFinishedActivity(): void {
+    this.activityService.ClearFinished();
+  }
+
+  /** Close the Activity drawer when clicking anywhere outside it. */
+  @HostListener('document:click')
+  onDocumentClickCloseActivity(): void {
+    if (this.activityOpen) {
+      this.activityOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   showNotifications(): void {
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
@@ -2959,8 +3026,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // Update URL to reflect the new app
-    const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
+    this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
   /**

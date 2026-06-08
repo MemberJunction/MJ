@@ -1,20 +1,20 @@
-<div class="entity-viewer-container" [style.height]="effectiveConfig.height">
+<div class="entity-viewer-container" [style.height]="EffectiveConfig.height">
   <!-- Header -->
-  @if (effectiveConfig.showFilter || effectiveConfig.showViewModeToggle || effectiveConfig.showRecordCount) {
+  @if (EffectiveConfig.showFilter || EffectiveConfig.showViewModeToggle || EffectiveConfig.showRecordCount) {
     <div class="viewer-header">
       <!-- Filter Input -->
-      @if (effectiveConfig.showFilter) {
+      @if (EffectiveConfig.showFilter) {
         <div class="filter-container">
           <i class="fa-solid fa-search filter-icon"></i>
           <input
             type="text"
             class="filter-input"
-            [placeholder]="effectiveConfig.filterPlaceholder"
-            [value]="effectiveFilterText"
-            (input)="onFilterChange($any($event.target).value)"
+            [placeholder]="EffectiveConfig.filterPlaceholder"
+            [value]="EffectiveFilterText"
+            (input)="OnFilterChange($any($event.target).value)"
           />
-          @if (effectiveFilterText) {
-            <button class="clear-filter-btn" (click)="clearFilter()" title="Clear filter">
+          @if (EffectiveFilterText) {
+            <button class="clear-filter-btn" (click)="ClearFilter()" title="Clear filter">
               <i class="fa-solid fa-times"></i>
             </button>
           }
@@ -22,97 +22,34 @@
       }
 
       <!-- Record Count -->
-      @if (effectiveConfig.showRecordCount && effectiveEntity) {
+      @if (EffectiveConfig.showRecordCount && EffectiveEntity) {
         <div class="record-count">
-          @if (filteredRecordCount !== totalRecordCount) {
-            <span>{{ filteredRecordCount | number }} of {{ totalRecordCount | number }} records</span>
+          @if (FilteredRecordCount !== TotalRecordCount) {
+            <span>{{ FilteredRecordCount | number }} of {{ TotalRecordCount | number }} records</span>
           } @else {
-            <span>{{ totalRecordCount | number }} records</span>
+            <span>{{ TotalRecordCount | number }} records</span>
           }
         </div>
       }
 
-      <!-- View Mode Toggle -->
-      @if (effectiveConfig.showViewModeToggle) {
-        <div class="view-mode-toggle">
-          <button
-            class="toggle-btn"
-            [class.active]="effectiveViewMode === 'grid'"
-            (click)="setViewMode('grid')"
-            title="Grid View">
-            <i class="fa-solid fa-list"></i>
-          </button>
-          <button
-            class="toggle-btn"
-            [class.active]="effectiveViewMode === 'cards'"
-            (click)="setViewMode('cards')"
-            title="Cards View">
-            <i class="fa-solid fa-grip"></i>
-          </button>
-          @if (hasDateFields) {
-            <button
-              class="toggle-btn"
-              [class.active]="effectiveViewMode === 'timeline'"
-              (click)="setViewMode('timeline')"
-              title="Timeline View">
-              <i class="fa-solid fa-timeline"></i>
-            </button>
-          }
-          <button
-            class="toggle-btn"
-            [class.active]="effectiveViewMode === 'map'"
-            [class.geo-hidden]="!HasGeoCoding"
-            (click)="setViewMode('map')"
-            title="Map View">
-            <i class="fa-solid fa-map-location-dot"></i>
-          </button>
-        </div>
+      <!-- View Type Toggle — the reusable switcher, driven entirely by the MJ: View Types
+           registry (ViewTypeEngine). The available types and their icons come from metadata
+           (ViewType.Icon), filtered by each descriptor's availability predicate. Selecting routes
+           back through SelectViewTypeById, which mounts the chosen descriptor's RendererComponent
+           into #dynamicViewHost. The container has zero knowledge of any view type's chrome. -->
+      @if (EffectiveConfig.showViewModeToggle) {
+        <mj-view-type-switcher
+          [Provider]="Provider"
+          [Entity]="EffectiveEntity"
+          [ActiveViewTypeID]="ActiveViewTypeId"
+          (ViewTypeSelected)="SelectViewTypeById($event.viewTypeId)">
+        </mj-view-type-switcher>
       }
 
       <!-- Recycle Bin chip (auto-hides when entity has no deleted records, no tracking,
            or user lacks Delete permission) -->
       @if (ShowRecycleBin) {
-        <mj-recycle-bin-chip [EntityName]="effectiveEntity?.Name ?? null"></mj-recycle-bin-chip>
-      }
-
-      <!-- Timeline Controls (only shown when timeline is active) -->
-      @if (effectiveViewMode === 'timeline' && hasDateFields) {
-        <!-- Date Field Selector -->
-        <div class="timeline-date-selector">
-          <i class="fa-solid fa-calendar-days"></i>
-          @if (availableDateFields.length === 1) {
-            <span class="date-field-label">{{ selectedDateFieldDisplayName }}</span>
-          } @else {
-            <select
-              class="date-field-select"
-              [value]="selectedTimelineDateField"
-              (change)="setTimelineDateField($any($event.target).value)">
-              @for (field of availableDateFields; track field.Name) {
-                <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
-              }
-            </select>
-          }
-        </div>
-
-        <!-- Orientation Toggle -->
-        <div class="timeline-orientation-toggle">
-          <button
-            class="toggle-btn"
-            (click)="toggleTimelineOrientation()"
-            [title]="timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
-            <i [class]="timelineOrientation === 'vertical' ? 'fa-solid fa-ellipsis-vertical' : 'fa-solid fa-ellipsis'"></i>
-          </button>
-        </div>
-
-        <!-- Sort Order Toggle -->
-        <div class="timeline-sort-toggle">
-          <button
-            class="toggle-btn"
-            (click)="toggleTimelineSortOrder()"
-            [title]="timelineSortOrder === 'desc' ? 'Showing Newest First (click for Oldest First)' : 'Showing Oldest First (click for Newest First)'">
-            <i [class]="timelineSortOrder === 'desc' ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short'"></i>
-          </button>
-        </div>
+        <mj-recycle-bin-chip [EntityName]="EffectiveEntity?.Name ?? null"></mj-recycle-bin-chip>
       }
     </div>
   }
@@ -120,99 +57,34 @@
   <!-- Content -->
   <div class="viewer-content">
     <!-- Loading container - full page when no data exists -->
-    <div class="loading-container" [hidden]="!(isLoading && filteredRecords.length === 0)">
-      <mj-loading [text]="loadingMessage" size="medium"></mj-loading>
+    <div class="loading-container" [hidden]="!(IsLoading && FilteredRecords.length === 0)">
+      <mj-loading [text]="LoadingMessage" size="medium"></mj-loading>
     </div>
 
     <!-- Loading overlay - shown on top of content when loading with existing data -->
-    <div class="loading-overlay" [hidden]="!(isLoading && filteredRecords.length > 0)">
-      <mj-loading [text]="loadingMessage" size="small"></mj-loading>
+    <div class="loading-overlay" [hidden]="!(IsLoading && FilteredRecords.length > 0)">
+      <mj-loading [text]="LoadingMessage" size="small"></mj-loading>
     </div>
 
     <!-- Empty state: no entity selected -->
-    <div class="empty-state" [hidden]="!!effectiveEntity">
+    <div class="empty-state" [hidden]="!!EffectiveEntity">
       <i class="fa-solid fa-database"></i>
       <p>Select an entity to view records</p>
     </div>
 
-    <!-- Empty state: no records found -->
-    <div class="empty-state" [hidden]="!effectiveEntity || filteredRecords.length > 0 || isLoading">
+    <!-- Empty state: no records found. Suppressed while a plug-in is active — every plug-in renders
+         its own empty/loading state, so the container never shows a generic "no records" over it. -->
+    <div class="empty-state" [hidden]="!EffectiveEntity || FilteredRecords.length > 0 || IsLoading || IsDynamicViewActive">
       <i class="fa-solid fa-inbox"></i>
-      <p>{{ debouncedFilterText ? 'No matching records' : 'No records found' }}</p>
+      <p>{{ DebouncedFilterText ? 'No matching records' : 'No records found' }}</p>
     </div>
 
-    <!-- Grid View - always rendered, visibility controlled by hidden -->
-    <mj-entity-data-grid
-      [hidden]="effectiveViewMode !== 'grid' || !effectiveEntity"
-      [Data]="filteredRecords"
-      [Params]="gridParams"
-      [FilterText]="debouncedFilterText"
-      [GridState]="gridState"
-      [Height]="'auto'"
-      [ShowToolbar]="showGridToolbar"
-      [ToolbarConfig]="effectiveGridToolbarConfig"
-      [SelectionMode]="gridSelectionMode"
-      [ShowAddToListButton]="showAddToListButton"
-      [AllowLoad]="false"
-      [ShowPager]="effectiveConfig.showPagination"
-      [PageSize]="effectiveConfig.pageSize"
-      [TotalRowCount]="pagination.totalRecords"
-      [PagerPageNumber]="pagination.currentPage + 1"
-      (AfterRowClick)="onDataGridRowClick($event)"
-      (AfterRowDoubleClick)="onDataGridRowDoubleClick($event)"
-      (AfterSort)="onDataGridSortChanged($event)"
-      (GridStateChanged)="onGridStateChanged($event)"
-      (SelectionChange)="onGridSelectionChange($event)"
-      (NewButtonClick)="onGridAddRequested()"
-      (RefreshButtonClick)="onGridRefreshRequested()"
-      (DeleteButtonClick)="onGridDeleteRequested($event)"
-      (ExportButtonClick)="onGridExportRequested()"
-      (AddToListRequested)="onGridAddToListRequested($event)"
-      (ForeignKeyClick)="onForeignKeyClick($event)"
-      (PageChange)="onGridPageChange($event)">
-    </mj-entity-data-grid>
-
-    <!-- Cards View - always rendered, visibility controlled by hidden -->
-    <mj-entity-cards
-      [hidden]="effectiveViewMode !== 'cards' || !effectiveEntity"
-      [entity]="effectiveEntity"
-      [records]="filteredRecords"
-      [selectedRecordId]="selectedRecordId"
-      [cardTemplate]="cardTemplate"
-      [hiddenFieldMatches]="hiddenFieldMatches"
-      [filterText]="debouncedFilterText"
-      (recordSelected)="onRecordSelected($event)"
-      (recordOpened)="onRecordOpened($event)">
-    </mj-entity-cards>
-
-    <!-- Timeline View - always rendered when date fields exist, visibility controlled by hidden -->
-    <mj-timeline
-      [hidden]="effectiveViewMode !== 'timeline' || !hasDateFields"
-      [groups]="timelineGroups"
-      [orientation]="timelineOrientation"
-      [layout]="timelineOrientation === 'vertical' ? 'alternating' : 'single'"
-      [sortOrder]="timelineSortOrder"
-      [segmentGrouping]="timelineSegmentGrouping"
-      [segmentsCollapsible]="true"
-      [segmentsDefaultExpanded]="true"
-      [selectedEventId]="timelineSelectedEventId"
-      (afterEventClick)="onTimelineEventClick($event)">
-    </mj-timeline>
-
-    <!-- Map View - rendered when geocoding supported, visibility controlled by hidden -->
-    @if (HasGeoCoding) {
-      <mj-map-view
-        [hidden]="effectiveViewMode !== 'map'"
-        [Entity]="effectiveEntity!"
-        [Records]="filteredRecords"
-        [TotalRecordCount]="totalRecordCount"
-        [RenderMode]="mapRenderMode"
-        [DisplayState]="mapDisplayState"
-        (MarkerClick)="onMapMarkerClick($event)"
-        (RenderModeChange)="onMapRenderModeChange($event)"
-        (DisplayStateChange)="onMapDisplayStateChange($event)">
-      </mj-map-view>
-    }
+    <!-- Plug-in (dynamic) view renderer host — the ONLY render path. The active descriptor's
+         RendererComponent is created into #dynamicViewHost via ViewContainerRef and fed the generic
+         IViewRenderer contract. Shown whenever there's an entity; the plug-in owns all its chrome. -->
+    <div class="dynamic-view-host" [hidden]="!EffectiveEntity">
+      <ng-template #dynamicViewHost></ng-template>
+    </div>
   </div>
 
 </div>

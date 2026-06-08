@@ -46,6 +46,10 @@ export class ClassifyPipelineTabComponent extends BaseAngularComponent {
     @Input() TrendingTags: TagCloudItem[] = [];
     /** Per-source live-run detail rows (shown during an active run). */
     @Input() LiveRunDetailRows: RunDetailRow[] = [];
+    /** Total content-item count in the DB (from TotalRowCount) — drives the "Showing X of Y" line. */
+    @Input() TotalItemCount = 0;
+    /** True while the host is loading the next page of content items. */
+    @Input() IsLoadingMoreItems = false;
 
     // ── Run state (data DOWN from the host) ──
 
@@ -96,6 +100,17 @@ export class ClassifyPipelineTabComponent extends BaseAngularComponent {
     @Output() FeedItemClicked = new EventEmitter<number>();
     /** Toggle the config panel → host `TogglePipelineConfig()` (persists + reports to agent). */
     @Output() ConfigToggled = new EventEmitter<void>();
+    /** Request the host load the next page of content items (no silent truncation). */
+    @Output() LoadMoreItemsRequested = new EventEmitter<void>();
+
+    /** Whether more content items exist in the DB than are currently loaded into the feed. */
+    public get HasMoreItems(): boolean {
+        return this.TotalItemCount > this.FeedItems.length;
+    }
+
+    public onLoadMoreItems(): void {
+        this.LoadMoreItemsRequested.emit();
+    }
 
     // ════════════════════════════════════════════
     // FEED — search, sort, pagination (presentational)
