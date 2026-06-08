@@ -19,6 +19,8 @@ export type {
   ConversionStatus,
   ConvertMigrationOptions,
 } from './MigrationConverter.js';
+export { splitByStatement, summarizeStatements } from './MigrationStatementSplitter.js';
+export type { StatementBatch, StatementKind } from './MigrationStatementSplitter.js';
 export { DatabaseAuditRunner } from './DatabaseAuditor.js';
 export { NoOpLLMFallback } from './LLMFallback.js';
 export type {
