@@ -8,7 +8,7 @@ MemberJunction agents today are **asynchronous** by design — a request comes i
 
 This proposal adds **real-time agents** to MemberJunction. The headline capability is a new kind of agent you can speak with live (and, later, share video and visual surfaces with). Real-time is delivered through three pillars:
 
-1. **A new model primitive — `BaseRealtimeModel`.** A modality-agnostic, streaming, full-duplex, tool-calling model class (Gemini Live, GPT Realtime, the Eleven Labs stack) sitting at MJ's lowest level alongside `BaseLLM`, `BaseAudioGenerator`, etc.
+1. **A new model primitive — `BaseRealtimeModel`.** A modality-agnostic, streaming, full-duplex, tool-calling model class (Gemini Live and GPT Realtime to start, with the Eleven Labs stack as a fast-follow) sitting at MJ's lowest level alongside `BaseLLM`, `BaseAudioGenerator`, etc.
 2. **A new agent type — `Realtime` — and the Voice Co-Agent.** A first-class agent type (peer of Loop and Flow) that runs a real-time model inside a session. The first agent we ship of this type, the **Voice Co-Agent**, is generic: it acts as the live voice for *any* existing MJ agent, delegating real work back to that agent. Agents gain voice by configuration, not by being rewritten.
 3. **Session & Channel infrastructure.** Long-lived **Sessions** wrap the multiple `AIAgentRun`s of a real-time interaction; pluggable **Channels** (voice, whiteboard, text, …) are the bidirectional surfaces the agent perceives and acts on. This is the substrate that makes pillars 1–2 work.
 
@@ -79,7 +79,7 @@ graph TD
 
 ## Real-Time Modality
 
-Real-time interaction (voice today, video later) does **not** run through the standard loop agent. The loop agent is intentionally **asynchronous and long-running** — forcing it to drive a live, low-latency conversation produces a poor experience, and modern real-time models (Gemini Live, GPT Realtime, the Eleven Labs stack) own the listen-reason-speak loop themselves. So we keep the loop agent exactly as it is and introduce a **new agent type** that wraps a real-time model and runs inside a session.
+Real-time interaction (voice today, video later) does **not** run through the standard loop agent. The loop agent is intentionally **asynchronous and long-running** — forcing it to drive a live, low-latency conversation produces a poor experience, and modern real-time models (Gemini Live and GPT Realtime now; the Eleven Labs stack as a fast-follow) own the listen-reason-speak loop themselves. So we keep the loop agent exactly as it is and introduce a **new agent type** that wraps a real-time model and runs inside a session.
 
 Critically, this still gives us broad coverage. Rather than rebuilding every agent for voice, we ship a single generic **Voice Co-Agent** that can supplement **any** existing agent (see below) — so adding real-time to a new agent is configuration, not code.
 
