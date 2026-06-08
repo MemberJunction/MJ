@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
@@ -1544,6 +1544,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
 
     /**
+     * Computes the per-user Row-Level-Security WHERE clause that {@link InternalRunView} will
+     * append to this query's SQL for the given user, so it can be folded into the cache
+     * fingerprint. RLS-scoped reads return a different result set than unscoped reads of the same
+     * entity+filter; without including the RLS clause in the cache key, a scoped user could be
+     * served a cached unscoped result set (a data leak).
+     *
+     * Returns '' when the user is exempt from RLS on this entity (the common case), which makes the
+     * resulting fingerprint byte-identical to the pre-RLS format — preserving normal cache sharing.
+     *
+     * Uses `this` (the active provider) to resolve the entity, never the global Metadata, so the
+     * correct per-provider/per-tenant metadata is consulted.
+     */
+    protected ComputeRunViewRLSWhereClause(params: RunViewParams, contextUser?: UserInfo): string {
+        const user = contextUser ?? this.CurrentUser;
+        if (!user || !params.EntityName) return '';
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity) return '';
+        return entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+    }
+
+    /**
      * Pre-processing hook for RunView.
      * Handles telemetry, validation, entity status check, and cache lookup.
      * @param params - The view parameters
@@ -1620,7 +1641,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let fingerprint: string | undefined;
 
         if (willCache && LocalCacheManager.Instance.IsInitialized) {
-            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
                 // Filter cached results to only the caller's requested fields (if specified)
@@ -1759,7 +1781,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BypassCache skips cache entirely — used by maintenance actions querying for
             // records that were inserted via direct SQL (bypassing BaseEntity.Save())
             if (batchWillCache && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
                     // Filter cached results to caller's requested fields (if specified and not entity_object)
@@ -2254,7 +2277,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Server-side auto-cache: small, unfiltered, unsorted results are
             // automatically cached even without explicit CacheLocal. These are
             // safe for in-place upsert on entity changes (no filter to evaluate).
-            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params, contextUser));
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 fingerprint,
@@ -2319,7 +2342,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 continue;
             }
 
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
+            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params[i], contextUser);
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, rlsWhereClause);
             const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params[i]);
             if ((params[i].CacheLocal || this.TrustLocalCacheCompletely) && batchEntityCacheAllowed && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);

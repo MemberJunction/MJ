@@ -46,106 +46,106 @@ export class ConversationEmptyStateComponent {
   private allSuggestedPrompts: Array<{icon: string; title: string; prompt: string}> = [
     // Data Analysis & Insights
     {
-      icon: 'fa-clock-rotate-left',
+      icon: 'fa-solid fa-clock-rotate-left',
       title: 'Recent changes',
       prompt: 'Show me what\'s changed in my data recently'
     },
     {
-      icon: 'fa-list-check',
+      icon: 'fa-solid fa-list-check',
       title: 'Pending items',
       prompt: 'Find all my incomplete or pending items'
     },
     {
-      icon: 'fa-magnifying-glass',
+      icon: 'fa-solid fa-magnifying-glass',
       title: 'Search everything',
       prompt: 'Search everything in my system for a specific topic'
     },
     {
-      icon: 'fa-clipboard-check',
+      icon: 'fa-solid fa-clipboard-check',
       title: 'Data quality',
       prompt: 'Analyze my data and find duplicates or inconsistencies'
     },
     {
-      icon: 'fa-inbox',
+      icon: 'fa-solid fa-inbox',
       title: 'Catch up',
       prompt: 'Create a summary of activity while I was away'
     },
 
     // Research & Information Gathering
     {
-      icon: 'fa-download',
+      icon: 'fa-solid fa-download',
       title: 'Research & save',
       prompt: 'Research a topic and save the findings to my database'
     },
     {
-      icon: 'fa-code-compare',
+      icon: 'fa-solid fa-code-compare',
       title: 'Compare sources',
       prompt: 'Compare my data with information from the web'
     },
     {
-      icon: 'fa-folder-open',
+      icon: 'fa-solid fa-folder-open',
       title: 'Search files',
       prompt: 'Search my files and documents for related information'
     },
     {
-      icon: 'fa-layer-group',
+      icon: 'fa-solid fa-layer-group',
       title: 'Multi-source search',
       prompt: 'Find relevant information across all my data sources'
     },
     {
-      icon: 'fa-sitemap',
+      icon: 'fa-solid fa-sitemap',
       title: 'Comprehensive research',
       prompt: 'Gather information on a topic from multiple sources'
     },
 
     // Automation & Agent Building
     {
-      icon: 'fa-calendar-day',
+      icon: 'fa-solid fa-calendar-day',
       title: 'Daily summaries',
       prompt: 'Create an agent to send me daily data summaries'
     },
     {
-      icon: 'fa-bell',
+      icon: 'fa-solid fa-bell',
       title: 'Change alerts',
       prompt: 'Build an agent that monitors data changes and alerts me'
     },
     {
-      icon: 'fa-file-chart-column',
+      icon: 'fa-solid fa-chart-column',
       title: 'Automated reports',
       prompt: 'Design an agent to aggregate data and create reports'
     },
     {
-      icon: 'fa-arrows-rotate',
+      icon: 'fa-solid fa-arrows-rotate',
       title: 'Data sync',
       prompt: 'Help me create an agent that syncs data with external systems'
     },
     {
-      icon: 'fa-file-import',
+      icon: 'fa-solid fa-file-import',
       title: 'File processor',
       prompt: 'Build an agent that processes files and updates my database'
     },
     {
-      icon: 'fa-slack',
+      icon: 'fa-brands fa-slack',
       title: 'Slack notifications',
       prompt: 'Create an agent to post updates to Slack when data changes'
     },
     {
-      icon: 'fa-broom',
+      icon: 'fa-solid fa-broom',
       title: 'Data cleanup',
       prompt: 'Design an agent that validates and cleans up my data regularly'
     },
     {
-      icon: 'fa-chart-pie',
+      icon: 'fa-solid fa-chart-pie',
       title: 'Auto visualizations',
       prompt: 'Build an agent that generates visualizations from my data'
     },
     {
-      icon: 'fa-graduation-cap',
+      icon: 'fa-solid fa-graduation-cap',
       title: 'Research compiler',
       prompt: 'Create an agent to research topics and compile findings'
     },
     {
-      icon: 'fa-diagram-project',
+      icon: 'fa-solid fa-diagram-project',
       title: 'Workflow automation',
       prompt: 'Help me design a workflow agent with approval steps'
     }

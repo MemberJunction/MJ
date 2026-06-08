@@ -240,6 +240,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Magic Link Invites Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkInvites"
+        SectionName="Magic Link Invites"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkInvites')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invites','ResourceTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invites')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkInvites')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInvites', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

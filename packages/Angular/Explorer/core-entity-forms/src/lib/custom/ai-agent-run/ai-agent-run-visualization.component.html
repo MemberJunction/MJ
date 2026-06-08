@@ -15,14 +15,14 @@
               Agent Execution Flow
             </div>
             <div class="zoom-controls">
-              <button (click)="zoomIn()" title="Zoom in">
-                <i class="fa-solid fa-search-plus"></i>
+              <button (click)="zoomIn()" title="Zoom in" aria-label="Zoom in visualization">
+                <i class="fa-solid fa-search-plus" aria-hidden="true"></i>
               </button>
-              <button (click)="zoomOut()" title="Zoom out">
-                <i class="fa-solid fa-search-minus"></i>
+              <button (click)="zoomOut()" title="Zoom out" aria-label="Zoom out visualization">
+                <i class="fa-solid fa-search-minus" aria-hidden="true"></i>
               </button>
-              <button (click)="resetZoom()" title="Reset zoom">
-                <i class="fa-solid fa-compress"></i>
+              <button (click)="resetZoom()" title="Reset zoom" aria-label="Reset zoom visualization">
+                <i class="fa-solid fa-compress" aria-hidden="true"></i>
               </button>
               <span class="zoom-level">{{ (panZoom.scale * 100).toFixed(0) }}%</span>
             </div>

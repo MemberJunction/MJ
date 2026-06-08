@@ -21,7 +21,7 @@ import {
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -112,6 +112,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
+    /** Activity-tracker id for the currently running detection (P3). */
+    private detectionActivityID: string | null = null;
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
     private filterSubject = new Subject<void>();
@@ -496,6 +499,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 return;
             }
 
+            this.detectionActivityID = this.activityService.Start('Duplicate detection', {
+                icon: 'fa-solid fa-clone',
+                detail: selectedDoc.EntityName,
+                progress: 0,
+            });
             // Subscribe to progress using the run ID as PipelineRunID
             this.subscribeToPipelineProgress(dupeRun.ID);
         } catch (error) {
@@ -797,6 +805,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 this.IsDetecting = false;
                 this.DetectionStage = success ? 'Complete' : 'Error';
                 this.DetectionProgress = success ? 100 : 0;
+                if (this.detectionActivityID) {
+                    this.activityService.Complete(this.detectionActivityID, success ? 'success' : 'error');
+                    this.detectionActivityID = null;
+                }
 
                 if (success) {
                     await this.LoadData();

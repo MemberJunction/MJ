@@ -1,0 +1,31 @@
+<!-- View-type switcher: a single dropdown driven entirely by the MJ: View Types registry.
+     Available types + icons come from metadata, filtered by each descriptor's availability
+     predicate. Renders nothing when the registry yields one type or fewer. -->
+@if (AvailableViewTypes.length > 1) {
+  <div class="view-type-dropdown">
+    <button
+      type="button"
+      class="toggle-btn view-type-dropdown-trigger"
+      [class.active]="DropdownOpen"
+      (click)="ToggleDropdown()"
+      [title]="(ActiveOption?.Label ?? '') + ' View'">
+      <i [class]="ActiveOption?.Icon"></i>
+      <span class="view-type-dropdown-label">{{ ActiveOption?.Label }}</span>
+      <i class="fa-solid fa-chevron-down view-type-dropdown-caret"></i>
+    </button>
+    @if (DropdownOpen) {
+      <div class="view-type-dropdown-menu">
+        @for (vt of AvailableViewTypes; track vt.Key) {
+          <button
+            type="button"
+            class="view-type-dropdown-item"
+            [class.active]="ActiveOption?.Key === vt.Key"
+            (click)="SelectViewType(vt)">
+            <i [class]="vt.Icon"></i>
+            <span>{{ vt.Label }}</span>
+          </button>
+        }
+      </div>
+    }
+  </div>
+}

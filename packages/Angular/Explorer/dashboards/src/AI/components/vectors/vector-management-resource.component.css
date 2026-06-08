@@ -461,6 +461,14 @@
     padding-left: 18px;
 }
 
+.health-reason {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--mj-text-muted);
+    padding-left: 18px;
+    margin-top: 4px;
+}
+
 /* --- Model Info --- */
 .model-info {
     display: flex;
