@@ -9,11 +9,11 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { CompositeKey, RunView } from '@memberjunction/core';
+import { debounceTime, takeUntil } from 'rxjs/operators';
+import { BaseEntity, BaseEntityEvent, CompositeKey, RunView } from '@memberjunction/core';
 import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledActionEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { RegisterClass, UUIDsEqual, NormalizeUUID, MJGlobal, MJEventType } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -21,11 +21,12 @@ import { ClassifyTagsTabComponent } from './tabs/tags-tab.component';
 import { ClassifyInboxTabComponent } from './tabs/inbox-tab.component';
 import { ClassifyHealthTabComponent } from './tabs/health-tab.component';
 import { ClassifySourceTypeFormDialogComponent } from './dialogs/source-type-form.dialog.component';
+import { ClassifySetupWizardComponent } from './dialogs/classify-setup-wizard.component';
 
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
 import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, ContentDuplicateRow, RunDetailRow, WeightedTag, ItemPipelineStatus, ContentItemDetail } from './shared/classify.types';
-import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords } from './shared/classify.format';
+import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords, deriveDisplayName } from './shared/classify.format';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -38,6 +39,12 @@ import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords } from
 export class AutotaggingPipelineResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
+    /** Activity-tracker id for the currently running pipeline (P3). */
+    private pipelineActivityID: string | null = null;
+
+    /** Debounced bus of entity names that changed externally; drives targeted reloads. */
+    private entityChange$ = new Subject<string>();
     protected override navigationService = inject(NavigationService);
 
     // ── Global state ──
@@ -46,9 +53,44 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Accurate total counts from TotalRowCount (not capped by MaxRows) ──
     private totalContentItemCount = 0;
     private totalContentTagCount = 0;
+    private totalRunHistoryCount = 0;
+
+    // ── Pagination windows (no silent truncation; user can Load more) ──
+    private static readonly CONTENT_ITEMS_PAGE_SIZE = 200;
+    private static readonly RUN_HISTORY_PAGE_SIZE = 200;
+    /** Current number of `MJ: Content Items` rows loaded into the feed window. */
+    private contentItemsPageSize = AutotaggingPipelineResourceComponent.CONTENT_ITEMS_PAGE_SIZE;
+    /** Current number of `MJ: Content Process Runs` rows loaded into the history window. */
+    private runHistoryWindowSize = AutotaggingPipelineResourceComponent.RUN_HISTORY_PAGE_SIZE;
+    /** True while a "Load more" fetch is in flight. */
+    public IsLoadingMoreItems = false;
+    public IsLoadingMoreRuns = false;
 
     // ── Tab state ──
-    public ActiveTab: TabName = 'pipeline';
+    private _activeTab: TabName = 'pipeline';
+    /** True once the view exists (after ngAfterViewInit), so the setter can safely run CD. */
+    private viewReady = false;
+    /**
+     * The active tab. Backed by a setter that, once the view is ready, synchronously
+     * flushes change detection whenever the value changes. The left-nav binds
+     * `[ActiveId]="ActiveTab"`; mutating this during an async gap in init (e.g. between
+     * the await in ngAfterViewInit and the next CD pass) previously surfaced an NG0100
+     * (`Previous value: 'pipeline'. Current value: 'sources'`). Flushing in the setter
+     * keeps the bound value stable across the check that follows.
+     */
+    public get ActiveTab(): TabName {
+        return this._activeTab;
+    }
+    public set ActiveTab(value: TabName) {
+        // Tag-vocabulary tabs moved to the dedicated Tags surface; coerce any
+        // stale saved/deep-linked value for a removed tab back to the cockpit.
+        const v: TabName = AutotaggingPipelineResourceComponent.VALID_TABS.includes(value) ? value : 'pipeline';
+        if (v === this._activeTab) return;
+        this._activeTab = v;
+        if (this.viewReady) {
+            this.cdr.detectChanges();
+        }
+    }
     private tabDataLoaded = new Set<TabName>();
 
     /** Live reference to the Tag Library tab (for deep-link + agent-tool search). */
@@ -69,7 +111,25 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // OpenFeedItemDetail(index) — the tab emits the original index back up.
 
     // Pipeline run state
-    public IsRunning = false;
+    private _isRunning = false;
+    /**
+     * True while a classification pipeline run is in flight. Backed by a setter
+     * that flushes change detection once the view is ready, so the `[disabled]="IsRunning"`
+     * Run button binding stays stable across the check that follows a within-cycle
+     * flip (run starting / instantly completing on an empty source) — eliminating
+     * the NG0100 (`Previous value: 'true'. Current value: 'false'`). Mirrors the
+     * `ActiveTab` setter pattern above.
+     */
+    public get IsRunning(): boolean {
+        return this._isRunning;
+    }
+    public set IsRunning(value: boolean) {
+        if (value === this._isRunning) return;
+        this._isRunning = value;
+        if (this.viewReady) {
+            this.cdr.detectChanges();
+        }
+    }
     public IsPaused = false;
     public RunProgress = 0;
     public RunStage = '';
@@ -149,6 +209,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     /** Live reference to the slide-in CRUD form dialog (driven from tab events). */
     @ViewChild('formDialog') private formDialog?: ClassifySourceTypeFormDialogComponent;
+    @ViewChild('setupWizard') private setupWizard?: ClassifySetupWizardComponent;
 
     // ── Schedule dialog ──
     // The quick-schedule dialog (state + save/remove logic) moved to
@@ -163,6 +224,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // stays in the host (shared by the pipeline feed + tag drill-down + sources).
     public SelectedFeedItem: ContentItemDetail | null = null;
     public ShowItemDetail = false;
+
+    // ── Phase 4: Item drilldown slide-in (audit/analytics) ──
+    /** ID of the content item shown in the drilldown slide-in, or null when closed. */
+    public DrilldownItemID: string | null = null;
+    public ShowItemDrilldown = false;
 
     // Form dropdown options + tree-dropdown configs (SourceType/ContentType/
     // FileType/AIModel/EmbeddingModel/VectorIndex options and the AI-model vendor
@@ -206,6 +272,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public get TotalContentTagCount(): number {
         return this.totalContentTagCount;
     }
+    /** Exposes the accurate total run-history count to the Run History tab via `[TotalRunCount]`. */
+    public get TotalRunHistoryCount(): number {
+        return this.totalRunHistoryCount;
+    }
     /** Exposes the cached ScheduledAction entities to the Sources tab via `[ScheduledActions]`. */
     public get ScheduledActionsCache(): Map<string, MJScheduledActionEntity> {
         return this.scheduledActionsCache;
@@ -236,7 +306,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
-    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'inbox', 'health', 'history'];
+    // Classify is now the pipeline-operator workspace only. Tag Library / Taxonomy
+    // / Inbox / Health moved to the dedicated Tags surface (no more overlap).
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'history'];
 
     /** Lightweight count of Pending tag suggestions for the Inbox nav badge. */
     public InboxPendingCount = 0;
@@ -251,6 +323,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     @ViewChild(ClassifyHealthTabComponent) private healthTab?: ClassifyHealthTabComponent;
 
     async ngAfterViewInit(): Promise<void> {
+        this.viewReady = true;
         await Promise.all([
             KnowledgeHubMetadataEngine.Instance.Config(false),
             UserInfoEngine.Instance.Config(false),
@@ -269,6 +342,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
 
         this.IsLoading = false;
+        this.subscribeToEntityChanges();
         this.registerAgentTools();
         this.emitAgentContext();
 
@@ -294,32 +368,78 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     /**
-     * D9: If a tagSearch parameter was provided via configuration, switch to the tags tab
-     * and apply the search filter after tag data loads.
+     * Tag browsing/search now lives on the dedicated Tags surface, so the Classify
+     * cockpit no longer hosts a `tagSearch` deep-link target. Kept as a no-op to
+     * preserve the call site. (Re-targeting Analytics' tag drill-down to the Tags
+     * surface is a tracked follow-up.)
      */
     private async handleInitialTagSearch(): Promise<void> {
-        const config = this.Data?.Configuration as Record<string, unknown> | undefined;
-        const tagSearch = config?.['tagSearch'] as string | undefined;
-        if (!tagSearch) return;
-
-        // Switch to the tags tab so ClassifyTagsTabComponent renders and the
-        // ViewChild resolves, ensuring its data is loaded.
-        if (this.ActiveTab !== 'tags') {
-            this.ActiveTab = 'tags';
-        }
-        if (!this.tabDataLoaded.has('tags')) {
-            await this.loadTabData('tags');
-            this.tabDataLoaded.add('tags');
-        }
-        this.cdr.detectChanges();
-
-        this.tagsTab?.ApplySearch(tagSearch);
+        return;
     }
 
     ngOnDestroy(): void {
         super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
+        this.entityChange$.complete();
+    }
+
+    /** Lowercased names of the entities whose external changes should refresh this dashboard. */
+    private static readonly REACTIVE_ENTITIES = new Set<string>([
+        'mj: content sources',
+        'mj: content types',
+        'mj: content items',
+        'mj: content item tags',
+        'mj: content process runs',
+        'mj: tags',
+    ]);
+
+    /**
+     * Lightweight reactivity: listen for BaseEntity save/delete/remote-invalidate
+     * events on the entities this dashboard renders, debounce them (~300ms to
+     * coalesce bursts), and re-call the matching host load method. Reloads never
+     * call Save(), so this cannot create a reload loop.
+     */
+    private subscribeToEntityChanges(): void {
+        MJGlobal.Instance.GetEventListener(true)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(event => {
+                if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return;
+                const beEvent = event.args as BaseEntityEvent | undefined;
+                if (!beEvent) return;
+                if (beEvent.type !== 'save' && beEvent.type !== 'delete' && beEvent.type !== 'remote-invalidate') return;
+                const entityName = beEvent.entityName?.toLowerCase().trim();
+                if (entityName && AutotaggingPipelineResourceComponent.REACTIVE_ENTITIES.has(entityName)) {
+                    this.entityChange$.next(entityName);
+                }
+            });
+
+        this.entityChange$
+            .pipe(debounceTime(300), takeUntil(this.destroy$))
+            .subscribe(entityName => void this.reloadForEntity(entityName));
+    }
+
+    /** Re-run the host load method(s) affected by an external change to `entityName`. */
+    private async reloadForEntity(entityName: string): Promise<void> {
+        switch (entityName) {
+            case 'mj: content sources':
+                await this.refreshSourcesTab();
+                break;
+            case 'mj: content types':
+                await this.refreshContentTypesTab();
+                break;
+            case 'mj: content items':
+            case 'mj: content item tags':
+            case 'mj: tags':
+                // Items + tags both feed the pipeline / tag-library view models;
+                // reload the shared base data so all dependent tabs rebuild.
+                await this.LoadPipelineData();
+                break;
+            case 'mj: content process runs':
+                await this.loadRunHistoryData(true);
+                break;
+        }
+        this.cdr.detectChanges();
     }
 
     /** Report current classify dashboard state to the agent */
@@ -401,12 +521,39 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // ── Tab switching ──
 
+    /** Memoized backing store + input signature for {@link navSections}. */
+    private _navSections: MJLeftNavSection[] = [];
+    private _navSectionsSignature = '';
+
     /**
      * Wraps `NavItems` for `<mj-left-nav>`. Hardcoded "Run History" item goes
      * into a second `MJLeftNavSection` — the rail's natural section break
      * replaces the bespoke `.at-nav-divider` line.
+     *
+     * Memoized: the array (and its element objects) are rebuilt only when one of
+     * the inputs actually changes. Returning a fresh array on every change-detection
+     * pass made `<mj-left-nav>` see a new `[Sections]` reference each cycle, which
+     * triggered `ExpressionChangedAfterItHasBeenCheckedError` (NG0100) during rapid
+     * tab switching (badge counts / IsRunning resolving mid-CD-cycle). A stable
+     * reference until inputs change eliminates that.
      */
     public get navSections(): MJLeftNavSection[] {
+        const signature = this.computeNavSectionsSignature();
+        if (signature !== this._navSectionsSignature) {
+            this._navSectionsSignature = signature;
+            this._navSections = this.buildNavSections();
+        }
+        return this._navSections;
+    }
+
+    /** Cheap stable fingerprint of every value that feeds {@link buildNavSections}. */
+    private computeNavSectionsSignature(): string {
+        const items = this.NavItems.map(n => `${n.Tab}|${n.Label}|${n.Icon}|${n.BadgeText}`).join(';');
+        return `${items}#${this.InboxPendingCount}#${this.HealthPendingCount}`;
+    }
+
+    /** Constructs the left-nav section model from current state (see {@link navSections}). */
+    private buildNavSections(): MJLeftNavSection[] {
         return [
             {
                 items: this.NavItems.map(n => ({
@@ -418,18 +565,6 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             },
             {
                 items: [
-                    {
-                        id: 'inbox',
-                        label: 'Inbox',
-                        icon: 'fa-solid fa-inbox',
-                        badge: this.InboxPendingCount > 0 ? String(this.InboxPendingCount) : undefined
-                    },
-                    {
-                        id: 'health',
-                        label: 'Health',
-                        icon: 'fa-solid fa-heart-pulse',
-                        badge: this.HealthPendingCount > 0 ? String(this.HealthPendingCount) : undefined
-                    },
                     {
                         id: 'history',
                         label: 'Run History',
@@ -566,7 +701,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
-                { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
+                { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: this.contentItemsPageSize, StartRow: 0, ResultType: 'simple', Fields: ['ID', 'Name', 'Description', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
                 { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
                 { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
@@ -584,6 +719,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
             this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
             this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
+            this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount : 0;
 
             // Load ScheduledAction entities referenced by sources so cron descriptions are available
             await this.loadScheduledActionsForSources();
@@ -599,30 +735,53 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
     }
 
+    /**
+     * Widen the loaded content-item window by one page and reload, so the user can
+     * see items previously truncated by the MaxRows cap. Wired to the pipeline
+     * tab's `(LoadMoreItemsRequested)`.
+     */
+    public async LoadMoreContentItems(): Promise<void> {
+        if (this.IsLoadingMoreItems) return;
+        this.IsLoadingMoreItems = true;
+        this.cdr.detectChanges();
+        this.contentItemsPageSize += AutotaggingPipelineResourceComponent.CONTENT_ITEMS_PAGE_SIZE;
+        await this.LoadPipelineData();
+        this.IsLoadingMoreItems = false;
+        this.cdr.detectChanges();
+    }
+
     private buildNavItems(): void {
         // Classify dashboard owns the autotag pipeline run-management surface plus
         // the Tag Library + Taxonomy Governance curation surfaces (Governance /
         // Synonyms / Scope editors live on the Taxonomy tab). All curation tabs are
         // surfaced here so they're directly reachable, not just agent-reachable.
+        // Classify is the content-pipeline operator workspace. Tag-vocabulary
+        // curation (Tag Library, Taxonomy tree, Suggestions/Inbox review, Health)
+        // lives on the dedicated "Tags" surface — we intentionally do NOT duplicate
+        // those tabs here. See the deep-link to Tags ▸ review from the pipeline.
         this.NavItems = [
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
-            { Tab: 'tags', Icon: 'fa-solid fa-tags', Label: 'Tag Library', BadgeText: '', BadgeClass: '' },
-            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: '', BadgeClass: '' },
         ];
     }
 
     private buildKPIMetrics(): void {
+        // Single canonical KPI row for the Pipeline Monitor. The Overview-analytics
+        // child below renders charts only (its old duplicate KPI strip — Content
+        // Items / Total Tags — was removed) so these five metrics are the one place
+        // headline numbers appear: sources, volume, vocabulary throughput, errors.
         const sourceCount = this.contentSourcesRaw.length;
         const itemCount = this.totalContentItemCount;
         const tagCount = this.totalContentTagCount;
+        const avgTagsPerItem = itemCount > 0 ? Math.round((tagCount / itemCount) * 10) / 10 : 0;
         const errorCount = this.contentRunsRaw.filter(r => (r['Status'] as string)?.toLowerCase() === 'error' || (r['Status'] as string)?.toLowerCase() === 'failed').length;
 
         this.KPIMetrics = [
             { Label: 'Active Sources', Value: sourceCount, Icon: 'fa-solid fa-satellite-dish', Trend: '', TrendUp: true },
             { Label: 'Content Items', Value: itemCount, Icon: 'fa-solid fa-file-lines', Trend: '', TrendUp: true },
-            { Label: 'Tags Generated', Value: tagCount, Icon: 'fa-solid fa-tags', Trend: tagCount > 0 && itemCount > 0 ? `${(tagCount / itemCount).toFixed(1)} avg/item` : '', TrendUp: true },
+            { Label: 'Total Tags', Value: tagCount, Icon: 'fa-solid fa-tags', Trend: '', TrendUp: true },
+            { Label: 'Avg Tags / Item', Value: avgTagsPerItem, Icon: 'fa-solid fa-chart-simple', Trend: '', TrendUp: true },
             { Label: 'Errors', Value: errorCount, Icon: 'fa-solid fa-circle-exclamation', Trend: '', TrendUp: false }
         ];
     }
@@ -645,7 +804,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const normalizedId = NormalizeUUID(itemId);
             const itemTags = this.getTopTagsForItem(itemId, 3);
             return {
-                Name: (item['Name'] as string) ?? 'Unnamed Item',
+                Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                 SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                 Tags: itemTags,
                 TimeAgo: this.formatRelativeTime(item['__mj_UpdatedAt'] as string),
@@ -775,17 +934,47 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // RUN HISTORY TAB
     // ════════════════════════════════════════════
 
-    private async loadRunHistoryData(): Promise<void> {
-        if (this.contentRunsRaw.length === 0) {
+    private async loadRunHistoryData(force = false): Promise<void> {
+        if (force || this.contentRunsRaw.length === 0) {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: 'MJ: Content Process Runs',
                 OrderBy: 'StartTime DESC',
-                MaxRows: 200,
+                MaxRows: this.runHistoryWindowSize,
+                StartRow: 0,
                 ResultType: 'simple'
             });
-            if (result.Success) this.contentRunsRaw = result.Results;
+            if (result.Success) {
+                this.contentRunsRaw = result.Results;
+                this.totalRunHistoryCount = result.TotalRowCount;
+            }
         }
+    }
+
+    /**
+     * Host handler for the Run History tab's `(RefreshRequested)` output. Forces a
+     * reload of `MJ: Content Process Runs`; the new array re-binds via `[Runs]`,
+     * which rebuilds the tab's rows and clears its loading state.
+     */
+    public async ReloadRunHistory(): Promise<void> {
+        this.runHistoryWindowSize = AutotaggingPipelineResourceComponent.RUN_HISTORY_PAGE_SIZE;
+        await this.loadRunHistoryData(true);
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Host handler for the Run History tab's `(LoadMoreRequested)` output. Widens
+     * the loaded window by one page and reloads, so the user can see the runs that
+     * were previously truncated. The new array re-binds via `[Runs]`.
+     */
+    public async LoadMoreRunHistory(): Promise<void> {
+        if (this.IsLoadingMoreRuns) return;
+        this.IsLoadingMoreRuns = true;
+        this.cdr.detectChanges();
+        this.runHistoryWindowSize += AutotaggingPipelineResourceComponent.RUN_HISTORY_PAGE_SIZE;
+        await this.loadRunHistoryData(true);
+        this.IsLoadingMoreRuns = false;
+        this.cdr.detectChanges();
     }
 
     /**
@@ -834,6 +1023,63 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         // Feed the dialog the raw source rows so edit can hydrate Configuration JSON.
         if (this.formDialog) this.formDialog.RawSources = this.contentSourcesRaw;
         void this.formDialog?.OpenAddSource();
+    }
+
+    /** Open the guided setup wizard (empty-state CTA + "Add Source (Guided)"). */
+    public OpenSetupWizard(): void {
+        void this.setupWizard?.Open();
+    }
+
+    // ================================================================
+    // First-run onboarding (P2)
+    // ================================================================
+
+    /** Show the guided onboarding checklist until content has been classified. */
+    public get ShowOnboarding(): boolean {
+        return this.TotalContentItemCount === 0;
+    }
+
+    /** Whether the onboarding card has been dismissed this session. */
+    public OnboardingDismissed = false;
+
+    /** Steps for the first-run onboarding checklist, with live completion state. */
+    public get OnboardingSteps(): Array<{ N: number; Title: string; Desc: string; Done: boolean; Action: 'add' | 'run' | '' ; Cta: string }> {
+        const hasSource = this.contentSourcesRaw.length > 0;
+        const hasRun = this.TotalRunHistoryCount > 0;
+        const hasItems = this.TotalContentItemCount > 0;
+        return [
+            { N: 1, Title: 'Add a content source', Desc: 'Connect where your content comes from — a website, files, RSS, email, or API.', Done: hasSource, Action: 'add', Cta: 'Add Source' },
+            { N: 2, Title: 'Run the classification pipeline', Desc: 'Ingest and auto-tag your content. Tip: seed a starter taxonomy first for better tags.', Done: hasRun, Action: 'run', Cta: 'Run Pipeline' },
+            { N: 3, Title: 'Review results', Desc: 'Inspect the generated tags, confidence scores, and analytics.', Done: hasItems, Action: '', Cta: '' },
+        ];
+    }
+
+    /** Index of the first incomplete step (the "active" one). */
+    public get OnboardingActiveStep(): number {
+        const steps = this.OnboardingSteps;
+        const idx = steps.findIndex(s => !s.Done);
+        return idx < 0 ? steps.length : idx;
+    }
+
+    /** Handle an onboarding step CTA. */
+    public OnOnboardingAction(action: 'add' | 'run' | 'seed'): void {
+        if (action === 'add') {
+            this.OpenSetupWizard();
+        } else if (action === 'run') {
+            void this.RunPipeline();
+        } else if (action === 'seed') {
+            void this.SwitchTab('taxonomy');
+        }
+    }
+
+    /** Dismiss the onboarding card (until next load / still empty). */
+    public DismissOnboarding(): void {
+        this.OnboardingDismissed = true;
+    }
+
+    /** After the wizard creates a source, reload the shared source list. */
+    public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
+        await this.refreshSourcesTab();
     }
 
     public OpenEditSourceForm(card: SourceCard): void {
@@ -954,7 +1200,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             }
 
             this.CurrentPipelineRunID = result.PipelineRunID;
+            this.pipelineActivityID = this.activityService.Start('Classify pipeline', {
+                icon: 'fa-solid fa-bolt',
+                detail: 'Starting…',
+                progress: 0,
+            });
             this.subscribeToPipelineProgress(result.PipelineRunID);
+            MJNotificationService.Instance.CreateSimpleNotification('Classification pipeline started…', 'info', 3000);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[Autotagging] Error starting pipeline:', msg);
@@ -1074,6 +1326,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         `;
 
         let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        // Track the most recent processed-item count from the progress stream so the
+        // completion toast can report it (and surface the "no ingested content" case).
+        let lastProcessedItems = 0;
 
         const finishPipeline = (success: boolean) => {
             if (idleTimer) clearTimeout(idleTimer);
@@ -1086,6 +1341,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 this.RunProgress = success ? 100 : 0;
                 this.CurrentPipelineRunID = null;
                 this.CurrentProcessRunID = null;
+                if (this.pipelineActivityID) {
+                    this.activityService.Complete(this.pipelineActivityID, success ? 'success' : 'error',
+                        success ? 'Classification complete' : 'Pipeline failed');
+                    this.pipelineActivityID = null;
+                }
 
                 for (const stage of this.PipelineStages) {
                     stage.Status = 'idle';
@@ -1102,7 +1362,17 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                         this.loadEntityRecordDocCache(),
                     ]);
                     this.tabDataLoaded.add('pipeline');
-                    MJNotificationService.Instance.CreateSimpleNotification('Pipeline complete', 'success', 3000);
+                    if (lastProcessedItems > 0) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Pipeline complete — ${lastProcessedItems} ${lastProcessedItems === 1 ? 'item' : 'items'} processed`,
+                            'success', 4000
+                        );
+                    } else {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            'Pipeline complete — 0 items processed. This source has no ingested content yet; add/crawl & vectorize content first.',
+                            'warning', 8000
+                        );
+                    }
                 }
                 this.cdr.detectChanges();
             });
@@ -1126,11 +1396,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 const stage = progress['Stage'] as string;
                 const pct = progress['PercentComplete'] as number;
                 const currentItem = progress['CurrentItem'] as string | undefined;
+                const processedItems = progress['ProcessedItems'] as number | undefined;
+                if (typeof processedItems === 'number') {
+                    lastProcessedItems = processedItems;
+                }
 
                 this.RunProgress = Math.min(100, Math.max(0, pct));
                 this.RunStage = this.formatStageName(stage);
                 this.RunCurrentItem = currentItem ?? '';
                 this.updateStagesForActiveRun(stage);
+                if (this.pipelineActivityID) {
+                    this.activityService.Update(this.pipelineActivityID, {
+                        Progress: this.RunProgress,
+                        Detail: this.RunCurrentItem || this.RunStage,
+                    });
+                }
                 this.cdr.detectChanges();
 
                 if (stage === 'complete') {
@@ -1384,7 +1664,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const statuses2 = this.inferPipelineStatuses(rawItem, allTags.length);
         this.SelectedFeedItem = {
             ID: itemId,
-            Name: (rawItem['Name'] as string) ?? 'Unnamed',
+            Name: deriveDisplayName({ Name: rawItem['Name'] as string | null, Description: rawItem['Description'] as string | null }),
             SourceName: (rawItem['ContentSource'] as string) ?? 'Unknown',
             SourceTypeName: (rawItem['ContentSourceType'] as string) ?? 'Unknown',
             ContentTypeName: (rawItem['ContentType'] as string) ?? 'Unknown',
@@ -1413,6 +1693,31 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.ShowItemDetail = false;
         this.SelectedFeedItem = null;
         this.cdr.detectChanges();
+    }
+
+    // ── Phase 4: Item drilldown (opened from the History tab's per-run item grid) ──
+
+    /** Open the audit/analytics drilldown slide-in for a content item. */
+    public OpenItemDrilldown(itemID: string): void {
+        this.DrilldownItemID = itemID;
+        this.ShowItemDrilldown = true;
+        this.cdr.detectChanges();
+    }
+
+    public CloseItemDrilldown(): void {
+        this.ShowItemDrilldown = false;
+        this.DrilldownItemID = null;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Handle a record-open intent bubbled up from the drilldown (item record,
+     * source, prompt run, entity record document). The host owns NavigationService.
+     */
+    public OpenDrilldownRecord(event: { entityName: string; recordID: string }): void {
+        const pkey = new CompositeKey();
+        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.recordID }];
+        this.navigationService.OpenEntityRecord(event.entityName, pkey);
     }
 
     public OpenRecordFromItem(item: ContentItemDetail): void {

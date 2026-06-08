@@ -26,6 +26,7 @@ export * from './engines/artifact-content-storage';
 export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
 export * from './engines/UserInfoEngine';
+export * from './engines/ApplicationSettingEngine';
 export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';

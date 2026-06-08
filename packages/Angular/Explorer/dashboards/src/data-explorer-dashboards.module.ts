@@ -4,7 +4,6 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -13,21 +12,18 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
 import { DataExplorerResourceComponent } from './DataExplorer/data-explorer-resource.component';
 import { NavigationPanelComponent as ExplorerNavigationPanelComponent } from './DataExplorer/components/navigation-panel/navigation-panel.component';
-import { ViewSelectorComponent } from './DataExplorer/components/view-selector/view-selector.component';
-import { FilterDialogComponent } from './DataExplorer/components/filter-dialog/filter-dialog.component';
 import { ExplorerStateService } from './DataExplorer/services/explorer-state.service';
 
 /**
- * DataExplorerDashboardsModule — Data Explorer feature area: dashboard,
- * navigation panel, view selector, and filter dialog.
+ * DataExplorerDashboardsModule — Data Explorer feature area: the dashboard and its left
+ * navigation panel. The saved-view lifecycle (selector, config panel, dialogs) now lives in
+ * mj-view-workspace from @memberjunction/ng-entity-viewer.
  */
 @NgModule({
   declarations: [
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
-    ExplorerNavigationPanelComponent,
-    ViewSelectorComponent,
-    FilterDialogComponent
+    ExplorerNavigationPanelComponent
   ],
   imports: [
     CommonModule,
@@ -36,7 +32,6 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     ContainerDirectivesModule,
     EntityViewerModule,
     SharedGenericModule,
-    FilterBuilderModule,
     ExportServiceModule,
     ListManagementModule,
     NgTreesModule

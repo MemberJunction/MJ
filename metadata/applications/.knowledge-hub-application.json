@@ -22,10 +22,10 @@
         "isDefault": false
       },
       {
-        "Label": "Clusters",
+        "Label": "Visualize",
         "Icon": "fa-solid fa-circle-nodes",
         "ResourceType": "Custom",
-        "DriverClass": "ClusterVisualizationResource",
+        "DriverClass": "VisualizationResource",
         "isDefault": false
       },
       {
@@ -65,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-05-01T18:47:56.524Z",
-    "checksum": "ede1799605922038250fb7ec80cca4746f621c2abedb626ae95d3b48ec6dff7c"
+    "lastModified": "2026-06-08T19:36:55.420Z",
+    "checksum": "bc695d67eb84350c158e9e469c76dd921ef3f27fe51ad7f22d2f1f94903f7cc4"
   }
 }

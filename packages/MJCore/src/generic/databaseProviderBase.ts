@@ -113,6 +113,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     abstract ExecuteSQL<T>(query: string, parameters?: unknown[], options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<Array<T>>
 
     /**
+     * Builds a parameter placeholder for parameterized queries.
+     * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
+     * @param index Zero-based parameter index
+     */
+    public BuildParameterPlaceholder(index: number): string {
+        return `$${index + 1}`;
+    }
+
+    /**
      * Begins a transaction for the current database connection.
      */
     abstract BeginTransaction(): Promise<void>;
