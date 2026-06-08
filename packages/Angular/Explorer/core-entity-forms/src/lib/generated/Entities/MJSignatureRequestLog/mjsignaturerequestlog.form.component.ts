@@ -17,7 +17,7 @@ export class MJSignatureRequestLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'signatureRequestReference', sectionName: 'Signature Request Reference', isExpanded: true },
             { sectionKey: 'operationDetails', sectionName: 'Operation Details', isExpanded: true },
-            { sectionKey: 'statusTransition', sectionName: 'Status Transition', isExpanded: true },
+            { sectionKey: 'statusChange', sectionName: 'Status Change', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

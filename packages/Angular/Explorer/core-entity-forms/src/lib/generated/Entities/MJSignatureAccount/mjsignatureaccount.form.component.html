@@ -65,10 +65,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Status Section -->
+    <!-- Account Status Section -->
     <mj-collapsible-panel
-        SectionKey="status"
-        SectionName="Status"
+        SectionKey="accountStatus"
+        SectionName="Account Status"
         Icon="fa fa-flag-checkered"
         [Form]="this"
         [FormContext]="formContext">
@@ -91,11 +91,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Email Defaults Section -->
+    <!-- Default Envelope Settings Section -->
     <mj-collapsible-panel
-        SectionKey="emailDefaults"
-        SectionName="Email Defaults"
-        Icon="fa fa-envelope"
+        SectionKey="defaultEnvelopeSettings"
+        SectionName="Default Envelope Settings"
+        Icon="fa fa-envelope-open-text"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -133,6 +133,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Lookup Fields Section -->
+    <mj-collapsible-panel
+        SectionKey="lookupFields"
+        SectionName="Lookup Fields"
+        Icon="fa fa-search"
+        [Form]="this"
+        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 

@@ -23868,7 +23868,7 @@ export const MJSignatureAccountSchema = z.object({
         * * Description: Whether this account is available for use. Inactive accounts are not pre-initialized by the engine driver cache.`),
     IsDefault: z.boolean().describe(`
         * * Field Name: IsDefault
-        * * Display Name: Default
+        * * Display Name: Default Account
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this is the default account for its provider (and Company, when scoped).`),
@@ -24220,7 +24220,7 @@ export const MJSignatureRequestSchema = z.object({
         * * Description: Provider-side envelope identifier (e.g. DocuSign envelopeId), assigned after the envelope is created.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.`),
@@ -24260,7 +24260,7 @@ export const MJSignatureRequestSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -90793,7 +90793,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
 
     /**
     * * Field Name: IsDefault
-    * * Display Name: Default
+    * * Display Name: Default Account
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this is the default account for its provider (and Company, when scoped).
@@ -91671,7 +91671,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.
@@ -91766,7 +91766,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {

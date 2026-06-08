@@ -16,8 +16,10 @@ export class MJSignatureProviderFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'providerDetails', sectionName: 'Provider Details', isExpanded: true },
-            { sectionKey: 'capabilities', sectionName: 'Capabilities', isExpanded: true },
+            { sectionKey: 'providerDefinition', sectionName: 'Provider Definition', isExpanded: true },
+            { sectionKey: 'providerAvailability', sectionName: 'Provider Availability', isExpanded: true },
+            { sectionKey: 'authenticationSettings', sectionName: 'Authentication Settings', isExpanded: true },
+            { sectionKey: 'featureCapabilities', sectionName: 'Feature Capabilities', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSignatureAccounts', sectionName: 'Signature Accounts', isExpanded: false }
         ]);

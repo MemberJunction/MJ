@@ -18,9 +18,10 @@ export class MJSignatureAccountFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'accountDetails', sectionName: 'Account Details', isExpanded: true },
             { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
-            { sectionKey: 'status', sectionName: 'Status', isExpanded: true },
-            { sectionKey: 'emailDefaults', sectionName: 'Email Defaults', isExpanded: true },
+            { sectionKey: 'accountStatus', sectionName: 'Account Status', isExpanded: true },
+            { sectionKey: 'defaultEnvelopeSettings', sectionName: 'Default Envelope Settings', isExpanded: true },
             { sectionKey: 'advancedSettings', sectionName: 'Advanced Settings', isExpanded: true },
+            { sectionKey: 'lookupFields', sectionName: 'Lookup Fields', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSignatureRequests', sectionName: 'Signature Requests', isExpanded: false }
         ]);

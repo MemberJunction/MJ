@@ -16,17 +16,13 @@ export class MJSignatureRequestFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'signatureAccount', sectionName: 'Signature Account', isExpanded: true },
-            { sectionKey: 'envelopeContent', sectionName: 'Envelope Content', isExpanded: true },
-            { sectionKey: 'envelopeLifecycle', sectionName: 'Envelope Lifecycle', isExpanded: true },
-            { sectionKey: 'envelopeIntegration', sectionName: 'Envelope Integration', isExpanded: true },
-            { sectionKey: 'polymorphicReference', sectionName: 'Polymorphic Reference', isExpanded: true },
-            { sectionKey: 'envelopeTimeline', sectionName: 'Envelope Timeline', isExpanded: true },
-            { sectionKey: 'envelopeOutcome', sectionName: 'Envelope Outcome', isExpanded: true },
+            { sectionKey: 'envelopeInfo', sectionName: 'Envelope Info', isExpanded: true },
+            { sectionKey: 'originContext', sectionName: 'Origin Context', isExpanded: true },
+            { sectionKey: 'lifecycleTiming', sectionName: 'Lifecycle & Timing', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSignatureRequestLogs', sectionName: 'Signature Request Logs', isExpanded: false },
-            { sectionKey: 'mJSignatureRequestRecipients', sectionName: 'Signature Request Recipients', isExpanded: false },
-            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false }
+            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false },
+            { sectionKey: 'mJSignatureRequestRecipients', sectionName: 'Signature Request Recipients', isExpanded: false }
         ]);
     }
 }
