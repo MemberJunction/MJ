@@ -1,5 +1,6 @@
 ---
 name: metadata-writer
+model: sonnet
 description: Researches the vendor's root-level config facts (auth, base URL, pagination, rate limits, incremental capability, webhooks, bulk, versioning, error shape, custom-object markers, FK naming) and writes them to the Integration row of `metadata/integrations/<vendor>/.<vendor>.integration.json`. Composed into the workflow after `vendor-brand-researcher` + `identity-establisher` + `source-auditor`. Emits per-flag CODE_EVIDENCE.
 tools: Read, Write, Edit, Bash, Grep, Glob
 context: fresh

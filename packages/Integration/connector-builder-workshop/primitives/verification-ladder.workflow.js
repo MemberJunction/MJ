@@ -187,6 +187,10 @@ function isAllowedSkip(reason) {
 
 const maxTier = String(args?.maxTier ?? 'T8');
 const maxTierNum = parseInt(maxTier.slice(1), 10);
+// Broker-mediated live testing: when the plan supplies brokerPlans (read-only mailbox
+// plans), the live rung runs through the separate-user broker instead of a credential
+// file — the credential never reaches the agent or this script.
+const brokerPlans = Array.isArray(args?.brokerPlans) ? args.brokerPlans : [];
 const hasCreds = !!args?.credentialReference;
 const tierResults = [];
 const skippedRungs = [];
@@ -201,27 +205,42 @@ for (const t of tiers) {
         continue;
     }
 
-    // Live rung without a credential reference — cannot run; surface the skip.
-    if (t.cred && !hasCreds) {
+    // Live rung needs EITHER a credential file (credentialReference) OR a broker
+    // (brokerPlans). With neither, it cannot run — surface the skip.
+    if (t.cred && !hasCreds && brokerPlans.length === 0) {
         tierResults.push({ tier: t.tier, label: t.label, status: 'skipped', skipReason: 'no-credential-reference' });
         continue;
     }
 
     phase(`${t.tier}_${t.label}`);
 
-    // Dispatch testing-agent with a HARD instruction to call the MCP runner and
-    // return its verbatim result. The agent has no authority to declare a verdict
-    // itself — the JS below trusts only the runner-shaped object.
-    const credLine = t.cred
-        ? `This is the ONLY live rung and is STRICTLY READ-ONLY (TestConnection + Discover + one read page — no writes/bidirectional/push).\nCREDENTIAL REFERENCE (OPAQUE — DO NOT READ): ${args?.credentialReference}\nThe MCP runner subprocess reads the credential file in isolation; pass it through as CredentialFilePath. No credential bytes return to you.`
-        : `No credentials required.`;
-
-    const result = await agent(
-        `Run tier ${t.runnerTier} for connector ${args?.connectorName ?? '(?)'} of vendor ${args?.vendor ?? '(?)'}.\n\n` +
-        `You MUST call the MCP tool \`mcp__mj-test-runner__run_tier\` with { Connector: "${args?.connectorName ?? ''}", Tier: "${t.runnerTier}"${t.cred ? ', CredentialFilePath: <the opaque credential reference above>' : ''} } and return its result VERBATIM — the exact object the runner returned ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Do NOT invent, summarize, or override Status; the runner is the only source of truth. ${credLine}\n\n` +
-        `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
-        { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
-    );
+    // The agent has no authority to declare a verdict itself — the JS below trusts
+    // only a runner-shaped object (Tier/Status/DurationMs).
+    let result;
+    if (t.cred && !hasCreds && brokerPlans.length > 0) {
+        // BROKER-MEDIATED live rung: the credential lives ONLY in the separate-user
+        // broker. The testing-agent submits a READ-ONLY job to the mailbox and reads
+        // the SCRUBBED result; no credential bytes ever reach the agent or this script.
+        const brokerTask = brokerPlans[0];
+        result = await agent(
+            `LIVE READ-ONLY rung ${t.runnerTier} for connector ${args?.connectorName ?? '(?)'} via the CREDENTIAL BROKER — you NEVER see the token.\n\n` +
+            `1) Write a job to /Users/Shared/mj-mailbox/jobs/<jobId>.json containing EXACTLY {"jobId":"<jobId>","task":"${brokerTask}"} (pick a unique jobId; READ-ONLY plan — the broker REFUSES any write/ack).\n` +
+            `2) Poll /Users/Shared/mj-mailbox/results/<jobId>.json until it appears (~90s max). The result is SCRUBBED (counts/keys/booleans only — no secrets).\n` +
+            `3) Return a runner-shaped verdict DERIVED from that scrubbed result: { Tier: "${t.runnerTier}", Connector: "${args?.connectorName ?? ''}", Status: (the broker result's .result.ok === true ? "Pass" : "Fail"), DurationMs: <elapsed ms, integer>, Output: "<one-line summary of the scrubbed result>", Errors: (ok ? [] : ["<the broker result's error/refused message>"]), Details: <the scrubbed result object> }.\n` +
+            `Do NOT fabricate success — Status MUST equal the broker's actual .result.ok. If no result file appears in time, return Status:"Fail", Errors:["broker-timeout"]. NEVER submit a write/ack task.`,
+            { agentType: 'testing-agent', model: 'sonnet', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}:broker` }
+        );
+    } else {
+        const credLine = t.cred
+            ? `This is the ONLY live rung and is STRICTLY READ-ONLY (TestConnection + Discover + one read page — no writes/bidirectional/push).\nCREDENTIAL REFERENCE (OPAQUE — DO NOT READ): ${args?.credentialReference}\nThe MCP runner subprocess reads the credential file in isolation; pass it through as CredentialFilePath. No credential bytes return to you.`
+            : `No credentials required.`;
+        result = await agent(
+            `Run tier ${t.runnerTier} for connector ${args?.connectorName ?? '(?)'} of vendor ${args?.vendor ?? '(?)'}.\n\n` +
+            `You MUST call the MCP tool \`mcp__mj-test-runner__run_tier\` with { Connector: "${args?.connectorName ?? ''}", Tier: "${t.runnerTier}"${t.cred ? ', CredentialFilePath: <the opaque credential reference above>' : ''} } and return its result VERBATIM — the exact object the runner returned ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Do NOT invent, summarize, or override Status; the runner is the only source of truth. ${credLine}\n\n` +
+            `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
+            { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
+        );
+    }
 
     // Trust ONLY a runner-shaped result. Anything that doesn't carry the runner's
     // Tier/Status/DurationMs (or carries the wrong Tier) is treated as a fabricated

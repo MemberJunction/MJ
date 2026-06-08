@@ -39,9 +39,9 @@ const reviewers = Array.from({ length: N }, (_, i) => i + 1);
 const refutations = (await parallel(
     reviewers.map(i => () =>
         agent(
-            `You are reviewer ${i} of ${N}, blind to the others.\n\nClaim: slot=${claim.slot} value=${JSON.stringify(claim.value)}\nEvidence supplied: ${JSON.stringify(claim.evidence ?? {})}\n\nTry to REFUTE. Default reject. Look for: provenance not reproducing, value contradicted by another source in the evidence, claimed source not authoritative, value implausible for the slot's type. Return { refuted: boolean, reason: string }. If you cannot find a specific refutation after honest effort, return refuted=false with reason='no-refutation-found-after-checklist'.`,
+            `You are reviewer ${i} of ${N}, blind to the others.\n\nClaim: slot=${claim.slot} value=${JSON.stringify(claim.value)}\nEvidence supplied: ${JSON.stringify(claim.evidence ?? {})}\n\nTry to REFUTE. Default reject. Run the FULL checklist: provenance not reproducing, value contradicted by another source in the evidence, claimed source not authoritative, value implausible for the slot's type, AND missing/incorrect constraints (required, nullability, length/precision, enum, PK, FK target). Apply extra scrutiny via your lens (reviewer 1: provenance & reproduction; 2: cross-source contradiction & type/enum; 3+: completeness of constraints & keys) IN ADDITION to — never instead of — the full checklist. Return { refuted: boolean, reason: string }. If you cannot find a specific refutation after honest effort, return refuted=false with reason='no-refutation-found-after-checklist'.`,
             { agentType: 'independent-reviewer', schema: REFUTATION_SCHEMA, phase: 'refute', label: `refute:${claim.slot}:${i}` }
-        )
+        ).catch(() => null)
     )
 )).filter(Boolean).map((r, i) => ({ reviewer: `r${i + 1}`, refuted: r.refuted, reason: r.reason }));
 

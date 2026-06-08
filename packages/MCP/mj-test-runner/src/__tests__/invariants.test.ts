@@ -17,6 +17,7 @@ const CONNECTOR = 'acme';
 interface FixtureIOF {
     Name: string;
     Type: string;
+    Length?: number;
     IsPrimaryKey?: boolean;
     IsForeignKey?: boolean;
     RelatedIntegrationObjectID?: string | null;
@@ -78,7 +79,7 @@ function validMetadata(): FixtureFile {
                     relatedEntities: {
                         'MJ: Integration Object Fields': [
                             { fields: { Name: 'Id', Type: 'int', IsPrimaryKey: true } },
-                            { fields: { Name: 'Name', Type: 'nvarchar' } },
+                            { fields: { Name: 'Name', Type: 'nvarchar', Length: 255 } },
                         ],
                     },
                 },
@@ -159,6 +160,47 @@ describe('ValidateInvariants', () => {
             expect(checkStatus(r.Details, 'ForeignKeyResolution')).toBe('Pass');
             expect(checkStatus(r.Details, 'CapabilityMethodMatch')).toBe('Pass');
             expect(checkStatus(r.Details, 'PkSourceMatrix')).toBe('Pass');
+            expect(checkStatus(r.Details, 'FullRecordPassThrough')).toBe('Pass');
+        });
+    });
+
+    describe('check 6: full-record pass-through (Phase-2 forward-compat)', () => {
+        const withFields = (expr: string): string => [
+            `import { RegisterClass } from '@memberjunction/global';`,
+            `import { BaseIntegrationConnector, BaseRESTIntegrationConnector } from '@memberjunction/integration-engine';`,
+            `@RegisterClass(BaseIntegrationConnector, 'AcmeConnector')`,
+            `export class AcmeConnector extends BaseRESTIntegrationConnector {`,
+            `    public override get IntegrationName(): string { return 'Acme'; }`,
+            `    private build(raw: Record<string, unknown>) {`,
+            `        return { ExternalID: '1', ObjectType: 'Company', Fields: ${expr} };`,
+            `    }`,
+            `}`,
+        ].join('\n');
+
+        it('fails when Fields is a filtered object literal (drops customs)', () => {
+            writeFixture({ connectorSource: withFields('{ Id: raw.Id, Name: raw.Name }') });
+            const r = ValidateInvariants(CONNECTOR, root);
+            expect(r.Status).toBe('Fail');
+            expect(checkStatus(r.Details, 'FullRecordPassThrough')).toBe('Fail');
+            expect(r.Errors.join(' ')).toMatch(/filtered object literal/i);
+        });
+
+        it('passes when Fields spreads the full source record', () => {
+            writeFixture({ connectorSource: withFields('{ ...raw }') });
+            const r = ValidateInvariants(CONNECTOR, root);
+            expect(checkStatus(r.Details, 'FullRecordPassThrough')).toBe('Pass');
+        });
+
+        it('passes when Fields spreads source then adds keys (still full)', () => {
+            writeFixture({ connectorSource: withFields('{ ...raw, _GroupTypeName: name }') });
+            const r = ValidateInvariants(CONNECTOR, root);
+            expect(checkStatus(r.Details, 'FullRecordPassThrough')).toBe('Pass');
+        });
+
+        it('passes when Fields is the raw record identifier', () => {
+            writeFixture({ connectorSource: withFields('raw') });
+            const r = ValidateInvariants(CONNECTOR, root);
+            expect(checkStatus(r.Details, 'FullRecordPassThrough')).toBe('Pass');
         });
     });
 

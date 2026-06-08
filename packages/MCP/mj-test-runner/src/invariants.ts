@@ -150,6 +150,8 @@ export function ValidateInvariants(connector: string, registryRoot: string): Inv
         checkForeignKeyResolution(ios),
         checkCapabilityMethodMatch(ios),
         checkPkSourceMatrix(connector, registryRoot, ios),
+        checkProvableOnly(ios),
+        checkFullRecordPassThrough(connector, registryRoot, integration),
     ];
 
     return aggregate(connector, checks);
@@ -362,6 +364,95 @@ function extractLookupObjectName(lookup: string): string | undefined {
         }
     }
     return undefined;
+}
+
+// ── Check: Provable-only constraints (plan §B4 — never NVARCHAR(MAX)) ──
+
+/**
+ * ProvableOnly (plan §B4): "string sizing — avoid NVARCHAR(MAX); size generously.
+ * Every stored constraint must be provable." This is a DETERMINISTIC, FLAT scan
+ * over EVERY IOF — a pattern/rule applied across the whole schema by code, NOT
+ * per-field LLM reasoning (that per-claim reasoning was the cost + accuracy bug).
+ * Flags any field whose Type is an unbounded string: explicit `(max)`, `text`/
+ * `ntext`, or a sized string type (nvarchar/varchar/char/nchar) with no provable
+ * length (Length unset / 0 / -1 / 'max' and no inline `(n)`).
+ */
+function checkProvableOnly(ios: IONode[]): InvariantCheckResult {
+    const findings: InvariantFinding[] = [];
+    const SIZED_STRING_TYPES = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
+    for (const io of ios) {
+        const ioName = io.fields.Name ?? '<unnamed-IO>';
+        const iofs = io.relatedEntities?.['MJ: Integration Object Fields'] ?? [];
+        for (const iof of iofs) {
+            const f = iof.fields;
+            const locus = `${ioName}.${f.Name ?? '<unnamed-IOF>'}`;
+            const typeRaw = f.Type == null ? '' : String(f.Type);
+            const type = typeRaw.toLowerCase().trim();
+            const baseType = type.replace(/\(.*$/, '').trim();
+            if (type.includes('(max)') || baseType === 'text' || baseType === 'ntext') {
+                findings.push({ Check: 'ProvableOnly', Locus: locus, Summary: `Type "${typeRaw}" is unbounded — plan §B4 forbids NVARCHAR(MAX)/text; size generously from docs/observed or mark the type unprovable.` });
+                continue;
+            }
+            if (SIZED_STRING_TYPES.has(baseType)) {
+                const hasInlineLen = /\(\s*\d+\s*\)/.test(type);
+                const lenRaw = f.Length;
+                const len = typeof lenRaw === 'string' ? lenRaw.toLowerCase().trim() : lenRaw;
+                const unbounded = lenRaw == null || len === '' || len === 'max' || len === 0 || len === -1 || len === '0' || len === '-1';
+                if (unbounded && !hasInlineLen) {
+                    findings.push({ Check: 'ProvableOnly', Locus: locus, Summary: `String field type "${baseType}" has no provable length (Length=${String(lenRaw)}) — plan §B4: size generously, never NVARCHAR(MAX).` });
+                }
+            }
+        }
+    }
+    return finalize('ProvableOnly', findings);
+}
+
+// ── Check 6: Full-record pass-through (Phase-2 forward-compat guarantee) ──
+
+/**
+ * Phase-2 framework-level custom-field capture reads `ExternalRecord.Fields` and diffs its keys
+ * against the field maps to surface customs. So every connector MUST put the FULL source record in
+ * `Fields` — never a hand-filtered subset, or customs are dropped before the framework can see them.
+ *
+ * The base REST fetch path guarantees this structurally (`ToExternalRecord` sets `Fields: raw`;
+ * `applyTransformPreservingKeys` re-adds any undeclared key a `TransformRecord` override drops).
+ * This check covers the override-fetch connectors that hand-build records: it fails a `Fields:`
+ * assignment built from a narrow object literal (explicit keys, NO `...` spread) — the
+ * YourMembership-class mistake. `Fields: raw | record | r | { ...source } | response.Body` all pass;
+ * only a constructed-subset literal is flagged. Exclude only nested child collections from a spread.
+ */
+function checkFullRecordPassThrough(connector: string, registryRoot: string, integration: IntegrationFile): InvariantCheckResult {
+    const tsPath = findConnectorSourcePath(connector, registryRoot, integration.fields.ClassName);
+    if (!tsPath) return finalize('FullRecordPassThrough', []);
+    const src = readFileSync(tsPath, 'utf-8');
+    const findings: InvariantFinding[] = [];
+
+    const re = /\bFields:\s*\{/g;  // \b excludes MappedFields:/PrimaryKeyFields:; `{` targets object-literal values only
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) {
+        const literal = extractBalancedBraces(src, m.index + m[0].length - 1);
+        if (literal === null) continue;
+        if (literal.includes('...')) continue;                          // spread of the source → full record → pass
+        if (!/[A-Za-z_$][\w$]*\s*:/.test(literal.slice(1, -1))) continue; // not a keyed literal (e.g. `{}`) → ignore
+        const line = src.slice(0, m.index).split('\n').length;
+        findings.push({
+            Check: 'FullRecordPassThrough',
+            Locus: `${tsPath}:${line}`,
+            Summary: `ExternalRecord.Fields built from a filtered object literal (explicit keys, no \`...\` spread): ${literal.replace(/\s+/g, ' ').slice(0, 90)}. This DROPS custom fields — the framework's custom-field capture only sees keys present in Fields. Set Fields to the full source record (\`Fields: raw\` / \`Fields: { ...source }\`), excluding only nested child collections.`,
+        });
+    }
+    return finalize('FullRecordPassThrough', findings);
+}
+
+/** Return the balanced-brace substring starting at index `start` (must be `{`), else null. */
+function extractBalancedBraces(src: string, start: number): string | null {
+    if (src[start] !== '{') return null;
+    let depth = 0;
+    for (let i = start; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(start, i + 1); }
+    }
+    return null;
 }
 
 // ── Check 3: Capability ↔ method match ───────────────────────────────

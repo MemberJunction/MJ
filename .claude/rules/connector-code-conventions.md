@@ -47,14 +47,34 @@ When implementing `DiscoverObjects` / `DiscoverFields`:
 - `IsReadOnly` — mark computed / system-managed / non-user-writable fields. It feeds whether a field is included in Create/Update bodies, so getting it wrong either drops a writable field or sends a read-only field the API rejects.
 - `IsForeignKey` + `ForeignKeyTarget` — set the source object name a FK references. The base `IntrospectSchema` only emits a `Relationships` entry when BOTH `IsForeignKey` is true AND `ForeignKeyTarget` is non-null; a half-set FK is silently dropped.
 
-### Discovery MUST capture customs whenever the source allows them
+### Discovery: capture every object/field the source allows — chosen by HOW its structure is reachable
 
-Discovery MUST capture custom objects/fields whenever the source allows them (HubSpot / Salesforce / most SaaS do). Pick the discovery mode by what the source exposes:
-- **LIVE** describe/introspection — when the source exposes a schema API (Salesforce `describeGlobal` + `/sobjects/{name}/describe`; GraphQL introspection). Always preferred.
-- **SAMPLE-discovery** — when there is no schema API but data is reachable: download/fetch a page, union the flattened keys across records, and emit the extras as **nullable** fields (the PropFuel pattern).
-- **STATIC** hardcoded catalog — allowed ONLY when the source schema is genuinely fixed and admits no customs.
+A connector must surface every object/field the source exposes (customs included) — anything
+`DiscoverObjects`/`DiscoverFields` never surfaces is silently dropped at
+`FieldMappingEngine.MapSingleRecord`. WHERE the structure comes from is decided ONLY by how its
+truth is reachable — three cases, in order. This is a GENERAL rule; no connector is special.
 
-A static catalog where the source allows customs is a **DEFECT** — customs are silently dropped at `FieldMappingEngine.MapSingleRecord` (only fields surfaced by `DiscoverFields` get a column + field map, so anything not discovered never lands).
+1. **Reachable with NO authentication** (public docs / OpenAPI / GraphQL SDL / a public schema
+   endpoint) → **STATIC metadata.** The extractor seeds it as `Declared` rows in
+   `metadata/integrations/<vendor>/.<vendor>.integration.json`. **NEVER hardcode the catalog in
+   connector code** — the answer lives in metadata, never in a baked TS constant/array.
+2. **Reachable ONLY WITH authentication, WITHOUT reading data** (an auth-gated
+   schema/describe/list/introspection endpoint) → **runtime discovery.** The connector's
+   `DiscoverObjects`/`DiscoverFields` calls that endpoint at runtime, right after the connection is
+   created (the D0/D1 creation pipeline), filling IO/IOF as `Discovered`. The connector encodes the
+   discovery **MECHANISM** (which endpoint, how to parse it) — **never the answer**, and never a
+   build-time call (there is no credential at build).
+3. **Reachable ONLY by syncing data** (no schema endpoint — structure is knowable only from the
+   records themselves) → **the framework's runtime custom-column capture** (§2, BUILT): full-record
+   pass-through → `__mj_integration_CustomOverflow` → post-sync promotion mints the columns
+   automatically. The connector does **NOT** sample data at build, does **NOT** bake a static field
+   catalog; it declares only what is docs-provable and lets the framework capture + promote the rest.
+
+**NEVER sample data at build time, and NEVER hardcode a catalog/field-list in connector code.**
+Build-time output is only: credential-free `Declared` metadata (case 1) + the discovery MECHANISM in
+code (cases 2/3). The actual discovered objects/fields are filled at runtime (case 2) or sync-time
+(case 3). A catalog baked in code where the source admits more — or any build-time data sampling — is
+a **DEFECT** (it both freezes the wrong answer and silently drops everything it didn't guess).
 
 ### Provable-only PK/FK/watermark — NEVER fabricated, the overlay enforces it
 

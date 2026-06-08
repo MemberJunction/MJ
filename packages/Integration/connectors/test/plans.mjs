@@ -14,6 +14,7 @@ import { runMatrixReadonly } from './gql-matrix-harness.mjs';
 import { runLifecycleOps, runDeleteCascade } from './gql-lifecycle-harness.mjs';
 import { makeGqlClient, makeHubspotTotal, makeDbClient, resolveSetupIds } from './gql-live-adapters.mjs';
 import { runConnectorE2E } from './connector-e2e-harness.mjs';
+import { runConnectorE2EHybrid } from './connector-e2e-hybrid.mjs';
 import { buildMock, deltaPassesFromManifest, objectsFromManifest } from './connector-e2e-adapters.mjs';
 import { resolve as pathResolve } from 'node:path';
 
@@ -410,8 +411,10 @@ export async function hubspotCleanData(values, scrub) {
  * Build the connector-agnostic e2e config from env + a base live cfg. NON-secret only.
  * Env vars (NEW; reuses all HS_LIVE_* DB/GQL coordinates from liveCfgFromEnv):
  *   E2E_CONNECTOR        registry connector dir name (e.g. 'propfuel') — required
- *   E2E_MODE             'mock' (credential-free, default) | 'live' (credentialed)
- *   E2E_FIXTURES_DIR     absolute path to the connector's `fixtures/` dir (mock mode).
+ *   E2E_MODE             'mock' (credential-free, default) | 'live' (credentialed) | 'hybrid'
+ *                        (limited-token: live where the token reaches, mock/fixtures where it 403s)
+ *   E2E_PROBE_LIMIT      hybrid: per-object scope-probe page size (default 1 — cheap read)
+ *   E2E_FIXTURES_DIR     absolute path to the connector's `fixtures/` dir (mock + hybrid-fallback).
  *                        Default: <this test dir>/fixtures/<connector>/fixtures
  *   E2E_INTEGRATION      MJ Integration NAME to resolve the IntegrationID by (e.g. 'PropFuel')
  *   E2E_SCHEMA           destination schema for verification override (else metadata-resolved)
@@ -424,12 +427,14 @@ function connectorE2eCfgFromEnv() {
     const base = liveCfgFromEnv();
     const here = pathResolve(new URL('.', import.meta.url).pathname);
     const connector = env.E2E_CONNECTOR;
-    const mode = (env.E2E_MODE === 'live') ? 'live' : 'mock';
+    // Tri-state today: 'live' | 'hybrid' | 'mock' (default). Anything else falls back to mock.
+    const mode = (env.E2E_MODE === 'live') ? 'live' : (env.E2E_MODE === 'hybrid') ? 'hybrid' : 'mock';
     const fixturesDir = env.E2E_FIXTURES_DIR || pathResolve(here, 'fixtures', String(connector || ''), 'fixtures');
     return {
         ...base,
         connector,
         mode,
+        probeLimit: Number(env.E2E_PROBE_LIMIT || 1),
         fixturesDir,
         integrationName: env.E2E_INTEGRATION || base.integrationID || connector,
         platform: env.E2E_PLATFORM || base.platform,
@@ -547,6 +552,75 @@ export async function connectorE2EMock(values, scrub) { return connectorE2EPlan(
 export async function connectorE2ELive(values, scrub) { return connectorE2EPlan(values, scrub, false); }
 
 /**
+ * HYBRID-mode e2e. For a LIMITED-SCOPE token: scope-probe every discovered object via the
+ * read-only IntegrationPreviewData op, then verify IN-SCOPE objects against REAL live data
+ * and OUT-OF-SCOPE objects (403 / object-401 / insufficient_scope) against mock/fixtures —
+ * giving full per-object coverage that neither binary mode can. A non-scope probe error
+ * (5xx / timeout) is a REAL failure (red), never a silent mock fallback.
+ *
+ * Reference mode ONLY: the broker pre-seeds the connection + ENCRYPTED credential and hands
+ * us HS_LIVE_CIID; the token is used BY-REFERENCE (the server decrypts it internally) and is
+ * never read here. Builds BOTH an inert live mock (for the live sub-pass) and a fixtures mock
+ * (for the out-of-scope fallback sub-pass), then delegates to runConnectorE2EHybrid.
+ *
+ * writes:false — read-only from the vendor (probe + pull); the only DB writes are into our own
+ * destination schema (the point of the test). allowWrite is hardwired false (no live mutation).
+ */
+async function connectorE2EHybridPlan(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (runner scrubs result)
+    const cfg = connectorE2eCfgFromEnv();
+    if (!cfg.connector) return { ok: false, error: 'connector-e2e-hybrid requires E2E_CONNECTOR (registry connector dir name)' };
+    if (!cfg.companyIntegrationID) {
+        return { ok: false, error: 'connector-e2e-hybrid is reference-mode ONLY — set HS_LIVE_CIID to the broker-seeded CompanyIntegrationID (the token is used by-reference, never read)' };
+    }
+
+    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
+    const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
+
+    // Build BOTH mocks: an inert one for the live sub-pass + the fixtures-replaying one for
+    // the out-of-scope fallback sub-pass. runConnectorE2EHybrid closes db + both mocks once.
+    const mockLive = await buildMock({ mode: 'live', fixturesDir: cfg.fixturesDir, tls: cfg.tls });
+    let mockFixtures = null;
+    try {
+        try { mockFixtures = await buildMock({ mode: 'mock', fixturesDir: cfg.fixturesDir, tls: cfg.tls }); }
+        catch (e) { mockFixtures = null; /* no fixtures → out-of-scope objects surface as no-fixture warnings */ void e; }
+
+        // Objects: explicit override > fixtures Objects[] > cfg default list. The fixtures
+        // Objects[] (when present) is also the fallback-serveable set for the no-fixture warning.
+        const fixtureObjects = mockFixtures?.manifest ? objectsFromManifest(mockFixtures.manifest) : [];
+        const objects = cfg.objectsOverride.length ? cfg.objectsOverride
+            : (fixtureObjects.length ? fixtureObjects : cfg.objects);
+        if (!objects.length) {
+            try { if (mockLive?.close) await mockLive.close(); } catch { /* best-effort */ }
+            try { if (mockFixtures?.close) await mockFixtures.close(); } catch { /* best-effort */ }
+            try { if (db.close) await db.close(); } catch { /* best-effort */ }
+            return { ok: false, mode: 'hybrid', connector: cfg.connector, error: 'connector-e2e-hybrid: no objects to probe (set E2E_OBJECTS or provide fixtures Objects[])' };
+        }
+
+        const fullCfg = {
+            ...cfg,
+            objects,
+            fixtureObjects: fixtureObjects.length ? fixtureObjects : undefined,
+            deltaPasses: mockFixtures?.manifest ? deltaPassesFromManifest(mockFixtures.manifest) : [],
+        };
+
+        const result = await runConnectorE2EHybrid({ gql, db, mockLive, mockFixtures }, fullCfg, false);
+        // Surface the fixtures mock wiring (live sub-pass needs no redirect; it hits the real vendor).
+        result.mockWiring = mockFixtures
+            ? { kind: mockFixtures.kind, baseURL: mockFixtures.baseURL ?? null, proxyURL: mockFixtures.proxyURL ?? null, tlsRequired: mockFixtures.tlsRequired ?? false, proxyEnvExpected: mockFixtures.proxyEnvExpected ?? null, fixtureWarnings: mockFixtures.warnings ?? [] }
+            : { note: 'no fixtures present — out-of-scope objects (if any) surface as mock-fallback-no-fixture warnings' };
+        return result;
+    } catch (e) {
+        try { if (mockLive?.close) await mockLive.close(); } catch { /* best-effort */ }
+        try { if (mockFixtures?.close) await mockFixtures.close(); } catch { /* best-effort */ }
+        try { if (db.close) await db.close(); } catch { /* best-effort */ }
+        return { ok: false, mode: 'hybrid', connector: cfg.connector, error: String(e?.stack ?? e?.message ?? e) };
+    }
+}
+
+/** Hybrid-mode e2e (reference-mode, limited-token) — writes:false; credentials only via broker. */
+export async function connectorE2EHybrid(values, scrub) { return connectorE2EHybridPlan(values, scrub); }
+
+/**
  * Registry: task name → { secrets (logicalName→ENV_VAR default), run, writes }.
  *
  * `writes` is the SAFETY flag. A live test against a client's real credentials must NEVER
@@ -623,6 +697,18 @@ export const PLANS = {
     'connector-e2e-live': {
         secrets: { token: 'CONNECTOR_API_KEY', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: connectorE2ELive, writes: false,
+    },
+    // HYBRID mode (LIMITED-SCOPE token, reference-mode only): scope-probe every discovered object
+    // (read-only IntegrationPreviewData), then verify IN-SCOPE objects against REAL live data and
+    // OUT-OF-SCOPE objects (403 / object-401 / insufficient_scope) against mock/fixtures — full
+    // per-object coverage where neither binary mode can. A non-scope probe error (5xx / timeout)
+    // stays RED. NO vendor token secret is declared → credentials arrive ONLY via the broker-seeded
+    // CIID (HS_LIVE_CIID); the server decrypts the credential internally (used by-reference, never
+    // read). writes:false (probe + pull are read-only; DB writes are into our OWN destination schema).
+    // Set E2E_CONNECTOR + E2E_MODE=hybrid + HS_LIVE_CIID + the HS_LIVE_* DB/GQL coordinates.
+    'connector-e2e-hybrid': {
+        secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: connectorE2EHybrid, writes: false,
     },
     'hubspot-tier1': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier1, writes: false },
     // PropFuel data-export feed — read-only (GET list + GET download; NEVER ack). Safe vs live data.
