@@ -36,7 +36,7 @@ graph TD
     end
 
     subgraph Data [Data Layer]
-        D_Session["AIAgentSession Record<br/>(with ActiveChannels JSON)"]
+        D_Session["AIAgentSession Record<br/>(+ AIAgentSessionChannel rows)"]
         D_Run["AIAgentRun Record"]
     end
 
@@ -68,7 +68,7 @@ graph TD
 An **Agent Session** represents a long-running, stateful connection and conversation lifecycle between a user and an agent. 
 * **Statefulness**: It persists across multiple individual turns (Runs).
 * **Connection Anchor**: It acts as the orchestrator of all active communication sockets.
-* **Schema**: Stored in a new `AIAgentSession` table. Active channels are tracked dynamically in an `ActiveChannels` JSON field, removing the need for a normalized sub-table.
+* **Schema**: Stored in a new `AIAgentSession` table. Each active channel attached to the session is a row in the normalized `AIAgentSessionChannel` table (see [Proposed Database Schema Additions](#proposed-database-schema-additions) for the rationale).
 
 ### 2. Pluggable Agent Channel Registry (`AIAgentChannel`)
 Channels are completely pluggable, avoiding hardcoded modalities. Developers can register new channel definitions (e.g., voice, text, canvas, video) via the `MJ: AI Agent Channels` database entity.
@@ -82,7 +82,7 @@ New channels snap into the framework by implementing standard pluggable interfac
 
 ### 4. Agent Run (`AIAgentRun`)
 An **Agent Run** remains the single-turn execution unit. When a user input is received via any channel, the Session Host triggers an `AIAgentRun`.
-* **Session ID Propagation**: The `ExecuteAgentParams` struct is extended to accept a `SessionID`.
+* **Session ID Propagation**: The `ExecuteAgentParams` struct is extended to accept an `agentSessionID` (distinct from the existing transport `sessionID`).
 * **Streaming Hooks**: The agent streams its output (e.g., text tokens, UI commands, or audio frames) back to the session's pluggable channels in real time.
 
 ---
@@ -109,10 +109,10 @@ Rather than replacing Conversations with Sessions, the two systems collaborate:
 2. **Session Initialization**:
    * When a client initiates a real-time call (starts a session), the client can pass an existing `ConversationID`. This instructs the Session Host to load the conversation's historical messages and inject them as initial context for the LLM.
    * If no `ConversationID` is passed, the Session Host automatically creates a new `MJConversation` record and associates the session with it.
-3. **Timeline Overlay mapping (`SessionID` on Details)**:
-   * To track which messages were sent during which active session, we add a nullable `SessionID` column to the `MJConversationDetail` table.
-   * If a message is typed in standard text chat *outside* of any active call, its `SessionID` is `NULL`.
-   * If a message is spoken or typed *during* a live call session, its `SessionID` is populated with the active `AIAgentSession.ID`.
+3. **Timeline Overlay mapping (`AgentSessionID` on Details)**:
+   * To track which messages were sent during which active session, we add a nullable `AgentSessionID` column to the `ConversationDetail` table.
+   * If a message is typed in standard text chat *outside* of any active call, its `AgentSessionID` is `NULL`.
+   * If a message is spoken or typed *during* a live call session, its `AgentSessionID` is populated with the active `AIAgentSession.ID`.
 4. **Conversation Timeline Overlays (Time Series)**:
    * A single `MJConversation` acts as a master chronological timeline container.
    * Over the lifespan of that conversation, the user can have **0 or more sequential active sessions** (e.g. starting a voice call, hanging up, typing some text, then starting another voice call).
@@ -128,47 +128,86 @@ Rather than replacing Conversations with Sessions, the two systems collaborate:
 
 ## Proposed Database Schema Additions
 
-To support this model, we propose adding two new entities to the MemberJunction schema. (Note that `CreatedAt` and `UpdatedAt` are omitted as they are handled automatically by MemberJunction metadata):
+To support this model, we propose adding three new entities to the MemberJunction schema.
+
+> [!NOTE]
+> **MJ conventions applied below:**
+> - `__mj_CreatedAt` / `__mj_UpdatedAt` are omitted — CodeGen adds them automatically. (`AIAgentSessionChannel` therefore gets `__mj_UpdatedAt` for free, which is why it carries no hand-rolled "last updated" column.)
+> - Status-style columns use `CHECK` constraints so CodeGen emits **string-union types** (e.g. `'Active' | 'Idle' | 'Closed'`) instead of bare `string`.
+> - PK defaults use `NEWSEQUENTIALID()` per the migration guide.
+> - The **entity Names** (metadata) use the `MJ:` prefix — `MJ: AI Agent Channels`, `MJ: AI Agent Sessions`, `MJ: AI Agent Session Channels` — even though the **table names** do not. The persisted session FK columns are named **`AgentSessionID`**, not `SessionID`, to avoid collision with the transport `sessionID` (see [Unified Session Transport](#unified-session-transport)).
+> - `AIAgentChannel` rows are **reference data** and are seeded via the metadata-file / `mj sync` path, **not** SQL `INSERT`s.
 
 ### 1. `AIAgentChannel` (Pluggable Channel Registry)
 ```sql
 CREATE TABLE [__mj].[AIAgentChannel] (
-    [ID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    [ID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
     [Name] NVARCHAR(100) NOT NULL UNIQUE, -- e.g., 'VoiceAudio', 'TextChat', 'ClientControl', 'CanvasSync'
     [Description] NVARCHAR(1000) NULL,
     [ServerPluginClass] NVARCHAR(250) NOT NULL, -- Serves as key for ClassFactory.CreateInstance() on Server
     [ClientPluginClass] NVARCHAR(250) NOT NULL, -- Serves as key for ClassFactory.CreateInstance() on Client
-    [ConfigSchema] NVARCHAR(MAX) NULL -- JSON Schema to validate channel parameters
+    -- Which transport plane this channel rides (see Unified Session Transport).
+    [TransportType] NVARCHAR(20) NOT NULL DEFAULT 'PubSub',
+    [ConfigSchema] NVARCHAR(MAX) NULL, -- JSON Schema to validate channel parameters
+    [IsActive] BIT NOT NULL DEFAULT 1,
+    CONSTRAINT [CK_AIAgentChannel_TransportType]
+        CHECK ([TransportType] IN ('PubSub', 'WebRTC', 'WebSocket'))
 );
 ```
 
 ### 2. `AIAgentSession` (AI Agent Session)
-Tracks active channels dynamically in an `ActiveChannels` JSON field, mapping them directly to the plugin definitions. Uses `DATETIMEOFFSET` on `LastActiveAt` for timezone tracking.
+The long-lived session record. Per-channel state is **normalized** into `AIAgentSessionChannel` (below) rather than an `ActiveChannels` JSON blob — see the rationale note after the schema. `Config` remains JSON because it is low-traffic, free-form session state. Uses `DATETIMEOFFSET` on `LastActiveAt` for timezone tracking.
 ```sql
 CREATE TABLE [__mj].[AIAgentSession] (
-    [ID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    [ID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
     [AgentID] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES [__mj].[AIAgent]([ID]),
     [UserID] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES [__mj].[User]([ID]),
-    [Status] VARCHAR(50) NOT NULL, -- 'Active', 'Idle', 'Closed'
+    [Status] NVARCHAR(20) NOT NULL DEFAULT 'Active',
     [ConversationID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[Conversation]([ID]),
+    -- The server node currently hosting this session's in-memory sockets (for affinity / janitor reconciliation).
+    [HostInstanceID] NVARCHAR(200) NULL,
     [Config] NVARCHAR(MAX) NULL, -- JSON block for session-specific state/variables
-    [ActiveChannels] NVARCHAR(MAX) NULL, -- JSON array of active channels: [{ channelId, socketUrl, status, config }]
-    [LastActiveAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+    [LastActiveAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    [ClosedAt] DATETIMEOFFSET NULL,
+    CONSTRAINT [CK_AIAgentSession_Status]
+        CHECK ([Status] IN ('Active', 'Idle', 'Closed'))
 );
 ```
 
-### 3. Schema Updates (Existing Tables)
+### 3. `AIAgentSessionChannel` (Active Channel Instances)
+One row per channel instance attached to a session — the normalized replacement for the `ActiveChannels` JSON array.
+```sql
+CREATE TABLE [__mj].[AIAgentSessionChannel] (
+    [ID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
+    [AgentSessionID] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES [__mj].[AIAgentSession]([ID]),
+    [ChannelID] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES [__mj].[AIAgentChannel]([ID]),
+    [Status] NVARCHAR(20) NOT NULL DEFAULT 'Connecting',
+    [SocketUrl] NVARCHAR(500) NULL, -- NULL for PubSub channels (they ride the shared subscription)
+    [Config] NVARCHAR(MAX) NULL, -- JSON, validated against AIAgentChannel.ConfigSchema
+    [LastActiveAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    [DisconnectedAt] DATETIMEOFFSET NULL,
+    CONSTRAINT [CK_AIAgentSessionChannel_Status]
+        CHECK ([Status] IN ('Connecting', 'Connected', 'Paused', 'Disconnected')),
+    -- A session attaches a given channel definition at most once at a time.
+    CONSTRAINT [UQ_AIAgentSessionChannel] UNIQUE ([AgentSessionID], [ChannelID])
+);
+```
 
-We add a nullable foreign key pointing to the session on both `AIAgentRun` and `MJConversationDetail` records:
+> [!NOTE]
+> **Why normalize out of `ActiveChannels` JSON?** The session row itself is low-traffic, but its *channels* are not: each channel independently connects, heartbeats, pauses, and disconnects, and (in voice scenarios) several are live at once. Keeping them in one JSON column on the session means concurrent channel state writes all contend on — and risk clobbering — the same row (lost-update races). Separate rows give per-channel row-level writes, FK integrity to `AIAgentChannel`, and clean queries ("show all `Connected` voice channels", "find sessions with an orphaned channel"). The cost is one extra small table, which is cheap. `Config` stays JSON on both tables because it is genuinely free-form and write-rarely.
+
+### 4. Schema Updates (Existing Tables)
+
+We add a nullable foreign key pointing to the session on both `AIAgentRun` and `ConversationDetail` records. The column is named **`AgentSessionID`** (not `SessionID`) to stay distinct from the transport `sessionID`:
 
 ```sql
 -- Link individual agent runs to their parent session
-ALTER TABLE [__mj].[AIAgentRun] 
-ADD [SessionID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[AIAgentSession]([ID]);
+ALTER TABLE [__mj].[AIAgentRun]
+ADD [AgentSessionID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[AIAgentSession]([ID]);
 
 -- Link specific messages in a conversation to the session in which they occurred
-ALTER TABLE [__mj].[ConversationDetail] 
-ADD [SessionID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[AIAgentSession]([ID]);
+ALTER TABLE [__mj].[ConversationDetail]
+ADD [AgentSessionID] UNIQUEIDENTIFIER NULL FOREIGN KEY REFERENCES [__mj].[AIAgentSession]([ID]);
 ```
 
 ---
@@ -432,6 +471,54 @@ Because everything now publishes through one `ISessionTransport` / `PubSubManage
 
 ---
 
+## Session Lifecycle, Heartbeat & Reconciliation
+
+A session is a **long-lived record backed by in-memory, node-local resources** (open sockets, WebRTC peers, upstream provider connections, the `ClientToolRequestManager` pending-request map). The hard part of any such design is the **mismatch between durable DB state and volatile process state**: a server crash or redeploy vaporizes the sockets but leaves rows reading `Status = 'Active'` forever. This section defines how that mismatch is kept from accumulating.
+
+### State model
+
+```
+            client activity / channel connect
+   ┌──────────────────────────────────────────────┐
+   ▼                                                │
+[Active] ──no activity > IdleThreshold──▶ [Idle] ──┘ (reactivates on any inbound envelope)
+   │                                         │
+   │ explicit hang-up / Close()              │ no activity > CloseThreshold
+   ▼                                         ▼
+[Closed] ◀───────────── janitor / graceful shutdown ─────────────
+```
+
+- **Active** — at least one channel connected and traffic flowing.
+- **Idle** — connected but quiet beyond `IdleThreshold` (e.g. 2 min). Sockets may be kept warm or torn down per channel policy; the session is cheaply resumable.
+- **Closed** — terminal. `ClosedAt` set, all `AIAgentSessionChannel` rows set to `Disconnected`, in-memory resources released, `ClientToolRequestManager.ClearSession(...)` called, any in-flight `AIAgentRun` aborted via its `cancellationToken`.
+
+### Heartbeat
+
+- Each connected channel sends a lightweight heartbeat (or any inbound envelope counts as one). The Session Host updates `AIAgentSessionChannel.LastActiveAt` and bubbles the max up to `AIAgentSession.LastActiveAt`.
+- Heartbeats use `SetSettingDebounced`-style coalescing so a chatty audio channel does not hammer the DB — at most one `LastActiveAt` write per session per few seconds.
+- Missing N consecutive heartbeats on a channel → that channel row goes `Disconnected`; when the **last** channel disconnects, the session transitions `Active → Idle`.
+
+### The janitor (orphan reconciliation)
+
+A `BaseSingleton` **SessionJanitor** runs on each server instance on a timer (e.g. every 60s) and also once at startup. It performs two sweeps:
+
+1. **Own-host recovery (startup):** On boot, an instance claims its identity in `HostInstanceID` (e.g. `hostname:pid:bootId`). Any `AIAgentSession` row still `Active`/`Idle` whose `HostInstanceID` equals a *previous* boot of this host (or this host with a different `bootId`) is an orphan from a crash/redeploy → force `Closed`. This is the primary defense against the "Active forever" leak.
+2. **Global staleness sweep (periodic):** Regardless of host, any `Active`/`Idle` session whose `LastActiveAt` is older than `CloseThreshold` (e.g. 15 min) is force-`Closed`. This catches sessions whose owning instance died without a clean boot record (scaled-down pod, OOM kill) and never came back to run its own-host recovery.
+
+Both sweeps use **keyset pagination** (`AfterKey`) if the backlog is large, per the MJ deep-pagination guide, and write through `BaseEntity.Save()` so Record Changes captures the transition.
+
+### Multi-instance notes
+
+- The janitor's global sweep is **idempotent and safe to run concurrently** on every instance — closing an already-`Closed` session is a no-op, and the `Status` CHECK + last-writer-wins on `ClosedAt` make races harmless.
+- `HostInstanceID` is also what enables **session affinity** for the media/upstream planes: a reconnecting client for an existing media session should be routed back to the owning host while it is alive; if that host is gone, the client simply starts a fresh session on a new host (the Conversation history is intact, so nothing is lost — see [Relationship: Sessions vs. Conversations](#relationship-sessions-vs-conversations)).
+- When `PubSubManager` is later backed by Redis, the **control plane** survives instance loss transparently; only media/upstream sockets need the affinity + janitor recovery described here.
+
+### Graceful shutdown
+
+On `SIGTERM`/redeploy, the instance runs the janitor's close path for its own sessions first (flush transcripts, set `Closed`, notify clients over the control plane so they can show "call ended / reconnecting"), then exits. This turns the common redeploy case into a clean close rather than an orphan the periodic sweep has to mop up later.
+
+---
+
 ## Detailed Execution & Streaming Flow
 
 Here is how a real-time voice and UI interaction flows through the layered session architecture:
@@ -449,12 +536,12 @@ Here is how a real-time voice and UI interaction flows through the layered sessi
        * `SessionID = [active Session ID]`
      * (Optional) The raw user audio clip is saved to MemberJunction file storage and linked to the conversation detail via `MJConversationDetailAttachment` to support voice playback.
 3. **Execution Trigger**:
-   * The Session Host calls `AgentRunner.ExecuteAgent(params)`, passing the newly created user message/transcript and the `SessionID` to trigger the agent's turn.
+   * The Session Host calls `AgentRunner.ExecuteAgent(params)`, passing the newly created user message/transcript and the `agentSessionID` to trigger the agent's turn.
 4. **Agent Execution Loop & Assistant Transcript Creation**:
    * The agent plans its steps. Suppose it decides it needs to query the database and show a chart.
    * **Client Tool Push (Mid-Run)**:
      * The agent invokes the `ShowChart` client tool.
-     * Because `SessionID` is present, the framework dispatches a message over the session's `ClientControl` socket channel: `{"type": "client-tool-request", "tool": "ShowChart", "params": {...}}`.
+     * Because `agentSessionID` is present, the framework dispatches a `tool-request` envelope over the session's `ClientControl` channel (see [Unified Session Transport](#unified-session-transport)): `{"Type": "tool-request", "ToolName": "ShowChart", "Params": "{...}"}`.
      * The client application receives this socket message and renders the chart immediately.
      * The client sends the success response back over the `ClientControl` socket: `{"type": "client-tool-response", "success": true}`.
      * The agent receives the response via socket, resolves the step, and continues to the next step.
@@ -469,7 +556,7 @@ Here is how a real-time voice and UI interaction flows through the layered sessi
          * `SessionID = [active Session ID]`
        * (Optional) The synthesized response audio is saved to storage and linked to this conversation detail via `MJConversationDetailAttachment`.
 5. **Run Finalization & Session Recording**:
-   * The `AIAgentRun` finishes, saves its steps (non-blocking), and associates itself with the `SessionID` for history tracking.
+   * The `AIAgentRun` finishes, saves its steps (non-blocking), and associates itself with the `AgentSessionID` for history tracking.
    * When the user hangs up or the session is closed, the Session Host can optionally upload a compiled recording of the entire call session and link it directly to the `AIAgentSession` record.
 
 ---
