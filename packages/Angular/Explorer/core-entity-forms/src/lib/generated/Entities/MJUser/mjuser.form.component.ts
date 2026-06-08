@@ -119,7 +119,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJListsLastRefreshedByUserID', sectionName: 'Lists (Last Refreshed By User ID)', isExpanded: false },
             { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false },
-            { sectionKey: 'mJClusterAnalysis', sectionName: 'Cluster Analysis', isExpanded: false }
+            { sectionKey: 'mJClusterAnalysis', sectionName: 'Cluster Analysis', isExpanded: false },
+            { sectionKey: 'mJMagicLinkRedemptions', sectionName: 'Magic Link Redemptions', isExpanded: false },
+            { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false }
         ]);
     }
 }

@@ -10,7 +10,7 @@
     </button>
 
     <!-- Nav Bar Apps: Left of App Switcher -->
-    @if (leftOfSwitcherApps.length > 0) {
+    @if (leftOfSwitcherApps.length > 0 && !appSwitchingLocked) {
       <div class="nav-bar-apps left-of-switcher">
         @for (app of leftOfSwitcherApps; track app) {
           <button
@@ -26,13 +26,15 @@
       </div>
     }
 
-    <!-- App Switcher -->
-    <mj-app-switcher
-      [activeApp]="activeApp"
-      [isViewingSystemTab]="isViewingSystemTab"
-      [loadingAppId]="loadingAppId"
-      (appSelected)="onAppSwitch($event)">
-    </mj-app-switcher>
+    <!-- App Switcher (hidden for app-locked sessions, e.g. magic-link) -->
+    @if (!appSwitchingLocked) {
+      <mj-app-switcher
+        [activeApp]="activeApp"
+        [isViewingSystemTab]="isViewingSystemTab"
+        [loadingAppId]="loadingAppId"
+        (appSelected)="onAppSwitch($event)">
+      </mj-app-switcher>
+    }
 
     <!-- App Navigation (desktop only) -->
     @if (activeApp) {
