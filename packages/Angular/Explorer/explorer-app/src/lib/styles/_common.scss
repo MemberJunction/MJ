@@ -450,11 +450,11 @@ textarea.form-control {
 }
 
 /* ===================================
-   KENDO ICON CARD SYSTEM
+   ICON CARD SYSTEM
    =================================== */
 
-/* Icon card class for Kendo cards - replaces mj-card mj-card-icon */
-.mj-kendo-icon-card {
+/* Icon card class - replaces mj-card mj-card-icon */
+.mj-icon-card {
     text-align: center;
     cursor: pointer;
     position: relative;
@@ -474,7 +474,7 @@ textarea.form-control {
         transform: translateY(-4px);
     }
     
-    /* Override Kendo card body padding for icon cards */
+    /* Card body padding for icon cards */
     .k-card-body {
         padding: 30px 20px;
         position: relative;
@@ -543,9 +543,9 @@ textarea.form-control {
 }
 
 /* Optional variations for icon cards */
-.mj-kendo-icon-card {
+.mj-icon-card {
     /* Small variant */
-    &.mj-kendo-icon-card-sm {
+    &.mj-icon-card-sm {
         .k-card-body {
             padding: 20px 15px;
         }
@@ -565,7 +565,7 @@ textarea.form-control {
     }
     
     /* Large variant */
-    &.mj-kendo-icon-card-lg {
+    &.mj-icon-card-lg {
         .k-card-body {
             padding: 40px 30px;
         }
@@ -585,7 +585,7 @@ textarea.form-control {
     }
     
     /* Clickable variant with more pronounced hover */
-    &.mj-kendo-icon-card-clickable {
+    &.mj-icon-card-clickable {
         &:hover {
             transform: translateY(-6px);
             box-shadow:
@@ -602,9 +602,9 @@ textarea.form-control {
     }
 }
 
-/* Responsive adjustments for Kendo icon cards */
+/* Responsive adjustments for icon cards */
 @media (max-width: 768px) {
-    .mj-kendo-icon-card {
+    .mj-icon-card {
         .k-card-body {
             padding: 20px 15px;
         }
@@ -624,14 +624,14 @@ textarea.form-control {
 }
 
 /* Accessibility enhancements */
-.mj-kendo-icon-card:focus-visible {
+.mj-icon-card:focus-visible {
     outline: 2px solid var(--mj-brand-primary);
     outline-offset: 2px;
 }
 
 /* High contrast mode */
 @media (prefers-contrast: high) {
-    .mj-kendo-icon-card {
+    .mj-icon-card {
         border-width: 2px !important;
         
         &:hover {
@@ -642,18 +642,18 @@ textarea.form-control {
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-    .mj-kendo-icon-card,
-    .mj-kendo-icon-card .mj-card-icon-large,
-    .mj-kendo-icon-card .k-chip,
-    .mj-kendo-icon-card .mj-card-actions {
+    .mj-icon-card,
+    .mj-icon-card .mj-card-icon-large,
+    .mj-icon-card .k-chip,
+    .mj-icon-card .mj-card-actions {
         transition-duration: 0.01ms !important;
     }
     
-    .mj-kendo-icon-card:hover {
+    .mj-icon-card:hover {
         transform: none !important;
     }
     
-    .mj-kendo-icon-card:hover .mj-card-icon-large {
+    .mj-icon-card:hover .mj-card-icon-large {
         transform: none !important;
     }
 }
@@ -1118,419 +1118,6 @@ textarea.form-control {
 }
 
 /* ===================================
-   MODERN KENDO DROPDOWN SYSTEM
-   =================================== */
-
-/* Base Dropdown Styling */
-::ng-deep .k-dropdown,
-::ng-deep .k-dropdownlist,
-::ng-deep .k-combobox,
-::ng-deep .k-multiselect,
-::ng-deep .k-autocomplete {
-    border: 2px solid var(--mj-border-default);
-    border-radius: 12px;
-    background: var(--mj-bg-surface);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    overflow: hidden;
-    position: relative;
-
-    /* Modern glass effect overlay */
-    &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
-        z-index: 1;
-    }
-
-    /* Focus state */
-    &:focus-within,
-    &.k-focus {
-        border-color: var(--mj-brand-primary);
-        box-shadow:
-            0 0 0 3px rgba(0, 118, 182, 0.15),
-            0 4px 16px rgba(0, 118, 182, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.9);
-        transform: translateY(-1px);
-    }
-
-    /* Hover state */
-    &:hover:not(.k-disabled) {
-        border-color: var(--mj-brand-primary);
-        box-shadow:
-            0 4px 12px rgba(0, 118, 182, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.9);
-        transform: translateY(-1px);
-    }
-
-    /* Disabled state */
-    &.k-disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        background: var(--mj-bg-surface-card);
-        border-color: var(--mj-border-default);
-        transform: none;
-        box-shadow: none;
-    }
-}
-
-/* ===================================
-   DROPDOWN INPUT WRAPPER
-   =================================== */
-
-::ng-deep .k-dropdown-wrap,
-::ng-deep .k-picker-wrap {
-    border: none;
-    background: transparent;
-    border-radius: inherit;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    position: relative;
-
-    /* Input field */
-    .k-input,
-    .k-input-inner {
-        border: none;
-        background: transparent;
-        padding: 12px 16px;
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--mj-brand-secondary);
-        line-height: 1.4;
-        width: 100%;
-        transition: color 0.3s ease;
-
-        &::placeholder {
-            color: var(--mj-text-muted);
-            font-weight: 400;
-        }
-
-        &:focus {
-            outline: none;
-            color: var(--mj-brand-secondary);
-        }
-    }
-
-    /* Selected value styling */
-    .k-input-value-text {
-        color: var(--mj-brand-secondary);
-        font-weight: 500;
-        padding: 12px 16px;
-        display: flex;
-        align-items: center;
-        min-height: 24px;
-    }
-}
-
-/* ===================================
-   DROPDOWN ARROW/BUTTON
-   =================================== */
-
-::ng-deep .k-select,
-::ng-deep .k-dropdown .k-select {
-    border: none;
-    background: var(--mj-brand-primary);
-    border-radius: 0 10px 10px 0;
-    width: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-
-    /* Shine effect */
-    &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-        transition: left 0.5s ease;
-    }
-
-    &:hover::before {
-        left: 100%;
-    }
-
-    /* Arrow icon */
-    .k-icon,
-    .k-svg-icon {
-        color: var(--mj-text-inverse);
-        font-size: 14px;
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    /* Hover effect */
-    &:hover {
-        background: var(--mj-brand-primary-hover);
-        transform: scale(1.05);
-    }
-
-    /* Active/opened state */
-    &:active,
-    .k-dropdown.k-state-active & {
-        background: var(--mj-brand-secondary);
-        transform: scale(0.95);
-
-        .k-icon,
-        .k-svg-icon {
-            transform: rotate(180deg);
-        }
-    }
-}
-
-/* ===================================
-   DROPDOWN POPUP/LIST STYLING
-   =================================== */
-
-::ng-deep .k-popup,
-::ng-deep .k-dropdown-popup,
-::ng-deep .k-list-container {
-    border: 2px solid var(--mj-brand-primary);
-    border-radius: 16px;
-    background: var(--mj-bg-surface);
-    box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.15),
-        0 8px 24px rgba(0, 118, 182, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    overflow: hidden !important;
-    margin-top: 8px;
-    animation: dropdown-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: top center;
-
-    /* Modern scroll styling */
-    &::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    &::-webkit-scrollbar-track {
-        background: var(--mj-bg-surface-card);
-        border-radius: 3px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-        background: var(--mj-brand-primary);
-        border-radius: 3px;
-
-        &:hover {
-            background: var(--mj-brand-secondary);
-        }
-    }
-}
-
-@keyframes dropdown-appear {
-    0% {
-        opacity: 0;
-        transform: translateY(-10px) scale(0.95);
-    }
-
-    100% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* ===================================
-   DROPDOWN LIST ITEMS
-   =================================== */
-
-::ng-deep .k-list,
-::ng-deep .k-list-ul {
-    padding: 8px 0;
-    margin: 0;
-    border-radius: 16px;
-
-    .k-list-item,
-    .k-item {
-        padding: 12px 16px;
-        color: var(--mj-brand-secondary);
-        font-weight: 500;
-        border: none;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        display: flex;
-        align-items: center;
-        cursor: pointer;
-
-        /* Modern hover effect */
-        &::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 0;
-            background: linear-gradient(90deg, var(--mj-brand-primary), var(--mj-brand-accent));
-            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        &:hover {
-            background: var(--mj-brand-accent);
-            color: var(--mj-brand-secondary);
-            transform: translateX(4px);
-
-            &::before {
-                width: 4px;
-            }
-        }
-
-        /* Selected state */
-        &.k-selected,
-        &.k-state-selected {
-            background: var(--mj-brand-primary);
-            color: var(--mj-text-inverse);
-            font-weight: 600;
-            transform: none;
-
-            &::before {
-                width: 4px;
-                background: var(--mj-bg-surface);
-            }
-
-            &:hover {
-                background: var(--mj-brand-primary-hover);
-            }
-        }
-
-        /* Focus state */
-        &.k-state-focused {
-            background: var(--mj-bg-surface-card);
-            outline: 2px solid var(--mj-brand-primary);
-            outline-offset: -2px;
-        }
-
-        /* Disabled state */
-        &.k-state-disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-
-            &:hover {
-                background: transparent;
-                transform: none;
-            }
-        }
-    }
-}
-
-/* ===================================
-   KENDO GRID STYLING
-   =================================== */
-
-::ng-deep .k-grid {
-    border: 2px solid var(--mj-border-default);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
-    overflow: hidden;
-    background: var(--mj-bg-surface);
-
-    .k-grid-header {
-        background: var(--mj-bg-surface-card);
-        border-bottom: 2px solid var(--mj-border-default);
-
-        .k-header {
-            background: transparent;
-            border: none;
-            border-right: 1px solid var(--mj-border-default);
-            color: var(--mj-brand-secondary);
-            font-weight: 600;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 16px 12px;
-            position: relative;
-
-            &:hover {
-                background: rgba(0, 118, 182, 0.1);
-            }
-        }
-    }
-
-    tbody tr {
-        transition: all 0.2s ease;
-        border-bottom: 1px solid var(--mj-bg-surface-card);
-
-        &:hover {
-            background: var(--mj-brand-accent);
-            box-shadow: 0 2px 8px rgba(0, 118, 182, 0.15);
-        }
-
-        &.k-selected {
-            background: rgba(0, 118, 182, 0.1);
-            border-left: 4px solid var(--mj-brand-primary);
-        }
-
-        td {
-            padding: 12px;
-            border-right: 1px solid var(--mj-bg-surface-card);
-            color: var(--mj-brand-secondary);
-            font-size: 14px;
-        }
-    }
-
-    .k-pager {
-        background: var(--mj-bg-surface-card);
-        border-top: 2px solid var(--mj-border-default);
-        padding: 12px 16px;
-
-        .k-pager-numbers .k-button {
-            border: 1px solid var(--mj-border-default);
-            background: var(--mj-bg-surface);
-            color: var(--mj-brand-secondary);
-            border-radius: 6px;
-            margin: 0 2px;
-            min-width: 32px;
-            height: 32px;
-            font-weight: 500;
-
-            &:hover {
-                background: var(--mj-brand-primary);
-                color: var(--mj-text-inverse);
-                border-color: var(--mj-brand-primary);
-            }
-
-            &.k-selected {
-                background: var(--mj-brand-primary);
-                color: var(--mj-text-inverse);
-                border-color: var(--mj-brand-primary);
-            }
-        }
-    }
-
-    .k-grid-toolbar {
-        background: var(--mj-bg-surface-card);
-        border-bottom: 1px solid var(--mj-border-default);
-        padding: 12px 16px;
-
-        .k-button {
-            background: var(--mj-brand-primary);
-            color: var(--mj-text-inverse);
-            border: 1px solid var(--mj-brand-primary);
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-
-            &:hover {
-                background: var(--mj-brand-secondary);
-                transform: translateY(-1px);
-                box-shadow: 0 4px 8px rgba(0, 118, 182, 0.3);
-            }
-        }
-    }
-}
-
-/* ===================================
    RESPONSIVE UTILITIES
    =================================== */
 
@@ -1632,21 +1219,21 @@ textarea.form-control {
     @extend .mj-grid-item;
 }
 
-// Legacy icon card compatibility - redirect to use Kendo icon card styles
+// Legacy icon card compatibility - redirect to use icon card styles
 // This allows existing mj-card mj-card-icon elements to work with new styles
 .mj-card.mj-card-icon {
     // Reset the old icon card styles
     padding: 0;
     text-align: left;
-    
-    // Apply Kendo icon card styles
+
+    // Apply icon card styles
     text-align: center;
     cursor: pointer;
     position: relative;
     overflow: visible;
     padding: 30px 20px;
     
-    // Copy hover effects from mj-kendo-icon-card
+    // Copy hover effects from mj-icon-card
     &:hover {
         .mj-card-icon-large {
             transform: scale(1.1) rotate(5deg);
@@ -1766,22 +1353,6 @@ textarea.form-control {
     }
 }
 
-// Existing window and dialog customizations remain unchanged
-.k-window {
-    .k-window-content {
-        position: static !important;
-    }
-}
-
-.k-window-titlebar-actions [title="Minimize"] {
-    display: none !important;
-}
-
-.k-tilelayout {
-    gap: 10px !important;
-    padding: 10px !important;
-}
-
 .waiting {
     cursor: wait !important;
 }
@@ -1823,7 +1394,7 @@ textarea.form-control {
 }
 
 /* Hover effects for cards */
-.mj-kendo-icon-card:hover .skip-icon-large {
+.mj-icon-card:hover .skip-icon-large {
     transform: scale(1.1) rotate(5deg);
     filter: drop-shadow(0 4px 8px rgba(0, 118, 182, 0.3));
 }

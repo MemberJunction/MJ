@@ -1,0 +1,53 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Visualize"
+    Icon="fa-solid fa-circle-nodes"
+    Subtitle="Explore your knowledge base as clusters or a tag cloud">
+    <div toolbar>
+      <div class="mode-switch" role="tablist">
+        @for (mode of Modes; track TrackByMode($index, mode)) {
+          <button
+            type="button"
+            class="mode-switch-btn"
+            role="tab"
+            [class.active]="IsActiveMode(mode.ID)"
+            [attr.aria-selected]="IsActiveMode(mode.ID)"
+            (click)="SelectMode(mode.ID)">
+            <i [class]="mode.Icon"></i>
+            <span>{{ mode.Label }}</span>
+          </button>
+        }
+      </div>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
+    <div class="visualize-container">
+      <div class="visualize-main">
+        @if (IsActiveMode('clusters')) {
+          <app-cluster-visualization-resource
+            [Embedded]="true"
+            (OpenRecordRequested)="OnClusterOpenRecord($event)">
+          </app-cluster-visualization-resource>
+        } @else {
+          <app-kh-tag-cloud
+            #tagCloud
+            [Provider]="Provider"
+            (TagSelected)="OnTagSelected($event)">
+          </app-kh-tag-cloud>
+        }
+      </div>
+
+      <app-kh-record-drilldown
+        [Visible]="DrilldownVisible"
+        [IsLoading]="DrilldownLoading"
+        [Title]="DrilldownTitle"
+        [Subtitle]="DrilldownSubtitle"
+        [Icon]="DrilldownIcon"
+        [Records]="DrilldownRecords"
+        (Closed)="CloseDrilldown()"
+        (OpenRecord)="OnDrilldownOpenRecord($event)">
+      </app-kh-record-drilldown>
+    </div>
+  </mj-page-body>
+</mj-page-layout>

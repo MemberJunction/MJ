@@ -36,6 +36,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
+import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -112,6 +113,8 @@ export * from './resolvers/SearchKnowledgeResolver.js';
 export * from './resolvers/SearchKnowledgeStreamResolver.js';
 export * from './resolvers/AvailableSearchProvidersResolver.js';
 export * from './resolvers/FetchEntityVectorsResolver.js';
+export * from './resolvers/RunClusterAnalysisResolver.js';
+export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
@@ -932,6 +935,18 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
   console.log('[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
 
+  // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
+  // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
+  // authenticated invite-creation router mounts AFTER it (see below).
+  let magicLinkAuthenticatedRouter: ReturnType<typeof createMagicLinkHandler>['authenticatedRouter'] | undefined;
+  if (configInfo.magicLink?.enabled) {
+    const { publicRouter, authenticatedRouter } = createMagicLinkHandler(oauthPublicUrl, configInfo.magicLink);
+    magicLinkAuthenticatedRouter = authenticatedRouter;
+    registerMagicLinkAuthProvider(oauthPublicUrl, configInfo.magicLink);
+    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
+    console.log(`[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
+  }
+
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
   // Without this, the browser blocks 401 responses from the auth middleware
   // because they lack Access-Control-Allow-Origin headers, preventing the
@@ -971,6 +986,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const oauthCors = cors<cors.CorsRequest>();
     app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
     console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
+  }
+
+  // ─── Magic-link authenticated route (invite creation) ─────────────────────
+  if (magicLinkAuthenticatedRouter) {
+    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
+    console.log(`[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
   }
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────

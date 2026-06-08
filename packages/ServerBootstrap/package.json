@@ -80,6 +80,7 @@
     "@memberjunction/ai-zhipu": "5.39.0",
     "@memberjunction/archiving-action": "5.39.0",
     "@memberjunction/archiving-engine": "5.39.0",
+    "@memberjunction/auth-providers": "5.39.0",
     "@memberjunction/codegen-lib": "5.39.0",
     "@memberjunction/communication-ms-graph": "5.39.0",
     "@memberjunction/communication-sendgrid": "5.39.0",

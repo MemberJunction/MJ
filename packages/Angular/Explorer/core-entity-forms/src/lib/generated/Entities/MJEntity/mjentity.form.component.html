@@ -2157,25 +2157,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Signature Requests Section -->
+    <!-- Cluster Analysis Section -->
     <mj-collapsible-panel
-        SectionKey="mJSignatureRequests"
-        SectionName="Signature Requests"
-        Icon="fa fa-file-signature"
+        SectionKey="mJClusterAnalysis"
+        SectionName="Cluster Analysis"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSignatureRequests')"
+        [BadgeCount]="GetSectionRowCount('mJClusterAnalysis')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Requests','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Requests')"
-                [AllowLoad]="IsSectionExpanded('mJSignatureRequests')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Cluster Analysis','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis')"
+                [AllowLoad]="IsSectionExpanded('mJClusterAnalysis')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSignatureRequests', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJClusterAnalysis', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

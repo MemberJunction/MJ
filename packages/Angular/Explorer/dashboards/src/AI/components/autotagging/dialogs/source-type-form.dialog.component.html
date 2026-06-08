@@ -116,6 +116,50 @@
                         }
                     }
                 }
+
+                <!-- Inline Entity Document creation: shown when an Entity-type
+                     source's selected entity has no Entity Document yet. -->
+                @if (SelectedEntityHasNoDocument) {
+                    <div class="cls-doc-callout">
+                        <div class="cls-doc-callout-head">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span><strong>{{ SelectedEntityName }}</strong> has no Entity Document. One is required to classify its records.</span>
+                        </div>
+                        @if (!ShowInlineEntityDocForm) {
+                            <button mjButton variant="primary" size="sm" (click)="OpenInlineEntityDocForm()">
+                                <i class="fa-solid fa-plus"></i> Create Entity Document
+                            </button>
+                        }
+                    </div>
+
+                    @if (ShowInlineEntityDocForm) {
+                        <div class="cls-doc-form">
+                            <div class="at-form-group">
+                                <label class="at-form-label">Document name</label>
+                                <input type="text" class="at-form-input" [(ngModel)]="NewEntityDocName"
+                                       placeholder="Document name">
+                            </div>
+                            <div class="at-form-group">
+                                <label class="at-form-label">Fields to include ({{ SelectedEntityDocFieldCount }} selected)</label>
+                                <div class="cls-doc-field-list">
+                                    @for (f of SelectedEntityFields; track f.Name) {
+                                        <label class="cls-doc-field-row">
+                                            <input type="checkbox" [(ngModel)]="NewEntityDocSelectedFields[f.Name]">
+                                            <span>{{ f.DisplayName }}</span>
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                            <div class="at-form-actions">
+                                <button mjButton variant="primary" size="sm" (click)="CreateInlineEntityDocument()" [disabled]="EntityDocSaving">
+                                    @if (EntityDocSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Creating… }
+                                    @else { <i class="fa-solid fa-check"></i> Create }
+                                </button>
+                                <button mjButton variant="secondary" size="sm" (click)="CancelInlineEntityDocForm()">Cancel</button>
+                            </div>
+                        </div>
+                    }
+                }
                 </div><!-- /Source section -->
 
                 <!-- ══════ EMBEDDING & VECTORS ══════ -->
@@ -247,6 +291,33 @@
                         </div>
                     }
                 </div><!-- /Classification section -->
+
+                <!-- ══════ DOMAIN CONTEXT (source scope) ══════ -->
+                <div class="cls-section">
+                    <div class="cls-section-title"><i class="fa-solid fa-comment-dots"></i> Domain context</div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Source guidance</label>
+                        <textarea class="at-form-textarea" rows="4"
+                                  [ngModel]="ClassificationContextValue"
+                                  (ngModelChange)="ClassificationContextValue = $event"
+                                  placeholder="Free-text guidance for the classifier about this source's domain — terminology, audience, what tags matter…"></textarea>
+                        <span class="at-form-hint">Injected into the autotagging prompt at the source scope.</span>
+                    </div>
+
+                    <div class="cls-toggle-row">
+                        <div class="cls-toggle-label">
+                            <span class="t">Substitutive mode</span>
+                            <span class="d">When on, this source's guidance <em>replaces</em> the org/content-type context. When off (default), it's <em>added</em> to them.</span>
+                        </div>
+                        <mj-switch [(ngModel)]="IsSubstitutiveMode"></mj-switch>
+                    </div>
+
+                    <div class="at-form-group">
+                        <label class="at-form-label">Effective context preview</label>
+                        <pre class="cls-context-preview">{{ EffectiveContextPreview }}</pre>
+                        <span class="at-form-hint">Org + source scopes shown. Content-type scope (if any) is also merged at run time.</span>
+                    </div>
+                </div><!-- /Domain context section -->
 
                 <!-- ══════ RUN BUDGETS ══════ -->
                 <div class="cls-section">

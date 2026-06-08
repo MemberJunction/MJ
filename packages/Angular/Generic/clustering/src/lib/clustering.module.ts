@@ -4,12 +4,17 @@ import { FormsModule } from '@angular/forms';
 
 import { ClusterScatterComponent } from './cluster-scatter.component';
 import { ClusterConfigPanelComponent } from './cluster-config-panel.component';
+import { ClusterViewRendererComponent } from './view-type/cluster-view-renderer.component';
+import { ClusterViewPropSheetComponent } from './view-type/cluster-view-prop-sheet.component';
+import { LoadClusterViewType } from './view-type/cluster-view-type';
 import { MJEntityCardComponent } from '@memberjunction/ng-entity-card';
 
 @NgModule({
     declarations: [
         ClusterScatterComponent,
         ClusterConfigPanelComponent,
+        ClusterViewRendererComponent,
+        ClusterViewPropSheetComponent,
     ],
     imports: [
         CommonModule,
@@ -19,6 +24,15 @@ import { MJEntityCardComponent } from '@memberjunction/ng-entity-card';
     exports: [
         ClusterScatterComponent,
         ClusterConfigPanelComponent,
+        ClusterViewRendererComponent,
+        ClusterViewPropSheetComponent,
     ],
 })
-export class ClusteringModule {}
+export class ClusteringModule {
+    constructor() {
+        // Guarantee the Cluster view-type descriptor's @RegisterClass runs whenever the
+        // clustering feature loads (ng-clustering sets sideEffects:false). App-wide
+        // registration is also covered by the generated ng-bootstrap class manifest.
+        LoadClusterViewType();
+    }
+}

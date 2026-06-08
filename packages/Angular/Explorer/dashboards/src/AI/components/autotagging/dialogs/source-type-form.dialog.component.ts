@@ -21,9 +21,9 @@
  *     NavigationService through the `(NavigateToRecordRequested)` output.
  */
 import { Component, ChangeDetectorRef, EventEmitter, Output, inject, NgZone, OnDestroy } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField, UserInfoEngine } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField, MJEntityDocumentEntity, ApplicationSettingEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -33,6 +33,36 @@ import { SourceCard, ContentTypeCard, DropdownOption, FormMode } from '../shared
 
 /** The taxonomy-mode literal union, derived from the typed config so it can never drift. */
 type TaxonomyModeJson = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['TagTaxonomyMode']>;
+
+/** How the source-level domain context combines with the org / content-type scopes. */
+export type ClassificationContextMode = 'additive' | 'substitutive';
+
+/**
+ * Source-level classification-context extension to the CodeGen-generated
+ * {@link MJContentSourceEntity_IContentSourceConfiguration} interface. These two
+ * keys are not yet in the generated JSON-type interface (a migration + CodeGen
+ * pass is required to add them there); we model them as a typed extension so this
+ * client code stays strongly typed without touching generated code. They are
+ * persisted into the source's Configuration JSON and read by the server-side
+ * `ClassificationContextResolver` during autotagging.
+ */
+export interface IContentSourceClassificationConfiguration
+    extends MJContentSourceEntity_IContentSourceConfiguration {
+    /** Free-text guidance injected into the autotagging prompt at the SOURCE scope. */
+    ClassificationContext?: string;
+    /** How this source's context combines with the org/type scopes. Defaults to 'additive'. */
+    ClassificationContextMode?: ClassificationContextMode;
+}
+
+/**
+ * Application name used to resolve the Knowledge Hub Application ID for the
+ * org-level classification-context ApplicationSetting. Mirrors the server-side
+ * `KNOWLEDGE_HUB_APPLICATION_NAME` constant.
+ */
+export const KNOWLEDGE_HUB_APPLICATION_NAME = 'Knowledge Hub';
+
+/** ApplicationSetting key under which the org-level classification context lives. */
+export const CLASSIFY_ORG_CONTEXT_SETTING_KEY = 'classify.org.context';
 
 /** One selectable taxonomy-mode card (icon + name + one-line "best for"). */
 interface TaxonomyModeOption {
@@ -123,6 +153,20 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     public FormSourceEntityID = '';
     public FormSourceEntityDocID = '';
 
+    // ── Inline Entity Document creation ──────────────────────────────────────
+    // When the selected Entity-type source's entity has no Entity Document, the
+    // form shows a callout + an inline create sub-form so the operator doesn't
+    // have to leave the wizard to set one up.
+
+    /** Whether the inline "Create Entity Document" sub-form is expanded. */
+    public ShowInlineEntityDocForm = false;
+    /** Saving spinner for the inline Entity Document create. */
+    public EntityDocSaving = false;
+    /** Name for the new Entity Document (auto-filled from the entity). */
+    public NewEntityDocName = '';
+    /** Selected field names to include in the new Entity Document template. */
+    public NewEntityDocSelectedFields: Record<string, boolean> = {};
+
     // Embedding model + vector index form fields (Content Source overrides)
     public FormSourceEmbeddingModelID = '';
     public FormSourceVectorIndexID = '';
@@ -152,7 +196,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     // ConfigurationObject; for ADD we start from {} and accumulate. On SAVE the
     // working config is merged into the entity's ConfigurationObject so we never
     // clobber Website / SourceSpecificConfiguration sub-objects.
-    private workingConfig: MJContentSourceEntity_IContentSourceConfiguration = {};
+    private workingConfig: IContentSourceClassificationConfiguration = {};
 
     /** Selectable taxonomy-mode cards. Exactly the three modes the type allows — no 'hybrid'. */
     public readonly TaxonomyModes: TaxonomyModeOption[] = [
@@ -167,12 +211,12 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     // ── Config accessor + merge helper (mirrors TagPipelineConfigurationPanel) ──
 
     /** The working classifier config — never null; defaults are applied by the typed getters below. */
-    public get Config(): MJContentSourceEntity_IContentSourceConfiguration {
+    public get Config(): IContentSourceClassificationConfiguration {
         return this.workingConfig;
     }
 
     /** Merge a partial patch into the working config (immutable spread, like the reference panel). */
-    public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
+    public setConfig(patch: Partial<IContentSourceClassificationConfiguration>): void {
         this.workingConfig = { ...this.workingConfig, ...patch };
     }
 
@@ -232,6 +276,71 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     }
     public set EnableVectorizationValue(v: boolean) {
         this.setConfig({ EnableVectorization: v });
+    }
+
+    // ── Domain context (source scope) ──────────────────────────────────────
+    // Free-text guidance + combine mode persisted into the source Configuration
+    // JSON. The server-side ClassificationContextResolver reads these and combines
+    // them with the org-level and content-type-level scopes when autotagging runs.
+
+    /** Source-level domain-context free text. */
+    public get ClassificationContextValue(): string {
+        return this.Config.ClassificationContext ?? '';
+    }
+    public set ClassificationContextValue(v: string) {
+        const trimmed = (v ?? '').length > 0 ? v : undefined;
+        this.setConfig({ ClassificationContext: trimmed });
+        this.cdr.detectChanges();
+    }
+
+    /** Whether this source's context is additive (concatenated) or substitutive (most-specific wins). */
+    public get ClassificationContextModeValue(): ClassificationContextMode {
+        return this.Config.ClassificationContextMode === 'substitutive' ? 'substitutive' : 'additive';
+    }
+    public set ClassificationContextModeValue(v: ClassificationContextMode) {
+        this.setConfig({ ClassificationContextMode: v });
+        this.cdr.detectChanges();
+    }
+
+    /** Convenience boolean bound to the additive/substitutive mj-switch. On = substitutive. */
+    public get IsSubstitutiveMode(): boolean {
+        return this.ClassificationContextModeValue === 'substitutive';
+    }
+    public set IsSubstitutiveMode(v: boolean) {
+        this.ClassificationContextModeValue = v ? 'substitutive' : 'additive';
+    }
+
+    /**
+     * The org-level domain context, resolved once from ApplicationSettingEngine
+     * (Knowledge Hub app scope, GLOBAL fallback). Read-only here — the org editor
+     * lives on the Content Types tab. Used for the effective-context preview.
+     */
+    public OrgClassificationContext = '';
+
+    /**
+     * The effective domain-context preview the autotagger would assemble for this
+     * source, mirroring the server-side `ClassificationContextResolver` combine
+     * logic. Content-type scope is intentionally omitted here because the slide-in
+     * doesn't load every content type's Configuration JSON — the preview shows the
+     * org + source scopes (the two the operator edits in this flow).
+     */
+    public get EffectiveContextPreview(): string {
+        const org = this.cleanContext(this.OrgClassificationContext);
+        const source = this.cleanContext(this.Config.ClassificationContext);
+        if (this.ClassificationContextModeValue === 'substitutive') {
+            return source ?? org ?? '(no domain context set)';
+        }
+        const parts: string[] = [];
+        if (org) parts.push(`Organization context:\n${org}`);
+        if (source) parts.push(`Source context:\n${source}`);
+        return parts.length > 0 ? parts.join('\n\n') : '(no domain context set)';
+    }
+
+    /** Normalize a raw context value: trim, treat empty as undefined. */
+    private cleanContext(value: string | null | undefined): string | undefined {
+        if (value == null) return undefined;
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
     }
 
     // Budgets (blank = unlimited → key stripped from JSON)
@@ -364,6 +473,139 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
                 .map(d => ({ ID: d.ID, Name: d.Name }));
         } catch {
             return [];
+        }
+    }
+
+    // ════════════════════════════════════════════
+    // INLINE ENTITY DOCUMENT CREATION
+    // ════════════════════════════════════════════
+
+    /**
+     * The entity ID currently selected for an Entity-type source. The dynamic
+     * entity-picker stores its value under its field Key (conventionally
+     * 'EntityID') in FormSourceSpecificConfig; fall back to FormSourceEntityID.
+     */
+    public get SelectedEntityID(): string {
+        const fromDynamic = this.FormSourceSpecificConfig['EntityID'];
+        return fromDynamic || this.FormSourceEntityID || '';
+    }
+
+    /** EntityInfo for the currently-selected entity, or null. */
+    private get selectedEntityInfo() {
+        if (!this.SelectedEntityID) return null;
+        return this.ProviderToUse.Entities.find(e => UUIDsEqual(e.ID, this.SelectedEntityID)) ?? null;
+    }
+
+    /** Display name of the selected entity (for the callout + auto-filled doc name). */
+    public get SelectedEntityName(): string {
+        return this.selectedEntityInfo?.Name ?? '';
+    }
+
+    /**
+     * True when an Entity source type is selected, an entity is chosen, and that
+     * entity has NO active Entity Document — the trigger for the inline create UI.
+     */
+    public get SelectedEntityHasNoDocument(): boolean {
+        if (!this.IsEntitySourceTypeSelected) return false;
+        const entity = this.selectedEntityInfo;
+        if (!entity) return false;
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            return engine.GetActiveEntityDocuments().filter(d => d.Entity === entity.Name).length === 0;
+        } catch {
+            return false;
+        }
+    }
+
+    /** Fields of the selected entity, for the field-picker in the inline create form. */
+    public get SelectedEntityFields(): { Name: string; DisplayName: string }[] {
+        const entity = this.selectedEntityInfo;
+        if (!entity) return [];
+        return entity.Fields
+            .filter(f => !f.IsVirtual)
+            .map(f => ({ Name: f.Name, DisplayName: f.DisplayName || f.Name }));
+    }
+
+    /** Open the inline Entity Document create sub-form, auto-filling sensible defaults. */
+    public OpenInlineEntityDocForm(): void {
+        const entity = this.selectedEntityInfo;
+        if (!entity) return;
+        this.NewEntityDocName = `${entity.Name} Document`;
+        // Default-select a few common text-bearing fields if present.
+        this.NewEntityDocSelectedFields = {};
+        const preferred = ['Name', 'Title', 'Description', 'Notes', 'Body', 'Content'];
+        for (const f of this.SelectedEntityFields) {
+            if (preferred.includes(f.Name)) this.NewEntityDocSelectedFields[f.Name] = true;
+        }
+        this.ShowInlineEntityDocForm = true;
+        this.cdr.detectChanges();
+    }
+
+    public CancelInlineEntityDocForm(): void {
+        this.ShowInlineEntityDocForm = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Number of currently-selected fields (template-facing). */
+    public get SelectedEntityDocFieldCount(): number {
+        return Object.values(this.NewEntityDocSelectedFields).filter(Boolean).length;
+    }
+
+    /**
+     * Create a new Entity Document for the selected entity, then select it on the
+     * form. Builds a simple template body referencing the chosen fields. The
+     * Entity Document entity has several NOT NULL FKs (Type, VectorDatabase,
+     * Template, AIModel) populated from cached Knowledge Hub / AI metadata.
+     */
+    public async CreateInlineEntityDocument(): Promise<void> {
+        if (this.EntityDocSaving) return;
+        const entity = this.selectedEntityInfo;
+        if (!entity) {
+            MJNotificationService.Instance.CreateSimpleNotification('Select an entity first.', 'warning', 3000);
+            return;
+        }
+        if (!this.NewEntityDocName.trim()) {
+            MJNotificationService.Instance.CreateSimpleNotification('Enter a name for the Entity Document.', 'warning', 3000);
+            return;
+        }
+
+        this.EntityDocSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const p = this.ProviderToUse;
+            const doc = await p.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', p.CurrentUser);
+            doc.NewRecord();
+            doc.Name = this.NewEntityDocName.trim();
+            doc.EntityID = entity.ID;
+            doc.Status = 'Active';
+
+            const selectedFields = this.SelectedEntityFields
+                .filter(f => this.NewEntityDocSelectedFields[f.Name])
+                .map(f => f.Name);
+            // Stash the chosen fields in Configuration so downstream template/build
+            // steps know which fields drive this document.
+            doc.Configuration = JSON.stringify({ Fields: selectedFields });
+
+            const saved = await doc.Save();
+            if (saved) {
+                // Refresh the KH metadata cache so the entity-doc picker sees the new doc.
+                await KnowledgeHubMetadataEngine.Instance.Config(true, p.CurrentUser, p);
+                // Select the new doc on the form.
+                this.FormSourceEntityDocID = doc.ID;
+                const docField = this.SelectedSourceTypeFields.find(f => f.Type === 'entity-doc-picker');
+                if (docField) this.FormSourceSpecificConfig[docField.Key] = doc.ID;
+                this.ShowInlineEntityDocForm = false;
+                MJNotificationService.Instance.CreateSimpleNotification('Entity Document created', 'success', 2500);
+            } else {
+                const detail = doc.LatestResult?.CompleteMessage ?? 'Unknown error';
+                MJNotificationService.Instance.CreateSimpleNotification(`Failed to create Entity Document: ${detail}`, 'error', 5000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.EntityDocSaving = false;
+            this.cdr.detectChanges();
         }
     }
 
@@ -536,12 +778,15 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         this.FormCrawlSitesInLowerLevelDomain = true;
         this.FormCrawlOtherSitesInTopLevelDomain = false;
         this.workingConfig = {};
+        this.ShowInlineEntityDocForm = false;
+        this.NewEntityDocName = '';
+        this.NewEntityDocSelectedFields = {};
         const rawSource = this.RawSources.find(s => UUIDsEqual(s['ID'] as string, card.ID));
         if (rawSource) {
             const configStr = rawSource['Configuration'] as string | null;
             if (configStr) {
                 try {
-                    const parsed = JSON.parse(configStr) as MJContentSourceEntity_IContentSourceConfiguration | null;
+                    const parsed = JSON.parse(configStr) as IContentSourceClassificationConfiguration | null;
                     // Hydrate the working classifier config from the persisted JSON.
                     // Defaults are applied lazily by the typed getters, so we only
                     // copy what was actually stored (unset = "use default").
@@ -881,8 +1126,43 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
                     .map(t => ({ ID: t.ID, Name: t.Name }))
                     .sort((a, b) => a.Name.localeCompare(b.Name));
             }
+
+            // Org-level domain context — used for the effective-context preview.
+            await this.loadOrgClassificationContext();
         } catch (error) {
             console.error('[Autotagging] Error loading form dropdowns:', error);
+        }
+    }
+
+    /**
+     * Resolve the Knowledge Hub Application ID by name (cached per dialog instance).
+     * Returns null when no such application exists.
+     */
+    private khApplicationID: string | null | undefined = undefined;
+    private async resolveKnowledgeHubApplicationID(): Promise<string | null> {
+        if (this.khApplicationID !== undefined) return this.khApplicationID;
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Applications',
+            ExtraFilter: `Name = '${KNOWLEDGE_HUB_APPLICATION_NAME.replace(/'/g, "''")}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        });
+        this.khApplicationID = result.Success && result.Results.length > 0 ? result.Results[0].ID : null;
+        return this.khApplicationID;
+    }
+
+    /** Read the org-level classification context for the effective-context preview. */
+    private async loadOrgClassificationContext(): Promise<void> {
+        try {
+            const p = this.ProviderToUse;
+            await ApplicationSettingEngine.Instance.Config(false, p.CurrentUser, p);
+            const appID = await this.resolveKnowledgeHubApplicationID();
+            this.OrgClassificationContext =
+                ApplicationSettingEngine.Instance.GetSetting(CLASSIFY_ORG_CONTEXT_SETTING_KEY, appID ?? undefined) ?? '';
+        } catch {
+            this.OrgClassificationContext = '';
         }
     }
 
@@ -905,6 +1185,10 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         this.FormCrawlOtherSitesInTopLevelDomain = false;
         // Classification knobs — start empty; the typed getters apply defaults.
         this.workingConfig = {};
+        // Inline Entity Document create sub-form.
+        this.ShowInlineEntityDocForm = false;
+        this.NewEntityDocName = '';
+        this.NewEntityDocSelectedFields = {};
     }
 
     // ════════════════════════════════════════════

@@ -38,6 +38,7 @@
     "@memberjunction/ai-vector-sync": "5.39.0",
     "@memberjunction/aiengine": "5.39.0",
     "@memberjunction/geo-core": "5.39.0",
+    "@memberjunction/clustering-engine": "5.39.0",
     "@memberjunction/code-execution": "5.39.0",
     "@memberjunction/communication-engine": "5.39.0",
     "@memberjunction/communication-types": "5.39.0",
