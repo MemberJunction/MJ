@@ -16,6 +16,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
     "@memberjunction/esignature": "5.39.0",
     "@memberjunction/global": "5.39.0"
