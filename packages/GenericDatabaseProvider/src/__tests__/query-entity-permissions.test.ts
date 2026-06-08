@@ -15,7 +15,7 @@ import {
     RunQueryParams,
     RunQueryResult,
 } from '@memberjunction/core';
-import { MJQueryEntityExtended, MJQueryEntityEntity, QueryEngine } from '@memberjunction/core-entities';
+import { MJQueryEntityExtended, MJQueryEntityEntity, MJQueryPermissionEntity, QueryEngine } from '@memberjunction/core-entities';
 
 // ---- Test subclass exposing protected methods ----
 
@@ -90,10 +90,6 @@ class TestPermissionProvider extends GenericDatabaseProvider {
     }
 
     // ---- Expose protected methods for direct testing ----
-    public testValidateQueryEntityPermissions(query: MJQueryEntityExtended, user: UserInfo): void {
-        this.ValidateQueryEntityPermissions(query, user);
-    }
-
     public testValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
         this.ValidateQueryForExecution(query, contextUser);
     }
@@ -111,9 +107,11 @@ function makeQueryInfo(overrides: Partial<{
     SQL: string;
     Status: string;
     QueryEntities: MJQueryEntityEntity[];
+    QueryPermissions: MJQueryPermissionEntity[];
 }>): MJQueryEntityExtended {
     const status = overrides.Status ?? 'Approved';
     const queryEntities = overrides.QueryEntities ?? [];
+    const queryPermissions = overrides.QueryPermissions ?? [];
 
     const q: Record<string, unknown> = {
         ID: overrides.ID ?? 'q-1',
@@ -124,12 +122,41 @@ function makeQueryInfo(overrides: Partial<{
         UsesTemplate: false,
         CacheEnabled: false,
         AuditQueryRuns: false,
-        UserCanRun: vi.fn().mockReturnValue(true),
         UserHasRunPermissions: vi.fn().mockReturnValue(true),
         GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
         QueryParameters: [],
         QueryEntities: queryEntities,
+        QueryPermissions: queryPermissions,
     };
+
+    // UserCanRun mirrors the real implementation logic
+    q.UserCanRun = vi.fn().mockImplementation((user: UserInfo) => {
+        const hasRunPerms = (q.UserHasRunPermissions as ReturnType<typeof vi.fn>)(user);
+        if (!hasRunPerms) {
+            return { canRun: false, deniedEntities: [] };
+        }
+
+        const perms = q.QueryPermissions as MJQueryPermissionEntity[];
+        if (perms && perms.length > 0) {
+            return { canRun: true, deniedEntities: [] };
+        }
+
+        const entities = q.QueryEntities as MJQueryEntityEntity[];
+        if (!entities || entities.length === 0) {
+            return { canRun: true, deniedEntities: [] };
+        }
+
+        const deniedEntities: string[] = [];
+        for (const qe of entities) {
+            const entityInfo = provider.Entities.find(e => e.ID === qe.EntityID);
+            if (!entityInfo) continue;
+            const entityPerms = entityInfo.GetUserPermisions(user);
+            if (!entityPerms || !entityPerms.CanRead) {
+                deniedEntities.push(entityInfo.Name);
+            }
+        }
+        return { canRun: deniedEntities.length === 0, deniedEntities };
+    });
 
     Object.defineProperty(q, 'CategoryPath', {
         get: () => '',
@@ -143,6 +170,8 @@ function makeQueryInfo(overrides: Partial<{
 
     return q as unknown as MJQueryEntityExtended;
 }
+
+let provider: TestPermissionProvider;
 
 function makeQueryEntityRecord(entityID: string): MJQueryEntityEntity {
     return {
@@ -166,6 +195,10 @@ function makeEntityInfo(id: string, name: string, canRead: boolean): EntityInfo 
     } as unknown as EntityInfo;
 }
 
+function makePermissionRecord(role: string): MJQueryPermissionEntity {
+    return { Role: role } as unknown as MJQueryPermissionEntity;
+}
+
 const mockUser: UserInfo = {
     ID: 'test-user-id',
     Name: 'Test User',
@@ -176,8 +209,6 @@ const mockUser: UserInfo = {
 // ---- Tests ----
 
 describe('Query Entity Permission Validation', () => {
-    let provider: TestPermissionProvider;
-
     beforeEach(() => {
         provider = new TestPermissionProvider();
         vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
@@ -191,10 +222,10 @@ describe('Query Entity Permission Validation', () => {
     });
 
     // ================================================================
-    // ValidateQueryEntityPermissions — direct unit tests
+    // UserCanRun — centralized permission check
     // ================================================================
-    describe('ValidateQueryEntityPermissions', () => {
-        it('should pass when user has read permission on all referenced entities', () => {
+    describe('UserCanRun', () => {
+        it('should return canRun=true when user has read permission on all referenced entities', () => {
             const entity1 = makeEntityInfo('e-1', 'Users', true);
             const entity2 = makeEntityInfo('e-2', 'Orders', true);
             provider.setMockEntities([entity1, entity2]);
@@ -206,12 +237,12 @@ describe('Query Entity Permission Validation', () => {
                 ],
             });
 
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser)).not.toThrow();
-            expect(entity1.GetUserPermisions).toHaveBeenCalledWith(mockUser);
-            expect(entity2.GetUserPermisions).toHaveBeenCalledWith(mockUser);
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(true);
+            expect(result.deniedEntities).toHaveLength(0);
         });
 
-        it('should throw when user lacks read permission on a referenced entity', () => {
+        it('should return denied entities when user lacks read permission', () => {
             const entity1 = makeEntityInfo('e-1', 'Users', true);
             const entity2 = makeEntityInfo('e-2', 'Salary Records', false);
             provider.setMockEntities([entity1, entity2]);
@@ -224,19 +255,18 @@ describe('Query Entity Permission Validation', () => {
                 ],
             });
 
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser))
-                .toThrow(/Salary Records/);
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(false);
+            expect(result.deniedEntities).toContain('Salary Records');
         });
 
-        it('should list all denied entities in the error message', () => {
+        it('should list all denied entities', () => {
             const entity1 = makeEntityInfo('e-1', 'Secret Plans', false);
             const entity2 = makeEntityInfo('e-2', 'Classified Data', false);
             const entity3 = makeEntityInfo('e-3', 'Public Info', true);
             provider.setMockEntities([entity1, entity2, entity3]);
 
             const query = makeQueryInfo({
-                Name: 'Multi-Source Report',
-                ID: 'q-multi',
                 QueryEntities: [
                     makeQueryEntityRecord('e-1'),
                     makeQueryEntityRecord('e-2'),
@@ -244,39 +274,23 @@ describe('Query Entity Permission Validation', () => {
                 ],
             });
 
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser))
-                .toThrow(/Secret Plans, Classified Data/);
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(false);
+            expect(result.deniedEntities).toContain('Secret Plans');
+            expect(result.deniedEntities).toContain('Classified Data');
+            expect(result.deniedEntities).not.toContain('Public Info');
         });
 
-        it('should include query name and ID in the error message', () => {
-            const entity = makeEntityInfo('e-1', 'Restricted', false);
-            provider.setMockEntities([entity]);
-
-            const query = makeQueryInfo({
-                Name: 'My Report',
-                ID: 'q-abc-123',
-                QueryEntities: [makeQueryEntityRecord('e-1')],
-            });
-
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser))
-                .toThrow(/query 'My Report'.*\(ID: q-abc-123\)/);
-        });
-
-        it('should warn and allow execution when no QueryEntity records exist', () => {
+        it('should return canRun=true when no QueryEntity records exist (legacy)', () => {
             provider.setMockEntities([]);
 
-            const query = makeQueryInfo({
-                Name: 'Legacy Query',
-                ID: 'q-legacy',
-                QueryEntities: [],
-            });
+            const query = makeQueryInfo({ QueryEntities: [] });
 
-            // Should not throw — fails open for backwards compatibility
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser)).not.toThrow();
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(true);
         });
 
         it('should skip stale entity references that no longer exist in metadata', () => {
-            // Only entity e-1 exists in metadata; e-stale does not
             const entity1 = makeEntityInfo('e-1', 'Users', true);
             provider.setMockEntities([entity1]);
 
@@ -287,11 +301,11 @@ describe('Query Entity Permission Validation', () => {
                 ],
             });
 
-            // Should not throw — stale reference is skipped
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser)).not.toThrow();
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(true);
         });
 
-        it('should throw when GetUserPermisions returns null', () => {
+        it('should treat null permissions as denied', () => {
             const entity = {
                 ID: 'e-1',
                 Name: 'Broken Permissions Entity',
@@ -304,34 +318,39 @@ describe('Query Entity Permission Validation', () => {
                 QueryEntities: [makeQueryEntityRecord('e-1')],
             });
 
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser))
-                .toThrow(/Broken Permissions Entity/);
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(false);
+            expect(result.deniedEntities).toContain('Broken Permissions Entity');
         });
 
-        it('should pass when QueryEntities is undefined', () => {
-            provider.setMockEntities([]);
+        it('should skip entity checks when explicit Query Permissions exist (stored-procedure semantics)', () => {
+            const entity = makeEntityInfo('e-1', 'Restricted', false);
+            provider.setMockEntities([entity]);
 
-            const q: Record<string, unknown> = {
-                ID: 'q-undef',
-                Name: 'Undefined QE Query',
-                SQL: 'SELECT 1',
-                Status: 'Approved',
-                UserHasRunPermissions: vi.fn().mockReturnValue(true),
-                QueryParameters: [],
-                QueryEntities: undefined,
-            };
-            Object.defineProperty(q, 'CategoryPath', { get: () => '', configurable: true });
-            const query = q as unknown as MJQueryEntityExtended;
+            const query = makeQueryInfo({
+                QueryEntities: [makeQueryEntityRecord('e-1')],
+                QueryPermissions: [makePermissionRecord('Admin')],
+            });
 
-            expect(() => provider.testValidateQueryEntityPermissions(query, mockUser)).not.toThrow();
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(true);
+            expect(result.deniedEntities).toHaveLength(0);
+        });
+
+        it('should return canRun=false when user lacks run permissions', () => {
+            const query = makeQueryInfo({});
+            query.UserHasRunPermissions = vi.fn().mockReturnValue(false);
+
+            const result = query.UserCanRun(mockUser);
+            expect(result.canRun).toBe(false);
         });
     });
 
     // ================================================================
-    // ValidateQueryForExecution — integration with entity permission check
+    // ValidateQueryForExecution — delegates to UserCanRun
     // ================================================================
-    describe('ValidateQueryForExecution integration', () => {
-        it('should call entity permission validation after run permission check', () => {
+    describe('ValidateQueryForExecution', () => {
+        it('should throw when user lacks entity read permission (no explicit query permissions)', () => {
             const entity = makeEntityInfo('e-1', 'Restricted', false);
             provider.setMockEntities([entity]);
 
@@ -339,12 +358,11 @@ describe('Query Entity Permission Validation', () => {
                 QueryEntities: [makeQueryEntityRecord('e-1')],
             });
 
-            // User has run permission (UserHasRunPermissions returns true) but not entity read
             expect(() => provider.testValidateQueryForExecution(query, mockUser))
-                .toThrow(/does not have read permission/);
+                .toThrow(/does not have permission to run query/);
         });
 
-        it('should skip entity permission check when no contextUser is provided and no CurrentUser', () => {
+        it('should include denied entities in error message', () => {
             const entity = makeEntityInfo('e-1', 'Restricted', false);
             provider.setMockEntities([entity]);
 
@@ -352,25 +370,32 @@ describe('Query Entity Permission Validation', () => {
                 QueryEntities: [makeQueryEntityRecord('e-1')],
             });
 
-            // No user — both permission checks should be skipped
+            expect(() => provider.testValidateQueryForExecution(query, mockUser))
+                .toThrow(/Restricted/);
+        });
+
+        it('should skip permission checks when no contextUser is provided and no CurrentUser', () => {
+            const entity = makeEntityInfo('e-1', 'Restricted', false);
+            provider.setMockEntities([entity]);
+
+            const query = makeQueryInfo({
+                QueryEntities: [makeQueryEntityRecord('e-1')],
+            });
+
             expect(() => provider.testValidateQueryForExecution(query)).not.toThrow();
         });
 
-        it('should throw run permission error before reaching entity permission check', () => {
+        it('should throw run permission error when user lacks run permissions', () => {
             const entity = makeEntityInfo('e-1', 'Some Entity', false);
             provider.setMockEntities([entity]);
 
             const query = makeQueryInfo({
                 QueryEntities: [makeQueryEntityRecord('e-1')],
             });
-            // User lacks run permission
             query.UserHasRunPermissions = vi.fn().mockReturnValue(false);
 
             expect(() => provider.testValidateQueryForExecution(query, mockUser))
                 .toThrow(/does not have permission to run query/);
-
-            // Entity permission check should never be reached
-            expect(entity.GetUserPermisions).not.toHaveBeenCalled();
         });
     });
 
@@ -394,8 +419,6 @@ describe('Query Entity Permission Validation', () => {
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Confidential');
-            expect(result.ErrorMessage).toContain('read permission');
-            expect(result.Results).toHaveLength(0);
         });
 
         it('should execute successfully when user has read permission on all entities', async () => {

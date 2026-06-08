@@ -176,7 +176,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             const qe = QueryEngine.Instance;
             this.categories = qe.Categories || [];
             this.queries = (qe.Queries || []).filter(q =>
-                q.UserCanRun(this.metadata.CurrentUser)
+                q.UserCanRun(this.metadata.CurrentUser).canRun
             );
 
             this.applyFilters();
