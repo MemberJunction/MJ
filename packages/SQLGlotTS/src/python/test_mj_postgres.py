@@ -72,14 +72,22 @@ check("sp_addextendedproperty TABLE-level → COMMENT ON TABLE",
       must_not_contain=["sp_addextendedproperty"])
 
 # --- Transform 2: IF [NOT] EXISTS(...) BEGIN ... END → DO block --------------
-check("idempotent IF NOT EXISTS BEGIN INSERT END → DO block",
-      """IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.EntityField WHERE ID = 'abc')
+check("idempotent IF NOT EXISTS BEGIN INSERT END → DO block (non-metadata table)",
+      """IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Widget WHERE ID = 'abc')
          BEGIN
-            INSERT INTO ${flyway:defaultSchema}.EntityField (ID, Name) VALUES ('abc', 'KeyPrefix');
+            INSERT INTO ${flyway:defaultSchema}.Widget (ID, Name) VALUES ('abc', 'KeyPrefix');
          END""",
       must_contain=["DO $$", "IF NOT EXISTS (", "THEN", "END IF;", "END $$;",
-                    'INSERT INTO ${flyway:defaultSchema}."EntityField"', '"ID"', '"Name"'],
+                    'INSERT INTO ${flyway:defaultSchema}."Widget"', '"ID"', '"Name"'],
       must_not_contain=["BEGIN\n    INSERT", "sp_addext"])
+
+check("idempotent seed of schema-derived metadata (EntityField) is dropped (CodeGen regenerates)",
+      """IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [ID] = 'abc')
+         BEGIN
+            INSERT INTO [${flyway:defaultSchema}].[EntityField] ([ID], [Name]) VALUES ('abc', 'X');
+         END""",
+      must_contain=[],
+      must_not_contain=["EntityField", "DO $$", "INSERT"])
 
 # --- GO batches + mixed envelope ordering -----------------------------------
 check("GO batches: DDL + comment + idempotent insert, all clean, order preserved",

@@ -51,13 +51,16 @@ class MJPostgres(Postgres):
             return super().identifier_sql(expression)
 
         def datatype_sql(self, expression: exp.DataType) -> str:
+            has_max = any(
+                isinstance(e, exp.DataTypeParam) and isinstance(e.this, exp.Var) and e.name.upper() == "MAX"
+                for e in expression.expressions
+            )
             # SS NVARCHAR(MAX)/VARCHAR(MAX) → PG TEXT (PG has no MAX length sentinel).
-            if expression.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.NVARCHAR, exp.DataType.Type.CHAR):
-                if any(
-                    isinstance(e, exp.DataTypeParam) and isinstance(e.this, exp.Var) and e.name.upper() == "MAX"
-                    for e in expression.expressions
-                ):
-                    return "TEXT"
+            if has_max and expression.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.NVARCHAR, exp.DataType.Type.CHAR):
+                return "TEXT"
+            # SS VARBINARY/BINARY(MAX|n) → PG BYTEA (takes no length modifier).
+            if expression.this in (exp.DataType.Type.VARBINARY, exp.DataType.Type.BINARY):
+                return "BYTEA"
             return super().datatype_sql(expression)
 
 
@@ -103,6 +106,21 @@ def _strip_collate(node: exp.Expression) -> exp.Expression:
         kept = [
             c for c in node.args.get("constraints", [])
             if not (isinstance(c, exp.ColumnConstraint) and isinstance(c.kind, exp.CollateColumnConstraint))
+        ]
+        node.set("constraints", kept)
+    return node
+
+
+def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
+    """Drop CHECK constraints using ISJSON() — PG has no ISJSON (validity enforced elsewhere)."""
+    if isinstance(node, exp.ColumnDef):
+        kept = [
+            c for c in node.args.get("constraints", [])
+            if not (
+                isinstance(c, exp.ColumnConstraint)
+                and isinstance(c.kind, exp.CheckColumnConstraint)
+                and "ISJSON" in c.kind.sql(dialect="tsql").upper()
+            )
         ]
         node.set("constraints", kept)
     return node
@@ -257,12 +275,22 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
     for stmt in statements:
         if stmt is None:
             continue
+        # Standalone seed of schema-derived metadata → drop; CodeGen regenerates it.
+        if isinstance(stmt, exp.Insert) and _METADATA_TABLES.search(stmt.sql(dialect="tsql")):
+            continue
         if isinstance(stmt, exp.Command):
             txt = stmt.sql(dialect="tsql")
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
                 continue
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
+            continue
+        # `SET NOEXEC ON` parses to a Set node in some contexts — drop it (batch control).
+        if isinstance(stmt, exp.Set) and "NOEXEC" in stmt.sql(dialect="tsql").upper():
+            continue
+        # RAISERROR(...) at statement level is invalid PG outside a function — drop it
+        # (inside an IF…BEGIN guard it is handled as RAISE EXCEPTION by the DO-block path).
+        if isinstance(stmt, exp.Anonymous) and (stmt.name or "").upper() == "RAISERROR":
             continue
         if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "NONCLUSTERED INDEX":
             stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
@@ -271,6 +299,7 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
             .transform(_rewrite_boolean_defaults)
             .transform(_strip_national)
             .transform(_strip_collate)
+            .transform(_drop_isjson_checks)
             .transform(_fold_clustered_constraints)
             .transform(_strip_nulls_ordering)
         )
@@ -278,11 +307,36 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
     return (";\n".join(out) + (";" if out else "")), unhandled
 
 
+_RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNORECASE)
+
+# Schema-derived metadata tables: CodeGen regenerates these rows from schema
+# introspection, so the idempotent INSERTs that seed them are Category-M (drop +
+# regenerate), not DDL to transpile. (Curated metadata — AIModel, Action, etc. —
+# is reseeded by `mj sync push`; only the introspection-derived tables are listed.)
+# Delimiter-agnostic: matches `[EntityField]`, "EntityField", schema.EntityField, etc.
+# Longer names first so EntityFieldValue isn't shadowed by EntityField/Entity.
+_METADATA_TABLES = _re.compile(
+    r"INSERT\s+INTO\b.{0,80}?\b(EntityFieldValue|EntityRelationship|EntityPermission|EntitySetting|EntityField|Entity)\b",
+    _re.IGNORECASE | _re.DOTALL,
+)
+
+
 def _transpile_if_exists_begin(m: "_re.Match") -> tuple[str, list[dict]]:
     """IF [NOT] EXISTS(<sel>) BEGIN <body> END → PG DO $$ … IF … THEN … END IF; … $$;"""
+    raw_body = m.group("body").strip()
+    # Idempotent seed of schema-derived metadata → drop; CodeGen regenerates it.
+    if _METADATA_TABLES.search(raw_body):
+        return "", []
     neg = "NOT " if m.group("neg") else ""
     cond_sql, u1 = _transpile_plain(m.group("cond").strip())
-    body_sql, u2 = _transpile_plain(m.group("body").strip())
+    # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION.
+    rr = _RAISERROR.search(raw_body)
+    if rr:
+        msg = rr.group(1)
+        msg = _pg_string(_unquote_tsql_string(msg)) if msg.lstrip("Nn").startswith("'") else "'migration guard failed'"
+        body_sql, u2 = f"RAISE EXCEPTION {msg};", []
+    else:
+        body_sql, u2 = _transpile_plain(raw_body)
     cond_inner = cond_sql.rstrip(";").strip()
     if not cond_inner or not body_sql.strip():
         return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}])
