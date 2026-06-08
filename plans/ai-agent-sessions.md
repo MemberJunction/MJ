@@ -519,6 +519,140 @@ On `SIGTERM`/redeploy, the instance runs the janitor's close path for its own se
 
 ---
 
+## Voice as a Model Capability
+
+Voice is **not** hardcoded into the Session Host. MJ already has a capability-typed AI driver system — `packages/AI/Core/src/generic/` defines sibling base classes (`baseLLM`, `baseEmbeddings`, `baseAudio`, `baseImage`, `baseVideo`, `baseDiffusion`, `baseReranker`), and `AIEngine` resolves any of them uniformly through the ClassFactory by `AIModelType` + `DriverClass`:
+
+```typescript
+// AIEngine.ts — same pattern for every capability
+const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
+```
+
+The `VoiceAudio` channel resolves its speech drivers the same way an agent resolves its LLM. Provider selection, priority/fallback, API-key resolution (`GetAIAPIKey(DriverClass)`), and per-minute cost tracking (`MJ: AI Model Costs`) all come for free.
+
+### Two voice modes
+
+| Mode | Pipeline | Models used | Loop owner | Transport planes |
+|---|---|---|---|---|
+| **Pipelined** | STT → MJ agent turn (`AIAgentRun`) → TTS | three `AIModel`s (audio + LLM + audio) | MJ `BaseAgent` | control (transcripts/tokens) + media (audio) |
+| **Realtime-native** | one duplex provider socket | one `BaseRealtimeVoice` model | the provider | upstream-provider + media + control |
+
+### Decision rule: when is realtime a new method vs. a new class?
+
+The line is **request/response vs. stateful duplex session**:
+
+- **Streaming STT / streaming TTS** — same one-shot operation, just chunked over time — is a **new method on `BaseAudioGenerator`**, advertised via the existing `GetSupportedMethods()` capability flag (the class already ships this exact mechanism for "some audio models support X, some don't"). No new class. This is the natural upgrade of the pipelined mode.
+- **Full-duplex conversational models** (Gemini Live, OpenAI Realtime) — one socket that listens, reasons, calls tools, and speaks with barge-in — get a **new sibling subclass of `BaseModel`** and a new `AIModelType`. Reasons: the contract returns a *stateful session handle*, not a `SpeechResult`; it is selected/resolved as its own capability; it is really a streaming multimodal LLM that happens to speak (modeling it as an audio generator is a category error); and it would force every TTS-only provider to stub out a session lifecycle it never implements. This is consistent with MJ's existing sibling-per-capability precedent.
+
+### Reuse: `BaseAudioGenerator` (pipelined mode — zero new model code)
+
+Already present in `baseAudio.ts`:
+
+```typescript
+export abstract class BaseAudioGenerator extends BaseModel {
+    public abstract CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult>;   // TTS
+    public abstract SpeechToText(params: SpeechToTextParams): Promise<SpeechResult>;   // STT
+    public abstract GetVoices(): Promise<VoiceInfo[]>;
+    public abstract GetSupportedMethods(): Promise<string[]>;
+    // ...
+}
+```
+
+Pipelined voice (Deepgram/Whisper for STT, ElevenLabs/OpenAI-TTS for output) needs **no new model class** — only metadata registration.
+
+### New capability: `BaseRealtimeVoice` (realtime-native mode)
+
+A new sibling base class added alongside the others in `packages/AI/Core/src/generic/`:
+
+```typescript
+export abstract class BaseRealtimeVoice extends BaseModel {
+    /** Opens a stateful duplex session; the returned handle is the long-lived object. */
+    public abstract StartSession(params: RealtimeSessionParams): Promise<IRealtimeVoiceSession>;
+}
+
+export interface IRealtimeVoiceSession {
+    SendAudio(chunk: ArrayBuffer): void;                          // client mic frames in
+    RegisterTools(tools: ClientToolMetadata[]): Promise<void>;   // provider-native tool registration
+    OnAudio(handler: (chunk: ArrayBuffer) => void): void;        // agent speech out → media plane
+    OnTranscript(handler: (t: RealtimeTranscript) => void): void;// → control plane + ConversationDetail
+    OnToolCall(handler: (call: RealtimeToolCall) => void): void; // → MJ tool execution under contextUser
+    OnInterruption(handler: () => void): void;                   // barge-in → cancellationToken
+    Close(): Promise<void>;
+}
+```
+
+The `VoiceAudio` channel, in realtime-native mode, wraps an `IRealtimeVoiceSession`: it bridges audio to the **media plane**, transcripts to the **control plane** (and into `ConversationDetail`), and `OnToolCall` into MJ tool execution under the session's `contextUser` (see [Authorization & Socket Security](#authorization--socket-security)). A single provider may register **both** an audio driver and a realtime driver (e.g. an OpenAI TTS model *and* an OpenAI Realtime model) — different model rows, different types, same vendor.
+
+### Metadata additions (no migration — `/metadata` + `mj sync`)
+
+These are **reference-data changes, authored as metadata files and applied with `mj sync push`** — not a SQL migration (consistent with how `metadata/ai-models/` and `metadata/ai-vendors/` are already managed).
+
+1. **New `AIModelType`: `Realtime`.** There is currently no metadata folder for model types (they pre-date the metadata-seeding convention), so add one — `metadata/ai-model-types/` with a `.mj-sync.json` bound to entity **`MJ: AI Model Types`** — and seed the `Realtime` type there. (Per the CLAUDE.md "Seeding New Lookup/Reference Tables" rule.)
+
+2. **Two new `MJ: AI Models`** in `metadata/ai-models/`, each typed `Realtime` and carrying an `MJ: AI Model Vendors` association whose `DriverClass` points at the realtime driver (mirroring the existing `xAILLM` / `AnthropicLLM` convention):
+
+   ```jsonc
+   {
+     "fields": {
+       "Name": "Gemini Live 2.5 Flash",
+       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+       "IsActive": true,
+       "InheritTypeModalities": true
+     },
+     "relatedEntities": {
+       "MJ: AI Model Vendors": [
+         {
+           "fields": {
+             "ModelID": "@parent:ID",
+             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+             "DriverClass": "GeminiRealtime",
+             "Priority": 0,
+             "Status": "Active"
+           }
+         }
+       ]
+     }
+   }
+   // …and a sibling record for "GPT Realtime" → DriverClass "OpenAIRealtime",
+   //    VendorID @lookup MJ: AI Vendors.Name=OpenAI
+   ```
+
+   Pipelined STT/TTS models (Whisper, Deepgram, ElevenLabs) are registered the same way under existing audio model type(s) — no schema work, just metadata.
+
+3. Apply with: `npx mj sync push --dir=metadata --include="ai-model-types,ai-models"`.
+
+The driver classes themselves (`GeminiRealtime`, `OpenAIRealtime`, implementing `BaseRealtimeVoice`) ship as code in the respective `packages/AI/Providers/*` packages and self-register via `@RegisterClass(BaseRealtimeVoice, 'GeminiRealtime')`.
+
+---
+
+## Authorization & Socket Security
+
+Authorization is **~90% reuse** of primitives that already exist; sessions add exactly one new piece.
+
+### Reuse map
+
+| Concern | Existing primitive | How sessions use it |
+|---|---|---|
+| Who may **open a session** for an agent | `AIAgentPermission` (`CanRun`), enforced today via `AIAgentPermissionHelper.HasPermission(agentID, user, 'run')` at `base-agent.ts:1283` | A session is a long-lived run wrapper → call the **same** `CanRun` check at session open. Denied → no session, no socket. |
+| **Transport authentication** | JWT on GraphQL + graphql-ws, with `JWT_EXPIRED` detection + refresh (`graphQLDataProvider.ts:3066-3080`) | Every transport plane reuses this; no new auth scheme. |
+| **Tool / action authorization** | `contextUser` + request-scoped `IMetadataProvider` (already a param on `ExecuteAgentParams`) | All tools/actions invoked mid-session execute under the session's `contextUser`, inheriting normal action/entity permission checks. |
+
+### The one genuinely new primitive
+
+**Short-lived, session-scoped socket tokens + an ownership check on inbound envelopes.** Each `SocketUrl` handed out in `AIAgentSessionChannel` embeds a token scoped to `{AgentSessionID, ChannelID, UserID}`, not a general bearer token. Every inbound envelope (via the `SendSessionMessage` mutation, the WebRTC data path, or a raw WS) must verify: (a) a valid JWT, (b) `AIAgentSession.UserID === contextUser.ID`, and (c) `Status = 'Active'`.
+
+### Realtime caveat (important)
+
+When a realtime provider drives the loop and emits a native `tool_call`, MJ must still execute that tool **under the session's `contextUser`** with the normal permission checks. The provider owning the conversation must **not** become an authorization bypass — a realtime LLM calling a tool can do exactly what the user could do, no more. Propagating the request-scoped provider (never pinning the global one) through the long-lived session keeps this both isolated and correct.
+
+### Deferred / out of scope
+
+- **Channel-grained permissions** (e.g. gating sensitive channels like `ClientControl` or metered `VoiceAudio` separately) are a known seam: either a future `AIAgentChannelPermission` table or a `RequiredRole`/`Scope` column on `AIAgentChannel`. **Start simple** — if you can run the agent, you can use its channels — and add grain only when a concrete need appears.
+- **Multi-party sessions.** `AIAgentSession.UserID` is singular by design; the ownership check above assumes one participant. Multi-human voice would require a participant sub-table and per-participant authz — explicitly out of scope for this iteration.
+
+---
+
 ## Detailed Execution & Streaming Flow
 
 Here is how a real-time voice and UI interaction flows through the layered session architecture:
