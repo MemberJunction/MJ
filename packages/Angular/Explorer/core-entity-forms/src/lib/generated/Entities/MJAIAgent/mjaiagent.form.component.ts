@@ -52,7 +52,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false }
         ]);
     }
 }
