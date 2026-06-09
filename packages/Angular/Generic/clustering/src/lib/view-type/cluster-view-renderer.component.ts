@@ -117,7 +117,7 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
   private _entity: EntityInfo | null = null;
   @Input()
   set entity(value: EntityInfo | null) {
-    const changed = value?.ID !== this._entity?.ID;
+    const changed = !UUIDsEqual(value?.ID, this._entity?.ID);
     this._entity = value;
     if (changed) {
       this.scheduleRecluster();

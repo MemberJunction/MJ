@@ -2499,8 +2499,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                if (!query.UserCanRun(user)) {
-                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}` });
+                const runCheck = query.UserCanRun(user);
+                if (!runCheck.canRun) {
+                    const deniedMsg = runCheck.deniedEntities.length > 0
+                        ? ` Denied entities: ${runCheck.deniedEntities.join(', ')}.`
+                        : '';
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}.${deniedMsg}` });
                     continue;
                 }
 
@@ -2613,8 +2617,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
         const user = contextUser || this.CurrentUser;
-        if (user && !query.UserHasRunPermissions(user)) {
-            throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
+        if (user) {
+            const result = query.UserCanRun(user);
+            if (!result.canRun) {
+                const deniedMsg = result.deniedEntities.length > 0
+                    ? ` Denied entities: ${result.deniedEntities.join(', ')}.`
+                    : '';
+                throw new Error(
+                    `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`
+                );
+            }
         }
 
         if (query.Status !== 'Approved') {
@@ -3301,7 +3313,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds a parameter placeholder for parameterized queries.
      * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
      */
-    protected BuildParameterPlaceholder(index: number): string {
+    public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
     }
 

@@ -211,6 +211,14 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         // The engine accesses .MJCoreSchemaName and .ExecuteSQL on it.
         ProviderToUse: {
             MJCoreSchemaName: '__mj',
+            // PlatformKey + Dialect feed ScheduledJobEngine.buildLockSprocCall, which
+            // builds the dialect-appropriate sproc call. Mimic the SQL Server dialect
+            // here so the engine exercises its default (EXEC) path under test.
+            PlatformKey: 'sqlserver',
+            Dialect: {
+                ProcedureCallSyntax: (schema: string, name: string, params: string[]) =>
+                    `EXEC [${schema}].[${name}] ${params.join(', ')}`
+            },
             ExecuteSQL: vi.fn().mockImplementation(async () => {
                 const next = mockExecuteSQLQueue.shift();
                 if (next === undefined) {
@@ -319,7 +327,12 @@ function makeJob(overrides: Partial<Record<string, unknown>> = {}): Record<strin
 const mockUser = { ID: 'user-1' };
 const mockBase = SchedulingEngineBase.Instance as Record<string, unknown> & {
     ScheduledJobs: Array<Record<string, unknown>>;
-    ProviderToUse: { ExecuteSQL: ReturnType<typeof vi.fn>; MJCoreSchemaName: string };
+    ProviderToUse: {
+        ExecuteSQL: ReturnType<typeof vi.fn>;
+        MJCoreSchemaName: string;
+        PlatformKey: string;
+        Dialect: { ProcedureCallSyntax: (schema: string, name: string, params: string[]) => string };
+    };
 };
 
 beforeEach(() => {
@@ -961,6 +974,52 @@ describe('T15: LeaseTimeoutMs is configurable and respected by tryAcquireLock', 
         engine.LeaseTimeoutMinutes = 3;
         expect(engine.LeaseTimeoutMs).toBe(180_000);
         expect(engine.LeaseTimeoutMinutes).toBe(3);
+    });
+});
+
+// ============================================================================
+// T15b: Lock sproc calls are dialect-aware (SQL Server EXEC vs PostgreSQL fn)
+// ============================================================================
+
+describe('T15b: buildLockSprocCall emits dialect-appropriate SQL', () => {
+    it('SQL Server: tryAcquireLock issues an EXEC with named @pN bindings', async () => {
+        const engine = SchedulingEngine.Instance;
+        queueAcquireRelease([1], []);
+
+        // @ts-expect-error: private method
+        await engine.tryAcquireLock('job-1');
+
+        const sql = String(mockBase.ProviderToUse.ExecuteSQL.mock.calls.at(-1)?.[0] ?? '');
+        expect(sql).toContain('EXEC [__mj].[spAcquireScheduledJobLock]');
+        expect(sql).toContain('@JobID=@p0');
+        expect(sql).not.toContain('SELECT * FROM');
+    });
+
+    it('PostgreSQL: tryAcquireLock issues SELECT * FROM fn() with $N placeholders', async () => {
+        const engine = SchedulingEngine.Instance;
+        const provider = mockBase.ProviderToUse;
+        const originalPlatform = provider.PlatformKey;
+        const originalDialect = provider.Dialect;
+        // Swap in the PostgreSQL dialect shape for this test only.
+        provider.PlatformKey = 'postgresql';
+        provider.Dialect = {
+            ProcedureCallSyntax: (schema: string, name: string, params: string[]) =>
+                `SELECT * FROM ${schema}."${name}"(${params.join(', ')})`
+        };
+        try {
+            queueAcquireRelease([1], []);
+
+            // @ts-expect-error: private method
+            await engine.tryAcquireLock('job-1');
+
+            const sql = String(provider.ExecuteSQL.mock.calls.at(-1)?.[0] ?? '');
+            expect(sql).toContain('SELECT * FROM __mj."spAcquireScheduledJobLock"($1, $2, $3, $4)');
+            expect(sql).not.toContain('EXEC');
+            expect(sql).not.toContain('@p0');
+        } finally {
+            provider.PlatformKey = originalPlatform;
+            provider.Dialect = originalDialect;
+        }
     });
 });
 

@@ -225,6 +225,7 @@
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
             "IconClass": "fa-solid fa-database",
+            "MaxIterationsPerRun": 50,
             "PayloadDownstreamPaths": [
               "*"
             ],
@@ -387,8 +388,8 @@
             "ID": "17E1C958-909C-41B2-8B52-138AED224108"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:09:33.220Z",
-            "checksum": "ac2603026183ecc0409e58efb68b7cc6f7924a9888726681ce9e7ef654474612"
+            "lastModified": "2026-06-09T06:32:34.970Z",
+            "checksum": "7694e4b5eb6c220ddef4ce2446e5a98810956b8bb143777320950a776b0c3b2b"
           }
         }
       ]

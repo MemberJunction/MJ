@@ -2,9 +2,15 @@ import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
 import { BaseArtifactPreviewComponent } from './base-artifact-preview.component';
 
 /**
- * Inline preview for image artifacts. Renders a single contained `<img>` (max 280px tall) inside
+ * Inline preview for image artifacts. Renders a single contained `<img>` (max 140px tall) inside
  * the conversation message card. Read-only — no toolbar, no zoom, no download. Clicking it bubbles
  * up through the card's clickable wrapper to open the full-size image viewer.
+ *
+ * Height note: this is a *thumbnail*, not the full view — kept deliberately compact (140px) so a
+ * message with an image artifact doesn't dominate the conversation. `max-width: 100%` (rather than a
+ * fixed width) is the only width constraint, so the aspect ratio is preserved and portrait images
+ * aren't distorted; the height cap is the single lever for overall size. Kept in sync with the video
+ * preview's cap so both visual media previews stay visually consistent.
  */
 @Component({
     standalone: false,
@@ -33,7 +39,7 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
             .image-preview__img {
                 display: block;
                 max-width: 100%;
-                max-height: 280px;
+                max-height: 140px;
                 width: auto;
                 height: auto;
                 object-fit: contain;

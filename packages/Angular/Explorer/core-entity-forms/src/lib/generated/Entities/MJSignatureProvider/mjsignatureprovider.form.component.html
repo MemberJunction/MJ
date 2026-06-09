@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Provider Definition Section -->
+    <!-- Provider Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="providerDefinition"
-        SectionName="Provider Definition"
-        Icon="fa fa-file-alt"
+        SectionKey="providerConfiguration"
+        SectionName="Provider Configuration"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -36,24 +36,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Provider Availability Section -->
-    <mj-collapsible-panel
-        SectionKey="providerAvailability"
-        SectionName="Provider Availability"
-        Icon="fa fa-toggle-on"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="IsActive"
             Type="checkbox"
             [EditMode]="EditMode"
@@ -70,31 +52,21 @@
 
     </mj-collapsible-panel>
 
-    <!-- Authentication Settings Section -->
+    <!-- Capabilities and Security Section -->
     <mj-collapsible-panel
-        SectionKey="authenticationSettings"
-        SectionName="Authentication Settings"
-        Icon="fa fa-lock"
+        SectionKey="capabilitiesAndSecurity"
+        SectionName="Capabilities and Security"
+        Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="RequiresOAuth"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Feature Capabilities Section -->
-    <mj-collapsible-panel
-        SectionKey="featureCapabilities"
-        SectionName="Feature Capabilities"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -108,6 +80,14 @@
             [ShowLabel]="true"
             FieldName="SupportsEmbeddedSigning"
             Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -150,7 +130,7 @@
     <mj-collapsible-panel
         SectionKey="mJSignatureAccounts"
         SectionName="Signature Accounts"
-        Icon="fa fa-lock"
+        Icon="fa fa-file-signature"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

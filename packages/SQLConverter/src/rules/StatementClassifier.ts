@@ -52,6 +52,19 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
 
+  // IF DATABASE_PRINCIPAL_ID(N'x') IS NULL ... EXEC('CREATE ROLE ...') → the SQL Server
+  // idiom for "create role if absent". Convert role creation to a PG pg_roles DO block;
+  // user/login creation has no PG equivalent and is skipped.
+  if (/^IF\s+DATABASE_PRINCIPAL_ID\s*\(/i.test(upper)) {
+    return /CREATE\s+ROLE\b/i.test(upper) ? 'CONDITIONAL_DDL' : 'SKIP_SQLSERVER';
+  }
+
+  // IF IS_ROLEMEMBER(...) = 0 ALTER ROLE ... ADD MEMBER → SS role-membership grants for
+  // SS logins/users that are not created in PG; no PG equivalent, so skip them.
+  if (/^IF\s+IS_ROLEMEMBER\s*\(/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
   // IF EXISTS (without NOT) — SQL Server pre-flight checks (drop extended property, etc.)
   if (/^IF\s+EXISTS\s*\(/i.test(upper) && !/^IF\s+NOT\s/i.test(upper)) {
     return 'SKIP_SQLSERVER';

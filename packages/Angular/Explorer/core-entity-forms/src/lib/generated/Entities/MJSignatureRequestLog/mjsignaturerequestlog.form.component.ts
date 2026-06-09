@@ -15,9 +15,9 @@ export class MJSignatureRequestLogFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'signatureRequestReference', sectionName: 'Signature Request Reference', isExpanded: true },
+            { sectionKey: 'requestContext', sectionName: 'Request Context', isExpanded: true },
             { sectionKey: 'operationDetails', sectionName: 'Operation Details', isExpanded: true },
-            { sectionKey: 'statusChange', sectionName: 'Status Change', isExpanded: true },
+            { sectionKey: 'statusTracking', sectionName: 'Status Tracking', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

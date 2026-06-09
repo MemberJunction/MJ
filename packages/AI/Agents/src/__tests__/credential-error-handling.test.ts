@@ -98,9 +98,13 @@ function isFatalPromptError(promptResult: MockPromptRunResult): boolean {
 // ============================================================================
 
 const MAX_CONSECUTIVE_FAILED_STEPS = 10;
+const MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES = 10;
 
 /**
- * Simulates the agent execution loop with the consecutive failure safety net.
+ * Simulates the agent execution loop with both safety nets:
+ *  - the consecutive-failed-steps net (counts step === 'Failed')
+ *  - the consecutive-unproductive-retries net (counts 'Retry' steps that carry an errorMessage,
+ *    i.e. parse/validation failures produced by createRetryStep)
  * Returns the final step and total step count.
  */
 function simulateExecutionLoop(
@@ -110,6 +114,7 @@ function simulateExecutionLoop(
     let currentNextStep: MockNextStep | null = null;
     let stepCount = 0;
     let consecutiveFailedSteps = 0;
+    let consecutiveUnproductiveRetries = 0;
 
     while (continueExecution) {
         const nextStep = stepProducer(stepCount);
@@ -125,6 +130,21 @@ function simulateExecutionLoop(
             }
         } else if (nextStep.step !== 'Failed') {
             consecutiveFailedSteps = 0;
+        }
+
+        // Track consecutive unproductive retries (parse/validation-failure retries)
+        const isUnproductiveRetry = nextStep.step === 'Retry' && !nextStep.terminate && !!nextStep.errorMessage;
+        if (isUnproductiveRetry) {
+            consecutiveUnproductiveRetries++;
+            if (consecutiveUnproductiveRetries >= MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES) {
+                nextStep.step = 'Failed';
+                nextStep.terminate = true;
+                nextStep.errorMessage = `Agent terminated after ${consecutiveUnproductiveRetries} consecutive unproductive retries ` +
+                    `(model repeatedly returned output that could not be parsed or validated). ` +
+                    `Last error: ${nextStep.errorMessage || 'Unknown'}`;
+            }
+        } else {
+            consecutiveUnproductiveRetries = 0;
         }
 
         if (nextStep.terminate) {
@@ -454,6 +474,84 @@ describe('executeAgentInternal - Max Consecutive Failed Steps Safety Net', () =>
 
         expect(finalStep.errorMessage).toContain('consecutive failed steps');
         expect(finalStep.errorMessage).toContain('Unknown');
+    });
+});
+
+// ============================================================================
+// Tests for the Max Consecutive Unproductive Retries Safety Net
+// This is the net that catches the real-world bug where a model (e.g. Gemini Flash)
+// repeatedly returns conversational prose instead of the required JSON envelope, so
+// the loop agent type emits a 'Retry' (not a 'Failed') every turn — bypassing the
+// consecutive-failed-steps net entirely and looping until the absolute iteration cap.
+// ============================================================================
+
+describe('executeAgentInternal - Max Consecutive Unproductive Retries Safety Net', () => {
+    it('should terminate after MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES parse-failure retries', () => {
+        // The exact bug: every turn the model returns prose, loop type emits a Retry
+        // carrying the "Failed to parse JSON response" errorMessage (via createRetryStep).
+        const { finalStep, stepCount } = simulateExecutionLoop(
+            () => ({
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Failed to parse JSON response'
+            })
+        );
+
+        expect(stepCount).toBe(MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES);
+        expect(finalStep.terminate).toBe(true);
+        expect(finalStep.step).toBe('Failed');
+        expect(finalStep.errorMessage).toContain('consecutive unproductive retries');
+        expect(finalStep.errorMessage).toContain('Failed to parse JSON response');
+    });
+
+    it('should NOT count productive (yield/await) retries that carry no errorMessage', () => {
+        // Pipeline / client-tool / sub-agent re-entry retries are created via
+        // createNextStep('Retry', …) WITHOUT an errorMessage and must never trip this net.
+        const { finalStep, stepCount } = simulateExecutionLoop(
+            (index) => {
+                if (index < 25) {
+                    return { step: 'Retry', terminate: false }; // productive retry, no errorMessage
+                }
+                return { step: 'Success', terminate: true };
+            }
+        );
+
+        expect(finalStep.step).toBe('Success');
+        expect(stepCount).toBe(26);
+    });
+
+    it('should reset the counter when a productive step intervenes', () => {
+        // A run that interleaves a real Action every few parse failures should NOT terminate —
+        // this is why a plain "every N retries" cap is keyed on *consecutive* unproductive retries.
+        const { finalStep, stepCount } = simulateExecutionLoop(
+            (index) => {
+                if (index >= 30) {
+                    return { step: 'Success', terminate: true };
+                }
+                // 4 parse-failure retries, then a productive Action, repeating
+                return (index % 5 === 4)
+                    ? { step: 'Actions', terminate: false }
+                    : { step: 'Retry', terminate: false, errorMessage: 'Failed to parse JSON response' };
+            }
+        );
+
+        expect(finalStep.step).toBe('Success');
+        expect(stepCount).toBe(31);
+    });
+
+    it('should not interfere with a Retry that already terminates', () => {
+        const { finalStep, stepCount } = simulateExecutionLoop(
+            () => ({
+                step: 'Retry',
+                terminate: true,
+                errorMessage: 'Some terminal retry'
+            })
+        );
+
+        expect(stepCount).toBe(1);
+        expect(finalStep.step).toBe('Retry');
+        expect(finalStep.errorMessage).toBe('Some terminal retry');
+        expect(finalStep.errorMessage).not.toContain('consecutive unproductive retries');
     });
 });
 
