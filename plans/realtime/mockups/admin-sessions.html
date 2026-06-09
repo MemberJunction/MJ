@@ -12,13 +12,14 @@
 <div class="app-shell">
   <div class="app-topbar">
     <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
-    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Admin</span></div>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span>MemberJunction</span><span class="brand-sub">· AI Administration</span></div>
     <div class="topbar-spacer"></div>
-    <span class="topbar-pill"><i class="fa-solid fa-shield-halved"></i> System administration</span>
+    <a href="admin-dashboard.html" class="topbar-pill"><i class="fa-solid fa-chart-line"></i> Realtime analytics</a>
     <div class="topbar-user">AM</div>
   </div>
 
   <div class="page-body">
+    <!-- page-header chrome: eyebrow / title / [meta] / [actions] -->
     <div class="page-header">
       <div class="page-eyebrow">AI Administration · Real-Time</div>
       <div class="row between center wrap">
@@ -26,36 +27,58 @@
         <div class="row gap-sm">
           <a href="admin-channels.html" class="btn btn--sm"><i class="fa-solid fa-plug"></i> Channels registry</a>
           <button class="btn btn--sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
-          <button class="btn btn--sm"><i class="fa-solid fa-download"></i> Export</button>
+          <button class="btn btn--sm"><i class="fa-solid fa-download"></i> Export CSV</button>
         </div>
       </div>
-      <p class="page-subtitle">Every long-lived <span class="mono">AIAgentSession</span> across the platform — live calls, idle holds, and closed history — with the channels they opened and the agent runs they delegated.</p>
+      <p class="page-subtitle">Every long-lived <span class="mono">AIAgentSession</span> across the platform — live calls, idle holds, and closed history — with the channels they opened and the agent runs they delegated. Drill into any row to see its lifecycle, run tree, and transcript.</p>
     </div>
 
-    <!-- stat tiles -->
-    <div class="stat-row">
-      <div class="card stat"><div class="stat-label">Total sessions</div><div class="stat-value">18</div></div>
-      <div class="card stat"><div class="stat-label">Active now</div><div class="stat-value" style="color:var(--mj-status-success)">2</div></div>
-      <div class="card stat"><div class="stat-label">Idle</div><div class="stat-value" style="color:var(--mj-status-warning)">1</div></div>
-      <div class="card stat"><div class="stat-label">Delegated runs (7d)</div><div class="stat-value">41</div></div>
+    <!-- KPI tiles (AI Dashboard idiom: left-accent card, icon chip, value, trend) -->
+    <div class="kpi-row" style="margin-bottom:18px">
+      <div class="kpi kpi--success">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-tower-broadcast"></i></div><div class="kpi__title">Active now</div></div>
+        <div class="kpi__value">2</div>
+        <div class="kpi__sub">live duplex sessions</div>
+      </div>
+      <div class="kpi kpi--warning">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-pause"></i></div><div class="kpi__title">Idle (holding)</div></div>
+        <div class="kpi__value">1</div>
+        <div class="kpi__sub">past IdleThreshold</div>
+      </div>
+      <div class="kpi kpi--primary">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-clock"></i></div><div class="kpi__title">Sessions today</div></div>
+        <div class="kpi__value">18</div>
+        <div class="kpi__trend up"><i class="fa-solid fa-arrow-up"></i> 22% <span style="color:var(--mj-text-disabled);font-weight:500">vs yesterday</span></div>
+      </div>
+      <div class="kpi kpi--sage">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-diagram-project"></i></div><div class="kpi__title">Delegated runs (7d)</div></div>
+        <div class="kpi__value">41</div>
+        <div class="kpi__sub">child AIAgentRuns via ParentRunID</div>
+      </div>
+      <div class="kpi kpi--info">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div><div class="kpi__title">Cost today</div></div>
+        <div class="kpi__value"><small>$</small>3.41</div>
+        <div class="kpi__sub">co-agent + delegated</div>
+      </div>
     </div>
 
-    <!-- filter bar -->
+    <!-- filter bar (search · status · agent · user · date) -->
     <div class="filterbar">
       <div class="search-input"><i class="fa-solid fa-magnifying-glass muted"></i><input type="text" placeholder="Search sessions, users, conversations…"></div>
       <select class="select"><option>Status: All</option><option>Active</option><option>Idle</option><option>Closed</option></select>
       <select class="select"><option>Agent: All</option><option>Voice Co-Agent</option></select>
       <select class="select"><option>User: All</option><option>amith@bluecypress.io</option><option>matt@…</option></select>
-      <select class="select"><option>Date: Last 7 days</option><option>Today</option><option>Last 30 days</option></select>
-      <span style="margin-left:auto" class="muted" style="font-size:12px">18 results</span>
+      <select class="select"><option>Host: All</option><option>api-1</option><option>api-2</option><option>api-3</option></select>
+      <select class="select"><option>Date: Today</option><option>Last 7 days</option><option>Last 30 days</option></select>
+      <span style="margin-left:auto" class="pill pill--ghost">18 results · 2 live</span>
     </div>
 
-    <!-- data grid -->
+    <!-- MJ data grid (same idiom as the AI Agent Runs list) -->
     <div class="grid-wrap">
       <table class="grid">
         <thead>
           <tr>
-            <th>Agent / Target</th><th>User</th><th>Status</th><th>Channels</th><th>Runs</th><th>Started</th><th>Duration</th><th>Host instance</th><th></th>
+            <th>Agent / Target</th><th>User</th><th>Status</th><th>Channels</th><th>Runs</th><th>Tokens</th><th>Cost</th><th>Started</th><th>Duration</th><th>Host instance</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -64,15 +87,15 @@
             <td>amith@bluecypress.io</td>
             <td><span class="pill pill--active"><span class="dot dot--live"></span> Active</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span> <span class="muted">2</span></td>
-            <td>1</td><td>3:40 pm</td><td>2:04</td><td class="mono">api-3:8841:bf2</td>
-            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+            <td>1</td><td class="mono">4.2K</td><td class="mono">$0.04</td><td>3:40 pm</td><td>2:04</td><td class="mono">api-3:8841:bf2</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm" title="Open session"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
             <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
             <td>matt@memberjunction.com</td>
             <td><span class="pill pill--active"><span class="dot dot--live"></span> Active</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-chalkboard"></i></span> <span class="muted">2</span></td>
-            <td>3</td><td>3:31 pm</td><td>11:18</td><td class="mono">api-1:7720:a09</td>
+            <td>3</td><td class="mono">21.7K</td><td class="mono">$0.31</td><td>3:31 pm</td><td>11:18</td><td class="mono">api-1:7720:a09</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
@@ -80,7 +103,7 @@
             <td>amith@bluecypress.io</td>
             <td><span class="pill pill--idle"><i class="fa-solid fa-pause"></i> Idle</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
-            <td>2</td><td>3:12 pm</td><td>6:02</td><td class="mono">api-3:8841:bf2</td>
+            <td>2</td><td class="mono">8.9K</td><td class="mono">$0.12</td><td>3:12 pm</td><td>6:02</td><td class="mono">api-3:8841:bf2</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
@@ -88,7 +111,7 @@
             <td>amith@bluecypress.io</td>
             <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span> <span class="muted">2</span></td>
-            <td>1</td><td>1:48 pm</td><td>2:04</td><td class="mono">api-2:5510:c70</td>
+            <td>1</td><td class="mono">4.2K</td><td class="mono">$0.04</td><td>1:48 pm</td><td>2:04</td><td class="mono">api-2:5510:c70</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
@@ -96,7 +119,7 @@
             <td>jess@bluecypress.io</td>
             <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
-            <td>4</td><td>1:20 pm</td><td>14:51</td><td class="mono">api-1:7720:a09</td>
+            <td>4</td><td class="mono">33.1K</td><td class="mono">$0.49</td><td>1:20 pm</td><td>14:51</td><td class="mono">api-1:7720:a09</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
@@ -104,23 +127,23 @@
             <td>matt@memberjunction.com</td>
             <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span> <span class="muted">2</span></td>
-            <td>2</td><td>12:55 pm</td><td>4:33</td><td class="mono">api-3:8841:bf2</td>
+            <td>2</td><td class="mono">9.6K</td><td class="mono">$0.14</td><td>12:55 pm</td><td>4:33</td><td class="mono">api-3:8841:bf2</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
             <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
             <td>amith@bluecypress.io</td>
-            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed <span class="muted" style="font-weight:500">· janitor</span></span></td>
+            <td><span class="pill pill--closed" title="Force-closed by lifecycle janitor after host crash"><i class="fa-solid fa-broom"></i> Closed · janitor</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
-            <td>0</td><td>11:02 am</td><td>0:51</td><td class="mono">api-2:5510:c70</td>
+            <td>0</td><td class="mono">0.9K</td><td class="mono">$0.01</td><td>11:02 am</td><td>0:51</td><td class="mono">api-2:5510:c70</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
-            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div> <span class="pill pill--sage" style="font-size:10px;padding:1px 7px"><i class="fa-solid fa-link"></i> resumed</span></td>
             <td>jess@bluecypress.io</td>
             <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-chalkboard"></i></span> <span class="muted">2</span></td>
-            <td>3</td><td>Yesterday</td><td>9:12</td><td class="mono">api-1:7720:a09</td>
+            <td>3</td><td class="mono">18.4K</td><td class="mono">$0.27</td><td>Yesterday</td><td>9:12</td><td class="mono">api-1:7720:a09</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
           <tr>
@@ -128,17 +151,17 @@
             <td>amith@bluecypress.io</td>
             <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
             <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
-            <td>1</td><td>Yesterday</td><td>1:39</td><td class="mono">api-3:8841:bf2</td>
+            <td>1</td><td class="mono">3.0K</td><td class="mono">$0.03</td><td>Yesterday</td><td>1:39</td><td class="mono">api-3:8841:bf2</td>
             <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="row between center" style="margin-top:14px">
-      <span class="muted" style="font-size:12.5px">Showing 9 of 18 · mostly Closed</span>
+      <span class="muted" style="font-size:12.5px">Showing 9 of 18 · 2 live · 1 idle · 15 closed</span>
       <div class="row gap-sm">
         <button class="btn btn--sm" disabled><i class="fa-solid fa-chevron-left"></i></button>
-        <button class="btn btn--sm">1</button>
+        <button class="btn btn--sm btn--primary">1</button>
         <button class="btn btn--sm">2</button>
         <button class="btn btn--sm"><i class="fa-solid fa-chevron-right"></i></button>
       </div>

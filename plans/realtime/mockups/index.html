@@ -69,27 +69,35 @@
       </a>
     </div>
 
-    <div class="hub-group-title">Admin Tooling</div>
+    <div class="hub-group-title">Admin Tooling — native MJ Explorer chrome</div>
+    <p class="muted" style="font-size:12.5px;margin:-6px 0 14px;max-width:760px">Rebuilt to match MJ's real admin patterns: the AI Dashboard's KPI tiles &amp; charts, the AI Agent Run form's header / tabs / run-step tree / accordion details, and MJ data grids with status pills. These should feel lifted straight out of Explorer.</p>
     <div class="hub-grid">
+      <a class="hub-card" href="admin-dashboard.html">
+        <div class="hub-thumb"><span class="hub-letter">F</span><i class="fa-solid fa-chart-line"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Realtime Voice analytics</div>
+          <div class="hub-card__desc">Analytics dashboard in the AI Dashboard idiom — KPI tiles (active sessions, avg duration, delegated runs, janitor closes, cost), sessions-over-time &amp; channel-usage charts, top target agents, recent sessions list.</div>
+        </div>
+      </a>
       <a class="hub-card" href="admin-sessions.html">
-        <div class="hub-thumb"><span class="hub-letter">F</span><i class="fa-solid fa-table-list"></i></div>
+        <div class="hub-thumb"><span class="hub-letter">G</span><i class="fa-solid fa-table-list"></i></div>
         <div class="hub-card__body">
           <div class="hub-card__title">AI Agent Sessions list</div>
-          <div class="hub-card__desc">Management grid of all AIAgentSessions — agent, target, user, status pills, channels, delegated runs, host instance, filters and search.</div>
+          <div class="hub-card__desc">Dashboard list page — KPI tiles up top, then an MJ data grid of all AIAgentSessions (agent → target, user, status pills, channels, runs, tokens/cost, host instance) with filters, search and drill-in. Mirrors the AI Agent Runs list.</div>
         </div>
       </a>
       <a class="hub-card" href="admin-session-detail.html">
-        <div class="hub-thumb"><span class="hub-letter">G</span><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+        <div class="hub-thumb"><span class="hub-letter">H</span><i class="fa-solid fa-magnifying-glass-chart"></i></div>
         <div class="hub-card__body">
-          <div class="hub-card__title">Session detail (admin)</div>
-          <div class="hub-card__desc">Observability drill-in: lifecycle timeline, channel rows, delegated run tree, prompt-run usage/cost, host instance and transcript.</div>
+          <div class="hub-card__title">Session detail · entity form</div>
+          <div class="hub-card__desc">A single session rendered as an MJ entity form — record-form-container toolbar, agent-run-style header + stat row, tabs, the delegated run tree (Co-Agent → Sage via ParentRunID with token/cost chips), lifecycle timeline, host/affinity facts, accordion details and transcript.</div>
         </div>
       </a>
       <a class="hub-card" href="admin-channels.html">
-        <div class="hub-thumb"><span class="hub-letter">H</span><i class="fa-solid fa-plug"></i></div>
+        <div class="hub-thumb"><span class="hub-letter">I</span><i class="fa-solid fa-plug"></i></div>
         <div class="hub-card__body">
           <div class="hub-card__title">AI Agent Channels registry</div>
-          <div class="hub-card__desc">The pluggable channel registry — plugin classes, transport-type pills, config schema, IsActive toggle and an add/edit detail panel.</div>
+          <div class="hub-card__desc">The pluggable AIAgentChannel registry as an MJ list + entity-form edit — plugin classes (ClassFactory keys), transport-type pills, config schema, IsActive toggle and a form-container edit panel.</div>
         </div>
       </a>
     </div>
