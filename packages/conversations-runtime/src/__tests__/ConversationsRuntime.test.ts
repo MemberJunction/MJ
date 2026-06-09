@@ -54,6 +54,22 @@ vi.mock('@memberjunction/ai-agent-client', () => ({
     ClientToolRegistry: class {
         Register() {}
     },
+    AgentClientSession: class {
+        public Provider: unknown = null;
+        constructor(_toolRegistry?: unknown) {}
+        GetRegisteredTools() {
+            return [];
+        }
+        async RunAgentFromConversationDetail() {
+            return { Success: true, Result: {} };
+        }
+    },
+}));
+
+// Streaming only touches GraphQLDataProvider inside `.initialize()`, which we never
+// call in this test. But the import side-effect needs to resolve.
+vi.mock('@memberjunction/graphql-dataprovider', () => ({
+    GraphQLDataProvider: { Instance: { PushStatusUpdates: vi.fn() } },
 }));
 
 import { ConversationsRuntime } from '../ConversationsRuntime';
@@ -61,6 +77,16 @@ import { MentionParser } from '../mentions/MentionParser';
 import { ConversationBridge } from '../bridge/ConversationBridge';
 import { DefaultAgentResolver } from '../default-agent/DefaultAgentResolver';
 import { SessionsObserver } from '../sessions/SessionsObserver';
+import { ConversationStreaming } from '../streaming/ConversationStreaming';
+import { ConversationAgentRunner } from '../agent-runner/ConversationAgentRunner';
+import {
+    ConsoleNotificationAdapter,
+    type INotificationAdapter,
+} from '../adapters/INotificationAdapter';
+import {
+    NoOpActiveTaskTracker,
+    type IActiveTaskTracker,
+} from '../adapters/IActiveTaskTracker';
 
 describe('ConversationsRuntime', () => {
     beforeEach(() => {
@@ -125,5 +151,47 @@ describe('ConversationsRuntime', () => {
 
     it('Dispose is safe to call', () => {
         expect(() => ConversationsRuntime.Instance.Dispose()).not.toThrow();
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // Adapter slots (added in PR 2a)
+    // ────────────────────────────────────────────────────────────────────
+
+    describe('adapter slots', () => {
+        it('Notification defaults to a ConsoleNotificationAdapter', () => {
+            expect(ConversationsRuntime.Instance.Notification).toBeInstanceOf(
+                ConsoleNotificationAdapter
+            );
+        });
+
+        it('Tasks defaults to a NoOpActiveTaskTracker', () => {
+            expect(ConversationsRuntime.Instance.Tasks).toBeInstanceOf(NoOpActiveTaskTracker);
+        });
+
+        it('UseNotificationAdapter swaps the registered adapter', () => {
+            const fake: INotificationAdapter = { Notify: () => undefined };
+            ConversationsRuntime.Instance.UseNotificationAdapter(fake);
+            expect(ConversationsRuntime.Instance.Notification).toBe(fake);
+
+            // Restore default for other tests
+            ConversationsRuntime.Instance.UseNotificationAdapter(new ConsoleNotificationAdapter());
+        });
+
+        it('UseActiveTaskTracker swaps the registered tracker', () => {
+            const fake: IActiveTaskTracker = { RemoveByAgentRunId: () => false };
+            ConversationsRuntime.Instance.UseActiveTaskTracker(fake);
+            expect(ConversationsRuntime.Instance.Tasks).toBe(fake);
+
+            ConversationsRuntime.Instance.UseActiveTaskTracker(new NoOpActiveTaskTracker());
+        });
+
+        it('Streaming and AgentRunner can be retrieved (lazy-constructed) and are stable', () => {
+            const streaming = ConversationsRuntime.Instance.Streaming;
+            const runner = ConversationsRuntime.Instance.AgentRunner;
+            expect(streaming).toBeInstanceOf(ConversationStreaming);
+            expect(runner).toBeInstanceOf(ConversationAgentRunner);
+            expect(ConversationsRuntime.Instance.Streaming).toBe(streaming);
+            expect(ConversationsRuntime.Instance.AgentRunner).toBe(runner);
+        });
     });
 });
