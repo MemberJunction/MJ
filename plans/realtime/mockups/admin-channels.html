@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · AI Agent Channels · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .reg-grid { display:grid; grid-template-columns: 1fr 380px; gap:20px; align-items:start }
+  @media(max-width:1100px){ .reg-grid{ grid-template-columns:1fr } }
+  .toggle { width:38px;height:22px;border-radius:11px;background:var(--mj-status-success);position:relative;cursor:pointer;flex-shrink:0 }
+  .toggle::after{ content:"";position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:#fff }
+  .toggle--off{ background:var(--mj-bg-surface-elevated) }
+  .toggle--off::after{ right:auto;left:2px }
+  .field { margin-bottom:14px }
+  .field label{ display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--mj-text-muted);margin-bottom:6px }
+  .field input,.field textarea{ width:100%;padding:9px 12px;border-radius:var(--mj-radius-md);border:1px solid var(--mj-border-default);background:var(--mj-bg-surface);color:var(--mj-text-primary);font-family:inherit;font-size:13.5px;outline:none }
+  .field textarea{ font-family:var(--mj-font-mono);font-size:12px;min-height:96px;resize:vertical }
+  .field input:focus,.field textarea:focus{ border-color:var(--mj-border-focus);box-shadow:0 0 0 3px rgba(38,153,204,0.15) }
+  .seg{ display:flex;gap:6px }
+  .seg button{ flex:1;padding:8px;border-radius:var(--mj-radius-md);border:1px solid var(--mj-border-default);background:var(--mj-bg-surface);color:var(--mj-text-secondary);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer }
+  .seg button.on{ background:var(--mj-status-info-bg);border-color:var(--mj-status-info);color:var(--mj-status-info-text) }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Admin · Channels</span></div>
+    <div class="topbar-spacer"></div>
+    <a href="admin-sessions.html" class="btn btn--sm"><i class="fa-solid fa-table-list"></i> Sessions</a>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <div class="page-header">
+      <div class="page-eyebrow">AI Administration · Pluggable channels</div>
+      <div class="row between center wrap">
+        <h1 class="page-title" style="margin:0">AI Agent Channels</h1>
+        <button class="btn btn--primary btn--sm"><i class="fa-solid fa-plus"></i> New channel</button>
+      </div>
+      <p class="page-subtitle">The pluggable <span class="mono">AIAgentChannel</span> registry. Each definition binds a server &amp; client plugin class (resolved via ClassFactory) to a transport plane, with an optional JSON config schema. Reference data — seeded via <span class="mono">mj sync</span>.</p>
+    </div>
+
+    <div class="reg-grid">
+      <!-- registry list -->
+      <div class="grid-wrap">
+        <table class="grid">
+          <thead><tr><th>Channel</th><th>Transport</th><th>Server plugin</th><th>Client plugin</th><th>Schema</th><th>Active</th></tr></thead>
+          <tbody>
+            <tr style="background:rgba(38,153,204,0.08)">
+              <td><div class="cell-strong"><i class="fa-solid fa-microphone-lines" style="color:var(--mj-brand-accent)"></i> VoiceAudio</div><div class="muted" style="font-size:11.5px">Duplex audio — model binds here</div></td>
+              <td><span class="pill pill--info">WebRTC</span></td>
+              <td class="mono">VoiceAudioServerPlugin</td>
+              <td class="mono">VoiceAudioClientPlugin</td>
+              <td><i class="fa-solid fa-check muted"></i></td>
+              <td><div class="toggle"></div></td>
+            </tr>
+            <tr>
+              <td><div class="cell-strong"><i class="fa-solid fa-comment" style="color:var(--mj-brand-accent)"></i> TextChat</div><div class="muted" style="font-size:11.5px">Control-plane text alongside voice</div></td>
+              <td><span class="pill pill--ghost">PubSub</span></td>
+              <td class="mono">TextChatServerPlugin</td>
+              <td class="mono">TextChatClientPlugin</td>
+              <td><i class="fa-solid fa-minus muted"></i></td>
+              <td><div class="toggle"></div></td>
+            </tr>
+            <tr>
+              <td><div class="cell-strong"><i class="fa-solid fa-chalkboard" style="color:var(--mj-brand-accent)"></i> Whiteboard</div><div class="muted" style="font-size:11.5px">Interactive surface · perception + mutation tools</div></td>
+              <td><span class="pill pill--brand">WebSocket</span></td>
+              <td class="mono">WhiteboardServerPlugin</td>
+              <td class="mono">WhiteboardClientPlugin</td>
+              <td><i class="fa-solid fa-check muted"></i></td>
+              <td><div class="toggle"></div></td>
+            </tr>
+            <tr>
+              <td><div class="cell-strong"><i class="fa-solid fa-sliders" style="color:var(--mj-brand-accent)"></i> ClientControl</div><div class="muted" style="font-size:11.5px">Navigation / UI tool commands</div></td>
+              <td><span class="pill pill--ghost">PubSub</span></td>
+              <td class="mono">ClientControlServerPlugin</td>
+              <td class="mono">ClientControlClientPlugin</td>
+              <td><i class="fa-solid fa-check muted"></i></td>
+              <td><div class="toggle"></div></td>
+            </tr>
+            <tr style="opacity:0.6">
+              <td><div class="cell-strong"><i class="fa-solid fa-video" style="color:var(--mj-text-muted)"></i> Video</div><div class="muted" style="font-size:11.5px">Deferred — anticipated by modality-agnostic model</div></td>
+              <td><span class="pill pill--info">WebRTC</span></td>
+              <td class="mono">—</td>
+              <td class="mono">—</td>
+              <td><i class="fa-solid fa-minus muted"></i></td>
+              <td><div class="toggle toggle--off"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- edit detail panel -->
+      <div class="card card-pad">
+        <div class="row between center" style="margin-bottom:16px">
+          <span class="section-label" style="margin:0">Edit channel</span>
+          <span class="pill pill--brand"><i class="fa-solid fa-microphone-lines"></i> VoiceAudio</span>
+        </div>
+
+        <div class="field"><label>Name</label><input value="VoiceAudio"></div>
+        <div class="field"><label>Description</label><input value="Duplex audio media plane; the realtime model binds to it and owns the provider socket."></div>
+
+        <div class="field"><label>Transport type</label>
+          <div class="seg">
+            <button>PubSub</button>
+            <button class="on">WebRTC</button>
+            <button>WebSocket</button>
+          </div>
+        </div>
+
+        <div class="field"><label>Server plugin class</label><input class="mono" value="VoiceAudioServerPlugin"></div>
+        <div class="field"><label>Client plugin class</label><input class="mono" value="VoiceAudioClientPlugin"></div>
+
+        <div class="field"><label>Config schema (JSON Schema)</label>
+          <textarea>{
+  "type": "object",
+  "properties": {
+    "sampleRate": { "type": "number", "default": 24000 },
+    "codec": { "enum": ["opus","pcm16"] }
+  }
+}</textarea>
+        </div>
+
+        <div class="row between center" style="margin:18px 0 4px;padding:10px 0;border-top:1px solid var(--mj-border-default)">
+          <div><div class="cell-strong" style="font-size:13.5px">Active</div><div class="muted" style="font-size:11.5px">Available for new sessions</div></div>
+          <div class="toggle"></div>
+        </div>
+
+        <!-- affirmative on LEFT per MJ convention -->
+        <div class="row gap-sm" style="margin-top:14px">
+          <button class="btn btn--primary" style="flex:1"><i class="fa-solid fa-check"></i> Save</button>
+          <button class="btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

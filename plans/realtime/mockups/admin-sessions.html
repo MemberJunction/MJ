@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · AI Agent Sessions · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Admin</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><i class="fa-solid fa-shield-halved"></i> System administration</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <div class="page-header">
+      <div class="page-eyebrow">AI Administration · Real-Time</div>
+      <div class="row between center wrap">
+        <h1 class="page-title" style="margin:0">AI Agent Sessions</h1>
+        <div class="row gap-sm">
+          <a href="admin-channels.html" class="btn btn--sm"><i class="fa-solid fa-plug"></i> Channels registry</a>
+          <button class="btn btn--sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          <button class="btn btn--sm"><i class="fa-solid fa-download"></i> Export</button>
+        </div>
+      </div>
+      <p class="page-subtitle">Every long-lived <span class="mono">AIAgentSession</span> across the platform — live calls, idle holds, and closed history — with the channels they opened and the agent runs they delegated.</p>
+    </div>
+
+    <!-- stat tiles -->
+    <div class="stat-row">
+      <div class="card stat"><div class="stat-label">Total sessions</div><div class="stat-value">18</div></div>
+      <div class="card stat"><div class="stat-label">Active now</div><div class="stat-value" style="color:var(--mj-status-success)">2</div></div>
+      <div class="card stat"><div class="stat-label">Idle</div><div class="stat-value" style="color:var(--mj-status-warning)">1</div></div>
+      <div class="card stat"><div class="stat-label">Delegated runs (7d)</div><div class="stat-value">41</div></div>
+    </div>
+
+    <!-- filter bar -->
+    <div class="filterbar">
+      <div class="search-input"><i class="fa-solid fa-magnifying-glass muted"></i><input type="text" placeholder="Search sessions, users, conversations…"></div>
+      <select class="select"><option>Status: All</option><option>Active</option><option>Idle</option><option>Closed</option></select>
+      <select class="select"><option>Agent: All</option><option>Voice Co-Agent</option></select>
+      <select class="select"><option>User: All</option><option>amith@bluecypress.io</option><option>matt@…</option></select>
+      <select class="select"><option>Date: Last 7 days</option><option>Today</option><option>Last 30 days</option></select>
+      <span style="margin-left:auto" class="muted" style="font-size:12px">18 results</span>
+    </div>
+
+    <!-- data grid -->
+    <div class="grid-wrap">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Agent / Target</th><th>User</th><th>Status</th><th>Channels</th><th>Runs</th><th>Started</th><th>Duration</th><th>Host instance</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>amith@bluecypress.io</td>
+            <td><span class="pill pill--active"><span class="dot dot--live"></span> Active</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span> <span class="muted">2</span></td>
+            <td>1</td><td>3:40 pm</td><td>2:04</td><td class="mono">api-3:8841:bf2</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>matt@memberjunction.com</td>
+            <td><span class="pill pill--active"><span class="dot dot--live"></span> Active</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-chalkboard"></i></span> <span class="muted">2</span></td>
+            <td>3</td><td>3:31 pm</td><td>11:18</td><td class="mono">api-1:7720:a09</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Query Builder</div></td>
+            <td>amith@bluecypress.io</td>
+            <td><span class="pill pill--idle"><i class="fa-solid fa-pause"></i> Idle</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
+            <td>2</td><td>3:12 pm</td><td>6:02</td><td class="mono">api-3:8841:bf2</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>amith@bluecypress.io</td>
+            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span> <span class="muted">2</span></td>
+            <td>1</td><td>1:48 pm</td><td>2:04</td><td class="mono">api-2:5510:c70</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Skip Analyst</div></td>
+            <td>jess@bluecypress.io</td>
+            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
+            <td>4</td><td>1:20 pm</td><td>14:51</td><td class="mono">api-1:7720:a09</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>matt@memberjunction.com</td>
+            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span> <span class="muted">2</span></td>
+            <td>2</td><td>12:55 pm</td><td>4:33</td><td class="mono">api-3:8841:bf2</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>amith@bluecypress.io</td>
+            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed <span class="muted" style="font-weight:500">· janitor</span></span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
+            <td>0</td><td>11:02 am</td><td>0:51</td><td class="mono">api-2:5510:c70</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>jess@bluecypress.io</td>
+            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-chalkboard"></i></span> <span class="muted">2</span></td>
+            <td>3</td><td>Yesterday</td><td>9:12</td><td class="mono">api-1:7720:a09</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+          <tr>
+            <td><div class="cell-strong">Voice Co-Agent</div><div class="muted" style="font-size:11.5px"><i class="fa-solid fa-arrow-right-long"></i> Sage</div></td>
+            <td>amith@bluecypress.io</td>
+            <td><span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span></td>
+            <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span> <span class="muted">1</span></td>
+            <td>1</td><td>Yesterday</td><td>1:39</td><td class="mono">api-3:8841:bf2</td>
+            <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="row between center" style="margin-top:14px">
+      <span class="muted" style="font-size:12.5px">Showing 9 of 18 · mostly Closed</span>
+      <div class="row gap-sm">
+        <button class="btn btn--sm" disabled><i class="fa-solid fa-chevron-left"></i></button>
+        <button class="btn btn--sm">1</button>
+        <button class="btn btn--sm">2</button>
+        <button class="btn btn--sm"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

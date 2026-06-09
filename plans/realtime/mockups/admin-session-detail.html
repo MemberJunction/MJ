@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Session Detail · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .admin-grid { display:grid; grid-template-columns: 1fr 360px; gap:20px; align-items:start }
+  @media(max-width:1100px){ .admin-grid{ grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="admin-sessions.html"><i class="fa-solid fa-arrow-left"></i> Sessions</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Admin · Session</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><i class="fa-solid fa-magnifying-glass-chart"></i> Observability</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <div class="page-header">
+      <div class="page-eyebrow">AIAgentSession · <span class="mono">sess_7f2a…c41</span></div>
+      <div class="row between center wrap">
+        <h1 class="page-title" style="margin:0">Voice Co-Agent → Sage</h1>
+        <div class="row gap-sm">
+          <span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span>
+          <button class="btn btn--sm"><i class="fa-solid fa-code"></i> View JSON</button>
+          <button class="btn btn--sm"><i class="fa-solid fa-clock-rotate-left"></i> Record changes</button>
+        </div>
+      </div>
+      <p class="page-subtitle">Full lifecycle, channel rows, delegated run tree and the co-agent prompt run for this session. User <span class="mono">amith@bluecypress.io</span> · conversation <a href="timeline-collapsed.html">Weather &amp; planning</a>.</p>
+    </div>
+
+    <div class="admin-grid">
+      <!-- LEFT -->
+      <div class="col gap-lg">
+        <!-- channel rows -->
+        <div class="card card-pad">
+          <span class="section-label">AIAgentSessionChannel rows</span>
+          <div class="grid-wrap" style="box-shadow:none">
+            <table class="grid">
+              <thead><tr><th>Channel</th><th>Transport</th><th>Status</th><th>Connected</th><th>Disconnected</th><th>Socket</th></tr></thead>
+              <tbody>
+                <tr><td><span class="cell-strong"><i class="fa-solid fa-microphone-lines" style="color:var(--mj-brand-accent)"></i> VoiceAudio</span></td><td><span class="pill pill--info">WebRTC</span></td><td><span class="pill pill--closed">Disconnected</span></td><td class="mono">3:40:01</td><td class="mono">3:42:04</td><td class="mono">rtc://…/v</td></tr>
+                <tr><td><span class="cell-strong"><i class="fa-solid fa-comment" style="color:var(--mj-brand-accent)"></i> TextChat</span></td><td><span class="pill pill--ghost">PubSub</span></td><td><span class="pill pill--closed">Disconnected</span></td><td class="mono">3:40:01</td><td class="mono">3:42:04</td><td class="muted">—</td></tr>
+                <tr><td><span class="cell-strong"><i class="fa-solid fa-sliders" style="color:var(--mj-brand-accent)"></i> ClientControl</span></td><td><span class="pill pill--ghost">PubSub</span></td><td><span class="pill pill--closed">Disconnected</span></td><td class="mono">3:40:00</td><td class="mono">3:42:04</td><td class="muted">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- run tree -->
+        <div class="card card-pad">
+          <span class="section-label">Agent run tree (ParentRunID nesting)</span>
+          <div class="run-node" style="margin-bottom:20px">
+            <div class="run-head">
+              <div class="avatar" style="width:30px;height:30px;font-size:12px;background:linear-gradient(135deg,var(--mj-color-brand-500),var(--mj-color-accent-400));color:#fff">VC</div>
+              <div style="flex:1"><div class="run-name">Voice Co-Agent · session run</div><div class="run-sub">AIAgentRun #co-77 · Realtime · one long-lived run · 2:04</div></div>
+              <span class="pill pill--closed"><i class="fa-solid fa-check"></i> Completed</span>
+            </div>
+            <div class="run-node run-node--child" style="margin-top:16px">
+              <div class="run-head">
+                <div class="avatar avatar--sage" style="width:28px;height:28px;font-size:11px">S</div>
+                <div style="flex:1"><div class="run-name">Sage · Weather lookup</div><div class="run-sub">AIAgentRun #a3f1c9 · ParentRunID #co-77 · 1.82s · 2 tool calls</div></div>
+                <span class="pill pill--active"><i class="fa-solid fa-check"></i> Completed</span>
+                <a href="session-detail.html" class="btn btn--sm" style="margin-left:8px">Open ↗</a>
+              </div>
+            </div>
+          </div>
+
+          <span class="section-label">Co-Agent prompt run (model leg)</span>
+          <div class="tool-call" style="display:flex">
+            <div class="ti" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--mj-bg-surface-sunken);color:var(--mj-brand-accent)"><i class="fa-solid fa-microchip"></i></div>
+            <div style="flex:1"><span class="cell-strong">AIPromptRun #pr_91b02</span> <span class="muted">· gpt-realtime-2 · Running→Completed · usage checkpointed incrementally</span></div>
+            <span class="pill pill--ghost mono">4,210 tok · $0.038</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="col gap-lg">
+        <div class="card card-pad">
+          <span class="section-label">Lifecycle</span>
+          <div class="timeline">
+            <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:00</div><div class="tl-title">Created</div><div class="tl-desc">CanRun checked · channels opening</div></div>
+            <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:01</div><div class="tl-title">Active</div><div class="tl-desc">Voice + Text + Control connected</div></div>
+            <div class="tl-item"><span class="tl-dot"></span><div class="tl-time">3:41:30</div><div class="tl-title">Idle</div><div class="tl-desc">Quiet &gt; IdleThreshold (2 min hold)</div></div>
+            <div class="tl-item"><span class="tl-dot tl-dot--end"></span><div class="tl-time">3:42:04</div><div class="tl-title">Closed · explicit</div><div class="tl-desc">User hang-up · channels torn down</div></div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <span class="section-label">Host &amp; affinity</span>
+          <div class="col" style="gap:14px">
+            <div class="kv"><span class="k">HostInstanceID</span><span class="v mono">api-2:5510:c70</span></div>
+            <div class="kv"><span class="k">Boot ID</span><span class="v mono">c70a1f</span></div>
+            <div class="kv"><span class="k">LastActiveAt</span><span class="v mono">3:42:03 -04:00</span></div>
+            <div class="kv"><span class="k">ClosedAt</span><span class="v mono">3:42:04 -04:00</span></div>
+            <div class="kv"><span class="k">LastSessionID</span><span class="v muted">— (not a continuation)</span></div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <span class="section-label">Security</span>
+          <div class="col" style="gap:10px">
+            <div class="row center gap-sm"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> <span class="sec">CanRun verified at open</span></div>
+            <div class="row center gap-sm"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> <span class="sec">Session-scoped socket tokens</span></div>
+            <div class="row center gap-sm"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> <span class="sec">Tools ran under contextUser</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- transcript full width -->
+    <div class="card card-pad" style="margin-top:20px">
+      <span class="section-label">Transcript (ConversationDetail · stamped with AgentSessionID)</span>
+      <div class="thread">
+        <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:02</span></div><div class="bubble">Yep, I'm here. What's up?</div></div></div>
+        <div class="turn turn--user"><div class="turn-avatar">AM</div><div><div class="turn-meta">You <span class="muted">3:40:41</span></div><div class="bubble">what's the weather in LA, SF, and NYC?</div></div></div>
+        <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:47</span></div><div class="bubble">Los Angeles is clear and about 78.5°. San Francisco is clear and about 67.8°. New York City is clear and about 76.2°.</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
