@@ -720,6 +720,28 @@ describe('LoopAgentType', () => {
             expect(result.step).toBe('Retry');
         });
 
+        it('should give a directive corrective message (not a terse one) on unparseable output', async () => {
+            // The retry feedback must explicitly steer the model back to JSON-only output and
+            // away from the prose-narration drift ("I'm executing the X action..."). A vague
+            // "couldn't parse" message gave strong in-context models nothing to correct against.
+            const result = await agent.DetermineNextStep(
+                {
+                    success: true,
+                    result: "I'm executing the Run Ad-hoc Query action with parameters: ...",
+                    chatResult: {} as AIPromptRunResult['chatResult'],
+                },
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            const msg = (result.errorMessage || '').toLowerCase();
+            expect(msg).toContain('json');
+            expect(msg).toContain('narration');
+            expect(msg).toContain('nothing else');
+        });
+
         // ── Payload change request passthrough ──────────────────────────
 
         it('should pass payloadChangeRequest through to the result', async () => {
