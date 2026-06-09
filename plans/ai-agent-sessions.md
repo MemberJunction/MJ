@@ -13,7 +13,7 @@ This proposal adds **real-time agents** to MemberJunction. The headline capabili
 3. **Session & Channel infrastructure.** Long-lived **Sessions** wrap the multiple `AIAgentRun`s of a real-time interaction; pluggable **Channels** (voice, whiteboard, text, …) are the bidirectional surfaces the agent perceives and acts on. This is the substrate that makes pillars 1–2 work.
 
 > [!NOTE]
-> **How to read this document.** **Part I** describes the real-time capability — the model, the agent type, the co-agent, the interaction flow, and the Explorer UX. **Part II** specifies the infrastructure that makes it work — sessions, channels, transport, lifecycle, and security. The infrastructure is general (it serves any modality), but real-time is what makes it worth building.
+> **How to read this document.** **Part I** describes the real-time capability — the model, the agent type, the co-agent, the interaction flow, and the Explorer UX. **Part II** specifies the infrastructure that makes it work — sessions, channels, transport, lifecycle, and security. The infrastructure is general (it serves any modality), but real-time is what makes it worth building. One piece of Part II — the [transport unification](#unified-session-transport) — is explicitly an **independent track that voice does not depend on** (voice rides the existing control plane + a new media plane); it ships as its own PR on its own timeline.
 
 **Terminology:** the persisted session is referred to as `AgentSessionID` throughout, distinct from the per-connection transport `sessionID` (see [Unified Session Transport](#unified-session-transport)).
 
@@ -104,8 +104,8 @@ export interface IRealtimeSession {
     OnOutput(handler: (chunk: ArrayBuffer) => void): void;        // model media out → media plane
     OnTranscript(handler: (t: RealtimeTranscript) => void): void;// text stream → control plane + ConversationDetail
     OnToolCall(handler: (call: RealtimeToolCall) => void): void; // → MJ tool execution under contextUser
-    OnInterruption(handler: () => void): void;                   // barge-in → cancellationToken
-    OnUsage(handler: (u: RealtimeUsage) => void): void;          // token/usage telemetry → AIPromptRun
+    OnInterruption(handler: () => void): void;                   // provider-detected barge-in → cancels model turn + in-flight delegated run
+    OnUsage(handler: (u: RealtimeUsage) => void): void;          // token/usage telemetry → AIPromptRun (checkpointed incrementally)
     Close(): Promise<void>;
 }
 ```
@@ -129,10 +129,12 @@ Because the Voice Co-Agent is a normal agent, tool wiring is already solved:
 
 - **Primary tool — invoke the target agent.** The co-agent's headline capability is a tool that runs the full async (loop/flow) agent and feeds results back to the model. Sub-agents are **not** exposed — the co-agent only talks to the top-level agent (the target's own loop handles its sub-agents).
 - **Plus normal server & client tools and artifacts.** Just like any agent, a Voice Co-Agent can be given fast server tools (actions), client tools, and artifact capabilities directly — no special plumbing.
+- **The realtime-registered tool set stays stable and target-independent.** The tools the co-agent registers *with the realtime provider* are fixed regardless of which agent is fronted: the **invoke-target-agent** tool (the target is a runtime parameter *inside* that one tool, not a different tool set) plus any fixed UI/control tools. Everything target-specific executes inside the delegated agent's own run — it is **never** registered on the realtime socket. This keeps the provider contract identical across targets, and is precisely what lets a pre-provisioned, fixed-tool provider like Eleven Labs fit the same model later (see [Eleven Labs](#eleven-labs--a-config-bound-agent-mapped-but-a-fast-follow)) — so it is a design rule for *all* drivers, not an EL workaround.
 
 ### Execution model & run topology
 
-- **One prompt run per session.** The entire real-time session is a single `AIPromptRun` (the full prior conversation dumped in as initial context) wrapped in a single long-lived `AIAgentRun`. It streams both directions with **no JSON intermediation** — inputs go straight to the model, outputs stream straight back. Usage/telemetry accrues over the session and is finalized at close (`OnUsage` → the prompt run).
+- **One prompt run per session — usage checkpointed incrementally, not just at close.** The entire real-time session is wrapped in a single long-lived `AIAgentRun`, with one streaming `AIPromptRun` for the model leg (the full prior conversation dumped in as initial context). It streams both directions with **no JSON intermediation** — inputs go straight to the model, outputs stream straight back. **Usage/telemetry is checkpointed incrementally (debounced) onto the prompt run as `OnUsage` fires — *not* accumulated only in memory and flushed at close.** This is deliberate: when the [janitor](#the-janitor-orphan-reconciliation) force-closes an orphaned session after a crash, it finalizes from the last-persisted values, so partial usage is never lost. We use `AIPromptRun` **as-is** — it already supports a long-lived `Running` status and links back to its `AIAgentRun`; realtime-specific reporting refinements (e.g. a dedicated run-type so hour-long rows can be segmented out of bounded-run dashboards, or modality-split audio/cached token columns) can be **added later if needed**, not in this build.
+- **Transcript lives in `ConversationDetail`, not the prompt run.** Each user/assistant exchange (block) in the realtime session is written as a `ConversationDetail` stamped with `AgentSessionID` — that is the durable transcript. The single `AIPromptRun` is the model-leg spend/lineage anchor and does **not** store the duplex transcript. It all ties together through links that already exist: `AIAgentRun → Conversation` (the run's conversation) and `AIPromptRun → AIAgentRun`.
 - **Delegated work is normal runs.** When the co-agent invokes the target agent, that is its own `AIAgentRun`, linked to the co-agent's run via **`ParentRunID`** and sharing the same **`AgentSessionID`** — so the delegation tree is visible and everything groups under the session.
 - **Long-running tools.** The pattern is *fire the tool call → keep talking / fill the space → push the result when ready*. The exact async-function semantics differ per provider (Gemini Live vs GPT Realtime vs Eleven Labs); the driver owns that mapping. **Open item** (see below) — very long work (minutes) is a known weak spot for voice.
 
@@ -146,9 +148,21 @@ The co-agent needs the **same context the loop agent already assembles**: releva
 
 `Realtime` is an **agent type, not a channel.** Within a session the I/O surfaces — `VoiceAudio`, `Whiteboard`, `TextChat` — are channels, and the single real-time agent perceives and drives them. See [Interactive Channels](#interactive-channels) for the full perception/action model and the one-agent-per-session invariant.
 
+### Failure, interruption & error handling
+
+Voice has failure modes a text run never sees, and the conversation has to *stay conversational* through them.
+
+- **Barge-in is the provider's job; the consequence for delegated work is ours.** Turn detection, VAD, and stopping the model mid-sentence are owned by the realtime provider — we lean on it entirely and do not build our own. We surface that event through a single abstracted hook on `BaseRealtimeModel` / `IRealtimeSession` — **`OnInterruption`** — so it is identical across Gemini / GPT / (later) Eleven Labs. The piece the provider *cannot* see is an **in-flight delegated `AIAgentRun`**: if the user barges in while the co-agent is waiting on a delegated run, `OnInterruption` fires that run's **`cancellationToken`** (we already carry it on `ExecuteAgentParams`), not just the model's current turn. The default is to cancel; a stale delegated result must never be narrated into a conversation that has moved on.
+- **Spoken error handling.** Provider socket drops mid-sentence, a delegated run fails, a tool errors — each must produce a graceful spoken outcome, not dead air or a crash. The driver feeds failures back to the model as a `tool_response`/error signal so it can narrate ("I hit a problem looking that up — want me to try again?"), and a dropped provider socket surfaces over the control plane so the UI can show "reconnecting / call ended" (see [Session Lifecycle](#session-lifecycle-heartbeat--reconciliation)). This is in scope for the MVP at least minimally — barge-in and "working on it" are not enough on their own.
+
+### Testing the realtime path
+
+Streaming, full-duplex drivers are the hardest-to-test component here, and the per-package test mandate (CLAUDE.md rule 6) still applies. The approach: a **mock provider socket** that implements the provider's frame protocol so `GeminiRealtime` / `OpenAIRealtime` can be exercised deterministically — scripted inbound audio/transcript/`tool_call`/usage/interruption frames in, asserted `RegisterTools` / `tool_response` / cancellation behavior out — with no real network or audio. Drivers must be written against `IRealtimeSession` so the mock substitutes cleanly. This is sketched now (before the first driver) so the drivers are built test-first rather than retrofitted.
+
 ### Persistence, continuation & UX
 
 - **Every turn persists.** Each user/assistant turn in the realtime session is written as a `ConversationDetail` stamped with `AgentSessionID`, exactly like text chat. Delegated agent runs and any artifacts they produce are recorded in conversation history too (not interrupted into the live voice UI unless a channel like Whiteboard explicitly surfaces them).
+- **Audio retention is off by default.** The text transcript (`ConversationDetail`s) is the default durable record. Raw audio is **not** persisted unless explicitly enabled per deployment; when enabled, capture needs a consent / PII story (retention window, access control, deletion) that is **out of scope for the first build** and gated behind that flag. This becomes a hard requirement the moment telephony is real — flagged now so it is a deliberate decision, not an accident.
 - **Session continuation.** A closed session can be resumed by starting a **new** session whose **`LastSessionID`** points at the prior one — mirroring `AIAgentRun.LastRunID` (we deliberately reuse that chaining nomenclature). The conversation is the durable thread; sessions are the time-boxed real-time episodes along it.
 - **UX — needs world-class treatment in `@memberjunction/ng-conversations`.** A realtime session sitting in the overall conversation timeline must be **collapsed by default** — you do *not* see the full back-and-forth transcript and every nested agent run inline. You can expand the session to see the full detail and runs, and resume it later (as a new, `LastSessionID`-chained session). This timeline/overlay design is a first-class UX deliverable, not an afterthought.
 
@@ -221,7 +235,7 @@ Because of the pre-provisioning + override-enablement asymmetry, **Eleven Labs i
 - **Multi-agent blend co-agent.** A future co-agent that fronts 2+ agents at once — deferred; start with a single target.
 - **Personality/capabilities above agent type.** A floated future idea to lift identity/personality into a generic layer above the agent type (via the agent-type parent-ID / subclassing). Deferred in favor of the co-agent approach, which is more durable for now.
 - **Multi-party sessions** — out of scope (see [Authorization & Socket Security](#authorization--socket-security)).
-- **Observability tradeoff.** Inside the provider's real-time environment we have less granularity than a normal MJ run; the one-prompt-run wrapper + usage telemetry is how we claw back what we can.
+- **Observability tradeoff.** Inside the provider's real-time environment we have less granularity than a normal MJ run; the one-prompt-run wrapper with **incrementally-checkpointed** usage telemetry, plus a `ConversationDetail` per turn, is how we claw back what we can. Finer per-turn token/cost granularity (a usage-event child, modality-split columns) is a deliberate *later* addition if reporting demands it — not built now.
 
 ---
 
@@ -267,14 +281,14 @@ Here is how a real-time voice + UI interaction flows through the layered session
    * The driver registers the agent's tools with the provider in its native function format (primary tool: **invoke the target agent**; plus any server/client tools). Full prior context is fed into the model.
 3. **Live conversation (bidirectional streaming, no intermediation)**:
    * The user speaks; media frames stream straight to the realtime model (`SendInput`). The model streams audio back (`OnOutput` → media plane) and text (`OnTranscript`).
-   * Each user/assistant turn is persisted as a `ConversationDetail` stamped with `AgentSessionID`. (Optionally, raw audio is saved to file storage and linked via `MJ: Conversation Detail Attachments` for playback.) Barge-in (`OnInterruption`) maps to `cancellationToken`.
+   * Each user/assistant turn is persisted as a `ConversationDetail` stamped with `AgentSessionID`. (Raw audio is **not** saved unless retention is explicitly enabled for the deployment — see [Persistence](#persistence-continuation--ux); when enabled it is linked via `MJ: Conversation Detail Attachments` for playback.) Barge-in is provider-detected and surfaced via `OnInterruption`; it cancels the model's current turn **and** fires the `cancellationToken` of any in-flight delegated `AIAgentRun` (see [Failure, interruption & error handling](#failure-interruption--error-handling)).
 4. **Delegating real work (mid-conversation tool call)**:
    * The model decides it needs Sage to actually do something and emits a native `tool_call` (`OnToolCall`). The driver routes it to MJ tool execution under the session's `contextUser`.
    * **Invoke-target-agent tool** → a full `AIAgentRun` for Sage executes, linked via `ParentRunID` to the co-agent run and sharing `AgentSessionID`. It runs asynchronously; the co-agent **fills the space** conversationally while it works.
-   * **UI tool** (e.g. `ShowChart`) → dispatched as a `tool-request` envelope over the `ClientControl` channel (see [Unified Session Transport](#unified-session-transport)); the client renders and responds.
+   * **UI tool** (e.g. `ShowChart`) → dispatched as a `tool-request` to the client over the control plane — the **existing** client-tool path today (`ClientToolRequestManager` + subscription), folding onto the unified envelope later if/when that [independent transport track](#unified-session-transport) lands.
    * Results are fed back to the realtime model as the `tool_response`. The model narrates the outcome in its own voice. Delegated runs and any artifacts are **recorded** in conversation history but not interrupted into the live voice UI (unless a channel like `Whiteboard` explicitly surfaces them).
 5. **Finalization & continuation**:
-   * On hang-up / timeout / close, the co-agent's prompt run is finalized with accumulated usage/telemetry (`OnUsage`), the `AIAgentSession` is set `Closed`, and channels are torn down (see [Session Lifecycle](#session-lifecycle-heartbeat--reconciliation)).
+   * On hang-up / timeout / close, the co-agent's prompt run is finalized from its **incrementally-checkpointed** usage/telemetry (so a crash-driven janitor close loses nothing — see [run topology](#execution-model--run-topology)), the `AIAgentSession` is set `Closed`, and channels are torn down (see [Session Lifecycle](#session-lifecycle-heartbeat--reconciliation)).
    * The conversation and all its `ConversationDetail` records (including the delegated runs) remain. Resuming later creates a **new** session chained via `LastSessionID`. In the timeline, the whole episode renders as a single **collapsed** voice-session block, expandable to the full transcript + runs.
 
 ---
@@ -312,7 +326,7 @@ While a session is active, present a focused **overlay / mode** over the convers
 - Live updates ride the existing push/subscription transport (see [Unified Session Transport](#unified-session-transport)); the conversations service already consumes agent progress, so the real-time stream extends a path that exists rather than inventing a new one.
 
 ### Suggested build phasing
-1. **MVP** — mic button → minimal overlay (turn state + captions) → voice round-trip with the Voice Co-Agent; collapsed session block in the timeline.
+1. **MVP** — mic button → minimal overlay (turn state + captions) → voice round-trip with the Voice Co-Agent; collapsed session block in the timeline; **minimal failure UX** (provider drop → "reconnecting / call ended", a narrated tool/delegation failure rather than dead air — see [Failure, interruption & error handling](#failure-interruption--error-handling)).
 2. **Delegation legibility** — "working on it" indicators + delegated-run links in the expanded block.
 3. **Interactive channels** — Whiteboard surface with perception + agent-driven mutations.
 4. **Polish** — Matt/LXT visual design pass, resume UX, multi-channel layout.
@@ -490,7 +504,7 @@ To allow channels (text, audio, canvas, video, etc.) to connect dynamically as p
 Implemented by the server-side channel plugin. Responsible for managing the WebSockets/WebRTC session host connections and streaming data back and forth.
 
 > [!IMPORTANT]
-> The interface below is the **conceptual** contract. The [Unified Session Transport](#unified-session-transport) section that follows **refines** it: channels do **not** own the client-facing socket (`Socket`/`OnClientConnect`/`SendToClient` are removed), and the loosely-typed `any` payloads are replaced with a typed `SessionEnvelope`. A channel is handed an injected `ISessionTransport` and becomes pure routing/translation logic. Read both together — the unified version is the one we build.
+> The interface below is the **conceptual** contract. The [Unified Session Transport](#unified-session-transport) section that follows **refines** it: channels do **not** own the client-facing socket (`Socket`/`OnClientConnect`/`SendToClient` are removed), and the loosely-typed `any` payloads are replaced with a typed `SessionEnvelope`. A channel is handed an injected `ISessionTransport` and becomes pure routing/translation logic. Read both together — the unified version is the target shape. Note the transport unification is an **independent track** (see its note); until it lands, channels ride the existing control plane, so the injected-`ISessionTransport` form is where this converges, not a Part I prerequisite.
 
 ```typescript
 export interface IAgentChannelServer {
@@ -600,7 +614,7 @@ To support both server-side LLM tool execution (like Gemini Live's native functi
 ## Unified Session Transport
 
 > [!IMPORTANT]
-> This is the single most important integration decision in the proposal. MemberJunction **already** ships a real-time, bi-directional, session-scoped transport — and most of what "Channels" needs is a generalization of it, not a new parallel stack. This section defines how all socket traffic (existing and new) is unified.
+> **This is an independent track — its own PR, not a prerequisite for voice (decision per review).** The unification below is worth doing on its own merits (one envelope, one multiplex, a Redis-ready control plane), but it **refactors live, shipping code** — `RunAIAgentResolver`, `ClientToolRequestManager`, and the two current subscriptions — which is the highest-regression-risk work in this proposal. Real-time voice does **not** require it: voice ships on a **new media plane** (WebRTC) running *alongside* the **existing, untouched control plane** (today's two subscriptions + PubSub). So this section is sequenced as a separate, independently-justified track with its own timeline; **nothing in [Part I](#part-i--real-time-agents) waits on it**, and it is fine for this to remain a distinct layer long-term. MemberJunction **already** ships a real-time, bi-directional, session-scoped transport, so this track *generalizes* it rather than adding a parallel stack. The sections below describe the target design; read them as "where this track lands," not "what voice depends on."
 
 ### What already exists (and must be reused, not duplicated)
 
@@ -731,12 +745,14 @@ All three resolve to the same MJ tool definition + execution; only the edge diff
 
 Because everything now publishes through one `ISessionTransport` / `PubSubManager`, making the **control plane** multi-instance is a single swap: back `PubSubManager` with Redis pub/sub and every JSON channel becomes cross-node at once. The **media plane** (WebRTC) and the **upstream provider** socket are inherently node-local, so those — and only those — require session affinity (sticky routing) at the load balancer. This is now an explicit, contained constraint rather than an implicit one.
 
-### Incremental, non-breaking rollout
+### Incremental, non-breaking rollout (this track's own PR sequence — independent of voice)
+
+Steps 1–3 are this track's own PR sequence and **voice does not wait for them**:
 
 1. Introduce `SessionEnvelope` + `ISessionTransport`; implement `PubSubSessionTransport` over the *current* topics/subscriptions (no wire change yet).
 2. Refactor `RunAIAgentResolver` + `ClientToolRequestManager` to emit/consume envelopes through the transport. Behavior identical; the two subscriptions collapse to one multiplex.
 3. Add the generic `SendSessionMessage` inbound mutation; migrate `RespondToClientToolRequest` onto it (keep the old mutation as a thin shim for one release).
-4. Only then add `WebRTCSessionTransport` + the `VoiceAudio` channel and any upstream-provider channels. Voice becomes purely additive on top of a unified, already-proven control plane.
+4. **Voice ships in parallel, not after.** The realtime **media plane** (`WebRTCSessionTransport` / `VoiceAudio` + upstream-provider channels) is built on a standalone media path beside the **existing** control plane, so the voice feature is never blocked on steps 1–3. Folding the realtime control traffic onto the unified transport once it has landed is a later *consolidation*, not a gate.
 
 ---
 
@@ -821,3 +837,4 @@ When a realtime provider drives the loop and emits a native `tool_call`, MJ must
 2. **True Multi-Channel Coordination**: Users can speak to the agent while simultaneously typing text or interacting with a whiteboard, and the agent can update the client UI mid-conversation.
 3. **Decoupled Sockets**: The heavy lifting of socket connection maintenance, WebRTC negotiation, and Twilio/telephony integration is isolated in the Session Host layer, keeping the core AI Agent package (`@memberjunction/ai-agents`) lightweight and focused on reasoning/actions.
 4. **Natural Continuation of Client Tools**: Client tools already have an asynchronous, event-driven request/response lifecycle. In standard HTTP runs, they rely on database polling/PubSub. In Session mode, they flow instantly over the established WebSocket, dropping round-trip latency to milliseconds.
+5. **Decoupled, low-risk delivery**: Real-time voice ships on a new media plane beside the existing, untouched streaming control plane — so the headline feature is never gated on the higher-regression-risk transport-unification refactor, which proceeds as its own independently-justified track ([Unified Session Transport](#unified-session-transport)). Likewise, the per-session prompt run checkpoints usage incrementally, so a crash or janitor close never loses cost/telemetry.
