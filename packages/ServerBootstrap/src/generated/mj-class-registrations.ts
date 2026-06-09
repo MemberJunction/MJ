@@ -1173,10 +1173,11 @@ import {
     ComputerUseTestDriver,
 } from '@memberjunction/computer-use-engine';
 
-// @memberjunction/server (3 classes)
+// @memberjunction/server (4 classes)
 import {
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
+    RateLimitMiddleware,
     SkipProxyAgent,
 } from '@memberjunction/server';
 
@@ -2030,6 +2031,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ComputerUseTestDriver,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
+    RateLimitMiddleware,
     SkipProxyAgent,
 ];
 
@@ -2037,7 +2039,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 845;
+export const CLASS_REGISTRATIONS_COUNT = 846;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
