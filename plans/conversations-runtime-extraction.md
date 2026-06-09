@@ -1,8 +1,8 @@
 # Conversations Runtime Extraction & Widget Extension Surface
 
-> **Status:** Planning / design — open for team review before any implementation.
+> **Status:** Planning / design — revised after first round of team review (2026-06-09).
 > **Authors:** Drafted via collaborative brainstorming session.
-> **Date:** 2026-06-08.
+> **Date:** 2026-06-08 (initial); 2026-06-09 (revised for team feedback).
 > **Audience:** MJ core maintainers + any downstream app team building chat-shaped UX on top of MJ (Form Builder Component Studio embed already in production; a downstream learning-focused application is the immediate forcing function).
 > **TL;DR:** The "conversation engine" described in recent design discussions is half-built already. Finish the extraction by promoting the runtime/orchestration code (currently trapped as Angular services) into a new pure-TypeScript package, leave the existing data-layer `ConversationEngine` where it is, and expand the widget's extension surface so downstream apps can build "character"-shaped tutor surfaces with zero custom chat code.
 
@@ -23,13 +23,13 @@ Their initial proposal: **build custom UI on top of MJ's chat *services***. That
 Two related issues compound this:
 
 - **Default agent is hardcoded** as the string `"Sage"` in three places in the Angular package. Any deployment that wants a different conversation manager has to fork.
-- **Voice/multimodal channels are coming** (separate workstream — `/plans/audio-agent-architecture.md`, `/plans/complete/multi-modal-chat-support.md`). The engine has to be open to them without a rewrite when they land.
+- **Real-time AI Agents (voice now, video later) are landing in 5.41.0** via PR #2787 (`plans/ai-agent-sessions.md`) — introducing `BaseRealtimeModel`, a new `Realtime` agent type, the generic Voice Co-Agent, and **agent-level Sessions & Channels** infrastructure. The conversations runtime must be aware of Sessions/Channels so a user activating voice in the widget flows cleanly through that infrastructure, not a parallel one.
 
 So this plan does three things at once:
 
 1. **Extract the runtime layer** out of Angular into a pure-TS package consumable on client or server.
-2. **Expand the widget's extension surface** (slots, lifecycle events, persona config, chat-specific tokens) so downstream apps can almost always use the widget directly instead of building custom UX.
-3. **Replace the hardcoded default-agent lookup** with an `MJ: Application Settings`-driven resolution chain, plus a metadata flag on `MJ: AI Agents`.
+2. **Expand the widget's extension surface** (slots with interface contracts + cloneable defaults, Before/After cancelable lifecycle events, persona config, chat-specific tokens) so downstream apps can almost always use the widget directly instead of building custom UX.
+3. **Replace the hardcoded default-agent lookup** with an `MJ: Application Settings`-driven resolution chain, with a small code-const Sage fallback for safety if no setting is configured.
 
 ---
 
@@ -45,7 +45,7 @@ A short read-only audit grounds the rest of the plan. None of the following is h
   - **Mode is purely `@Input()`-driven** (`overlayMode`, `showAgentPicker`, `showExportButton`, `defaultAgentId`, `linkedEntityId`, `applicationScope`, `applicationId`, etc.). There is no separate "full-page component" or "embed component" to consolidate.
 - **`mj-mention-editor`** is already standalone, implements `ControlValueAccessor`, owns its own attachment handling, and emits structured mention data via `getMentionChipsData()` / `getPlainTextWithJsonMentions()`. No third-party mention library is involved.
 - **`MJ: Application Settings`** entity + **`ApplicationSettingEngine`** singleton already ship in `@memberjunction/core-entities`. They mirror `UserInfoEngine` (BaseEngine, debounced setter, observable, `GetSetting(name, applicationId?)` with app-scoped-over-global resolution). **Zero scaffolding needed for the settings-driven default-agent work.**
-- **Voice/multimodal scaffolding is in design only.** No live voice code. The relevant plans (`audio-agent-architecture.md`, `multi-modal-chat-support.md`) describe a "channels" / "modality" concept; this plan reserves seams for them but ships zero voice code.
+- **Real-time AI Agents are landing imminently** via PR #2787 (target: 5.41.0). That work introduces (a) `BaseRealtimeModel` — a modality-agnostic, streaming, full-duplex, tool-calling model primitive (Gemini Live, GPT Realtime); (b) a new `Realtime` agent type plus a generic **Voice Co-Agent** that acts as the live voice for any existing agent; (c) **Sessions & Channels infrastructure** — long-lived Sessions wrap the multiple `AIAgentRun`s of a real-time interaction; pluggable, *interactive* Channels (voice, whiteboard, text, …) are bidirectional surfaces the agent perceives and acts on. This supersedes the earlier `audio-agent-architecture.md` / `multi-modal-chat-support.md` plans. This plan no longer reserves its own channel abstraction — it integrates with PR #2787's infrastructure directly.
 
 What does *not* exist yet:
 
@@ -66,17 +66,17 @@ What does *not* exist yet:
 
 1. Net-new pure-TS package `@memberjunction/conversations-runtime` owning the orchestration concerns above. Browser + server consumable. Zero UX dependencies.
 2. `ConversationEngine` stays in `core-entities`. Every existing import of it continues to work unchanged.
-3. Angular widget package (`@memberjunction/ng-conversations`) becomes a thin wrapper consuming the runtime, with an expanded but **additive-only** extension surface: chat-specific slots, persona/character inputs, lifecycle `@Output()`s, chat design tokens.
-4. Default-agent resolution becomes a 4-step chain driven by widget input → `MJ: Application Settings` (app-scoped) → `MJ: Application Settings` (global) → an `IsDefaultConversationManager` flag on `MJ: AI Agents`. The hardcoded `"Sage"` name lookup goes away.
-5. Reserve a `ConversationChannel` interface in the runtime so voice/video can plug in later as separate packages without engine changes.
-6. Ship one new `/guides/` doc (`CONVERSATIONS_UX_STACK_GUIDE.md`) modeled on `FORMS_ARCHITECTURE_GUIDE.md` covering the full three-layer stack.
+3. Angular widget package (`@memberjunction/ng-conversations`) becomes a thin wrapper consuming the runtime, with an expanded but **additive-only** extension surface: slots with interface contracts AND cloneable default components, persona/character inputs, **Before/After cancelable** lifecycle `@Output()`s, chat design tokens.
+4. Default-agent resolution becomes a 3-step chain driven by widget input → `MJ: Application Settings` (app-scoped) → `MJ: Application Settings` (global), with a small code-const Sage fallback if no setting is configured. The hardcoded `"Sage"` `Agents.find(...)` lookup goes away. No schema migration; Sage default ships as a metadata seed in `metadata/application-settings/`.
+5. Integrate with the AI Agent Sessions/Channels infrastructure from PR #2787 — the runtime surfaces Session state, doesn't own a parallel abstraction. Implementation is a stub task in this workstream until that PR lands.
+6. Ship one new `/guides/` doc (`CONVERSATIONS_UX_STACK_GUIDE.md`) modeled on `FORMS_ARCHITECTURE_GUIDE.md`, **and** update every existing README touched by this work (`ng-conversations`, the new `conversations-runtime` package, plus any guide rendered obsolete by the new one). Include a runnable **example personalization component** demonstrating slot subclassing.
 7. Form Builder cockpit and Component Studio AI Assistant embeds continue working with **zero source changes** in their packages. This is a hard regression bar.
 
 ### Non-goals
 
 - Renaming or moving `ConversationEngine` out of `core-entities`.
 - Introducing breaking input/output changes on `mj-conversation-chat-area`, `mj-chat-agents-overlay`, or `mj-mention-editor`.
-- Implementing voice channels. That belongs to the voice/multimodal channels workstream; this plan only reserves the seam.
+- Building the Sessions/Channels/Realtime infrastructure — that's PR #2787. This plan **integrates** with it, doesn't reimplement any part of it.
 - Building any UI for the downstream learning app. The widget extensions are general-purpose; the LXP-style "warm tutor home" is implemented by that app's team using the new extension points.
 - Touching the deprecated `conversation-workspace.component`. It is already flagged for removal; deletion can ride a separate cleanup PR.
 - Migrating the existing `ConversationBridgeService` / `MentionParserService` Vitest test files — they port over essentially as-is.
@@ -88,29 +88,40 @@ What does *not* exist yet:
 ### 4a. Three-layer stack
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  APPS  (Explorer, downstream Angular apps, future React apps,   │
-│         Node workers / CLI tools)                                │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  @memberjunction/ng-conversations  (Angular UI, unchanged       │
-│    package; additive extension surface)                          │
-│                                                                  │
-│    • mj-conversation-chat-area (overlay / embed / full-page)    │
-│    • mj-chat-agents-overlay (corner-bubble shell)               │
-│    • mj-mention-editor (standalone composer)                     │
-│    • mj-chat-conversations-resource (full-page wrapper)         │
-│    • NEW: ChatSlotDirective system                              │
-│    • NEW: chat-specific design tokens (--mj-chat-*)             │
-│    • NEW: persona/character inputs + lifecycle outputs          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐
+│  ANGULAR APPS                         │   │  NON-ANGULAR JS APPS                  │
+│  (Explorer, current/future Angular    │   │  (future React/Next/Vue/Svelte/…),   │
+│   apps that want the widget)          │   │   Node workers, CLI tools, server-   │
+│                                       │   │   side jobs, test harnesses)          │
+└──────────────────────────────────────┘   └──────────────────────────────────────┘
+                  │                                            │
+                  ▼                                            │
+┌──────────────────────────────────────┐                      │
+│  @memberjunction/ng-conversations    │                      │
+│    Angular UI — same package, same   │                      │
+│    selectors, additive extension     │                      │
+│    surface                            │                      │
+│                                       │                      │
+│  • mj-conversation-chat-area         │                      │
+│    (overlay / embed / full-page)     │                      │
+│  • mj-chat-agents-overlay            │                      │
+│  • mj-mention-editor                  │                      │
+│  • mj-chat-conversations-resource    │                      │
+│  • NEW: ChatSlotDirective + slot     │                      │
+│    interfaces + exported default     │                      │
+│    slot components (cloneable)       │                      │
+│  • NEW: --mj-chat-* design tokens    │                      │
+│  • NEW: persona/character inputs +   │                      │
+│    Before/After cancelable events    │                      │
+└──────────────────────────────────────┘                      │
+                  │                                            │
+                  └──────────────────┬─────────────────────────┘
+                                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  @memberjunction/conversations-runtime  ★ NEW                   │
 │    Pure TypeScript · Zero UX deps · Client + server             │
+│    Consumed directly by any JS host; ng-conversations is just   │
+│    one consumer.                                                 │
 │                                                                  │
 │    ConversationsRuntime (BaseEngine — orchestration)            │
 │    ├── Bridge          overlay ⇄ workspace state                │
@@ -119,8 +130,9 @@ What does *not* exist yet:
 │    ├── Tools           client-tool registry + dispatch          │
 │    ├── DefaultAgent    Application-Settings-driven resolver     │
 │    ├── Mentions        parser (pure)                            │
-│    └── Channels        TextChannel built-in; voice/video        │
-│                        register externally                       │
+│    └── Sessions        observability over the Sessions/Channels │
+│                        infrastructure from PR #2787 (stub —     │
+│                        owned by that PR, integrated here)        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -129,6 +141,7 @@ What does *not* exist yet:
 │    ConversationEngine                                            │
 │    ApplicationSettingEngine                                      │
 │    AIEngineBase                                                  │
+│    [+ new Sessions/Channels entities from PR #2787]             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -137,6 +150,10 @@ What does *not* exist yet:
 │  graphql-dataprovider, global                                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**The layering rule:**
+- **Angular apps** consume `@memberjunction/ng-conversations` (which transitively consumes `conversations-runtime`). They get the widget.
+- **Non-Angular JS apps** (React, Vue, Svelte, Next.js, Node workers, CLI tools, server-side jobs, test harnesses) consume `@memberjunction/conversations-runtime` directly. They bring their own UX layer.
 
 **Why `conversations-runtime` and not `conversations`:** the runtime/orchestration framing is honest about what's inside, and avoids name collision with the existing `ConversationEngine` data-layer class.
 
@@ -157,6 +174,7 @@ export class ConversationsRuntime extends BaseEngine<ConversationsRuntime> {
   public get Tools():        ClientToolRegistry;
   public get DefaultAgent(): DefaultAgentResolver;
   public get Mentions():     MentionParser;
+  public get Sessions():     SessionsObserver;     // ★ integrates PR #2787
 
   // Convenience: the things every consumer does
   public sendMessage(input: SendMessageInput,
@@ -164,12 +182,10 @@ export class ConversationsRuntime extends BaseEngine<ConversationsRuntime> {
                      provider?: IMetadataProvider): Observable<ConversationTurnEvent>;
 
   public observeConversation(conversationId: string): Observable<ConversationState>;
-
-  public registerChannel(channel: ConversationChannel): void;
-  public selectChannel(agent: AIAgentEntityExtended,
-                       preference: 'text' | 'voice' | 'auto'): ConversationChannel;
 }
 ```
+
+**`SessionsObserver`** is intentionally an *observability* surface, not a *control* surface. When PR #2787's Sessions/Channels infrastructure runs (e.g., a user activates voice and the Voice Co-Agent spawns a Session), the runtime observes that Session's lifecycle and surfaces it through the same `ConversationTurnEvent` stream consumers already subscribe to. The Sessions/Channels infrastructure itself lives in `core-entities` + the agent runtime — this plan does not duplicate it.
 
 Key shapes:
 
@@ -217,64 +233,66 @@ A `DefaultAgentResolver` (inside the runtime, exposed as `ConversationsRuntime.I
 1. **Explicit `defaultAgentId` on the call (or widget `@Input()`)** — already works today, preserved.
 2. **`MJ: Application Settings` row** where `ApplicationID = <current app>` and `Name = 'Conversations.DefaultAgentID'`.
 3. **`MJ: Application Settings` row** where `ApplicationID IS NULL` and `Name = 'Conversations.DefaultAgentID'` (global default).
-4. **`MJ: AI Agents` row** where `IsDefaultConversationManager = 1` (metadata fallback, replaces `Agents.find(a => a.Name === 'Sage')`).
+4. **Code-const fallback** — `Agents.find(a => a.Name === DEFAULT_FALLBACK_AGENT_NAME)` where `DEFAULT_FALLBACK_AGENT_NAME = 'Sage'`. Last-resort safety net so the system never throws on a clean install where seeding may have skipped.
 
-If all four steps fail, the resolver throws a descriptive error rather than failing silently — the current code path logs a warning and returns `null`, which makes misconfigurations hard to spot at the call site.
+If even step 4 misses (no agent named `Sage` exists in the install), the resolver throws a descriptive error rather than returning `null` — the current code path logs a warning and returns `null`, which makes misconfigurations hard to spot at the call site.
 
-**Schema change:** one column on `MJ: AI Agents` plus an `sp_addextendedproperty` description. Single migration:
+**No schema migration.** The hardcoded `Agents.find(a => a.Name === 'Sage')` from today's three call sites collapses into the single fallback constant inside the resolver, kept around purely as the safety net.
 
-```sql
-ALTER TABLE ${flyway:defaultSchema}.AIAgent ADD
-    IsDefaultConversationManager BIT NOT NULL DEFAULT 0;
+**The default ships as a metadata seed.** A new directory `metadata/application-settings/` containing `.sage-default-agent.json` seeds the global setting:
 
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'When set, this agent is the fallback default conversation manager...',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIAgent',
-    @level2type = N'COLUMN', @level2name = N'IsDefaultConversationManager';
-
--- Data step: preserve existing behavior — Sage stays the default unless reconfigured
-UPDATE ${flyway:defaultSchema}.AIAgent
-SET IsDefaultConversationManager = 1
-WHERE Name = 'Sage';
-```
-
-CodeGen picks up the column after the migration; `AIAgentEntity` gains a strongly-typed `IsDefaultConversationManager: boolean` property. No `.Get()` / `.Set()` workarounds — the column has to exist before the runtime is wired to it.
-
-**Caching:** `ApplicationSettingEngine` already caches and exposes a reactive observable. `AIEngineBase.Instance.Agents` already caches all agents. The resolver caches its result per `(applicationId, explicitAgentId)` for the lifetime of a turn and invalidates when either source emits a change.
-
-### 4d. Channel seam
-
-A minimal interface, no implementation beyond the built-in text channel:
-
-```typescript
-export interface ConversationChannel {
-  readonly kind: 'text' | 'voice' | 'video' | string;
-  readonly capabilities: ChannelCapabilities;
-
-  send(input: SendMessageInput,
-       ctx: ChannelContext): Observable<ConversationTurnEvent>;
-
-  state$?: Observable<ChannelState>;  // optional — only voice/video need it
-  dispose(): void;
-}
-
-interface ChannelCapabilities {
-  canSendText:     boolean;
-  canSendAudio:    boolean;
-  canReceiveAudio: boolean;
-  canSendVideo:    boolean;
-  canReceiveVideo: boolean;
-  isRealtime:      boolean;
+```json
+{
+  "fields": {
+    "ApplicationID": null,
+    "Name": "Conversations.DefaultAgentID",
+    "Value": "@lookup:MJ: AI Agents.Name=Sage",
+    "Comments": "Global default conversation-manager agent. App-scoped overrides take precedence."
+  }
 }
 ```
 
-The runtime ships **one built-in channel: `TextChannel`** — a thin adapter around the existing `RunAIAgentFromConversationDetail` GraphQL mutation, exposing it through the `ConversationTurnEvent` stream.
+On every install that runs `mj sync push`, the setting exists and the resolver never needs the fallback. Deployments that want a different global default rewrite the lookup value to their chosen agent (e.g., Betty in the Betty v2 deployment); deployments that want a per-app override add an app-scoped row.
 
-Voice/video are separate future packages (e.g., `@memberjunction/conversations-channel-voice`) that call `runtime.registerChannel(...)`. The widget asks `runtime.selectChannel(agent, preference)`; widget code never imports voice-specific types.
+**Caching.** `ApplicationSettingEngine` already caches and exposes a reactive observable. `AIEngineBase.Instance.Agents` already caches all agents. The resolver caches its result per `(applicationId, explicitAgentId)` for the lifetime of a turn and invalidates when either source emits a change.
 
-**Net cost of this section now:** ~150 lines of interface definitions + the TextChannel adapter wrapping existing code. Pays off the day voice lands.
+### 4d. AI Agent Sessions & Channels integration (stub task)
+
+PR #2787 introduces Sessions (long-lived wrappers over multiple `AIAgentRun`s of a real-time interaction) and Channels (interactive, bidirectional surfaces the agent perceives and acts on — voice, whiteboard, text, etc.). The conversations runtime does **not** invent a parallel abstraction; it observes and surfaces what PR #2787 owns.
+
+**What the runtime gains:**
+
+- A `SessionsObserver` sub-component that subscribes to the lifecycle of Sessions linked to active conversations. When a Voice Co-Agent starts a Session, the observer emits Session/Channel events into the existing `ConversationTurnEvent` stream so widget consumers see them through the same channel they already watch.
+- New `ConversationTurnEvent` variants — additive only:
+
+  ```typescript
+  type ConversationTurnEvent =
+    | { kind: 'started';           agentRunId: string; }
+    | { kind: 'progress';          step: string; percent?: number; message?: string; }
+    | { kind: 'tool-invoked';      toolName: string; args: unknown; }
+    | { kind: 'response-form';     form: AgentResponseForm; }
+    | { kind: 'artifact';          artifactId: string; }
+    | { kind: 'session-started';   sessionId: string; channelKinds: string[]; }     // ★ new
+    | { kind: 'session-channel';   sessionId: string; channelKind: string;
+                                    state: 'opening' | 'open' | 'closing' | 'closed'; } // ★ new
+    | { kind: 'session-ended';     sessionId: string; reason: string; }              // ★ new
+    | { kind: 'complete';          result: ExecuteAgentResult; }
+    | { kind: 'error';             error: Error; };
+  ```
+
+- The widget's existing `BeforeAgentTurn` / `AfterAgentTurn` events (Section 4e) handle these new event variants identically to the existing ones — no extra widget surface required for the Session story to flow through.
+
+**What this plan does NOT do:**
+
+- Define `BaseRealtimeModel`, `Realtime` agent type, Voice Co-Agent, or any Channel implementation — those belong to PR #2787.
+- Ship code now. The integration is a **stub task** in the sequencing (Section 8, Step 6): once PR #2787 lands, wire the `SessionsObserver` against its public API. Until then, the stub is a no-op observer.
+
+**Why this is the right shape:**
+
+- The runtime is conversation-shaped; Sessions are agent-shaped. Keeping them in separate layers preserves the "Sessions/Channels are an agent capability" framing from PR #2787 and avoids leaking real-time concerns into every chat surface.
+- The widget already speaks `ConversationTurnEvent`. Adding three event variants is cheaper than adding a parallel event stream.
+
+**Net cost of this section now:** ~40 lines of stub code (`SessionsObserver` as a no-op + three event-variant additions), plus a follow-up tightly scoped to PR #2787's public API once it merges.
 
 ### 4e. Widget extension surface
 
@@ -288,9 +306,6 @@ All additive on `mj-conversation-chat-area`. Existing embeds (Form Builder, Comp
 @Input() AgentCharacterConfig: AgentCharacterConfig | null = null;
 //        { avatarUrl, characterName, voiceStateMode: 'subtle' | 'prominent' }
 
-// Channel preference for this surface
-@Input() PreferredChannel: 'text' | 'voice' | 'auto' = 'auto';
-
 // Default-agent resolution context (formalize)
 @Input() ApplicationId: string | null = null;
 
@@ -299,33 +314,127 @@ All additive on `mj-conversation-chat-area`. Existing embeds (Form Builder, Comp
 //        { greeting, subtext, suggestedPrompts, hideDefaultPrompts }
 ```
 
-**New `<ng-content>` slot system** via a single `ChatSlotDirective`:
+*(`PreferredChannel` from the original draft is gone — channel selection is owned by the Sessions/Channels infrastructure in PR #2787; the widget reacts to Session state via the new outputs below, not to a channel preference input.)*
+
+**New slot system: `ChatSlotDirective` + interface contracts + cloneable default components.**
+
+Five named slots — each has (a) a `mjChatSlot` template form for ad-hoc projection, (b) a TypeScript interface every slot component implements so the widget can call into it with a strong contract, and (c) an exported standalone default component the consumer can clone, subclass, or wrap (containment pattern):
+
+| Slot | Interface | Default standalone component | Purpose |
+|---|---|---|---|
+| `emptyState` | `IMJChatEmptyStateComponent` | `MJChatEmptyStateDefaultComponent` | What renders before any messages exist |
+| `agentPresence` | `IMJChatAgentPresenceComponent` | `MJChatAgentPresenceDefaultComponent` | Character / avatar / voice-state visualization |
+| `header` | `IMJChatHeaderComponent` | `MJChatHeaderDefaultComponent` | Top bar (title, agent picker, export/share toggles) |
+| `messageExtra` | `IMJChatMessageExtraComponent` | `MJChatMessageExtraDefaultComponent` | Per-message decoration (inline within the bubble) |
+| `demonstrationSurface` | `IMJChatDemonstrationSurfaceComponent` | `MJChatDemonstrationSurfaceDefaultComponent` *(no-op default)* | **NEW.** Adjacent full-width surface for content the agent is "walking through" (e.g., annotated lesson material). Off unless a slot is supplied. |
+
+```typescript
+// Example interface contract — the widget can speak with confidence to whatever component lands in the slot
+export interface IMJChatEmptyStateComponent {
+  Greeting: string;
+  Subtext?: string;
+  SuggestedPrompts?: string[];
+  PromptSelected: EventEmitter<string>;     // standardized output
+}
+```
+
+**Three consumption modes, all first-class:**
 
 ```html
+<!-- Mode 1: Project an ad-hoc template -->
 <mj-conversation-chat-area ...>
-  <ng-template mjChatSlot="emptyState">…</ng-template>
-  <ng-template mjChatSlot="agentPresence" let-state>…</ng-template>
-  <ng-template mjChatSlot="header" let-conversation>…</ng-template>
-  <ng-template mjChatSlot="messageExtra" let-message>…</ng-template>
+  <ng-template mjChatSlot="emptyState">
+    <my-warm-welcome />
+  </ng-template>
+</mj-conversation-chat-area>
+
+<!-- Mode 2: Wrap the exported default (containment) -->
+<mj-conversation-chat-area ...>
+  <ng-template mjChatSlot="agentPresence" let-state>
+    <my-warm-frame>
+      <mj-chat-agent-presence-default [State]="state" [Mode]="'prominent'" />
+    </my-warm-frame>
+  </ng-template>
 </mj-conversation-chat-area>
 ```
 
-If a slot is not supplied, the component renders its existing default. Zero change-detection cost when slots are absent.
-
-**New lifecycle `@Output()`s** — pure passthrough from the runtime's observable stream:
-
 ```typescript
-@Output() AgentTurnStarted    = new EventEmitter<{ agentRunId; agentId }>();
-@Output() AgentTurnProgress   = new EventEmitter<{ step; percent?; message? }>();
-@Output() AgentTurnCompleted  = new EventEmitter<{ agentRunId; result }>();
-@Output() ToolInvoked         = new EventEmitter<{ toolName; args; result }>();
-@Output() ResponseFormShown   = new EventEmitter<{ formId; questionsCount }>();
-@Output() ResponseFormSubmitted = new EventEmitter<{ formId; values }>();
-@Output() VoiceStateChanged   = new EventEmitter<'idle'|'listening'|'thinking'|'speaking'>();
-@Output() ChannelChanged      = new EventEmitter<'text'|'voice'|'video'>();
+// Mode 3: Subclass the exported default
+@Component({ selector: 'my-tutor-presence', standalone: true, ... })
+export class MyTutorPresenceComponent
+  extends MJChatAgentPresenceDefaultComponent
+  implements IMJChatAgentPresenceComponent {
+  // Override only what you need
+}
 ```
 
-Concrete consumer use cases these unlock without forking the widget: pausing a video player on `VoiceStateChanged === 'listening'`, recording a tutor-step badge when `ResponseFormSubmitted` fires, navigating to a specific lesson when `ToolInvoked` fires for a `navigate-to-lesson` tool.
+If a slot is not supplied, the component renders its exported default. Zero change-detection cost when slots are absent.
+
+**New lifecycle `@Output()`s — Before/After cancelable pattern.**
+
+Per established MJ convention (see `packages/Angular/Generic/trees/src/lib/events/tree-events.ts`, `packages/Angular/Generic/base-forms/src/lib/types/form-events.ts`, and `packages/Angular/Generic/clustering/src/lib/clustering.types.ts`), action events come as `Before*` / `After*` pairs. The `Before*` event carries an args object extending `CancellableChatEventArgs` (with a `Cancel: boolean` property the listener can flip); the widget checks `if (event.Cancel) return;` before proceeding and emits the corresponding `After*` only on the non-canceled path. Informational events (progress, shown notifications) stay as single emitters.
+
+```typescript
+// Base — mirrors MJ's established CancellableEventArgs idiom
+export class CancellableChatEventArgs {
+  Cancel: boolean = false;
+  CancelReason?: string;
+}
+
+// Agent-turn lifecycle
+export class BeforeAgentTurnEventArgs extends CancellableChatEventArgs {
+  readonly Input: SendMessageInput;
+}
+export class AfterAgentTurnEventArgs {
+  readonly AgentRunId: string;
+  readonly Result: ExecuteAgentResult;
+}
+
+// Tool invocations (the agent invoking a client tool)
+export class BeforeToolInvokedEventArgs extends CancellableChatEventArgs {
+  readonly ToolName: string;
+  readonly Args: unknown;
+}
+export class AfterToolInvokedEventArgs {
+  readonly ToolName: string;
+  readonly Args: unknown;
+  readonly Result: unknown;
+}
+
+// Response form submission
+export class BeforeResponseFormSubmittedEventArgs extends CancellableChatEventArgs {
+  readonly FormId: string;
+  readonly Values: Record<string, unknown>;
+}
+export class AfterResponseFormSubmittedEventArgs {
+  readonly FormId: string;
+  readonly Values: Record<string, unknown>;
+}
+
+// Widget @Output declarations
+@Output() BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+@Output() AfterAgentTurn  = new EventEmitter<AfterAgentTurnEventArgs>();
+@Output() AgentTurnProgress = new EventEmitter<{ step; percent?; message? }>(); // informational
+
+@Output() BeforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+@Output() AfterToolInvoked  = new EventEmitter<AfterToolInvokedEventArgs>();
+
+@Output() ResponseFormShown = new EventEmitter<{ formId; questionsCount }>();   // informational
+@Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+@Output() AfterResponseFormSubmitted  = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+// Session lifecycle (from PR #2787 integration, Section 4d) — informational only;
+// cancellation of voice/realtime activity lives at the Sessions layer, not here
+@Output() SessionStarted = new EventEmitter<{ sessionId; channelKinds }>();
+@Output() SessionChannelStateChanged = new EventEmitter<{ sessionId; channelKind; state }>();
+@Output() SessionEnded = new EventEmitter<{ sessionId; reason }>();
+```
+
+**Concrete consumer use cases this enables without forking the widget:**
+- Pause a video on `BeforeAgentTurn` (don't cancel — just sync UI state alongside).
+- Block a destructive tool invocation client-side: `BeforeToolInvoked` listener sets `Cancel = true` if the user hasn't confirmed.
+- Capture analytics on `AfterAgentTurn` / `AfterToolInvoked`.
+- Coordinate UI lighting/dim with `SessionChannelStateChanged` (e.g., dim the room when the voice channel transitions to `open`, restore when `closed`).
 
 **New chat-specific design tokens** (`--mj-chat-*`), defined in the widget package and defaulting to existing semantic `--mj-*` tokens:
 
@@ -351,31 +460,63 @@ A downstream app's warm theme becomes a token override file, not a CSS fork. Mat
 
 The hard regression bar: **Form Builder cockpit and Component Studio AI Assistant embeds compile and render identically with zero source changes in their packages.** Verified by:
 
-1. Existing inputs on `mj-conversation-chat-area` remain in place with identical defaults and identical semantics. New inputs all have safe defaults (`false`, `null`, `'auto'`).
-2. Existing outputs continue to fire on the same events. New outputs are additive.
+1. Existing inputs on `mj-conversation-chat-area` remain in place with identical defaults and identical semantics. New inputs all have safe defaults (`false`, `null`).
+2. Existing outputs continue to fire on the same events. New outputs are additive — Before/After pairs are new emitters; no existing emitter is renamed or repurposed.
 3. The deprecated `conversation-workspace.component` is left alone.
 4. `mj-mention-editor` is untouched.
 5. `mj-chat-agents-overlay` keeps its existing input/output surface; internally it switches from injecting Angular services to consuming `ConversationsRuntime.Instance`, which is invisible to consumers.
 
-There is no metadata migration that changes existing-install behavior. The default-agent flag migration sets `IsDefaultConversationManager = 1` on the existing Sage row, preserving today's behavior on every install that already has Sage.
+**No schema migration ships with this plan.** The default-agent change is purely metadata: a new `metadata/application-settings/.sage-default-agent.json` seeds the global default. Existing installs preserve today's "Sage is the default" behavior either via the seed (on next `mj sync push`) or via the code-const fallback (if they skip the sync).
 
 ---
 
 ## 6. Documentation deliverables
 
-1. **TSDoc** on every exported class, interface, and method in `conversations-runtime`. Each block: what it does (one sentence), when to use it vs. the obvious alternative, an `@example` when the signature isn't self-explanatory.
-2. **`packages/conversations-runtime/README.md`** — overview, "when to use this vs. the widget", `Config()` bootstrap, four short code samples (send a message, observe a conversation, register a client tool, register a channel). Links to the guide.
-3. **`packages/Angular/Generic/conversations/README.md`** — updated to position the package as the Angular wrapper over the runtime, with full prop/event reference for the new extension surface.
-4. **`guides/CONVERSATIONS_UX_STACK_GUIDE.md`** — new guide, modeled on `FORMS_ARCHITECTURE_GUIDE.md` and `NAVIGATION_AND_ROUTING_GUIDE.md`. Structure:
-   - Three-layer stack diagram.
-   - "I want a chat surface in my app" decision tree (default config → embed → DefaultAgentId/linked-record → slots/character/tokens → headless runtime).
-   - Widget reference: full props/events, four extension dimensions.
-   - Runtime reference: `Config()`, `sendMessage`, `observeConversation`, client tools, channels.
-   - `MJ: Application Settings` reference (the 4-step default-agent resolution chain).
-   - Examples — Form Builder embed, "warm tutor full-page with character" pattern, server-side conversation read.
-   - Anti-patterns — don't import widget internals; don't depend on `conversations-runtime` from `core-entities` (cycle); don't reach around the channel system to call audio APIs directly.
-   - Cross-references — `FORMS_ARCHITECTURE_GUIDE.md`, `audio-agent-architecture.md`.
-5. **CLAUDE.md root** gets one new line in the existing development-guides list pointing to the new guide. No other CLAUDE.md edits.
+Per review feedback, docs scope is *wider* than a single new guide — every README touched by this work is updated, and any older guide rendered obsolete is updated in place rather than orphaned.
+
+### 6a. TSDoc
+
+Every exported class, interface, and method in `conversations-runtime` gets a TSDoc block. Each block: what it does (one sentence), when to use it vs. the obvious alternative, an `@example` when the signature isn't self-explanatory.
+
+The same TSDoc bar applies to every new public symbol in `ng-conversations` (slot interfaces, default slot components, event arg classes).
+
+### 6b. READMEs to write or update
+
+| README | Action | What it covers |
+|---|---|---|
+| `packages/conversations-runtime/README.md` | **NEW** | Overview, "when to use this vs. the widget", `Config()` bootstrap, four short code samples (send a message, observe a conversation, register a client tool, observe Sessions). Links to the guide. |
+| `packages/Angular/Generic/conversations/README.md` | **UPDATE** | Reposition the package as the Angular wrapper over the runtime. Full prop/event reference for the new extension surface. Slot system + three consumption modes (project / wrap / subclass). Updated embed examples that match current Form Builder + Component Studio usage. |
+| `packages/MJCoreEntities/src/engines/conversations.ts` | **JSDoc top-of-file expand** | Clarify that `ConversationEngine` is the data layer; orchestration lives in `@memberjunction/conversations-runtime`. Point readers at the new package. |
+| Any subpackage README that mentions the chat widget today | **UPDATE in place** | Audit pass. Anything that references the widget's internal services or implies they're a public API gets corrected. |
+
+### 6c. New guide: `guides/CONVERSATIONS_UX_STACK_GUIDE.md`
+
+Modeled on `FORMS_ARCHITECTURE_GUIDE.md` and `NAVIGATION_AND_ROUTING_GUIDE.md`. Structure:
+
+- Three-layer stack diagram.
+- "I want a chat surface in my app" decision tree (default config → embed → DefaultAgentId/linked-record → slots/character/tokens → headless runtime).
+- Widget reference: full props/events, the slot system (with interfaces + cloneable defaults), Before/After cancelable event pattern, design tokens.
+- Runtime reference: `Config()`, `sendMessage`, `observeConversation`, client tools, Sessions observability.
+- `MJ: Application Settings` reference (the 3-step default-agent resolution chain + code-const fallback + the seeded default).
+- **Worked examples** — Form Builder embed (as-is), "warm tutor full-page with character" pattern (built on slots + tokens), server-side conversation read (Node worker).
+- Anti-patterns — don't import widget internals; don't depend on `conversations-runtime` from `core-entities` (cycle); don't reimplement Sessions/Channels (they live in PR #2787's stack); don't bypass slot interfaces with `any`-typed templates.
+- Cross-references — `FORMS_ARCHITECTURE_GUIDE.md`, `plans/ai-agent-sessions.md`.
+
+### 6d. Guides to update or retire
+
+- `audio-agent-architecture.md` and `complete/multi-modal-chat-support.md` are superseded by PR #2787's `plans/ai-agent-sessions.md`. Replace with one-line redirect notes; do not delete (the conversation history is useful).
+- Any existing guide that references "Sage hardcoded" or "the widget's services" gets updated to reflect the new resolver and the runtime split.
+
+### 6e. Runnable example component
+
+Per feedback, ship a concrete personalization example, not just docs. A new package `packages/Angular/Generic/conversations/examples/` (or a similar location) holds:
+
+- `ChatWithWarmCharacterExample` — a standalone Angular component using slots + persona inputs + token overrides to produce a warm, character-driven chat surface. Imports the exported default slot components and demonstrates the subclass + wrap modes. Suitable as a copy-and-modify starting point for downstream apps.
+- Sample `--mj-chat-*` token override file shown in the README.
+
+### 6f. CLAUDE.md root
+
+One new line in the existing development-guides list pointing to the new guide. No other CLAUDE.md edits.
 
 ---
 
@@ -388,12 +529,12 @@ Vitest, `src/__tests__/`, no DB, mocks at boundaries — MJ standard.
 | Test file | Covers |
 |---|---|
 | `ConversationsRuntime.test.ts` | `Config()` lazy load, singleton semantics, sub-component composition, `provider?` fallback to `Metadata.Provider` |
-| `DefaultAgentResolver.test.ts` | The 4-step resolution chain — one test per layer plus tie-breaker tests. Mocks `ApplicationSettingEngine` + `AIEngineBase` |
+| `DefaultAgentResolver.test.ts` | The 3-step resolution chain — one test per layer plus tie-breaker tests, plus the code-const Sage fallback when no setting is configured, plus the descriptive-error path when even the fallback misses. Mocks `ApplicationSettingEngine` + `AIEngineBase`. |
 | `ConversationAgentRunner.test.ts` | `sendMessage()` happy path: started → progress → complete. Error path: started → error. Resolution failure surfaces a descriptive error |
 | `ConversationStreaming.test.ts` | PubSub message routing by `ConversationDetailID`, late-arrival replay (5-minute window), unsubscribe cleanup |
 | `ClientToolRegistry.test.ts` | register / deregister / dispatch, decorator chain, context propagation, missing-tool error |
+| `SessionsObserver.test.ts` | Stub-mode behavior — no-ops cleanly until PR #2787 is wired in. Asserts the no-op observer produces no errors when subscribed and never emits Session events. **Real Sessions integration tests follow once PR #2787 lands.** |
 | `MentionParser.test.ts` | Ported from current package (already exists) |
-| `TextChannel.test.ts` | Wraps the GraphQL call; mock the call, assert event-stream shape |
 | `ConversationBridge.test.ts` | Ported from current package (already exists) |
 
 Coverage target: **80%+ line coverage on the runtime package.**
@@ -402,9 +543,10 @@ Coverage target: **80%+ line coverage on the runtime package.**
 
 | Test file | Covers |
 |---|---|
-| `ChatSlotDirective.test.ts` | Slot registry — projection works when slot supplied, default renders when absent |
+| `ChatSlotDirective.test.ts` | Slot registry — projection works when slot supplied, default standalone component renders when absent. All five slots covered. |
+| `slot-interfaces.test.ts` | Every default slot component satisfies its declared interface (compile-time assertion in TS plus runtime smoke). |
 | `chat-area.persona.test.ts` | `ShowAgentCharacter` + `AgentCharacterConfig` inputs render the character zone; off by default |
-| `chat-area.events.test.ts` | Lifecycle `@Output()`s fire from the runtime's observable stream |
+| `chat-area.events.before-after.test.ts` | Before/After cancelable event pairs — `Cancel = true` halts default behavior and suppresses the `After*` emit; `Cancel = false` (default) lets it through and fires the `After*`; informational events fire regardless. Covers `BeforeAgentTurn`/`AfterAgentTurn`, `BeforeToolInvoked`/`AfterToolInvoked`, `BeforeResponseFormSubmitted`/`AfterResponseFormSubmitted`. |
 | `chat-area.tokens.test.ts` | New `--mj-chat-*` tokens have correct fallbacks to existing semantic tokens |
 
 **One integration smoke test** in `packages/conversations-runtime/src/__tests__/integration/sendMessage.smoke.test.ts`: mock `IMetadataProvider` + mock GraphQL client, call `sendMessage()`, assert full event sequence comes back. Catches wiring regressions across all sub-components at once.
@@ -420,58 +562,65 @@ Coverage target: **80%+ line coverage on the runtime package.**
 
 ## 8. Sequencing
 
-The work decomposes into seven steps. Each step is independently committable and reviewable; the PR could ship as one branch or as a stacked series.
+The work decomposes into six steps (the original Step 1 migration is gone — see Section 4c). Each step is independently committable and reviewable; the PR could ship as one branch or as a stacked series.
 
-**Step 1 — Migration: `IsDefaultConversationManager` column on `MJ: AI Agents`** (~30 min)
-- Single `migrations/v5/V…__v5.x_AIAgent_IsDefaultConversationManager.sql` migration adding the column + `sp_addextendedproperty` + data step flagging the existing Sage row.
-- Run migration locally; run CodeGen; verify `AIAgentEntity.IsDefaultConversationManager` exists as a typed property.
-- **Unblocks Step 4 (resolver wiring).**
-
-**Step 2 — Create `@memberjunction/conversations-runtime` package skeleton** (~1 hr)
+**Step 1 — Create `@memberjunction/conversations-runtime` package skeleton** (~1 hr)
 - New package directory with `package.json`, `tsconfig.json`, `vitest.config.ts`, scaffolded `src/index.ts`.
 - Declared deps: `@memberjunction/core`, `@memberjunction/core-entities`, `@memberjunction/global`, `@memberjunction/ai-agent-client`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-engine-base`, `@memberjunction/graphql-dataprovider`, `rxjs`. **No Angular deps.**
 - Empty `ConversationsRuntime` class extending `BaseEngine`, exports.
 - Verify `npm run build` from package directory succeeds and the package is picked up by Turborepo.
 
-**Step 3 — Port the pure-TS sub-components** (~3 hrs)
+**Step 2 — Port the pure-TS sub-components** (~3 hrs)
 - Port `MentionParserService` → `MentionParser` (essentially a rename — already pure).
 - Port `ConversationBridgeService` → `ConversationBridge` (strip `@Injectable()`, keep RxJS).
 - Port `ConversationStreamingService` → `ConversationStreaming`.
 - Port `ConversationAgentService` → `ConversationAgentRunner` (the bulk of the work; this is the agent-run pipeline).
 - Port the client-tool registry logic out of `AgentClientSession` reuse (or wrap it) into `ClientToolRegistry`.
-- Write `TextChannel` wrapping the existing GraphQL mutation.
+- Stub `SessionsObserver` as a no-op (real wiring follows once PR #2787 lands).
 - Migrate existing Vitest tests for `MentionParser` and `ConversationBridge`.
 
-**Step 4 — Wire `DefaultAgentResolver`** (~1 hr)
+**Step 3 — Wire `DefaultAgentResolver` + metadata seed** (~1 hr)
 - Reads `ApplicationSettingEngine.Instance.GetSetting('Conversations.DefaultAgentID', applicationId)` for layers 2 + 3.
-- Reads `AIEngineBase.Instance.Agents.find(a => a.IsDefaultConversationManager)` for layer 4.
-- Comprehensive unit tests for the chain.
+- Code-const fallback `Agents.find(a => a.Name === 'Sage')` for layer 4.
+- Author `metadata/application-settings/.sage-default-agent.json` and the `.mj-sync.json` for the new metadata folder. Test that `mj sync push` upserts the global setting.
+- Comprehensive unit tests for the 3-step chain + fallback + descriptive-error path.
 
-**Step 5 — Update `@memberjunction/ng-conversations` to consume the runtime** (~3 hrs)
+**Step 4 — Update `@memberjunction/ng-conversations` to consume the runtime** (~4 hrs)
 - Existing services (`ConversationAgentService`, `ConversationStreamingService`, etc.) become thin wrappers that delegate to `ConversationsRuntime.Instance.*`. Some can be removed entirely; some stay as Angular DI shims for components that already inject them (to avoid blast-radius churn).
 - Replace the three `Agents.find(a => a.Name === 'Sage')` call sites with `ConversationsRuntime.Instance.DefaultAgent.resolve(...)`.
-- Add the new `@Input()`s (`ShowAgentCharacter`, `AgentCharacterConfig`, `PreferredChannel`, `ApplicationId`, `EmptyStateConfig`).
-- Add the `@Output()`s wiring them to the runtime's observable stream.
-- Add `ChatSlotDirective` and project the four documented slots.
-- Add `--mj-chat-*` token definitions in the package's SCSS.
+- Add the new `@Input()`s (`ShowAgentCharacter`, `AgentCharacterConfig`, `ApplicationId`, `EmptyStateConfig`).
+- **Add `ChatSlotDirective` + interface contracts + exported default slot components** for all five slots (`emptyState`, `agentPresence`, `header`, `messageExtra`, `demonstrationSurface`).
+- **Add Before/After cancelable `@Output()`s** for the agent-turn / tool-invoked / response-form-submitted events; informational outputs for progress / Session events.
+- Add `--mj-chat-*` token definitions in the package's SCSS, defaulting to existing semantic tokens.
 - Run existing test suite to confirm no regressions; add new tests for the new surface.
 
-**Step 6 — Manual verification of the three existing embeds** (~1 hr)
+**Step 5 — Manual verification of the three existing embeds + slot stress-test** (~1.5 hrs)
 - Build MJExplorer.
 - Open the corner overlay — confirm it still toggles, renders messages, streams progress.
 - Navigate to the full-page Chat app — confirm conversation list + chat area still work.
 - Open Form Builder cockpit — confirm the embedded chat-area still routes to the Form Builder agent (its `[DefaultAgentId]` input still wins, layer 1).
 - Open Component Studio AI Assistant — same verification.
 - Run a conversation that invokes a client tool (e.g., ask Sage to navigate somewhere) — confirm tool dispatch still works.
+- **Slot stress-test:** build the example `ChatWithWarmCharacterExample` against the new slot system and verify it covers the two zones flagged by design review: (a) a full-page text view paired with a "voice call" view on one conversation, and (b) the demonstrative-material surface via `demonstrationSurface`. If either zone reveals a missing primitive, that's a stop-the-line signal and the design comes back for revision before proceeding.
 
-**Step 7 — Documentation** (~3 hrs)
+**Step 6 — Documentation + Sessions integration stub** (~3.5 hrs)
 - TSDoc pass over the runtime public API.
-- `packages/conversations-runtime/README.md`.
+- `packages/conversations-runtime/README.md` (new).
 - `packages/Angular/Generic/conversations/README.md` update.
-- `guides/CONVERSATIONS_UX_STACK_GUIDE.md`.
+- Top-of-file JSDoc expand on `ConversationEngine` in `core-entities`.
+- Audit pass over subpackage READMEs that mention the widget.
+- `guides/CONVERSATIONS_UX_STACK_GUIDE.md` (new).
+- One-line redirect notes in `audio-agent-architecture.md` and `complete/multi-modal-chat-support.md` pointing at PR #2787's `plans/ai-agent-sessions.md`.
 - CLAUDE.md root cross-reference line.
+- **`ChatWithWarmCharacterExample`** runnable component.
+- **Sessions integration stub:** confirm the `SessionsObserver` no-op compiles and tests pass; document the follow-up task that wires it against PR #2787's public API.
 
-**Honest total estimate:** ~12 hours of focused engineering work, plus review. The "single day" framing some had in mind is realistic for Steps 1-5 if everything goes smoothly and no surprises surface in the wiring. Steps 6-7 are a second day. Plan accordingly: **2-3 focused days end-to-end with review in the loop**, not a single uninterrupted day.
+**Honest total estimate:** ~14 hours of focused engineering work, plus review (slightly more than the original 12 — the slot interface/cloneable-default work and the wider docs audit add hours, partially offset by dropping the migration). Plan accordingly: **2-3 focused days end-to-end with review in the loop**, not a single uninterrupted day.
+
+**Follow-up after PR #2787 lands** (separately tracked, not in scope of this PR):
+- Replace the `SessionsObserver` stub with real subscriptions against PR #2787's Sessions/Channels surface.
+- Add real Session integration tests.
+- Update the new guide's Sessions section once the public API stabilizes.
 
 ---
 
@@ -479,11 +628,12 @@ The work decomposes into seven steps. Each step is independently committable and
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Form Builder / Component Studio embed regresses during the widget rewrite | Medium | High — both are in production | Manual verification step (Step 6) is non-skippable. CI runs the full Turborepo build. Existing embed configurations are documented as the regression test set. |
+| Form Builder / Component Studio embed regresses during the widget rewrite | Medium | High — both are in production | Manual verification step (Step 5) is non-skippable. CI runs the full Turborepo build. Existing embed configurations are documented as the regression test set. |
 | The runtime package accidentally pulls an Angular transitive dep | Low | Medium — defeats the purpose | `package.json` declares zero Angular deps. CI build verifies. Reviewers explicitly check the lock-file diff. |
-| `ApplicationSettingEngine` cache misses or wrong-scope resolution surprises consumers | Low | Medium — wrong agent gets picked | Resolver unit tests cover every chain step + tie-breakers. The descriptive error on full failure surfaces misconfigurations loudly instead of falling back silently. |
-| Voice channel work lands with a different shape than the reserved interface | Medium | Low — this plan is the only consumer of the interface at that point | Renames/extensions are cheap when there's one consumer. Coordinate informally with the voice/multimodal workstream during their design phase. |
+| `ApplicationSettingEngine` cache misses or wrong-scope resolution surprises consumers | Low | Medium — wrong agent gets picked | Resolver unit tests cover every chain step + tie-breakers. The descriptive error path surfaces misconfigurations loudly instead of falling back silently. |
+| PR #2787's Sessions/Channels public API differs from what `SessionsObserver` assumes | Medium | Low — observer is a no-op stub until #2787 lands | Wiring is deferred to a follow-up tracked outside this PR. The integration is small (~40 lines per Section 4d). Cross-reference both plan docs to stay aligned. |
 | The "headless runtime" path gets abused — apps build custom chat UX they didn't need | Medium | Medium — fragments MJ chat UX over time | The new guide includes an explicit "before going headless, prove the widget slots/inputs can't cover it" guardrail. Code review enforces. |
+| The slot stress-test (Step 5) reveals a missing primitive (e.g., the warm tutor home or demonstrative-material zone can't be expressed cleanly with current slots) | Medium | Medium — design needs revision before proceeding | Treat this as a stop-the-line signal. Either add a new slot or revise the existing slot interfaces; do not paper over with `any`-typed templates. The new guide's anti-patterns section reinforces this. |
 | Singletons cross-contaminate in multi-provider client setups | Low | High — wrong-server data shows up in wrong conversation | Every runtime API accepts `provider?: IMetadataProvider`. CLAUDE.md's existing per-provider rule applies; tests cover the multi-provider case. |
 | Turborepo dependency graph becomes harder to reason about after adding the new package | Low | Low | One new package, clearly placed in the layer diagram. Documented in the guide. |
 
@@ -491,13 +641,13 @@ The work decomposes into seven steps. Each step is independently committable and
 
 ## 10. Out of scope (explicitly)
 
-- Implementing voice channels (separate workstream owned by the voice/multimodal channels effort).
+- Implementing the Sessions/Channels/Realtime stack. That's PR #2787 (`plans/ai-agent-sessions.md`). This plan integrates with it via a no-op stub now; real wiring follows once that PR lands.
 - Building any UI for the downstream learning app — the widget extensions are general-purpose, the app team consumes them.
 - Removing the deprecated `conversation-workspace.component` — can ride a separate cleanup PR.
 - Refactoring `mj-mention-editor` — already standalone, no need.
 - Server-side reference implementation — the runtime is designed for server-side use, but proving it with a real Node consumer is a follow-up, not a launch requirement. Tests cover the `provider?` parameter path.
 - Per-linked-entity default agent resolution (e.g., "this Course nominates its own tutor agent"). Adds an entity-metadata convention that doesn't exist today; consider as a follow-up if real demand surfaces.
-- Migrating to a "junction" `MJ: Application Default Agent` table instead of `IsDefaultConversationManager` flag + `Application Settings` key. The current proposal is leaner; revisit if multiple agents per application become a real need.
+- Adding a junction `MJ: Application Default Agent` table for multiple agents per application. The 3-step Application-Settings chain is leaner; revisit only if multiple-default-agents-per-app becomes a real need.
 
 ---
 
@@ -507,8 +657,10 @@ The work decomposes into seven steps. Each step is independently committable and
 - `packages/MJCoreEntities/src/engines/conversations.ts` — existing `ConversationEngine` (data layer; unchanged by this plan).
 - `packages/MJCoreEntities/src/engines/ApplicationSettingEngine.ts` — existing settings engine the resolver consumes.
 - `packages/MJCore/src/generic/baseEngine.ts` — `BaseEngine` reference for the runtime class shape.
+- `packages/Angular/Generic/trees/src/lib/events/tree-events.ts` — reference implementation of the Before/After cancelable event pattern used in Section 4e.
+- `packages/Angular/Generic/base-forms/src/lib/types/form-events.ts` — second reference for the same pattern (`CancellableFormEvent` family).
+- `packages/Angular/Generic/clustering/src/lib/clustering.types.ts` — third reference, generic `CancelableEvent<T>` variant.
 - `guides/FORMS_ARCHITECTURE_GUIDE.md` — structural model for the new guide.
 - `guides/NAVIGATION_AND_ROUTING_GUIDE.md` — same; both are multi-layer subsystem guides.
-- `plans/audio-agent-architecture.md` — voice channels work; the `ConversationChannel` interface reserves seams for it.
-- `plans/complete/multi-modal-chat-support.md` — modality scaffolding context.
+- **PR #2787 (`plans/ai-agent-sessions.md`)** — Real-Time AI Agents: `BaseRealtimeModel`, `Realtime` agent type, Voice Co-Agent, Sessions/Channels infrastructure. The conversations runtime integrates with it; the channel abstraction lives there, not here. *(Supersedes the earlier `plans/audio-agent-architecture.md` and `plans/complete/multi-modal-chat-support.md` — those get one-line redirect notes per Section 6d.)*
 - `CLAUDE.md` — root project rules; the new guide adds one cross-reference line.
