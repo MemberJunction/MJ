@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/conversations-runtime",
   "type": "module",
-  "version": "5.39.0",
+  "version": "5.40.1",
   "description": "MemberJunction: Framework-agnostic Conversations Runtime — orchestration, mention parsing, overlay/workspace bridge, default-agent resolution, client-tool registry, sessions observability. Pure TypeScript, zero UX dependencies. Consumable from browser (Angular widget, React, Vue, etc.) or server (Node workers, CLI tools, test harnesses).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,12 +16,12 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai-agent-client": "5.39.0",
-    "@memberjunction/ai-core-plus": "5.39.0",
-    "@memberjunction/ai-engine-base": "5.39.0",
-    "@memberjunction/core": "5.39.0",
-    "@memberjunction/core-entities": "5.39.0",
-    "@memberjunction/global": "5.39.0",
+    "@memberjunction/ai-agent-client": "5.40.1",
+    "@memberjunction/ai-core-plus": "5.40.1",
+    "@memberjunction/ai-engine-base": "5.40.1",
+    "@memberjunction/core": "5.40.1",
+    "@memberjunction/core-entities": "5.40.1",
+    "@memberjunction/global": "5.40.1",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
