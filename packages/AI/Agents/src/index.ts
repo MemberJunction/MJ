@@ -35,6 +35,7 @@ export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
 export * from './AgentDataPreloader';
 export * from './agent-context-injector';
+export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
 export * from './memory-manager-agent';
 export * from './query-builder-agent';

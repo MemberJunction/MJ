@@ -22,9 +22,8 @@ import { CopyScalarsAndArrays, JSONValidator, SafeExpressionEvaluator, UUIDsEqua
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AgentContextInjector } from './agent-context-injector';
-import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
-import { RerankerService } from '@memberjunction/ai-reranker';
+import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
+import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
     AIPromptRunResult,
@@ -1642,22 +1641,16 @@ export class BaseAgent {
     }
 
     /**
-     * Storage for injected memory context to prepend to prompts
-     */
-    private _memoryContext: string = '';
-
-    /**
      * Storage for injected notes and examples to include in result
      */
     private _injectedMemory: { notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] } = { notes: [], examples: [] };
 
     /**
      * Storage for injected pre-execution RAG context (Phase 1C of search-scopes-rag-plus).
-     * Contains the formatted `<retrieved_context>` system-message block actually injected
-     * into `conversationMessages`, plus the structured per-scope / combined result detail
-     * for downstream observability and artifact persistence.
+     * Contains the structured per-scope / combined result detail for downstream observability
+     * and artifact persistence. The formatted `<retrieved_context>` system-message block is
+     * unshifted onto `conversationMessages` by the shared {@link AgentMemoryContextBuilder}.
      */
-    private _ragContext: string = '';
     private _injectedRAG: AgentPreExecutionRAGResult | null = null;
 
     /**
@@ -1725,83 +1718,32 @@ export class BaseAgent {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         secondaryScopeConfig?: SecondaryScopeConfig | null
     ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
-        // Check if injection is enabled
-        if (!agent.InjectNotes && !agent.InjectExamples) {
-            return { notes: [], examples: [] };
-        }
+        // Delegate the orchestration to the shared, reusable builder so both BaseAgent and the
+        // Realtime agent type inject memory identically. The observability context and verbose
+        // status logging are derived from this instance and passed through.
+        const observability = this._agentRun
+            ? { agentRunID: this._agentRun.ID, stepNumber: (this._agentRun.Steps?.length || 0) + 1 }
+            : undefined;
 
-        const injector = new AgentContextInjector();
+        const result = await new AgentMemoryContextBuilder().InjectContextMemory(
+            input,
+            agent,
+            userId,
+            companyId,
+            contextUser,
+            conversationMessages,
+            primaryScopeEntityId,
+            primaryScopeRecordId,
+            secondaryScopes,
+            secondaryScopeConfig,
+            observability,
+            (message, verboseOnly) => this.logStatus(message, verboseOnly)
+        );
 
-        // Parse reranker configuration if present
-        const rerankerConfigJson = agent.RerankerConfiguration;
-        const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
+        // Store for inclusion in result (externally observable behavior preserved)
+        this._injectedMemory = result;
 
-        // Get notes if injection enabled
-        const notes = agent.InjectNotes
-            ? await injector.GetNotesForContext({
-                agentId: agent.ID,
-                userId,
-                companyId,
-                currentInput: input,
-                strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
-                maxNotes: agent.MaxNotesToInject || 5,
-                contextUser: contextUser!,
-                rerankerConfig,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                secondaryScopeConfig,
-                // Pass observability context for run step tracking
-                observability: this._agentRun ? {
-                    agentRunID: this._agentRun.ID,
-                    stepNumber: (this._agentRun.Steps?.length || 0) + 1
-                } : undefined
-            })
-            : [];
-        this.logStatus(`BaseAgent: Got ${notes.length} notes from injector`, true);
-
-        // Get examples if injection enabled
-        const examples = agent.InjectExamples
-            ? await injector.GetExamplesForContext({
-                agentId: agent.ID,
-                userId,
-                companyId,
-                currentInput: input,
-                strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
-                maxExamples: agent.MaxExamplesToInject || 3,
-                contextUser: contextUser!,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                secondaryScopeConfig
-            })
-            : [];
-
-        // Format and inject memory context into conversation messages
-        if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
-            const notesText = injector.FormatNotesForInjection(notes);
-            const examplesText = injector.FormatExamplesForInjection(examples);
-
-            this._memoryContext = '';
-            if (notesText) this._memoryContext += notesText + '\n\n';
-            if (examplesText) this._memoryContext += examplesText + '\n\n';
-
-            // Inject as system message at the start
-            conversationMessages.unshift({
-                role: 'system',
-                content: this._memoryContext
-            });
-
-            this.logStatus(
-                `💾 Injected ${notes.length} notes and ${examples.length} examples into conversation context`,
-                true
-            );
-        }
-
-        // Store for inclusion in result
-        this._injectedMemory = { notes, examples };
-
-        return { notes, examples };
+        return result;
     }
 
     /**
@@ -1840,43 +1782,25 @@ export class BaseAgent {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         payload?: unknown
     ): Promise<AgentPreExecutionRAGResult | null> {
-        try {
-            if (!contextUser) return null;
-            if (!agent?.ID) return null;
+        // Delegate to the shared builder so the Realtime agent type injects pre-execution RAG
+        // identically. Verbose status + non-fatal error logging are threaded through from this instance.
+        const result = await new AgentMemoryContextBuilder().InjectPreExecutionRAG(
+            lastUserMessage,
+            agent,
+            contextUser,
+            conversationMessages,
+            originalMessages,
+            primaryScopeEntityId,
+            primaryScopeRecordId,
+            secondaryScopes,
+            payload,
+            (message, verboseOnly) => this.logStatus(message, verboseOnly),
+            (error, options) => this.logError(error, options)
+        );
 
-            const rag = new AgentPreExecutionRAG();
-            const result = await rag.Execute({
-                agent,
-                lastUserMessage,
-                recentMessages: originalMessages ? originalMessages.slice(-5) : undefined,
-                payload,
-                primaryScopeRecordId,
-                primaryScopeEntityId,
-                secondaryScopes,
-                contextUser
-            });
-
-            if (!result) return null;
-
-            if (conversationMessages && result.formattedSystemMessage) {
-                this._ragContext = result.formattedSystemMessage;
-                conversationMessages.unshift({ role: 'system', content: this._ragContext });
-                this.logStatus(
-                    `🔎 Injected pre-execution RAG context: ${result.combinedResults.length} result(s) from ${result.queriedScopeIDs.length} scope(s)`,
-                    true
-                );
-            }
-
-            this._injectedRAG = result;
-            return result;
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            this.logError(`InjectPreExecutionRAG failed — continuing without RAG context: ${msg}`, {
-                agent,
-                category: 'AgentPreExecutionRAG'
-            });
-            return null;
-        }
+        // Store for inclusion in result (externally observable behavior preserved)
+        this._injectedRAG = result;
+        return result;
     }
 
     /**
