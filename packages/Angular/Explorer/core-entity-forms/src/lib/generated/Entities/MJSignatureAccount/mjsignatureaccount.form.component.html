@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="accountDetails"
         SectionName="Account Details"
-        Icon="fa fa-id-card"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -28,11 +28,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Relationships Section -->
+    <!-- Account Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="relationships"
-        SectionName="Relationships"
-        Icon="fa fa-link"
+        SectionKey="accountConfiguration"
+        SectionName="Account Configuration"
+        Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -62,6 +62,14 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -69,7 +77,7 @@
     <mj-collapsible-panel
         SectionKey="accountStatus"
         SectionName="Account Status"
-        Icon="fa fa-flag-checkered"
+        Icon="fa fa-check-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -91,11 +99,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Default Envelope Settings Section -->
+    <!-- Sender Settings Section -->
     <mj-collapsible-panel
-        SectionKey="defaultEnvelopeSettings"
-        SectionName="Default Envelope Settings"
-        Icon="fa fa-envelope-open-text"
+        SectionKey="senderSettings"
+        SectionName="Sender Settings"
+        Icon="fa fa-envelope"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -118,39 +126,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Advanced Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="advancedSettings"
-        SectionName="Advanced Settings"
-        Icon="fa fa-sliders-h"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="Configuration"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Lookup Fields Section -->
-    <mj-collapsible-panel
-        SectionKey="lookupFields"
-        SectionName="Lookup Fields"
-        Icon="fa fa-search"
-        [Form]="this"
-        [FormContext]="formContext">
-
-    </mj-collapsible-panel>
-
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

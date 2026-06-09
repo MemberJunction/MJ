@@ -23862,13 +23862,13 @@ export const MJSignatureAccountSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this account is available for use. Inactive accounts are not pre-initialized by the engine driver cache.`),
     IsDefault: z.boolean().describe(`
         * * Field Name: IsDefault
-        * * Display Name: Default Account
+        * * Display Name: Is Default
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this is the default account for its provider (and Company, when scoped).`),
@@ -23899,15 +23899,15 @@ export const MJSignatureAccountSchema = z.object({
         * * Default Value: getutcdate()`),
     SignatureProvider: z.string().describe(`
         * * Field Name: SignatureProvider
-        * * Display Name: Signature Provider
+        * * Display Name: Signature Provider Name
         * * SQL Data Type: nvarchar(100)`),
     Credential: z.string().describe(`
         * * Field Name: Credential
-        * * Display Name: Credential
+        * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
     Company: z.string().nullable().describe(`
         * * Field Name: Company
-        * * Display Name: Company
+        * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -23934,7 +23934,7 @@ export const MJSignatureProviderSchema = z.object({
         * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. 'DocuSign').`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this provider type is available for use. Inactive providers are skipped by the engine.`),
@@ -24018,7 +24018,7 @@ export const MJSignatureRequestDocumentSchema = z.object({
         * * Description: Ordering of this document within the envelope (1-based).`),
     Role: z.union([z.literal('Signed'), z.literal('Source')]).describe(`
         * * Field Name: Role
-        * * Display Name: Role
+        * * Display Name: Document Role
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Source
     * * Value List Type: List
@@ -24036,13 +24036,17 @@ export const MJSignatureRequestDocumentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SignatureRequest: z.string().describe(`
+        * * Field Name: SignatureRequest
+        * * Display Name: Signature Request Name
+        * * SQL Data Type: nvarchar(255)`),
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact
+        * * Display Name: Artifact Name
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -24098,6 +24102,10 @@ export const MJSignatureRequestLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SignatureRequest: z.string().nullable().describe(`
+        * * Field Name: SignatureRequest
+        * * Display Name: Signature Request Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJSignatureRequestLogEntityType = z.infer<typeof MJSignatureRequestLogSchema>;
@@ -24113,7 +24121,7 @@ export const MJSignatureRequestRecipientSchema = z.object({
         * * Default Value: newsequentialid()`),
     SignatureRequestID: z.string().describe(`
         * * Field Name: SignatureRequestID
-        * * Display Name: Signature Request
+        * * Display Name: Signature Request ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)`),
     Email: z.string().describe(`
@@ -24170,6 +24178,10 @@ export const MJSignatureRequestRecipientSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SignatureRequest: z.string().describe(`
+        * * Field Name: SignatureRequest
+        * * Display Name: Signature Request
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJSignatureRequestRecipientEntityType = z.infer<typeof MJSignatureRequestRecipientSchema>;
@@ -24185,12 +24197,12 @@ export const MJSignatureRequestSchema = z.object({
         * * Default Value: newsequentialid()`),
     SignatureAccountID: z.string().describe(`
         * * Field Name: SignatureAccountID
-        * * Display Name: Signature Account
+        * * Display Name: Signature Account ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Signature Accounts (vwSignatureAccounts.ID)`),
-    Title: z.string().describe(`
-        * * Field Name: Title
-        * * Display Name: Title
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Envelope title / email subject.`),
     Message: z.string().nullable().describe(`
@@ -24220,7 +24232,7 @@ export const MJSignatureRequestSchema = z.object({
         * * Description: Provider-side envelope identifier (e.g. DocuSign envelopeId), assigned after the envelope is created.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.`),
@@ -24256,11 +24268,11 @@ export const MJSignatureRequestSchema = z.object({
         * * Default Value: getutcdate()`),
     SignatureAccount: z.string().describe(`
         * * Field Name: SignatureAccount
-        * * Display Name: Signature Account Name
+        * * Display Name: Signature Account
         * * SQL Data Type: nvarchar(200)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -90779,7 +90791,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this account is available for use. Inactive accounts are not pre-initialized by the engine driver cache.
@@ -90793,7 +90805,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
 
     /**
     * * Field Name: IsDefault
-    * * Display Name: Default Account
+    * * Display Name: Is Default
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this is the default account for its provider (and Company, when scoped).
@@ -90866,7 +90878,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
 
     /**
     * * Field Name: SignatureProvider
-    * * Display Name: Signature Provider
+    * * Display Name: Signature Provider Name
     * * SQL Data Type: nvarchar(100)
     */
     get SignatureProvider(): string {
@@ -90875,7 +90887,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
 
     /**
     * * Field Name: Credential
-    * * Display Name: Credential
+    * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
     get Credential(): string {
@@ -90884,7 +90896,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
 
     /**
     * * Field Name: Company
-    * * Display Name: Company
+    * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string | null {
@@ -90963,7 +90975,7 @@ export class MJSignatureProviderEntity extends BaseEntity<MJSignatureProviderEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this provider type is available for use. Inactive providers are skipped by the engine.
@@ -91176,7 +91188,7 @@ export class MJSignatureRequestDocumentEntity extends BaseEntity<MJSignatureRequ
 
     /**
     * * Field Name: Role
-    * * Display Name: Role
+    * * Display Name: Document Role
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Source
     * * Value List Type: List
@@ -91213,8 +91225,17 @@ export class MJSignatureRequestDocumentEntity extends BaseEntity<MJSignatureRequ
     }
 
     /**
+    * * Field Name: SignatureRequest
+    * * Display Name: Signature Request Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SignatureRequest(): string {
+        return this.Get('SignatureRequest');
+    }
+
+    /**
     * * Field Name: Artifact
-    * * Display Name: Artifact
+    * * Display Name: Artifact Name
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string | null {
@@ -91223,7 +91244,7 @@ export class MJSignatureRequestDocumentEntity extends BaseEntity<MJSignatureRequ
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version Name
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -91372,6 +91393,15 @@ export class MJSignatureRequestLogEntity extends BaseEntity<MJSignatureRequestLo
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: SignatureRequest
+    * * Display Name: Signature Request Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SignatureRequest(): string | null {
+        return this.Get('SignatureRequest');
+    }
 }
 
 
@@ -91419,7 +91449,7 @@ export class MJSignatureRequestRecipientEntity extends BaseEntity<MJSignatureReq
 
     /**
     * * Field Name: SignatureRequestID
-    * * Display Name: Signature Request
+    * * Display Name: Signature Request ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Signature Requests (vwSignatureRequests.ID)
     */
@@ -91549,6 +91579,15 @@ export class MJSignatureRequestRecipientEntity extends BaseEntity<MJSignatureReq
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: SignatureRequest
+    * * Display Name: Signature Request
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SignatureRequest(): string {
+        return this.Get('SignatureRequest');
+    }
 }
 
 
@@ -91596,7 +91635,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 
     /**
     * * Field Name: SignatureAccountID
-    * * Display Name: Signature Account
+    * * Display Name: Signature Account ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Signature Accounts (vwSignatureAccounts.ID)
     */
@@ -91608,16 +91647,16 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
     }
 
     /**
-    * * Field Name: Title
-    * * Display Name: Title
+    * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Envelope title / email subject.
     */
-    get Title(): string {
-        return this.Get('Title');
+    get Name(): string {
+        return this.Get('Name');
     }
-    set Title(value: string) {
-        this.Set('Title', value);
+    set Name(value: string) {
+        this.Set('Name', value);
     }
 
     /**
@@ -91671,7 +91710,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Polymorphic reference (entity half): the Entity of the originating business record that owns this signature request. NULL for standalone requests. Paired with RecordID.
@@ -91757,7 +91796,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 
     /**
     * * Field Name: SignatureAccount
-    * * Display Name: Signature Account Name
+    * * Display Name: Signature Account
     * * SQL Data Type: nvarchar(200)
     */
     get SignatureAccount(): string {
@@ -91766,7 +91805,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
