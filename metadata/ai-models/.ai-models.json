@@ -5780,7 +5780,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "GroqLLM",
             "APIName": "moonshotai/kimi-k2-instruct-0905",
             "MaxInputTokens": 131072,
@@ -5803,7 +5803,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Deprecated",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
@@ -9441,7 +9441,7 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window.",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026. Recommended replacement is claude-opus-4-8. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
       "IsActive": true,
@@ -15767,6 +15767,99 @@
     "sync": {
       "lastModified": "2026-06-05T02:25:07.892Z",
       "checksum": "a2e840a7221f7ec13257672bab9ff1aea15d38c7ad03ece5879694e68e9e8c75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.7 Plus",
+      "PowerRank": 18,
+      "Description": "Alibaba Cloud's Plus-tier model in the Qwen 3.7 series, GA on Alibaba Cloud Model Studio (Bailian) on 2026-06-01 at endpoint qwen3.7-plus. Multimodal (text, vision, video understanding) with deep-reasoning, tool invocation, and autonomous iteration capabilities. 1M token context window. Positioned as the cost-efficient sibling of Qwen 3.7 Max — roughly 1/6 the per-token price while preserving most of the agentic and reasoning capability of the Max tier. OpenAI-compatible API via DashScope; also surfaced on OpenRouter 2026-06-03.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.6 Plus"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.7-plus",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.7-plus",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-06-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.40,
+            "OutputPricePerUnit": 1.16,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Plus pricing on Alibaba Cloud Model Studio (DashScope/Bailian) as of GA on 2026-06-01: $0.40/1M input, $1.16/1M output. Positioned at roughly 1/6 the per-token cost of Qwen 3.7 Max. Sources: https://www.marktechpost.com/2026/06/02/alibabas-qwen-team-launches-qwen3-7-plus-adding-vision-deep-reasoning-tool-invocation-and-autonomous-iteration-on-the-bailian-platform/ ; https://www.digitalapplied.com/blog/qwen-3-7-plus-alibaba-multimodal-agent-model-2026-release"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-06-03T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.40,
+            "OutputPricePerUnit": 1.16,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Plus on OpenRouter (passthrough pricing). Listed on 2026-06-03 per OpenRouter June 4 changelog. Source: https://openrouter.ai/docs/changelog"
+          }
+        }
+      ]
     }
   }
 ]
