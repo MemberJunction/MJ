@@ -20,6 +20,7 @@ import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
+import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
@@ -139,7 +140,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
-    private uiCommandHandler: UICommandHandlerService
+    private uiCommandHandler: UICommandHandlerService,
+    private agentService: ConversationAgentService
   ) {
     super();
   }
@@ -150,6 +152,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // change detection asks for it. Fire-and-forget — the getter falls back
     // to defaults until it's loaded.
     AIEngineBase.Instance.EnsureLoaded();
+
+    // Warm the conversation-manager-agent cache (DefaultAgentResolver chain)
+    // so the synchronous isConversationManager getter returns the right answer
+    // on first render. Fire-and-forget — the getter returns false until cached,
+    // matching the pre-PR-2 behavior of the previous hardcoded check.
+    void this.agentService.getConversationManagerAgent();
 
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
@@ -387,7 +395,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get isConversationManager(): boolean {
-    return this.aiAgentInfo?.name === 'Sage';
+    // Resolved at runtime via the conversation manager agent registered through
+    // ConversationsRuntime's DefaultAgentResolver chain — explicit input wins,
+    // then app-scoped Application Setting, then global Application Setting, then
+    // the code-const Sage fallback. Replaces the previous hardcoded 'Sage'
+    // name check. Returns false until the agent service has cached the
+    // resolved agent (warmed by message-input's first routing call).
+    const cmName = this.agentService.ConversationManagerAgentName;
+    if (!cmName) return false;
+    return this.aiAgentInfo?.name === cmName;
   }
 
   public get displayMessage(): string {
