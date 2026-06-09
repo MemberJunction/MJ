@@ -68,6 +68,15 @@ export interface DelegatedResult {
      * driver feeds this back to the model as the `tool_response` so it can speak the outcome.
      */
     Output: string;
+    /**
+     * When the delegated run paused awaiting user feedback (an interactive target agent, e.g.
+     * Query Builder confirming a task graph), this carries the paused run's id so the transport
+     * layer can persist it and resume the SAME run on the user's next answer (rather than starting
+     * a fresh run). Absent when the run completed (or failed) without pausing. The {@link Output} in
+     * this case is the agent's clarifying QUESTION, and {@link Success} is `true` (a valid
+     * intermediate outcome).
+     */
+    PausedRunID?: string;
 }
 
 /**
@@ -111,6 +120,13 @@ export interface ExecutedToolCall {
     ResultJson: string;
     /** Whether the tool/delegation completed successfully. */
     Success: boolean;
+    /**
+     * When the delegated target-agent run paused awaiting user feedback, this surfaces the paused
+     * run's id (propagated from {@link DelegatedResult.PausedRunID}) so the transport layer can
+     * persist it and resume that run on the user's next answer. Absent for non-delegation tools and
+     * for delegated runs that completed without pausing.
+     */
+    PausedRunID?: string;
 }
 
 /**
@@ -211,7 +227,7 @@ export class RealtimeToolBroker {
                 Arguments: call.Arguments,
                 AbortSignal: controller.signal
             });
-            return this.serializeResult(result.Success, result.Output);
+            return this.serializeResult(result.Success, result.Output, result.PausedRunID);
         } catch (error) {
             this.logError(error, 'delegating to target agent');
             return this.serializeError(error);
@@ -244,10 +260,12 @@ export class RealtimeToolBroker {
      *
      * @param success Whether the tool/delegation completed successfully.
      * @param output The textual outcome (narration on success, error text on failure).
+     * @param pausedRunID When the delegated run paused awaiting feedback, the paused run's id to
+     *   surface for resumption. Omitted for completed runs and non-delegation tools.
      * @returns The serialized result.
      */
-    private serializeResult(success: boolean, output: string): ExecutedToolCall {
-        return { ResultJson: JSON.stringify({ success, output }), Success: success };
+    private serializeResult(success: boolean, output: string, pausedRunID?: string): ExecutedToolCall {
+        return { ResultJson: JSON.stringify({ success, output }), Success: success, PausedRunID: pausedRunID };
     }
 
     /**

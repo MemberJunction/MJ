@@ -43,7 +43,7 @@ import {
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
@@ -150,6 +150,20 @@ export interface ExecuteRelayedToolInput {
      * Threaded into the delegated agent run's `cancellationToken`.
      */
     AbortSignal?: AbortSignal;
+    /**
+     * Optional progress callback invoked with each delegated-run progress event (mirrors the normal
+     * agent-run path's `onProgress`). The transport layer (the MJServer resolver) publishes these so
+     * the realtime model can narrate the target agent's progress while it runs. When omitted, the
+     * delegated run streams nothing and the model only receives the final tool result.
+     */
+    OnProgress?: AgentExecutionProgressCallback;
+    /**
+     * Optional id of a previously-paused delegated run (Status `AwaitingFeedback`) to RESUME instead
+     * of starting a fresh run. When set, {@link delegateToTarget} passes it as `lastRunId` (with
+     * `autoPopulateLastRunPayload`) to {@link AgentRunner.RunAgent}, so the user's answer continues
+     * the SAME interactive run (e.g. confirming a Query Builder task graph).
+     */
+    ResumeRunID?: string;
 }
 
 /**
@@ -415,16 +429,18 @@ export class RealtimeClientSessionService {
      * @param input The relayed tool call plus delegation linkage.
      * @param contextUser The calling user (threaded into the delegated agent run).
      * @param provider The request-scoped metadata provider (threaded into the delegated agent run).
-     * @returns `{ ResultJson, Success }` — the serialized tool result for the browser to relay back.
+     * @returns `{ ResultJson, Success, PausedRunID? }` — the serialized tool result for the browser
+     *   to relay back, plus the paused run id when the delegated target agent paused awaiting
+     *   feedback (so the resolver can persist it and resume that run on the next answer).
      */
     public async ExecuteRelayedTool(
         input: ExecuteRelayedToolInput,
         contextUser: UserInfo,
         provider: IMetadataProvider
-    ): Promise<{ ResultJson: string; Success: boolean }> {
+    ): Promise<{ ResultJson: string; Success: boolean; PausedRunID?: string }> {
         const broker = this.buildToolBroker(input, contextUser, provider);
         const result = await broker.ExecuteToolCall(input.Call);
-        return { ResultJson: result.ResultJson, Success: result.Success };
+        return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID };
     }
 
     /**
@@ -796,30 +812,81 @@ export class RealtimeClientSessionService {
         }
 
         try {
-            const requestText = this.parseDelegateRequestText(request.Arguments);
-            const parentRun = await this.loadParentRun(input.ParentRunID, contextUser, provider);
-            const runner = new AgentRunner(provider);
-            const result = await runner.RunAgent({
-                agent: target,
-                conversationMessages: [{ role: 'user', content: requestText }],
-                contextUser,
-                provider,
-                cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
-                parentRun: parentRun ?? undefined,
-                agentSessionID: input.AgentSessionID
-            });
-
-            return {
-                CallID: request.CallID,
-                Success: result.success,
-                Output: result.success
-                    ? (result.agentRun?.Message || 'The target agent completed the request.')
-                    : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.')
-            };
+            const result = await this.runDelegatedAgent(input, request, target, contextUser, provider);
+            return this.buildDelegatedResult(request.CallID, result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             return { CallID: request.CallID, Success: false, Output: `Delegation failed: ${message}` };
         }
+    }
+
+    /**
+     * Runs (or resumes) the target agent for a delegation. Threads the combined abort signal, parent
+     * run linkage, session id, and the `OnProgress` callback so the resolver can stream progress.
+     * When {@link ExecuteRelayedToolInput.ResumeRunID} is set, resumes that paused run via
+     * `lastRunId` + `autoPopulateLastRunPayload` (the user's answer continues the same interactive
+     * run) instead of starting fresh.
+     *
+     * @param input The relayed tool input (linkage, progress callback, optional resume id).
+     * @param request The broker's delegation request (call id + arguments + abort signal).
+     * @param target The resolved target agent.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The agent execution result.
+     */
+    private async runDelegatedAgent(
+        input: ExecuteRelayedToolInput,
+        request: DelegateToTargetRequest,
+        target: MJAIAgentEntityExtended,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<ExecuteAgentResult> {
+        const requestText = this.parseDelegateRequestText(request.Arguments);
+        const parentRun = await this.loadParentRun(input.ParentRunID, contextUser, provider);
+        const runner = new AgentRunner(provider);
+        return runner.RunAgent({
+            agent: target,
+            conversationMessages: [{ role: 'user', content: requestText }],
+            contextUser,
+            provider,
+            cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
+            parentRun: parentRun ?? undefined,
+            agentSessionID: input.AgentSessionID,
+            onProgress: input.OnProgress,
+            lastRunId: input.ResumeRunID,
+            autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
+        });
+    }
+
+    /**
+     * Maps an {@link ExecuteAgentResult} onto the broker's {@link DelegatedResult}, special-casing a
+     * run that paused awaiting feedback. An `AwaitingFeedback` run is a valid intermediate outcome,
+     * not an error: we return its clarifying QUESTION (the run's `Message`) as the tool Output —
+     * phrased so the realtime model relays it as a question to the user — set `Success: true`, and
+     * surface the paused run id so the resolver can resume that run on the user's next answer.
+     *
+     * @param callID The provider call id this result corresponds to.
+     * @param result The agent execution result.
+     * @returns The delegated result for the model's tool_response.
+     */
+    private buildDelegatedResult(callID: string, result: ExecuteAgentResult): DelegatedResult {
+        if (result.agentRun?.Status === 'AwaitingFeedback') {
+            const question = result.agentRun.Message?.trim()
+                || 'The target agent needs more information to continue.';
+            return {
+                CallID: callID,
+                Success: true,
+                Output: `The target agent needs a response before it can continue. Ask the user: ${question}`,
+                PausedRunID: result.agentRun.ID
+            };
+        }
+        return {
+            CallID: callID,
+            Success: result.success,
+            Output: result.success
+                ? (result.agentRun?.Message || 'The target agent completed the request.')
+                : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.')
+        };
     }
 
     /**

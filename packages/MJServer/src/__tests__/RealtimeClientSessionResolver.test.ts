@@ -69,7 +69,12 @@ function makeResolver(): RealtimeClientSessionResolver {
 
 /** Minimal AppContext — providers is consumed by the mocked GetReadWriteProvider, so contents are inert. */
 function makeCtx(): AppContext {
-    return { userPayload: {}, providers: [] } as unknown as AppContext;
+    return { userPayload: { sessionId: 'pubsub-session-1' }, providers: [] } as unknown as AppContext;
+}
+
+/** A controllable PubSubEngine stub whose `publish` calls are asserted. */
+function makePubSub(): { publish: ReturnType<typeof vi.fn> } {
+    return { publish: vi.fn(async () => undefined) };
 }
 
 interface FakeSession {
@@ -187,7 +192,7 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         const resolver = makeResolver();
 
         await expect(
-            resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx()),
+            resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub()),
         ).rejects.toThrow(/do not own/i);
 
         expect(executeRelayedToolMock).not.toHaveBeenCalled();
@@ -208,6 +213,7 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
             'invoke-target-agent',
             '{"request":"do it"}',
             makeCtx(),
+            makePubSub(),
         );
 
         expect(out).toBe('{"ok":true}');
@@ -229,8 +235,86 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         const resolver = makeResolver();
 
         await expect(
-            resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'x', '{}', makeCtx()),
+            resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'x', '{}', makeCtx(), makePubSub()),
         ).rejects.toThrow(/closed/i);
+    });
+
+    it('publishes significant delegation progress (and drops noise) tagged for this voice session', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        // Invoke the OnProgress callback the resolver builds, capturing what it publishes.
+        executeRelayedToolMock.mockImplementation(async (input: { OnProgress: (p: unknown) => void }) => {
+            input.OnProgress({ step: 'initialization', message: 'noise' }); // dropped
+            input.OnProgress({ step: 'prompt_execution', message: 'thinking', percentage: 42 }); // published
+            return { ResultJson: '{"ok":true}', Success: true };
+        });
+        const pubSub = makePubSub();
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-7', 'invoke-target-agent', '{}', makeCtx(), pubSub);
+
+        // Only the significant step published — exactly one publish.
+        expect(pubSub.publish).toHaveBeenCalledTimes(1);
+        const [topic, payload] = pubSub.publish.mock.calls[0] as [string, { message: string; sessionId: string }];
+        expect(topic).toBe('PUSH_STATUS_UPDATES'); // PUSH_STATUS_UPDATES_TOPIC value
+        expect(payload.sessionId).toBe('pubsub-session-1');
+        expect(JSON.parse(payload.message)).toMatchObject({
+            resolver: 'RealtimeClientSessionResolver',
+            type: 'RealtimeDelegationProgress',
+            agentSessionID: 'session-1',
+            callID: 'call-7',
+            step: 'prompt_execution',
+            message: 'thinking',
+            percentage: 42,
+        });
+    });
+
+    it('persists pendingFeedbackRunID when a relayed call leaves a run paused', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1' }) });
+        currentProvider = makeProvider(() => session);
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"q":1}', Success: true, PausedRunID: 'paused-1' });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(JSON.parse(session.Config_ as string)).toMatchObject({
+            targetAgentID: 'target-1',
+            pendingFeedbackRunID: 'paused-1',
+        });
+        expect(session.Save).toHaveBeenCalled();
+    });
+
+    it('consumes pendingFeedbackRunID as ResumeRunID and clears it on the next call', async () => {
+        const session = makeSessionEntity({
+            Config_: JSON.stringify({ targetAgentID: 'target-1', pendingFeedbackRunID: 'paused-1' }),
+        });
+        currentProvider = makeProvider(() => session);
+        // Resumed run completes (no new pause).
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"done":1}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-2', 'invoke-target-agent', '{"request":"yes"}', makeCtx(), makePubSub());
+
+        // The paused id was passed in to resume the run...
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { ResumeRunID?: string };
+        expect(relayArg.ResumeRunID).toBe('paused-1');
+        // ...and cleared from the session config afterward.
+        expect(JSON.parse(session.Config_ as string).pendingFeedbackRunID).toBeUndefined();
+        expect(session.Save).toHaveBeenCalled();
+    });
+
+    it('re-stores a new pendingFeedbackRunID when a resumed run pauses again', async () => {
+        const session = makeSessionEntity({
+            Config_: JSON.stringify({ targetAgentID: 'target-1', pendingFeedbackRunID: 'paused-1' }),
+        });
+        currentProvider = makeProvider(() => session);
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"q":2}', Success: true, PausedRunID: 'paused-2' });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-3', 'invoke-target-agent', '{"request":"yes"}', makeCtx(), makePubSub());
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { ResumeRunID?: string };
+        expect(relayArg.ResumeRunID).toBe('paused-1');
+        expect(JSON.parse(session.Config_ as string).pendingFeedbackRunID).toBe('paused-2');
     });
 });
 

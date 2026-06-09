@@ -24,17 +24,26 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { AppContext } from '../types.js';
+import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
+import { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
+
+/**
+ * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
+ * in {@link import('./RunAIAgentResolver.js').RunAIAgentResolver}. Initialization/validation/finalization
+ * noise is dropped so the model only narrates meaningful work.
+ */
+const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
 /** The seeded name of the internal orchestration agent that voices on behalf of a target agent. */
 const VOICE_CO_AGENT_NAME = 'Voice Co-Agent';
@@ -59,6 +68,13 @@ interface RealtimeSessionConfig {
     coAgentRunID?: string;
     /** ID of the co-agent `AIPromptRun` linked to {@link RealtimeSessionConfig.coAgentRunID}. Optional. */
     promptRunID?: string;
+    /**
+     * ID of a delegated target-agent run that paused awaiting user feedback (Status `AwaitingFeedback`,
+     * e.g. an interactive agent like Query Builder). Set when a relayed tool call left a run paused;
+     * consumed (and cleared) on the NEXT relayed tool call so that the user's answer RESUMES that run
+     * rather than starting fresh. Re-stored if the resumed run pauses again.
+     */
+    pendingFeedbackRunID?: string;
 }
 
 /**
@@ -164,25 +180,94 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('toolName', () => String) toolName: string,
         @Arg('argsJson', () => String) argsJson: string,
         @Ctx() { userPayload, providers }: AppContext,
+        @PubSub() pubSub: PubSubEngine,
     ): Promise<string> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
 
-        const { ResultJson } = await this.clientSessionService.ExecuteRelayedTool(
+        const { ResultJson, PausedRunID } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
                 TargetAgentID: config.targetAgentID,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
                 ParentRunID: config.coAgentRunID,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
+                OnProgress: this.buildDelegationProgressCallback(pubSub, userPayload, agentSessionId, callId),
+                // Resume a previously-paused delegated run (if any) with the user's answer.
+                ResumeRunID: config.pendingFeedbackRunID,
             },
             contextUser,
             provider,
         );
 
+        // Roll the paused-run id forward in the session config: clear the one we just consumed, and
+        // store a new one only if the (resumed or fresh) run paused again awaiting feedback.
+        await this.updatePendingFeedbackRunID(session, config, PausedRunID);
+
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return ResultJson;
+    }
+
+    /**
+     * Builds the `OnProgress` callback threaded into the delegated target-agent run. Each significant
+     * progress event (see {@link SIGNIFICANT_PROGRESS_STEPS}) is published to
+     * {@link PUSH_STATUS_UPDATES_TOPIC} on this user's `sessionId` so the browser can correlate it to
+     * THIS voice session (via `agentSessionID` + `callID`) and feed it to the realtime model to
+     * narrate — distinct from a normal `RunAIAgentResolver` agent-run stream by `resolver`/`type`.
+     */
+    private buildDelegationProgressCallback(
+        pubSub: PubSubEngine,
+        userPayload: UserPayload,
+        agentSessionID: string,
+        callID: string,
+    ): AgentExecutionProgressCallback {
+        return (progress) => {
+            if (!SIGNIFICANT_PROGRESS_STEPS.includes(progress.step)) {
+                return;
+            }
+            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                message: JSON.stringify({
+                    resolver: 'RealtimeClientSessionResolver',
+                    type: 'RealtimeDelegationProgress',
+                    agentSessionID,
+                    callID,
+                    step: progress.step,
+                    message: progress.message,
+                    percentage: progress.percentage,
+                }),
+                sessionId: userPayload.sessionId,
+            });
+        };
+    }
+
+    /**
+     * Rolls the session's `pendingFeedbackRunID` forward after a relayed tool call. The id we just
+     * consumed (resumed or none) is dropped; a new paused run id is stored only when the run paused
+     * again awaiting feedback. When neither the old nor new value is set, this is a no-op (no save).
+     * Best-effort: a save failure is logged, not thrown.
+     */
+    private async updatePendingFeedbackRunID(
+        session: MJAIAgentSessionEntity,
+        config: RealtimeSessionConfig,
+        pausedRunID: string | undefined,
+    ): Promise<void> {
+        const previous = config.pendingFeedbackRunID;
+        if (!previous && !pausedRunID) {
+            return;
+        }
+        const next: RealtimeSessionConfig = {
+            targetAgentID: config.targetAgentID,
+            coAgentRunID: config.coAgentRunID,
+            promptRunID: config.promptRunID,
+            pendingFeedbackRunID: pausedRunID,
+        };
+        session.Config_ = JSON.stringify(next);
+        if (!(await session.Save())) {
+            LogError(
+                `RealtimeClientSessionResolver.updatePendingFeedbackRunID save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
     }
 
     /**
@@ -374,6 +459,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         targetAgentID: parsed.targetAgentID,
                         coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
                         promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+                        pendingFeedbackRunID:
+                            typeof parsed.pendingFeedbackRunID === 'string' ? parsed.pendingFeedbackRunID : undefined,
                     };
                 }
             } catch {

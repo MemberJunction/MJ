@@ -6,7 +6,7 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
@@ -25,6 +25,16 @@ import {
     CoAgentSystemPromptResolution
 } from '../realtime/realtime-client-session-service';
 import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult } from '../realtime/realtime-tool-broker';
+
+// Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
+// `runAgentMock` is hoisted so the vi.mock factory can close over it.
+const { runAgentMock } = vi.hoisted(() => ({ runAgentMock: vi.fn() }));
+vi.mock('../AgentRunner', () => ({
+    AgentRunner: class {
+        constructor(_provider: unknown) { /* provider captured by real code; irrelevant to mock */ }
+        RunAgent = runAgentMock;
+    },
+}));
 
 // ════════════════════════════════════════════════════════════════════
 // Mocks
@@ -369,5 +379,123 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
         await svc.FinalizeCoAgentRun(null, null, contextUser, prov, true);
 
         expect(getEntity).not.toHaveBeenCalled();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// delegateToTarget — REAL path (AgentRunner mocked): progress streaming,
+// AwaitingFeedback question + PausedRunID, and ResumeRunID resumption.
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Exposes the protected {@link RealtimeClientSessionService.delegateToTarget} and stubs only the
+ * DB-backed seams (target resolution + parent-run load). The REAL delegateToTarget runs against the
+ * module-mocked AgentRunner so we can assert exactly what it passes to RunAgent + how it maps results.
+ */
+class DelegateTestService extends RealtimeClientSessionService {
+    protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
+        if (!targetAgentID) return null;
+        return { ID: targetAgentID, Name: 'Query Builder', Description: 'Builds queries.' } as unknown as MJAIAgentEntityExtended;
+    }
+    protected override async loadParentRun(): Promise<null> {
+        return null;
+    }
+    public CallDelegate(
+        input: ExecuteRelayedToolInput,
+        request: DelegateToTargetRequest
+    ): Promise<DelegatedResult> {
+        // Reach the protected method for testing.
+        return (this as unknown as {
+            delegateToTarget: (i: ExecuteRelayedToolInput, r: DelegateToTargetRequest, u: UserInfo, p: IMetadataProvider) => Promise<DelegatedResult>;
+        }).delegateToTarget(input, request, contextUser, provider);
+    }
+}
+
+function makeDelegateInput(overrides: Partial<ExecuteRelayedToolInput> = {}): ExecuteRelayedToolInput {
+    return {
+        AgentSessionID: 'session-1',
+        TargetAgentID: 'target-1',
+        Call: { CallID: 'c1', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: JSON.stringify({ request: 'build it' }) },
+        ...overrides,
+    };
+}
+
+function makeDelegateRequest(overrides: Partial<DelegateToTargetRequest> = {}): DelegateToTargetRequest {
+    return { CallID: 'c1', Arguments: JSON.stringify({ request: 'build it' }), AbortSignal: new AbortController().signal, ...overrides };
+}
+
+describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
+    beforeEach(() => {
+        runAgentMock.mockReset();
+    });
+
+    it('threads OnProgress through to RunAgent', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const onProgress = vi.fn();
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({ OnProgress: onProgress }), makeDelegateRequest());
+
+        expect(runAgentMock).toHaveBeenCalledTimes(1);
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.onProgress).toBe(onProgress);
+        // A fresh (non-resume) run does NOT set lastRunId / autoPopulateLastRunPayload.
+        expect(passed.lastRunId).toBeUndefined();
+        expect(passed.autoPopulateLastRunPayload).toBeUndefined();
+    });
+
+    it('returns the question + surfaces PausedRunID when the run is AwaitingFeedback', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'paused-run-1', Status: 'AwaitingFeedback', Message: 'Should I include archived rows?' },
+        });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(true);
+        expect(result.PausedRunID).toBe('paused-run-1');
+        expect(result.Output).toContain('Should I include archived rows?');
+        // Phrased so the model relays it as a question, not a completed task.
+        expect(result.Output.toLowerCase()).toContain('ask the user');
+    });
+
+    it('passes lastRunId + autoPopulateLastRunPayload when ResumeRunID is set', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'paused-run-1', Status: 'Completed', Message: 'finished' } });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput({ ResumeRunID: 'paused-run-1' }), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.lastRunId).toBe('paused-run-1');
+        expect(passed.autoPopulateLastRunPayload).toBe(true);
+        // Resumed run that completed surfaces no PausedRunID.
+        expect(result.PausedRunID).toBeUndefined();
+        expect(result.Success).toBe(true);
+    });
+
+    it('maps a non-paused failure to Success:false with the error message', async () => {
+        runAgentMock.mockResolvedValue({ success: false, agentRun: { ID: 'r1', Status: 'Failed', ErrorMessage: 'boom' } });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(false);
+        expect(result.Output).toContain('boom');
+        expect(result.PausedRunID).toBeUndefined();
+    });
+
+    it('ExecuteRelayedTool surfaces PausedRunID end-to-end through the broker', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'paused-run-9', Status: 'AwaitingFeedback', Message: 'Confirm the task graph?' },
+        });
+        const svc = new DelegateTestService();
+
+        const result = await svc.ExecuteRelayedTool(makeDelegateInput(), contextUser, provider);
+
+        expect(result.PausedRunID).toBe('paused-run-9');
+        expect(result.Success).toBe(true);
+        expect(JSON.parse(result.ResultJson).output).toContain('Confirm the task graph?');
     });
 });
