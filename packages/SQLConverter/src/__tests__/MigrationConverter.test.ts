@@ -209,14 +209,28 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     expect(kept.tsql).toContain('GetWeirdStuff');
   });
 
-  it('reports dropped metadata DML in the notes (audit trail)', () => {
+  it('reports dropped metadata DML in the notes for NON-baseline snapshots (audit trail)', () => {
     const sql = snapshot(
       'CREATE TABLE [__mj].[T] ([ID] INT);',
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
       "INSERT INTO [__mj].[Entity] ([ID],[Name]) VALUES ('aaaa','T');",
     );
-    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    const kept = extractKeptTSQL(sql, 'V_Old_Unbannered_Snapshot.sql');
     expect(kept.notes[0]).toMatch(/1 metadata DML/);
+    expect(kept.tsql).not.toContain('INSERT INTO [__mj].[Entity]');
+  });
+
+  it('BASELINES keep their metadata DML (the point-in-time seed codegen boots from)', () => {
+    // A fresh PG install seeds metadata from the baseline itself — codegen cannot run
+    // on empty Entity/EntityField, and `mj sync push` only owns the curated subset.
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      "INSERT INTO [__mj].[Entity] ([ID],[Name]) VALUES ('aaaa','T');",
+    );
+    const kept = extractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
+    expect(kept.tsql).toContain('INSERT INTO [__mj].[Entity]');
+    expect(kept.tsql).not.toContain('vwTs');
   });
 });
 

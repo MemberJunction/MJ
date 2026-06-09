@@ -246,6 +246,13 @@ export default class MigrateConvert extends Command {
     const regenReseed: string[] = [];
     const needsHand: { file: string; routines: string[] }[] = [];
     const withUnhandled: { file: string; count: number }[] = [];
+    const gapReport: {
+      sourceFile: string;
+      outputFile: string;
+      status: string;
+      handProcedural: string[];
+      unhandled: { kind: string; snippet: string }[];
+    }[] = [];
 
     for (const m of unconverted) {
       const sql = fs.readFileSync(path.join(sourceDir, m.SourceFile), 'utf8');
@@ -286,6 +293,30 @@ export default class MigrateConvert extends Command {
       if (result.unhandled.length > 0) {
         withUnhandled.push({ file: m.SourceFile, count: result.unhandled.length });
       }
+      if (result.status === 'needs-hand-authoring' || result.unhandled.length > 0) {
+        gapReport.push({
+          sourceFile: m.SourceFile,
+          outputFile: outName,
+          status: result.status,
+          handProcedural: result.handProcedural,
+          unhandled: result.unhandled,
+        });
+      }
+    }
+
+    // The consolidated gap artifact — everything a build engineer (or an LLM pass they
+    // drive) needs to finish the conversion, in one machine-readable file.
+    if (!flags['dry-run']) {
+      const reportPath = path.join(outputDir, 'conversion-gaps.report.json');
+      if (gapReport.length > 0) {
+        fs.writeFileSync(
+          reportPath,
+          JSON.stringify({ generatedAt: new Date().toISOString(), sourceDir, gaps: gapReport }, null, 2),
+        );
+        this.log(`\nGap report written: ${reportPath}`);
+      } else if (fs.existsSync(reportPath)) {
+        fs.unlinkSync(reportPath); // clean run — stale report would misreport state
+      }
     }
 
     this.printSplitSummary(converted, regenReseed, needsHand, withUnhandled, flags['dry-run']);
@@ -294,8 +325,8 @@ export default class MigrateConvert extends Command {
     if (gapCount > 0 && !flags['allow-gaps']) {
       this.error(
         `${needsHand.length} migration(s) need hand-authoring and ${withUnhandled.length} have ` +
-          'unhandled statements. Resolve the gaps (see comments in the output files), or pass ' +
-          '--allow-gaps to accept them for now.',
+          'unhandled statements. Resolve the gaps (conversion-gaps.report.json + comments in the ' +
+          'output files), or pass --allow-gaps to accept them for now.',
       );
     }
   }

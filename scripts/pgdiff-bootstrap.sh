@@ -1,29 +1,33 @@
 #!/bin/bash
-# Fresh-install bootstrap for the split-and-regenerate PG pipeline.
+# Fresh-install bootstrap for the split-and-regenerate PG pipeline — REPO-ONLY:
+# every input is a committed file; no fixture database required.
 #
-#   ./scripts/pgdiff-bootstrap.sh <db> <astDir> <oracleDB>
+#   ./scripts/pgdiff-bootstrap.sh <db> <astDir> [packFile]
 #
 # Builds a working, codegen-complete PG database from AST-converted migrations:
-#   1. fresh <db> + LATEST baseline only (full schema snapshot)
-#   2. bootstrap pack: metadata-layer views + functions dumped from <oracleDB>
-#      (vwEntities/vwSQLTablesAndEntities/introspection fns — these query sys.* on
-#      SQL Server so they can't be transpiled; the oracle's PG versions are the fixture)
-#   3. seed the MJ_Metadata dataset tables from <oracleDB> (codegen loads metadata via
-#      the Dataset, and requires Entity rows to PRE-exist — see project notes)
-#   4. apply the post-baseline V migrations — AFTER the metadata seed, so their
-#      entity-REGISTRATION INSERTs (new entities the stale oracle lacks) land with
-#      their FK parents (Role/Application/Entity) present
-#   5. roles + introspection helper + Owner user; then mj codegen, AWAITED
-#      (scripts/pg-codegen-await.mjs), DB-side only (--skipfiles)
+#   1. fresh <db> + latest AST baseline (full schema AND metadata seed — baselines
+#      keep their metadata DML through the transpiler, so codegen can boot)
+#   2. bootstrap pack: metadata-layer views + functions (vwEntities /
+#      vwSQLTablesAndEntities / introspection fns) extracted from the latest
+#      COMMITTED PG baseline in migrations-pg/v5 — these query sys.* on SQL Server
+#      so they can't be transpiled; their PG versions are versioned source
+#   3. post-baseline V migrations (new-entity registration INSERTs land on the
+#      seeded metadata), then the pack re-applies — transpiled ALTER COLUMNs drop
+#      dependent views (codegen rebuilds them, but a few are read by codegen's own
+#      startup, e.g. vwApplicationSettings)
+#   4. roles + introspection helper + Owner user (scripts/pg-bootstrap-helpers.sql)
+#   5. mj codegen, AWAITED (scripts/pg-codegen-await.mjs), DB-side only (--skipfiles)
 #
 # Container: postgres-claude on :5433, user mj_admin. Timing for each step is printed.
 set -u
-DB="${1:?database}"; AST="${2:?dir of .pg.sql}"; ORACLE="${3:?oracle db (pg_known_good)}"
+DB="${1:?database}"; AST="${2:?dir of .pg.sql}"
+PACK="${3:-$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | sort | tail -1)}"
+[ -z "$PACK" ] && { echo "no committed PG baseline found for the bootstrap pack"; exit 1; }
 PSQL="docker exec -i -e PGPASSWORD=Claude2Pg99 postgres-claude psql -U mj_admin"
 T0=$(date +%s)
 step() { echo; echo "[$1] $2  (t+$(( $(date +%s) - T0 ))s)"; }
 
-step 1/5 "fresh $DB + latest AST baseline"
+step 1/5 "fresh $DB + latest AST baseline (schema + metadata seed)"
 # DROP/CREATE can't run in a transaction block — separate -c calls.
 $PSQL -d postgres -c "DROP DATABASE IF EXISTS $DB;" >/dev/null
 $PSQL -d postgres -c "CREATE DATABASE $DB;" >/dev/null
@@ -31,57 +35,42 @@ $PSQL -d "$DB" -c "CREATE SCHEMA IF NOT EXISTS __mj; CREATE EXTENSION IF NOT EXI
 LATEST_B=$(ls "$AST"/B*.pg.sql 2>/dev/null | sort | tail -1)
 [ -z "$LATEST_B" ] && { echo "no baseline found in $AST"; exit 1; }
 STAGE_B=/tmp/_bootstrap_b; rm -rf "$STAGE_B"; mkdir -p "$STAGE_B"; cp "$LATEST_B" "$STAGE_B/"
+# SQL Server CHECK string-lists compare case-INsensitively (collation), PG's don't —
+# so a baseline can carry data its own CHECK rejects on PG (EntityField.CodeType has
+# 'Typescript' rows vs the CHECK's 'TypeScript'). One bad row aborts a whole multi-row
+# INSERT and silently loses ~1k metadata rows. These value-list CHECKs are
+# codegen-owned (regenerated from EntityFieldValue in step 5) — strip them from the
+# staged copy rather than lose seed rows.
+STAGED="$STAGE_B/$(basename "$LATEST_B")" python3 - <<'EOF'
+import os, re
+p = os.environ['STAGED']
+src = open(p).read()
+stripped, n = re.subn(r',?\s*CONSTRAINT\s+"CK_EntityField_CodeType"\s+CHECK\s*\((?:[^()]|\([^()]*\))*\)', '', src)
+open(p, 'w').write(stripped)
+print(f"stripped {n} codegen-owned CHECK constraint(s) from the staged baseline")
+EOF
 echo "baseline: $(basename "$LATEST_B")"
 ./scripts/pgdiff-apply-psql.sh "$DB" "$STAGE_B" /tmp/pgdiff/bootstrap-baseline.txt
+echo "Entity rows from baseline seed: $($PSQL -d "$DB" -tA -c 'SELECT COUNT(*) FROM __mj."Entity";')"
 
-step 2/5 "bootstrap pack: metadata-layer views + functions (from $ORACLE)"
-# Dump only views/functions from the oracle; apply twice continue-on-error so
-# view-on-view dependencies settle. Generated objects that fail here are fine —
-# codegen regenerates them in step 5.
-docker exec -e PGPASSWORD=Claude2Pg99 postgres-claude pg_dump -U mj_admin -d "$ORACLE" \
-  --schema-only --schema=__mj --no-owner --no-privileges > /tmp/_oracle_schema.sql
-python3 - <<'EOF'
-import re
-src = open('/tmp/_oracle_schema.sql').read()
-# Keep CREATE [OR REPLACE] VIEW / FUNCTION / PROCEDURE statements only.
+step 2/5 "bootstrap pack: metadata-layer views + functions (from $(basename "$PACK"))"
+# Keep only view/function/procedure definitions; apply twice continue-on-error so
+# view-on-view dependencies settle. Generated objects that fail are fine — codegen
+# regenerates them in step 5; what MUST land is the vwEntities metadata layer.
+PACK_FILE="$PACK" python3 - <<'EOF'
+import os, re
+src = open(os.environ['PACK_FILE']).read()
 stmts = re.split(r'\n(?=CREATE )', src)
 keep = [s for s in stmts if re.match(r'CREATE (OR REPLACE )?(VIEW|FUNCTION|PROCEDURE)\b', s)]
-open('/tmp/_oracle_viewsfns.sql', 'w').write('\n'.join(keep))
+open('/tmp/_bootstrap_pack.sql', 'w').write('\n'.join(keep))
 print(f"bootstrap pack: {len(keep)} view/function definitions")
 EOF
-docker cp /tmp/_oracle_viewsfns.sql postgres-claude:/tmp/_oracle_viewsfns.sql >/dev/null
-$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_oracle_viewsfns.sql >/dev/null 2>&1
-$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_oracle_viewsfns.sql >/dev/null 2>/tmp/_pack_errs.txt
+docker cp /tmp/_bootstrap_pack.sql postgres-claude:/tmp/_bootstrap_pack.sql >/dev/null
+$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_bootstrap_pack.sql >/dev/null 2>&1
+$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_bootstrap_pack.sql >/dev/null 2>/tmp/_pack_errs.txt
 echo "pack applied (residual errors on 2nd pass: $(grep -c ERROR /tmp/_pack_errs.txt || true) — codegen regenerates those)"
 
-step 3/5 "seed core metadata data (MJ_Metadata dataset tables from $ORACLE)"
-# The dataset's table list comes from the oracle itself. EntityField's CodeType CHECK
-# is dropped first (oracle data predates a casing fix; codegen regenerates the CHECK).
-TABLES=$($PSQL -d "$ORACLE" -tA -c "
-  SELECT DISTINCT e.\"BaseTable\" FROM __mj.\"DatasetItem\" di
-  JOIN __mj.\"Dataset\" d ON d.\"ID\" = di.\"DatasetID\"
-  JOIN __mj.\"Entity\" e ON e.\"ID\" = di.\"EntityID\"
-  WHERE d.\"Name\" = 'MJ_Metadata' AND e.\"SchemaName\" = '__mj';" | grep -v '^$')
-TABLES="Dataset DatasetItem $TABLES"
-# Stale-oracle data can violate CHECKs whose widening migration is POST-baseline
-# (applied in step 4, after this seed): CodeType ('Typescript' casing) and
-# ExtendedType ('Icon' added by the v5.39 Widen migration, which re-creates the
-# CHECK itself in step 4). One violating row aborts the whole COPY for that table.
-$PSQL -d "$DB" -c "ALTER TABLE __mj.\"EntityField\" DROP CONSTRAINT IF EXISTS \"CK_EntityField_CodeType\";
-ALTER TABLE __mj.\"EntityField\" DROP CONSTRAINT IF EXISTS \"CK_EntityField_ExtendedType\";" >/dev/null 2>&1
-# Build pg_dump args as an array passed straight to docker exec — no sh -c layer,
-# so the case-preserving quotes inside each --table pattern survive intact.
-DUMP_ARGS=(pg_dump -U mj_admin -d "$ORACLE" --data-only --no-owner)
-for t in $TABLES; do DUMP_ARGS+=("--table=__mj.\"$t\""); done
-docker exec -e PGPASSWORD=Claude2Pg99 postgres-claude "${DUMP_ARGS[@]}" > /tmp/_oracle_seed.sql
-docker cp /tmp/_oracle_seed.sql postgres-claude:/tmp/_oracle_seed.sql >/dev/null
-# session_replication_role=replica skips FK enforcement during the bulk load (the DB
-# is baseline-only at this point, so the seed tables are empty — no PK collisions)
-$PSQL -d "$DB" -v ON_ERROR_STOP=0 -c "SET session_replication_role = replica;" \
-  -f /tmp/_oracle_seed.sql > /dev/null 2>/tmp/_seed_errs.txt || true
-echo "seeded $(echo $TABLES | wc -w | tr -d ' ') tables (errors: $(grep -c ERROR /tmp/_seed_errs.txt || true)); Entity rows: $($PSQL -d "$DB" -tA -c 'SELECT COUNT(*) FROM __mj."Entity";')"
-
-step 4/5 "post-baseline V migrations (registration INSERTs land on seeded metadata)"
+step 3/5 "post-baseline V migrations + pack re-apply"
 B_TS=$(basename "$LATEST_B" | sed -E 's/^B([0-9]+)__.*/\1/')
 STAGE_V=/tmp/_bootstrap_v; rm -rf "$STAGE_V"; mkdir -p "$STAGE_V"
 for f in "$AST"/V*.pg.sql; do
@@ -91,14 +80,12 @@ done
 echo "applying $(ls "$STAGE_V" | wc -l | tr -d ' ') post-baseline migrations"
 ./scripts/pgdiff-apply-psql.sh "$DB" "$STAGE_V" /tmp/pgdiff/bootstrap-postv.txt
 echo "Entity rows after V migrations: $($PSQL -d "$DB" -tA -c 'SELECT COUNT(*) FROM __mj."Entity";')"
-# Transpiled ALTER COLUMNs drop dependent views (pg_depend DO blocks) — codegen
-# regenerates them, but a few are read by codegen's OWN startup (vwApplicationSettings
-# via the dataset status check). Re-apply the oracle view/function pack to restore them.
-$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_oracle_viewsfns.sql >/dev/null 2>&1
-$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_oracle_viewsfns.sql >/dev/null 2>&1
-echo "view/function pack re-applied post-V (views now: $($PSQL -d "$DB" -tA -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema='__mj';"))"
+# Restore metadata-layer views dropped by transpiled ALTER COLUMN pg_depend blocks.
+$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_bootstrap_pack.sql >/dev/null 2>&1
+$PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_bootstrap_pack.sql >/dev/null 2>&1
+echo "pack re-applied post-V (views now: $($PSQL -d "$DB" -tA -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema='__mj';"))"
 
-step 5a/5 "roles + introspection helper + Owner user"
+step 4/5 "roles + introspection helper + Owner user"
 docker cp ./scripts/pg-bootstrap-helpers.sql postgres-claude:/tmp/_helpers.sql >/dev/null
 $PSQL -d "$DB" -v ON_ERROR_STOP=0 -f /tmp/_helpers.sql >/dev/null 2>&1
 $PSQL -d "$DB" -c "
@@ -106,7 +93,7 @@ $PSQL -d "$DB" -c "
   VALUES ('00000000-0000-0000-0000-000000000002','Owner','owner@memberjunction.local','Owner',TRUE,'None')
   ON CONFLICT (\"ID\") DO NOTHING;" >/dev/null
 
-step 5b/5 "mj codegen (awaited, DB-side only)"
+step 5/5 "mj codegen (awaited, DB-side only)"
 DB_PLATFORM=postgresql DB_HOST=localhost DB_PORT=5433 DB_DATABASE="$DB" \
 DB_USERNAME=mj_admin DB_PASSWORD=Claude2Pg99 \
 CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 \
