@@ -15,6 +15,18 @@ export class GrantRule implements IConversionRule {
     // Remove N prefix from strings
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
 
+    // GRANT CONNECT TO <login> is a SQL Server server-level connect grant for a
+    // login principal. PostgreSQL has no statement-level equivalent — CONNECT is
+    // per-database (GRANT CONNECT ON DATABASE <db> TO <role>) and the database
+    // name isn't known at conversion time. Emit an INTENTIONAL skip marker so the
+    // /pg-migrate quality gate treats it as a reviewed, justified skip rather than
+    // an unconverted gap. Without this the raw `GRANT CONNECT TO "role";` passes
+    // through as invalid PG and fails at apply time.
+    const connectGrant = result.match(/\bGRANT\s+CONNECT\s+TO\s+(.+?)\s*;?\s*$/i);
+    if (connectGrant) {
+      return `-- SKIPPED (INTENTIONAL): GRANT CONNECT TO ${connectGrant[1].trim()} — SQL Server login connect grant has no PostgreSQL equivalent\n`;
+    }
+
     // Convert GRANT/REVOKE ... ON SCHEMA::schema_name TO role
     // SQL Server: GRANT SELECT ON SCHEMA::myschema TO myrole
     // PostgreSQL:  GRANT SELECT ON ALL TABLES IN SCHEMA myschema TO myrole
