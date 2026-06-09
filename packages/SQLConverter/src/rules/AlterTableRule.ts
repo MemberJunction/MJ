@@ -66,9 +66,11 @@ export class AlterTableRule implements IConversionRule {
     if (/FOREIGN\s+KEY/i.test(result)) {
       // Remove WITH NOCHECK (PG doesn't support it)
       result = result.replace(/\bWITH\s+NOCHECK\b/gi, '');
-      // Add DEFERRABLE INITIALLY DEFERRED before the semicolon
-      result = result.trimEnd().replace(/;?\s*$/, '');
-      result += ' DEFERRABLE INITIALLY DEFERRED';
+      // Attach DEFERRABLE INITIALLY DEFERRED to each FK clause's REFERENCES target.
+      // It must NOT go at the end of the whole statement: a multi-clause
+      // ALTER TABLE ... ADD (cols, FK, CHECK, ...) ends on a CHECK constraint, and
+      // PG rejects DEFERRABLE on CHECK constraints.
+      result = this.makeForeignKeysDeferrable(result);
     }
 
     // CHECK constraints: add NOT VALID to skip validation of existing rows.
@@ -419,6 +421,19 @@ export class AlterTableRule implements IConversionRule {
       /(CONSTRAINT\s+"?\w+"?\s+)FOREIGN\s+KEY\s+(REFERENCES\b)/gi,
       '$1$2'
     );
+  }
+
+  /**
+   * Append `DEFERRABLE INITIALLY DEFERRED` to each foreign-key clause by matching
+   * its `REFERENCES <table>(<cols>)` target (plus any ON DELETE / ON UPDATE
+   * actions). This places the clause on the FK itself, so it works whether the FK
+   * is the last clause or sits before trailing CHECK constraints in a multi-clause
+   * `ALTER TABLE ... ADD (...)`. Idempotent: skips a target already followed by
+   * DEFERRABLE.
+   */
+  private makeForeignKeysDeferrable(sql: string): string {
+    const re = /(REFERENCES\s+[\w".]+\s*\([^)]*\)(?:\s+ON\s+(?:DELETE|UPDATE)\s+(?:NO\s+ACTION|CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT))*)(?!\s+DEFERRABLE)/gi;
+    return sql.replace(re, '$1 DEFERRABLE INITIALLY DEFERRED');
   }
 
   /**
