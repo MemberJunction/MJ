@@ -76,3 +76,27 @@ export interface IMJChatDemonstrationSurfaceComponent {
     /** Whether the surface should be visible. */
     Visible?: boolean;
 }
+
+/**
+ * Contract for the `messageRenderer` slot — per-item template applied to every
+ * message in the list. Unlike the other slots (which replace a fixed positional
+ * zone), `messageRenderer` is invoked once per message via `*ngTemplateOutlet`
+ * with the message as the implicit context (`let-message`).
+ *
+ * Lets consumers swap the entire feed-vs-bubble-vs-anything-else rendering
+ * decision without forking. Two default components ship:
+ *
+ *   • `MJChatMessageFeedDefaultComponent` — the existing avatar+name+timestamp
+ *     feed layout (current behavior; default when no slot is supplied).
+ *   • `MJChatMessageBubbleDefaultComponent` — bubble layout where identity
+ *     comes from side + shape (user on right, agent on left), using the
+ *     `--mj-chat-bubble-*` tokens for color.
+ *
+ * Implementing components keep the contract minimal — just receive the message
+ * entity and render however they want. Subclasses extend a default to inherit
+ * its shell and override specific behavior.
+ */
+export interface IMJChatMessageRendererComponent {
+    /** The conversation detail row to render. */
+    Message: import('@memberjunction/core-entities').MJConversationDetailEntity | null;
+}

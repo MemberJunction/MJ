@@ -29,6 +29,7 @@ import { MJChatAgentPresenceDefaultComponent } from '../lib/components/slots/mj-
 import { MJChatHeaderDefaultComponent } from '../lib/components/slots/mj-chat-header-default.component';
 import { MJChatMessageExtraDefaultComponent } from '../lib/components/slots/mj-chat-message-extra-default.component';
 import { MJChatDemonstrationSurfaceDefaultComponent } from '../lib/components/slots/mj-chat-demonstration-surface-default.component';
+import { MJChatMessageBubbleDefaultComponent } from '../lib/components/slots/mj-chat-message-bubble-default.component';
 
 import type {
     IMJChatEmptyStateComponent,
@@ -36,6 +37,7 @@ import type {
     IMJChatHeaderComponent,
     IMJChatMessageExtraComponent,
     IMJChatDemonstrationSurfaceComponent,
+    IMJChatMessageRendererComponent,
 } from '../lib/components/slots/slot-interfaces';
 
 describe('Slot default components — exports + interface conformance', () => {
@@ -82,6 +84,15 @@ describe('Slot default components — exports + interface conformance', () => {
     it('MJChatDemonstrationSurfaceDefaultComponent is exported as a class', () => {
         expect(typeof MJChatDemonstrationSurfaceDefaultComponent).toBe('function');
         type _Check = InstanceType<typeof MJChatDemonstrationSurfaceDefaultComponent> extends IMJChatDemonstrationSurfaceComponent
+            ? true
+            : never;
+        const _interfaceCheck: _Check = true;
+        expect(_interfaceCheck).toBe(true);
+    });
+
+    it('MJChatMessageBubbleDefaultComponent is exported as a class', () => {
+        expect(typeof MJChatMessageBubbleDefaultComponent).toBe('function');
+        type _Check = InstanceType<typeof MJChatMessageBubbleDefaultComponent> extends IMJChatMessageRendererComponent
             ? true
             : never;
         const _interfaceCheck: _Check = true;

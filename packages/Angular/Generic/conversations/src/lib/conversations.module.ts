@@ -81,6 +81,7 @@ import { MJChatAgentPresenceDefaultComponent } from './components/slots/mj-chat-
 import { MJChatHeaderDefaultComponent } from './components/slots/mj-chat-header-default.component';
 import { MJChatMessageExtraDefaultComponent } from './components/slots/mj-chat-message-extra-default.component';
 import { MJChatDemonstrationSurfaceDefaultComponent } from './components/slots/mj-chat-demonstration-surface-default.component';
+import { MJChatMessageBubbleDefaultComponent } from './components/slots/mj-chat-message-bubble-default.component';
 
 // Export all components (excluding standalone components)
 const COMPONENTS = [
@@ -165,7 +166,8 @@ const COMPONENTS = [
     MJChatAgentPresenceDefaultComponent,
     MJChatHeaderDefaultComponent,
     MJChatMessageExtraDefaultComponent,
-    MJChatDemonstrationSurfaceDefaultComponent
+    MJChatDemonstrationSurfaceDefaultComponent,
+    MJChatMessageBubbleDefaultComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -178,7 +180,8 @@ const COMPONENTS = [
     MJChatAgentPresenceDefaultComponent,
     MJChatHeaderDefaultComponent,
     MJChatMessageExtraDefaultComponent,
-    MJChatDemonstrationSurfaceDefaultComponent
+    MJChatDemonstrationSurfaceDefaultComponent,
+    MJChatMessageBubbleDefaultComponent
   ]
 })
 export class ConversationsModule { }

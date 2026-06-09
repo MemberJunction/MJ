@@ -77,4 +77,5 @@ export * from './lib/components/slots/mj-chat-agent-presence-default.component';
 export * from './lib/components/slots/mj-chat-header-default.component';
 export * from './lib/components/slots/mj-chat-message-extra-default.component';
 export * from './lib/components/slots/mj-chat-demonstration-surface-default.component';
+export * from './lib/components/slots/mj-chat-message-bubble-default.component';
 export * from './lib/events/chat-events';
