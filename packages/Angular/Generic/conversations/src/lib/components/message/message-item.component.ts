@@ -47,6 +47,17 @@ export interface MessageAttachment {
 }
 
 /**
+ * A fully-loaded artifact + its version to render as a card under a message.
+ * A single message can carry more than one DISTINCT artifact (e.g. a research
+ * report plus a standalone generated infographic), so the message renders an
+ * array of these — one card each.
+ */
+export interface MessageArtifactRef {
+  artifact: MJArtifactEntity;
+  version: MJArtifactVersionEntity;
+}
+
+/**
  * Component for displaying a single message in a conversation
  * Follows the dynamic rendering pattern from skip-chat for optimal performance
  * This component is created dynamically via ViewContainerRef.createComponent()
@@ -68,6 +79,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifact?: MJArtifactEntity;
   @Input() public artifactVersion?: MJArtifactVersionEntity;
+  /**
+   * All distinct artifacts attached to this message, each at its latest version.
+   * Preferred over the single `artifact`/`artifactVersion` inputs above (which are
+   * retained for backward compatibility and kept pointed at the first entry).
+   */
+  @Input() public artifacts: MessageArtifactRef[] = [];
   @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
@@ -665,8 +682,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.shouldShowRating();
   }
 
+  /**
+   * The artifacts to render under this message, one card each. Prefers the
+   * `artifacts` array; falls back to the legacy single `artifact`/`artifactVersion`
+   * inputs so older callers that set only those keep working.
+   */
+  public get displayArtifacts(): MessageArtifactRef[] {
+    if (this.artifacts && this.artifacts.length > 0) {
+      return this.artifacts;
+    }
+    if (this.artifact && this.artifactVersion) {
+      return [{ artifact: this.artifact, version: this.artifactVersion }];
+    }
+    return [];
+  }
+
   public get hasArtifact(): boolean {
-    return !!this.artifactVersion;
+    return this.displayArtifacts.length > 0;
   }
 
   /**

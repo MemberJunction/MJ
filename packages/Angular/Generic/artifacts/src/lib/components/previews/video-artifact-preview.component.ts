@@ -33,10 +33,14 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
                 display: block;
             }
 
+            /* Compact thumbnail height — kept in sync with the image preview (140px) so both
+               visual media previews stay consistent and neither dominates the conversation.
+               Video keeps width:100% (unlike image) because the player chrome reads better at
+               full card width. */
             .video-preview__video {
                 display: block;
                 max-width: 100%;
-                max-height: 280px;
+                max-height: 140px;
                 width: 100%;
                 height: auto;
                 border-radius: 6px;
