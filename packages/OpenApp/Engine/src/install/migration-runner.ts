@@ -19,7 +19,11 @@ import path from 'node:path';
  * 0.6.x requires a provider; the field is optional here purely because it's
  * filled in inside `RunAppMigrations` after the dynamic import resolves.
  */
+/** Database platform an Open App is being installed into. */
+export type AppDbPlatform = 'sqlserver' | 'postgresql';
+
 interface SkywayConfig {
+    Dialect?: AppDbPlatform;
     Database: {
         Server: string;
         Port: number;
@@ -72,6 +76,8 @@ export interface MigrationRunOptions {
  * Database configuration for the migration runner.
  */
 export interface SkywayDatabaseConfig {
+    /** Target database platform. Defaults to 'sqlserver' when omitted (back-compat). */
+    Platform?: AppDbPlatform;
     /** Database host */
     Host: string;
     /** Database port */
@@ -112,6 +118,43 @@ export interface MigrationRunResult {
 }
 
 /**
+ * Per-platform Skyway wiring, expressed as a lookup table rather than `if (platform === …)`
+ * branches. Each entry names the Skyway provider package/export to load and how to resolve the
+ * connection-encryption defaults for that platform. Adding a new platform = adding one row.
+ */
+const SKYWAY_PROVIDER_REGISTRY: Record<AppDbPlatform, {
+    /** Skyway provider package (held as data so the dynamic import isn't compile-time resolved). */
+    ModuleId: string;
+    /** Named export within that package implementing the Skyway provider contract. */
+    ExportName: string;
+    /** Resolves the connection encryption defaults for this platform from the supplied config. */
+    ResolveEncryption(dbConfig: SkywayDatabaseConfig): { Encrypt: boolean; TrustServerCertificate: boolean };
+}> = {
+    sqlserver: {
+        ModuleId: '@memberjunction/skyway-sqlserver',
+        ExportName: 'SqlServerProvider',
+        ResolveEncryption(dbConfig) {
+            // Azure SQL (host ends in .database.windows.net) requires encryption; on-prem defaults to off.
+            const isAzureSql = dbConfig.Host.includes('.database.windows.net');
+            return {
+                Encrypt: dbConfig.Encrypt ?? isAzureSql,
+                TrustServerCertificate: dbConfig.TrustServerCertificate ?? !isAzureSql,
+            };
+        },
+    },
+    postgresql: {
+        ModuleId: '@memberjunction/skyway-postgres',
+        ExportName: 'PostgresProvider',
+        ResolveEncryption(dbConfig) {
+            return {
+                Encrypt: dbConfig.Encrypt ?? false,
+                TrustServerCertificate: dbConfig.TrustServerCertificate ?? true,
+            };
+        },
+    },
+};
+
+/**
  * Runs Skyway migrations for an Open App.
  *
  * This executes Skyway with the app's schema as the defaultSchema,
@@ -129,17 +172,18 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 
     try {
         // Use variables to prevent TypeScript from resolving the modules at compile time.
-        // @memberjunction/skyway-core + @memberjunction/skyway-sqlserver are published
-        // as dependencies of the host process (e.g. MJCLI).
+        // @memberjunction/skyway-core + the matching provider (skyway-sqlserver /
+        // skyway-postgres) are published as dependencies of the host process (e.g. MJCLI).
+        const platform: AppDbPlatform = DatabaseConfig.Platform ?? 'sqlserver';
         const skywayModuleId = '@memberjunction/skyway-core';
-        const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
         const { Skyway } = await import(skywayModuleId);
-        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders);
-        // Skyway 0.6.x requires an explicit provider. OpenApp migrations target
-        // SQL Server (Azure auto-detection is SQL-Server-specific), so we always
-        // attach the SqlServerProvider here.
-        config.Provider = new SqlServerProvider(config.Database);
+        // Skyway 0.6.x requires an explicit provider. Resolve it from the registry (data-driven —
+        // no per-platform branching). The module id is held in a variable so it isn't resolved at
+        // compile time (the provider packages are runtime deps of the host process, e.g. MJCLI).
+        const providerModuleId = SKYWAY_PROVIDER_REGISTRY[platform].ModuleId;
+        const providerModule = await import(providerModuleId) as Record<string, new (db: SkywayConfig['Database']) => unknown>;
+        config.Provider = new providerModule[SKYWAY_PROVIDER_REGISTRY[platform].ExportName](config.Database);
 
         if (Verbose) {
             console.log(`Running Skyway migrations for schema '${SchemaName}'`);
@@ -193,12 +237,13 @@ function BuildSkywayConfig(
         ? migrationsDir
         : path.resolve(migrationsDir);
 
-    // Auto-detect Azure SQL: if host ends with .database.windows.net, encrypt is required
-    const isAzureSql = dbConfig.Host.includes('.database.windows.net');
-    const encrypt = dbConfig.Encrypt ?? isAzureSql;
-    const trustCert = dbConfig.TrustServerCertificate ?? !isAzureSql;
+    const platform: AppDbPlatform = dbConfig.Platform ?? 'sqlserver';
+
+    // Encryption defaults are resolved by the platform's registry entry (no per-platform branching here).
+    const { Encrypt: encrypt, TrustServerCertificate: trustCert } = SKYWAY_PROVIDER_REGISTRY[platform].ResolveEncryption(dbConfig);
 
     return {
+        Dialect: platform,
         Database: {
             Server: dbConfig.Host,
             Port: dbConfig.Port,

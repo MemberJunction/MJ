@@ -185,6 +185,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     private _dialect: SQLDialect | null = null;
 
     /**
+     * Drops a schema AND every object it contains, using this provider's own platform behavior.
+     * Callers (e.g. the Open App installer) invoke this on whatever provider they hold and never
+     * branch on platform themselves. The base implementation issues a bare `DROP SCHEMA <name>`
+     * (ANSI — succeeds only when the schema is already empty); concrete providers override:
+     * PostgreSQL uses `DROP SCHEMA ... CASCADE`; SQL Server (no CASCADE) first empties the schema
+     * via catalog-driven DROPs, then drops the schema.
+     * @param schemaName the schema to drop — caller is responsible for validating/authorizing it
+     */
+    public async DropSchemaWithContents(schemaName: string): Promise<void> {
+        await this.ExecuteSQL(`DROP SCHEMA ${this.QuoteIdentifier(schemaName)}`);
+    }
+
+    /**
      * Gets the MemberJunction core schema name (e.g. '__mj').
      * Subclasses should override if they have a different way to resolve this.
      * Defaults to the value from ConfigData.

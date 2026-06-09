@@ -81,8 +81,10 @@ export async function SchemaExists(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<boolean> {
+  // information_schema.schemata is ANSI-standard and present on both SQL Server and
+  // PostgreSQL, so this existence check is dialect-agnostic (no sys.schemas / pg_namespace branch).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM sys.schemas WHERE name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -113,7 +115,8 @@ export async function CreateAppSchema(
   }
 
   try {
-    await provider.ExecuteSQL(`CREATE SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    // provider.QuoteIdentifier applies the dialect's quoting ([..] on SS, ".." on PG).
+    await provider.ExecuteSQL(`CREATE SCHEMA ${provider.QuoteIdentifier(schemaName)}`);
     return { Success: true };
   }
   catch (error: unknown) {
@@ -148,9 +151,9 @@ export async function DropAppSchema(
   }
 
   try {
-    // Drop all objects in the schema first (SQL Server doesn't support CASCADE on DROP SCHEMA)
-    await DropAllSchemaObjects(schemaName, provider);
-    await provider.ExecuteSQL(`DROP SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    // Delegate to the provider's own platform behavior (PostgreSQL: CASCADE; SQL Server:
+    // empty-then-drop). No platform branching here — the provider abstraction owns the difference.
+    await provider.DropSchemaWithContents(schemaName);
     return { Success: true };
   }
   catch (error: unknown) {
@@ -163,90 +166,8 @@ export async function DropAppSchema(
 }
 
 /**
- * Drops all objects within a schema before the schema itself can be dropped.
- * SQL Server requires schemas to be empty before they can be dropped.
- *
- * Uses QUOTENAME() for all dynamic identifiers in generated SQL to prevent
- * injection via object names. The schema name is passed as a parameterized
- * string literal to the catalog queries, and QUOTENAME() wraps all identifiers
- * in the dynamically-built DROP statements.
- *
- * Compatible with both SQL Server and Azure SQL Database.
- */
-async function DropAllSchemaObjects(
-  schemaName: string,
-  provider: DatabaseProviderBase
-): Promise<void> {
-  const escaped = EscapeSqlString(schemaName);
-
-  // Drop foreign keys first to avoid dependency issues
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'ALTER TABLE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id)) + N' DROP CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.foreign_keys
-    WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-
-  // Drop views
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'DROP VIEW ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.views WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-
-  // Drop stored procedures
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'DROP PROCEDURE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.procedures WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-
-  // Drop functions
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'DROP FUNCTION ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.objects WHERE type IN ('FN','IF','TF') AND SCHEMA_NAME(schema_id) = '${escaped}';
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-
-  // Drop tables
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'DROP TABLE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.tables WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-
-  // Drop user-defined types (must come after tables that may reference them)
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'DROP TYPE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.types WHERE SCHEMA_NAME(schema_id) = '${escaped}' AND is_user_defined = 1;
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-
-  // Drop sequences
-  await provider.ExecuteSQL(`
-    DECLARE @sql NVARCHAR(MAX) = N'';
-    SELECT @sql = @sql + N'DROP SEQUENCE ' + QUOTENAME('${escaped}') + N'.' + QUOTENAME(name) + N';' + CHAR(10)
-    FROM sys.sequences WHERE SCHEMA_NAME(schema_id) = '${escaped}';
-    IF @sql <> N'' EXEC sp_executesql @sql;
-  `);
-}
-
-/**
  * Escapes a string for use in SQL string literals (prevents SQL injection).
  */
 export function EscapeSqlString(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-/**
- * Escapes a string for use as a SQL identifier (within square brackets).
- */
-function EscapeSqlIdentifier(value: string): string {
-  return value.replace(/\]/g, ']]');
 }

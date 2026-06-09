@@ -203,6 +203,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return pgDialect;
     }
 
+    /** PostgreSQL drops a schema and everything in it in a single CASCADE statement. */
+    public override async DropSchemaWithContents(schemaName: string): Promise<void> {
+        await this.ExecuteSQL(`DROP SCHEMA ${this.QuoteIdentifier(schemaName)} CASCADE`);
+    }
+
     // ─── Configuration & Lifecycle ───────────────────────────────────
 
     get ConfigData(): PostgreSQLProviderConfigData {

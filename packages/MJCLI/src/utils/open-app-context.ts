@@ -8,71 +8,144 @@
 import sql from 'mssql';
 import ora from 'ora-classic';
 import { createRequire } from 'node:module';
-import type { UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserInfo, type DatabaseProviderBase, Metadata, SetProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { getValidatedConfig } from '../config.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider initialization (lazy singleton)
 // ─────────────────────────────────────────────────────────────────────────────
 
-let _pool: sql.ConnectionPool | null = null;
-let _provider: SQLServerDataProvider | null = null;
-let _initPromise: Promise<SQLServerDataProvider> | null = null;
+let _provider: DatabaseProviderBase | null = null;
+let _initPromise: Promise<DatabaseProviderBase> | null = null;
+/** Platform-specific teardown registered by the active init path. */
+let _closeFn: (() => Promise<void>) | null = null;
 
 /**
- * Initializes the MJ SQL Server provider if not already done.
- * Creates a connection pool, configures the provider, and populates UserCache.
+ * Initializes the MJ data provider for the configured platform if not already done.
+ * Selects the SQL Server or PostgreSQL provider from `config.dbPlatform`, configures it,
+ * and populates UserCache. Idempotent — repeated calls return the cached provider.
  */
-async function ensureProviderInitialized(): Promise<{ pool: sql.ConnectionPool; provider: SQLServerDataProvider }> {
-  if (_provider && _pool?.connected) {
-    return { pool: _pool, provider: _provider };
+async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+  if (_provider) {
+    return _provider;
   }
-
   if (_initPromise) {
-    const provider = await _initPromise;
-    return { pool: _pool!, provider };
+    return _initPromise;
   }
 
   _initPromise = (async () => {
     const config = getValidatedConfig();
-
-    const poolConfig: sql.config = {
-      server: config.dbHost,
-      port: config.dbPort,
-      database: config.dbDatabase,
-      user: config.codeGenLogin,
-      password: config.codeGenPassword,
-      options: {
-        encrypt: config.dbHost.includes('.database.windows.net'),
-        trustServerCertificate: config.dbTrustServerCertificate ?? true,
-        enableArithAbort: true,
-      },
+    const platform = (config.dbPlatform ?? 'sqlserver').toLowerCase();
+    // Composition root: select the concrete provider initializer from a table keyed by platform
+    // (data-driven — no `platform === …` branching). This is the single place a platform string is
+    // resolved to a provider; everything downstream uses the polymorphic DatabaseProviderBase.
+    const PROVIDER_INITIALIZERS: Record<string, (c: CliConfig) => Promise<DatabaseProviderBase>> = {
+      sqlserver: initSqlServerProvider,
+      postgresql: initPostgresProvider,
     };
-
-    _pool = new sql.ConnectionPool(poolConfig);
-    await _pool.connect();
-
-    const providerConfig = new SQLServerProviderConfigData(
-      _pool,
-      config.coreSchema ?? '__mj',
-    );
-
-    _provider = await setupSQLServerClient(providerConfig);
+    _provider = await (PROVIDER_INITIALIZERS[platform] ?? initSqlServerProvider)(config);
     return _provider;
   })();
 
-  const provider = await _initPromise;
-  return { pool: _pool!, provider };
+  return _initPromise;
+}
+
+type CliConfig = ReturnType<typeof getValidatedConfig>;
+
+/** SQL Server provider init (mssql ConnectionPool + setupSQLServerClient). */
+async function initSqlServerProvider(config: CliConfig): Promise<DatabaseProviderBase> {
+  const poolConfig: sql.config = {
+    server: config.dbHost,
+    port: config.dbPort,
+    database: config.dbDatabase,
+    user: config.codeGenLogin,
+    password: config.codeGenPassword,
+    options: {
+      encrypt: config.dbHost.includes('.database.windows.net'),
+      trustServerCertificate: config.dbTrustServerCertificate ?? true,
+      enableArithAbort: true,
+    },
+  };
+
+  const pool = new sql.ConnectionPool(poolConfig);
+  await pool.connect();
+  const providerConfig = new SQLServerProviderConfigData(pool, config.coreSchema ?? '__mj');
+  const provider = await setupSQLServerClient(providerConfig);
+  _closeFn = async () => { if (pool.connected) { await pool.close(); } };
+  return provider as unknown as DatabaseProviderBase;
 }
 
 /**
- * Closes the shared connection pool. Call on CLI exit for cleanup.
+ * PostgreSQL provider init. `pg` and the PG data provider are dynamically imported so
+ * SQL-Server-only environments never need them installed. Mirrors the MetadataSync /
+ * MJServer PG bootstrap so CLI Open App commands have the same provider + System-user
+ * semantics on PostgreSQL.
+ */
+async function initPostgresProvider(config: CliConfig): Promise<DatabaseProviderBase> {
+  const pg = (await import('pg')).default;
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+
+  const coreSchema = config.coreSchema ?? '__mj';
+  const port = config.dbPort ?? 5432;
+  const pgPool = new pg.Pool({
+    host: config.dbHost,
+    port,
+    user: config.codeGenLogin,
+    password: config.codeGenPassword,
+    database: config.dbDatabase,
+    max: 10,
+    min: 1,
+  });
+  const testClient = await pgPool.connect();
+  await testClient.query('SELECT 1');
+  testClient.release();
+
+  const pgConfigData = new PostgreSQLProviderConfigData(
+    {
+      Host: config.dbHost,
+      Port: port,
+      Database: config.dbDatabase,
+      User: config.codeGenLogin,
+      Password: config.codeGenPassword,
+      MaxConnections: 10,
+      MinConnections: 1,
+    },
+    coreSchema,
+    1, // > 0 triggers the initial metadata load (AllowRefresh gate in PostgreSQLDataProvider)
+  );
+
+  const provider = new PostgreSQLDataProvider();
+  await provider.Config(pgConfigData);
+  SetProvider(provider as unknown as DatabaseProviderBase);
+  _closeFn = async () => { try { await pgPool.end(); } catch { /* best-effort */ } };
+
+  await refreshUserCacheFromPG(pgPool, coreSchema);
+  return provider as unknown as DatabaseProviderBase;
+}
+
+/** Populates UserCache from PG vwUsers/vwUserRoles (UserCache itself is provider-agnostic state). */
+async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
+  const uResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUsers"`);
+  const rResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUserRoles"`);
+  const userInfos = uResult.rows.map((user: Record<string, unknown>) =>
+    new UserInfo(Metadata.Provider, {
+      ...user,
+      UserRoles: rResult.rows.filter((role: Record<string, unknown>) =>
+        UUIDsEqual(role.UserID as string, user.ID as string)),
+    })
+  );
+  (UserCache.Instance as unknown as Record<string, unknown>)['_users'] = userInfos;
+}
+
+/**
+ * Closes the shared connection pool(s). Call on CLI exit for cleanup.
  */
 export async function closeConnectionPool(): Promise<void> {
-  if (_pool?.connected) {
-    await _pool.close();
-    _pool = null;
+  if (_closeFn) {
+    await _closeFn();
+    _closeFn = null;
   }
   _provider = null;
   _initPromise = null;
@@ -128,7 +201,7 @@ export async function buildOrchestratorContext(
   verbose?: boolean,
 ): Promise<OrchestratorContextShape> {
   const config = getValidatedConfig();
-  const { provider } = await ensureProviderInitialized();
+  const provider = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
 
@@ -176,7 +249,7 @@ export async function buildOrchestratorContext(
  */
 interface OrchestratorContextShape {
   ContextUser: UserInfo;
-  DatabaseProvider: SQLServerDataProvider;
+  DatabaseProvider: DatabaseProviderBase;
   DatabaseConfig: {
     Host: string;
     Port: number;
