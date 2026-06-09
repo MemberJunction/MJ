@@ -581,7 +581,7 @@ export class SQLServerDataProvider
     return `OFFSET ${startRow} ROWS FETCH NEXT ${maxRows} ROWS ONLY`;
   }
 
-  protected override BuildParameterPlaceholder(index: number): string {
+  public override BuildParameterPlaceholder(index: number): string {
     return `@p${index}`;
   }
 

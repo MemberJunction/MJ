@@ -63,7 +63,9 @@
     "datasets",
     "archiving",
     "entity-form-overrides",
-    "entity-settings"
+    "entity-settings",
+    "roles",
+    "entity-permissions"
   ],
   "sqlLogging": {
     "enabled": true,

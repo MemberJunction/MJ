@@ -6,7 +6,7 @@
  * via `[Runs]` (the host is the data orchestrator); loads per-run detail rows
  * on demand itself. Cross-tab navigation (none today) would bubble via @Output.
  */
-import { Component, ChangeDetectorRef, Input, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Input, Output, inject } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
@@ -30,10 +30,51 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
         this.buildRunHistoryRows();
         this.buildHistorySourceOptions();
         this.FilterRunHistory();
+        // A fresh Runs binding (from the host reload) ends any in-flight refresh.
+        this.IsLoading = false;
+        this.cdr.detectChanges();
     }
     get Runs(): Record<string, unknown>[] {
         return this._runs;
     }
+
+    /** Total run count in the DB (from TotalRowCount) — drives the "Showing X of Y" line. */
+    @Input() TotalRunCount = 0;
+
+    /** True while the host is fetching the next page in response to LoadMoreRequested. */
+    @Input() IsLoadingMore = false;
+
+    /** Bubble a "load more" request to the host, which widens the loaded window. */
+    @Output() LoadMoreRequested = new EventEmitter<void>();
+
+    /**
+     * Bubble a content-item selection (from the per-run item grid) up to the host,
+     * which owns NavigationService + the drilldown slide-in.
+     */
+    @Output() ItemSelected = new EventEmitter<string>();
+
+    public onItemSelected(itemID: string): void {
+        this.ItemSelected.emit(itemID);
+    }
+
+    /** Whether more runs exist in the DB than are currently loaded. */
+    public get HasMoreRuns(): boolean {
+        return this.TotalRunCount > this._runs.length;
+    }
+
+    public onLoadMore(): void {
+        this.LoadMoreRequested.emit();
+    }
+
+    /** Shown while the host reloads the run list in response to RefreshRequested. */
+    public IsLoading = false;
+
+    /**
+     * Bubble a refresh request up to the host, which owns the run-history data
+     * (`MJ: Content Process Runs`). The host reloads and re-binds `[Runs]`, whose
+     * setter rebuilds the rows; the host also clears IsLoading via [Loading].
+     */
+    @Output() RefreshRequested = new EventEmitter<void>();
 
     public RunHistoryRows: RunHistoryRow[] = [];
     public FilteredRunRows: RunHistoryRow[] = [];
@@ -48,6 +89,16 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
 
     // Template-facing formatters
     public readonly FormatTokenCount = formatTokenCount;
+
+    /**
+     * Ask the host to reload the run history. Data is host-owned, so we surface a
+     * loading state and emit; the new `[Runs]` binding clears IsLoading.
+     */
+    public Refresh(): void {
+        this.IsLoading = true;
+        this.cdr.detectChanges();
+        this.RefreshRequested.emit();
+    }
 
     private buildRunHistoryRows(): void {
         this.RunHistoryRows = this._runs.map(run => {

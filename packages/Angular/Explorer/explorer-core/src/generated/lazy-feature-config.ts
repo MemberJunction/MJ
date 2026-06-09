@@ -19,7 +19,7 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (15 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (16 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
@@ -94,6 +94,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
   'BaseResourceComponent::Tags': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
+  'BaseResourceComponent::VisualizationResource': loadAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadCommunicationDashboardsModule,
@@ -203,4 +204,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 100;
+export const LAZY_FEATURE_CONFIG_COUNT = 101;
