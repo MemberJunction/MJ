@@ -5794,8 +5794,8 @@
             "ID": "DA60EB91-B2BC-4F24-BFEE-4DEAB8959ADF"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.439Z",
-            "checksum": "5ef4d7e7063e988fe5dfc77b350ffec3687633a9b8f3b1f458e4a6505387fc88"
+            "lastModified": "2026-06-09T06:32:19.380Z",
+            "checksum": "07ae8122765a06f9d2b7876abc97ffb3ed7409be0bfc0fb4a87831094464b735"
           }
         },
         {
@@ -5813,8 +5813,8 @@
             "ID": "37C8550B-699F-48C9-A0CA-E599C165A637"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.590Z",
-            "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
+            "lastModified": "2026-06-09T06:32:19.400Z",
+            "checksum": "5d8f0a008ae79c0a550cad7a15929b016a99cacae766027bcd594d2af5456dd9"
           }
         },
         {
@@ -9572,8 +9572,8 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.411Z",
-      "checksum": "2c2e87341a7c6f2885fbe3c9da6cb4c940b7fe4fd3b772da0308694d93885561"
+      "lastModified": "2026-06-09T06:32:19.016Z",
+      "checksum": "b7babef47ddeb2f1dcdde5a7d8e6bf3e5e8db3312f652b532dea97e478d2b51d"
     }
   },
   {
@@ -15793,6 +15793,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A0EFD351-3588-4754-9EDF-7610844E0CA9"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.893Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
           }
         },
         {
@@ -15809,6 +15816,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "86EE6496-C59A-4F8A-84D8-90506A341757"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.913Z",
+            "checksum": "92be4cff8f8db950d3c085f542c197c1fdd358aadff0004e9dd2c906c2091fe2"
           }
         },
         {
@@ -15825,6 +15839,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "522A32C5-FA8E-4772-83D4-3B2235235283"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.933Z",
+            "checksum": "e7067d63cb2f992a24fc76f1dadf7f67490feb3964f05f98173af9e83ac105e4"
           }
         }
       ],
@@ -15837,11 +15858,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.40,
+            "InputPricePerUnit": 0.4,
             "OutputPricePerUnit": 1.16,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Qwen 3.7 Plus pricing on Alibaba Cloud Model Studio (DashScope/Bailian) as of GA on 2026-06-01: $0.40/1M input, $1.16/1M output. Positioned at roughly 1/6 the per-token cost of Qwen 3.7 Max. Sources: https://www.marktechpost.com/2026/06/02/alibabas-qwen-team-launches-qwen3-7-plus-adding-vision-deep-reasoning-tool-invocation-and-autonomous-iteration-on-the-bailian-platform/ ; https://www.digitalapplied.com/blog/qwen-3-7-plus-alibaba-multimodal-agent-model-2026-release"
+          },
+          "primaryKey": {
+            "ID": "2E86FA53-B3E1-4F75-AD7B-A8263A09B81D"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.975Z",
+            "checksum": "1cdeefa86d37e72bdecfae5375da4badb3bf2ed2989873fea5c5723c4390000c"
           }
         },
         {
@@ -15852,14 +15880,28 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.40,
+            "InputPricePerUnit": 0.4,
             "OutputPricePerUnit": 1.16,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Qwen 3.7 Plus on OpenRouter (passthrough pricing). Listed on 2026-06-03 per OpenRouter June 4 changelog. Source: https://openrouter.ai/docs/changelog"
+          },
+          "primaryKey": {
+            "ID": "068C6E17-6D4B-49A6-B85F-1ECE1BE4E1CD"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.994Z",
+            "checksum": "d7a4d61facaa7ce238463a3d332b4764d54d962a7b465044db74e2ff1814fcb5"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "6B5F5FCA-26CF-4DC4-90F9-6A2ABAA75028"
+    },
+    "sync": {
+      "lastModified": "2026-06-09T06:32:19.741Z",
+      "checksum": "24f9eea5cb2f4a7d1550fa4e2738049cbed75ca13c63ece27526e999bd08ed75"
     }
   }
 ]
