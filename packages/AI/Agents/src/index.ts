@@ -48,6 +48,7 @@ export * from './realtime/realtime-session-runner';
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a
 // duplicate-export collision.
 export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall } from './realtime/realtime-tool-broker';
+export * from './realtime/realtime-client-session-service';
 
 // Re-export from ai-reranker for backward compatibility
 export {

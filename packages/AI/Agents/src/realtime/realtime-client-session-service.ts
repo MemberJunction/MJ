@@ -1,0 +1,698 @@
+/**
+ * @fileoverview Server-agnostic preparer + tool relay for a CLIENT-DIRECT realtime session
+ * (the Voice Co-Agent dual-topology design).
+ *
+ * In the client-direct topology the browser opens its OWN provider socket (e.g. WebRTC) using a
+ * server-minted ephemeral token, but the **server** still owns the system prompt and tool set and
+ * **executes** every tool call the browser relays back. This service is the server-side half of
+ * that contract. It does two things:
+ *
+ * 1. {@link RealtimeClientSessionService.PrepareClientSession} — resolves the Realtime model,
+ *    assembles the companion system prompt (co-agent prompt + target identity + history + memory),
+ *    builds the stable, target-independent tool set (always including `invoke-target-agent`), and
+ *    asks the model to mint a {@link ClientRealtimeSessionConfig} (ephemeral token + provider
+ *    session config) the browser applies verbatim.
+ * 2. {@link RealtimeClientSessionService.ExecuteRelayedTool} — executes a single tool call the
+ *    browser relayed, routing it through the shared {@link RealtimeToolBroker} so the result is
+ *    byte-for-byte identical to the server-bridged path. `invoke-target-agent` delegates to the
+ *    target agent via {@link AgentRunner.RunAgent}; every other tool returns a structured
+ *    "not available" result for now (action wiring is a later phase).
+ *
+ * **Why this duplicates BaseAgent.** The private helpers in `BaseAgent.executeRealtimeSession`
+ * (model resolution, companion-prompt assembly, target-agent resolution, delegation) are the
+ * server-bridged equivalents of the logic here, but they are `private` to `BaseAgent` and bound to
+ * an in-flight `AIAgentRun`/`StartSession` lifecycle. This service mirrors that logic for the
+ * client-direct topology, which has no server-side session loop. **A future refactor should extract
+ * a shared `RealtimeSessionPreparer`** that both `BaseAgent` and this service consume, eliminating
+ * the duplication. Until then, keep the two in sync intentionally.
+ *
+ * @module @memberjunction/ai-agents
+ * @author MemberJunction.com
+ */
+
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import {
+    BaseRealtimeModel,
+    ChatMessage,
+    ClientRealtimeSessionConfig,
+    GetAIAPIKey,
+    JSONObject,
+    RealtimeSessionParams,
+    RealtimeToolCall,
+    RealtimeToolDefinition
+} from '@memberjunction/ai';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
+
+import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
+import { AgentRunner } from '../AgentRunner';
+import {
+    RealtimeToolBroker,
+    RealtimeToolBrokerDeps,
+    INVOKE_TARGET_AGENT_TOOL_NAME,
+    DelegateToTargetRequest,
+    DelegatedResult,
+    ToolExecutionResult
+} from './realtime-tool-broker';
+
+/**
+ * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
+ *
+ * The co-agent may be supplied either as a fully-loaded entity (`CoAgent`) or by id (`CoAgentID`),
+ * which is resolved from {@link AIEngine}'s cached agents. The target agent is always supplied by
+ * id — it is a runtime choice made when the voice session starts.
+ */
+export interface PrepareClientSessionInput {
+    /** The Voice Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
+    CoAgent?: MJAIAgentEntityExtended;
+    /** The Voice Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
+    CoAgentID?: string;
+    /** The top-level target agent the co-agent voices on behalf of (a runtime parameter). */
+    TargetAgentID: string;
+    /** The shared session id grouping this voice session's runs. */
+    AgentSessionID: string;
+    /** Prior conversation history to seed the model's context. Optional. */
+    ConversationMessages?: ChatMessage[];
+    /** Optional user-scope id for memory/context retrieval (falls back to the context user). */
+    UserID?: string;
+    /** Optional company-scope id for memory/context retrieval. */
+    CompanyID?: string;
+    /** Optional provider-specific session config bag (voice, language, turn detection, etc.). */
+    Config?: JSONObject;
+    /** Optional extra, target-independent tools to expose in addition to `invoke-target-agent`. */
+    ExtraTools?: RealtimeToolDefinition[];
+}
+
+/**
+ * Result of {@link RealtimeClientSessionService.PrepareClientSession}.
+ *
+ * On success, {@link RealtimeClientSessionPrepResult.ClientConfig} is the server-minted config the
+ * browser applies, and {@link RealtimeClientSessionPrepResult.SessionParams} is the params the
+ * server used to mint it (handy for the resolver to echo/persist). On failure, `Success` is `false`
+ * and `ErrorMessage` explains why — this method never throws for an unresolvable model/key.
+ */
+export interface RealtimeClientSessionPrepResult {
+    /** Whether the client session config was minted successfully. */
+    Success: boolean;
+    /** The minted client-direct session config (token + provider session config). Present on success. */
+    ClientConfig?: ClientRealtimeSessionConfig;
+    /** The session params the server built (system prompt, model, tools). Present on success. */
+    SessionParams?: RealtimeSessionParams;
+    /** A human-readable failure reason. Present on failure. */
+    ErrorMessage?: string;
+}
+
+/**
+ * Input for {@link RealtimeClientSessionService.ExecuteRelayedTool}.
+ *
+ * Carries the single tool call the browser relayed plus the linkage needed to run a delegated
+ * target-agent run under the same session.
+ */
+export interface ExecuteRelayedToolInput {
+    /** The shared session id grouping this voice session's runs. */
+    AgentSessionID: string;
+    /** The id of the (co-agent) run that owns this session, used as the delegated run's parent. Optional. */
+    ParentRunID?: string;
+    /** The top-level target agent id for `invoke-target-agent` delegation. */
+    TargetAgentID: string;
+    /** The tool call the browser relayed from the provider. */
+    Call: RealtimeToolCall;
+    /**
+     * Optional abort signal so a barge-in on the browser can cancel an in-flight delegated run.
+     * Threaded into the delegated agent run's `cancellationToken`.
+     */
+    AbortSignal?: AbortSignal;
+}
+
+/**
+ * The resolved Realtime model plus its identifiers, returned by the model-resolution seam.
+ */
+export interface RealtimeModelResolution {
+    /** The instantiated realtime driver. */
+    Model: BaseRealtimeModel;
+    /** The `MJ: AI Models` row id. */
+    ModelID: string;
+    /** The chosen vendor id. */
+    VendorID: string;
+    /** The vendor API name passed to the provider as the model id. */
+    APIName: string;
+}
+
+/**
+ * Server-agnostic service that prepares a client-direct realtime session and executes the tool
+ * calls the browser relays back. Constructed per-request (a normal injectable service — NOT a
+ * singleton) so the {@link UserInfo} and {@link IMetadataProvider} are always request-scoped.
+ *
+ * Every public method takes the `contextUser` and `provider` explicitly — this service never
+ * reaches for the global default provider, so it is safe in multi-provider/multi-tenant servers.
+ */
+export class RealtimeClientSessionService {
+    /**
+     * Prepares a client-direct realtime session: resolves the model, assembles the companion
+     * system prompt + stable tool set, and mints the {@link ClientRealtimeSessionConfig}.
+     *
+     * Returns a failure result (never throws) when no Realtime model/key resolves or the provider
+     * cannot mint a client-direct session.
+     *
+     * @param input The co-agent/target/session inputs.
+     * @param contextUser The calling user (threaded to metadata + memory retrieval).
+     * @param provider The request-scoped metadata provider.
+     * @returns The prep result (Success + ClientConfig/SessionParams, or Success: false + ErrorMessage).
+     */
+    public async PrepareClientSession(
+        input: PrepareClientSessionInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<RealtimeClientSessionPrepResult> {
+        await this.configureEngine(contextUser, provider);
+
+        const coAgent = this.resolveCoAgent(input);
+        if (!coAgent) {
+            return { Success: false, ErrorMessage: 'The Voice Co-Agent could not be resolved from the supplied id or entity.' };
+        }
+
+        const resolution = await this.resolveRealtimeModel(coAgent);
+        if (!resolution) {
+            return { Success: false, ErrorMessage: this.noModelMessage() };
+        }
+
+        if (!resolution.Model.SupportsClientDirect) {
+            return {
+                Success: false,
+                ErrorMessage: `The resolved realtime model '${resolution.APIName}' does not support client-direct sessions.`
+            };
+        }
+
+        const sessionParams = await this.buildSessionParams(input, coAgent, resolution.APIName, contextUser, provider);
+
+        try {
+            const clientConfig = await resolution.Model.CreateClientSession(sessionParams);
+            return { Success: true, ClientConfig: clientConfig, SessionParams: sessionParams };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { Success: false, ErrorMessage: `Failed to mint client realtime session: ${message}` };
+        }
+    }
+
+    /**
+     * Executes a single tool call relayed from the browser and returns its serialized result.
+     *
+     * Builds a {@link RealtimeToolBroker} whose `DelegateToTarget` runs the target agent (threading
+     * the abort signal, parent run, and session id) and whose `ExecuteTool` returns a structured
+     * "not available" result for non-target tools (action wiring is a later phase). The broker
+     * routes the call and always resolves with structured JSON — failures become `tool_response`
+     * errors the model can narrate rather than thrown exceptions.
+     *
+     * @param input The relayed tool call plus delegation linkage.
+     * @param contextUser The calling user (threaded into the delegated agent run).
+     * @param provider The request-scoped metadata provider (threaded into the delegated agent run).
+     * @returns `{ ResultJson, Success }` — the serialized tool result for the browser to relay back.
+     */
+    public async ExecuteRelayedTool(
+        input: ExecuteRelayedToolInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<{ ResultJson: string; Success: boolean }> {
+        const broker = this.buildToolBroker(input, contextUser, provider);
+        const result = await broker.ExecuteToolCall(input.Call);
+        return { ResultJson: result.ResultJson, Success: result.Success };
+    }
+
+    /**
+     * Ensures {@link AIEngine} metadata is loaded before resolution. **Overridable seam** so tests
+     * can skip the DB-backed config load.
+     *
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     */
+    protected async configureEngine(contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+        await AIEngine.Instance.Config(false, contextUser, provider);
+    }
+
+    /**
+     * Resolves the co-agent from either the supplied entity or its id (from cached metadata).
+     *
+     * @param input The prepare-session input.
+     * @returns The co-agent entity, or `null` when neither form resolves.
+     */
+    protected resolveCoAgent(input: PrepareClientSessionInput): MJAIAgentEntityExtended | null {
+        if (input.CoAgent) {
+            return input.CoAgent;
+        }
+        if (input.CoAgentID) {
+            return (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, input.CoAgentID!)) ?? null;
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the Realtime model + vendor driver + API key, mirroring `BaseAgent`'s server-bridged
+     * resolution: highest-power active model of AIModelType `Realtime`; highest-priority active
+     * vendor whose `DriverClass` has a resolvable API key; instantiated via the `ClassFactory`.
+     *
+     * **Overridable seam.** Test subclasses override this to return a mock model so the service can
+     * be exercised without provider SDKs or DB metadata. Returns `null` (never throws) when any
+     * step can't be satisfied.
+     *
+     * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
+     * @returns The resolved model + identifiers, or `null`.
+     */
+    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended): Promise<RealtimeModelResolution | null> {
+        const model = this.selectRealtimeModelEntity(coAgent);
+        if (!model) {
+            return null;
+        }
+
+        const vendor = this.selectRealtimeVendor(model.ID);
+        if (!vendor) {
+            return null;
+        }
+
+        const apiKey = GetAIAPIKey(vendor.DriverClass);
+        if (!apiKey) {
+            return null;
+        }
+
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+            BaseRealtimeModel,
+            vendor.DriverClass,
+            apiKey
+        );
+        if (!instance) {
+            return null;
+        }
+
+        return { Model: instance, ModelID: model.ID, VendorID: vendor.VendorID, APIName: vendor.APIName };
+    }
+
+    /**
+     * Selects the highest-power active model of AIModelType `Realtime`. Mirrors
+     * `BaseAgent.selectRealtimeModelEntity`.
+     *
+     * @param coAgent The co-agent (reserved for future per-agent model preference).
+     * @returns The chosen model entity, or `null`.
+     */
+    private selectRealtimeModelEntity(coAgent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
+        const isRealtime = (m: MJAIModelEntityExtended): boolean =>
+            typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
+
+        const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && isRealtime(m));
+        if (realtimeModels.length === 0) {
+            return null;
+        }
+
+        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+    }
+
+    /**
+     * Selects the highest-priority active vendor for a model whose `DriverClass` has a resolvable
+     * API key. Mirrors `BaseAgent.selectRealtimeVendor`.
+     *
+     * @param modelID The chosen model's id.
+     * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
+     */
+    private selectRealtimeVendor(modelID: string): { VendorID: string; DriverClass: string; APIName: string } | null {
+        const vendors = AIEngine.Instance.ModelVendors
+            .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
+            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+
+        for (const v of vendors) {
+            if (GetAIAPIKey(v.DriverClass!)) {
+                return { VendorID: v.VendorID ?? '', DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Builds the {@link RealtimeSessionParams} for the client-direct session: the companion system
+     * prompt plus the stable, target-independent tool set.
+     *
+     * @param input The prepare-session input.
+     * @param coAgent The resolved co-agent.
+     * @param modelApiName The vendor API name of the resolved realtime model.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The assembled session params.
+     */
+    protected async buildSessionParams(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        modelApiName: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<RealtimeSessionParams> {
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+
+        return {
+            Model: modelApiName,
+            SystemPrompt: systemPrompt,
+            Tools: this.buildStableToolSet(input.ExtraTools),
+            InitialContext: memoryContext || undefined,
+            Config: input.Config
+        };
+    }
+
+    /**
+     * Assembles the companion system prompt: the framing ("you are the voice for the target"), the
+     * co-agent's own system prompt text, the TARGET agent's identity/capabilities (Name +
+     * Description), the conversation history, and the same memory/context a loop agent assembles.
+     *
+     * @param input The prepare-session input.
+     * @param coAgent The resolved co-agent.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The concatenated system prompt (never empty — the framing is always present).
+     */
+    protected async buildCompanionSystemPrompt(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<string> {
+        const target = this.resolveTargetAgent(input.TargetAgentID);
+        const targetName = target?.Name ?? 'the configured target agent';
+
+        const framing =
+            `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
+            `conversation with the user. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
+            `tool and narrate progress while it runs — do not attempt to do the work yourself.`;
+
+        const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
+        const targetIdentity = this.formatTargetIdentity(target);
+        const history = this.formatConversationHistory(input.ConversationMessages);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+
+        return [framing, coAgentPrompt, targetIdentity, history, memoryContext]
+            .filter(part => part && part.trim().length > 0)
+            .join('\n\n');
+    }
+
+    /**
+     * Resolves the target agent entity from cached metadata.
+     *
+     * @param targetAgentID The target agent id.
+     * @returns The target agent entity, or `null` when not found.
+     */
+    protected resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
+        if (!targetAgentID) {
+            return null;
+        }
+        return (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, targetAgentID)) ?? null;
+    }
+
+    /**
+     * Reads the co-agent's own system prompt text from its highest-priority active agent prompt,
+     * mirroring `BaseAgent.loadAgentConfiguration`'s child-prompt resolution.
+     *
+     * @param coAgent The resolved co-agent.
+     * @returns The co-agent's system prompt template text, or empty string when none is configured.
+     */
+    protected getCoAgentSystemPromptText(coAgent: MJAIAgentEntityExtended): string {
+        const engine = AIEngine.Instance;
+        const agentPrompts = engine.AgentPrompts ?? [];
+        const agentPrompt = agentPrompts
+            .filter(ap => UUIDsEqual(ap.AgentID, coAgent.ID) && ap.Status === 'Active')
+            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        if (!agentPrompt) {
+            return '';
+        }
+        const prompt = (engine.Prompts ?? []).find(p => UUIDsEqual(p.ID, agentPrompt.PromptID));
+        return prompt?.TemplateText ?? '';
+    }
+
+    /**
+     * Formats the target agent's identity + capabilities block for the system prompt.
+     *
+     * @param target The target agent, or `null`.
+     * @returns The formatted block, or empty string when no target resolved.
+     */
+    private formatTargetIdentity(target: MJAIAgentEntityExtended | null): string {
+        if (!target) {
+            return '';
+        }
+        const description = target.Description?.trim() ? target.Description.trim() : 'No description provided.';
+        return `Target agent you are voicing for:\nName: ${target.Name}\nCapabilities: ${description}`;
+    }
+
+    /**
+     * Formats prior conversation history as a plain-text block for the system prompt.
+     *
+     * @param messages The conversation messages, or undefined.
+     * @returns The formatted history block, or empty string when there is none.
+     */
+    private formatConversationHistory(messages?: ChatMessage[]): string {
+        if (!messages || messages.length === 0) {
+            return '';
+        }
+        const lines = messages
+            .map(m => {
+                const text = typeof m.content === 'string' ? m.content : '';
+                return text.trim().length > 0 ? `${m.role}: ${text}` : '';
+            })
+            .filter(line => line.length > 0);
+        return lines.length > 0 ? `Conversation so far:\n${lines.join('\n')}` : '';
+    }
+
+    /**
+     * Assembles the same memory/context block a loop agent injects, reusing
+     * {@link AgentMemoryContextBuilder} so there is no duplicated retrieval logic. The builder
+     * unshifts a system message onto a throwaway array, which we pull back out as plain text.
+     *
+     * @param input The prepare-session input.
+     * @param coAgent The resolved co-agent.
+     * @param contextUser The calling user.
+     * @returns The concatenated context text (empty string when nothing was injected).
+     */
+    protected async assembleMemoryContext(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        contextUser: UserInfo
+    ): Promise<string> {
+        const lastUserMessage = (input.ConversationMessages ?? []).filter(m => m.role === 'user').pop();
+        const inputText = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '';
+        const scratch: ChatMessage[] = [];
+
+        const builder = new AgentMemoryContextBuilder();
+        await builder.InjectContextMemory(
+            inputText,
+            coAgent,
+            input.UserID || contextUser?.ID,
+            input.CompanyID,
+            contextUser,
+            scratch,
+            undefined,
+            undefined,
+            undefined,
+            null
+        );
+
+        return scratch
+            .map(m => (typeof m.content === 'string' ? m.content : ''))
+            .filter(c => c.length > 0)
+            .join('\n\n');
+    }
+
+    /**
+     * Builds the stable, target-independent tool set every voice session exposes: the single
+     * `invoke-target-agent` tool plus any caller-supplied extra tools. The target is a runtime
+     * argument *inside* the call, never a per-target tool — this keeps the provider contract
+     * identical across targets.
+     *
+     * @param extraTools Optional additional target-independent tools.
+     * @returns The tools to register at session start.
+     */
+    protected buildStableToolSet(extraTools?: RealtimeToolDefinition[]): RealtimeToolDefinition[] {
+        const invokeTarget: RealtimeToolDefinition = {
+            Name: INVOKE_TARGET_AGENT_TOOL_NAME,
+            Description:
+                'Hand the user\'s request to the target agent to perform the actual work. Call this whenever ' +
+                'real work (data lookup, analysis, actions) is required, then narrate progress while it runs.',
+            ParametersSchema: {
+                type: 'object',
+                properties: {
+                    request: {
+                        type: 'string',
+                        description: 'The natural-language request to hand to the target agent.'
+                    }
+                },
+                required: ['request']
+            }
+        };
+
+        return extraTools && extraTools.length > 0 ? [invokeTarget, ...extraTools] : [invokeTarget];
+    }
+
+    /**
+     * Builds the {@link RealtimeToolBroker} for a relayed tool call, wiring `DelegateToTarget` to a
+     * target-agent run and `ExecuteTool` to a structured "not available" placeholder.
+     *
+     * @param input The relayed tool input.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The constructed broker.
+     */
+    protected buildToolBroker(
+        input: ExecuteRelayedToolInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): RealtimeToolBroker {
+        const deps: RealtimeToolBrokerDeps = {
+            DelegateToTarget: (request) => this.delegateToTarget(input, request, contextUser, provider),
+            ExecuteTool: (call) => this.executeNonTargetTool(call)
+        };
+        return new RealtimeToolBroker(deps);
+    }
+
+    /**
+     * Delegates an `invoke-target-agent` call to the target agent via {@link AgentRunner.RunAgent}.
+     *
+     * Threads the broker-owned abort signal (combined with any caller signal) into the child run's
+     * `cancellationToken`, links the child run to the co-agent run via `parentRunID`, and propagates
+     * `agentSessionID` so both runs group under the same session. Mirrors
+     * `BaseAgent.delegateRealtimeToTarget`.
+     *
+     * @param input The relayed tool input (target id + linkage).
+     * @param request The broker's delegation request (call id + arguments + abort signal).
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The delegated result for the model's tool_response.
+     */
+    protected async delegateToTarget(
+        input: ExecuteRelayedToolInput,
+        request: DelegateToTargetRequest,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<DelegatedResult> {
+        const target = this.resolveTargetAgent(input.TargetAgentID);
+        if (!target) {
+            return {
+                CallID: request.CallID,
+                Success: false,
+                Output: 'No target agent is configured for this voice session, so the request could not be performed.'
+            };
+        }
+
+        try {
+            const requestText = this.parseDelegateRequestText(request.Arguments);
+            const parentRun = await this.loadParentRun(input.ParentRunID, contextUser, provider);
+            const runner = new AgentRunner(provider);
+            const result = await runner.RunAgent({
+                agent: target,
+                conversationMessages: [{ role: 'user', content: requestText }],
+                contextUser,
+                provider,
+                cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
+                parentRun: parentRun ?? undefined,
+                agentSessionID: input.AgentSessionID
+            });
+
+            return {
+                CallID: request.CallID,
+                Success: result.success,
+                Output: result.success
+                    ? (result.agentRun?.Message || 'The target agent completed the request.')
+                    : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.')
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { CallID: request.CallID, Success: false, Output: `Delegation failed: ${message}` };
+        }
+    }
+
+    /**
+     * Loads the co-agent run entity behind {@link ExecuteRelayedToolInput.ParentRunID} so the
+     * delegated run can link to it via `parentRun` (→ `ParentRunID`). Returns `null` when no id was
+     * supplied or the run cannot be loaded (delegation proceeds without parent linkage rather than
+     * failing the whole call).
+     *
+     * @param parentRunID The co-agent run id, or undefined.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The loaded parent run entity, or `null`.
+     */
+    protected async loadParentRun(
+        parentRunID: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<MJAIAgentRunEntityExtended | null> {
+        if (!parentRunID) {
+            return null;
+        }
+        const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        return (await run.Load(parentRunID)) ? run : null;
+    }
+
+    /**
+     * Routes a non-target tool call. For now this returns a structured "not available" result —
+     * the richer client/UI/action routing is wired in a later phase. Documented minimal seam.
+     *
+     * @param call The non-target tool call.
+     * @returns A failed {@link ToolExecutionResult} the model can narrate.
+     */
+    protected async executeNonTargetTool(call: RealtimeToolCall): Promise<ToolExecutionResult> {
+        return {
+            CallID: call.CallID,
+            Success: false,
+            Output: `Tool '${call.ToolName}' is not available in this voice session.`
+        };
+    }
+
+    /**
+     * Parses the natural-language request text out of an `invoke-target-agent` call's arguments.
+     * Falls back to the raw argument string when it is not the expected `{ request: string }` JSON.
+     *
+     * @param argumentsJson The raw arguments string emitted by the model.
+     * @returns The request text to hand to the target agent.
+     */
+    private parseDelegateRequestText(argumentsJson: string): string {
+        try {
+            const parsed = JSON.parse(argumentsJson) as { request?: unknown };
+            if (typeof parsed.request === 'string') {
+                return parsed.request;
+            }
+        } catch {
+            /* not JSON — fall through to raw */
+        }
+        return argumentsJson;
+    }
+
+    /**
+     * Combines the broker's per-call abort signal with an optional caller-supplied signal so either
+     * source can cancel the delegated run. Returns the broker signal alone when no caller signal is
+     * present (the common case), avoiding an unnecessary controller.
+     *
+     * @param brokerSignal The broker-owned per-call abort signal (always present).
+     * @param callerSignal An optional caller signal (e.g. a request-scoped barge-in).
+     * @returns A single abort signal that fires when either source aborts.
+     */
+    private combineSignals(brokerSignal: AbortSignal, callerSignal?: AbortSignal): AbortSignal {
+        if (!callerSignal) {
+            return brokerSignal;
+        }
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        if (brokerSignal.aborted || callerSignal.aborted) {
+            controller.abort();
+        } else {
+            brokerSignal.addEventListener('abort', abort, { once: true });
+            callerSignal.addEventListener('abort', abort, { once: true });
+        }
+        return controller.signal;
+    }
+
+    /**
+     * The clear, actionable message returned when no usable Realtime model can be resolved.
+     *
+     * @returns The failure message.
+     */
+    private noModelMessage(): string {
+        return (
+            'No usable Realtime model could be resolved for the Voice Co-Agent. Configure a model of ' +
+            "AIModelType 'Realtime' with an active vendor DriverClass and a valid API key " +
+            '(e.g. AI_VENDOR_API_KEY__<driver>).'
+        );
+    }
+}
