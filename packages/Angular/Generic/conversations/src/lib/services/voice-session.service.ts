@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
@@ -24,6 +24,37 @@ export type VoiceConnectionState =
 export interface VoiceCaption {
   Role: 'User' | 'Assistant';
   Text: string;
+}
+
+/**
+ * A delegated-run progress update surfaced to the UI, emitted on {@link VoiceSessionService.DelegationProgress$}.
+ * These originate server-side during an `invoke-target-agent` delegation (e.g. while Sage works) and let a
+ * future overlay render a "working" card while the realtime model narrates the same progress aloud.
+ */
+export interface VoiceDelegationProgress {
+  /** The `invoke-target-agent` call this progress belongs to. */
+  CallID: string;
+  /** The delegation phase: `prompt_execution` | `action_execution` | `subagent_execution` | `decision_processing`. */
+  Step: string;
+  /** Human-readable progress message. */
+  Message: string;
+  /** Optional completion percentage (0–100) when the server can estimate it. */
+  Percentage?: number;
+}
+
+/**
+ * Raw shape of the JSON `message` the server publishes on the push-status topic during a delegated run.
+ * We filter on `resolver` + `type` before correlating by `agentSessionID`; normal agent runs publish
+ * other shapes on the same topic and are ignored.
+ */
+interface RealtimeDelegationProgressPayload {
+  resolver: string;
+  type: string;
+  agentSessionID: string;
+  callID: string;
+  step: string;
+  message: string;
+  percentage?: number;
 }
 
 /**
@@ -131,6 +162,7 @@ export class VoiceSessionService {
   private _connectionState$ = new BehaviorSubject<VoiceConnectionState>('closed');
   private _captions$ = new BehaviorSubject<VoiceCaption[]>([]);
   private _active$ = new BehaviorSubject<boolean>(false);
+  private _delegationProgress$ = new Subject<VoiceDelegationProgress>();
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -138,6 +170,11 @@ export class VoiceSessionService {
   public readonly Captions$: Observable<VoiceCaption[]> = this._captions$.asObservable();
   /** True while a session is open (mic button active, overlay shown). */
   public readonly Active$: Observable<boolean> = this._active$.asObservable();
+  /**
+   * Progress updates from a delegated agent run (e.g. Sage) while the realtime model waits on it.
+   * The future overlay subscribes to render a "working" card; the model also narrates these aloud.
+   */
+  public readonly DelegationProgress$: Observable<VoiceDelegationProgress> = this._delegationProgress$.asObservable();
 
   // ── WebRTC / session internals ─────────────────────────────────────────────
   private peerConnection: RTCPeerConnection | null = null;
@@ -149,6 +186,14 @@ export class VoiceSessionService {
 
   /** Accumulates the in-flight assistant transcript across delta frames. */
   private pendingAssistantText = '';
+
+  // ── Delegated-run progress streaming ───────────────────────────────────────
+  /** Minimum gap between spoken progress narrations, to avoid chatter / interrupting. */
+  private static readonly DelegationNarrationThrottleMs = 4000;
+  /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
+  private delegationProgressSub: Subscription | null = null;
+  /** Timestamp (ms) of the last narration `response.create` we triggered; 0 = never. */
+  private lastDelegationNarrationAt = 0;
 
   private _provider: IMetadataProvider | null = null;
 
@@ -194,6 +239,7 @@ export class VoiceSessionService {
       this.sessionConfigJson = session.SessionConfigJson;
 
       await this.openWebRtcConnection(session);
+      this.subscribeDelegationProgress();
       // State advances to 'listening' once the data channel opens (see wireDataChannel).
     } catch (error) {
       console.error('[VoiceSession] Failed to start session:', error);
@@ -536,6 +582,121 @@ export class VoiceSessionService {
     }
   }
 
+  // ── Delegated-run progress streaming ───────────────────────────────────────
+
+  /**
+   * Subscribes to the server's push-status topic (scoped by the GraphQL transport
+   * sessionId) to receive delegated-run progress for the active voice session.
+   * Each matching event is surfaced on {@link DelegationProgress$} and narrated.
+   */
+  private subscribeDelegationProgress(): void {
+    if (this.delegationProgressSub) {
+      return; // already subscribed for this session
+    }
+    const transportSessionId = this.gql().sessionId;
+    this.lastDelegationNarrationAt = 0;
+    this.delegationProgressSub = this.gql()
+      .PushStatusUpdates(transportSessionId)
+      .subscribe({
+        next: (raw: string) => this.onDelegationStatusMessage(raw),
+        error: (err: unknown) => console.error('[VoiceSession] Delegation progress stream error:', err)
+      });
+  }
+
+  /** Parses one push-status message and, if it's our delegation progress, dispatches it. */
+  private onDelegationStatusMessage(raw: string): void {
+    const progress = this.parseProgress(raw);
+    if (progress) {
+      this.dispatchProgress(progress);
+    }
+  }
+
+  /**
+   * Parses a push-status message and returns it only when it's a delegation
+   * progress event for the active voice session — otherwise `null` (ignored).
+   */
+  private parseProgress(raw: string): VoiceDelegationProgress | null {
+    let payload: RealtimeDelegationProgressPayload;
+    try {
+      payload = JSON.parse(raw) as RealtimeDelegationProgressPayload;
+    } catch {
+      return null; // non-JSON or unrelated frame
+    }
+    const matches =
+      payload?.resolver === 'RealtimeClientSessionResolver' &&
+      payload?.type === 'RealtimeDelegationProgress' &&
+      payload?.agentSessionID === this.agentSessionId;
+    if (!matches) {
+      return null;
+    }
+    return {
+      CallID: payload.callID,
+      Step: payload.step,
+      Message: payload.message,
+      Percentage: payload.percentage
+    };
+  }
+
+  /** Emits the progress to the UI observable and feeds it to the realtime model. */
+  private dispatchProgress(progress: VoiceDelegationProgress): void {
+    this._delegationProgress$.next(progress);
+    this.narrateProgress(progress);
+  }
+
+  /**
+   * Injects the progress into the model's context as a developer item every time,
+   * then (throttled) asks the model to briefly voice a reassuring update so the
+   * background work doesn't sit in silence — without chattering or interrupting.
+   */
+  private narrateProgress(progress: VoiceDelegationProgress): void {
+    const channel = this.dataChannel;
+    if (!channel) {
+      return;
+    }
+    this.injectProgressContext(channel, progress.Message);
+    if (this.shouldNarrateNow()) {
+      this.lastDelegationNarrationAt = Date.now();
+      this.requestProgressNarration(channel);
+    }
+  }
+
+  /** Sends a developer-role context item describing the latest background progress. */
+  private injectProgressContext(channel: RTCDataChannel, message: string): void {
+    this.sendEvent(channel, {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'developer',
+        content: [{ type: 'input_text', text: `[delegated-agent progress] ${message}` }]
+      }
+    });
+  }
+
+  /** Triggers a short, conservative spoken update about the background progress. */
+  private requestProgressNarration(channel: RTCDataChannel): void {
+    this.sendEvent(channel, {
+      type: 'response.create',
+      response: {
+        instructions:
+          'Briefly and naturally reassure the user about this background progress in one short sentence; skip if not helpful.'
+      }
+    });
+  }
+
+  /** True when the narration throttle window has elapsed since the last spoken update. */
+  private shouldNarrateNow(): boolean {
+    return Date.now() - this.lastDelegationNarrationAt >= VoiceSessionService.DelegationNarrationThrottleMs;
+  }
+
+  /** Tears down the delegation progress subscription and resets the narration throttle. */
+  private teardownDelegationProgress(): void {
+    if (this.delegationProgressSub) {
+      this.delegationProgressSub.unsubscribe();
+      this.delegationProgressSub = null;
+    }
+    this.lastDelegationNarrationAt = 0;
+  }
+
   // ── Teardown ───────────────────────────────────────────────────────────────
 
   /**
@@ -543,6 +704,8 @@ export class VoiceSessionService {
    * @param closeServerSession when true, calls `CloseAgentSession` on the server.
    */
   private async teardown(closeServerSession: boolean): Promise<void> {
+    this.teardownDelegationProgress();
+
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
 
