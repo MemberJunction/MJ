@@ -1,5 +1,7 @@
 # @memberjunction/geo-maps
 
+## 5.40.1
+
 ## 5.40.0
 
 ## 5.39.0

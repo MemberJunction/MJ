@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-entity-form-dialog
 
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-base-forms@5.40.1
+  - @memberjunction/ng-container-directives@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/global@5.40.1
+
 ## 5.40.0
 
 ### Patch Changes

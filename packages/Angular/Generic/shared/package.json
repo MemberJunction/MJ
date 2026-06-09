@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared-generic",
-  "version": "5.40.0",
+  "version": "5.40.1",
   "description": "MemberJunction: Generic Angular Shared Package - utility services and reusable elements used in any Angular application.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -32,10 +32,10 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/core": "5.40.0",
-    "@memberjunction/ng-base-types": "5.40.0",
-    "@memberjunction/core-entities": "5.40.0",
-    "@memberjunction/global": "5.40.0",
+    "@memberjunction/core": "5.40.1",
+    "@memberjunction/ng-base-types": "5.40.1",
+    "@memberjunction/core-entities": "5.40.1",
+    "@memberjunction/global": "5.40.1",
     "dompurify": "^3.3.0",
     "tslib": "^2.8.1"
   },

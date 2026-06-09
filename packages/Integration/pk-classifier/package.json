@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-pk-classifier",
   "type": "module",
-  "version": "5.40.0",
+  "version": "5.40.1",
   "description": "Lightweight soft-PK classifier for integration objects. Cascades: universal convention (vendor-level hint) → naming heuristic → statistical uniqueness sampling → one-shot LLM. Built from scratch — does NOT depend on DBAutoDoc. Narrow scope: PK only. Honest: returns no candidate when nothing is confident enough — the framework then leaves the entity PK-less rather than synthesizing.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,9 +14,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "5.40.0",
-    "@memberjunction/core-entities": "5.40.0",
-    "@memberjunction/global": "5.40.0"
+    "@memberjunction/core": "5.40.1",
+    "@memberjunction/core-entities": "5.40.1",
+    "@memberjunction/global": "5.40.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

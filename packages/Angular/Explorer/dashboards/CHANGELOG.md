@@ -1,5 +1,65 @@
 # @memberjunction/ng-dashboards
 
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/tag-engine-base@5.40.1
+  - @memberjunction/api-keys-base@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/ng-base-application@5.40.1
+  - @memberjunction/ng-core-entity-forms@5.40.1
+  - @memberjunction/ng-explorer-settings@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-testing@5.40.1
+  - @memberjunction/ng-action-gallery@5.40.1
+  - @memberjunction/ng-actions@5.40.1
+  - @memberjunction/ng-agent-requests@5.40.1
+  - @memberjunction/ng-agents@5.40.1
+  - @memberjunction/ng-ai-test-harness@5.40.1
+  - @memberjunction/ng-archive-manager@5.40.1
+  - @memberjunction/ng-base-forms@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-clustering@5.40.1
+  - @memberjunction/ng-code-editor@5.40.1
+  - @memberjunction/ng-container-directives@5.40.1
+  - @memberjunction/ng-conversations@5.40.1
+  - @memberjunction/ng-credentials@5.40.1
+  - @memberjunction/ng-dashboard-viewer@5.40.1
+  - @memberjunction/ng-entity-relationship-diagram@5.40.1
+  - @memberjunction/ng-entity-viewer@5.40.1
+  - @memberjunction/ng-filter-builder@5.40.1
+  - @memberjunction/ng-list-management@5.40.1
+  - @memberjunction/ng-map-view@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-query-viewer@5.40.1
+  - @memberjunction/ng-react@5.40.1
+  - @memberjunction/ng-resource-permissions@5.40.1
+  - @memberjunction/ng-scheduling@5.40.1
+  - @memberjunction/ng-search@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/ng-trees@5.40.1
+  - @memberjunction/ng-versions@5.40.1
+  - @memberjunction/credentials@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/integration-engine-base@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/skip-types@5.40.1
+  - @memberjunction/templates-base-types@5.40.1
+  - @memberjunction/testing-engine-base@5.40.1
+  - @memberjunction/ng-export-service@5.40.1
+  - @memberjunction/ng-markdown@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/ng-word-cloud@5.40.1
+  - @memberjunction/lists-base@5.40.1
+  - @memberjunction/export-engine@5.40.1
+  - @memberjunction/global@5.40.1
+
 ## 5.40.0
 
 ### Minor Changes
