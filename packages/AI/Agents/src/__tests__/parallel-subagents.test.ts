@@ -371,7 +371,7 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
 
             // Verify progress callbacks and conversation updates
             expect(params.onProgress).toHaveBeenCalledTimes(2);
-            expect(params.conversationMessages.length).toBe(3); // 2 assistant delegation msgs + 1 user completion msg
+            expect(params.conversationMessages.length).toBe(3); // 2 user-role delegation annotations + 1 user completion msg
             expect(params.conversationMessages[2].content).toContain('Parallel Sub-Agents Completed:');
             expect(params.conversationMessages[2].content).toContain('ChildAgent1');
             expect(params.conversationMessages[2].content).toContain('ChildAgent2');
@@ -563,12 +563,14 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
 
             await agent.testProcessSubAgentStep(params, previousDecision);
 
-            const assistantContents = params.conversationMessages
-                .filter(m => m.role === 'assistant')
+            // Delegation records are now user-role environment annotations ("[You delegated …]"),
+            // not assistant turns — so the model never sees framework prose as an assistant exemplar.
+            const delegationContents = params.conversationMessages
+                .filter(m => m.role === 'user' && typeof m.content === 'string' && m.content.includes('delegated'))
                 .map(m => m.content);
-            expect(assistantContents).toHaveLength(2);
-            expect(assistantContents[0]).toContain('ChildAgent1');
-            expect(assistantContents[1]).toContain('ChildAgent2');
+            expect(delegationContents).toHaveLength(2);
+            expect(delegationContents[0]).toContain('ChildAgent1');
+            expect(delegationContents[1]).toContain('ChildAgent2');
         });
 
         it('should terminate the parent with Failed step when a failing sub-agent requested terminateAfter', async () => {

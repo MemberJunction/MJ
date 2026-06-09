@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "apiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Dropbox Sign API key from Settings > API. Sent as HTTP Basic username for all requests.",
+      "isSecret": true,
+      "order": 0
+    },
+    "restBase": {
+      "type": "string",
+      "title": "REST Base URI",
+      "description": "Dropbox Sign REST base. Defaults to https://api.hellosign.com/v3.",
+      "isSecret": false,
+      "order": 1,
+      "default": "https://api.hellosign.com/v3"
+    },
+    "testMode": {
+      "type": "boolean",
+      "title": "Test Mode",
+      "description": "When true, signature requests are created as non-billable test requests.",
+      "isSecret": false,
+      "order": 2,
+      "default": false
+    },
+    "connectHmacKey": {
+      "type": "string",
+      "title": "Callback HMAC Key",
+      "description": "Optional secret for verifying inbound event callbacks. Dropbox Sign signs callbacks with the API key by default; set this only if you use a distinct callback secret. Inbound webhooks are rejected when verification fails.",
+      "isSecret": true,
+      "order": 3
+    }
+  },
+  "required": ["apiKey"]
+}

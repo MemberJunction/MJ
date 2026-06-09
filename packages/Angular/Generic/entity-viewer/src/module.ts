@@ -6,9 +6,11 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
-import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -25,6 +27,19 @@ import { DuplicateViewDialogComponent } from './lib/duplicate-view-dialog/duplic
 import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
 import { RecycleBinComponent } from './lib/recycle-bin/recycle-bin.component';
 import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.component';
+import { ViewSelectorComponent } from './lib/view-selector/view-selector.component';
+import { ViewWorkspaceComponent } from './lib/view-workspace/view-workspace.component';
+import { ViewTypeSwitcherComponent } from './lib/view-type-switcher/view-type-switcher.component';
+import { CardsViewRendererComponent } from './lib/view-types/renderers/cards-view-renderer.component';
+import { GridViewRendererComponent } from './lib/view-types/renderers/grid-view-renderer.component';
+import { TimelineViewRendererComponent } from './lib/view-types/renderers/timeline-view-renderer.component';
+import { MapViewRendererComponent } from './lib/view-types/renderers/map-view-renderer.component';
+import { LoadViewTypeDescriptors } from './lib/view-types';
+
+// Register the built-in view-type descriptors with the ClassFactory at module load.
+// This force-references each @RegisterClass-decorated descriptor so bundlers don't
+// tree-shake them out, making them discoverable by the ViewTypeEngine via DriverClass.
+LoadViewTypeDescriptors();
 
 /**
  * EntityViewerModule - Provides components for viewing entity data
@@ -63,7 +78,14 @@ import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.comp
     DuplicateViewDialogComponent,
     SharedViewWarningDialogComponent,
     RecycleBinComponent,
-    RecycleBinChipComponent
+    RecycleBinChipComponent,
+    ViewSelectorComponent,
+    ViewWorkspaceComponent,
+    ViewTypeSwitcherComponent,
+    CardsViewRendererComponent,
+    GridViewRendererComponent,
+    TimelineViewRendererComponent,
+    MapViewRendererComponent
   ],
   imports: [
     CommonModule,
@@ -73,9 +95,12 @@ import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.comp
     PaginationComponent,
     TimelineModule,
     ExportServiceModule,
+    ListManagementModule,
     MapViewModule,
     RecordChangesModule,
-    MjSlidePanelComponent
+    MjSlidePanelComponent,
+    MJButtonDirective,
+    FilterBuilderModule
   ],
   exports: [
     EntityCardsComponent,
@@ -91,7 +116,10 @@ import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.comp
     ViewHeaderComponent,
     DuplicateViewDialogComponent,
     SharedViewWarningDialogComponent,
-    RecycleBinComponent
+    RecycleBinComponent,
+    ViewSelectorComponent,
+    ViewWorkspaceComponent,
+    ViewTypeSwitcherComponent
   ]
 })
 export class EntityViewerModule { }

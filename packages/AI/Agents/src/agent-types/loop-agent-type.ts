@@ -91,7 +91,20 @@ export class LoopAgentType extends BaseAgentType {
             // Parse the response using the base class utility
             const response = this.parseJSONResponse<LoopAgentResponse>(promptResult);
             if (!response) {
-                return this.createRetryStep('Failed to parse JSON response');
+                // Strong, specific corrective directive. The common failure mode here is the model
+                // drifting into conversational prose (e.g. "I'm executing the X action with
+                // parameters: ...") instead of emitting the JSON envelope. A terse "couldn't parse"
+                // message gives the model nothing to correct against, so we spell out exactly what
+                // to do and what NOT to do. This is the retry-feedback half of the prose-drift fix;
+                // the other half re-roles framework action records so they stop reading as prose
+                // assistant exemplars.
+                return this.createRetryStep(
+                    'Your previous message was not valid JSON and could not be parsed. Respond with ONLY a ' +
+                    'single raw JSON object conforming to the LoopAgentResponse interface — no prose, no ' +
+                    'markdown code fences, and no natural-language narration such as "I\'m executing the ... ' +
+                    'action". Do not describe your action in text; express it inside the JSON (e.g. via ' +
+                    'nextStep). Output the JSON object and nothing else.'
+                );
             }
             
             // Validate the response structure

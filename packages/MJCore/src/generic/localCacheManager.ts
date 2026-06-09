@@ -1087,9 +1087,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *
      * @param params - The RunView parameters
      * @param connectionPrefix - Prefix identifying the connection (e.g., server URL) to differentiate caches across connections
+     * @param rlsWhereClause - The per-user Row-Level-Security WHERE clause that the provider will
+     *   append to this query for the current user. This MUST participate in the fingerprint:
+     *   an RLS-scoped read produces a different (smaller) result set than an unscoped read of the
+     *   same entity+filter, so they must never share a cache entry. When empty/undefined (the
+     *   common case — users with no RLS filter), the fingerprint is byte-for-byte identical to the
+     *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1138,6 +1144,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // so non-keyset fingerprints stay byte-for-byte identical (no cache invalidation).
         if (params.AfterKey) {
             parts.push(`ak:${params.AfterKey.ToString()}`);
+        }
+
+        // Row-Level-Security segment. The provider appends a per-user RLS WHERE clause to the
+        // executed SQL AFTER the cache key would otherwise be computed, so without this an
+        // RLS-scoped read could collide with (and be served) a cached unscoped result — a data
+        // leak. We hash the clause and append it ONLY when non-empty, so users with no RLS filter
+        // (the vast majority) keep producing the exact same fingerprint as before and continue to
+        // share cache entries unchanged. Distinct RLS clauses (e.g. different {{ScopeResourceID}}
+        // substitutions) hash differently and therefore never collide.
+        const rls = (rlsWhereClause ?? '').trim();
+        if (rls.length > 0) {
+            parts.push(`rls:${this.simpleHash(rls)}`);
         }
 
         // Only include connection if provided

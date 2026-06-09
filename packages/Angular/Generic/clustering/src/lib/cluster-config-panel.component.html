@@ -43,6 +43,51 @@
             </div>
         }
 
+        <!-- Multi-entity source selector -->
+        @if (HasMultiSourceOptions) {
+            <div class="form-group multi-source">
+                <button type="button" class="multi-source-toggle" (click)="ToggleMultiSource()">
+                    <i class="fa-solid" [class.fa-chevron-down]="!ShowMultiSource" [class.fa-chevron-up]="ShowMultiSource"></i>
+                    Multiple sources
+                    @if (IsMultiEntity) {
+                        <span class="multi-source-badge">{{ SelectedDocIDs.length }}</span>
+                    }
+                </button>
+                @if (ShowMultiSource) {
+                    <div class="multi-source-list">
+                        <div class="multi-source-hint">Select 2+ documents to cluster them together. All must use the same embedding model.</div>
+                        @for (doc of AllEntityDocOptions; track doc.ID) {
+                            <label class="multi-source-item">
+                                <input type="checkbox" [checked]="IsDocSelected(doc.ID)" (change)="ToggleDoc(doc.ID)">
+                                <span class="multi-source-name">{{ doc.Name }}</span>
+                                @if (doc.EntityName) { <span class="multi-source-entity">{{ doc.EntityName }}</span> }
+                            </label>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Projection (2D / 3D) + Color-by toggles -->
+        <div class="form-row toggle-row">
+            @if (ShowDimensionToggle) {
+                <div class="form-group">
+                    <label>Projection</label>
+                    <div class="seg-toggle" role="group">
+                        <button type="button" class="seg-btn" [class.active]="(Config.Dimensions ?? 2) === 2" (click)="SetDimensions(2)">2D</button>
+                        <button type="button" class="seg-btn" [class.active]="Config.Dimensions === 3" (click)="SetDimensions(3)">3D</button>
+                    </div>
+                </div>
+            }
+            <div class="form-group">
+                <label>Color by</label>
+                <div class="seg-toggle" role="group">
+                    <button type="button" class="seg-btn" [class.active]="(Config.ColorBy ?? 'cluster') === 'cluster'" (click)="SetColorBy('cluster')">Cluster</button>
+                    <button type="button" class="seg-btn" [class.active]="Config.ColorBy === 'entity'" (click)="SetColorBy('entity')">Entity</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Filter -->
         <div class="form-group">
             <label>Filter (optional)</label>
@@ -125,16 +170,23 @@
             </div>
         </div>
 
-        <!-- Run button -->
-        <button class="run-btn"
-                [disabled]="IsRunning || !Config.EntityName"
-                (click)="OnRun()">
-            @if (IsRunning) {
-                <i class="fa-solid fa-spinner fa-spin"></i> Running...
-            } @else {
-                <i class="fa-solid fa-play"></i> Run Clustering
+        <!-- Run + Save action row -->
+        <div class="action-row">
+            <button class="run-btn"
+                    [disabled]="!CanRun"
+                    (click)="OnRun()">
+                @if (IsRunning) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Running...
+                } @else {
+                    <i class="fa-solid fa-play"></i> Run Clustering
+                }
+            </button>
+            @if (CanSave) {
+                <button class="save-btn" (click)="OnSave()" title="Save this visualization">
+                    <i class="fa-solid fa-bookmark"></i> Save
+                </button>
             }
-        </button>
+        </div>
 
         <!-- Metrics display -->
         @if (Metrics && Metrics.RecordCount > 0) {
@@ -167,11 +219,5 @@
             </div>
         }
 
-        <!-- Save link -->
-        @if (ShowSaveButton) {
-            <div class="save-link" (click)="OnSave()">
-                <i class="fa-solid fa-bookmark"></i> Save this visualization
-            </div>
-        }
     }
 </div>

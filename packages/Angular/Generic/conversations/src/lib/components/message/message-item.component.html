@@ -110,13 +110,13 @@
           </div>
         }
 
-        <!-- Artifact Message Card -->
-        @if (hasArtifact && artifact && artifactVersion) {
-          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
+        <!-- Artifact Message Cards — one per distinct artifact on this message -->
+        @for (a of displayArtifacts; track a.artifact.ID) {
+          <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
             <mj-artifact-message-card
-              [artifactId]="artifact.ID"
-              [artifact]="artifact"
-              [artifactVersion]="artifactVersion"
+              [artifactId]="a.artifact.ID"
+              [artifact]="a.artifact"
+              [artifactVersion]="a.version"
               [currentUser]="currentUser"
               (actionPerformed)="onArtifactActionPerformed($event)">
             </mj-artifact-message-card>

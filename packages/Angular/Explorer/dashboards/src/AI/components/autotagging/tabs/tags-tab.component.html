@@ -1,6 +1,15 @@
 <mj-page-header-interior
     Title="Tag Library"
     [Subtitle]="Subtitle">
+  <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
+      } @else {
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+      }
+    </button>
+  </div>
   <div toolbar>
     <input type="text" class="at-search-input" placeholder="Search tags..."
            [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
@@ -9,6 +18,11 @@
 
 <mj-page-body-interior [Padding]="false" [Flex]="true">
   <div class="at-main-area">
+    @if (IsLoading) {
+      <div class="at-loading-overlay">
+        <mj-loading text="Refreshing tags…"></mj-loading>
+      </div>
+    }
     <div class="at-page-body">
         <div class="at-tag-lib-layout">
             <div class="at-tag-lib-main">

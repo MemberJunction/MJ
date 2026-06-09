@@ -156,6 +156,12 @@ jobs:
           echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Push release commit and tag
+        if: ${{ env.BRANCH == 'main' }}
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: npm run commitpush
+
       - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
         run: |

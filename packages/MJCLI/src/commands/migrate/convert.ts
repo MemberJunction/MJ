@@ -175,7 +175,10 @@ export default class MigrateConvert extends Command {
    * A T-SQL file like `V202604060452__v5.24.x__Foo.sql` maps to:
    * - `V202604060452__v5.24.x__Foo.pg.sql` in the output directory
    *
-   * Baseline files (B__) and .pg-only.sql files are skipped.
+   * Baseline files (`B*__Baseline.sql`) ARE included — they convert through the
+   * same rule pipeline as versioned migrations whenever they lack a `.pg.sql`
+   * (or `.pg-only.sql`) counterpart. Only already-converted outputs (`.pg.sql` /
+   * `.pg-only.sql`) are excluded from the source scan.
    */
   private discoverUnconverted(
     sourceDir: string,

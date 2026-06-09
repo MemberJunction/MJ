@@ -146,7 +146,7 @@ function makeQueryInfo(overrides: Partial<{
         UsesTemplate: overrides.UsesTemplate ?? false,
         CacheEnabled: overrides.CacheEnabled ?? false,
         AuditQueryRuns: overrides.AuditQueryRuns ?? false,
-        UserCanRun: vi.fn().mockReturnValue(true),
+        UserCanRun: vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] }),
         UserHasRunPermissions: vi.fn().mockReturnValue(true),
         GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
         QueryParameters: [],
@@ -243,7 +243,7 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
 
         it('should throw when user lacks permission', () => {
             const query = makeQueryInfo({ ID: 'q-1' });
-            query.UserHasRunPermissions = vi.fn().mockReturnValue(false);
+            query.UserCanRun = vi.fn().mockReturnValue({ canRun: false, deniedEntities: [] });
             provider.setMockQueries([query]);
 
             expect(() => provider.testFindAndValidateQuery({ QueryID: 'q-1' }, mockUser))
