@@ -1,0 +1,14 @@
+# @memberjunction/esignature-pandadoc
+
+## 5.40.0
+
+### Minor Changes
+
+- b2e1937: Adds Dropbox Sign and PandaDoc eSignature drivers and hardens the inbound webhook path with verify-if-configured HMAC verification, an artifact-reference send option, signed-document write-back to Artifacts, and an encrypted Message field
+
+### Patch Changes
+
+- Updated dependencies [b2e1937]
+- Updated dependencies [9ddea03]
+  - @memberjunction/esignature@5.40.0
+  - @memberjunction/global@5.40.0

@@ -1,5 +1,7 @@
 # @memberjunction/ng-ui-components
 
+## 5.40.0
+
 ## 5.39.0
 
 ### Minor Changes
