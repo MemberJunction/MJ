@@ -3,7 +3,8 @@ import {
   convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes,
   quotePascalCaseIdentifiers, convertCommonFunctions, convertStringConcat,
   convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
-  transformCodeOnly,
+  transformCodeOnly, castBooleanInsertValues, convertJsonFunctions,
+  convertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
@@ -59,6 +60,9 @@ export class InsertRule implements IConversionRule {
     result = convertStuff(result);
     result = convertConvertFunction(result);
     result = convertIIF(result);
+    // Convert SS JSON functions (JSON_VALUE / ISJSON) BEFORE PascalCase quoting,
+    // so the function names aren't quoted as identifiers.
+    result = convertJsonFunctions(result);
     result = convertCastTypes(result);
     // Convert SELECT TOP N subqueries to SELECT ... LIMIT N
     result = convertTopToLimit(result);
@@ -82,7 +86,11 @@ export class InsertRule implements IConversionRule {
     result = quotePascalCaseIdentifiers(result);
     // Cast SS BIT literals (0/1) → PG boolean (FALSE/TRUE) at boolean-column
     // positions in INSERT VALUES. PG rejects integer literals for boolean columns.
-    result = this.castBooleanInsertValues(result, context.TableColumns);
+    result = castBooleanInsertValues(result, context.TableColumns);
+    // Convert `"BoolCol" = 0/1` comparisons/assignments (UPDATE SET, WHERE) to
+    // FALSE/TRUE. INSERT VALUES is positional (handled above); this covers the
+    // `"col" = N` form that appears in UPDATE/DELETE statements.
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
     // Convert T-SQL UPDATE alias FROM pattern to PG syntax
     result = this.convertUpdateFromAlias(result);
     // Ensure semicolon after the actual SQL statement (not after trailing comments).
@@ -119,93 +127,30 @@ export class InsertRule implements IConversionRule {
     );
   }
 
-  /**
-   * Cast SQL Server BIT literals (0/1) to PG boolean (FALSE/TRUE) in INSERT VALUES
-   * for columns known to be BOOLEAN. PG has no implicit integer→boolean cast, so a
-   * literal `0`/`1` for a boolean column fails at apply time. Column types come from
-   * the accumulated CREATE TABLE map; tuple values are tokenized string-aware so
-   * commas inside quoted JSON/text never split a value.
-   */
-  private castBooleanInsertValues(sql: string, tableColumns: Map<string, Map<string, string>>): string {
-    const m = sql.match(/INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/i);
-    if (!m) return sql;
-    const cols = tableColumns.get(m[1].toLowerCase());
-    if (!cols) return sql;
-
-    const colNames = m[2].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-    const boolPos = new Set<number>();
-    colNames.forEach((c, i) => {
-      if ((cols.get(c.toLowerCase()) ?? '').toUpperCase() === 'BOOLEAN') boolPos.add(i);
-    });
-    if (boolPos.size === 0) return sql;
-
-    const headEnd = m.index! + m[0].length;
-    return sql.slice(0, headEnd) + this.rewriteValuesTuples(sql.slice(headEnd), boolPos);
-  }
-
-  /** Walk the post-VALUES text, rewriting boolean-position literals in each top-level tuple. */
-  private rewriteValuesTuples(text: string, boolPos: Set<number>): string {
-    let out = '';
-    let i = 0;
-    while (i < text.length) {
-      if (text[i] !== '(') { out += text[i++]; continue; }
-      // Capture a balanced, string-aware tuple starting at i.
-      let depth = 0, inStr = false, j = i;
-      for (; j < text.length; j++) {
-        const c = text[j];
-        if (inStr) {
-          if (c === "'") { if (text[j + 1] === "'") j++; else inStr = false; }
-        } else if (c === "'") inStr = true;
-        else if (c === '(') depth++;
-        else if (c === ')') { depth--; if (depth === 0) { j++; break; } }
-      }
-      out += this.rewriteTuple(text.slice(i, j), boolPos);
-      i = j;
-    }
-    return out;
-  }
-
-  /** Rewrite `0`/`1` → `FALSE`/`TRUE` at boolean positions within one `(...)` tuple. */
-  private rewriteTuple(tuple: string, boolPos: Set<number>): string {
-    const vals = this.splitTopLevelValues(tuple.slice(1, -1));
-    for (let k = 0; k < vals.length; k++) {
-      if (!boolPos.has(k)) continue;
-      vals[k] = vals[k].replace(/^(\s*)0(\s*)$/, '$1FALSE$2').replace(/^(\s*)1(\s*)$/, '$1TRUE$2');
-    }
-    return '(' + vals.join(',') + ')';
-  }
-
-  /** Split a tuple body on top-level commas, respecting single-quoted strings and nested parens. */
-  private splitTopLevelValues(s: string): string[] {
-    const out: string[] = [];
-    let cur = '', depth = 0, inStr = false;
-    for (let i = 0; i < s.length; i++) {
-      const c = s[i];
-      if (inStr) {
-        cur += c;
-        if (c === "'") { if (s[i + 1] === "'") cur += s[++i]; else inStr = false; }
-      } else if (c === "'") { inStr = true; cur += c; }
-      else if (c === '(') { depth++; cur += c; }
-      else if (c === ')') { depth--; cur += c; }
-      else if (c === ',' && depth === 0) { out.push(cur); cur = ''; }
-      else cur += c;
-    }
-    if (cur.length) out.push(cur);
-    return out;
-  }
-
   /** Convert T-SQL UPDATE alias FROM pattern to PostgreSQL syntax.
    *  T-SQL: UPDATE alias SET alias.Col = val FROM schema.table alias JOIN ... WHERE ...
    *  PG:    UPDATE schema.table AS alias SET Col = val FROM other_tables WHERE ... */
-  private convertUpdateFromAlias(sql: string): string {
+  private convertUpdateFromAlias(fullSql: string): string {
     // Detect UPDATE <bareWord> SET (bareWord with no dots/quotes = alias, not table)
-    const aliasMatch = sql.match(/\bUPDATE\s+(\w+)\s+SET\b/i);
-    if (!aliasMatch) return sql;
+    const aliasMatch = fullSql.match(/\bUPDATE\s+(\w+)\s+SET\b/i);
+    if (!aliasMatch || aliasMatch.index === undefined) return fullSql;
     const alias = aliasMatch[1];
 
-    // Verify the alias appears in a FROM clause as: <schema>."<table>" <alias>
+    // Isolate any leading comment block from the statement itself. Comments can
+    // contain the word "from" (e.g. "...backfill X from the legacy Y..."), which
+    // would otherwise be matched by the \bFROM\b searches below and corrupt the
+    // rewrite. We process only the SQL from UPDATE onward, then re-prepend the head.
+    const head = fullSql.slice(0, aliasMatch.index);
+    const sql = fullSql.slice(aliasMatch.index);
+    return head + this.rewriteUpdateFromAlias(sql, alias);
+  }
+
+  /** Core UPDATE-alias-FROM rewrite, operating on the statement text (no leading comments). */
+  private rewriteUpdateFromAlias(sql: string, alias: string): string {
+
+    // Verify the alias appears in a FROM clause as: <schema>."<table>" [AS] <alias>
     const tableMatch = sql.match(
-      new RegExp(`\\bFROM\\b[\\s\\S]*?(\\w+\\."[^"]+")\\s+${alias}\\b`, 'i')
+      new RegExp(`\\bFROM\\b[\\s\\S]*?(\\w+\\."[^"]+")\\s+(?:AS\\s+)?${alias}\\b`, 'i')
     );
     if (!tableMatch) return sql;
     const tableName = tableMatch[1];
@@ -259,7 +204,7 @@ export class InsertRule implements IConversionRule {
     const onConditions: string[] = [];
     for (let i = 1; i < fragments.length; i++) {
       const body = fragments[i].trim();
-      const parsed = body.match(/^([\w]+\."[^"]+"\s+\w+)\s+ON\s+([\s\S]+)$/i);
+      const parsed = body.match(/^([\w]+\."[^"]+"\s+(?:AS\s+)?\w+)\s+ON\s+([\s\S]+)$/i);
       if (parsed) {
         otherTables.push(parsed[1].trim());
         onConditions.push(parsed[2].trim());

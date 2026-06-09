@@ -737,6 +737,7 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'IF', 'THEN', 'ELSE', 'EXISTS', 'CREATE', 'DROP', 'TRUE', 'FALSE',
   'VARCHAR', 'TEXT', 'UUID', 'BOOLEAN', 'INTEGER', 'BIGINT', 'SMALLINT',
   'TIMESTAMPTZ', 'BYTEA', 'REAL', 'NUMERIC', 'DECIMAL', 'DOUBLE', 'PRECISION', 'XML',
+  'JSON', 'JSONB',
   'CHAR', 'LIKE', 'SIMILAR', 'TO', 'WITH', 'NOCHECK', 'DEFERRABLE',
   'INITIALLY', 'DEFERRED', 'CASCADE', 'RESTRICT', 'VALID', 'GRANT',
   'EXECUTE', 'FUNCTION', 'PROCEDURE', 'VIEW', 'TRIGGER', 'SCHEMA',
@@ -833,4 +834,188 @@ export function convertBooleanLiteralComparisons(
         ? `"${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
         : match,
   );
+}
+
+/**
+ * Find the index just past the matching close paren for the `(` at `openPos`.
+ * String-literal aware (single quotes, with '' escapes). Returns -1 if unbalanced.
+ */
+function matchParen(text: string, openPos: number): number {
+  let depth = 0, inStr = false;
+  for (let i = openPos; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (c === "'") { if (text[i + 1] === "'") i++; else inStr = false; }
+    } else if (c === "'") inStr = true;
+    else if (c === '(') depth++;
+    else if (c === ')') { depth--; if (depth === 0) return i + 1; }
+  }
+  return -1;
+}
+
+/** Split a paren-body string on top-level commas, respecting quotes and nested parens. */
+function splitArgs(body: string): string[] {
+  const out: string[] = [];
+  let cur = '', depth = 0, inStr = false;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (inStr) { cur += c; if (c === "'") { if (body[i + 1] === "'") cur += body[++i]; else inStr = false; } }
+    else if (c === "'") { inStr = true; cur += c; }
+    else if (c === '(') { depth++; cur += c; }
+    else if (c === ')') { depth--; cur += c; }
+    else if (c === ',' && depth === 0) { out.push(cur.trim()); cur = ''; }
+    else cur += c;
+  }
+  if (cur.trim().length) out.push(cur.trim());
+  return out;
+}
+
+/**
+ * Convert SQL Server JSON functions to PostgreSQL equivalents:
+ *   JSON_VALUE(expr, '$.a.b')  →  (expr)::jsonb #>> '{a,b}'   (->> for a single segment)
+ *   ISJSON(expr) = 1           →  (expr) IS JSON
+ *   ISJSON(expr) = 0           →  (expr) IS NOT JSON
+ *   ISJSON(expr)               →  (expr) IS JSON
+ * Accepts both bare (`JSON_VALUE(...)`) and already-quoted (`"JSON_VALUE"(...)`) forms,
+ * so it is order-independent relative to identifier quoting. PG 16+ provides the IS JSON
+ * predicate; JSON_VALUE's `$.`-rooted path is rewritten to jsonb path-extraction operators.
+ */
+export function convertJsonFunctions(sql: string): string {
+  sql = convertNamedJsonCall(sql, 'JSON_VALUE', (args, after) => {
+    if (args.length < 2) return null;
+    const expr = args[0];
+    const pathLit = args[1].trim();
+    const pm = pathLit.match(/^'(.*)'$/s);
+    if (!pm) return null;
+    // Strip leading '$.' / '$' and split into segments.
+    const segs = pm[1].replace(/^\$\.?/, '').split('.').filter(s => s.length > 0);
+    if (segs.length === 0) return null;
+    const replacement = segs.length === 1
+      ? `(${expr})::jsonb ->> '${segs[0]}'`
+      : `(${expr})::jsonb #>> '{${segs.join(',')}}'`;
+    return { replacement, consume: 0, after };
+  });
+
+  sql = convertNamedJsonCall(sql, 'ISJSON', (args, after) => {
+    if (args.length < 1) return null;
+    const expr = args[0];
+    // Look for a trailing `= 1` / `= 0` comparison to fold into IS [NOT] JSON.
+    const cmp = after.match(/^\s*=\s*([01])(?![\w.])/);
+    if (cmp) {
+      const isNot = cmp[1] === '0' ? ' NOT' : '';
+      return { replacement: `(${expr}) IS${isNot} JSON`, consume: cmp[0].length, after };
+    }
+    return { replacement: `(${expr}) IS JSON`, consume: 0, after };
+  });
+
+  return sql;
+}
+
+/**
+ * Locate every call to `name(` (bare or double-quoted), extract its balanced
+ * argument list, and let `build` produce the replacement text plus how many
+ * characters of the trailing context to also consume (for folding `= 1` etc.).
+ */
+function convertNamedJsonCall(
+  sql: string,
+  name: string,
+  build: (args: string[], after: string) => { replacement: string; consume: number; after: string } | null,
+): string {
+  const callRe = new RegExp(`"?${name}"?\\s*\\(`, 'gi');
+  let result = sql;
+  let searchFrom = 0;
+  while (true) {
+    callRe.lastIndex = searchFrom;
+    const m = callRe.exec(result);
+    if (!m) break;
+    const openParen = result.indexOf('(', m.index);
+    const close = matchParen(result, openParen);
+    if (close < 0) { searchFrom = m.index + m[0].length; continue; }
+    const args = splitArgs(result.slice(openParen + 1, close - 1));
+    const built = build(args, result.slice(close));
+    if (!built) { searchFrom = close; continue; }
+    result = result.slice(0, m.index) + built.replacement + result.slice(close + built.consume);
+    searchFrom = m.index + built.replacement.length;
+  }
+  return result;
+}
+
+/**
+ * Cast SQL Server BIT literals (0/1) to PG boolean (FALSE/TRUE) in `INSERT INTO
+ * table (...) VALUES (...)` for columns known to be BOOLEAN. PG has no implicit
+ * integer→boolean cast, so a literal `0`/`1` for a boolean column fails at apply
+ * time. Column types come from the accumulated CREATE TABLE map (plus the seeded
+ * core-metadata catalog); tuple values are tokenized string-aware so commas inside
+ * quoted JSON/text never split a value. Handles multi-row VALUES and INSERTs that
+ * appear inside a wrapping DO/IF block (only the INSERT...VALUES segment is rewritten).
+ */
+export function castBooleanInsertValues(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  const m = sql.match(/INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/i);
+  if (!m) return sql;
+  const cols = tableColumns.get(m[1].toLowerCase());
+  if (!cols) return sql;
+
+  const colNames = m[2].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+  const boolPos = new Set<number>();
+  colNames.forEach((c, i) => {
+    if ((cols.get(c.toLowerCase()) ?? '').toUpperCase() === 'BOOLEAN') boolPos.add(i);
+  });
+  if (boolPos.size === 0) return sql;
+
+  const headEnd = m.index! + m[0].length;
+  return sql.slice(0, headEnd) + rewriteValuesTuples(sql.slice(headEnd), boolPos);
+}
+
+/** Walk the post-VALUES text, rewriting boolean-position literals in each top-level tuple. */
+function rewriteValuesTuples(text: string, boolPos: Set<number>): string {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '(') { out += text[i++]; continue; }
+    // Capture a balanced, string-aware tuple starting at i.
+    let depth = 0, inStr = false, j = i;
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) {
+        if (c === "'") { if (text[j + 1] === "'") j++; else inStr = false; }
+      } else if (c === "'") inStr = true;
+      else if (c === '(') depth++;
+      else if (c === ')') { depth--; if (depth === 0) { j++; break; } }
+    }
+    out += rewriteTuple(text.slice(i, j), boolPos);
+    i = j;
+  }
+  return out;
+}
+
+/** Rewrite `0`/`1` → `FALSE`/`TRUE` at boolean positions within one `(...)` tuple. */
+function rewriteTuple(tuple: string, boolPos: Set<number>): string {
+  const vals = splitTopLevelValues(tuple.slice(1, -1));
+  for (let k = 0; k < vals.length; k++) {
+    if (!boolPos.has(k)) continue;
+    vals[k] = vals[k].replace(/^(\s*)0(\s*)$/, '$1FALSE$2').replace(/^(\s*)1(\s*)$/, '$1TRUE$2');
+  }
+  return '(' + vals.join(',') + ')';
+}
+
+/** Split a tuple body on top-level commas, respecting single-quoted strings and nested parens. */
+function splitTopLevelValues(s: string): string[] {
+  const out: string[] = [];
+  let cur = '', depth = 0, inStr = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      cur += c;
+      if (c === "'") { if (s[i + 1] === "'") cur += s[++i]; else inStr = false; }
+    } else if (c === "'") { inStr = true; cur += c; }
+    else if (c === '(') { depth++; cur += c; }
+    else if (c === ')') { depth--; cur += c; }
+    else if (c === ',' && depth === 0) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  if (cur.length) out.push(cur);
+  return out;
 }
