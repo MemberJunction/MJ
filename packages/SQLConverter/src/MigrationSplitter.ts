@@ -150,9 +150,16 @@ function walkUpToItemOpener(lines: string[], bannerIdx: number): number {
       return i;
     }
   }
-  // Fallback: no opener found in window — split at the banner's own header start.
-  // Conservatively back up over the leading dash-rule line if present.
-  return bannerIdx > floor ? floor : bannerIdx;
+  // Fallback: no `/*` opener in the window — this item uses a `--` comment header
+  // (e.g. `-- Item: vwAIAgentRuns` under a dash rule). Split at the start of the
+  // banner's CONTIGUOUS comment/blank run only — backing up a fixed offset can land
+  // mid-statement and bisect a preceding INSERT (live hit: AIAgentRun_LastHeartbeatAt,
+  // whose registration INSERT lost its tail to the block and failed to parse).
+  let i = bannerIdx;
+  while (i - 1 >= floor && /^\s*(--.*)?$/.test(lines[i - 1])) {
+    i--;
+  }
+  return i;
 }
 
 /**

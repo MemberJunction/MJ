@@ -73,7 +73,11 @@ echo "pack applied (residual errors on 2nd pass: $(grep -c ERROR /tmp/_pack_errs
 step 3/5 "post-baseline V migrations + pack re-apply"
 B_TS=$(basename "$LATEST_B" | sed -E 's/^B([0-9]+)__.*/\1/')
 STAGE_V=/tmp/_bootstrap_v; rm -rf "$STAGE_V"; mkdir -p "$STAGE_V"
-for f in "$AST"/V*.pg.sql; do
+# Include committed `.pg-only.sql` files (PG-specific hand-authored content — the
+# scheduling/watchdog sprocs and maintenance-fn updates ship there) alongside the
+# converted V*.pg.sql.
+for f in "$AST"/V*.pg.sql migrations-pg/v5/V*.pg-only.sql; do
+  [ -e "$f" ] || continue
   ts=$(basename "$f" | sed -E 's/^V([0-9]+)__.*/\1/')
   [ "$ts" -gt "$B_TS" ] && cp "$f" "$STAGE_V/"
 done

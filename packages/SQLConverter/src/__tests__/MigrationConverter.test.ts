@@ -279,6 +279,28 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
     expect(kept.tsql).not.toContain('GRANT SELECT');
   });
 
+  it('recovers the AdvancedGeneration curation tail (category UPDATEs + EntitySetting INSERTs)', () => {
+    // AdvancedGeneration emits EntityField.Category / Entity.Icon UPDATEs and
+    // EntitySetting INSERTs as ONE un-GO\'d batch headed by an UPDATE. PG codegen runs
+    // without AdvancedGeneration, so this curation has no other source (live hit:
+    // 12 eSignature FieldCategoryIcons/Info settings + field categories).
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      '-- CODE GEN RUN',
+      '/* categorize fields */',
+      "UPDATE [${flyway:defaultSchema}].[EntityField] SET Category = 'System Metadata' WHERE ID = 'aaaa';",
+      "UPDATE [${flyway:defaultSchema}].[Entity] SET [Icon] = 'fa fa-cog' WHERE [ID] = 'bbbb';",
+      "INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID],[EntityID],[Name],[Value]) VALUES ('cccc','bbbb','FieldCategoryInfo','{}');",
+      'GO',
+      'CREATE VIEW [${flyway:defaultSchema}].[vwWidgets] AS SELECT * FROM [${flyway:defaultSchema}].[Widget];',
+    ].join('\n');
+    const kept = extractKeptTSQL(sql, 'V_Widgets_Feature.sql');
+    expect(kept.tsql).toContain("Category = 'System Metadata'");
+    expect(kept.tsql).toContain('[EntitySetting]');
+    expect(kept.tsql).not.toContain('CREATE VIEW');
+  });
+
   it('recovers special-date-field statements (__mj_CreatedAt/__mj_UpdatedAt) for new entities', () => {
     // PG codegen does not reliably re-add the special date columns when the recovered
     // EntityField metadata already lists them (live hit: ClusterAnalysisCluster lost

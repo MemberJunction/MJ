@@ -375,6 +375,10 @@ const ENTITY_REGISTRATION_TABLES = [
   'ApplicationEntity',
   'EntityRelationship',
   'EntityPermission',
+  // AdvancedGeneration field-categorization output (FieldCategoryIcons/Info) — emitted
+  // into the CodeGen block on SQL Server; PG codegen runs without AdvancedGeneration,
+  // so these rows have no other source on PG (live hit: 12 eSignature settings).
+  'EntitySetting',
 ];
 
 /**
@@ -384,14 +388,19 @@ const ENTITY_REGISTRATION_TABLES = [
 function recoverEntityRegistrationInserts(codeGenBlock: string): string {
   const tableAlt = ENTITY_REGISTRATION_TABLES.join('|');
   const qualifiedTable = String.raw`\[?\$\{flyway:defaultSchema\}\]?\s*\.\s*\[?(?:${tableAlt})\]?\b`;
-  // Two CodeGen shapes target a registration table:
-  //   (a) a bare `INSERT INTO <schema>.<RegTable> …` (the Entity / ApplicationEntity rows), and
+  // Three CodeGen shapes target a registration table:
+  //   (a) a bare `INSERT INTO <schema>.<RegTable> …` (the Entity / ApplicationEntity rows),
   //   (b) an idempotent `IF NOT EXISTS (SELECT … FROM <schema>.<RegTable> …) BEGIN INSERT … END`
-  //       guard (the EntityField / EntityFieldValue / EntityRelationship rows).
-  // The AST transpiler keeps both (its metadata-drop matcher is disabled and it lowers the
-  // IF-EXISTS-BEGIN guard to a PG DO block), so recovering either form is sufficient.
+  //       guard (the EntityField / EntityFieldValue / EntityRelationship rows), and
+  //   (c) a bare `UPDATE <schema>.<RegTable> …` — the AdvancedGeneration curation tail
+  //       (EntityField.Category / GeneratedFormSection, Entity.Icon). These run as one
+  //       un-GO'd batch with the EntitySetting INSERTs; PG codegen runs without
+  //       AdvancedGeneration, so this curation has no other source on PG.
+  // The AST transpiler keeps all three (its metadata-drop matcher is disabled and it lowers
+  // the IF-EXISTS-BEGIN guard to a PG DO block), so recovering these forms is sufficient.
   const headRe = new RegExp(
     String.raw`^\s*(?:INSERT\s+INTO\s+${qualifiedTable}` +
+      String.raw`|UPDATE\s+${qualifiedTable}` +
       String.raw`|IF\s+(?:NOT\s+)?EXISTS\s*\([^)]*\b(?:${tableAlt})\b)`,
     'i',
   );
@@ -410,9 +419,16 @@ function recoverEntityRegistrationInserts(codeGenBlock: string): string {
   // provenance comment, which the statement splitter doesn't strip, so it lands as 'unknown'
   // rather than 'metadata-dml'. We only emit batches whose first real keyword targets a
   // registration table, so misclassification upstream doesn't cause us to miss or over-keep.
+  // GO separators are NOT guaranteed inside a CodeGen block — real files contain long
+  // GO-less runs where GRANTs, registration INSERTs, and curation UPDATEs share one
+  // batch (live hit: eSignature's whole tail headed by a GRANT, dropping the virtual
+  // EntityField registrations and EntitySettings with it). CodeGen does, however,
+  // prefix every emitted item with a `/* … */` provenance comment at line start —
+  // segment on those so each item is classified independently of its batch-mates.
   return splitByStatement(codeGenBlock)
-    .filter((s) => headRe.test(stripLeadingCommentsAndNoise(s.sql)) || specialDateField.test(afterLineComments(s.sql)))
-    .map((s) => truncateAtGeneratedObject(s.sql))
+    .flatMap((s) => s.sql.split(/\n(?=\s*\/\*)/))
+    .filter((seg) => headRe.test(stripLeadingCommentsAndNoise(seg)) || specialDateField.test(afterLineComments(seg)))
+    .map((seg) => truncateAtGeneratedObject(seg))
     .join('\nGO\n');
 }
 
