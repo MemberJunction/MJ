@@ -1,0 +1,23 @@
+{
+  "fields": {
+    "Name": "Voice Co-Agent - System Prompt",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/Voice Co-Agent - System Prompt.template.md",
+    "ResponseFormat": "Text",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "System prompt for the Voice Co-Agent (Realtime agent type). Uses companion / 'voice for' framing so the model speaks on behalf of any target agent without impersonation. The target agent, its capabilities, the conversation so far, and the user's memory are injected at session start; the prompt is intentionally generic so one definition fronts any MJ agent.",
+    "PromptRole": "System",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": []
+  },
+  "primaryKey": {
+    "ID": "AE5A9613-2850-4DC8-9DBE-1A243790944E"
+  },
+  "sync": {
+    "lastModified": "2026-06-09T16:24:14.205Z",
+    "checksum": "be1c2c58c202950ba6cf34224ee4f4de8cc9c08c81b7545377ede321a71a32e3"
+  }
+}

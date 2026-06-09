@@ -1,0 +1,42 @@
+[
+  {
+    "fields": {
+      "Name": "Voice Co-Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+      "Description": "Generic real-time voice companion. Acts as the live, low-latency voice for any target MJ agent (the target is a runtime parameter), holding a natural spoken conversation while delegating real work back to that agent. Of the Realtime agent type; driven by a BaseRealtimeModel session rather than an iterative loop.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Realtime",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExecutionMode": "Sequential",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-microphone-lines"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Voice Co-Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F9F5549A-0E54-46FF-98CE-DB4AB9E74992"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T16:24:15.323Z",
+            "checksum": "5c4b5e68d7a915675b3f28cdf423be20fa4a2f34f88b791a855e866b89ac717d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C277FEE8-D450-4B50-9167-2F3396072123"
+    },
+    "sync": {
+      "lastModified": "2026-06-09T16:24:15.293Z",
+      "checksum": "e330424218767968cd057463a9d6eabfc18c0feede671842e3f0800f2e752af2"
+    }
+  }
+]

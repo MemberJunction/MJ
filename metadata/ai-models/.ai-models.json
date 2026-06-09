@@ -14070,8 +14070,8 @@
     "fields": {
       "Name": "GPT Realtime 2",
       "PowerRank": 11,
-      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input.",
-      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input. Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 8,
@@ -14152,8 +14152,8 @@
       "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:47.961Z",
-      "checksum": "e6e0ee9add0c539048051161bf21e2c24af5e0d1804ad80ad33f45de8fa059e4"
+      "lastModified": "2026-06-09T16:24:11.336Z",
+      "checksum": "d74ee7f556cc46337e20d8c226a1994e3058e51e6f0faf76b6bd7f5f0887b9b1"
     }
   },
   {
@@ -15902,6 +15902,50 @@
     "sync": {
       "lastModified": "2026-06-09T06:32:19.741Z",
       "checksum": "24f9eea5cb2f4a7d1550fa4e2738049cbed75ca13c63ece27526e999bd08ed75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 2.5 Flash Native Audio",
+      "PowerRank": 11,
+      "Description": "Google's Gemini 2.5 Flash native-audio live model — a streaming, full-duplex, tool-calling realtime model for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "GeminiRealtime",
+            "APIName": "gemini-2.5-flash-native-audio-preview-12-2025",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T16:24:11.854Z",
+            "checksum": "05face04b82d5df598fc94ee5c4787a8b754ae7996497c7d69a144ece73ef65d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F1AEF71E-9E93-4C27-870E-620E75FA5552"
+    },
+    "sync": {
+      "lastModified": "2026-06-09T16:24:11.304Z",
+      "checksum": "b2b4e641a808ab4e17c4399e890e3a0242832b2e3336e9fd7ab3cb71397abf3d"
     }
   }
 ]
