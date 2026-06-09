@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/storage
 
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/credentials@5.40.0
+  - @memberjunction/global@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes

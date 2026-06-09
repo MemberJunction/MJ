@@ -1,5 +1,19 @@
 # @memberjunction/api-keys
 
+## 5.40.0
+
+### Patch Changes
+
+- 73bb233: Add KeyPrefix column to APIKey table for visual key identification. Stores the configured prefix plus 4 characters of the random body (e.g., "mj_sk_a1b2") at creation time so administrators can differentiate API keys without exposing the full key.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/api-keys-base@5.40.0
+  - @memberjunction/global@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes

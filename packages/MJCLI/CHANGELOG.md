@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/cli
 
+## 5.40.0
+
+### Patch Changes
+
+- 9233802: Convert and validate the consolidated baseline in the PostgreSQL migration pipeline. GrantRule now skips `GRANT CONNECT` (no PG equivalent) and ProcedureToFunctionRule skips CRUD sprocs whose `RETURNS SETOF` view is a deprecated/orphaned entity view — both emit `-- SKIPPED (INTENTIONAL)` markers instead of apply-failing SQL. Fix the MJCLI baseline roundtrip's PG conversion (it called nonexistent `--input/--output` flags) and correct the migrate-convert baseline JSDoc.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [9233802]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/codegen-lib@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/server-bootstrap-lite@5.40.0
+  - @memberjunction/sql-converter@5.40.0
+  - @memberjunction/ai-cli@5.40.0
+  - @memberjunction/db-auto-doc@5.40.0
+  - @memberjunction/metadata-sync@5.40.0
+  - @memberjunction/open-app-engine@5.40.0
+  - @memberjunction/query-gen@5.40.0
+  - @memberjunction/testing-cli@5.40.0
+  - @memberjunction/config@5.40.0
+  - @memberjunction/installer@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes
