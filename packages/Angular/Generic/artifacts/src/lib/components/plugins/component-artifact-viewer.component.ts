@@ -4,8 +4,9 @@ import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-ar
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { isFormRole, getDeclaredFormEntityName } from '@memberjunction/interactive-component-types/forms';
-import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
+import { evaluateComponentPermissions, PermissionEvaluationResult } from './component-permission-evaluation';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -84,6 +85,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public errorMessage = '';
   public errorDetails = '';
 
+  // Permission state
+  public permissionResult: PermissionEvaluationResult | null = null;
+
   /**
    * Whether this plugin has content to display in the Display tab.
    * Returns true only if the component has code that can be rendered.
@@ -127,10 +131,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     try {
       // Clear cached resolved spec from previous version so stale data doesn't persist
       this._cachedResolvedSpec = null;
+      this.permissionResult = null;
 
       if (this.artifactVersion?.Content) {
         this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
         this.extractComponentParts();
+        this.evaluatePermissions();
         // Form-aware detection. Done here (not in ngAfterViewInit) so the
         // template's `@if (isFormArtifact)` branch decides which preview
         // to mount on the very first render — no flash of the non-form
@@ -145,6 +151,28 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       this.errorMessage = 'Failed to load component';
       this.errorDetails = error instanceof Error ? error.message : String(error);
     }
+  }
+
+  /**
+   * Evaluate whether the current user has sufficient permissions for
+   * all entities and queries referenced in the component's dataRequirements.
+   * Uses the best available spec: resolved (from registry) > cached > stripped artifact.
+   * Runs synchronously against already-loaded client-side metadata.
+   */
+  private evaluatePermissions(): void {
+    const spec = this.resolvedComponentSpec;
+    if (!spec) return;
+
+    const md = new Metadata();
+    const currentUser = md.CurrentUser;
+    if (!currentUser) return; // No user context — skip check
+
+    this.permissionResult = evaluateComponentPermissions(spec, currentUser);
+  }
+
+  /** Whether the component should be blocked from rendering due to missing permissions. */
+  public get isPermissionBlocked(): boolean {
+    return !!this.permissionResult && !this.permissionResult.canRun;
   }
 
   /**
@@ -265,6 +293,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       // Cache the resolved spec so it's available even after the React component is destroyed
       this._cachedResolvedSpec = this.reactComponent.resolvedComponentSpec;
       this.tabsChanged.emit();
+
+      // Re-evaluate permissions against the resolved spec — the stripped artifact
+      // spec has no dataRequirements, so the initial check in loadComponentSpec()
+      // passes trivially. The resolved spec from the registry contains the full
+      // dataRequirements with entity and query references.
+      this.evaluatePermissions();
     }
   }
 
