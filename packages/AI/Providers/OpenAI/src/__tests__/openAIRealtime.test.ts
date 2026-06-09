@@ -168,10 +168,10 @@ describe('OpenAIRealtime', () => {
             }
         });
 
-        it('SubmitToolResult sends function_call_output then response.create', async () => {
+        it('SendToolResult sends function_call_output then response.create', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             driver.Fake.Sent = [];
-            session.SubmitToolResult('call_1', '{"temp":72}');
+            await session.SendToolResult('call_1', '{"temp":72}');
             const out = driver.Fake.Sent[0];
             const respond = driver.Fake.Sent[1];
             expect(out.type).toBe('conversation.item.create');

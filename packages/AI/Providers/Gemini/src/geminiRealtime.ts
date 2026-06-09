@@ -23,6 +23,7 @@ import {
     type RealtimeToolCall,
     type RealtimeUsage,
     type JSONObject,
+    type JSONValue,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -195,6 +196,14 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private usageHandler: ((u: RealtimeUsage) => void) | null = null;
 
     /**
+     * Maps each pending tool call's `CallID` to its function name. Gemini's `sendToolResponse`
+     * requires the function name, but the Core {@link IRealtimeSession.SendToolResult} contract only
+     * carries `callID` + `output`. We cache the name when a tool call arrives and clear the entry
+     * once the result is sent.
+     */
+    private pendingToolCallNames = new Map<string, string>();
+
+    /**
      * Binds the underlying live session. Called by the driver once `connect` resolves.
      */
     public AttachLiveSession(live: GeminiLiveSession): void {
@@ -263,25 +272,46 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Sends a tool result back to the model.
+     * @inheritdoc
      *
-     * The Core {@link IRealtimeSession} contract intentionally has no explicit "send tool result"
-     * method — tool execution and result-feeding are owned by the agent layer above this primitive.
-     * This driver-specific method is the seam through which that layer feeds results back; it is not
-     * part of the cross-provider contract, so the contract is left unchanged. The `CallID` is matched
-     * to the originating {@link RealtimeToolCall} via the function-response `id`.
+     * Completes the tool-call loop for Gemini. Gemini's `sendToolResponse` requires the function
+     * *name*, which the Core contract does not pass — so the name is looked up from the
+     * {@link pendingToolCallNames} cache populated when the originating tool call arrived. The
+     * `output` JSON string is parsed into the structured response object Gemini expects, and the
+     * cache entry is cleared once the response is sent.
      *
-     * @param callId The originating tool call's id.
-     * @param toolName The tool name the result is for.
-     * @param result The tool's structured result.
+     * @param callID The originating tool call's id.
+     * @param output The tool's result as a JSON-stringified string.
      */
-    public SendToolResult(callId: string, toolName: string, result: JSONObject): void {
+    public async SendToolResult(callID: string, output: string): Promise<void> {
+        const name = this.pendingToolCallNames.get(callID) ?? '';
         const functionResponse: FunctionResponse = {
-            id: callId,
-            name: toolName,
-            response: result,
+            id: callID,
+            name,
+            response: this.parseToolOutput(output),
         };
         this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
+        this.pendingToolCallNames.delete(callID);
+    }
+
+    /**
+     * Parses a JSON-stringified tool result into the structured object Gemini's function-response
+     * slot expects. Falls back to wrapping non-JSON output as `{ result: <text> }` so a free-text
+     * result still round-trips without throwing.
+     *
+     * @param output The tool's result as a JSON-stringified string.
+     * @returns The parsed response object.
+     */
+    private parseToolOutput(output: string): JSONObject {
+        try {
+            const parsed: unknown = JSON.parse(output);
+            if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed as JSONObject;
+            }
+            return { result: parsed as JSONValue };
+        } catch {
+            return { result: output };
+        }
     }
 
     /** @inheritdoc */
@@ -356,13 +386,19 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * arguments object to the JSON-string form the contract specifies.
      */
     private handleToolCall(functionCalls: FunctionCall[] | undefined): void {
-        if (!this.toolCallHandler || !functionCalls) {
+        if (!functionCalls) {
             return;
         }
         for (const call of functionCalls) {
-            this.toolCallHandler({
-                CallID: call.id ?? '',
-                ToolName: call.name ?? '',
+            const callID = call.id ?? '';
+            const toolName = call.name ?? '';
+            // Cache the call's name (regardless of whether a tool-call handler is registered) so
+            // SendToolResult can supply it to Gemini's sendToolResponse, which requires the function
+            // name the Core contract does not carry.
+            this.pendingToolCallNames.set(callID, toolName);
+            this.toolCallHandler?.({
+                CallID: callID,
+                ToolName: toolName,
                 Arguments: JSON.stringify(call.args ?? {}),
             });
         }
@@ -382,6 +418,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.toolCallHandler = null;
         this.interruptionHandler = null;
         this.usageHandler = null;
+        this.pendingToolCallNames.clear();
     }
 
     /** Returns the bound live session or throws if it was never attached / already closed. */

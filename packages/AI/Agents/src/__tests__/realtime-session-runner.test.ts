@@ -36,6 +36,7 @@ class MockRealtimeSession implements IRealtimeSession {
     public RegisteredTools: RealtimeToolDefinition[] = [];
     public Closed = false;
     public CloseError: Error | null = null;
+    public SentToolResults: { CallID: string; Output: string }[] = [];
 
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
@@ -53,6 +54,10 @@ class MockRealtimeSession implements IRealtimeSession {
     OnToolCall(handler: (call: RealtimeToolCall) => void): void { this.toolCallHandler = handler; }
     OnInterruption(handler: () => void): void { this.interruptionHandler = handler; }
     OnUsage(handler: (u: RealtimeUsage) => void): void { this.usageHandler = handler; }
+
+    async SendToolResult(callID: string, output: string): Promise<void> {
+        this.SentToolResults.push({ CallID: callID, Output: output });
+    }
 
     async Close(): Promise<void> {
         if (this.CloseError) throw this.CloseError;
@@ -211,6 +216,85 @@ describe('RealtimeSessionRunner', () => {
             expect(h.executeToolSpy).toHaveBeenCalledTimes(1);
             expect(h.delegateSpy).not.toHaveBeenCalled();
             expect(h.executeToolSpy.mock.calls[0][0].ToolName).toBe('ShowChart');
+            await runner.Stop();
+        });
+    });
+
+    // ── Tool-result round-trip (SendToolResult) ───────────────────────
+
+    describe('tool-result round-trip', () => {
+        it('sends the serialized delegated result back via SendToolResult after invoke-target', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({
+                CallID: 'call-1',
+                ToolName: INVOKE_TARGET_AGENT_TOOL_NAME,
+                Arguments: '{"request":"do work"}'
+            });
+            // Let the delegate promise and the subsequent SendToolResult hop settle.
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(h.session.SentToolResults).toHaveLength(1);
+            expect(h.session.SentToolResults[0].CallID).toBe('call-1');
+            expect(JSON.parse(h.session.SentToolResults[0].Output)).toEqual({ success: true, output: 'done' });
+            await runner.Stop();
+        });
+
+        it('sends the serialized tool result back via SendToolResult after a non-target tool', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({ CallID: 'call-2', ToolName: 'ShowChart', Arguments: '{}' });
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(h.session.SentToolResults).toHaveLength(1);
+            expect(h.session.SentToolResults[0].CallID).toBe('call-2');
+            expect(JSON.parse(h.session.SentToolResults[0].Output)).toEqual({ success: true, output: 'tool-ok' });
+            await runner.Stop();
+        });
+
+        it('sends a structured error result when the delegated run throws', async () => {
+            const delegate = vi.fn(async (_req: DelegateToTargetRequest): Promise<DelegatedResult> => {
+                throw new Error('target exploded');
+            });
+            const h = buildHarness({ DelegateToTarget: delegate });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({
+                CallID: 'call-err',
+                ToolName: INVOKE_TARGET_AGENT_TOOL_NAME,
+                Arguments: '{}'
+            });
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(h.session.SentToolResults).toHaveLength(1);
+            expect(h.session.SentToolResults[0].CallID).toBe('call-err');
+            expect(JSON.parse(h.session.SentToolResults[0].Output)).toEqual({ success: false, error: 'target exploded' });
+            await runner.Stop();
+        });
+
+        it('sends a structured error result when a non-target tool throws', async () => {
+            const executeTool = vi.fn(async (_call: RealtimeToolCall): Promise<ToolExecutionResult> => {
+                throw new Error('tool exploded');
+            });
+            const h = buildHarness({ ExecuteTool: executeTool });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({ CallID: 'call-err2', ToolName: 'ShowChart', Arguments: '{}' });
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(h.session.SentToolResults).toHaveLength(1);
+            expect(h.session.SentToolResults[0].CallID).toBe('call-err2');
+            expect(JSON.parse(h.session.SentToolResults[0].Output)).toEqual({ success: false, error: 'tool exploded' });
             await runner.Stop();
         });
     });

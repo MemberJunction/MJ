@@ -334,13 +334,15 @@ export class RealtimeSessionRunner {
         const controller = new AbortController();
         this.currentDelegationController = controller;
         try {
-            await this.deps.DelegateToTarget({
+            const result = await this.deps.DelegateToTarget({
                 CallID: call.CallID,
                 Arguments: call.Arguments,
                 AbortSignal: controller.signal
             });
+            await this.sendToolResult(call.CallID, result.Success, result.Output);
         } catch (error) {
             this.logError(error, 'delegating to target agent');
+            await this.sendToolError(call.CallID, error);
         } finally {
             // Only clear if this is still the active controller (a later delegation may have replaced it).
             if (this.currentDelegationController === controller) {
@@ -356,9 +358,55 @@ export class RealtimeSessionRunner {
      */
     private async handleOtherTool(call: RealtimeToolCall): Promise<void> {
         try {
-            await this.deps.ExecuteTool(call);
+            const result = await this.deps.ExecuteTool(call);
+            await this.sendToolResult(call.CallID, result.Success, result.Output);
         } catch (error) {
             this.logError(error, `executing tool '${call.ToolName}'`);
+            await this.sendToolError(call.CallID, error);
+        }
+    }
+
+    /**
+     * Serializes a tool/delegation outcome to a JSON string and feeds it back to the model via
+     * {@link IRealtimeSession.SendToolResult} so the model can continue (and narrate) the turn.
+     *
+     * @param callID The originating tool call's id.
+     * @param success Whether the tool/delegation completed successfully.
+     * @param output The textual outcome (narration on success, error text on failure).
+     */
+    private async sendToolResult(callID: string, success: boolean, output: string): Promise<void> {
+        const resultJson = JSON.stringify({ success, output });
+        await this.dispatchToolResult(callID, resultJson, 'sending tool result');
+    }
+
+    /**
+     * Sends a structured error result back to the model so it can narrate the failure (consistent
+     * with the plan's spoken-error-handling) rather than leaving the tool call unanswered.
+     *
+     * @param callID The originating tool call's id.
+     * @param error The thrown error or message.
+     */
+    private async sendToolError(callID: string, error: unknown): Promise<void> {
+        const message = error instanceof Error ? error.message : String(error);
+        const resultJson = JSON.stringify({ success: false, error: message });
+        await this.dispatchToolResult(callID, resultJson, 'sending tool error result');
+    }
+
+    /**
+     * Sends a serialized tool result to the live session, logging (but not rethrowing) any failure.
+     *
+     * @param callID The originating tool call's id.
+     * @param resultJson The JSON-stringified result to send.
+     * @param operation A short description of the send operation, used in error logging.
+     */
+    private async dispatchToolResult(callID: string, resultJson: string, operation: string): Promise<void> {
+        if (!this.session) {
+            return;
+        }
+        try {
+            await this.session.SendToolResult(callID, resultJson);
+        } catch (error) {
+            this.logError(error, operation);
         }
     }
 

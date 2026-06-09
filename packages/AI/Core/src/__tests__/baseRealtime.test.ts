@@ -17,6 +17,7 @@ class MockRealtimeSession implements IRealtimeSession {
     public RegisteredTools: RealtimeToolDefinition[] = [];
     public SentInput: ArrayBuffer[] = [];
     public Closed = false;
+    public SentToolResults: { CallID: string; Output: string }[] = [];
 
     public OutputHandler?: (chunk: ArrayBuffer) => void;
     public TranscriptHandler?: (t: RealtimeTranscript) => void;
@@ -42,6 +43,10 @@ class MockRealtimeSession implements IRealtimeSession {
 
     public OnToolCall(handler: (call: RealtimeToolCall) => void): void {
         this.ToolCallHandler = handler;
+    }
+
+    public async SendToolResult(callID: string, output: string): Promise<void> {
+        this.SentToolResults.push({ CallID: callID, Output: output });
     }
 
     public OnInterruption(handler: () => void): void {
@@ -167,6 +172,16 @@ describe('IRealtimeSession', () => {
         const call: RealtimeToolCall = { CallID: 'c1', ToolName: 'invokeTargetAgent', Arguments: '{"prompt":"hi"}' };
         session.ToolCallHandler?.(call);
         expect(handler).toHaveBeenCalledWith(call);
+    });
+
+    it('SendToolResult is part of the contract and forwards the call result', async () => {
+        session = newSession();
+        // Structurally assert SendToolResult is on the IRealtimeSession contract.
+        const contract: IRealtimeSession = session;
+        expect(typeof contract.SendToolResult).toBe('function');
+        await contract.SendToolResult('c1', '{"temp":72}');
+        expect(session.SentToolResults).toHaveLength(1);
+        expect(session.SentToolResults[0]).toEqual({ CallID: 'c1', Output: '{"temp":72}' });
     });
 
     it('OnInterruption registers a handler that fires on barge-in', () => {

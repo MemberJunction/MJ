@@ -54,10 +54,9 @@ export interface IOpenAIRealtimeConnection {
  * context), and translates the provider's server-event stream into the modality-agnostic
  * {@link IRealtimeSession} contract.
  *
- * **Tool results** are not part of the Core `IRealtimeSession` contract (which only models the
- * inbound tool-call request). The returned session therefore exposes an additional
- * {@link OpenAIRealtimeSession.SubmitToolResult} method that the agent layer calls to feed a tool
- * result back to the model. See that method's docs and the package notes for details.
+ * **Tool results** complete the tool-call loop: the returned session implements the Core
+ * `IRealtimeSession.SendToolResult` contract method, which the agent layer calls after executing a
+ * tool to feed its result back to the model. See {@link OpenAIRealtimeSession.SendToolResult}.
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
@@ -153,22 +152,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Submits a tool result back to the model and requests a new response.
+     * @inheritdoc
      *
-     * **Contract note:** the Core `IRealtimeSession` interface intentionally models only the
-     * *inbound* tool-call request ({@link IRealtimeSession.OnToolCall}); it has no explicit method
-     * for returning the result. This method is the provider-specific completion of that loop — the
-     * agent layer (which holds the typed session) calls it after executing the tool. It sends a
-     * `conversation.item.create` with a `function_call_output` item, then a `response.create` so
-     * the model continues the turn with the result in context.
+     * Completes the tool-call loop for OpenAI: sends a `conversation.item.create` with a
+     * `function_call_output` item carrying the tool output, then a `response.create` so the model
+     * continues the turn with the result in context.
      *
-     * @param callId The `CallID` from the {@link RealtimeToolCall}.
-     * @param output The tool's output as a string (JSON or free text).
+     * @param callID The `CallID` from the originating {@link RealtimeToolCall}.
+     * @param output The tool's result as a JSON-stringified string.
      */
-    public SubmitToolResult(callId: string, output: string): void {
+    public async SendToolResult(callID: string, output: string): Promise<void> {
         const item: RealtimeConversationItemFunctionCallOutput = {
             type: 'function_call_output',
-            call_id: callId,
+            call_id: callID,
             output,
         };
         this.connection.send({ type: 'conversation.item.create', item });

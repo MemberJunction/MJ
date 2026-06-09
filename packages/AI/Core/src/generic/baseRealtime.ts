@@ -118,6 +118,17 @@ export interface IRealtimeSession {
     OnToolCall(handler: (call: RealtimeToolCall) => void): void;
 
     /**
+     * Send the result of an executed tool/function call back to the model so it can continue the
+     * turn. `output` is the JSON-stringified tool result. Called by the agent layer after it handles
+     * an {@link IRealtimeSession.OnToolCall}.
+     *
+     * @param callID The `CallID` from the originating {@link RealtimeToolCall}, used to correlate the result.
+     * @param output The tool's result as a JSON-stringified string.
+     * @returns A promise that resolves once the result has been sent to the provider.
+     */
+    SendToolResult(callID: string, output: string): Promise<void>;
+
+    /**
      * Registers a handler for provider-detected interruptions (barge-in).
      *
      * Turn detection / VAD is owned by the provider. The agent layer uses this hook to cancel

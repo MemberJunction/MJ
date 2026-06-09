@@ -242,17 +242,30 @@ describe('GeminiRealtime', () => {
             expect(decl).toMatchObject({ name: 'lookup', description: 'Look something up', parametersJsonSchema: { type: 'object' } });
         });
 
-        it('SendToolResult sends a matching functionResponse', () => {
-            // SendToolResult is the Gemini-specific seam for feeding tool results back; it is not on
-            // the cross-provider IRealtimeSession contract, so reach it through the concrete type.
-            const concrete = session as IRealtimeSession & {
-                SendToolResult: (callId: string, toolName: string, result: Record<string, unknown>) => void;
-            };
-            concrete.SendToolResult('call-1', 'get_weather', { tempF: 72 });
+        it('SendToolResult sends a matching functionResponse using the cached call name', async () => {
+            // SendToolResult is now a first-class IRealtimeSession contract method carrying only
+            // callID + JSON-string output. Gemini needs the function name, which it caches from the
+            // originating tool call — so drive an inbound tool call first to populate the cache.
+            driver.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-1', name: 'get_weather', args: { city: 'NYC' } }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-1', JSON.stringify({ tempF: 72 }));
 
             expect(driver.Fake.ToolResponses).toHaveLength(1);
             const responses = driver.Fake.ToolResponses[0].functionResponses as FunctionResponse[];
             expect(responses[0]).toEqual({ id: 'call-1', name: 'get_weather', response: { tempF: 72 } });
+        });
+
+        it('SendToolResult wraps non-JSON output as { result }', async () => {
+            driver.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-2', name: 'do_thing', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-2', 'plain text outcome');
+
+            const responses = driver.Fake.ToolResponses[0].functionResponses as FunctionResponse[];
+            expect(responses[0]).toEqual({ id: 'call-2', name: 'do_thing', response: { result: 'plain text outcome' } });
         });
 
         it('Close closes the live session', async () => {
