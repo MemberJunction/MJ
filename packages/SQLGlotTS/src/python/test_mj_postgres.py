@@ -18,12 +18,16 @@ def check(name, sql, must_contain=(), must_not_contain=(), expect_unhandled=0):
     global _failures
     r = mj_transpile(sql)
     joined = "\n".join(r["sql"])
+    # Whitespace-insensitive substring match so assertions survive pretty-printing
+    # (sqlglot may wrap a statement across lines, e.g. `DEFAULT (\n  CURRENT_USER\n)`).
+    import re as _re2
+    nows = _re2.sub(r"\s+", "", joined)
     errs = []
     for s in must_contain:
-        if s not in joined:
+        if _re2.sub(r"\s+", "", s) not in nows:
             errs.append(f"missing {s!r}")
     for s in must_not_contain:
-        if s in joined:
+        if _re2.sub(r"\s+", "", s) in nows:
             errs.append(f"should not contain {s!r}")
     if len(r["unhandled"]) != expect_unhandled:
         errs.append(f"unhandled={len(r['unhandled'])} (expected {expect_unhandled}): {r['unhandled']}")
@@ -179,13 +183,13 @@ check("idempotent IF NOT EXISTS BEGIN INSERT END → DO block (non-metadata tabl
                     'INSERT INTO ${flyway:defaultSchema}."Widget"', '"ID"', '"Name"'],
       must_not_contain=["BEGIN\n    INSERT", "sp_addext"])
 
-check("idempotent seed of schema-derived metadata (EntityField) is dropped (CodeGen regenerates)",
+check("entity-metadata seed (EntityField) is KEPT + transpiled to an idempotent DO block (PG CodeGen does not recreate entity metadata)",
       """IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [ID] = 'abc')
          BEGIN
             INSERT INTO [${flyway:defaultSchema}].[EntityField] ([ID], [Name]) VALUES ('abc', 'X');
          END""",
-      must_contain=[],
-      must_not_contain=["EntityField", "DO $$", "INSERT"])
+      must_contain=['DO $$', 'INSERT INTO ${flyway:defaultSchema}."EntityField"', "VALUES ('abc', 'X')"],
+      must_not_contain=["[EntityField]"])
 
 # --- Transform: standalone DEFAULT constraint → ALTER COLUMN SET DEFAULT ------
 # sqlglot can't parse `ADD CONSTRAINT … DEFAULT (…) FOR [col]`; these carry ~all of
@@ -258,6 +262,45 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'x',
 GO""",
       must_contain=["ADD COLUMN", "COMMENT ON COLUMN"],
       must_not_contain=["GO", "sp_addextendedproperty"])
+
+# --- extended-property drop guard (SQL-Server-only) -------------------------
+# IF EXISTS(sys.extended_properties …) BEGIN sp_dropextendedproperty END → dropped;
+# the re-add that follows still emits its COMMENT ON. (Magic_Link TokenHash case.)
+check("IF EXISTS(sys.extended_properties) BEGIN sp_dropextendedproperty END guard → dropped; re-add kept",
+      """IF EXISTS (SELECT 1 FROM sys.extended_properties
+           WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.MagicLinkInvite')
+           AND name = 'MS_Description')
+BEGIN
+    EXEC sp_dropextendedproperty @name=N'MS_Description',
+        @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
+        @level1type=N'TABLE', @level1name=N'MagicLinkInvite',
+        @level2type=N'COLUMN', @level2name=N'TokenHash';
+END;
+GO
+EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'base64url hash',
+    @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
+    @level1type=N'TABLE', @level1name=N'MagicLinkInvite', @level2type=N'COLUMN', @level2name=N'TokenHash';
+GO""",
+      must_contain=['COMMENT ON COLUMN ${flyway:defaultSchema}."MagicLinkInvite"."TokenHash" IS \'base64url hash\''],
+      must_not_contain=["sys.extended_properties", "sp_dropextendedproperty", "DO $$"])
+
+# --- data-DML: UPDATE…FROM self-alias + ISJSON + JSON_VALUE (Backfill_UserView) ----
+check("UPDATE alias…FROM target alias JOIN → PG UPDATE target AS alias…FROM other; ISJSON→IS JSON; JSON_VALUE→jsonb ->>",
+      """UPDATE uv SET uv.ViewTypeID = vt.ID
+  FROM ${flyway:defaultSchema}.UserView AS uv
+  INNER JOIN ${flyway:defaultSchema}.ViewType AS vt ON vt.Name = JSON_VALUE(uv.DisplayState, '$.defaultMode')
+ WHERE uv.ViewTypeID IS NULL AND ISJSON(uv.DisplayState) = 1;""",
+      must_contain=[
+          'UPDATE ${flyway:defaultSchema}."UserView" AS "uv"',
+          'SET "ViewTypeID" = "vt"."ID"',
+          'FROM ${flyway:defaultSchema}."ViewType" AS "vt"',
+          '("uv"."DisplayState")::jsonb ->> \'defaultMode\'',
+          '"uv"."DisplayState" IS JSON',
+      ],
+      # NB: don't assert absence of 'ISJSON' here — whitespace-insensitive matching
+      # collapses the legitimate 'IS JSON' predicate to 'ISJSON'. The IS-JSON must_contain
+      # above already proves the rewrite.
+      must_not_contain=['JSON_EXTRACT_PATH_TEXT', 'UPDATE "uv" SET', 'SET "uv"."ViewTypeID"'])
 
 if _failures:
     print(f"\n{_failures} test(s) FAILED")

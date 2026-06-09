@@ -24,6 +24,8 @@ Reference for the SS→PG type overrides: SQLConverter ``TypeResolver.MJ_OVERRID
 """
 from __future__ import annotations
 
+import json as _json
+import os as _os
 import sqlglot
 from sqlglot import exp
 from sqlglot.dialects.postgres import Postgres
@@ -39,6 +41,13 @@ class MJPostgres(Postgres):
     """PostgreSQL generation with MJ's type/function/boolean conventions baked in."""
 
     class Generator(Postgres.Generator):
+        TRANSFORMS = {
+            **Postgres.Generator.TRANSFORMS,
+            # SS JSON_VALUE(col,'$.path') → JSONExtractScalar. PG's default
+            # JSON_EXTRACT_PATH_TEXT needs a json arg, but MJ stores JSON in text
+            # columns; cast to jsonb and use ->> (single key) / #>> (nested).
+            exp.JSONExtractScalar: lambda self, e: _json_extract_scalar_sql(self, e),
+        }
         TYPE_MAPPING = {
             **Postgres.Generator.TYPE_MAPPING,
             exp.DataType.Type.BIT: "BOOLEAN",
@@ -119,6 +128,113 @@ def _rewrite_string_concat(node: exp.Expression) -> exp.Expression:
             return isinstance(x, (exp.National, exp.DPipe)) or (isinstance(x, exp.Literal) and x.is_string)
         if is_strish(node.left) or is_strish(node.right):
             return exp.DPipe(this=node.left, expression=node.right)
+    return node
+
+
+def _json_extract_scalar_sql(self, expression: exp.JSONExtractScalar) -> str:
+    """JSONExtractScalar (from SS JSON_VALUE) → `(col::jsonb) ->> 'key'` (single path)
+    or `(col::jsonb) #>> '{a,b}'` (nested). Casting to jsonb lets it work on the text
+    columns MJ stores JSON in (PG's JSON_EXTRACT_PATH_TEXT requires a real json arg)."""
+    this = self.sql(expression, "this")
+    path = expression.expression
+    # Skip the `$` root element (empty name) — keep only the key/segment names.
+    parts = [p.name for p in path.expressions if p.name] if isinstance(path, exp.JSONPath) else None
+    if parts and len(parts) > 1:
+        return f"(({this})::jsonb #>> '{{{','.join(parts)}}}')"
+    key = parts[0] if parts else (path.name if path else "")
+    return f"(({this})::jsonb ->> '{key}')"
+
+
+def _rewrite_insert_booleans(node: exp.Expression) -> exp.Expression:
+    """In `INSERT INTO t (…cols…) VALUES (…)`, coerce 1/0 → TRUE/FALSE for any column
+    known to be BIT/BOOLEAN (file-level + MJ_EXTRA_BIT_COLS registry). SS seeds bit
+    columns with 1/0; PG won't implicitly cast integer → boolean, so the INSERT aborts."""
+    if not isinstance(node, exp.Insert) or not isinstance(node.this, exp.Schema):
+        return node
+    tbl = node.this.this
+    tname = tbl.name.lower() if isinstance(tbl, exp.Table) else None
+    if not tname:
+        return node
+    cols = [c.name.lower() for c in node.this.expressions]
+    bool_pos = [i for i, c in enumerate(cols) if (tname, c) in _BIT_COLS]
+    if not bool_pos:
+        return node
+    values = node.expression
+    if not isinstance(values, exp.Values):
+        return node
+    for tup in values.expressions:
+        if not isinstance(tup, exp.Tuple):
+            continue
+        for i in bool_pos:
+            if i < len(tup.expressions):
+                v = tup.expressions[i]
+                if isinstance(v, exp.Literal) and not v.is_string and v.name in ("0", "1"):
+                    tup.set("expressions", [
+                        (exp.true() if v.name == "1" else exp.false()) if j == i else e
+                        for j, e in enumerate(tup.expressions)
+                    ])
+    return node
+
+
+def _is_isjson(node: exp.Expression) -> bool:
+    return isinstance(node, exp.Anonymous) and (node.name or "").upper() == "ISJSON"
+
+
+def _rewrite_isjson_eq(node: exp.Expression) -> exp.Expression:
+    """SS `ISJSON(x) = 1` / `ISJSON(x) = 0` → PG `x IS JSON` / `x IS NOT JSON`.
+    PG has no ISJSON function; it has the SQL:2016 `IS JSON` predicate (PG16+)."""
+    if isinstance(node, exp.EQ) and _is_isjson(node.this) and isinstance(node.expression, exp.Literal):
+        arg = node.this.expressions[0]
+        is_json = exp.Is(this=arg.copy(), expression=exp.JSON())
+        return exp.Not(this=is_json) if node.expression.name == "0" else is_json
+    return node
+
+
+def _rewrite_isjson_bare(node: exp.Expression) -> exp.Expression:
+    """Bare `ISJSON(x)` predicate (not compared to 1/0) → `x IS JSON`."""
+    if _is_isjson(node):
+        return exp.Is(this=node.expressions[0].copy(), expression=exp.JSON())
+    return node
+
+
+def _rewrite_update_from_alias(node: exp.Expression) -> exp.Expression:
+    """SS `UPDATE alias SET alias.c = … FROM Target AS alias [JOIN Other o ON j] WHERE w`
+    → PG `UPDATE Target AS alias SET c = … FROM Other o WHERE j AND w`.
+    PG forbids naming the target via an alias defined in FROM and forbids the alias
+    qualifier on SET targets; the target's join condition must move to WHERE."""
+    if not isinstance(node, exp.Update):
+        return node
+    frm = node.args.get("from")
+    tgt = node.this
+    if not frm or not isinstance(frm.this, exp.Table) or not isinstance(tgt, exp.Table):
+        return node
+    base = frm.this
+    base_alias = base.alias
+    joins = base.args.get("joins") or []
+    if not base_alias or tgt.name != base_alias or not joins:
+        return node  # only the self-aliased-target + join shape
+    # target ← the real FROM base table (alias preserved), stripped of its joins
+    new_target = base.copy()
+    new_target.set("joins", None)
+    node.set("this", new_target)
+    # join ON conditions → WHERE; the joined tables become the new FROM
+    conds = [j.args["on"].copy() for j in joins if j.args.get("on")]
+    first = joins[0].this.copy()
+    if len(joins) > 1:
+        first.set("joins", [j.copy() for j in joins[1:]])
+    node.set("from", exp.From(this=first))
+    existing = node.args["where"].this if node.args.get("where") else None
+    clauses = conds + ([existing] if existing else [])
+    if clauses:
+        combined = clauses[0]
+        for c in clauses[1:]:
+            combined = exp.And(this=combined, expression=c)
+        node.set("where", exp.Where(this=combined))
+    # strip the target-alias qualifier from SET LHS (PG: SET col = …, not alias.col = …)
+    for assign in node.expressions:
+        lhs = assign.this if isinstance(assign, exp.EQ) else None
+        if isinstance(lhs, exp.Column) and lhs.table == base_alias:
+            lhs.set("table", None)
     return node
 
 
@@ -562,12 +678,48 @@ def _transpile_alter_column(txt: str) -> str | None:
     except Exception:  # noqa: BLE001
         return None
     col = m.group("col").strip().strip('[]"')
-    actions = [f'ALTER COLUMN "{col}" TYPE {pgtype}']
+    tbl_ref = _emit_table_ref(m.group("tbl"))
+    nullability = None
     if _re.search(r"\bNOT\s+NULL\b", rest, _re.IGNORECASE):
-        actions.append(f'ALTER COLUMN "{col}" SET NOT NULL')
+        nullability = f'ALTER COLUMN "{col}" SET NOT NULL'
     elif _re.search(r"\bNULL\b", rest, _re.IGNORECASE):
-        actions.append(f'ALTER COLUMN "{col}" DROP NOT NULL')
-    return f'ALTER TABLE {_emit_table_ref(m.group("tbl"))} ' + ", ".join(actions)
+        nullability = f'ALTER COLUMN "{col}" DROP NOT NULL'
+    # Atomic (non-parameterized) types: an in-place type change is implausible in MJ, and
+    # SS restates the column type on EVERY `ALTER COLUMN` even for a nullability-only change.
+    # So emit only the nullability action — no TYPE restate. A no-op `ALTER … TYPE` would
+    # (a) be rejected by PG when a view depends on the column and (b) force dropping CodeGen
+    # metadata views (e.g. vwApplicationSettings) that `mj codegen` itself needs to bootstrap.
+    _ATOMIC = {"UUID", "BOOLEAN", "SMALLINT", "INTEGER", "BIGINT", "REAL",
+               "DOUBLE PRECISION", "DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ"}
+    if pgtype.split("(")[0].strip().upper() in _ATOMIC:
+        return f'ALTER TABLE {tbl_ref} {nullability}' if nullability else None
+    # Parameterized types (VARCHAR(n)/NUMERIC/TEXT/BYTEA): a genuine widening. Emit the TYPE
+    # change + nullability, dropping dependent CodeGen views first (regenerated by codegen).
+    actions = [f'ALTER COLUMN "{col}" TYPE {pgtype}'] + ([nullability] if nullability else [])
+    bare_tbl = m.group("tbl").strip().split(".")[-1].strip().strip('[]"')
+    return _drop_dependent_views_block(bare_tbl, col) + "\n" + f'ALTER TABLE {tbl_ref} ' + ", ".join(actions)
+
+
+def _drop_dependent_views_block(table: str, col: str) -> str:
+    """DO block that drops every view depending on <table>.<col> (CodeGen regenerates them).
+    Deterministic and a no-op when nothing depends on the column."""
+    tbl = table.replace("'", "''")
+    cn = col.replace("'", "''")
+    return (
+        "DO $$\nDECLARE r RECORD;\nBEGIN\n"
+        "  FOR r IN\n"
+        "    SELECT DISTINCT ns.nspname AS sch, dv.relname AS vw\n"
+        "    FROM pg_depend d\n"
+        "    JOIN pg_rewrite rw ON rw.oid = d.objid\n"
+        "    JOIN pg_class dv ON dv.oid = rw.ev_class AND dv.relkind = 'v'\n"
+        "    JOIN pg_namespace ns ON ns.oid = dv.relnamespace\n"
+        "    JOIN pg_class tc ON tc.oid = d.refobjid\n"
+        "    JOIN pg_attribute a ON a.attrelid = tc.oid AND a.attnum = d.refobjsubid\n"
+        f"    WHERE tc.relname = '{tbl}' AND a.attname = '{cn}'\n"
+        "  LOOP\n"
+        "    EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', r.sch, r.vw);\n"
+        "  END LOOP;\nEND $$;"
+    )
 
 
 # EXEC sp_dropextendedproperty @name=N'MS_Description', … @level1name=…, @level2name=… ;
@@ -668,7 +820,7 @@ def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
     return results
 
 
-def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
+def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
     """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits."""
     out, unhandled = [], []
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
@@ -728,13 +880,17 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
             stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
         stmt = _rewrite_boolean_int_checks(stmt)
         stmt = (
-            stmt.transform(_fix_misparsed_table_constraint)
+            stmt.transform(_rewrite_update_from_alias)  # restructures UPDATE before other rewrites
+            .transform(_rewrite_insert_booleans)  # seed-INSERT 1/0 → TRUE/FALSE for bit cols
+            .transform(_fix_misparsed_table_constraint)
             .transform(_rewrite_functions)
             .transform(_rewrite_boolean_defaults)
             .transform(_rewrite_string_concat)
             .transform(_strip_national)
             .transform(_strip_collate)
-            .transform(_drop_isjson_checks)
+            .transform(_drop_isjson_checks)  # drop ISJSON CHECK constraints BEFORE…
+            .transform(_rewrite_isjson_eq)   # …rewriting surviving ISJSON predicates (WHERE)
+            .transform(_rewrite_isjson_bare)
             .transform(_fold_clustered_constraints)
             .transform(_strip_nulls_ordering)
             .transform(_column_fk_to_reference)
@@ -743,22 +899,24 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
         # is left actionless — emitting bare `ALTER TABLE x` is a PG syntax error. Skip.
         if isinstance(stmt, exp.Alter) and not stmt.args.get("actions"):
             continue
-        out.append(stmt.sql(dialect=MJPostgres, pretty=False, identify=True))
+        out.append(stmt.sql(dialect=MJPostgres, pretty=pretty, identify=True))
     return (";\n".join(out) + (";" if out else "")), unhandled
 
 
 _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNORECASE)
 
-# Schema-derived metadata tables: CodeGen regenerates these rows from schema
-# introspection, so the idempotent INSERTs that seed them are Category-M (drop +
-# regenerate), not DDL to transpile. (Curated metadata — AIModel, Action, etc. —
-# is reseeded by `mj sync push`; only the introspection-derived tables are listed.)
-# Delimiter-agnostic: matches `[EntityField]`, "EntityField", schema.EntityField, etc.
-# Longer names first so EntityFieldValue isn't shadowed by EntityField/Entity.
-_METADATA_TABLES = _re.compile(
-    r"INSERT\s+INTO\b.{0,80}?\b(EntityFieldValue|EntityRelationship|EntityPermission|EntitySetting|EntityField|Entity)\b",
-    _re.IGNORECASE | _re.DOTALL,
-)
+# Inline entity-metadata INSERTs (Entity / EntityField / ApplicationEntity / …) in a
+# FEATURE migration are KEPT and transpiled — NOT dropped. Empirically, `mj codegen` on
+# PostgreSQL regenerates SQL *objects* (views, CRUD functions, triggers — already dropped
+# by the splitter's CodeGen-block extraction) but does NOT introspect the schema to (re)create
+# Entity/EntityField *metadata rows* the way SQL-Server CodeGen does (the schema-management
+# sprocs that drive that — spUpdateExistingEntitiesFromSchema, … — are SQL-Server-only).
+# So a new entity's registration rows have NO other source: dropping them leaves the entity
+# absent from metadata, and CodeGen then generates no view/sproc for it (a parity gap of
+# exactly the new-entity views/sprocs). Pure-metadata `*_Metadata_Sync` migrations are still
+# fully re-seeded via `mj sync push` — the SPLITTER routes those to reseed (empty kept-TSQL),
+# so they never reach here. This matcher is therefore intentionally disabled (matches nothing).
+_METADATA_TABLES = _re.compile(r"(?!x)x")
 
 
 def _transpile_if_exists_begin(m: "_re.Match") -> tuple[str, list[dict]]:
@@ -766,6 +924,16 @@ def _transpile_if_exists_begin(m: "_re.Match") -> tuple[str, list[dict]]:
     raw_body = m.group("body").strip()
     # Idempotent seed of schema-derived metadata → drop; CodeGen regenerates it.
     if _METADATA_TABLES.search(raw_body):
+        return "", []
+    # Extended-property existence guard — IF EXISTS(sys.extended_properties …) BEGIN
+    # sp_dropextendedproperty/sp_addextendedproperty END. SQL-Server-only: PG
+    # `COMMENT ON … IS …` overwrites unconditionally and `mj codegen` re-syncs every
+    # MS_Description from EntityField.Description, so the drop-then-re-add dance is a
+    # no-op on PG. Drop the whole guard; the re-add `sp_addextendedproperty` that
+    # follows the END is a separate statement and still emits its COMMENT ON.
+    if _re.search(r"sys\.extended_properties", m.group("cond"), _re.IGNORECASE) or _re.search(
+        r"sp_(?:drop|add)extendedproperty", raw_body, _re.IGNORECASE
+    ):
         return "", []
     neg = "NOT " if m.group("neg") else ""
     cond_sql, u1 = _transpile_plain(m.group("cond").strip())
@@ -803,21 +971,30 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
     unhandled: list[dict] = []
 
     # File-level pass: register every BIT column so boolean CHECKs in separate ALTER
-    # statements can be resolved (see `_rewrite_boolean_int_checks`).
+    # statements can be resolved (see `_rewrite_boolean_int_checks`). Augment with
+    # boolean columns of tables declared OUTSIDE this file (the baseline / earlier
+    # migrations), supplied as JSON [["table","col"],…] in MJ_EXTRA_BIT_COLS — needed to
+    # coerce 1/0 → TRUE/FALSE in seed INSERTs that target core tables (e.g. User.IsActive).
     global _BIT_COLS
     _BIT_COLS = _collect_bit_columns(sql)
+    extra = _os.environ.get("MJ_EXTRA_BIT_COLS")
+    if extra:
+        try:
+            _BIT_COLS |= {(t.lower(), c.lower()) for t, c in _json.loads(extra)}
+        except Exception:  # noqa: BLE001
+            pass
 
     for batch in _GO_SPLIT.split(sql):
         if not batch.strip():
             continue
-        out_sql, u = _transpile_batch(batch)
+        out_sql, u = _transpile_batch(batch, pretty)
         out.extend(out_sql)
         unhandled.extend(u)
 
     return {"sql": out, "unhandled": unhandled}
 
 
-def _transpile_batch(batch: str) -> tuple[list[str], list[dict]]:
+def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[dict]]:
     """Scan one GO batch into envelope chunks + plain SQL, transpiling each in order."""
     out: list[str] = []
     unhandled: list[dict] = []
@@ -844,14 +1021,14 @@ def _transpile_batch(batch: str) -> tuple[list[str], list[dict]]:
         if nxt is None:
             gap = batch[pos:]
             if gap.strip():
-                s, u = _transpile_plain(gap)
+                s, u = _transpile_plain(gap, pretty)
                 if s.strip():
                     out.append(s)
                 unhandled.extend(u)
             break
         gap = batch[pos:nxt.start()]
         if gap.strip():
-            s, u = _transpile_plain(gap)
+            s, u = _transpile_plain(gap, pretty)
             if s.strip():
                 out.append(s)
             unhandled.extend(u)
@@ -878,5 +1055,10 @@ def _transpile_batch(batch: str) -> tuple[list[str], list[dict]]:
 
 if __name__ == "__main__":
     import sys, json
-    result = mj_transpile(sys.stdin.read())
-    print(json.dumps(result, indent=2))
+    if "--collect-bitcols" in sys.argv:
+        # Emit [["table","col"],…] for every BIT/BOOLEAN column in the piped SQL — lets the
+        # convert driver build a cross-file registry (baseline tables) for INSERT coercion.
+        print(json.dumps(sorted(list(_collect_bit_columns(sys.stdin.read())))))
+    else:
+        result = mj_transpile(sys.stdin.read())
+        print(json.dumps(result, indent=2))
