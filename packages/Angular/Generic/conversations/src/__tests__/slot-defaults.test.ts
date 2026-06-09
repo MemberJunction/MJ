@@ -45,7 +45,7 @@ describe('Slot default components — exports + interface conformance', () => {
         // If this assignment ever fails to type-check, the interface drifted from
         // the default — fix one or the other. Using a no-op cast keeps this at
         // type-level only (no runtime instantiation).
-        type _Check = IMJChatEmptyStateComponent extends InstanceType<typeof MJChatEmptyStateDefaultComponent>
+        type _Check = InstanceType<typeof MJChatEmptyStateDefaultComponent> extends IMJChatEmptyStateComponent
             ? true
             : never;
         const _interfaceCheck: _Check = true;
@@ -54,7 +54,7 @@ describe('Slot default components — exports + interface conformance', () => {
 
     it('MJChatAgentPresenceDefaultComponent is exported as a class', () => {
         expect(typeof MJChatAgentPresenceDefaultComponent).toBe('function');
-        type _Check = IMJChatAgentPresenceComponent extends InstanceType<typeof MJChatAgentPresenceDefaultComponent>
+        type _Check = InstanceType<typeof MJChatAgentPresenceDefaultComponent> extends IMJChatAgentPresenceComponent
             ? true
             : never;
         const _interfaceCheck: _Check = true;
@@ -63,7 +63,7 @@ describe('Slot default components — exports + interface conformance', () => {
 
     it('MJChatHeaderDefaultComponent is exported as a class', () => {
         expect(typeof MJChatHeaderDefaultComponent).toBe('function');
-        type _Check = IMJChatHeaderComponent extends InstanceType<typeof MJChatHeaderDefaultComponent>
+        type _Check = InstanceType<typeof MJChatHeaderDefaultComponent> extends IMJChatHeaderComponent
             ? true
             : never;
         const _interfaceCheck: _Check = true;
@@ -72,7 +72,7 @@ describe('Slot default components — exports + interface conformance', () => {
 
     it('MJChatMessageExtraDefaultComponent is exported as a class', () => {
         expect(typeof MJChatMessageExtraDefaultComponent).toBe('function');
-        type _Check = IMJChatMessageExtraComponent extends InstanceType<typeof MJChatMessageExtraDefaultComponent>
+        type _Check = InstanceType<typeof MJChatMessageExtraDefaultComponent> extends IMJChatMessageExtraComponent
             ? true
             : never;
         const _interfaceCheck: _Check = true;
@@ -81,7 +81,7 @@ describe('Slot default components — exports + interface conformance', () => {
 
     it('MJChatDemonstrationSurfaceDefaultComponent is exported as a class', () => {
         expect(typeof MJChatDemonstrationSurfaceDefaultComponent).toBe('function');
-        type _Check = IMJChatDemonstrationSurfaceComponent extends InstanceType<typeof MJChatDemonstrationSurfaceDefaultComponent>
+        type _Check = InstanceType<typeof MJChatDemonstrationSurfaceDefaultComponent> extends IMJChatDemonstrationSurfaceComponent
             ? true
             : never;
         const _interfaceCheck: _Check = true;
