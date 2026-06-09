@@ -42,6 +42,7 @@ export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
 export * from './ClientToolRequestManager';
+export * from './realtime/realtime-session-runner';
 
 // Re-export from ai-reranker for backward compatibility
 export {
