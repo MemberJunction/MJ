@@ -160,11 +160,13 @@ export class ConditionalDDLRule implements IConversionRule {
     // Strip comments before matching to avoid matching role keywords inside comments
     // (e.g., "Create Role and Grant Permissions" in a comment would match "and" as role name)
     const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
-    const roleMatch = stripped.match(/CREATE\s+ROLE\s+("?\w+"?)/i);
+    // Accept [bracket], "quoted", or bare role names. SS emits the AUTHORIZATION
+    // clause (e.g. CREATE ROLE [cdp_BI] AUTHORIZATION [db_securityadmin]) which PG
+    // has no equivalent for — we capture only the name and drop the rest.
+    const roleMatch = stripped.match(/CREATE\s+ROLE\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
     if (!roleMatch) return null;
-    const roleName = roleMatch[1];
-    // Strip quotes to get the bare name for the pg_roles lookup
-    const bareRoleName = roleName.replace(/^"|"$/g, '');
+    const bareRoleName = roleMatch[1] || roleMatch[2] || roleMatch[3];
+    const roleName = `"${bareRoleName}"`;
     return [
       'DO $$',
       'BEGIN',
