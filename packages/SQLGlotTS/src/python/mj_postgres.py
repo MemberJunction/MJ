@@ -436,6 +436,184 @@ def _transpile_sp_addextendedproperty(args: str) -> str | None:
     return f'COMMENT ON TABLE {schema}."{table}" IS {_pg_string(value)};'
 
 
+# T-SQL emits column defaults as standalone constraint statements that sqlglot
+# CANNOT parse (it falls back to an opaque exp.Command and the default is lost):
+#     ALTER TABLE [t] ADD CONSTRAINT [DF_…] DEFAULT (<expr>) FOR [col];
+# These carry ~all of MJ's column defaults (969 newsequentialid() ID defaults alone),
+# so dropping them leaves the PG schema without them and breaks seed INSERTs that omit
+# a defaulted column (e.g. ApplicationEntity rows relying on the ID default). Recognize
+# the fixed shape on raw text and emit the PG form: `ALTER TABLE t ALTER COLUMN "col"
+# SET DEFAULT <expr>` — the same "structural envelope" approach used for
+# sp_addextendedproperty / IF EXISTS BEGIN. The trailing `;` is optional because
+# sqlglot's Command node text drops it.
+_DEFAULT_CONSTRAINT = _re.compile(
+    r"^\s*ALTER\s+TABLE\s+(?P<tbl>.+?)\s+ADD\s+CONSTRAINT\s+(?:\[[^\]]+\]|\"[^\"]+\"|\S+)\s+"
+    r"DEFAULT\s+(?P<expr>.+?)\s+FOR\s+(?P<col>\[[^\]]+\]|\"[^\"]+\"|\w+)\s*;?\s*$",
+    _re.IGNORECASE | _re.DOTALL,
+)
+# Identifier tokens inside a table reference: bracketed, double-quoted, the Flyway
+# sentinel/macro, or a bare PascalCase name.
+_IDENT_TOKEN = _re.compile(
+    r'\[[^\]]+\]|"[^"]+"|' + _re.escape(FLYWAY_SENTINEL) + r'|' + _re.escape(FLYWAY_MACRO) + r'|[A-Za-z_]\w*'
+)
+
+
+def _ident_token_to_pg(tok: str) -> str:
+    """One identifier token → PG form. `[x]`/`"x"`/`x` → `"x"`; Flyway sentinel/macro → macro verbatim."""
+    name = tok.strip()
+    if name.startswith("[") and name.endswith("]"):
+        name = name[1:-1]
+    elif name.startswith('"') and name.endswith('"'):
+        name = name[1:-1]
+    if name in (FLYWAY_SENTINEL, FLYWAY_MACRO):
+        return FLYWAY_MACRO
+    return f'"{name}"'
+
+
+def _emit_table_ref(tbl_raw: str) -> str:
+    """`[__mj].[X]` → `"__mj"."X"`; `${flyway:defaultSchema}.[X]` → `${flyway:defaultSchema}."X"`."""
+    toks = _IDENT_TOKEN.findall(tbl_raw)
+    return ".".join(_ident_token_to_pg(t) for t in toks) if toks else tbl_raw.strip()
+
+
+def _balanced_parens(s: str) -> bool:
+    """True if every paren in s closes before the end (i.e. the whole string is one group)."""
+    depth = 0
+    for i, c in enumerate(s):
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0 and i != len(s) - 1:
+                return False
+    return depth == 0
+
+
+def _convert_default_expr(expr_raw: str, table: str, col: str) -> str:
+    """Convert a T-SQL DEFAULT expression to PG. Unwraps SS's `((…))` wrapping, maps
+    BIT 1/0 → TRUE/FALSE (via the file-level bit registry), and routes the rest through
+    the AST (newsequentialid()→gen_random_uuid(), getutcdate()→now(), N'…'→'…')."""
+    e = expr_raw.strip().rstrip(";").strip()
+    while len(e) >= 2 and e[0] == "(" and e[-1] == ")" and _balanced_parens(e):
+        e = e[1:-1].strip()
+    if table and (table.lower(), col.lower()) in _BIT_COLS and e in ("0", "1"):
+        return "TRUE" if e == "1" else "FALSE"
+    try:
+        node = sqlglot.parse_one(e.replace(FLYWAY_MACRO, FLYWAY_SENTINEL), read="tsql")
+        node = node.transform(_strip_national).transform(_rewrite_functions)
+        return node.sql(dialect=MJPostgres, identify=True)
+    except Exception:  # noqa: BLE001 — fall back to the raw expr (still valid for simple literals)
+        return e
+
+
+def _strip_leading_sql_comments(s: str) -> str:
+    """Drop leading `--` / `/* */` comments. sqlglot attaches a preceding comment to the
+    statement node, so a Command's text can be `/* note */ ALTER …` — which defeats a
+    `^ALTER` anchor. The comment is non-essential metadata; drop it for matching/emit."""
+    s = s.strip()
+    while True:
+        if s.startswith("--"):
+            nl = s.find("\n")
+            s = ("" if nl < 0 else s[nl + 1:]).lstrip()
+        elif s.startswith("/*"):
+            end = s.find("*/")
+            s = ("" if end < 0 else s[end + 2:]).lstrip()
+        else:
+            return s
+
+
+def _transpile_default_constraint(txt: str) -> str | None:
+    """`ALTER TABLE t ADD CONSTRAINT df DEFAULT (expr) FOR [col]` → PG `ALTER COLUMN SET DEFAULT`.
+    Returns None if txt isn't a standalone default constraint."""
+    m = _DEFAULT_CONSTRAINT.match(txt.strip())
+    if not m:
+        return None
+    col = m.group("col").strip().strip('[]"')
+    toks = _IDENT_TOKEN.findall(m.group("tbl"))
+    tname = (toks[-1].strip('[]"') if toks else "")
+    expr = _convert_default_expr(m.group("expr"), tname, col)
+    return f'ALTER TABLE {_emit_table_ref(m.group("tbl"))} ALTER COLUMN "{col}" SET DEFAULT {expr}'
+
+
+# T-SQL `ALTER TABLE t ALTER COLUMN c <type> [NOT NULL|NULL]` — also unparseable by
+# sqlglot (→ opaque Command). PG splits this into a TYPE change and a separate
+# nullability action: `ALTER COLUMN c TYPE <pgtype>, ALTER COLUMN c SET/DROP NOT NULL`.
+# Dropped silently today, so a post-baseline column type/nullability change would
+# no-op; emit the PG form (reusing the dialect's type mapping).
+_ALTER_COLUMN = _re.compile(
+    r"^\s*ALTER\s+TABLE\s+(?P<tbl>.+?)\s+ALTER\s+COLUMN\s+(?P<col>\[[^\]]+\]|\"[^\"]+\"|\w+)\s+(?P<rest>.+?)\s*;?\s*$",
+    _re.IGNORECASE | _re.DOTALL,
+)
+
+
+def _transpile_alter_column(txt: str) -> str | None:
+    """`ALTER TABLE t ALTER COLUMN c <type> [NOT NULL|NULL]` → PG TYPE change + nullability.
+    Returns None if txt isn't an ALTER COLUMN (or its type can't be parsed)."""
+    m = _ALTER_COLUMN.match(txt.strip())
+    if not m:
+        return None
+    rest = m.group("rest").strip()
+    try:
+        node = sqlglot.parse_one(f"CREATE TABLE t (c {rest})", read="tsql")
+        cd = node.find(exp.ColumnDef)
+        if cd is None or cd.kind is None:
+            return None
+        pgtype = cd.kind.sql(dialect=MJPostgres, identify=True)
+    except Exception:  # noqa: BLE001
+        return None
+    col = m.group("col").strip().strip('[]"')
+    actions = [f'ALTER COLUMN "{col}" TYPE {pgtype}']
+    if _re.search(r"\bNOT\s+NULL\b", rest, _re.IGNORECASE):
+        actions.append(f'ALTER COLUMN "{col}" SET NOT NULL')
+    elif _re.search(r"\bNULL\b", rest, _re.IGNORECASE):
+        actions.append(f'ALTER COLUMN "{col}" DROP NOT NULL')
+    return f'ALTER TABLE {_emit_table_ref(m.group("tbl"))} ' + ", ".join(actions)
+
+
+# EXEC sp_dropextendedproperty @name=N'MS_Description', … @level1name=…, @level2name=… ;
+# Same envelope shape as sp_addextendedproperty but with NO @value (it removes a comment).
+# Map to `COMMENT ON … IS NULL`; dropped today, so 7 stale column comments survive.
+_SP_DROPEXTPROP = _re.compile(
+    r"EXEC(?:UTE)?\s+sp_dropextendedproperty\b(?P<args>(?:'(?:[^']|'')*'|[^';])*);",
+    _re.IGNORECASE | _re.DOTALL,
+)
+
+
+def _dropextprop_positional(args: str) -> dict | None:
+    """Positional sp_dropextendedproperty args: name, l0type, l0name, l1type, l1name[, l2type, l2name] (no value)."""
+    vals = [_unquote_tsql_string(m.group(1)) for m in _re.finditer(r"(N?'(?:[^']|'')*')", args)]
+    if len(vals) < 5:
+        return None
+    d = {"name": vals[0], "level0name": vals[2], "level1name": vals[4]}
+    if len(vals) >= 7:
+        d["level2type"], d["level2name"] = vals[5], vals[6]
+    return d
+
+
+def _transpile_sp_dropextendedproperty(args: str) -> str | None:
+    """EXEC sp_dropextendedproperty(MS_Description) → COMMENT ON COLUMN/TABLE … IS NULL."""
+    if _extprop_arg(args, "name") is not None:
+        get = lambda k: _extprop_arg(args, k)  # noqa: E731
+    else:
+        p = _dropextprop_positional(args)
+        if p is None:
+            return None
+        get = lambda k: p.get(k)  # noqa: E731
+    if (get("name") or "").upper() != "MS_DESCRIPTION":
+        return None
+    schema = get("level0name") or FLYWAY_MACRO
+    table = get("level1name")
+    col = get("level2name")
+    col_type = (get("level2type") or ("COLUMN" if col else "")).upper()
+    if not table:
+        return None
+    if _CODEGEN_OBJECT_NAME.match(table):  # CodeGen object — regenerated, skip
+        return ""
+    if col and col_type == "COLUMN":
+        return f'COMMENT ON COLUMN {schema}."{table}"."{col}" IS NULL;'
+    return f'COMMENT ON TABLE {schema}."{table}" IS NULL;'
+
+
 def _split_top_level_statements(sql: str) -> list[str]:
     """Split SQL on top-level `;`, ignoring semicolons inside single-quoted strings and
     `--` / `/* */` comments. Used to recover good statements when a whole-gap parse fails
@@ -516,7 +694,20 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
             continue
         if isinstance(stmt, exp.Command):
-            txt = stmt.sql(dialect="tsql")
+            # sqlglot may glom a preceding comment onto the Command (`/* note */ ALTER …`),
+            # which defeats the `^ALTER` anchors below; match against the bare statement.
+            txt = _strip_leading_sql_comments(stmt.sql(dialect="tsql"))
+            # T-SQL standalone column-default constraint — sqlglot can't parse it, so it
+            # lands here as a Command. Emit the PG `ALTER COLUMN … SET DEFAULT` form.
+            dc = _transpile_default_constraint(txt)
+            if dc is not None:
+                out.append(dc)
+                continue
+            # T-SQL `ALTER TABLE … ALTER COLUMN c <type> [NOT] NULL` — also a Command.
+            ac = _transpile_alter_column(txt)
+            if ac is not None:
+                out.append(ac)
+                continue
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
                 continue
@@ -647,8 +838,9 @@ def _transpile_batch(batch: str) -> tuple[list[str], list[dict]]:
     # Walk the batch, alternating between recognized envelopes and plain SQL gaps.
     while pos < len(batch):
         ext = _SP_EXTPROP.search(batch, pos)
+        dxp = _SP_DROPEXTPROP.search(batch, pos)
         ife = _IF_EXISTS_BEGIN.search(batch, pos)
-        nxt = min([m for m in (ext, ife) if m], key=lambda m: m.start(), default=None)
+        nxt = min([m for m in (ext, dxp, ife) if m], key=lambda m: m.start(), default=None)
         if nxt is None:
             gap = batch[pos:]
             if gap.strip():
@@ -669,6 +861,12 @@ def _transpile_batch(batch: str) -> tuple[list[str], list[dict]]:
                 out.append(comment)
             else:
                 unhandled.append({"kind": "sp_addextendedproperty", "snippet": nxt.group(0)[:80]})
+        elif nxt is dxp:
+            comment = _transpile_sp_dropextendedproperty(nxt.group("args"))
+            if comment:
+                out.append(comment)
+            elif comment is None:
+                unhandled.append({"kind": "sp_dropextendedproperty", "snippet": nxt.group(0)[:80]})
         else:
             do, u = _transpile_if_exists_begin(nxt)
             if do.strip():

@@ -187,6 +187,67 @@ check("idempotent seed of schema-derived metadata (EntityField) is dropped (Code
       must_contain=[],
       must_not_contain=["EntityField", "DO $$", "INSERT"])
 
+# --- Transform: standalone DEFAULT constraint → ALTER COLUMN SET DEFAULT ------
+# sqlglot can't parse `ADD CONSTRAINT … DEFAULT (…) FOR [col]`; these carry ~all of
+# MJ's column defaults. Must emit PG `ALTER COLUMN … SET DEFAULT`, converting the expr.
+check("standalone newsequentialid() default → ALTER COLUMN SET DEFAULT gen_random_uuid()",
+      "ALTER TABLE [${flyway:defaultSchema}].[ApplicationEntity] ADD CONSTRAINT [DF_AE_ID] DEFAULT (newsequentialid()) FOR [ID];",
+      must_contain=['ALTER TABLE ${flyway:defaultSchema}."ApplicationEntity" ALTER COLUMN "ID" SET DEFAULT GEN_RANDOM_UUID()'],
+      must_not_contain=["ADD CONSTRAINT", "newsequentialid", "FOR ["])
+
+check("standalone getutcdate() default → SET DEFAULT NOW()",
+      "ALTER TABLE [__mj].[RowLevelSecurityFilter] ADD CONSTRAINT [DF_x] DEFAULT (getutcdate()) FOR [__mj_CreatedAt];",
+      must_contain=['ALTER TABLE "__mj"."RowLevelSecurityFilter" ALTER COLUMN "__mj_CreatedAt" SET DEFAULT NOW()'],
+      must_not_contain=["ADD CONSTRAINT", "getutcdate", "FOR ["])
+
+check("standalone BIT default ((1))/((0)) → TRUE/FALSE via bit registry; non-bit numeric kept",
+      "CREATE TABLE ${flyway:defaultSchema}.ApplicationEntity (DefaultForNewUser BIT NOT NULL, Sequence INT NOT NULL);\nGO\n"
+      "ALTER TABLE [${flyway:defaultSchema}].[ApplicationEntity] ADD CONSTRAINT [DF_d] DEFAULT ((1)) FOR [DefaultForNewUser];\n"
+      "ALTER TABLE [${flyway:defaultSchema}].[ApplicationEntity] ADD CONSTRAINT [DF_s] DEFAULT ((0)) FOR [Sequence];",
+      must_contain=['ALTER COLUMN "DefaultForNewUser" SET DEFAULT TRUE',
+                    'ALTER COLUMN "Sequence" SET DEFAULT 0'],
+      must_not_contain=["ADD CONSTRAINT", "DEFAULT ((1))", "SET DEFAULT 1"])
+
+check("standalone string default preserved",
+      "ALTER TABLE [__mj].[Foo] ADD CONSTRAINT [DF_st] DEFAULT (N'Active') FOR [Status];",
+      must_contain=['ALTER COLUMN "Status" SET DEFAULT \'Active\''],
+      must_not_contain=["ADD CONSTRAINT", "N'Active'"])
+
+# --- Transform: ALTER COLUMN type/nullability change → PG TYPE + SET/DROP NOT NULL --
+check("ALTER COLUMN type + NOT NULL → TYPE change + SET NOT NULL",
+      "ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] NVARCHAR(200) NOT NULL;",
+      must_contain=['ALTER TABLE "__mj"."Foo" ALTER COLUMN "Name" TYPE VARCHAR(200)',
+                    'ALTER COLUMN "Name" SET NOT NULL'],
+      must_not_contain=["ALTER COLUMN [Name]", "NVARCHAR", "DROP NOT NULL"])
+
+check("ALTER COLUMN NVARCHAR(MAX) NULL → TYPE TEXT + DROP NOT NULL; flyway macro kept",
+      "ALTER TABLE [${flyway:defaultSchema}].[Bar] ALTER COLUMN [Note] NVARCHAR(MAX) NULL;",
+      must_contain=['ALTER TABLE ${flyway:defaultSchema}."Bar" ALTER COLUMN "Note" TYPE TEXT',
+                    'ALTER COLUMN "Note" DROP NOT NULL'],
+      must_not_contain=["NVARCHAR", "SET NOT NULL", "__mj_flyway"])
+
+check("ALTER COLUMN with a leading comment (own GO batch) still transpiles",
+      "-- Phase 4 — Email becomes optional.\n"
+      "ALTER TABLE ${flyway:defaultSchema}.MagicLinkInvite ALTER COLUMN Email NVARCHAR(255) NULL;",
+      must_contain=['ALTER TABLE ${flyway:defaultSchema}."MagicLinkInvite" ALTER COLUMN "Email" TYPE VARCHAR(255)',
+                    'DROP NOT NULL'],
+      must_not_contain=["NVARCHAR", "Phase 4"])
+
+# --- Transform: sp_dropextendedproperty → COMMENT ON … IS NULL ---------------
+check("sp_dropextendedproperty COLUMN → COMMENT ON COLUMN … IS NULL",
+      "EXEC sp_dropextendedproperty @name=N'MS_Description', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'Foo', @level2type=N'COLUMN', @level2name=N'Bar';",
+      must_contain=['COMMENT ON COLUMN ${flyway:defaultSchema}."Foo"."Bar" IS NULL'],
+      must_not_contain=["sp_dropextendedproperty", "EXEC"])
+
+check("sp_dropextendedproperty TABLE-level → COMMENT ON TABLE … IS NULL",
+      "EXEC sp_dropextendedproperty @name=N'MS_Description', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'Widget';",
+      must_contain=['COMMENT ON TABLE ${flyway:defaultSchema}."Widget" IS NULL'],
+      must_not_contain=["sp_dropextendedproperty"])
+
 # --- GO batches + mixed envelope ordering -----------------------------------
 check("GO batches: DDL + comment + idempotent insert, all clean, order preserved",
       """ALTER TABLE ${flyway:defaultSchema}.APIKey ADD KeyPrefix NVARCHAR(20) NULL;
