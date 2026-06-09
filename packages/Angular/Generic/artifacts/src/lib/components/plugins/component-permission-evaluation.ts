@@ -1,4 +1,4 @@
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { QueryEngine } from '@memberjunction/core-entities';
 
@@ -23,7 +23,8 @@ export interface PermissionEvaluationResult {
  */
 function evaluateComponentPermissionsSingle(
     spec: ComponentSpec,
-    currentUser: UserInfo
+    currentUser: UserInfo,
+    provider?: IMetadataProvider
 ): PermissionEvaluationResult {
     const missingEntities: string[] = [];
     const missingQueries: string[] = [];
@@ -34,7 +35,7 @@ function evaluateComponentPermissionsSingle(
     }
 
     // Check entity permissions (all current components are read-only)
-    const md = new Metadata();
+    const md = provider ?? Metadata.Provider;
     for (const entityReq of dataReqs.entities ?? []) {
         const entityInfo = md.EntityByName(entityReq.name);
         if (!entityInfo) continue; // Unknown entity — skip (may be stale reference)
@@ -72,12 +73,13 @@ function evaluateComponentPermissionsSingle(
  */
 export function evaluateComponentPermissions(
     spec: ComponentSpec,
-    currentUser: UserInfo
+    currentUser: UserInfo,
+    provider?: IMetadataProvider
 ): PermissionEvaluationResult {
-    const result = evaluateComponentPermissionsSingle(spec, currentUser);
+    const result = evaluateComponentPermissionsSingle(spec, currentUser, provider);
 
     for (const dep of spec.dependencies ?? []) {
-        const depResult = evaluateComponentPermissions(dep, currentUser);
+        const depResult = evaluateComponentPermissions(dep, currentUser, provider);
         result.missingEntities.push(...depResult.missingEntities);
         result.missingQueries.push(...depResult.missingQueries);
     }

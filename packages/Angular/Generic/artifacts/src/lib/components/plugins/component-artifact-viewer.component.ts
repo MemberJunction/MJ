@@ -4,7 +4,7 @@ import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-ar
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { isFormRole, getDeclaredFormEntityName } from '@memberjunction/interactive-component-types/forms';
-import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 import { evaluateComponentPermissions, PermissionEvaluationResult } from './component-permission-evaluation';
 
@@ -163,11 +163,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     const spec = this.resolvedComponentSpec;
     if (!spec) return;
 
-    const md = new Metadata();
-    const currentUser = md.CurrentUser;
+    const provider = this.ProviderToUse;
+    const currentUser = provider.CurrentUser;
     if (!currentUser) return; // No user context — skip check
 
-    this.permissionResult = evaluateComponentPermissions(spec, currentUser);
+    this.permissionResult = evaluateComponentPermissions(spec, currentUser, provider);
   }
 
   /** Whether the component should be blocked from rendering due to missing permissions. */
