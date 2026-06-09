@@ -29,6 +29,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
@@ -358,10 +359,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
   //     message-item.component's `onFormSubmitted()`, forwarded through
   //     message-list to chat-area.
-  //   ✗ beforeToolInvoked / afterToolInvoked — DECLARED but firing requires
-  //     a `beforeDispatch` hook in AgentClientSession (the session executes
-  //     tools immediately when the ClientToolRequest subscription emits; no
-  //     cancellation hook exists today). Deferred to a runtime-side commit.
+  //   ◐ beforeToolInvoked / afterToolInvoked — FIRING (subscribed to
+  //     AgentClientService.ToolRequested$ / ToolExecuted$ in ngOnInit and
+  //     re-emitted on chat-area's outputs). Cancel is ADVISORY today —
+  //     listeners can flip event.Cancel = true and observe it, but
+  //     AgentClientSession.handleToolRequest doesn't honor it; the tool runs
+  //     regardless. Enforcing cancel requires a `beforeDispatch` hook inside
+  //     AgentClientSession — a small runtime-side follow-up commit.
   //   ✗ session* — DECLARED but the SessionsObserver is a no-op stub until
   //     PR #2787 (ai-agent-sessions) lands.
 
@@ -588,7 +592,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     private bridge: ConversationBridgeService,
     private analyzeArtifactService: AnalyzeArtifactService,
     private uiCommandHandler: UICommandHandlerService,
-    private interactiveFormApplyService: InteractiveFormApplyService
+    private interactiveFormApplyService: InteractiveFormApplyService,
+    private agentClientService: AgentClientService
   ) {
   super();}
 
@@ -630,6 +635,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (command.type === 'client:capture-data-snapshot') {
           void this.handleCaptureDataSnapshotCommand(command);
         }
+      });
+
+    // Bridge AgentClientService's tool-dispatch observables to chat-area's
+    // Before/After cancelable @Outputs. `ToolRequested$` fires synchronously
+    // BEFORE the tool runs (good for the beforeToolInvoked semantic),
+    // `ToolExecuted$` fires after.
+    //
+    // Cancel is ADVISORY today: a listener can flip `event.Cancel = true`, but
+    // AgentClientSession.handleToolRequest doesn't honor it yet — the session
+    // already kicked off the await on the registry execution by the time the
+    // subscriber's mutation lands. Enforcing cancel requires a `beforeDispatch`
+    // hook inside AgentClientSession (runtime-side follow-up). Listeners can
+    // subscribe + observe today; veto enforcement follows in a future commit.
+    this.agentClientService.ToolRequested$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((toolEvent) => {
+        this.beforeToolInvoked.emit(
+          new BeforeToolInvokedEventArgs(toolEvent.Request.ToolName, toolEvent.Request.Params)
+        );
+      });
+    this.agentClientService.ToolExecuted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((toolEvent) => {
+        this.afterToolInvoked.emit(
+          new AfterToolInvokedEventArgs(
+            toolEvent.Request.ToolName,
+            toolEvent.Request.Params,
+            toolEvent.Result
+          )
+        );
       });
 
     // The workspace component initializes AI Engine and mention service before
