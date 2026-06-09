@@ -74,6 +74,14 @@ import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.co
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
 
+// PR 2c — Widget extension surface (standalone)
+import { ChatSlotDirective } from './directives/chat-slot.directive';
+import { MJChatEmptyStateDefaultComponent } from './components/slots/mj-chat-empty-state-default.component';
+import { MJChatAgentPresenceDefaultComponent } from './components/slots/mj-chat-agent-presence-default.component';
+import { MJChatHeaderDefaultComponent } from './components/slots/mj-chat-header-default.component';
+import { MJChatMessageExtraDefaultComponent } from './components/slots/mj-chat-message-extra-default.component';
+import { MJChatDemonstrationSurfaceDefaultComponent } from './components/slots/mj-chat-demonstration-surface-default.component';
+
 // Export all components (excluding standalone components)
 const COMPONENTS = [
   MessageItemComponent,
@@ -150,13 +158,27 @@ const COMPONENTS = [
     CollectionShareModalComponent,
     UserPickerComponent,
     ArtifactCollectionPickerModalComponent,
-    ArtifactShareModalComponent
+    ArtifactShareModalComponent,
+    // PR 2c — Widget extension surface (standalone)
+    ChatSlotDirective,
+    MJChatEmptyStateDefaultComponent,
+    MJChatAgentPresenceDefaultComponent,
+    MJChatHeaderDefaultComponent,
+    MJChatMessageExtraDefaultComponent,
+    MJChatDemonstrationSurfaceDefaultComponent
   ],
   exports: [
     ...COMPONENTS,
     SearchShortcutDirective,
     // Standalone components
-    TasksFullViewComponent
+    TasksFullViewComponent,
+    // PR 2c — Widget extension surface
+    ChatSlotDirective,
+    MJChatEmptyStateDefaultComponent,
+    MJChatAgentPresenceDefaultComponent,
+    MJChatHeaderDefaultComponent,
+    MJChatMessageExtraDefaultComponent,
+    MJChatDemonstrationSurfaceDefaultComponent
   ]
 })
 export class ConversationsModule { }

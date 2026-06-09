@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
@@ -30,6 +30,52 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { UUIDsEqual } from '@memberjunction/global';
+
+// PR 2c — Widget extension surface
+import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
+import type {
+  IMJChatAgentPresenceComponent,
+  MJChatAgentPresenceState,
+  IMJChatEmptyStateComponent,
+} from '../slots/slot-interfaces';
+import {
+  BeforeAgentTurnEventArgs,
+  AfterAgentTurnEventArgs,
+  BeforeToolInvokedEventArgs,
+  AfterToolInvokedEventArgs,
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+  SessionStartedEventArgs,
+  SessionChannelStateChangedEventArgs,
+  SessionEndedEventArgs,
+} from '../../events/chat-events';
+
+/**
+ * Configuration for the persona/character rendering in the `agentPresence` slot.
+ * Off by default — opt in via `showAgentCharacter`. Mirrors {@link IMJChatAgentPresenceComponent}.
+ */
+export interface AgentCharacterConfig {
+  /** Optional avatar URL. */
+  avatarUrl?: string;
+  /** Display name. */
+  characterName?: string;
+  /** Visual intensity. */
+  voiceStateMode?: 'subtle' | 'prominent';
+  /** Current voice state — drives state-colored styling on the default presence component. */
+  state?: MJChatAgentPresenceState;
+}
+
+/**
+ * Configuration payload for the `emptyState` slot's default component. When
+ * supplied, drives the empty-state's greeting / subtext / suggested prompts.
+ */
+export interface EmptyStateConfig {
+  greeting?: string;
+  subtext?: string;
+  suggestedPrompts?: string[];
+  /** Hide the default suggested prompts even if greeting/subtext are set. */
+  hideDefaultPrompts?: boolean;
+}
 
 /** Default width (percentage) for the artifact viewer pane */
 const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
@@ -270,6 +316,78 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
 
+  // ────────────────────────────────────────────────────────────────────
+  // PR 2c — Widget extension surface (additive — no breaking changes)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * When true, the `agentPresence` slot is allowed to render (using the
+   * supplied `agentCharacterConfig` for visualization data). Off by default
+   * so existing embeds (Form Builder, Component Studio AI Assistant, the
+   * corner overlay) see no UI change.
+   */
+  @Input() showAgentCharacter: boolean = false;
+
+  /**
+   * Visualization data forwarded to the `agentPresence` slot's default
+   * component (or to any consumer-projected template via slot context).
+   * Includes avatar URL, character name, voice state, and visual intensity.
+   */
+  @Input() agentCharacterConfig: AgentCharacterConfig | null = null;
+
+  /**
+   * Structured config for the `emptyState` slot's default component —
+   * greeting, subtext, and optional suggested prompts. Backwards-compatible
+   * with the existing `emptyStateGreeting` input (which still wins when
+   * `emptyStateConfig` is null).
+   */
+  @Input() emptyStateConfig: EmptyStateConfig | null = null;
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR 2c — Before/After cancelable @Output() events
+  // ────────────────────────────────────────────────────────────────────
+  //
+  // Listeners set `event.Cancel = true` on the `Before*` event to halt the
+  // default behavior; the matching `After*` event then does NOT fire.
+  // Informational events (progress, shown notifications, session lifecycle)
+  // stay as single emitters without a Before-pair.
+  //
+  // WIRING STATUS (PR 2c):
+  //   All Before/After event emitters and SessionStarted/Ended events are
+  //   DECLARED in this commit so consumers can subscribe and depend on the
+  //   public surface. Actual firing wiring is deferred to follow-up commits
+  //   that touch the emission paths:
+  //     • beforeAgentTurn / afterAgentTurn — wire in message-input.component
+  //       around `agentService.processMessage()` (line ~1117).
+  //     • beforeToolInvoked / afterToolInvoked — wire to the runtime's
+  //       AgentClientSession tool-dispatch path.
+  //     • beforeResponseFormSubmitted / afterResponseFormSubmitted — wire
+  //       to message-item's response-form submission handler.
+  //     • session* — wire once PR #2787's SessionsObserver replaces the
+  //       no-op stub.
+
+  /** Cancelable — fired BEFORE a user message is sent to the agent. */
+  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+  /** Fired AFTER a successful agent turn completes. */
+  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /** Cancelable — fired BEFORE a registered client tool is invoked by the agent. */
+  @Output() beforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+  /** Fired AFTER a client tool invocation completes. */
+  @Output() afterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+
+  /** Cancelable — fired BEFORE a response form's submitted values are sent. */
+  @Output() beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  /** Fired AFTER a response form's values have been sent. */
+  @Output() afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /** Informational. */
+  @Output() sessionStarted = new EventEmitter<SessionStartedEventArgs>();
+  /** Informational. */
+  @Output() sessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
+  /** Informational. */
+  @Output() sessionEnded = new EventEmitter<SessionEndedEventArgs>();
+
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
@@ -295,6 +413,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
+
+  /**
+   * Slot-fill templates supplied by consumers via the `mjChatSlot` directive.
+   * Looked up by slot name with {@link slotTemplate}.
+   */
+  @ContentChildren(ChatSlotDirective) private chatSlotChildren!: QueryList<ChatSlotDirective>;
+
+  /**
+   * Public helper for the template + consumers — resolve a slot name to the
+   * consumer-supplied `TemplateRef`, or `null` if no consumer template was
+   * projected for that slot. When `null`, the template should render the
+   * slot's default standalone component.
+   */
+  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+    return this.chatSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
 
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;

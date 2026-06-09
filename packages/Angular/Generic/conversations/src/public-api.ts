@@ -67,3 +67,14 @@ export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
+
+// PR 2c — Widget extension surface
+export * from './lib/services/conversations-runtime-bootstrap.service';
+export * from './lib/directives/chat-slot.directive';
+export * from './lib/components/slots/slot-interfaces';
+export * from './lib/components/slots/mj-chat-empty-state-default.component';
+export * from './lib/components/slots/mj-chat-agent-presence-default.component';
+export * from './lib/components/slots/mj-chat-header-default.component';
+export * from './lib/components/slots/mj-chat-message-extra-default.component';
+export * from './lib/components/slots/mj-chat-demonstration-surface-default.component';
+export * from './lib/events/chat-events';

@@ -1,0 +1,43 @@
+/**
+ * MJ Conversations — Chat-specific design tokens.
+ *
+ * These tokens give the slot defaults (`MJChatEmptyStateDefaultComponent`,
+ * `MJChatAgentPresenceDefaultComponent`, etc.) and chat-area surfaces a
+ * documented hook for theming WITHOUT requiring consumers to override the
+ * underlying semantic tokens.
+ *
+ * Each token defaults to an existing semantic `--mj-*` token from
+ * `_tokens.scss` so the chat surface adapts automatically to light/dark
+ * mode and to any consumer-supplied theme. Consumers that want a custom
+ * theme (e.g., warm tutor surfaces) override these chat tokens locally:
+ *
+ *   :root {
+ *     --mj-chat-bubble-agent-bg: #fff4e6;
+ *     --mj-chat-character-accent: #f59e0b;
+ *     --mj-chat-voice-listening: #10b981;
+ *   }
+ *
+ * Imported via the conversations package's stylesheet so it's available
+ * everywhere the chat widget renders.
+ */
+
+:root {
+    /* ===== Bubbles ===== */
+    --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+    --mj-chat-bubble-user-text: var(--mj-text-inverse);
+    --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+    --mj-chat-bubble-agent-text: var(--mj-text-primary);
+
+    /* ===== Composer ===== */
+    --mj-chat-composer-bg: var(--mj-bg-surface);
+    --mj-chat-composer-border: var(--mj-border-default);
+
+    /* ===== Character / persona ===== */
+    --mj-chat-character-accent: var(--mj-brand-primary);
+    --mj-chat-presence-pulse-color: var(--mj-brand-primary);
+
+    /* ===== Voice state (Pranav's channels — wired once PR #2787 lands) ===== */
+    --mj-chat-voice-listening: var(--mj-status-info);
+    --mj-chat-voice-thinking: var(--mj-status-warning);
+    --mj-chat-voice-speaking: var(--mj-brand-primary);
+}
