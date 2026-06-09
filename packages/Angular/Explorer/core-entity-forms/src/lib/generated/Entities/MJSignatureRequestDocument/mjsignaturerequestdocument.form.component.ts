@@ -15,8 +15,7 @@ export class MJSignatureRequestDocumentFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'signatureRequest', sectionName: 'Signature Request', isExpanded: true },
-            { sectionKey: 'artifactReference', sectionName: 'Artifact Reference', isExpanded: true },
+            { sectionKey: 'documentContext', sectionName: 'Document Context', isExpanded: true },
             { sectionKey: 'documentDetails', sectionName: 'Document Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
