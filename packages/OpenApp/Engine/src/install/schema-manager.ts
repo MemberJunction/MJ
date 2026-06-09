@@ -81,8 +81,10 @@ export async function SchemaExists(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<boolean> {
+  // information_schema.schemata is ANSI-standard and present on both SQL Server and
+  // PostgreSQL, so this existence check is dialect-agnostic (no sys.schemas / pg_namespace branch).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM sys.schemas WHERE name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -113,7 +115,8 @@ export async function CreateAppSchema(
   }
 
   try {
-    await provider.ExecuteSQL(`CREATE SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    // provider.QuoteIdentifier applies the dialect's quoting ([..] on SS, ".." on PG).
+    await provider.ExecuteSQL(`CREATE SCHEMA ${provider.QuoteIdentifier(schemaName)}`);
     return { Success: true };
   }
   catch (error: unknown) {
@@ -148,9 +151,15 @@ export async function DropAppSchema(
   }
 
   try {
-    // Drop all objects in the schema first (SQL Server doesn't support CASCADE on DROP SCHEMA)
-    await DropAllSchemaObjects(schemaName, provider);
-    await provider.ExecuteSQL(`DROP SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    if (provider.PlatformKey === 'postgresql') {
+      // PostgreSQL supports CASCADE — drops the schema and everything in it in one statement.
+      await provider.ExecuteSQL(`DROP SCHEMA ${provider.QuoteIdentifier(schemaName)} CASCADE`);
+    }
+    else {
+      // SQL Server doesn't support CASCADE on DROP SCHEMA — empty the schema first, then drop it.
+      await DropAllSchemaObjects(schemaName, provider);
+      await provider.ExecuteSQL(`DROP SCHEMA ${provider.QuoteIdentifier(schemaName)}`);
+    }
     return { Success: true };
   }
   catch (error: unknown) {

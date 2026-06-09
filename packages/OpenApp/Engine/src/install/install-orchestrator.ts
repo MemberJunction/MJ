@@ -42,7 +42,11 @@ import {
 export interface OrchestratorContext {
   /** MJ context user for entity operations (Metadata / RunView) */
   ContextUser: UserInfo;
-  /** MJ database provider for schema DDL operations */
+  /**
+   * MJ database provider for schema DDL operations. Its `PlatformKey` ('sqlserver' |
+   * 'postgresql') is the single source of truth for the target platform — schema DDL and
+   * the migration provider are selected from it, not from a separate flag.
+   */
   DatabaseProvider: DatabaseProviderBase;
   /** Database config for Skyway */
   DatabaseConfig: SkywayDatabaseConfig;
@@ -930,18 +934,27 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, manifest.migrations.directory, tempDir, context.GitHubOptions);
+  // Platform-aware migration source: on PostgreSQL, apply the same `migrations` ->
+  // `migrations-pg` convention the `mj migrate` CLI uses, so the installer picks up the
+  // app's converted PG migration set. The target platform is read from the provider
+  // (single source of truth).
+  const platform = context.DatabaseProvider.PlatformKey;
+  const migrationsDirectory = platform === 'postgresql'
+    ? manifest.migrations.directory.replace(/\bmigrations\b/, 'migrations-pg')
+    : manifest.migrations.directory;
+
+  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, migrationsDirectory, tempDir, context.GitHubOptions);
 
   if (!downloadResult.Success) {
     return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
   }
 
-  context.Callbacks?.OnProgress?.('Migration', `Running ${downloadResult.Files?.length ?? 0} migration(s)...`);
+  context.Callbacks?.OnProgress?.('Migration', `Running ${downloadResult.Files?.length ?? 0} migration(s) [${platform}]...`);
 
   const migrationResult = await RunAppMigrations({
     MigrationsDir: tempDir,
     SchemaName: manifest.schema.name,
-    DatabaseConfig: context.DatabaseConfig,
+    DatabaseConfig: { ...context.DatabaseConfig, Platform: platform },
     MJCoreSchema: context.MJCoreSchema,
     ExtraPlaceholders: context.MigrationPlaceholders,
   });

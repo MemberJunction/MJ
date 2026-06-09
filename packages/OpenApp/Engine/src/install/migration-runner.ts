@@ -19,7 +19,11 @@ import path from 'node:path';
  * 0.6.x requires a provider; the field is optional here purely because it's
  * filled in inside `RunAppMigrations` after the dynamic import resolves.
  */
+/** Database platform an Open App is being installed into. */
+export type AppDbPlatform = 'sqlserver' | 'postgresql';
+
 interface SkywayConfig {
+    Dialect?: AppDbPlatform;
     Database: {
         Server: string;
         Port: number;
@@ -72,6 +76,8 @@ export interface MigrationRunOptions {
  * Database configuration for the migration runner.
  */
 export interface SkywayDatabaseConfig {
+    /** Target database platform. Defaults to 'sqlserver' when omitted (back-compat). */
+    Platform?: AppDbPlatform;
     /** Database host */
     Host: string;
     /** Database port */
@@ -129,17 +135,23 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 
     try {
         // Use variables to prevent TypeScript from resolving the modules at compile time.
-        // @memberjunction/skyway-core + @memberjunction/skyway-sqlserver are published
-        // as dependencies of the host process (e.g. MJCLI).
+        // @memberjunction/skyway-core + the matching provider (skyway-sqlserver /
+        // skyway-postgres) are published as dependencies of the host process (e.g. MJCLI).
+        const platform: AppDbPlatform = DatabaseConfig.Platform ?? 'sqlserver';
         const skywayModuleId = '@memberjunction/skyway-core';
-        const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
         const { Skyway } = await import(skywayModuleId);
-        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders);
-        // Skyway 0.6.x requires an explicit provider. OpenApp migrations target
-        // SQL Server (Azure auto-detection is SQL-Server-specific), so we always
-        // attach the SqlServerProvider here.
-        config.Provider = new SqlServerProvider(config.Database);
+        // Skyway 0.6.x requires an explicit provider selected by platform.
+        if (platform === 'postgresql') {
+            const pgProviderModuleId = '@memberjunction/skyway-postgres';
+            const { PostgresProvider } = await import(pgProviderModuleId);
+            config.Provider = new PostgresProvider(config.Database);
+        }
+        else {
+            const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
+            const { SqlServerProvider } = await import(sqlServerProviderModuleId);
+            config.Provider = new SqlServerProvider(config.Database);
+        }
 
         if (Verbose) {
             console.log(`Running Skyway migrations for schema '${SchemaName}'`);
@@ -193,12 +205,15 @@ function BuildSkywayConfig(
         ? migrationsDir
         : path.resolve(migrationsDir);
 
-    // Auto-detect Azure SQL: if host ends with .database.windows.net, encrypt is required
-    const isAzureSql = dbConfig.Host.includes('.database.windows.net');
+    const platform: AppDbPlatform = dbConfig.Platform ?? 'sqlserver';
+
+    // Auto-detect Azure SQL (SQL-Server-only): if host ends with .database.windows.net, encrypt is required.
+    const isAzureSql = platform === 'sqlserver' && dbConfig.Host.includes('.database.windows.net');
     const encrypt = dbConfig.Encrypt ?? isAzureSql;
     const trustCert = dbConfig.TrustServerCertificate ?? !isAzureSql;
 
     return {
+        Dialect: platform,
         Database: {
             Server: dbConfig.Host,
             Port: dbConfig.Port,
