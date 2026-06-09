@@ -279,6 +279,30 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
     expect(kept.tsql).not.toContain('GRANT SELECT');
   });
 
+  it('recovers special-date-field statements (__mj_CreatedAt/__mj_UpdatedAt) for new entities', () => {
+    // PG codegen does not reliably re-add the special date columns when the recovered
+    // EntityField metadata already lists them (live hit: ClusterAnalysisCluster lost
+    // __mj_UpdatedAt). The ADD/backfill/DEFAULT statements carry an exact provenance
+    // comment and must survive the split.
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      '-- CODE GEN RUN',
+      '/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Widget */',
+      'ALTER TABLE [${flyway:defaultSchema}].[Widget] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;',
+      'GO',
+      '/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Widget */',
+      'ALTER TABLE [${flyway:defaultSchema}].[Widget] ADD CONSTRAINT [DF___mj_Widget___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];',
+      'GO',
+      '/* generated view — must stay dropped */',
+      'CREATE VIEW [${flyway:defaultSchema}].[vwWidgets] AS SELECT * FROM [${flyway:defaultSchema}].[Widget];',
+    ].join('\n');
+    const kept = extractKeptTSQL(sql, 'V_Widgets_Feature.sql');
+    expect(kept.tsql).toContain('[__mj_UpdatedAt] DATETIMEOFFSET');
+    expect(kept.tsql).toContain('DF___mj_Widget___mj_UpdatedAt');
+    expect(kept.tsql).not.toContain('CREATE VIEW');
+  });
+
   it('recovers registration rows in a needs-hand file too (not skipped by the early return)', () => {
     // Regression: the needs-hand path returned before recovery ran, silently excluding
     // registration rows below the banner (live hit: IsComputed_To_EntityField).

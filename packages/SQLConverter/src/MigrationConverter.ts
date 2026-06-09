@@ -395,13 +395,23 @@ function recoverEntityRegistrationInserts(codeGenBlock: string): string {
       String.raw`|IF\s+(?:NOT\s+)?EXISTS\s*\([^)]*\b(?:${tableAlt})\b)`,
     'i',
   );
+  // Special date fields (__mj_CreatedAt / __mj_UpdatedAt) for NEW entities must also be
+  // recovered: CodeGen emits their ADD/backfill/DEFAULT statements in the dropped block,
+  // and PG codegen does NOT reliably re-add them when the recovered EntityField metadata
+  // already lists the fields (observed: __mj_CreatedAt added, __mj_UpdatedAt skipped on
+  // ClusterAnalysisCluster). Each statement carries an exact provenance comment —
+  // `/* SQL text to add special date field … */` — which is the recovery anchor.
+  // The anchor is the `/* … */` provenance comment itself, so only `--` line comments
+  // (e.g. the `-- CODE GEN RUN` delimiter heading the first batch) are stripped first.
+  const specialDateField = /^\s*\/\* SQL text to add special date field/i;
+  const afterLineComments = (sql: string) => sql.replace(/^(?:\s*--[^\n]*\n)*\s*/, '');
   // Classify by our own head-regex against the comment-stripped SQL, NOT the splitter's
   // `kind`: a CodeGen registration statement is preceded by `-- CODE GEN RUN` + a `/* … */`
   // provenance comment, which the statement splitter doesn't strip, so it lands as 'unknown'
   // rather than 'metadata-dml'. We only emit batches whose first real keyword targets a
   // registration table, so misclassification upstream doesn't cause us to miss or over-keep.
   return splitByStatement(codeGenBlock)
-    .filter((s) => headRe.test(stripLeadingCommentsAndNoise(s.sql)))
+    .filter((s) => headRe.test(stripLeadingCommentsAndNoise(s.sql)) || specialDateField.test(afterLineComments(s.sql)))
     .map((s) => truncateAtGeneratedObject(s.sql))
     .join('\nGO\n');
 }
