@@ -10,32 +10,22 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Signature Request Section -->
+    <!-- Document Context Section -->
     <mj-collapsible-panel
-        SectionKey="signatureRequest"
-        SectionName="Signature Request"
-        Icon="fa fa-envelope-open-text"
+        SectionKey="documentContext"
+        SectionName="Document Context"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="SignatureRequestID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Artifact Reference Section -->
-    <mj-collapsible-panel
-        SectionKey="artifactReference"
-        SectionName="Artifact Reference"
-        Icon="fa fa-file-alt"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -61,7 +51,7 @@
     <mj-collapsible-panel
         SectionKey="documentDetails"
         SectionName="Document Details"
-        Icon="fa fa-file"
+        Icon="fa fa-file-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

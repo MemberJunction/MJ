@@ -1,9 +1,21 @@
 import { EntityPermissionType, IRunViewProvider } from '@memberjunction/core';
 import { AppContext } from '../types.js';
-import { Arg, Ctx, Query, Resolver, InputType, Field } from 'type-graphql';
+import { Arg, Ctx, Query, Resolver } from 'type-graphql';
 import { MJEntity_, MJEntityResolverBase } from '../generated/generated.js';
-import sql from 'mssql';
 import { GetReadOnlyProvider } from '../util.js';
+
+const VALID_SCHEMA_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+function sanitizeSchemaNames(names: string[]): string[] {
+  return names.filter((s) => VALID_SCHEMA_NAME.test(s));
+}
+
+function buildSchemaInClause(columnName: string, schemas: string[], negate: boolean): string {
+  const sanitized = sanitizeSchemaNames(schemas);
+  if (sanitized.length === 0) return '';
+  const operator = negate ? 'NOT IN' : 'IN';
+  return `${columnName} ${operator} (${sanitized.map((s) => `'${s}'`).join(',')})`;
+}
 
 @Resolver(MJEntity_)
 export class EntityResolver extends MJEntityResolverBase {
@@ -17,9 +29,9 @@ export class EntityResolver extends MJEntityResolverBase {
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     const rlsWhere = this.getRowLevelSecurityWhereClause(provider, 'Entities', userPayload, EntityPermissionType.Read, ' WHERE');
     const includeSchemaSQL =
-      IncludeSchemas && IncludeSchemas.length > 0 ? `SchemaName IN (${IncludeSchemas.map((s) => `'${s}'`).join(',')})` : '';
+      IncludeSchemas && IncludeSchemas.length > 0 ? buildSchemaInClause('SchemaName', IncludeSchemas, false) : '';
     const excludeSchemaSQL =
-      ExcludeSchemas && ExcludeSchemas.length > 0 ? `SchemaName NOT IN (${ExcludeSchemas.map((s) => `'${s}'`).join(',')})` : '';
+      ExcludeSchemas && ExcludeSchemas.length > 0 ? buildSchemaInClause('SchemaName', ExcludeSchemas, true) : '';
     let schemaSQL = '';
     if (includeSchemaSQL) schemaSQL = includeSchemaSQL;
     if (excludeSchemaSQL) {
@@ -32,7 +44,7 @@ export class EntityResolver extends MJEntityResolverBase {
       if (totalWhere) totalWhere = `${totalWhere} AND ${rlsWhere}`;
       else totalWhere = ` ${rlsWhere}`;
     }
-    const rv = provider as any as IRunViewProvider;
+    const rv = provider as IRunViewProvider;
     const result = await rv.RunView({
       EntityName: 'MJ: Entities',
       ExtraFilter: totalWhere,

@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Signature Request Linking Section -->
+    <!-- Request Association Section -->
     <mj-collapsible-panel
-        SectionKey="signatureRequestLinking"
-        SectionName="Signature Request Linking"
+        SectionKey="requestAssociation"
+        SectionName="Request Association"
         Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
@@ -29,11 +29,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Recipient Contact Section -->
+    <!-- Recipient Information Section -->
     <mj-collapsible-panel
-        SectionKey="recipientContact"
-        SectionName="Recipient Contact"
-        Icon="fa fa-address-card"
+        SectionKey="recipientInformation"
+        SectionName="Recipient Information"
+        Icon="fa fa-user"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -53,13 +53,21 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Role"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Signing Workflow Section -->
+    <!-- Workflow Settings Section -->
     <mj-collapsible-panel
-        SectionKey="signingWorkflow"
-        SectionName="Signing Workflow"
+        SectionKey="workflowSettings"
+        SectionName="Workflow Settings"
         Icon="fa fa-tasks"
         [Form]="this"
         [FormContext]="formContext">
@@ -74,60 +82,22 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Role"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Signing Status Section -->
-    <mj-collapsible-panel
-        SectionKey="signingStatus"
-        SectionName="Signing Status"
-        Icon="fa fa-flag-checkered"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
             FieldName="Status"
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Signing Timeline Section -->
-    <mj-collapsible-panel
-        SectionKey="signingTimeline"
-        SectionName="Signing Timeline"
-        Icon="fa fa-calendar-alt"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="SignedAt"
             Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- External Integration Section -->
-    <mj-collapsible-panel
-        SectionKey="externalIntegration"
-        SectionName="External Integration"
-        Icon="fa fa-plug"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="ExternalRecipientID"
             Type="textbox"
             [EditMode]="EditMode"

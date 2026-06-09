@@ -241,6 +241,23 @@ export class BaseAgent {
     private static readonly MAX_CONSECUTIVE_FAILED_STEPS = 10;
 
     /**
+     * Maximum consecutive *unproductive* retry steps before forcing termination.
+     *
+     * An unproductive retry is a 'Retry' next-step that carries an errorMessage — i.e. one
+     * produced by {@link BaseAgentType.createRetryStep} because the model's output could not
+     * be parsed or failed structural validation (e.g. the LLM returned conversational prose
+     * instead of the required JSON envelope). These do NOT count as 'Failed' steps, so they
+     * bypass {@link MAX_CONSECUTIVE_FAILED_STEPS} entirely and — without this guard — loop
+     * until the far-higher absolute iteration cap (effectively forever, burning time and tokens).
+     *
+     * Legitimate yield/await retries (pipeline / client-tools / sub-agent re-entry) are created
+     * via createNextStep('Retry', …) WITHOUT an errorMessage, so they do not increment this
+     * counter. Any productive (non-unproductive-retry) step resets it.
+     * @private
+     */
+    private static readonly MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES = 10;
+
+    /**
      * Instance of AIPromptRunner used for executing hierarchical prompts.
      * @private
      */
@@ -1501,6 +1518,7 @@ export class BaseAgent {
         let currentNextStep: BaseAgentNextStep<P> | null = null;
         let stepCount = 0;
         let consecutiveFailedSteps = 0;
+        let consecutiveUnproductiveRetries = 0;
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -1546,6 +1564,40 @@ export class BaseAgent {
                 }
             } else if (nextStep.step !== 'Failed') {
                 consecutiveFailedSteps = 0;
+            }
+
+            // Track consecutive *unproductive* retries to prevent infinite loops that the
+            // consecutive-failed-steps net above cannot catch. A model that repeatedly returns
+            // output we can't parse/validate (e.g. conversational prose instead of the required
+            // JSON envelope) yields a stream of 'Retry' steps — never 'Failed' — so the failed-step
+            // counter resets every turn and never trips. Such retries are produced via
+            // createRetryStep(), which always sets an errorMessage; legitimate yield/await retries
+            // (pipeline / client-tools / sub-agent re-entry) carry no errorMessage and are exempt.
+            const isUnproductiveRetry = nextStep.step === 'Retry' && !nextStep.terminate && !!nextStep.errorMessage;
+            if (isUnproductiveRetry) {
+                consecutiveUnproductiveRetries++;
+                if (consecutiveUnproductiveRetries >= BaseAgent.MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES) {
+                    this.logError(
+                        `⛔ Agent '${params.agent.Name}' reached maximum consecutive unproductive retries ` +
+                        `(${BaseAgent.MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES}). The model is repeatedly returning output ` +
+                        `that cannot be parsed or validated. Forcing termination to prevent infinite loop.`,
+                        {
+                            agent: params.agent,
+                            category: 'ExecutionSafetyNet',
+                            metadata: {
+                                consecutiveUnproductiveRetries,
+                                lastError: nextStep.errorMessage
+                            }
+                        }
+                    );
+                    nextStep.step = 'Failed';
+                    nextStep.terminate = true;
+                    nextStep.errorMessage = `Agent terminated after ${consecutiveUnproductiveRetries} consecutive unproductive retries ` +
+                        `(model repeatedly returned output that could not be parsed or validated). ` +
+                        `Last error: ${nextStep.errorMessage || 'Unknown'}`;
+                }
+            } else {
+                consecutiveUnproductiveRetries = 0;
             }
 
             // Check if we should continue or terminate
@@ -6780,9 +6832,13 @@ The context is now within limits. Please retry your request with the recovered c
         });
         
         // Add assistant message indicating we're executing a sub-agent
+        // Recorded as a `user`-role environment annotation (not an `assistant` turn) for the same
+        // reason as the action record above: the model's real output is the JSON envelope, and
+        // storing framework prose as an `assistant` turn trains strong in-context models to imitate
+        // the prose and drift off the required JSON format. See the note at the action-record push.
         params.conversationMessages.push({
-            role: 'assistant',
-            content: `I'm delegating this task to the "${subAgentRequest.name}" agent.\n\nReason: ${subAgentRequest.message}`
+            role: 'user',
+            content: `[You delegated this task to the "${subAgentRequest.name}" agent. Reason: ${subAgentRequest.message}]`
         });
         
         
@@ -7285,9 +7341,11 @@ The context is now within limits. Please retry your request with the recovered c
                 hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
             }
         });
+        // `user`-role environment annotation (not an `assistant` turn) — see the note on the
+        // single-delegation push above for why framework prose must not be stored as assistant turns.
         params.conversationMessages.push({
-            role: 'assistant',
-            content: `I'm delegating this task to the parallel sub-agent "${request.name}".\n\nReason: ${request.message}`
+            role: 'user',
+            content: `[You delegated this task to the parallel sub-agent "${request.name}". Reason: ${request.message}]`
         });
 
         return { request: request as AgentSubAgentRequest<unknown>, subAgentEntity, relationship };
@@ -7705,9 +7763,13 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         // Add assistant message indicating we're executing a related sub-agent
+        // Recorded as a `user`-role environment annotation (not an `assistant` turn) for the same
+        // reason as the action record above: the model's real output is the JSON envelope, and
+        // storing framework prose as an `assistant` turn trains strong in-context models to imitate
+        // the prose and drift off the required JSON format. See the note at the action-record push.
         params.conversationMessages.push({
-            role: 'assistant',
-            content: `I'm delegating this task to the "${subAgentRequest.name}" agent.\n\nReason: ${subAgentRequest.message}`
+            role: 'user',
+            content: `[You delegated this task to the "${subAgentRequest.name}" agent. Reason: ${subAgentRequest.message}]`
         });
 
         // Prepare input data for the step
@@ -8254,12 +8316,23 @@ The context is now within limits. Please retry your request with the recovered c
                 displayMode: 'live' // Only show in live mode
             });
 
-            // Build detailed action execution message with parameters using markdown formatting
-            // This creates a permanent, lightweight record of what was requested
+            // Build a detailed record of the action(s) invoked, with parameters, in markdown.
+            // This is a permanent, lightweight memory of what was requested.
+            //
+            // IMPORTANT — this record is injected as a `user`-role environment annotation, NOT an
+            // `assistant` turn. The model's actual output is the JSON envelope, but we don't store
+            // that raw JSON; we store this human-readable summary instead. If it were recorded as an
+            // `assistant` turn, then after a few action-heavy turns the model's entire visible
+            // assistant history would be prose like "I'm executing the X action with parameters: …",
+            // and strong in-context learners (e.g. Gemini Flash) imitate that demonstrated pattern
+            // over the system-prompt instruction — drifting into prose and breaking JSON parsing,
+            // which (pre-guardrail) looped forever. Phrasing it in second person under the `user`
+            // role keeps the memory while removing the false assistant-prose exemplar. The
+            // human-facing narration is emitted separately via onProgress above.
             let actionMessage: string;
             if (actions.length === 1) {
                 const aa = actions[0];
-                actionMessage = `I'm executing the **${aa.name}** action`;
+                actionMessage = `[You invoked the **${aa.name}** action`;
 
                 // Add parameters if they exist
                 if (aa.params && Object.keys(aa.params).length > 0) {
@@ -8269,12 +8342,12 @@ The context is now within limits. Please retry your request with the recovered c
                             return `• **${key}**: ${displayValue}`;
                         })
                         .join('\n');
-                    actionMessage += ` with parameters:\n${paramsList}`;
+                    actionMessage += ` with parameters:\n${paramsList}\n]`;
                 } else {
-                    actionMessage += '.';
+                    actionMessage += '.]';
                 }
             } else {
-                actionMessage = `I'm executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                actionMessage = `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
                     let actionText = `${index + 1}. **${aa.name}**`;
 
                     // Add parameters if they exist
@@ -8289,13 +8362,14 @@ The context is now within limits. Please retry your request with the recovered c
                     }
 
                     return actionText;
-                }).join('\n\n');
+                }).join('\n\n') + '\n]';
             }
 
             if (addConversationMessage) {
-                // Add assistant message (no metadata - this is a permanent record)
+                // Record as a `user`-role environment annotation (no metadata - permanent record).
+                // See the note above on why this is NOT an `assistant` turn.
                 params.conversationMessages.push({
-                    role: 'assistant',
+                    role: 'user',
                     content: actionMessage
                 });
             }

@@ -787,3 +787,50 @@ export function convertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
   return sql;
 }
+
+/**
+ * Convert SQL Server BIT comparisons (`"Col" = 1` / `= 0`) to PostgreSQL boolean
+ * literals (`"Col" = TRUE` / `= FALSE`) for columns known to be BOOLEAN.
+ *
+ * PG has no implicit boolean↔integer cast, so `bool_col = 1` raises
+ * "operator does not exist: boolean = integer" — and for VIEWs that error fires
+ * at CREATE time, blocking the migration.
+ *
+ * Boolean columns are identified by name from the accumulated CREATE TABLE type
+ * map. A name is treated as boolean only if it is BOOLEAN in at least one table
+ * AND never a non-boolean type in any other table, so an integer column that
+ * merely shares a name with a boolean column elsewhere is left untouched.
+ */
+export function collectBooleanColumnNames(
+  tableColumns: Map<string, Map<string, string>>,
+): Set<string> {
+  const boolNames = new Set<string>();
+  const nonBoolNames = new Set<string>();
+  for (const cols of tableColumns.values()) {
+    for (const [name, type] of cols) {
+      const lower = name.toLowerCase();
+      if (type.toUpperCase() === 'BOOLEAN') boolNames.add(lower);
+      else nonBoolNames.add(lower);
+    }
+  }
+  for (const n of nonBoolNames) boolNames.delete(n);
+  return boolNames;
+}
+
+export function convertBooleanLiteralComparisons(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  const boolNames = collectBooleanColumnNames(tableColumns);
+  if (boolNames.size === 0) return sql;
+
+  // `(?![\w.])` guards against matching inside a larger number/identifier
+  // (e.g. `= 10`, `= 1.5`).
+  return sql.replace(
+    /"(\w+)"\s*(=|<>|!=)\s*([01])(?![\w.])/g,
+    (match, col: string, op: string, val: string) =>
+      boolNames.has(col.toLowerCase())
+        ? `"${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
+        : match,
+  );
+}

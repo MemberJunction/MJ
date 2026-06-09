@@ -181,7 +181,7 @@ EXEC sp_addextendedproperty
 CREATE TABLE ${flyway:defaultSchema}.SignatureRequest (
     ID                  UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
     SignatureAccountID  UNIQUEIDENTIFIER NOT NULL,
-    Title               NVARCHAR(255)    NOT NULL,
+    Name                NVARCHAR(255)    NOT NULL,
     Message             NVARCHAR(MAX)    NULL,
     Status              NVARCHAR(20)     NOT NULL CONSTRAINT DF_SignatureRequest_Status DEFAULT ('Draft'),
     ExternalEnvelopeID  NVARCHAR(255)    NULL,
@@ -205,7 +205,7 @@ EXEC sp_addextendedproperty
     @value = N'Envelope title / email subject.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'SignatureRequest',
-    @level2type = N'COLUMN', @level2name = N'Title';
+    @level2type = N'COLUMN', @level2name = N'Name';
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -503,9 +503,7 @@ GO
 
 
 
-
-
-/*---------------------------------------------------CODEGEN--------------------------------------------------*/
+/*--------------------------CODEGEN------------------------------*/
 /* SQL generated to create new entity MJ: Signature Providers */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
@@ -532,7 +530,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'dd777444-c381-412f-919c-d0198fe4b54c',
+         '7ee4d69f-16f5-4dc1-9b02-b4af7f8ca8d2',
          'MJ: Signature Providers',
          'Signature Providers',
          NULL,
@@ -558,22 +556,22 @@ GO
 /* SQL generated to add new entity MJ: Signature Providers to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'dd777444-c381-412f-919c-d0198fe4b54c', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '7ee4d69f-16f5-4dc1-9b02-b4af7f8ca8d2', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Providers for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('dd777444-c381-412f-919c-d0198fe4b54c', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('7ee4d69f-16f5-4dc1-9b02-b4af7f8ca8d2', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Providers for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('dd777444-c381-412f-919c-d0198fe4b54c', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('7ee4d69f-16f5-4dc1-9b02-b4af7f8ca8d2', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Providers for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('dd777444-c381-412f-919c-d0198fe4b54c', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('7ee4d69f-16f5-4dc1-9b02-b4af7f8ca8d2', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: Signature Accounts */
 
@@ -601,7 +599,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '64408373-0375-47bf-965f-eb6fad41d8e4',
+         '43e3f77a-c2b3-4672-a53f-4ff28a0c098b',
          'MJ: Signature Accounts',
          'Signature Accounts',
          NULL,
@@ -627,22 +625,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Signature Accounts to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '64408373-0375-47bf-965f-eb6fad41d8e4', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '43e3f77a-c2b3-4672-a53f-4ff28a0c098b', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Accounts for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('64408373-0375-47bf-965f-eb6fad41d8e4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('43e3f77a-c2b3-4672-a53f-4ff28a0c098b', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Accounts for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('64408373-0375-47bf-965f-eb6fad41d8e4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('43e3f77a-c2b3-4672-a53f-4ff28a0c098b', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Accounts for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('64408373-0375-47bf-965f-eb6fad41d8e4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('43e3f77a-c2b3-4672-a53f-4ff28a0c098b', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: Signature Requests */
 
@@ -670,7 +668,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '0075dbdf-fd00-4568-a7ac-03fdbf55d329',
+         'a3b3dfeb-ffca-4f8d-b497-3d2e7fbb02a4',
          'MJ: Signature Requests',
          'Signature Requests',
          NULL,
@@ -696,22 +694,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Signature Requests to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0075dbdf-fd00-4568-a7ac-03fdbf55d329', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'a3b3dfeb-ffca-4f8d-b497-3d2e7fbb02a4', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Requests for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('0075dbdf-fd00-4568-a7ac-03fdbf55d329', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('a3b3dfeb-ffca-4f8d-b497-3d2e7fbb02a4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Requests for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('0075dbdf-fd00-4568-a7ac-03fdbf55d329', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('a3b3dfeb-ffca-4f8d-b497-3d2e7fbb02a4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Requests for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('0075dbdf-fd00-4568-a7ac-03fdbf55d329', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('a3b3dfeb-ffca-4f8d-b497-3d2e7fbb02a4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: Signature Request Documents */
 
@@ -739,7 +737,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '54571136-d2f3-4ded-9a0e-2d9b6dd7e1be',
+         '975dff8e-dad8-44b6-9722-4d7b138a213f',
          'MJ: Signature Request Documents',
          'Signature Request Documents',
          NULL,
@@ -765,22 +763,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Signature Request Documents to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '54571136-d2f3-4ded-9a0e-2d9b6dd7e1be', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '975dff8e-dad8-44b6-9722-4d7b138a213f', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Documents for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('54571136-d2f3-4ded-9a0e-2d9b6dd7e1be', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('975dff8e-dad8-44b6-9722-4d7b138a213f', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Documents for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('54571136-d2f3-4ded-9a0e-2d9b6dd7e1be', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('975dff8e-dad8-44b6-9722-4d7b138a213f', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Documents for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('54571136-d2f3-4ded-9a0e-2d9b6dd7e1be', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('975dff8e-dad8-44b6-9722-4d7b138a213f', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: Signature Request Recipients */
 
@@ -808,7 +806,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'c15fe41e-040e-4a35-9f27-7a07dfd2f75a',
+         '2eecc44e-a41f-4521-8c0e-764d4d68ff70',
          'MJ: Signature Request Recipients',
          'Signature Request Recipients',
          NULL,
@@ -834,22 +832,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Signature Request Recipients to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c15fe41e-040e-4a35-9f27-7a07dfd2f75a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2eecc44e-a41f-4521-8c0e-764d4d68ff70', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Recipients for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('c15fe41e-040e-4a35-9f27-7a07dfd2f75a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('2eecc44e-a41f-4521-8c0e-764d4d68ff70', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Recipients for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('c15fe41e-040e-4a35-9f27-7a07dfd2f75a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('2eecc44e-a41f-4521-8c0e-764d4d68ff70', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Recipients for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('c15fe41e-040e-4a35-9f27-7a07dfd2f75a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('2eecc44e-a41f-4521-8c0e-764d4d68ff70', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: Signature Request Logs */
 
@@ -877,7 +875,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'f9f6f8c8-a29f-42a2-a64e-15ee43098252',
+         '224f170c-5fcc-41f2-906f-b82b30f1eb2a',
          'MJ: Signature Request Logs',
          'Signature Request Logs',
          NULL,
@@ -903,22 +901,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Signature Request Logs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'f9f6f8c8-a29f-42a2-a64e-15ee43098252', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '224f170c-5fcc-41f2-906f-b82b30f1eb2a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Logs for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('f9f6f8c8-a29f-42a2-a64e-15ee43098252', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('224f170c-5fcc-41f2-906f-b82b30f1eb2a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Logs for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('f9f6f8c8-a29f-42a2-a64e-15ee43098252', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('224f170c-5fcc-41f2-906f-b82b30f1eb2a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Signature Request Logs for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('f9f6f8c8-a29f-42a2-a64e-15ee43098252', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('224f170c-5fcc-41f2-906f-b82b30f1eb2a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequest */
 ALTER TABLE [${flyway:defaultSchema}].[SignatureRequest] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -952,38 +950,6 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[SignatureRequest] ADD CONSTRAINT [DF___mj_SignatureRequest___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-UPDATE [${flyway:defaultSchema}].[SignatureRequestLog] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD CONSTRAINT [DF___mj_SignatureRequestLog___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-UPDATE [${flyway:defaultSchema}].[SignatureRequestLog] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD CONSTRAINT [DF___mj_SignatureRequestLog___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
-
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestDocument */
 ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestDocument] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
@@ -1014,6 +980,38 @@ GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestDocument */
 ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestDocument] ADD CONSTRAINT [DF___mj_SignatureRequestDocument___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+UPDATE [${flyway:defaultSchema}].[SignatureAccount] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD CONSTRAINT [DF___mj_SignatureAccount___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+UPDATE [${flyway:defaultSchema}].[SignatureAccount] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD CONSTRAINT [DF___mj_SignatureAccount___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestRecipient */
@@ -1080,41 +1078,41 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[SignatureProvider] ADD CONSTRAINT [DF___mj_SignatureProvider___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-UPDATE [${flyway:defaultSchema}].[SignatureAccount] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+UPDATE [${flyway:defaultSchema}].[SignatureRequestLog] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD CONSTRAINT [DF___mj_SignatureAccount___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD CONSTRAINT [DF___mj_SignatureRequestLog___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-UPDATE [${flyway:defaultSchema}].[SignatureAccount] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+UPDATE [${flyway:defaultSchema}].[SignatureRequestLog] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureAccount */
-ALTER TABLE [${flyway:defaultSchema}].[SignatureAccount] ADD CONSTRAINT [DF___mj_SignatureAccount___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.SignatureRequestLog */
+ALTER TABLE [${flyway:defaultSchema}].[SignatureRequestLog] ADD CONSTRAINT [DF___mj_SignatureRequestLog___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5cf9200e-149f-4763-9d47-6c6ca7310099' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e71c719c-20f1-4ede-a4bb-1a05ad3f56b2' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1147,8 +1145,8 @@ GO
          )
          VALUES
          (
-            '5cf9200e-149f-4763-9d47-6c6ca7310099',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            'e71c719c-20f1-4ede-a4bb-1a05ad3f56b2',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100001,
             'ID',
             'ID',
@@ -1179,7 +1177,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e4e1bf49-f90c-4f31-bfcf-c5049b6bd445' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'SignatureAccountID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '04a2ede7-1528-48b6-97e0-e7bfcd7c92d5' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'SignatureAccountID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1212,8 +1210,8 @@ GO
          )
          VALUES
          (
-            'e4e1bf49-f90c-4f31-bfcf-c5049b6bd445',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '04a2ede7-1528-48b6-97e0-e7bfcd7c92d5',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100002,
             'SignatureAccountID',
             'Signature Account ID',
@@ -1228,7 +1226,7 @@ GO
             1,
             0,
             0,
-            '64408373-0375-47BF-965F-EB6FAD41D8E4',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B',
             'ID',
             0,
             0,
@@ -1244,7 +1242,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37b8e7c1-c70b-4414-a18c-2b18c0d36245' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'Title')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd33a8958-5a04-45ba-9b70-f84881e2cf0c' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1277,11 +1275,11 @@ GO
          )
          VALUES
          (
-            '37b8e7c1-c70b-4414-a18c-2b18c0d36245',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            'd33a8958-5a04-45ba-9b70-f84881e2cf0c',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100003,
-            'Title',
-            'Title',
+            'Name',
+            'Name',
             'Envelope title / email subject.',
             'nvarchar',
             510,
@@ -1295,10 +1293,10 @@ GO
             0,
             NULL,
             NULL,
+            1,
+            1,
             0,
-            0,
-            0,
-            0,
+            1,
             0,
             0,
             'Search',
@@ -1309,7 +1307,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3a61d503-86b2-4f87-8cfe-a65cc0142b77' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'Message')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '875fd874-c53f-41e5-9cdb-2d6468973073' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'Message')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1342,8 +1340,8 @@ GO
          )
          VALUES
          (
-            '3a61d503-86b2-4f87-8cfe-a65cc0142b77',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '875fd874-c53f-41e5-9cdb-2d6468973073',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100004,
             'Message',
             'Message',
@@ -1374,7 +1372,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3df07a6f-c4e3-4d8e-96d0-710b3a45799b' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0da669d4-15fa-4b9a-ab4d-0d2497166089' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1407,8 +1405,8 @@ GO
          )
          VALUES
          (
-            '3df07a6f-c4e3-4d8e-96d0-710b3a45799b',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '0da669d4-15fa-4b9a-ab4d-0d2497166089',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100005,
             'Status',
             'Status',
@@ -1439,7 +1437,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '772866a6-fbe7-47f1-bdea-e7dccc8f278d' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'ExternalEnvelopeID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dac6b9ed-a9b9-4861-8e41-1874cd520be5' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'ExternalEnvelopeID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1472,8 +1470,8 @@ GO
          )
          VALUES
          (
-            '772866a6-fbe7-47f1-bdea-e7dccc8f278d',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            'dac6b9ed-a9b9-4861-8e41-1874cd520be5',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100006,
             'ExternalEnvelopeID',
             'External Envelope ID',
@@ -1504,7 +1502,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e51828e6-3866-42ca-a0f8-3cc7d72112ba' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'EntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b70d9fe2-0f70-4bab-b61e-ac46bc496bf3' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'EntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1537,8 +1535,8 @@ GO
          )
          VALUES
          (
-            'e51828e6-3866-42ca-a0f8-3cc7d72112ba',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            'b70d9fe2-0f70-4bab-b61e-ac46bc496bf3',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100007,
             'EntityID',
             'Entity ID',
@@ -1569,7 +1567,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1d9e98c6-c2c7-48e0-8c46-7f57eda49d61' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'RecordID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2fd94d7a-1fa7-44d4-94fb-935431801e0e' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'RecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1602,8 +1600,8 @@ GO
          )
          VALUES
          (
-            '1d9e98c6-c2c7-48e0-8c46-7f57eda49d61',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '2fd94d7a-1fa7-44d4-94fb-935431801e0e',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100008,
             'RecordID',
             'Record ID',
@@ -1634,7 +1632,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7075d0c0-55c6-430a-8c62-2cd828f90f64' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'SentAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4ffe69fd-3d6d-4a6a-8086-b1649c009553' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'SentAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1667,8 +1665,8 @@ GO
          )
          VALUES
          (
-            '7075d0c0-55c6-430a-8c62-2cd828f90f64',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '4ffe69fd-3d6d-4a6a-8086-b1649c009553',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100009,
             'SentAt',
             'Sent At',
@@ -1699,7 +1697,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1ea675c-dc91-4f60-bd99-a3d920b44f2d' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'CompletedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8e13825f-dfd5-482b-a4e1-d080c5b1c101' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'CompletedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1732,8 +1730,8 @@ GO
          )
          VALUES
          (
-            'e1ea675c-dc91-4f60-bd99-a3d920b44f2d',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '8e13825f-dfd5-482b-a4e1-d080c5b1c101',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100010,
             'CompletedAt',
             'Completed At',
@@ -1764,7 +1762,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6839cd3d-d30a-4bad-a82c-c36671f91286' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'VoidReason')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '947e3ea5-772d-4782-98b9-aeefc2394fa4' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'VoidReason')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1797,8 +1795,8 @@ GO
          )
          VALUES
          (
-            '6839cd3d-d30a-4bad-a82c-c36671f91286',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '947e3ea5-772d-4782-98b9-aeefc2394fa4',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100011,
             'VoidReason',
             'Void Reason',
@@ -1829,7 +1827,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '29fcd07c-2978-4f44-9196-e1add2724191' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '36b6703c-96c3-4156-8502-f47dd0769744' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1862,8 +1860,8 @@ GO
          )
          VALUES
          (
-            '29fcd07c-2978-4f44-9196-e1add2724191',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '36b6703c-96c3-4156-8502-f47dd0769744',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100012,
             '__mj_CreatedAt',
             'Created At',
@@ -1894,7 +1892,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5eef5ad3-92c4-4b4b-84d5-a903699b08f2' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '64ca6956-b996-497e-bb2b-dc3376c4a704' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1927,8 +1925,8 @@ GO
          )
          VALUES
          (
-            '5eef5ad3-92c4-4b4b-84d5-a903699b08f2',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            '64ca6956-b996-497e-bb2b-dc3376c4a704',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100013,
             '__mj_UpdatedAt',
             'Updated At',
@@ -1959,7 +1957,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0e62ff7-5fbb-4ff9-92e9-4f437a318b33' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dd2b8f16-0b5e-4752-b44b-f332a5530c56' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1992,8 +1990,8 @@ GO
          )
          VALUES
          (
-            'a0e62ff7-5fbb-4ff9-92e9-4f437a318b33',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
+            'dd2b8f16-0b5e-4752-b44b-f332a5530c56',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100001,
             'ID',
             'ID',
@@ -2024,7 +2022,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6564503a-9231-4069-a8a4-c53856e48e55' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'SignatureRequestID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e0ffc7bb-b143-4930-9ef3-08d5729c9c04' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'SignatureRequestID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2057,593 +2055,8 @@ GO
          )
          VALUES
          (
-            '6564503a-9231-4069-a8a4-c53856e48e55',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100002,
-            'SignatureRequestID',
-            'Signature Request ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e9e0448-51d7-4693-97af-84d753a101fe' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'Operation')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1e9e0448-51d7-4693-97af-84d753a101fe',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100003,
-            'Operation',
-            'Operation',
-            'The provider operation logged (e.g. CreateEnvelope, GetEnvelopeStatus, DownloadSignedDocument, VoidEnvelope, Webhook).',
-            'nvarchar',
-            100,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '510c984f-0c7e-4e5e-9185-2bb29cc61d27' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'Success')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '510c984f-0c7e-4e5e-9185-2bb29cc61d27',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100004,
-            'Success',
-            'Success',
-            'Whether the operation succeeded.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6c2a198b-ed52-469a-8a4b-7821e9c01d65' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'StatusBefore')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '6c2a198b-ed52-469a-8a4b-7821e9c01d65',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100005,
-            'StatusBefore',
-            'Status Before',
-            'Signature request status immediately before the operation, when applicable.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '12b3ec2b-843a-4b89-a51b-b4fd5aa16451' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'StatusAfter')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '12b3ec2b-843a-4b89-a51b-b4fd5aa16451',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100006,
-            'StatusAfter',
-            'Status After',
-            'Signature request status immediately after the operation, when applicable.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6fd41107-427b-413f-a69e-3f161aba3444' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = 'Detail')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '6fd41107-427b-413f-a69e-3f161aba3444',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100007,
-            'Detail',
-            'Detail',
-            'Free-form detail: error text on failure, or normalized event JSON for webhook entries.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1be6013e-c6fb-4a86-aaa7-12ecc1769c76' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1be6013e-c6fb-4a86-aaa7-12ecc1769c76',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100008,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '93875f79-4ff6-451c-95a9-244443938600' OR (EntityID = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '93875f79-4ff6-451c-95a9-244443938600',
-            'F9F6F8C8-A29F-42A2-A64E-15EE43098252', -- Entity: MJ: Signature Request Logs
-            100009,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0b8af4a8-bd9c-430f-8dd5-d123d3fcfb45' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0b8af4a8-bd9c-430f-8dd5-d123d3fcfb45',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cd233c1b-0616-46d6-ad62-9662641cd732' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'SignatureRequestID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'cd233c1b-0616-46d6-ad62-9662641cd732',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            'e0ffc7bb-b143-4930-9ef3-08d5729c9c04',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100002,
             'SignatureRequestID',
             'Signature Request ID',
@@ -2658,7 +2071,7 @@ GO
             1,
             0,
             0,
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4',
             'ID',
             0,
             0,
@@ -2674,7 +2087,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5fa45fd9-aaae-4fca-847c-874454f13221' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'ArtifactID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c9fc86d8-0586-4b1f-a6b2-6088b02aed06' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'ArtifactID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2707,8 +2120,8 @@ GO
          )
          VALUES
          (
-            '5fa45fd9-aaae-4fca-847c-874454f13221',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            'c9fc86d8-0586-4b1f-a6b2-6088b02aed06',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100003,
             'ArtifactID',
             'Artifact ID',
@@ -2739,7 +2152,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0a6b914f-55ed-4684-8266-e34178b42967' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'ArtifactVersionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e308445e-1ac1-42a5-b415-08f5974be589' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'ArtifactVersionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2772,8 +2185,8 @@ GO
          )
          VALUES
          (
-            '0a6b914f-55ed-4684-8266-e34178b42967',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            'e308445e-1ac1-42a5-b415-08f5974be589',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100004,
             'ArtifactVersionID',
             'Artifact Version ID',
@@ -2804,7 +2217,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4a59d086-c037-414d-a727-8a307952d2a7' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a206a8d1-db54-49e2-a641-07d0a77a97c4' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2837,8 +2250,8 @@ GO
          )
          VALUES
          (
-            '4a59d086-c037-414d-a727-8a307952d2a7',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            'a206a8d1-db54-49e2-a641-07d0a77a97c4',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100005,
             'Name',
             'Name',
@@ -2869,7 +2282,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8745e83c-ac66-4415-96a0-79e5b862e531' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'Sequence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f9283e8e-7a9c-42ab-9d7f-2896b3c1a0f4' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'Sequence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2902,8 +2315,8 @@ GO
          )
          VALUES
          (
-            '8745e83c-ac66-4415-96a0-79e5b862e531',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            'f9283e8e-7a9c-42ab-9d7f-2896b3c1a0f4',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100006,
             'Sequence',
             'Sequence',
@@ -2934,7 +2347,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e8002a7-f705-4211-8a53-539e42089999' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'Role')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1a33cac0-8579-4813-8941-80195a300ac5' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'Role')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2967,8 +2380,8 @@ GO
          )
          VALUES
          (
-            '1e8002a7-f705-4211-8a53-539e42089999',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            '1a33cac0-8579-4813-8941-80195a300ac5',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100007,
             'Role',
             'Role',
@@ -2999,7 +2412,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '514f8cc5-5607-4e8b-8603-1cfeb647a26c' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '598ca112-9604-44a5-b218-79ac441e0dae' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3032,8 +2445,8 @@ GO
          )
          VALUES
          (
-            '514f8cc5-5607-4e8b-8603-1cfeb647a26c',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            '598ca112-9604-44a5-b218-79ac441e0dae',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100008,
             '__mj_CreatedAt',
             'Created At',
@@ -3064,7 +2477,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '153bde51-2dee-4c6e-af5b-cdd21e8ed80e' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '093b9aac-b391-4ba5-b8fc-26aa0fadbf8c' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3097,8 +2510,8 @@ GO
          )
          VALUES
          (
-            '153bde51-2dee-4c6e-af5b-cdd21e8ed80e',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            '093b9aac-b391-4ba5-b8fc-26aa0fadbf8c',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100009,
             '__mj_UpdatedAt',
             'Updated At',
@@ -3129,7 +2542,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bbeba8e4-eda3-4942-9087-8b9bfc42fa18' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e7b15dc2-cbd6-431b-ab23-be119ee54926' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3162,8 +2575,8 @@ GO
          )
          VALUES
          (
-            'bbeba8e4-eda3-4942-9087-8b9bfc42fa18',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
+            'e7b15dc2-cbd6-431b-ab23-be119ee54926',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100001,
             'ID',
             'ID',
@@ -3194,7 +2607,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b0911186-46dd-4a61-99ed-0bd9c5b574b7' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'SignatureRequestID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3bda6373-6ec9-4c18-bd55-17d56b15bfd8' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3227,1438 +2640,8 @@ GO
          )
          VALUES
          (
-            'b0911186-46dd-4a61-99ed-0bd9c5b574b7',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100002,
-            'SignatureRequestID',
-            'Signature Request ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '67df9f72-d46d-47cf-9a0d-629e5200c269' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'Email')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '67df9f72-d46d-47cf-9a0d-629e5200c269',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100003,
-            'Email',
-            'Email',
-            'Recipient email address.',
-            'nvarchar',
-            640,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3abc4a50-d368-4894-abdd-1319eef7741c' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '3abc4a50-d368-4894-abdd-1319eef7741c',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100004,
-            'Name',
-            'Name',
-            'Recipient display name.',
-            'nvarchar',
-            400,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7754d06e-d2ed-4f26-b1ae-d44f74fef59c' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'RoutingOrder')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7754d06e-d2ed-4f26-b1ae-d44f74fef59c',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100005,
-            'RoutingOrder',
-            'Routing Order',
-            'Signing order; lower routes first (1-based).',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '692e65d6-12f5-4dfa-a562-509f6a40d3aa' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'Role')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '692e65d6-12f5-4dfa-a562-509f6a40d3aa',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100006,
-            'Role',
-            'Role',
-            'Template role name for this recipient, when the envelope was created from a provider template.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '05440883-e497-4e32-8ed6-52a830b1e2c2' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '05440883-e497-4e32-8ed6-52a830b1e2c2',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100007,
-            'Status',
-            'Status',
-            'Per-recipient status: Created, Sent, Delivered, Signed, or Declined.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Created',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8606b69f-c70a-43b2-8a49-33f5e475558a' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'SignedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8606b69f-c70a-43b2-8a49-33f5e475558a',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100008,
-            'SignedAt',
-            'Signed At',
-            'Timestamp this recipient signed.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'aba7abe6-37be-404d-a22e-251cc57d45c8' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = 'ExternalRecipientID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'aba7abe6-37be-404d-a22e-251cc57d45c8',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100009,
-            'ExternalRecipientID',
-            'External Recipient ID',
-            'Provider-side recipient identifier, for correlation with provider events.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1998e813-feef-4062-8e9c-b34175be55bb' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1998e813-feef-4062-8e9c-b34175be55bb',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100010,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7452445d-e4d0-46e1-841a-c88ad1288ced' OR (EntityID = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7452445d-e4d0-46e1-841a-c88ad1288ced',
-            'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', -- Entity: MJ: Signature Request Recipients
-            100011,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0927c056-519c-48e6-866b-047a5ed9499a' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0927c056-519c-48e6-866b-047a5ed9499a',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '87064008-5e47-4659-a56d-074ffe872040' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '87064008-5e47-4659-a56d-074ffe872040',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100002,
-            'Name',
-            'Name',
-            'Display name of the eSignature provider type (e.g. DocuSign, Adobe Sign).',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '736140cc-d13d-49f9-8b98-8e0e3ba2ec89' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'ServerDriverKey')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '736140cc-d13d-49f9-8b98-8e0e3ba2ec89',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100003,
-            'ServerDriverKey',
-            'Server Driver Key',
-            'Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. ''DocuSign'').',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a5929f62-f5f1-47fb-9a60-16afc3fd8094' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'IsActive')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a5929f62-f5f1-47fb-9a60-16afc3fd8094',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100004,
-            'IsActive',
-            'Is Active',
-            'Whether this provider type is available for use. Inactive providers are skipped by the engine.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '95374ea7-57ce-4980-bc32-bf11ebc2502d' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'Priority')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '95374ea7-57ce-4980-bc32-bf11ebc2502d',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100005,
-            'Priority',
-            'Priority',
-            'Selection priority when multiple providers could apply. Lower number = higher priority.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a256d1fc-c259-4c84-b9ab-abb311282206' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'RequiresOAuth')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a256d1fc-c259-4c84-b9ab-abb311282206',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100006,
-            'RequiresOAuth',
-            'Requires O Auth',
-            'Whether this provider requires OAuth-based credentials (vs. a static API key).',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '78e093bf-733c-4535-8cea-83b4d4ef8f02' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'SupportsTemplates')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '78e093bf-733c-4535-8cea-83b4d4ef8f02',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100007,
-            'SupportsTemplates',
-            'Supports Templates',
-            'Whether this provider supports creating envelopes from provider-hosted templates (ApplyTemplate operation).',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fe939e74-dac6-4a31-a9e3-5fb43ab79fc5' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'SupportsEmbeddedSigning')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'fe939e74-dac6-4a31-a9e3-5fb43ab79fc5',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100008,
-            'SupportsEmbeddedSigning',
-            'Supports Embedded Signing',
-            'Whether this provider supports embedded (in-app) signing URLs (CreateEmbeddedSigningUrl operation).',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a1220c4d-0fa7-456c-8fa8-3d6eaef75baa' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = 'Configuration')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a1220c4d-0fa7-456c-8fa8-3d6eaef75baa',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100009,
-            'Configuration',
-            'Configuration',
-            'JSON of non-secret provider-type defaults (e.g. oauthBase, restBase). Merged under per-account Configuration and decrypted credential values at driver initialize().',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f7ec73de-c1c7-4b1b-a7c7-227ea3b21888' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f7ec73de-c1c7-4b1b-a7c7-227ea3b21888',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100010,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '714e3cad-cf29-4ec9-826e-9da3e6df66b7' OR (EntityID = 'DD777444-C381-412F-919C-D0198FE4B54C' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '714e3cad-cf29-4ec9-826e-9da3e6df66b7',
-            'DD777444-C381-412F-919C-D0198FE4B54C', -- Entity: MJ: Signature Providers
-            100011,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '422fdbb2-1b12-4a5d-ba3c-33c81d0a7ff2' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '422fdbb2-1b12-4a5d-ba3c-33c81d0a7ff2',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e929af02-4d40-45c0-bc62-285b6cfadbe8' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e929af02-4d40-45c0-bc62-285b6cfadbe8',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '3bda6373-6ec9-4c18-bd55-17d56b15bfd8',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100002,
             'Name',
             'Name',
@@ -4689,7 +2672,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8cea1d11-3650-49eb-811d-8bc5d7f184fc' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'SignatureProviderID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '40a3f0b5-f4fc-43e0-94ee-bc85ed6af7a5' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'SignatureProviderID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4722,8 +2705,8 @@ GO
          )
          VALUES
          (
-            '8cea1d11-3650-49eb-811d-8bc5d7f184fc',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '40a3f0b5-f4fc-43e0-94ee-bc85ed6af7a5',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100003,
             'SignatureProviderID',
             'Signature Provider ID',
@@ -4738,7 +2721,7 @@ GO
             1,
             0,
             0,
-            'DD777444-C381-412F-919C-D0198FE4B54C',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2',
             'ID',
             0,
             0,
@@ -4754,7 +2737,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a4165153-5bea-4f75-a73c-e1119bbdcbf2' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'CredentialID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'be88e0af-24a9-4cc8-b3e7-27fabf2ad78b' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'CredentialID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4787,8 +2770,8 @@ GO
          )
          VALUES
          (
-            'a4165153-5bea-4f75-a73c-e1119bbdcbf2',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            'be88e0af-24a9-4cc8-b3e7-27fabf2ad78b',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100004,
             'CredentialID',
             'Credential ID',
@@ -4819,7 +2802,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '560eb704-35ad-4bcb-8e8d-02e747a70aa7' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'CompanyID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9b86c37b-47ab-4715-a239-1b072cb79fc1' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'CompanyID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4852,8 +2835,8 @@ GO
          )
          VALUES
          (
-            '560eb704-35ad-4bcb-8e8d-02e747a70aa7',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '9b86c37b-47ab-4715-a239-1b072cb79fc1',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100005,
             'CompanyID',
             'Company ID',
@@ -4884,7 +2867,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ecd64234-0d63-4079-adad-d0e41a00e9dd' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'IsActive')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fd0b6be9-9152-4d05-aa8a-4186448eb827' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'IsActive')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4917,8 +2900,8 @@ GO
          )
          VALUES
          (
-            'ecd64234-0d63-4079-adad-d0e41a00e9dd',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            'fd0b6be9-9152-4d05-aa8a-4186448eb827',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100006,
             'IsActive',
             'Is Active',
@@ -4949,7 +2932,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '712d95cc-8ab4-43f2-80b1-8482d7daaba1' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'IsDefault')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5b0443ea-fdd3-4df3-a109-f436741dabb9' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'IsDefault')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4982,8 +2965,8 @@ GO
          )
          VALUES
          (
-            '712d95cc-8ab4-43f2-80b1-8482d7daaba1',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '5b0443ea-fdd3-4df3-a109-f436741dabb9',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100007,
             'IsDefault',
             'Is Default',
@@ -5014,7 +2997,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0fc620ee-b884-4cd3-ab4e-4a9ab294092a' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'DefaultFromName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '756c442e-c593-4dac-bef8-a494ce2b1902' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'DefaultFromName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5047,8 +3030,8 @@ GO
          )
          VALUES
          (
-            '0fc620ee-b884-4cd3-ab4e-4a9ab294092a',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '756c442e-c593-4dac-bef8-a494ce2b1902',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100008,
             'DefaultFromName',
             'Default From Name',
@@ -5079,7 +3062,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '64eed22f-74ce-4f67-9fef-88975844c1a8' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'DefaultFromEmail')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '931be8e0-2ad1-485e-87d3-ed8cb3b41e6f' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'DefaultFromEmail')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5112,8 +3095,8 @@ GO
          )
          VALUES
          (
-            '64eed22f-74ce-4f67-9fef-88975844c1a8',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '931be8e0-2ad1-485e-87d3-ed8cb3b41e6f',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100009,
             'DefaultFromEmail',
             'Default From Email',
@@ -5144,7 +3127,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c175f6d-c44d-471c-a275-c624c91cbe53' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'Configuration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b708d886-ef4a-4e60-9e8c-83200bee3939' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'Configuration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5177,8 +3160,8 @@ GO
          )
          VALUES
          (
-            '2c175f6d-c44d-471c-a275-c624c91cbe53',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            'b708d886-ef4a-4e60-9e8c-83200bee3939',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100010,
             'Configuration',
             'Configuration',
@@ -5209,7 +3192,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f07b04f-b520-4946-8254-a23e225597ab' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e16d1554-36c3-477e-9cd5-524b802191d5' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5242,8 +3225,8 @@ GO
          )
          VALUES
          (
-            '6f07b04f-b520-4946-8254-a23e225597ab',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            'e16d1554-36c3-477e-9cd5-524b802191d5',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100011,
             '__mj_CreatedAt',
             'Created At',
@@ -5274,7 +3257,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b9bcb7b9-235a-4c89-bd5c-2046429695b5' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2d9620e6-6074-49b7-98f6-02b347e7f913' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5307,8 +3290,8 @@ GO
          )
          VALUES
          (
-            'b9bcb7b9-235a-4c89-bd5c-2046429695b5',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '2d9620e6-6074-49b7-98f6-02b347e7f913',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100012,
             '__mj_UpdatedAt',
             'Updated At',
@@ -5337,196 +3320,2211 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 2ef06f73-bcc8-439d-85c5-44f0f80b4bf2 */
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ec4b6a3c-7d36-4c41-af64-e20a04f2eb68' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ec4b6a3c-7d36-4c41-af64-e20a04f2eb68',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ff34ff1f-3f9e-4a1b-997b-91bf0e8a628f' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'SignatureRequestID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ff34ff1f-3f9e-4a1b-997b-91bf0e8a628f',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100002,
+            'SignatureRequestID',
+            'Signature Request ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d12d760-f6bb-4eb2-82f4-13f518583d95' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'Email')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4d12d760-f6bb-4eb2-82f4-13f518583d95',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100003,
+            'Email',
+            'Email',
+            'Recipient email address.',
+            'nvarchar',
+            640,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b87d1bdd-ad99-4c3a-83e4-811a1e389c11' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b87d1bdd-ad99-4c3a-83e4-811a1e389c11',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100004,
+            'Name',
+            'Name',
+            'Recipient display name.',
+            'nvarchar',
+            400,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ee9f7851-6abb-442c-8e43-abcbda31a1aa' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'RoutingOrder')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ee9f7851-6abb-442c-8e43-abcbda31a1aa',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100005,
+            'RoutingOrder',
+            'Routing Order',
+            'Signing order; lower routes first (1-based).',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4ff77bb5-7e61-449a-a81a-d97daa86b6f5' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'Role')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4ff77bb5-7e61-449a-a81a-d97daa86b6f5',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100006,
+            'Role',
+            'Role',
+            'Template role name for this recipient, when the envelope was created from a provider template.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8d1f72d7-6d09-43a4-98cf-e35ba9f08957' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8d1f72d7-6d09-43a4-98cf-e35ba9f08957',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100007,
+            'Status',
+            'Status',
+            'Per-recipient status: Created, Sent, Delivered, Signed, or Declined.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Created',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4552bdca-0879-4a14-b1c0-b50cb5f84dbd' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'SignedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4552bdca-0879-4a14-b1c0-b50cb5f84dbd',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100008,
+            'SignedAt',
+            'Signed At',
+            'Timestamp this recipient signed.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9dd840b9-bef5-454b-ab7d-6461ec604235' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'ExternalRecipientID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9dd840b9-bef5-454b-ab7d-6461ec604235',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100009,
+            'ExternalRecipientID',
+            'External Recipient ID',
+            'Provider-side recipient identifier, for correlation with provider events.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6a99a826-45b6-4f2e-bffc-71c30c979f0c' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '6a99a826-45b6-4f2e-bffc-71c30c979f0c',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100010,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '29560860-f17b-4e0d-a317-716f4820c1dd' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '29560860-f17b-4e0d-a317-716f4820c1dd',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100011,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '73781f9b-7be7-4cc9-9414-c21974ab2a11' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '73781f9b-7be7-4cc9-9414-c21974ab2a11',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c9aaae97-883f-4d9c-814e-183e2463c5f4' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c9aaae97-883f-4d9c-814e-183e2463c5f4',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100002,
+            'Name',
+            'Name',
+            'Display name of the eSignature provider type (e.g. DocuSign, Adobe Sign).',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b335e776-2677-405c-beb4-bc435c53afe3' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'ServerDriverKey')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b335e776-2677-405c-beb4-bc435c53afe3',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100003,
+            'ServerDriverKey',
+            'Server Driver Key',
+            'Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. ''DocuSign'').',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a845b64d-1d66-4ed6-9ce4-4c7bcae26a8d' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'IsActive')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a845b64d-1d66-4ed6-9ce4-4c7bcae26a8d',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100004,
+            'IsActive',
+            'Is Active',
+            'Whether this provider type is available for use. Inactive providers are skipped by the engine.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1078b446-e3dc-4a7e-8d46-288724b0a8ba' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'Priority')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1078b446-e3dc-4a7e-8d46-288724b0a8ba',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100005,
+            'Priority',
+            'Priority',
+            'Selection priority when multiple providers could apply. Lower number = higher priority.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9659f0dd-ecee-4804-9681-b91b8b215cf2' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'RequiresOAuth')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9659f0dd-ecee-4804-9681-b91b8b215cf2',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100006,
+            'RequiresOAuth',
+            'Requires O Auth',
+            'Whether this provider requires OAuth-based credentials (vs. a static API key).',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c0f7a466-a1e7-4856-ab2b-335756ec44d1' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'SupportsTemplates')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c0f7a466-a1e7-4856-ab2b-335756ec44d1',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100007,
+            'SupportsTemplates',
+            'Supports Templates',
+            'Whether this provider supports creating envelopes from provider-hosted templates (ApplyTemplate operation).',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1bf29a02-9b42-4b60-b13b-8536c42e84e4' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'SupportsEmbeddedSigning')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1bf29a02-9b42-4b60-b13b-8536c42e84e4',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100008,
+            'SupportsEmbeddedSigning',
+            'Supports Embedded Signing',
+            'Whether this provider supports embedded (in-app) signing URLs (CreateEmbeddedSigningUrl operation).',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd27b6ae3-e34b-42dc-9eb5-0b296fc9a934' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = 'Configuration')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd27b6ae3-e34b-42dc-9eb5-0b296fc9a934',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100009,
+            'Configuration',
+            'Configuration',
+            'JSON of non-secret provider-type defaults (e.g. oauthBase, restBase). Merged under per-account Configuration and decrypted credential values at driver initialize().',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '42db4adb-fb7b-49fb-9406-53931316f62a' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '42db4adb-fb7b-49fb-9406-53931316f62a',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100010,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d139b93-4fa1-4d9e-801d-84e55f301a03' OR (EntityID = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4d139b93-4fa1-4d9e-801d-84e55f301a03',
+            '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', -- Entity: MJ: Signature Providers
+            100011,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '47eacabd-fcb9-4416-b275-763de5377d3d' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '47eacabd-fcb9-4416-b275-763de5377d3d',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '02951200-7a4f-4455-a7e5-81b5c68b58b4' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'SignatureRequestID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '02951200-7a4f-4455-a7e5-81b5c68b58b4',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100002,
+            'SignatureRequestID',
+            'Signature Request ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b98f7e88-badf-44e7-b02a-79d0de1898ea' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'Operation')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b98f7e88-badf-44e7-b02a-79d0de1898ea',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100003,
+            'Operation',
+            'Operation',
+            'The provider operation logged (e.g. CreateEnvelope, GetEnvelopeStatus, DownloadSignedDocument, VoidEnvelope, Webhook).',
+            'nvarchar',
+            100,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7fbbb1a6-423a-4b6e-8127-490a272a81f2' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'Success')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7fbbb1a6-423a-4b6e-8127-490a272a81f2',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100004,
+            'Success',
+            'Success',
+            'Whether the operation succeeded.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '43ab0872-21f8-4bac-b71a-0f72045df11b' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'StatusBefore')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '43ab0872-21f8-4bac-b71a-0f72045df11b',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100005,
+            'StatusBefore',
+            'Status Before',
+            'Signature request status immediately before the operation, when applicable.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '70e5d48f-97fc-4ff4-a427-01e8c9cfcef3' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'StatusAfter')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '70e5d48f-97fc-4ff4-a427-01e8c9cfcef3',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100006,
+            'StatusAfter',
+            'Status After',
+            'Signature request status immediately after the operation, when applicable.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cab58ea9-c662-4a83-b454-f57a4401576b' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'Detail')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cab58ea9-c662-4a83-b454-f57a4401576b',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100007,
+            'Detail',
+            'Detail',
+            'Free-form detail: error text on failure, or normalized event JSON for webhook entries.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ffe370ef-0f9a-47b3-bd54-79d544824832' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ffe370ef-0f9a-47b3-bd54-79d544824832',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100008,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'baad8f2e-3e8a-4f3d-8833-f88713cd5a5f' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'baad8f2e-3e8a-4f3d-8833-f88713cd5a5f',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100009,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID ae803047-db7f-49bd-941f-318022832aaf */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2ef06f73-bcc8-439d-85c5-44f0f80b4bf2', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 1, 'Completed', 'Completed', GETUTCDATE(), GETUTCDATE());
+                                       ('ae803047-db7f-49bd-941f-318022832aaf', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 1, 'Completed', 'Completed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 8900d547-bd9d-4be0-82a1-a1f527607645 */
+/* SQL text to insert entity field value with ID cdab932a-8c6a-4ee5-ae75-60e138332dc2 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8900d547-bd9d-4be0-82a1-a1f527607645', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 2, 'Declined', 'Declined', GETUTCDATE(), GETUTCDATE());
+                                       ('cdab932a-8c6a-4ee5-ae75-60e138332dc2', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 2, 'Declined', 'Declined', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 603c91ae-beba-4751-bb29-41e29cf2fa65 */
+/* SQL text to insert entity field value with ID e696a16f-2ce3-4c63-a339-2782bc9d3d9b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('603c91ae-beba-4751-bb29-41e29cf2fa65', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 3, 'Delivered', 'Delivered', GETUTCDATE(), GETUTCDATE());
+                                       ('e696a16f-2ce3-4c63-a339-2782bc9d3d9b', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 3, 'Delivered', 'Delivered', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ff31ea00-d4ca-4014-99f2-bdfc1df48c07 */
+/* SQL text to insert entity field value with ID e03dcde2-1635-4290-b15c-f25d9f241768 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ff31ea00-d4ca-4014-99f2-bdfc1df48c07', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 4, 'Draft', 'Draft', GETUTCDATE(), GETUTCDATE());
+                                       ('e03dcde2-1635-4290-b15c-f25d9f241768', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 4, 'Draft', 'Draft', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 95010442-645b-43b0-bee2-3da6953203fa */
+/* SQL text to insert entity field value with ID 57cf588d-74a8-4251-9f42-4e60f1e06552 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('95010442-645b-43b0-bee2-3da6953203fa', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 5, 'Sent', 'Sent', GETUTCDATE(), GETUTCDATE());
+                                       ('57cf588d-74a8-4251-9f42-4e60f1e06552', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 5, 'Sent', 'Sent', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 49b23e1c-b522-4c75-8720-93a37014656e */
+/* SQL text to insert entity field value with ID 377b95e1-0b46-47ab-a1fe-acd6adebf92e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('49b23e1c-b522-4c75-8720-93a37014656e', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 6, 'Signed', 'Signed', GETUTCDATE(), GETUTCDATE());
+                                       ('377b95e1-0b46-47ab-a1fe-acd6adebf92e', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 6, 'Signed', 'Signed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID a28ac8d1-09fc-49a0-8675-6f2f950f5981 */
+/* SQL text to insert entity field value with ID a1a99dfb-5bc2-4fc3-8cbe-15eae6ace3d0 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a28ac8d1-09fc-49a0-8675-6f2f950f5981', '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B', 7, 'Voided', 'Voided', GETUTCDATE(), GETUTCDATE());
+                                       ('a1a99dfb-5bc2-4fc3-8cbe-15eae6ace3d0', '0DA669D4-15FA-4B9A-AB4D-0D2497166089', 7, 'Voided', 'Voided', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 3DF07A6F-C4E3-4D8E-96D0-710B3A45799B */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='3DF07A6F-C4E3-4D8E-96D0-710B3A45799B';
+/* SQL text to update ValueListType for entity field ID 0DA669D4-15FA-4B9A-AB4D-0D2497166089 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='0DA669D4-15FA-4B9A-AB4D-0D2497166089';
 
-/* SQL text to insert entity field value with ID d3ca4a47-3d35-49b4-a07a-ef92a4e70ca3 */
+/* SQL text to insert entity field value with ID a9d1e07d-b7ec-4a7e-9f81-23f47a80453f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d3ca4a47-3d35-49b4-a07a-ef92a4e70ca3', '1E8002A7-F705-4211-8A53-539E42089999', 1, 'Signed', 'Signed', GETUTCDATE(), GETUTCDATE());
+                                       ('a9d1e07d-b7ec-4a7e-9f81-23f47a80453f', '1A33CAC0-8579-4813-8941-80195A300AC5', 1, 'Signed', 'Signed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 1745cc2e-8aaf-4f10-85d8-f12a237f6c1c */
+/* SQL text to insert entity field value with ID b59520d9-07d7-4c3c-8be2-7ae6d22074d3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('1745cc2e-8aaf-4f10-85d8-f12a237f6c1c', '1E8002A7-F705-4211-8A53-539E42089999', 2, 'Source', 'Source', GETUTCDATE(), GETUTCDATE());
+                                       ('b59520d9-07d7-4c3c-8be2-7ae6d22074d3', '1A33CAC0-8579-4813-8941-80195A300AC5', 2, 'Source', 'Source', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 1E8002A7-F705-4211-8A53-539E42089999 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1E8002A7-F705-4211-8A53-539E42089999';
+/* SQL text to update ValueListType for entity field ID 1A33CAC0-8579-4813-8941-80195A300AC5 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1A33CAC0-8579-4813-8941-80195A300AC5';
 
-/* SQL text to insert entity field value with ID 7994f62e-170f-435a-a9a8-de96d3375175 */
+/* SQL text to insert entity field value with ID 0616403a-5358-4e8f-beea-8275745c27e0 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7994f62e-170f-435a-a9a8-de96d3375175', '05440883-E497-4E32-8ED6-52A830B1E2C2', 1, 'Created', 'Created', GETUTCDATE(), GETUTCDATE());
+                                       ('0616403a-5358-4e8f-beea-8275745c27e0', '8D1F72D7-6D09-43A4-98CF-E35BA9F08957', 1, 'Created', 'Created', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 5d7650bf-fb6a-4687-a202-7089555f227b */
+/* SQL text to insert entity field value with ID 2e5f3565-2c73-4057-b66d-3faa27a7f04e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('5d7650bf-fb6a-4687-a202-7089555f227b', '05440883-E497-4E32-8ED6-52A830B1E2C2', 2, 'Declined', 'Declined', GETUTCDATE(), GETUTCDATE());
+                                       ('2e5f3565-2c73-4057-b66d-3faa27a7f04e', '8D1F72D7-6D09-43A4-98CF-E35BA9F08957', 2, 'Declined', 'Declined', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 1d5c1a1e-1588-44d6-ba07-61b623b9f276 */
+/* SQL text to insert entity field value with ID ecdf93f2-7b93-428f-8048-f63356fd6ec7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('1d5c1a1e-1588-44d6-ba07-61b623b9f276', '05440883-E497-4E32-8ED6-52A830B1E2C2', 3, 'Delivered', 'Delivered', GETUTCDATE(), GETUTCDATE());
+                                       ('ecdf93f2-7b93-428f-8048-f63356fd6ec7', '8D1F72D7-6D09-43A4-98CF-E35BA9F08957', 3, 'Delivered', 'Delivered', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ededeaee-bd79-4c13-b6bb-6cfe7475da28 */
+/* SQL text to insert entity field value with ID 897395f4-9d4f-4b93-94c3-7a06b5fabd63 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ededeaee-bd79-4c13-b6bb-6cfe7475da28', '05440883-E497-4E32-8ED6-52A830B1E2C2', 4, 'Sent', 'Sent', GETUTCDATE(), GETUTCDATE());
+                                       ('897395f4-9d4f-4b93-94c3-7a06b5fabd63', '8D1F72D7-6D09-43A4-98CF-E35BA9F08957', 4, 'Sent', 'Sent', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 27ba0c7d-5adc-4478-8227-b5dedb6a3cfa */
+/* SQL text to insert entity field value with ID c9bada35-2cf5-4203-8148-9c53934ada4b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('27ba0c7d-5adc-4478-8227-b5dedb6a3cfa', '05440883-E497-4E32-8ED6-52A830B1E2C2', 5, 'Signed', 'Signed', GETUTCDATE(), GETUTCDATE());
+                                       ('c9bada35-2cf5-4203-8148-9c53934ada4b', '8D1F72D7-6D09-43A4-98CF-E35BA9F08957', 5, 'Signed', 'Signed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 05440883-E497-4E32-8ED6-52A830B1E2C2 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='05440883-E497-4E32-8ED6-52A830B1E2C2';
+/* SQL text to update ValueListType for entity field ID 8D1F72D7-6D09-43A4-98CF-E35BA9F08957 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='8D1F72D7-6D09-43A4-98CF-E35BA9F08957';
 
 
 /* Create Entity Relationship: MJ: Signature Requests -> MJ: Signature Request Logs (One To Many via SignatureRequestID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '5884b2ec-8f9e-4576-98c7-4ad426c7e471'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2cf25380-195c-4a46-9c37-6fe0d51eb6ca'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('5884b2ec-8f9e-4576-98c7-4ad426c7e471', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', 'F9F6F8C8-A29F-42A2-A64E-15EE43098252', 'SignatureRequestID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('2cf25380-195c-4a46-9c37-6fe0d51eb6ca', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', '224F170C-5FCC-41F2-906F-B82B30F1EB2A', 'SignatureRequestID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Signature Requests -> MJ: Signature Request Recipients (One To Many via SignatureRequestID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '1818231f-aac0-4a11-a7b3-2a67ca050125'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('1818231f-aac0-4a11-a7b3-2a67ca050125', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', '2EECC44E-A41F-4521-8C0E-764D4D68FF70', 'SignatureRequestID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Signature Requests -> MJ: Signature Request Documents (One To Many via SignatureRequestID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '612eef9c-ddf0-4a9d-81f3-1fa70fe7e59e'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '3506256c-bd79-4677-9aff-7ccd17a5d0b9'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('612eef9c-ddf0-4a9d-81f3-1fa70fe7e59e', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', 'SignatureRequestID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Signature Requests -> MJ: Signature Request Recipients (One To Many via SignatureRequestID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0d41a323-964e-4de1-a849-582ab51f5901'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0d41a323-964e-4de1-a849-582ab51f5901', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', 'SignatureRequestID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Companies -> MJ: Signature Accounts (One To Many via CompanyID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '03957182-91ea-45ec-8ce3-e6c810c99df3'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('03957182-91ea-45ec-8ce3-e6c810c99df3', 'D4238F34-2837-EF11-86D4-6045BDEE16E6', '64408373-0375-47BF-965F-EB6FAD41D8E4', 'CompanyID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Entities -> MJ: Signature Requests (One To Many via EntityID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9704872b-6a17-4d82-855f-0cda023ba618'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('9704872b-6a17-4d82-855f-0cda023ba618', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', 'EntityID', 'One To Many', 1, 1, 62, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Artifacts -> MJ: Signature Request Documents (One To Many via ArtifactID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '25b5cef3-4d21-4f0e-940e-4be1abceb8bd'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('25b5cef3-4d21-4f0e-940e-4be1abceb8bd', 'F48D2341-8667-40BB-BCA8-87D7F80E16CD', '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', 'ArtifactID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Credentials -> MJ: Signature Accounts (One To Many via CredentialID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c45b78e1-17f4-4357-b5cf-e2b58ee3208e'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('c45b78e1-17f4-4357-b5cf-e2b58ee3208e', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', '64408373-0375-47BF-965F-EB6FAD41D8E4', 'CredentialID', 'One To Many', 1, 1, 8, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Signature Providers -> MJ: Signature Accounts (One To Many via SignatureProviderID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '41d26906-16d1-4def-b177-34ff5184e52b'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('41d26906-16d1-4def-b177-34ff5184e52b', 'DD777444-C381-412F-919C-D0198FE4B54C', '64408373-0375-47BF-965F-EB6FAD41D8E4', 'SignatureProviderID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Artifact Versions -> MJ: Signature Request Documents (One To Many via ArtifactVersionID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a404459c-05d4-479e-aa3f-c54b41913139'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('a404459c-05d4-479e-aa3f-c54b41913139', 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', 'ArtifactVersionID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('3506256c-bd79-4677-9aff-7ccd17a5d0b9', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', '975DFF8E-DAD8-44B6-9722-4D7B138A213F', 'SignatureRequestID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Signature Accounts -> MJ: Signature Requests (One To Many via SignatureAccountID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0621c92d-eeea-47ba-a79c-18b849613cd8'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '29685f42-7fc9-4214-8c87-93f8f29b8f3b'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0621c92d-eeea-47ba-a79c-18b849613cd8', '64408373-0375-47BF-965F-EB6FAD41D8E4', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', 'SignatureAccountID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('29685f42-7fc9-4214-8c87-93f8f29b8f3b', '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', 'SignatureAccountID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Companies -> MJ: Signature Accounts (One To Many via CompanyID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a5934ae8-3f6b-41d6-81ae-a32313b6256e'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('a5934ae8-3f6b-41d6-81ae-a32313b6256e', 'D4238F34-2837-EF11-86D4-6045BDEE16E6', '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', 'CompanyID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Entities -> MJ: Signature Requests (One To Many via EntityID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '697bef3c-7bc6-4248-af61-006040a603fd'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('697bef3c-7bc6-4248-af61-006040a603fd', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', 'EntityID', 'One To Many', 1, 1, 62, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Artifacts -> MJ: Signature Request Documents (One To Many via ArtifactID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '52158d8d-bfaf-4a43-a688-d93ddcd59de7'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('52158d8d-bfaf-4a43-a688-d93ddcd59de7', 'F48D2341-8667-40BB-BCA8-87D7F80E16CD', '975DFF8E-DAD8-44B6-9722-4D7B138A213F', 'ArtifactID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Credentials -> MJ: Signature Accounts (One To Many via CredentialID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'df9bea45-2736-4dd5-a039-eb172468ee89'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('df9bea45-2736-4dd5-a039-eb172468ee89', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', 'CredentialID', 'One To Many', 1, 1, 8, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Signature Providers -> MJ: Signature Accounts (One To Many via SignatureProviderID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f034dcd3-929b-4e91-8c8d-fbe95dd9b1cb'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('f034dcd3-929b-4e91-8c8d-fbe95dd9b1cb', '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', 'SignatureProviderID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Artifact Versions -> MJ: Signature Request Documents (One To Many via ArtifactVersionID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2df255ac-d1c5-4b54-9901-602536e53b6d'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('2df255ac-d1c5-4b54-9901-602536e53b6d', 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', '975DFF8E-DAD8-44B6-9722-4D7B138A213F', 'ArtifactVersionID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for SignatureAccount */
@@ -5565,14 +5563,14 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SignatureAccount_CompanyID ON [${flyway:defaultSchema}].[SignatureAccount] ([CompanyID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 8CEA1D11-3650-49EB-811D-8BC5D7F184FC */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8CEA1D11-3650-49EB-811D-8BC5D7F184FC', @RelatedEntityNameFieldMap='SignatureProvider';
+/* SQL text to update entity field related entity name field map for entity field ID 40A3F0B5-F4FC-43E0-94EE-BC85ED6AF7A5 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='40A3F0B5-F4FC-43E0-94EE-BC85ED6AF7A5', @RelatedEntityNameFieldMap='SignatureProvider';
 
-/* SQL text to update entity field related entity name field map for entity field ID A4165153-5BEA-4F75-A73C-E1119BBDCBF2 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A4165153-5BEA-4F75-A73C-E1119BBDCBF2', @RelatedEntityNameFieldMap='Credential';
+/* SQL text to update entity field related entity name field map for entity field ID BE88E0AF-24A9-4CC8-B3E7-27FABF2AD78B */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='BE88E0AF-24A9-4CC8-B3E7-27FABF2AD78B', @RelatedEntityNameFieldMap='Credential';
 
-/* SQL text to update entity field related entity name field map for entity field ID 560EB704-35AD-4BCB-8E8D-02E747A70AA7 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='560EB704-35AD-4BCB-8E8D-02E747A70AA7', @RelatedEntityNameFieldMap='Company';
+/* SQL text to update entity field related entity name field map for entity field ID 9B86C37B-47AB-4715-A239-1B072CB79FC1 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='9B86C37B-47AB-4715-A239-1B072CB79FC1', @RelatedEntityNameFieldMap='Company';
 
 /* Base View SQL for MJ: Signature Accounts */
 -----------------------------------------------------------------
@@ -5922,8 +5920,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SignatureRequestDocument_ArtifactVersionID ON [${flyway:defaultSchema}].[SignatureRequestDocument] ([ArtifactVersionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 5FA45FD9-AAAE-4FCA-847C-874454F13221 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5FA45FD9-AAAE-4FCA-847C-874454F13221', @RelatedEntityNameFieldMap='Artifact';
+/* SQL text to update entity field related entity name field map for entity field ID E0FFC7BB-B143-4930-9EF3-08D5729C9C04 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E0FFC7BB-B143-4930-9EF3-08D5729C9C04', @RelatedEntityNameFieldMap='SignatureRequest';
 
 /* Index for Foreign Keys for SignatureRequestLog */
 -----------------------------------------------------------------
@@ -5943,6 +5941,9 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SignatureRequestLog_SignatureRequestID ON [${flyway:defaultSchema}].[SignatureRequestLog] ([SignatureRequestID]);
 
+/* SQL text to update entity field related entity name field map for entity field ID 02951200-7A4F-4455-A7E5-81B5C68B58B4 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='02951200-7A4F-4455-A7E5-81B5C68B58B4', @RelatedEntityNameFieldMap='SignatureRequest';
+
 /* Index for Foreign Keys for SignatureRequestRecipient */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -5960,6 +5961,9 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[SignatureRequestRecipient]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SignatureRequestRecipient_SignatureRequestID ON [${flyway:defaultSchema}].[SignatureRequestRecipient] ([SignatureRequestID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID FF34FF1F-3F9E-4A1B-997B-91BF0E8A628F */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='FF34FF1F-3F9E-4A1B-997B-91BF0E8A628F', @RelatedEntityNameFieldMap='SignatureRequest';
 
 /* Index for Foreign Keys for SignatureRequest */
 -----------------------------------------------------------------
@@ -5988,8 +5992,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SignatureRequest_EntityID ON [${flyway:defaultSchema}].[SignatureRequest] ([EntityID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID E4E1BF49-F90C-4F31-BFCF-C5049B6BD445 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E4E1BF49-F90C-4F31-BFCF-C5049B6BD445', @RelatedEntityNameFieldMap='SignatureAccount';
+/* SQL text to update entity field related entity name field map for entity field ID 04A2EDE7-1528-48B6-97E0-E7BFCD7C92D5 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='04A2EDE7-1528-48B6-97E0-E7BFCD7C92D5', @RelatedEntityNameFieldMap='SignatureAccount';
 
 /* Base View SQL for MJ: Signature Providers */
 -----------------------------------------------------------------
@@ -6223,6 +6227,48 @@ GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSignatureProvider] TO [cdp_Developer], [cdp_Integration];
 
+/* spDelete SQL for MJ: Signature Providers */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Signature Providers
+-- Item: spDeleteSignatureProvider
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR SignatureProvider
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteSignatureProvider]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureProvider];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureProvider]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[SignatureProvider]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureProvider] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Signature Providers */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureProvider] TO [cdp_Developer], [cdp_Integration];
+
 /* Base View SQL for MJ: Signature Request Logs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6246,9 +6292,14 @@ GO
 CREATE VIEW [${flyway:defaultSchema}].[vwSignatureRequestLogs]
 AS
 SELECT
-    s.*
+    s.*,
+    MJSignatureRequest_SignatureRequestID.[Name] AS [SignatureRequest]
 FROM
     [${flyway:defaultSchema}].[SignatureRequestLog] AS s
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[SignatureRequest] AS MJSignatureRequest_SignatureRequestID
+  ON
+    [s].[SignatureRequestID] = MJSignatureRequest_SignatureRequestID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwSignatureRequestLogs] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
@@ -6447,6 +6498,54 @@ GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSignatureRequestLog] TO [cdp_Developer], [cdp_Integration];
 
+/* spDelete SQL for MJ: Signature Request Logs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Signature Request Logs
+-- Item: spDeleteSignatureRequestLog
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR SignatureRequestLog
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteSignatureRequestLog]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureRequestLog];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureRequestLog]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[SignatureRequestLog]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestLog] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Signature Request Logs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestLog] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update entity field related entity name field map for entity field ID C9FC86D8-0586-4B1F-A6B2-6088B02AED06 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='C9FC86D8-0586-4B1F-A6B2-6088B02AED06', @RelatedEntityNameFieldMap='Artifact';
+
+/* SQL text to update entity field related entity name field map for entity field ID B70D9FE2-0F70-4BAB-B61E-AC46BC496BF3 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B70D9FE2-0F70-4BAB-B61E-AC46BC496BF3', @RelatedEntityNameFieldMap='Entity';
+
 /* Base View SQL for MJ: Signature Request Recipients */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6470,9 +6569,14 @@ GO
 CREATE VIEW [${flyway:defaultSchema}].[vwSignatureRequestRecipients]
 AS
 SELECT
-    s.*
+    s.*,
+    MJSignatureRequest_SignatureRequestID.[Name] AS [SignatureRequest]
 FROM
     [${flyway:defaultSchema}].[SignatureRequestRecipient] AS s
+INNER JOIN
+    [${flyway:defaultSchema}].[SignatureRequest] AS MJSignatureRequest_SignatureRequestID
+  ON
+    [s].[SignatureRequestID] = MJSignatureRequest_SignatureRequestID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwSignatureRequestRecipients] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
@@ -6685,90 +6789,6 @@ GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSignatureRequestRecipient] TO [cdp_Developer], [cdp_Integration];
 
-/* spDelete SQL for MJ: Signature Providers */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Signature Providers
--- Item: spDeleteSignatureProvider
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR SignatureProvider
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteSignatureProvider]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureProvider];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureProvider]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[SignatureProvider]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureProvider] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Signature Providers */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureProvider] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Signature Request Logs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Signature Request Logs
--- Item: spDeleteSignatureRequestLog
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR SignatureRequestLog
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteSignatureRequestLog]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureRequestLog];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteSignatureRequestLog]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[SignatureRequestLog]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestLog] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Signature Request Logs */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestLog] TO [cdp_Developer], [cdp_Integration];
-
 /* spDelete SQL for MJ: Signature Request Recipients */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6811,11 +6831,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestRecipient] T
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestRecipient] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID E51828E6-3866-42CA-A0F8-3CC7D72112BA */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E51828E6-3866-42CA-A0F8-3CC7D72112BA', @RelatedEntityNameFieldMap='Entity';
-
-/* SQL text to update entity field related entity name field map for entity field ID 0A6B914F-55ED-4684-8266-E34178B42967 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='0A6B914F-55ED-4684-8266-E34178B42967', @RelatedEntityNameFieldMap='ArtifactVersion';
+/* SQL text to update entity field related entity name field map for entity field ID E308445E-1AC1-42A5-B415-08F5974BE589 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E308445E-1AC1-42A5-B415-08F5974BE589', @RelatedEntityNameFieldMap='ArtifactVersion';
 
 /* Base View SQL for MJ: Signature Requests */
 -----------------------------------------------------------------
@@ -6888,7 +6905,7 @@ GO
 CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateSignatureRequest]
     @ID uniqueidentifier = NULL,
     @SignatureAccountID uniqueidentifier,
-    @Title nvarchar(255),
+    @Name nvarchar(255),
     @Message_Clear bit = 0,
     @Message nvarchar(MAX) = NULL,
     @Status nvarchar(20) = NULL,
@@ -6916,7 +6933,7 @@ BEGIN
             (
                 [ID],
                 [SignatureAccountID],
-                [Title],
+                [Name],
                 [Message],
                 [Status],
                 [ExternalEnvelopeID],
@@ -6931,7 +6948,7 @@ BEGIN
             (
                 @ID,
                 @SignatureAccountID,
-                @Title,
+                @Name,
                 CASE WHEN @Message_Clear = 1 THEN NULL ELSE ISNULL(@Message, NULL) END,
                 ISNULL(@Status, 'Draft'),
                 CASE WHEN @ExternalEnvelopeID_Clear = 1 THEN NULL ELSE ISNULL(@ExternalEnvelopeID, NULL) END,
@@ -6948,7 +6965,7 @@ BEGIN
         INSERT INTO [${flyway:defaultSchema}].[SignatureRequest]
             (
                 [SignatureAccountID],
-                [Title],
+                [Name],
                 [Message],
                 [Status],
                 [ExternalEnvelopeID],
@@ -6962,7 +6979,7 @@ BEGIN
         VALUES
             (
                 @SignatureAccountID,
-                @Title,
+                @Name,
                 CASE WHEN @Message_Clear = 1 THEN NULL ELSE ISNULL(@Message, NULL) END,
                 ISNULL(@Status, 'Draft'),
                 CASE WHEN @ExternalEnvelopeID_Clear = 1 THEN NULL ELSE ISNULL(@ExternalEnvelopeID, NULL) END,
@@ -7003,7 +7020,7 @@ GO
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateSignatureRequest]
     @ID uniqueidentifier,
     @SignatureAccountID uniqueidentifier = NULL,
-    @Title nvarchar(255) = NULL,
+    @Name nvarchar(255) = NULL,
     @Message_Clear bit = 0,
     @Message nvarchar(MAX) = NULL,
     @Status nvarchar(20) = NULL,
@@ -7026,7 +7043,7 @@ BEGIN
         [${flyway:defaultSchema}].[SignatureRequest]
     SET
         [SignatureAccountID] = ISNULL(@SignatureAccountID, [SignatureAccountID]),
-        [Title] = ISNULL(@Title, [Title]),
+        [Name] = ISNULL(@Name, [Name]),
         [Message] = CASE WHEN @Message_Clear = 1 THEN NULL ELSE ISNULL(@Message, [Message]) END,
         [Status] = ISNULL(@Status, [Status]),
         [ExternalEnvelopeID] = CASE WHEN @ExternalEnvelopeID_Clear = 1 THEN NULL ELSE ISNULL(@ExternalEnvelopeID, [ExternalEnvelopeID]) END,
@@ -7151,10 +7168,15 @@ CREATE VIEW [${flyway:defaultSchema}].[vwSignatureRequestDocuments]
 AS
 SELECT
     s.*,
+    MJSignatureRequest_SignatureRequestID.[Name] AS [SignatureRequest],
     MJArtifact_ArtifactID.[Name] AS [Artifact],
     MJArtifactVersion_ArtifactVersionID.[Name] AS [ArtifactVersion]
 FROM
     [${flyway:defaultSchema}].[SignatureRequestDocument] AS s
+INNER JOIN
+    [${flyway:defaultSchema}].[SignatureRequest] AS MJSignatureRequest_SignatureRequestID
+  ON
+    [s].[SignatureRequestID] = MJSignatureRequest_SignatureRequestID.[ID]
 LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Artifact] AS MJArtifact_ArtifactID
   ON
@@ -7401,7 +7423,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd7de20e0-12b6-4105-ba3d-6a0e97db7b75' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'SignatureAccount')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd6b694fe-3781-4744-a329-b5da6551ca69' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'SignatureAccount')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7434,8 +7456,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            'd7de20e0-12b6-4105-ba3d-6a0e97db7b75',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            'd6b694fe-3781-4744-a329-b5da6551ca69',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100027,
             'SignatureAccount',
             'Signature Account',
@@ -7466,7 +7488,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'db5436ac-78f5-4b2d-acb0-408c8fb37f6c' OR (EntityID = '0075DBDF-FD00-4568-A7AC-03FDBF55D329' AND Name = 'Entity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c7c4167b-0472-479f-bf34-dcc29d25e5a8' OR (EntityID = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4' AND Name = 'Entity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7499,8 +7521,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            'db5436ac-78f5-4b2d-acb0-408c8fb37f6c',
-            '0075DBDF-FD00-4568-A7AC-03FDBF55D329', -- Entity: MJ: Signature Requests
+            'c7c4167b-0472-479f-bf34-dcc29d25e5a8',
+            'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', -- Entity: MJ: Signature Requests
             100028,
             'Entity',
             'Entity',
@@ -7531,7 +7553,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dca03b76-895d-481f-ba81-10b13fbce0a3' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'Artifact')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e461b212-c8ce-412d-bfbb-ae354bb22816' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'SignatureRequest')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7564,9 +7586,74 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            'dca03b76-895d-481f-ba81-10b13fbce0a3',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
+            'e461b212-c8ce-412d-bfbb-ae354bb22816',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
             100019,
+            'SignatureRequest',
+            'Signature Request',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ca5248b-60c4-4ca0-b967-94bbe3edc162' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'Artifact')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7ca5248b-60c4-4ca0-b967-94bbe3edc162',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
+            100020,
             'Artifact',
             'Artifact',
             NULL,
@@ -7596,7 +7683,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '64280299-21d3-4c3a-a089-1d46e08075fd' OR (EntityID = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE' AND Name = 'ArtifactVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ef3b6f24-3da4-4aad-9720-fefc1bdf9cc4' OR (EntityID = '975DFF8E-DAD8-44B6-9722-4D7B138A213F' AND Name = 'ArtifactVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7629,9 +7716,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            '64280299-21d3-4c3a-a089-1d46e08075fd',
-            '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', -- Entity: MJ: Signature Request Documents
-            100020,
+            'ef3b6f24-3da4-4aad-9720-fefc1bdf9cc4',
+            '975DFF8E-DAD8-44B6-9722-4D7B138A213F', -- Entity: MJ: Signature Request Documents
+            100021,
             'ArtifactVersion',
             'Artifact Version',
             NULL,
@@ -7661,7 +7748,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '776f45a5-3475-44f6-9789-5eb70acef0ca' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'SignatureProvider')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '34f399f0-a74c-454a-a64b-385a3e89fc9b' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'SignatureProvider')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7694,8 +7781,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            '776f45a5-3475-44f6-9789-5eb70acef0ca',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '34f399f0-a74c-454a-a64b-385a3e89fc9b',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100025,
             'SignatureProvider',
             'Signature Provider',
@@ -7726,7 +7813,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b58ab39e-29eb-43db-b092-305a9a13eb42' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'Credential')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '10acca90-272e-4424-8c5c-b56ee86ff6ac' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'Credential')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7759,8 +7846,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            'b58ab39e-29eb-43db-b092-305a9a13eb42',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '10acca90-272e-4424-8c5c-b56ee86ff6ac',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100026,
             'Credential',
             'Credential',
@@ -7791,7 +7878,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0feac7ed-4328-4d76-8cc6-998f4a79b5eb' OR (EntityID = '64408373-0375-47BF-965F-EB6FAD41D8E4' AND Name = 'Company')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0d9459ef-1391-48fc-9c12-145fb18d2411' OR (EntityID = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B' AND Name = 'Company')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7824,8 +7911,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
          VALUES
          (
-            '0feac7ed-4328-4d76-8cc6-998f4a79b5eb',
-            '64408373-0375-47BF-965F-EB6FAD41D8E4', -- Entity: MJ: Signature Accounts
+            '0d9459ef-1391-48fc-9c12-145fb18d2411',
+            '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', -- Entity: MJ: Signature Accounts
             100027,
             'Company',
             'Company',
@@ -7854,455 +7941,402 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSignatureRequestDocument] TO
          )
       END;
 
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1f6f1bf1-64de-4330-ab2c-aa161eb9defc' OR (EntityID = '2EECC44E-A41F-4521-8C0E-764D4D68FF70' AND Name = 'SignatureRequest')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1f6f1bf1-64de-4330-ab2c-aa161eb9defc',
+            '2EECC44E-A41F-4521-8C0E-764D4D68FF70', -- Entity: MJ: Signature Request Recipients
+            100023,
+            'SignatureRequest',
+            'Signature Request',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8a6b9f8a-6ed0-4617-9034-67dd097caccf' OR (EntityID = '224F170C-5FCC-41F2-906F-B82B30F1EB2A' AND Name = 'SignatureRequest')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8a6b9f8a-6ed0-4617-9034-67dd097caccf',
+            '224F170C-5FCC-41F2-906F-B82B30F1EB2A', -- Entity: MJ: Signature Request Logs
+            100019,
+            'SignatureRequest',
+            'Signature Request',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '8745E83C-AC66-4415-96A0-79E5B862E531'
+               WHERE ID = 'A845B64D-1D66-4ED6-9CE4-4C7BCAE26A8D'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '1E8002A7-F705-4211-8A53-539E42089999'
+               WHERE ID = '1078B446-E3DC-4A7E-8D46-288724B0A8BA'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '9659F0DD-ECEE-4804-9681-B91B8B215CF2'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'C0F7A466-A1E7-4856-AB2B-335756EC44D1'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '1BF29A02-9B42-4B60-B13B-8536C42E84E4'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '1E8002A7-F705-4211-8A53-539E42089999'
+               WHERE ID = 'B335E776-2677-405C-BEB4-BC435C53AFE3'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '4A59D086-C037-414D-A727-8A307952D2A7'
+               WHERE ID = 'C9AAAE97-883F-4D9C-814E-183E2463C5F4'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '1E8002A7-F705-4211-8A53-539E42089999'
+               WHERE ID = 'B335E776-2677-405C-BEB4-BC435C53AFE3'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '736140CC-D13D-49F9-8B98-8E0E3BA2EC89'
+               WHERE ID = 'F9283E8E-7A9C-42AB-9D7F-2896B3C1A0F4'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'A5929F62-F5F1-47FB-9A60-16AFC3FD8094'
+               WHERE ID = '1A33CAC0-8579-4813-8941-80195A300AC5'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '95374EA7-57CE-4980-BC32-BF11EBC2502D'
+               WHERE ID = 'E461B212-C8CE-412D-BFBB-AE354BB22816'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '736140CC-D13D-49F9-8B98-8E0E3BA2EC89'
+               WHERE ID = '1A33CAC0-8579-4813-8941-80195A300AC5'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '87064008-5E47-4659-A56D-074FFE872040'
-               AND AutoUpdateUserSearchPredicate = 1;
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'E461B212-C8CE-412D-BFBB-AE354BB22816'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '736140CC-D13D-49F9-8B98-8E0E3BA2EC89'
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = '1A33CAC0-8579-4813-8941-80195A300AC5'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '0DA669D4-15FA-4B9A-AB4D-0D2497166089'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '4FFE69FD-3D6D-4A6A-8086-B1649C009553'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '8E13825F-DFD5-482B-A4E1-D080C5B1C101'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'D6B694FE-3781-4744-A329-B5DA6551CA69'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'DAC6B9ED-A9B9-4861-8E41-1874CD520BE5'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = 'DAC6B9ED-A9B9-4861-8E41-1874CD520BE5'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IsNameField = 1
-               WHERE ID = '67DF9F72-D46D-47CF-9A0D-629E5200C269'
+               WHERE ID = 'B98F7E88-BADF-44E7-B02A-79D0DE1898EA'
                AND AutoUpdateIsNameField = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '67DF9F72-D46D-47CF-9A0D-629E5200C269'
+               WHERE ID = 'B98F7E88-BADF-44E7-B02A-79D0DE1898EA'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '7754D06E-D2ED-4F26-B1AE-D44F74FEF59C'
+               WHERE ID = '7FBBB1A6-423A-4B6E-8127-490A272A81F2'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '05440883-E497-4E32-8ED6-52A830B1E2C2'
+               WHERE ID = '43AB0872-21F8-4BAC-B71A-0F72045DF11B'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '70E5D48F-97FC-4FF4-A427-01E8C9CFCEF3'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'FFE370EF-0F9A-47B3-BD54-79D544824832'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '67DF9F72-D46D-47CF-9A0D-629E5200C269'
+               WHERE ID = 'B98F7E88-BADF-44E7-B02A-79D0DE1898EA'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '692E65D6-12F5-4DFA-A562-509F6A40D3AA'
+               WHERE ID = '43AB0872-21F8-4BAC-B71A-0F72045DF11B'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'ABA7ABE6-37BE-404D-A22E-251CC57D45C8'
+               WHERE ID = '70E5D48F-97FC-4FF4-A427-01E8C9CFCEF3'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '3ABC4A50-D368-4894-ABDD-1319EEF7741C'
+               WHERE ID = 'B98F7E88-BADF-44E7-B02A-79D0DE1898EA'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '67DF9F72-D46D-47CF-9A0D-629E5200C269'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '692E65D6-12F5-4DFA-A562-509F6A40D3AA'
+               WHERE ID = '43AB0872-21F8-4BAC-B71A-0F72045DF11B'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = 'ABA7ABE6-37BE-404D-A22E-251CC57D45C8'
+               WHERE ID = '70E5D48F-97FC-4FF4-A427-01E8C9CFCEF3'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IsNameField = 1
-               WHERE ID = '37B8E7C1-C70B-4414-A18C-2B18C0D36245'
+               WHERE ID = '4D12D760-F6BB-4EB2-82F4-13F518583D95'
                AND AutoUpdateIsNameField = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '37B8E7C1-C70B-4414-A18C-2B18C0D36245'
+               WHERE ID = '4D12D760-F6BB-4EB2-82F4-13F518583D95'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B'
+               WHERE ID = 'EE9F7851-6ABB-442C-8E43-ABCBDA31A1AA'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '7075D0C0-55C6-430A-8C62-2CD828F90F64'
+               WHERE ID = '4FF77BB5-7E61-449A-A81A-D97DAA86B6F5'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'E1EA675C-DC91-4F60-BD99-A3D920B44F2D'
+               WHERE ID = '8D1F72D7-6D09-43A4-98CF-E35BA9F08957'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '37B8E7C1-C70B-4414-A18C-2B18C0D36245'
+               WHERE ID = '4D12D760-F6BB-4EB2-82F4-13F518583D95'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B'
+               WHERE ID = '4FF77BB5-7E61-449A-A81A-D97DAA86B6F5'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '772866A6-FBE7-47F1-BDEA-E7DCCC8F278D'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6839CD3D-D30A-4BAD-A82C-C36671F91286'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '37B8E7C1-C70B-4414-A18C-2B18C0D36245'
-               AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '772866A6-FBE7-47F1-BDEA-E7DCCC8F278D'
+               WHERE ID = '4D12D760-F6BB-4EB2-82F4-13F518583D95'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = '1E9E0448-51D7-4693-97AF-84D753A101FE'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '1E9E0448-51D7-4693-97AF-84D753A101FE'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '510C984F-0C7E-4E5E-9185-2BB29CC61D27'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '6C2A198B-ED52-469A-8A4B-7821E9C01D65'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '12B3EC2B-843A-4B89-A51B-B4FD5AA16451'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '1BE6013E-C6FB-4A86-AAA7-12ECC1769C76'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '1E9E0448-51D7-4693-97AF-84D753A101FE'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6C2A198B-ED52-469A-8A4B-7821E9C01D65'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '12B3EC2B-843A-4B89-A51B-B4FD5AA16451'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '6FD41107-427B-413F-A69E-3F161ABA3444'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '1E9E0448-51D7-4693-97AF-84D753A101FE'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '6C2A198B-ED52-469A-8A4B-7821E9C01D65'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '12B3EC2B-843A-4B89-A51B-B4FD5AA16451'
+               WHERE ID = '4FF77BB5-7E61-449A-A81A-D97DAA86B6F5'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'ECD64234-0D63-4079-ADAD-D0E41A00E9DD'
+               WHERE ID = 'FD0B6BE9-9152-4D05-AA8A-4186448EB827'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '712D95CC-8AB4-43F2-80B1-8482D7DAABA1'
+               WHERE ID = '5B0443EA-FDD3-4DF3-A109-F436741DABB9'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '776F45A5-3475-44F6-9789-5EB70ACEF0CA'
+               WHERE ID = '931BE8E0-2AD1-485E-87D3-ED8CB3B41E6F'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '0FEAC7ED-4328-4D76-8CC6-998F4A79B5EB'
+               WHERE ID = '34F399F0-A74C-454A-A64B-385A3E89FC9B'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '0FC620EE-B884-4CD3-AB4E-4A9AB294092A'
+               WHERE ID = '756C442E-C593-4DAC-BEF8-A494CE2B1902'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '64EED22F-74CE-4F67-9FEF-88975844C1A8'
+               WHERE ID = '931BE8E0-2AD1-485E-87D3-ED8CB3B41E6F'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '776F45A5-3475-44F6-9789-5EB70ACEF0CA'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '0FEAC7ED-4328-4D76-8CC6-998F4A79B5EB'
+               WHERE ID = '34F399F0-A74C-454A-A64B-385A3E89FC9B'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'E929AF02-4D40-45C0-BC62-285B6CFADBE8'
+               WHERE ID = '3BDA6373-6EC9-4C18-BD55-17D56B15BFD8'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '776F45A5-3475-44F6-9789-5EB70ACEF0CA'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '0FEAC7ED-4328-4D76-8CC6-998F4A79B5EB'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '0FC620EE-B884-4CD3-AB4E-4A9AB294092A'
+               WHERE ID = '34F399F0-A74C-454A-A64B-385A3E89FC9B'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '64EED22F-74CE-4F67-9FEF-88975844C1A8'
+               WHERE ID = '931BE8E0-2AD1-485E-87D3-ED8CB3B41E6F'
                AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set categories for 11 fields */
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0B8AF4A8-BD9C-430F-8DD5-D123D3FCFB45' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.SignatureRequestID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Signature Request',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Signature Request',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'CD233C1B-0616-46D6-AD62-9662641CD732' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.ArtifactID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Artifact Reference',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5FA45FD9-AAAE-4FCA-847C-874454F13221' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.ArtifactVersionID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Artifact Reference',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact Version',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0A6B914F-55ED-4684-8266-E34178B42967' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Document Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Document Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4A59D086-C037-414D-A727-8A307952D2A7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.Sequence 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Document Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8745E83C-AC66-4415-96A0-79E5B862E531' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.Role 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Document Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1E8002A7-F705-4211-8A53-539E42089999' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '514F8CC5-5607-4E8B-8603-1CFEB647A26C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '153BDE51-2DEE-4C6E-AF5B-CDD21E8ED80E' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.Artifact 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Artifact Reference',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DCA03B76-895D-481F-BA81-10B13FBCE0A3' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Documents.ArtifactVersion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Artifact Reference',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '64280299-21D3-4C3A-A089-1D46E08075FD' AND AutoUpdateCategory = 1;
-
-/* Set entity icon to fa fa-file */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-file', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('6674b6a0-0c72-49af-b03d-23feb93b72b5', '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', 'FieldCategoryInfo', '{"Signature Request":{"icon":"fa fa-envelope-open-text","description":"Fields that associate the document with its signature request envelope"},"Artifact Reference":{"icon":"fa fa-file-alt","description":"Identifiers linking to the underlying artifact and its specific version"},"Document Details":{"icon":"fa fa-file","description":"Core information about the document such as name, order and role in the signing process"},"System Metadata":{"icon":"fa fa-cog","description":"Technical audit fields managed by the system"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('19536c3a-1d2f-4b31-8c31-888fe01e018e', '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE', 'FieldCategoryIcons', '{"Signature Request":"fa fa-envelope-open-text","Artifact Reference":"fa fa-file-alt","Document Details":"fa fa-file","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '54571136-D2F3-4DED-9A0E-2D9B6DD7E1BE';
 
 /* Set categories for 11 fields */
 
@@ -8314,89 +8348,88 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0927C056-519C-48E6-866B-047A5ED9499A' AND AutoUpdateCategory = 1;
+   ID = '73781F9B-7BE7-4CC9-9414-C21974AB2A11' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Definition',
+   Category = 'Provider Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '87064008-5E47-4659-A56D-074FFE872040' AND AutoUpdateCategory = 1;
+   ID = 'C9AAAE97-883F-4D9C-814E-183E2463C5F4' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.ServerDriverKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Definition',
+   Category = 'Provider Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '736140CC-D13D-49F9-8B98-8E0E3BA2EC89' AND AutoUpdateCategory = 1;
+   ID = 'B335E776-2677-405C-BEB4-BC435C53AFE3' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.IsActive 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Availability',
+   Category = 'Provider Configuration',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Active',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A5929F62-F5F1-47FB-9A60-16AFC3FD8094' AND AutoUpdateCategory = 1;
+   ID = 'A845B64D-1D66-4ED6-9CE4-4C7BCAE26A8D' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.Priority 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Availability',
+   Category = 'Provider Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '95374EA7-57CE-4980-BC32-BF11EBC2502D' AND AutoUpdateCategory = 1;
+   ID = '1078B446-E3DC-4A7E-8D46-288724B0A8BA' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.RequiresOAuth 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Authentication Settings',
+   Category = 'Capabilities and Security',
    GeneratedFormSection = 'Category',
    DisplayName = 'Requires OAuth',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A256D1FC-C259-4C84-B9AB-ABB311282206' AND AutoUpdateCategory = 1;
+   ID = '9659F0DD-ECEE-4804-9681-B91B8B215CF2' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.SupportsTemplates 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Feature Capabilities',
+   Category = 'Capabilities and Security',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '78E093BF-733C-4535-8CEA-83B4D4EF8F02' AND AutoUpdateCategory = 1;
+   ID = 'C0F7A466-A1E7-4856-AB2B-335756EC44D1' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.SupportsEmbeddedSigning 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Feature Capabilities',
+   Category = 'Capabilities and Security',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FE939E74-DAC6-4A31-A9E3-5FB43AB79FC5' AND AutoUpdateCategory = 1;
+   ID = '1BF29A02-9B42-4B60-B13B-8536C42E84E4' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.Configuration 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Definition',
+   Category = 'Capabilities and Security',
    GeneratedFormSection = 'Category',
    ExtendedType = 'Code',
    CodeType = 'Other'
 WHERE 
-   ID = 'A1220C4D-0FA7-456C-8FA8-3D6EAEF75BAA' AND AutoUpdateCategory = 1;
+   ID = 'D27B6AE3-E34B-42DC-9EB5-0B296FC9A934' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8406,7 +8439,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F7EC73DE-C1C7-4B1B-A7C7-227EA3B21888' AND AutoUpdateCategory = 1;
+   ID = '42DB4ADB-FB7B-49FB-9406-53931316F62A' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Providers.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8416,166 +8449,9 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '714E3CAD-CF29-4EC9-826E-9DA3E6DF66B7' AND AutoUpdateCategory = 1;
+   ID = '4D139B93-4FA1-4D9E-801D-84E55F301A03' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-file-signature */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-file-signature', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'DD777444-C381-412F-919C-D0198FE4B54C';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('08541823-27d5-4603-81ad-d0ffbd8439f5', 'DD777444-C381-412F-919C-D0198FE4B54C', 'FieldCategoryInfo', '{"Provider Definition":{"icon":"fa fa-file-alt","description":"Core identification and technical details of the eSignature provider"},"Provider Availability":{"icon":"fa fa-toggle-on","description":"Controls whether the provider is active and its selection priority"},"Authentication Settings":{"icon":"fa fa-lock","description":"How credentials are obtained for the provider (OAuth vs. static keys)"},"Feature Capabilities":{"icon":"fa fa-cogs","description":"Supported eSignature features such as templates and embedded signing"},"System Metadata":{"icon":"fa fa-cog","description":"System‑managed audit fields"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('f48400f7-5ebf-4bb5-b306-267c46b2a30d', 'DD777444-C381-412F-919C-D0198FE4B54C', 'FieldCategoryIcons', '{"Provider Definition":"fa fa-file-alt","Provider Availability":"fa fa-toggle-on","Authentication Settings":"fa fa-lock","Feature Capabilities":"fa fa-cogs","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'DD777444-C381-412F-919C-D0198FE4B54C';
-
-/* Set categories for 11 fields */
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BBEBA8E4-EDA3-4942-9087-8B9BFC42FA18' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.SignatureRequestID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Signature Request Linking',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Signature Request',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B0911186-46DD-4A61-99ED-0BD9C5B574B7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Email 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Recipient Contact',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'Email',
-   CodeType = NULL
-WHERE 
-   ID = '67DF9F72-D46D-47CF-9A0D-629E5200C269' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Recipient Contact',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3ABC4A50-D368-4894-ABDD-1319EEF7741C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.RoutingOrder 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Signing Workflow',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7754D06E-D2ED-4F26-B1AE-D44F74FEF59C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Role 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Signing Workflow',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '692E65D6-12F5-4DFA-A562-509F6A40D3AA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Signing Status',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '05440883-E497-4E32-8ED6-52A830B1E2C2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.SignedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Signing Timeline',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8606B69F-C70A-43B2-8A49-33F5E475558A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.ExternalRecipientID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'External Integration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'ABA7ABE6-37BE-404D-A22E-251CC57D45C8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1998E813-FEEF-4062-8E9C-B34175BE55BB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Request Recipients.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7452445D-E4D0-46E1-841A-C88AD1288CED' AND AutoUpdateCategory = 1;
-
-/* Set entity icon to fa fa-envelope-open-text */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-envelope-open-text', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('8a4e41a2-34e7-4309-bddc-49ce9b78ec77', 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', 'FieldCategoryInfo', '{"System Metadata":{"icon":"fa fa-cog","description":"Technical audit fields managed by the system"},"Signature Request Linking":{"icon":"fa fa-link","description":"Links recipients to their signature request"},"Recipient Contact":{"icon":"fa fa-address-card","description":"Contact information for the signature recipient"},"Signing Workflow":{"icon":"fa fa-tasks","description":"Settings that control signing order and role within the workflow"},"Signing Status":{"icon":"fa fa-flag-checkered","description":"Current status of the recipient in the signing process"},"Signing Timeline":{"icon":"fa fa-calendar-alt","description":"Dates and timestamps related to the signing actions"},"External Integration":{"icon":"fa fa-plug","description":"Identifiers for external e‑signature provider integration"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('43e9ca11-2561-47ee-af0d-841ead23d302', 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A', 'FieldCategoryIcons', '{"System Metadata":"fa fa-cog","Signature Request Linking":"fa fa-link","Recipient Contact":"fa fa-address-card","Signing Workflow":"fa fa-tasks","Signing Status":"fa fa-flag-checkered","Signing Timeline":"fa fa-calendar-alt","External Integration":"fa fa-plug"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'C15FE41E-040E-4A35-9F27-7A07DFD2F75A';
-
-/* Set categories for 9 fields */
+/* Set categories for 10 fields */
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8585,18 +8461,29 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A0E62FF7-5FBB-4FF9-92E9-4F437A318B33' AND AutoUpdateCategory = 1;
+   ID = '47EACABD-FCB9-4416-B275-763DE5377D3D' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.SignatureRequestID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Signature Request Reference',
+   Category = 'Request Context',
    GeneratedFormSection = 'Category',
    DisplayName = 'Signature Request',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6564503A-9231-4069-A8A4-C53856E48E55' AND AutoUpdateCategory = 1;
+   ID = '02951200-7A4F-4455-A7E5-81B5C68B58B4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Logs.SignatureRequest 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Request Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Signature Request Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8A6B9F8A-6ED0-4617-9034-67DD097CACCF' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.Operation 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8606,7 +8493,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '1E9E0448-51D7-4693-97AF-84D753A101FE' AND AutoUpdateCategory = 1;
+   ID = 'B98F7E88-BADF-44E7-B02A-79D0DE1898EA' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.Success 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8616,37 +8503,37 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '510C984F-0C7E-4E5E-9185-2BB29CC61D27' AND AutoUpdateCategory = 1;
+   ID = '7FBBB1A6-423A-4B6E-8127-490A272A81F2' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.StatusBefore 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Status Change',
+   Category = 'Status Tracking',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6C2A198B-ED52-469A-8A4B-7821E9C01D65' AND AutoUpdateCategory = 1;
+   ID = '43AB0872-21F8-4BAC-B71A-0F72045DF11B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.StatusAfter 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Status Change',
+   Category = 'Status Tracking',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '12B3EC2B-843A-4B89-A51B-B4FD5AA16451' AND AutoUpdateCategory = 1;
+   ID = '70E5D48F-97FC-4FF4-A427-01E8C9CFCEF3' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.Detail 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Operation Details',
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
-   ID = '6FD41107-427B-413F-A69E-3F161ABA3444' AND AutoUpdateCategory = 1;
+   ID = 'CAB58EA9-C662-4A83-B454-F57A4401576B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8656,7 +8543,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '1BE6013E-C6FB-4A86-AAA7-12ECC1769C76' AND AutoUpdateCategory = 1;
+   ID = 'FFE370EF-0F9A-47B3-BD54-79D544824832' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Request Logs.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8666,29 +8553,347 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '93875F79-4FF6-451C-95A9-244443938600' AND AutoUpdateCategory = 1;
+   ID = 'BAAD8F2E-3E8A-4F3D-8833-F88713CD5A5F' AND AutoUpdateCategory = 1;
 
 /* Set entity icon to fa fa-file-signature */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-file-signature', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252';
+               WHERE [ID] = '224F170C-5FCC-41F2-906F-B82B30F1EB2A';
+
+/* Set entity icon to fa fa-signature */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-signature', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('68478d1a-7178-40a0-8c73-091a61160471', 'F9F6F8C8-A29F-42A2-A64E-15EE43098252', 'FieldCategoryInfo', '{"Signature Request Reference":{"icon":"fa fa-link","description":"Reference to the related signature request record"},"Operation Details":{"icon":"fa fa-cogs","description":"Information about the operation performed and its outcome"},"Status Change":{"icon":"fa fa-exchange-alt","description":"Before and after status values surrounding the operation"},"System Metadata":{"icon":"fa fa-cog","description":"System‑managed audit fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('1c9eb987-5000-4f9c-ba46-4b809c1d7c4e', '224F170C-5FCC-41F2-906F-B82B30F1EB2A', 'FieldCategoryInfo', '{"Request Context":{"icon":"fa fa-file-signature","description":"Links the log entry to the specific signature request"},"Operation Details":{"icon":"fa fa-cogs","description":"Information about the specific operation performed and its outcome"},"Status Tracking":{"icon":"fa fa-exchange-alt","description":"Tracks state changes before and after the operation"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('84551335-11b4-4f25-ad97-91e9ac61af41', '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', 'FieldCategoryInfo', '{"Provider Configuration":{"icon":"fa fa-sliders-h","description":"Core identification, activation, and operational settings for the signature provider."},"Capabilities and Security":{"icon":"fa fa-shield-alt","description":"Functional capabilities, authentication requirements, and technical configuration parameters."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields."}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('1ae267ab-422d-430b-9f7f-5a4d943989ea', 'F9F6F8C8-A29F-42A2-A64E-15EE43098252', 'FieldCategoryIcons', '{"Signature Request Reference":"fa fa-link","Operation Details":"fa fa-cogs","Status Change":"fa fa-exchange-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('aba268f4-dadd-4416-93c5-48d55d47ec14', '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2', 'FieldCategoryIcons', '{"Provider Configuration":"fa fa-sliders-h","Capabilities and Security":"fa fa-shield-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('efc38dc7-29f1-4ba5-bd03-a8da92149f29', '224F170C-5FCC-41F2-906F-B82B30F1EB2A', 'FieldCategoryIcons', '{"Request Context":"fa fa-file-signature","Operation Details":"fa fa-cogs","Status Tracking":"fa fa-exchange-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'F9F6F8C8-A29F-42A2-A64E-15EE43098252';
+         WHERE [EntityID] = '7EE4D69F-16F5-4DC1-9B02-B4AF7F8CA8D2';
+
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '224F170C-5FCC-41F2-906F-B82B30F1EB2A';
+
+/* Set categories for 12 fields */
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DD2B8F16-0B5E-4752-B44B-F332A5530C56' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.SignatureRequestID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Signature Request',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E0FFC7BB-B143-4930-9EF3-08D5729C9C04' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.SignatureRequest 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Signature Request Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E461B212-C8CE-412D-BFBB-AE354BB22816' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.ArtifactID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Artifact',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C9FC86D8-0586-4B1F-A6B2-6088B02AED06' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.Artifact 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Artifact Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7CA5248B-60C4-4CA0-B967-94BBE3EDC162' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.ArtifactVersionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Artifact Version',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E308445E-1AC1-42A5-B415-08F5974BE589' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.ArtifactVersion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Artifact Version Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'EF3B6F24-3DA4-4AAD-9720-FEFC1BDF9CC4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Document Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A206A8D1-DB54-49E2-A641-07D0A77A97C4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.Sequence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F9283E8E-7A9C-42AB-9D7F-2896B3C1A0F4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.Role 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Document Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Document Role',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1A33CAC0-8579-4813-8941-80195A300AC5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '598CA112-9604-44A5-B218-79AC441E0DAE' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Documents.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '093B9AAC-B391-4BA5-B8FC-26AA0FADBF8C' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-file-signature */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-file-signature', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '975DFF8E-DAD8-44B6-9722-4D7B138A213F';
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('654eac24-728a-4739-b5ad-a20f88f3f77e', '975DFF8E-DAD8-44B6-9722-4D7B138A213F', 'FieldCategoryInfo', '{"Document Context":{"icon":"fa fa-link","description":"Links to parent signature requests and related document artifacts"},"Document Details":{"icon":"fa fa-file-alt","description":"Configuration details for the document including naming, ordering, and usage role"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('0aec54c8-c3a7-410f-abb9-4783a0d172b2', '975DFF8E-DAD8-44B6-9722-4D7B138A213F', 'FieldCategoryIcons', '{"Document Context":"fa fa-link","Document Details":"fa fa-file-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '975DFF8E-DAD8-44B6-9722-4D7B138A213F';
+
+/* Set categories for 12 fields */
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'EC4B6A3C-7D36-4C41-AF64-E20A04F2EB68' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.SignatureRequestID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Request Association',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FF34FF1F-3F9E-4A1B-997B-91BF0E8A628F' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.SignatureRequest 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Request Association',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1F6F1BF1-64DE-4330-AB2C-AA161EB9DEFC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Email 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Recipient Information',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Email',
+   CodeType = NULL
+WHERE 
+   ID = '4D12D760-F6BB-4EB2-82F4-13F518583D95' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Recipient Information',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B87D1BDD-AD99-4C3A-83E4-811A1E389C11' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Role 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Recipient Information',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4FF77BB5-7E61-449A-A81A-D97DAA86B6F5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.RoutingOrder 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Workflow Settings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'EE9F7851-6ABB-442C-8E43-ABCBDA31A1AA' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Workflow Settings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8D1F72D7-6D09-43A4-98CF-E35BA9F08957' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.SignedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Workflow Settings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4552BDCA-0879-4A14-B1C0-B50CB5F84DBD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.ExternalRecipientID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Workflow Settings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9DD840B9-BEF5-454B-AB7D-6461EC604235' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6A99A826-45B6-4F2E-BFFC-71C30C979F0C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Request Recipients.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '29560860-F17B-4E0D-A317-716F4820C1DD' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-envelope-open-text */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-envelope-open-text', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '2EECC44E-A41F-4521-8C0E-764D4D68FF70';
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('9a98f354-b7b4-4ddb-9eb4-a37e150fceeb', '2EECC44E-A41F-4521-8C0E-764D4D68FF70', 'FieldCategoryInfo', '{"Recipient Information":{"icon":"fa fa-user","description":"Basic contact details and assigned roles for the recipient"},"Workflow Settings":{"icon":"fa fa-tasks","description":"Signing order, status tracking, and provider integration details"},"Request Association":{"icon":"fa fa-link","description":"Linkages to the parent signature request entity"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('adb8153d-36df-4e4c-aaa7-64b14b271f42', '2EECC44E-A41F-4521-8C0E-764D4D68FF70', 'FieldCategoryIcons', '{"Recipient Information":"fa fa-user","Workflow Settings":"fa fa-tasks","Request Association":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
+/* Set DefaultForNewUser=true for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '2EECC44E-A41F-4521-8C0E-764D4D68FF70';
 
 /* Set categories for 15 fields */
 
@@ -8700,131 +8905,127 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5CF9200E-149F-4763-9D47-6C6CA7310099' AND AutoUpdateCategory = 1;
+   ID = 'E71C719C-20F1-4EDE-A4BB-1A05AD3F56B2' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.SignatureAccountID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Envelope Info',
+   Category = 'Request Details',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Signature Account',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'E4E1BF49-F90C-4F31-BFCF-C5049B6BD445' AND AutoUpdateCategory = 1;
+   ID = '04A2EDE7-1528-48B6-97E0-E7BFCD7C92D5' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.SignatureAccount 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Envelope Info',
+   Category = 'Request Details',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Signature Account Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D7DE20E0-12B6-4105-BA3D-6A0E97DB7B75' AND AutoUpdateCategory = 1;
+   ID = 'D6B694FE-3781-4744-A329-B5DA6551CA69' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: Signature Requests.Title 
+-- UPDATE Entity Field Category Info MJ: Signature Requests.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Envelope Info',
+   Category = 'Request Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '37B8E7C1-C70B-4414-A18C-2B18C0D36245' AND AutoUpdateCategory = 1;
+   ID = 'D33A8958-5A04-45BA-9B70-F84881E2CF0C' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.Message 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Envelope Info',
+   Category = 'Request Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '3A61D503-86B2-4F87-8CFE-A65CC0142B77' AND AutoUpdateCategory = 1;
+   ID = '875FD874-C53F-41E5-9CDB-2D6468973073' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Envelope Info',
+   Category = 'Request Status',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '3DF07A6F-C4E3-4D8E-96D0-710B3A45799B' AND AutoUpdateCategory = 1;
+   ID = '0DA669D4-15FA-4B9A-AB4D-0D2497166089' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.ExternalEnvelopeID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Envelope Info',
+   Category = 'Request Status',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '772866A6-FBE7-47F1-BDEA-E7DCCC8F278D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Requests.SentAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Lifecycle & Timing',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7075D0C0-55C6-430A-8C62-2CD828F90F64' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Requests.CompletedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Lifecycle & Timing',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E1EA675C-DC91-4F60-BD99-A3D920B44F2D' AND AutoUpdateCategory = 1;
+   ID = 'DAC6B9ED-A9B9-4861-8E41-1874CD520BE5' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.VoidReason 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Lifecycle & Timing',
+   Category = 'Request Status',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6839CD3D-D30A-4BAD-A82C-C36671F91286' AND AutoUpdateCategory = 1;
+   ID = '947E3EA5-772D-4782-98B9-AEEFC2394FA4' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.EntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Origin Context',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E51828E6-3866-42CA-A0F8-3CC7D72112BA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Requests.RecordID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Origin Context',
+   Category = 'Related Records',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '1D9E98C6-C2C7-48E0-8C46-7F57EDA49D61' AND AutoUpdateCategory = 1;
+   ID = 'B70D9FE2-0F70-4BAB-B61E-AC46BC496BF3' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.Entity 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Origin Context',
+   Category = 'Related Records',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'DB5436AC-78F5-4B2D-ACB0-408C8FB37F6C' AND AutoUpdateCategory = 1;
+   ID = 'C7C4167B-0472-479F-BF34-DCC29D25E5A8' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Requests.RecordID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Related Records',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2FD94D7A-1FA7-44D4-94FB-935431801E0E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Requests.SentAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4FFE69FD-3D6D-4A6A-8086-B1649C009553' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Requests.CompletedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8E13825F-DFD5-482B-A4E1-D080C5B1C101' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8834,7 +9035,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '29FCD07C-2978-4F44-9196-E1ADD2724191' AND AutoUpdateCategory = 1;
+   ID = '36B6703C-96C3-4156-8502-F47DD0769744' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Requests.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8844,29 +9045,29 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5EEF5AD3-92C4-4B4B-84D5-A903699B08F2' AND AutoUpdateCategory = 1;
+   ID = '64CA6956-B996-497E-BB2B-DC3376C4A704' AND AutoUpdateCategory = 1;
 
 /* Set entity icon to fa fa-file-signature */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-file-signature', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '0075DBDF-FD00-4568-A7AC-03FDBF55D329';
+               WHERE [ID] = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('1fece692-ed12-4921-9dc3-c4f5863a57e7', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', 'FieldCategoryInfo', '{"Envelope Info":{"icon":"fa fa-envelope-open-text","description":"Core details of the signature envelope including account, title, message, status and external identifiers"},"Lifecycle & Timing":{"icon":"fa fa-clock","description":"Timestamps and status changes that track the envelope''s progress"},"Origin Context":{"icon":"fa fa-link","description":"References to the business record that originated the signature request"},"System Metadata":{"icon":"fa fa-cog","description":"Technical audit fields managed by the system"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('3099f3fa-c903-4ac0-9c1d-552991834fd6', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', 'FieldCategoryInfo', '{"Request Details":{"icon":"fa fa-info-circle","description":"Core information about the signature request and account"},"Request Status":{"icon":"fa fa-tasks","description":"Lifecycle status and external provider tracking information"},"Related Records":{"icon":"fa fa-link","description":"Links to the originating business records"},"Timeline":{"icon":"fa fa-clock","description":"Key event timestamps for the request lifecycle"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('1ce8515d-d184-430c-a3ef-0e7735ddf9da', '0075DBDF-FD00-4568-A7AC-03FDBF55D329', 'FieldCategoryIcons', '{"Envelope Info":"fa fa-envelope-open-text","Lifecycle & Timing":"fa fa-clock","Origin Context":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('4c60fbb5-8595-49cb-af53-1018240f01d9', 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4', 'FieldCategoryIcons', '{"Request Details":"fa fa-info-circle","Request Status":"fa fa-tasks","Related Records":"fa fa-link","Timeline":"fa fa-clock","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
-/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: medium) */
+/* Set DefaultForNewUser=true for NEW entity (category: supporting, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '0075DBDF-FD00-4568-A7AC-03FDBF55D329';
+         WHERE [EntityID] = 'A3B3DFEB-FFCA-4F8D-B497-3D2E7FBB02A4';
 
 /* Set categories for 15 fields */
 
@@ -8878,7 +9079,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '422FDBB2-1B12-4A5D-BA3C-33C81D0A7FF2' AND AutoUpdateCategory = 1;
+   ID = 'E7B15DC2-CBD6-431B-AB23-BE119EE54926' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8888,92 +9089,123 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'E929AF02-4D40-45C0-BC62-285B6CFADBE8' AND AutoUpdateCategory = 1;
+   ID = '3BDA6373-6EC9-4C18-BD55-17D56B15BFD8' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.SignatureProviderID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationships',
+   Category = 'Account Configuration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Signature Provider',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8CEA1D11-3650-49EB-811D-8BC5D7F184FC' AND AutoUpdateCategory = 1;
+   ID = '40A3F0B5-F4FC-43E0-94EE-BC85ED6AF7A5' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.CredentialID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationships',
+   Category = 'Account Configuration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Credential',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A4165153-5BEA-4F75-A73C-E1119BBDCBF2' AND AutoUpdateCategory = 1;
+   ID = 'BE88E0AF-24A9-4CC8-B3E7-27FABF2AD78B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.CompanyID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationships',
+   Category = 'Account Configuration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Company',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '560EB704-35AD-4BCB-8E8D-02E747A70AA7' AND AutoUpdateCategory = 1;
+   ID = '9B86C37B-47AB-4715-A239-1B072CB79FC1' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.IsActive 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Account Status',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Active',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'ECD64234-0D63-4079-ADAD-D0E41A00E9DD' AND AutoUpdateCategory = 1;
+   ID = 'FD0B6BE9-9152-4D05-AA8A-4186448EB827' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.IsDefault 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Account Status',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Default Account',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '712D95CC-8AB4-43F2-80B1-8482D7DAABA1' AND AutoUpdateCategory = 1;
+   ID = '5B0443EA-FDD3-4DF3-A109-F436741DABB9' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.DefaultFromName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Default Envelope Settings',
+   Category = 'Sender Settings',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0FC620EE-B884-4CD3-AB4E-4A9AB294092A' AND AutoUpdateCategory = 1;
+   ID = '756C442E-C593-4DAC-BEF8-A494CE2B1902' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.DefaultFromEmail 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Default Envelope Settings',
+   Category = 'Sender Settings',
    GeneratedFormSection = 'Category',
    ExtendedType = 'Email',
    CodeType = NULL
 WHERE 
-   ID = '64EED22F-74CE-4F67-9FEF-88975844C1A8' AND AutoUpdateCategory = 1;
+   ID = '931BE8E0-2AD1-485E-87D3-ED8CB3B41E6F' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.Configuration 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Advanced Settings',
+   Category = 'Account Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = 'Code',
    CodeType = 'Other'
 WHERE 
-   ID = '2C175F6D-C44D-471C-A275-C624C91CBE53' AND AutoUpdateCategory = 1;
+   ID = 'B708D886-EF4A-4E60-9E8C-83200BEE3939' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Accounts.SignatureProvider 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Account Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Signature Provider Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '34F399F0-A74C-454A-A64B-385A3E89FC9B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Accounts.Credential 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Account Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Credential Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '10ACCA90-272E-4424-8C5C-B56EE86FF6AC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Signature Accounts.Company 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Account Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Company Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0D9459EF-1391-48FC-9C12-145FB18D2411' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8983,7 +9215,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6F07B04F-B520-4946-8254-A23E225597AB' AND AutoUpdateCategory = 1;
+   ID = 'E16D1554-36C3-477E-9CD5-524B802191D5' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Signature Accounts.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8993,57 +9225,27 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B9BCB7B9-235A-4C89-BD5C-2046429695B5' AND AutoUpdateCategory = 1;
+   ID = '2D9620E6-6074-49B7-98F6-02B347E7F913' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: Signature Accounts.SignatureProvider 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Lookup Fields',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '776F45A5-3475-44F6-9789-5EB70ACEF0CA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Accounts.Credential 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Lookup Fields',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B58AB39E-29EB-43DB-B092-305A9A13EB42' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Signature Accounts.Company 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Lookup Fields',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0FEAC7ED-4328-4D76-8CC6-998F4A79B5EB' AND AutoUpdateCategory = 1;
-
-/* Set entity icon to fa fa-lock */
+/* Set entity icon to fa fa-file-signature */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-lock', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '64408373-0375-47BF-965F-EB6FAD41D8E4';
+               SET [Icon] = 'fa fa-file-signature', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('4fd37b1b-8a9c-469d-b04c-df8f55fd2492', '64408373-0375-47BF-965F-EB6FAD41D8E4', 'FieldCategoryInfo', '{"Account Details":{"icon":"fa fa-id-card","description":"Core identifying information for the signature account"},"Relationships":{"icon":"fa fa-link","description":"Links to related entities such as provider, credential, and company"},"Account Status":{"icon":"fa fa-flag-checkered","description":"Flags that control availability and default selection of the account"},"Default Envelope Settings":{"icon":"fa fa-envelope-open-text","description":"Default sender name and email used when creating envelopes"},"Advanced Settings":{"icon":"fa fa-sliders-h","description":"JSON configuration overrides specific to this account"},"Lookup Fields":{"icon":"fa fa-search","description":"Denormalized display names for related entities"},"System Metadata":{"icon":"fa fa-cog","description":"System‑managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('b75d6f57-f87f-423a-8d14-9496210c0b0d', '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', 'FieldCategoryInfo', '{"Account Details":{"icon":"fa fa-info-circle","description":"Basic identification and naming information for the signature account."},"Account Configuration":{"icon":"fa fa-cogs","description":"Technical settings, provider links, and JSON configuration overrides."},"Account Status":{"icon":"fa fa-check-circle","description":"Operational status and default settings for the account."},"Sender Settings":{"icon":"fa fa-envelope","description":"Default identity information used when sending envelopes."},"System Metadata":{"icon":"fa fa-database","description":"System-managed audit and tracking fields."}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('9d76ed80-b32e-4175-b38b-5a71ea58e432', '64408373-0375-47BF-965F-EB6FAD41D8E4', 'FieldCategoryIcons', '{"Account Details":"fa fa-id-card","Relationships":"fa fa-link","Account Status":"fa fa-flag-checkered","Default Envelope Settings":"fa fa-envelope-open-text","Advanced Settings":"fa fa-sliders-h","Lookup Fields":"fa fa-search","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('2d497758-0a56-4611-aac0-c5ea9f8f2260', '43E3F77A-C2B3-4672-A53F-4FF28A0C098B', 'FieldCategoryIcons', '{"Account Details":"fa fa-info-circle","Account Configuration":"fa fa-cogs","Account Status":"fa fa-check-circle","Sender Settings":"fa fa-envelope","System Metadata":"fa fa-database"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '64408373-0375-47BF-965F-EB6FAD41D8E4';
+         WHERE [EntityID] = '43E3F77A-C2B3-4672-A53F-4FF28A0C098B';
 
