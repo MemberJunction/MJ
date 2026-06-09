@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/esignature-docusign",
-  "version": "5.39.0",
+  "version": "5.40.1",
   "description": "DocuSign driver for the MemberJunction eSignature primitive. Registers a BaseSignatureProvider implementation via @RegisterClass(BaseSignatureProvider, 'DocuSign') using the DocuSign REST API and JWT-grant OAuth.",
   "type": "module",
   "main": "dist/index.js",
@@ -17,8 +17,8 @@
   },
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/esignature": "5.39.0",
-    "@memberjunction/global": "5.39.0",
+    "@memberjunction/esignature": "5.40.1",
+    "@memberjunction/global": "5.40.1",
     "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
