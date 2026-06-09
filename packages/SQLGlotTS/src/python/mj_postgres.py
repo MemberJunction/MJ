@@ -42,6 +42,11 @@ class MJPostgres(Postgres):
         TYPE_MAPPING = {
             **Postgres.Generator.TYPE_MAPPING,
             exp.DataType.Type.BIT: "BOOLEAN",
+            # SS date/time types are tz-aware in MJ (oracle stores them as
+            # `timestamp with time zone`); sqlglot otherwise defaults to plain TIMESTAMP.
+            exp.DataType.Type.DATETIME: "TIMESTAMPTZ",
+            exp.DataType.Type.DATETIME2: "TIMESTAMPTZ",
+            exp.DataType.Type.SMALLDATETIME: "TIMESTAMPTZ",
         }
 
         def identifier_sql(self, expression: exp.Identifier) -> str:
@@ -61,6 +66,14 @@ class MJPostgres(Postgres):
             # SS VARBINARY/BINARY(MAX|n) → PG BYTEA (takes no length modifier).
             if expression.this in (exp.DataType.Type.VARBINARY, exp.DataType.Type.BINARY):
                 return "BYTEA"
+            # SS FLOAT[(n)]: n<=24 is 4-byte (REAL), n>24 or bare is 8-byte (DOUBLE
+            # PRECISION). sqlglot maps bare FLOAT→REAL, narrowing to 4-byte; correct it.
+            if expression.this in (exp.DataType.Type.FLOAT, exp.DataType.Type.DOUBLE):
+                params = [e for e in expression.expressions if isinstance(e, exp.DataTypeParam)]
+                precision = None
+                if params and isinstance(params[0].this, exp.Literal) and not params[0].this.is_string:
+                    precision = int(params[0].name)
+                return "REAL" if (precision is not None and precision <= 24) else "DOUBLE PRECISION"
             return super().datatype_sql(expression)
 
 
@@ -75,15 +88,117 @@ _FUNC_REWRITES = {
 }
 
 
+# SS principal/session functions → PG CURRENT_USER (emitted bare, no parens).
+# (SUSER_NAME/SUSER_SNAME already parse to exp.CurrentUser in sqlglot; USER_NAME
+# parses to an Anonymous func and needs the explicit rewrite. These show up in
+# column DEFAULTs — left untranslated they fail the whole CREATE TABLE.)
+_CURRENT_USER_FUNCS = {"USER_NAME", "SUSER_NAME", "SUSER_SNAME", "CURRENT_USER", "SESSION_USER"}
+
+
 def _rewrite_functions(node: exp.Expression) -> exp.Expression:
     """Rewrite SS-specific functions to PG equivalents in the AST."""
-    if isinstance(node, exp.Anonymous) and node.name and node.name.upper() in _FUNC_REWRITES:
-        return exp.func(_FUNC_REWRITES[node.name.upper()])
+    if isinstance(node, exp.Anonymous) and node.name:
+        upper = node.name.upper()
+        if upper in _CURRENT_USER_FUNCS:
+            return exp.CurrentUser()
+        if upper in _FUNC_REWRITES:
+            return exp.func(_FUNC_REWRITES[upper])
     # Some SS funcs parse to typed nodes rather than Anonymous. SYSDATETIMEOFFSET()
     # parses to CurrentTimestampLTZ; GETDATE() to CurrentTimestamp.
     if isinstance(node, (exp.CurrentTimestamp, exp.CurrentTimestampLTZ)):
         return exp.func("NOW")
     return node
+
+
+def _rewrite_string_concat(node: exp.Expression) -> exp.Expression:
+    """T-SQL string concatenation with `+` → PG `||`. Only when an operand is clearly
+    a string (literal, N'...', or an already-rewritten `||` chain), so numeric `a + b`
+    is left alone. Post-order traversal handles chains (`'a' + b + 'c'`) innermost-first."""
+    if isinstance(node, exp.Add):
+        def is_strish(x: exp.Expression) -> bool:
+            return isinstance(x, (exp.National, exp.DPipe)) or (isinstance(x, exp.Literal) and x.is_string)
+        if is_strish(node.left) or is_strish(node.right):
+            return exp.DPipe(this=node.left, expression=node.right)
+    return node
+
+
+# Cross-statement BIT-column registry, keyed (table_lower, column_lower). Built once
+# per transpile pass by `_collect_bit_columns` because a `CHECK (BitCol = 1)` often lives
+# in a separate `ALTER TABLE … ADD CONSTRAINT` whose target column was declared BIT in an
+# earlier CREATE TABLE / ALTER ADD COLUMN batch (so single-statement context isn't enough).
+_BIT_COLS: set[tuple[str, str]] = set()
+
+
+def _table_name_of(stmt: exp.Expression) -> str | None:
+    """Lower-cased name of the table a CREATE/ALTER statement targets, if any."""
+    if isinstance(stmt, exp.Create):
+        t = stmt.this.find(exp.Table) if stmt.this else None
+    elif isinstance(stmt, exp.Alter):
+        t = stmt.this if isinstance(stmt.this, exp.Table) else stmt.find(exp.Table)
+    else:
+        t = None
+    return t.name.lower() if isinstance(t, exp.Table) and t.name else None
+
+
+def _collect_bit_columns(sql: str) -> set[tuple[str, str]]:
+    """One pass over the whole file collecting (table, column) for every BIT column
+    declared in a CREATE TABLE or ALTER ADD COLUMN — used to resolve boolean CHECKs
+    that sit in separate ALTER statements."""
+    out: set[tuple[str, str]] = set()
+    protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
+    # Parse per GO batch and tolerate failures — a single unparseable batch (common in
+    # baselines) must not wipe out the whole registry.
+    for batch in _GO_SPLIT.split(protected):
+        if not batch.strip():
+            continue
+        try:
+            stmts = sqlglot.parse(batch, read="tsql")
+        except Exception:  # noqa: BLE001
+            continue
+        for st in stmts:
+            if st is None:
+                continue
+            tbl = _table_name_of(st)
+            if not tbl:
+                continue
+            for cd in st.find_all(exp.ColumnDef):
+                if cd.kind is not None and cd.kind.this in (exp.DataType.Type.BIT, exp.DataType.Type.BOOLEAN):
+                    out.add((tbl, cd.name.lower()))
+    return out
+
+
+def _rewrite_boolean_int_checks(stmt: exp.Expression) -> exp.Expression:
+    """`CHECK (BitCol = 1/0)` → `CHECK (BitCol = TRUE/FALSE)`. After BIT→BOOLEAN, a
+    `boolean = integer` comparison is a PG type error that aborts the CREATE/ALTER.
+    Type-aware: rewrites equality only against a column known to be BIT/BOOLEAN — either
+    declared in this same statement or, via the file-level `_BIT_COLS` registry, on the
+    table this statement targets — so genuine integer checks (`Priority = 1`) are untouched."""
+    bool_cols = {
+        cd.name.lower()
+        for cd in stmt.find_all(exp.ColumnDef)
+        if cd.kind is not None and cd.kind.this in (exp.DataType.Type.BIT, exp.DataType.Type.BOOLEAN)
+    }
+    tbl = _table_name_of(stmt)
+    if tbl:
+        bool_cols |= {col for (t, col) in _BIT_COLS if t == tbl}
+    if not bool_cols:
+        return stmt
+
+    def unwrap(x: exp.Expression) -> exp.Expression:
+        while isinstance(x, exp.Paren):  # SS wraps the literal in parens: `IsActive = (1)`
+            x = x.this
+        return x
+
+    def fix(node: exp.Expression) -> exp.Expression:
+        if isinstance(node, exp.EQ):
+            left, right = unwrap(node.this), unwrap(node.expression)
+            col, lit = (left, right) if isinstance(left, exp.Column) else (right, left)
+            if (isinstance(col, exp.Column) and col.name.lower() in bool_cols
+                    and isinstance(lit, exp.Literal) and not lit.is_string and lit.name in ("0", "1")):
+                return exp.EQ(this=col, expression=exp.true() if lit.name == "1" else exp.false())
+        return node
+
+    return stmt.transform(fix)
 
 
 def _strip_national(node: exp.Expression) -> exp.Expression:
@@ -112,7 +227,13 @@ def _strip_collate(node: exp.Expression) -> exp.Expression:
 
 
 def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
-    """Drop CHECK constraints using ISJSON() — PG has no ISJSON (validity enforced elsewhere)."""
+    """Drop CHECK constraints using ISJSON() — PG has no ISJSON (validity enforced elsewhere).
+
+    Handles both column-level (a constraint on a ColumnDef) and table-level
+    (`CONSTRAINT ck CHECK (ISJSON(...))` in a CREATE, or `ADD CONSTRAINT ... CHECK
+    (ISJSON(...))` in an ALTER). Table-level forms are removed outright (return None);
+    an ALTER left with no actions is dropped downstream by the empty-ALTER guard.
+    """
     if isinstance(node, exp.ColumnDef):
         kept = [
             c for c in node.args.get("constraints", [])
@@ -123,6 +244,9 @@ def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
             )
         ]
         node.set("constraints", kept)
+        return node
+    if isinstance(node, (exp.Constraint, exp.AddConstraint)) and "ISJSON" in node.sql(dialect="tsql").upper():
+        return None
     return node
 
 
@@ -147,6 +271,43 @@ def _fold_clustered_constraints(node: exp.Expression) -> exp.Expression:
     # UNIQUE NONCLUSTERED: UniqueColumnConstraint wraps a NonClusteredColumnConstraint holding the cols.
     if isinstance(node, exp.UniqueColumnConstraint) and isinstance(node.this, exp.NonClusteredColumnConstraint):
         node.set("this", exp.Schema(expressions=cols_of(node.this)))
+    return node
+
+
+def _column_fk_to_reference(node: exp.Expression) -> exp.Expression:
+    """Column-level `CONSTRAINT fk FOREIGN KEY REFERENCES t(c)` → bare `REFERENCES t(c)`.
+
+    T-SQL allows the `FOREIGN KEY` keyword on an inline (column) FK constraint; PG does
+    not — a column constraint is just `REFERENCES`. sqlglot parses this into a
+    ColumnConstraint whose kind is ForeignKey(reference=Reference(...)) and the Postgres
+    generator keeps the `FOREIGN KEY` token, producing `syntax error at or near "FOREIGN"`
+    that aborts the whole `ALTER TABLE ... ADD` (losing every column in the statement).
+    Replace the ForeignKey kind with its inner Reference so PG sees a valid column FK.
+    """
+    if isinstance(node, exp.ColumnConstraint) and isinstance(node.kind, exp.ForeignKey):
+        ref = node.kind.args.get("reference")
+        if ref is not None:
+            node.set("kind", ref)
+    return node
+
+
+def _fix_misparsed_table_constraint(node: exp.Expression) -> exp.Expression:
+    """A table-level `CONSTRAINT name CHECK(...)` listed inside a T-SQL multi-item
+    `ALTER TABLE ADD col1, col2, CONSTRAINT ... CHECK(...)` is mis-parsed by sqlglot
+    as a column named "CONSTRAINT" with a user-defined type (the constraint name),
+    e.g. `ADD COLUMN "CONSTRAINT" CK_x CHECK(...)` → PG `type "ck_x" does not exist`,
+    aborting the whole ADD. Rebuild it as a proper `ADD CONSTRAINT name <kind>`.
+    """
+    if (isinstance(node, exp.ColumnDef)
+            and isinstance(node.this, exp.Identifier)
+            and node.this.name.upper() == "CONSTRAINT"
+            and node.kind is not None
+            and node.kind.this == exp.DataType.Type.USERDEFINED):
+        cname = node.kind.args.get("kind")
+        name_ident = exp.to_identifier(cname.name if isinstance(cname, exp.Expression) else str(cname))
+        kinds = [c.kind for c in node.constraints if isinstance(c, exp.ColumnConstraint) and c.kind is not None]
+        if kinds:
+            return exp.AddConstraint(expressions=[exp.Constraint(this=name_ident, expressions=kinds)])
     return node
 
 
@@ -191,9 +352,18 @@ def _first_keyword(text: str) -> str:
 # fixed shape. We recognize the envelope structurally and transpile the real SQL
 # *inside* it (predicates, INSERT bodies, descriptions) through the AST dialect.
 
+# CodeGen object naming convention (mirrors MigrationStatementSplitter.CODEGEN_NAME):
+# views, the CRUD/recompile sprocs, fn* functions, trg* triggers — all regenerated by
+# `mj codegen`, so their extended-property comments must be skipped (object is dropped).
+_CODEGEN_OBJECT_NAME = _re.compile(r"^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete|trg)", _re.IGNORECASE)
+
 # EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'...', ... ;
+# The terminating `;` must be the one OUTSIDE the quoted args — description @values
+# routinely contain semicolons ("applies to all apps; when set, …"). A naive `.*?;`
+# cuts at the first in-string semicolon, corrupting this and every later envelope
+# boundary. Match args as a run of (whole single-quoted string | non-quote/non-`;` char).
 _SP_EXTPROP = _re.compile(
-    r"EXEC(?:UTE)?\s+sp_addextendedproperty\b(?P<args>.*?);",
+    r"EXEC(?:UTE)?\s+sp_addextendedproperty\b(?P<args>(?:'(?:[^']|'')*'|[^';])*);",
     _re.IGNORECASE | _re.DOTALL,
 )
 # IF [NOT] EXISTS (<select>) BEGIN <body> END  — the idempotency wrapper.
@@ -255,28 +425,95 @@ def _transpile_sp_addextendedproperty(args: str) -> str | None:
     col_type = (get("level2type") or ("COLUMN" if col else "")).upper()
     if value is None or not table:
         return None
-    # Comments on CodeGen views (vw*) are regenerated by `mj codegen` — skip them so we
-    # don't COMMENT ON a view that doesn't exist yet at apply time.
-    if table.startswith("vw"):
+    # Comments on CodeGen objects (views vw*, sprocs spCreate/spUpdate/spDelete/spRecompile,
+    # functions fn*, triggers trg*) are regenerated by `mj codegen` — and the object doesn't
+    # exist at apply time (it's dropped), so a COMMENT ON would fail "relation does not exist".
+    # Skip them; CodeGen re-emits the object and its description.
+    if _CODEGEN_OBJECT_NAME.match(table):
         return ""
     if col and col_type == "COLUMN":
         return f'COMMENT ON COLUMN {schema}."{table}"."{col}" IS {_pg_string(value)};'
     return f'COMMENT ON TABLE {schema}."{table}" IS {_pg_string(value)};'
 
 
+def _split_top_level_statements(sql: str) -> list[str]:
+    """Split SQL on top-level `;`, ignoring semicolons inside single-quoted strings and
+    `--` / `/* */` comments. Used to recover good statements when a whole-gap parse fails
+    on one bad statement (a poison statement must not drop its neighbors)."""
+    out: list[str] = []
+    buf: list[str] = []
+    i, n, in_str = 0, len(sql), False
+    while i < n:
+        c = sql[i]
+        if in_str:
+            buf.append(c)
+            if c == "'":
+                if i + 1 < n and sql[i + 1] == "'":  # escaped '' inside string
+                    buf.append("'"); i += 2; continue
+                in_str = False
+            i += 1; continue
+        if c == "'":
+            in_str = True; buf.append(c); i += 1; continue
+        if c == "-" and i + 1 < n and sql[i + 1] == "-":  # line comment
+            j = sql.find("\n", i); j = n if j < 0 else j
+            buf.append(sql[i:j]); i = j; continue
+        if c == "/" and i + 1 < n and sql[i + 1] == "*":  # block comment
+            j = sql.find("*/", i); j = n if j < 0 else j + 2
+            buf.append(sql[i:j]); i = j; continue
+        if c == ";":
+            buf.append(";"); out.append("".join(buf)); buf = []; i += 1; continue
+        buf.append(c); i += 1
+    tail = "".join(buf)
+    if tail.strip():
+        out.append(tail)
+    return out
+
+
+def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
+    """Parse a SQL chunk into (statement, raw_text) pairs. Fast path: one `sqlglot.parse`.
+    On failure, fall back to per-statement parsing so a single unparseable statement only
+    drops itself, not the valid DDL around it (returns (None, raw) for the failures)."""
+    try:
+        return [(s, "") for s in sqlglot.parse(protected, read="tsql") if s is not None]
+    except Exception:  # noqa: BLE001
+        pass
+    results: list[tuple[exp.Expression | None, str]] = []
+    for piece in _split_top_level_statements(protected):
+        if not piece.strip():
+            continue
+        try:
+            for s in sqlglot.parse(piece, read="tsql"):
+                if s is not None:
+                    results.append((s, piece))
+        except Exception:  # noqa: BLE001
+            results.append((None, piece))
+    return results
+
+
 def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
     """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits."""
     out, unhandled = [], []
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
-    try:
-        statements = sqlglot.parse(protected, read="tsql")
-    except Exception as e:  # noqa: BLE001 — report, don't crash the batch
-        return "", [{"kind": "parse-error", "snippet": str(e)[:120]}]
-    for stmt in statements:
+    for stmt, raw in _parse_resilient(protected):
         if stmt is None:
+            unhandled.append({"kind": "parse-error", "snippet": raw.strip()[:80]})
             continue
         # Standalone seed of schema-derived metadata → drop; CodeGen regenerates it.
         if isinstance(stmt, exp.Insert) and _METADATA_TABLES.search(stmt.sql(dialect="tsql")):
+            continue
+        # T-SQL procedural glue with no standalone PG equivalent — DECLARE @v / SET @v /
+        # SELECT @v = ... / IF @v ... EXEC('...'). In Category-B (regular DDL/DML) these
+        # only appear as leaked imperative logic (e.g. dynamic auto-named-constraint
+        # drops); real proc/function bodies are classified hand-procedural upstream and
+        # never reach here. Emitting them produces invalid `$v` SQL — report, don't emit.
+        # (`@v` parses to exp.Parameter; the protected Flyway macro is an Identifier, so
+        # it never false-positives here.)
+        if isinstance(stmt, exp.Declare) or (
+            isinstance(stmt, (exp.Set, exp.If, exp.Select, exp.Update))
+            and stmt.find(exp.Parameter) is not None
+        ):
+            txt = stmt.sql(dialect="tsql")
+            unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
             continue
         if isinstance(stmt, exp.Command):
             txt = stmt.sql(dialect="tsql")
@@ -285,8 +522,12 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
                 continue
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
             continue
-        # `SET NOEXEC ON` parses to a Set node in some contexts — drop it (batch control).
-        if isinstance(stmt, exp.Set) and "NOEXEC" in stmt.sql(dialect="tsql").upper():
+        # SS session/batch-control SETs have no PG equivalent and error as unrecognized
+        # config params — drop them (NOEXEC, NOCOUNT, XACT_ABORT, QUOTED_IDENTIFIER, ANSI_*).
+        if isinstance(stmt, exp.Set) and _re.search(
+            r"\b(NOEXEC|NOCOUNT|XACT_ABORT|QUOTED_IDENTIFIER|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|"
+            r"ARITHABORT|CONCAT_NULL_YIELDS_NULL|NUMERIC_ROUNDABORT)\b",
+            stmt.sql(dialect="tsql"), _re.IGNORECASE):
             continue
         # RAISERROR(...) at statement level is invalid PG outside a function — drop it
         # (inside an IF…BEGIN guard it is handled as RAISE EXCEPTION by the DO-block path).
@@ -294,15 +535,23 @@ def _transpile_plain(sql: str) -> tuple[str, list[dict]]:
             continue
         if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "NONCLUSTERED INDEX":
             stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
+        stmt = _rewrite_boolean_int_checks(stmt)
         stmt = (
-            stmt.transform(_rewrite_functions)
+            stmt.transform(_fix_misparsed_table_constraint)
+            .transform(_rewrite_functions)
             .transform(_rewrite_boolean_defaults)
+            .transform(_rewrite_string_concat)
             .transform(_strip_national)
             .transform(_strip_collate)
             .transform(_drop_isjson_checks)
             .transform(_fold_clustered_constraints)
             .transform(_strip_nulls_ordering)
+            .transform(_column_fk_to_reference)
         )
+        # An ALTER TABLE whose only action was dropped (e.g. an ISJSON ADD CONSTRAINT)
+        # is left actionless — emitting bare `ALTER TABLE x` is a PG syntax error. Skip.
+        if isinstance(stmt, exp.Alter) and not stmt.args.get("actions"):
+            continue
         out.append(stmt.sql(dialect=MJPostgres, pretty=False, identify=True))
     return (";\n".join(out) + (";" if out else "")), unhandled
 
@@ -361,6 +610,11 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
     """
     out: list[str] = []
     unhandled: list[dict] = []
+
+    # File-level pass: register every BIT column so boolean CHECKs in separate ALTER
+    # statements can be resolved (see `_rewrite_boolean_int_checks`).
+    global _BIT_COLS
+    _BIT_COLS = _collect_bit_columns(sql)
 
     for batch in _GO_SPLIT.split(sql):
         if not batch.strip():

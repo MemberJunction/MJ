@@ -53,6 +53,91 @@ check("flyway macro preserved verbatim, identifiers quoted",
       must_contain=['${flyway:defaultSchema}."APIKey"', '"KeyPrefix" VARCHAR(20)'],
       must_not_contain=['"${flyway', "__mj_flyway"])
 
+# --- Column-level FK: FOREIGN KEY REFERENCES → bare REFERENCES ---------------
+check("inline column FK drops FOREIGN KEY keyword (PG column constraint)",
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgentRequest ADD "
+      "RequestTypeID UNIQUEIDENTIFIER NULL CONSTRAINT FK_x FOREIGN KEY "
+      "REFERENCES ${flyway:defaultSchema}.AIAgentRequestType(ID), "
+      "Priority INT NOT NULL CONSTRAINT DF_p DEFAULT 50;",
+      must_contain=['CONSTRAINT "FK_x" REFERENCES ${flyway:defaultSchema}."AIAgentRequestType" ("ID")',
+                    'ADD COLUMN "Priority" INT NOT NULL', 'DEFAULT 50'],
+      must_not_contain=["FOREIGN KEY"])
+
+# --- Table-level constraint mixed into ADD list (sqlglot mis-parse) ----------
+check("table CONSTRAINT in multi-item ADD → ADD CONSTRAINT (not a bogus column)",
+      "ALTER TABLE ${flyway:defaultSchema}.AIPrompt ADD "
+      "AssistantPrefill NVARCHAR(MAX) NULL, "
+      "PrefillFallbackMode NVARCHAR(20) NOT NULL DEFAULT 'Ignore', "
+      "CONSTRAINT CK_AIPrompt_PrefillFallbackMode CHECK (PrefillFallbackMode IN ('Ignore','None'));",
+      must_contain=['ADD COLUMN "AssistantPrefill" TEXT',
+                    'ADD COLUMN "PrefillFallbackMode" VARCHAR(20) NOT NULL DEFAULT \'Ignore\'',
+                    'ADD CONSTRAINT "CK_AIPrompt_PrefillFallbackMode" CHECK'],
+      must_not_contain=['ADD COLUMN "CONSTRAINT"', "USERDEFINED"])
+
+# --- FLOAT precision: bare/wide FLOAT → DOUBLE PRECISION, narrow → REAL -------
+check("FLOAT widths map to DOUBLE PRECISION / REAL",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (A FLOAT NULL, B FLOAT(53) NULL, C FLOAT(24) NULL);",
+      must_contain=['"A" DOUBLE PRECISION', '"B" DOUBLE PRECISION', '"C" REAL'],
+      must_not_contain=['"A" REAL', "FLOAT(53)", "FLOAT(24)"])
+
+# --- Datetime types are tz-aware (match oracle `timestamp with time zone`) ----
+check("DATETIME/DATETIME2/SMALLDATETIME → TIMESTAMPTZ",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (A DATETIME NULL, B DATETIME2 NULL, C SMALLDATETIME NULL, D DATETIMEOFFSET NULL);",
+      must_contain=['"A" TIMESTAMPTZ', '"B" TIMESTAMPTZ', '"C" TIMESTAMPTZ', '"D" TIMESTAMPTZ'],
+      must_not_contain=["TIMESTAMP NULL", "TIMESTAMP,", "TIMESTAMP)"])
+
+# --- USER_NAME() in a DEFAULT → CURRENT_USER (else CREATE TABLE fails + cascades) --
+check("USER_NAME()/SUSER_NAME() in column default → CURRENT_USER",
+      "CREATE TABLE ${flyway:defaultSchema}.ConversationDetail (Role NVARCHAR(20) NOT NULL DEFAULT (USER_NAME()), Owner NVARCHAR(20) NULL DEFAULT (SUSER_NAME()));",
+      must_contain=["DEFAULT (CURRENT_USER)"],
+      must_not_contain=["USER_NAME(", "SUSER_NAME("])
+
+# --- boolean = integer CHECK (type-aware) ------------------------------------
+check("BIT column CHECK = 1/0 → = TRUE/FALSE; integer column untouched; paren-wrapped",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (IsActive BIT NOT NULL, Priority INT NOT NULL, "
+      "CONSTRAINT CK_a CHECK (IsActive = (1)), CONSTRAINT CK_p CHECK (Priority = 1));",
+      must_contain=['CHECK ("IsActive" = TRUE)', 'CHECK ("Priority" = 1)'],
+      must_not_contain=['"IsActive" = 1', '"IsActive" = (1)'])
+
+check("boolean CHECK in SEPARATE ALTER resolves via file-level BIT registry",
+      "CREATE TABLE ${flyway:defaultSchema}.AIAgent (EnableContextCompression BIT NOT NULL);\nGO\n"
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgent ADD CONSTRAINT CK_x CHECK (EnableContextCompression = (0));",
+      must_contain=['CHECK ("EnableContextCompression" = FALSE)'],
+      must_not_contain=['= (0)', '= 0)'])
+
+check("SET NOCOUNT/XACT_ABORT/QUOTED_IDENTIFIER batch-control dropped",
+      "SET NOCOUNT ON;\nSET XACT_ABORT ON;\nSET QUOTED_IDENTIFIER ON;\nCREATE TABLE ${flyway:defaultSchema}.Foo (ID UNIQUEIDENTIFIER NOT NULL);",
+      must_contain=['CREATE TABLE'],
+      must_not_contain=["NOCOUNT", "XACT_ABORT", "QUOTED_IDENTIFIER"])
+
+# --- string concat 'a' + col → 'a' || col ------------------------------------
+check("string concat + → || (numeric + untouched)",
+      "UPDATE ${flyway:defaultSchema}.Entity SET Name = 'MJ: ' + Name WHERE Seq = Seq + 1;",
+      must_contain=["'MJ: ' || ", '"Seq" + 1'],
+      must_not_contain=["'MJ: ' + "])
+
+# --- table-level ISJSON CHECK dropped (column-level already covered) ---------
+check("table-level ISJSON CHECK dropped; sibling constraint kept",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (Data NVARCHAR(MAX) NULL, X INT NULL, "
+      "CONSTRAINT CK_json CHECK (ISJSON(Data) > 0), CONSTRAINT CK_x CHECK (X > 0));",
+      must_contain=['CONSTRAINT "CK_x" CHECK'],
+      must_not_contain=["ISJSON", "CK_json"])
+
+check("ALTER ADD with only an ISJSON CHECK → whole ALTER dropped",
+      "ALTER TABLE ${flyway:defaultSchema}.Foo ADD CONSTRAINT CK_json CHECK (ISJSON(Data) > 0);",
+      must_contain=[],
+      must_not_contain=["ISJSON", "ALTER TABLE"])
+
+# --- Procedural T-SQL glue is reported as unhandled, never emitted as $v SQL --
+check("DECLARE / SELECT @v= / IF @v EXEC dropped to unhandled (real DDL kept)",
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgentRequest ADD CONSTRAINT CK_S CHECK (Status IN ('A','B'));\n"
+      "DECLARE @ConstraintName AS VARCHAR(200);\n"
+      "SELECT @ConstraintName = cc.CONSTRAINT_NAME FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc WHERE cc.x = 1;\n"
+      "IF @ConstraintName IS NOT NULL EXEC('ALTER TABLE y DROP CONSTRAINT ' + @ConstraintName);",
+      must_contain=['ADD CONSTRAINT "CK_S" CHECK'],
+      must_not_contain=["$ConstraintName", "DECLARE", "@ConstraintName", "EXEC("],
+      expect_unhandled=3)
+
 # --- Transform 1: sp_addextendedproperty → COMMENT ON -----------------------
 check("sp_addextendedproperty COLUMN → COMMENT ON COLUMN",
       """EXEC sp_addextendedproperty
@@ -69,6 +154,19 @@ check("sp_addextendedproperty TABLE-level → COMMENT ON TABLE",
            @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
            @level1type=N'TABLE', @level1name=N'Widget';""",
       must_contain=['COMMENT ON TABLE ${flyway:defaultSchema}."Widget" IS'],
+      must_not_contain=["sp_addextendedproperty"])
+
+# --- Envelope boundary: semicolon INSIDE an sp_addextendedproperty value -----
+# A `;` in the description must NOT terminate the envelope early (else it cuts the
+# statement and corrupts every later gap boundary, dropping real DDL like the table after).
+check("sp_addextendedproperty with ';' in the value doesn't break following DDL",
+      "EXEC sp_addextendedproperty @name=N'MS_Description', "
+      "@value=N'Applies to all apps; when set, scoped to one.', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'Foo', @level2type=N'COLUMN', @level2name=N'Bar';\n"
+      "CREATE TABLE ${flyway:defaultSchema}.AfterComment (ID UNIQUEIDENTIFIER NOT NULL);",
+      must_contain=['COMMENT ON COLUMN', 'Applies to all apps; when set, scoped to one.',
+                    'CREATE TABLE ${flyway:defaultSchema}."AfterComment"'],
       must_not_contain=["sp_addextendedproperty"])
 
 # --- Transform 2: IF [NOT] EXISTS(...) BEGIN ... END → DO block --------------
