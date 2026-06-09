@@ -8,6 +8,14 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     },
 }));
 
+// --- Mock the client-direct service so CloseSession's run finalization is observable (no DB). ---
+const finalizeCoAgentRunMock = vi.fn(async () => undefined);
+vi.mock('@memberjunction/ai-agents', () => ({
+    RealtimeClientSessionService: class {
+        FinalizeCoAgentRun = finalizeCoAgentRunMock;
+    },
+}));
+
 // --- Mock RunView.FromMetadataProvider so channel sweeps are controllable, while leaving the
 //     rest of @memberjunction/core intact. ---
 const runViewMock = vi.fn();
@@ -68,6 +76,7 @@ function makeSessionEntity(overrides: Partial<FakeEntity> = {}): FakeEntity {
 
 beforeEach(() => {
     hasPermissionMock.mockReset();
+    finalizeCoAgentRunMock.mockClear();
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
 });
@@ -141,6 +150,39 @@ describe('SessionManager.CloseSession', () => {
         expect(session.ClosedAt).toBeInstanceOf(Date);
         expect(channel.Status).toBe('Disconnected');
         expect(channel.DisconnectedAt).toBeInstanceOf(Date);
+        // No observability run ids in this session's config — finalize is not invoked.
+        expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
+    });
+
+    it('finalizes the co-agent observability runs when the session config carries their ids', async () => {
+        const session = makeSessionEntity({
+            ID: 'session-voice',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-5', promptRunID: 'prompt-run-5' }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+        const user = makeUser();
+
+        const ok = await mgr.CloseSession('session-voice', user, provider);
+
+        expect(ok).toBe(true);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-5', 'prompt-run-5', user, provider, true);
+    });
+
+    it('does not finalize when the session config has no run ids (target only)', async () => {
+        const session = makeSessionEntity({
+            ID: 'session-no-runs',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1' }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.CloseSession('session-no-runs', makeUser(), provider);
+
+        expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
     });
 
     it('is idempotent — closing an already-Closed session is a no-op returning true', async () => {

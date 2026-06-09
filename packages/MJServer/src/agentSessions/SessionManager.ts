@@ -5,12 +5,23 @@ import {
     MJConversationEntity,
 } from '@memberjunction/core-entities';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const CONVERSATION_ENTITY = 'MJ: Conversations';
+
+/**
+ * Shape of the observability run ids a realtime voice session persists in `AIAgentSession.Config_`.
+ * Read on {@link SessionManager.CloseSession} to finalize the co-agent runs. All fields optional —
+ * a non-voice session (or one whose run creation was skipped) carries none of them.
+ */
+interface SessionRunConfig {
+    coAgentRunID?: string;
+    promptRunID?: string;
+}
 
 /**
  * Inputs for {@link SessionManager.CreateSession}. `conversationID`/`lastSessionID`/`config`
@@ -122,7 +133,51 @@ export class SessionManager {
             return false;
         }
         await this.disconnectChannels(agentSessionID, contextUser, provider);
+        await this.finalizeObservabilityRuns(session, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Finalizes the co-agent observability runs a realtime voice session stored in its `Config_`
+     * (see `RealtimeClientSessionResolver`). No-op when the config carries no run ids. Tolerant: a
+     * malformed config or a finalize failure is swallowed so it can never break session close.
+     */
+    private async finalizeObservabilityRuns(
+        session: MJAIAgentSessionEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        const config = this.parseSessionRunConfig(session.Config_);
+        if (!config.coAgentRunID && !config.promptRunID) {
+            return;
+        }
+        try {
+            await new RealtimeClientSessionService().FinalizeCoAgentRun(
+                config.coAgentRunID ?? null,
+                config.promptRunID ?? null,
+                contextUser,
+                provider,
+                true,
+            );
+        } catch (e) {
+            LogError(`SessionManager.finalizeObservabilityRuns failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** Parses the session's `Config_` for observability run ids; returns an empty config on any error. */
+    private parseSessionRunConfig(raw: string | null): SessionRunConfig {
+        if (!raw) {
+            return {};
+        }
+        try {
+            const parsed = JSON.parse(raw) as Partial<SessionRunConfig>;
+            return {
+                coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
+                promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+            };
+        } catch {
+            return {};
+        }
     }
 
     /**

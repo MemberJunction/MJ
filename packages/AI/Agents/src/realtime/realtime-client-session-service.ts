@@ -30,7 +30,8 @@
  * @author MemberJunction.com
  */
 
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
+import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
@@ -72,6 +73,8 @@ export interface PrepareClientSessionInput {
     TargetAgentID: string;
     /** The shared session id grouping this voice session's runs. */
     AgentSessionID: string;
+    /** Optional conversation id the session is attached to — stamped on the co-agent observability run. */
+    ConversationID?: string;
     /** Prior conversation history to seed the model's context. Optional. */
     ConversationMessages?: ChatMessage[];
     /** Optional user-scope id for memory/context retrieval (falls back to the context user). */
@@ -99,8 +102,32 @@ export interface RealtimeClientSessionPrepResult {
     ClientConfig?: ClientRealtimeSessionConfig;
     /** The session params the server built (system prompt, model, tools). Present on success. */
     SessionParams?: RealtimeSessionParams;
+    /**
+     * ID of the server-side co-agent observability `AIAgentRun` created for this session. Present
+     * when the run was created successfully; absent when run creation was skipped or failed
+     * (observability is best-effort and never fails the prepare). Delegated target-agent runs nest
+     * under this run via `ParentRunID`, and {@link RealtimeClientSessionService.FinalizeCoAgentRun}
+     * closes it when the session ends.
+     */
+    CoAgentRunID?: string;
+    /**
+     * ID of the server-side co-agent `AIPromptRun` linked to {@link RealtimeClientSessionPrepResult.CoAgentRunID}.
+     * Present only when the co-agent's system prompt resolved (so a prompt run could be created).
+     */
+    PromptRunID?: string;
     /** A human-readable failure reason. Present on failure. */
     ErrorMessage?: string;
+}
+
+/**
+ * The resolved co-agent system prompt text plus the id of the prompt it came from, returned by
+ * {@link RealtimeClientSessionService.resolveCoAgentSystemPrompt}.
+ */
+export interface CoAgentSystemPromptResolution {
+    /** The co-agent's system prompt template text (empty string when none is configured). */
+    Text: string;
+    /** The `MJ: AI Prompts` row id, or `null` when the co-agent has no active prompt. */
+    PromptID: string | null;
 }
 
 /**
@@ -186,12 +213,193 @@ export class RealtimeClientSessionService {
 
         const sessionParams = await this.buildSessionParams(input, coAgent, resolution.APIName, contextUser, provider);
 
+        let clientConfig: ClientRealtimeSessionConfig;
         try {
-            const clientConfig = await resolution.Model.CreateClientSession(sessionParams);
-            return { Success: true, ClientConfig: clientConfig, SessionParams: sessionParams };
+            clientConfig = await resolution.Model.CreateClientSession(sessionParams);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             return { Success: false, ErrorMessage: `Failed to mint client realtime session: ${message}` };
+        }
+
+        // Best-effort observability: create a server-side co-agent run (+ prompt run) so the voice
+        // session is visible in the agent-run timeline and delegated runs can nest under it. A
+        // failure here never fails the prepare — we just omit the ids.
+        const promptID = this.resolveCoAgentSystemPrompt(coAgent).PromptID;
+        const obs = await this.createCoAgentObservabilityRun(
+            coAgent, promptID, resolution.ModelID,
+            input.UserID || contextUser?.ID, input.AgentSessionID,
+            contextUser, provider, input.ConversationID,
+        );
+
+        return {
+            Success: true,
+            ClientConfig: clientConfig,
+            SessionParams: sessionParams,
+            CoAgentRunID: obs?.CoAgentRunID,
+            PromptRunID: obs?.PromptRunID,
+        };
+    }
+
+    /**
+     * Creates the server-side co-agent observability runs for a voice session: an `AIAgentRun`
+     * (Status `Running`) and — when a co-agent system prompt resolved — a linked `AIPromptRun`
+     * (Status `Running`, `AgentRunID` = the co-agent run). Delegated target-agent runs nest under
+     * the returned `CoAgentRunID` via `ParentRunID`.
+     *
+     * Best-effort: returns `null` (and logs) when the co-agent run cannot be saved, so callers can
+     * continue without observability rather than failing the whole prepare.
+     *
+     * @param coAgent The resolved co-agent (its id stamps `AgentID`).
+     * @param promptID The co-agent system prompt id, or `null` to skip the prompt run.
+     * @param modelID The resolved realtime model id (stamps the prompt run's `ModelID`).
+     * @param userID Optional owning user id for the agent run.
+     * @param agentSessionID The session id grouping this voice session's runs.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The `{ CoAgentRunID, PromptRunID }` pair, or `null` when the agent run failed.
+     */
+    protected async createCoAgentObservabilityRun(
+        coAgent: MJAIAgentEntityExtended,
+        promptID: string | null,
+        modelID: string,
+        userID: string | undefined,
+        agentSessionID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        conversationID?: string,
+    ): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
+        const coAgentRunID = await this.createCoAgentRun(
+            coAgent, userID, agentSessionID, conversationID, contextUser, provider,
+        );
+        if (!coAgentRunID) {
+            return null;
+        }
+        const promptRunID = await this.createCoAgentPromptRun(promptID, modelID, coAgentRunID, contextUser, provider);
+        return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined };
+    }
+
+    /**
+     * Creates the co-agent `AIAgentRun` row (Status `Running`). Returns its id, or `null` (logging
+     * `CompleteMessage`) when the save fails.
+     */
+    private async createCoAgentRun(
+        coAgent: MJAIAgentEntityExtended,
+        userID: string | undefined,
+        agentSessionID: string,
+        conversationID: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        run.NewRecord();
+        run.AgentID = coAgent.ID;
+        run.Status = 'Running';
+        run.StartedAt = new Date();
+        run.AgentSessionID = agentSessionID;
+        if (conversationID) {
+            run.ConversationID = conversationID;
+        }
+        if (userID) {
+            run.UserID = userID;
+        }
+        if (await run.Save()) {
+            return run.ID;
+        }
+        LogError(`RealtimeClientSessionService.createCoAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return null;
+    }
+
+    /**
+     * Creates the co-agent `AIPromptRun` row (Status `Running`) linked to the co-agent run. Returns
+     * its id, or `null` when `promptID` is absent (skipped) or the save fails (logged).
+     */
+    private async createCoAgentPromptRun(
+        promptID: string | null,
+        modelID: string,
+        coAgentRunID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        if (!promptID) {
+            return null;
+        }
+        const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+        promptRun.NewRecord();
+        promptRun.PromptID = promptID;
+        promptRun.ModelID = modelID;
+        promptRun.RunAt = new Date();
+        promptRun.RunType = 'Single';
+        promptRun.Status = 'Running';
+        promptRun.AgentRunID = coAgentRunID;
+        if (await promptRun.Save()) {
+            return promptRun.ID;
+        }
+        LogError(`RealtimeClientSessionService.createCoAgentPromptRun save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return null;
+    }
+
+    /**
+     * Finalizes the server-side co-agent observability runs when a voice session ends. Loads each
+     * (when its id is supplied) and, **only if it is still `Running`**, sets it to `Completed`
+     * (or `Failed` when `success` is false) with a `CompletedAt` stamp. Idempotent and tolerant:
+     * a missing/already-finalized run is a no-op; a load/save failure is logged, never thrown.
+     *
+     * @param coAgentRunID The co-agent run id, or `null` to skip.
+     * @param promptRunID The co-agent prompt run id, or `null` to skip.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @param success Whether the session ended successfully (controls Completed vs Failed).
+     */
+    public async FinalizeCoAgentRun(
+        coAgentRunID: string | null,
+        promptRunID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        success: boolean = true,
+    ): Promise<void> {
+        await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
+        await this.finalizePromptRun(promptRunID, contextUser, provider, success);
+    }
+
+    /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */
+    private async finalizeAgentRun(
+        coAgentRunID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        success: boolean,
+    ): Promise<void> {
+        if (!coAgentRunID) {
+            return;
+        }
+        const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        if (!(await run.Load(coAgentRunID)) || run.Status !== 'Running') {
+            return;
+        }
+        run.Status = success ? 'Completed' : 'Failed';
+        run.CompletedAt = new Date();
+        if (!(await run.Save())) {
+            LogError(`RealtimeClientSessionService.finalizeAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /** Loads + finalizes the co-agent `AIPromptRun` if still `Running`. Tolerant: logs, never throws. */
+    private async finalizePromptRun(
+        promptRunID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        success: boolean,
+    ): Promise<void> {
+        if (!promptRunID) {
+            return;
+        }
+        const run = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+        if (!(await run.Load(promptRunID)) || run.Status !== 'Running') {
+            return;
+        }
+        run.Status = success ? 'Completed' : 'Failed';
+        run.CompletedAt = new Date();
+        if (!(await run.Save())) {
+            LogError(`RealtimeClientSessionService.finalizePromptRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 
@@ -411,16 +619,28 @@ export class RealtimeClientSessionService {
      * @returns The co-agent's system prompt template text, or empty string when none is configured.
      */
     protected getCoAgentSystemPromptText(coAgent: MJAIAgentEntityExtended): string {
+        return this.resolveCoAgentSystemPrompt(coAgent).Text;
+    }
+
+    /**
+     * Resolves the co-agent's highest-priority active system prompt, returning both its template
+     * text and its prompt id. The id is surfaced so {@link PrepareClientSession} can create a linked
+     * co-agent `AIPromptRun` for observability. Mirrors `BaseAgent.loadAgentConfiguration`'s
+     * child-prompt resolution.
+     *
+     * @param coAgent The resolved co-agent.
+     * @returns The prompt text + id, or `{ Text: '', PromptID: null }` when none is configured.
+     */
+    protected resolveCoAgentSystemPrompt(coAgent: MJAIAgentEntityExtended): CoAgentSystemPromptResolution {
         const engine = AIEngine.Instance;
-        const agentPrompts = engine.AgentPrompts ?? [];
-        const agentPrompt = agentPrompts
+        const agentPrompt = (engine.AgentPrompts ?? [])
             .filter(ap => UUIDsEqual(ap.AgentID, coAgent.ID) && ap.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
         if (!agentPrompt) {
-            return '';
+            return { Text: '', PromptID: null };
         }
         const prompt = (engine.Prompts ?? []).find(p => UUIDsEqual(p.ID, agentPrompt.PromptID));
-        return prompt?.TemplateText ?? '';
+        return { Text: prompt?.TemplateText ?? '', PromptID: prompt?.ID ?? null };
     }
 
     /**

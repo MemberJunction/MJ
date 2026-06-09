@@ -51,6 +51,14 @@ const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
 interface RealtimeSessionConfig {
     /** The top-level target agent the co-agent voices on behalf of. */
     targetAgentID: string;
+    /**
+     * ID of the server-side co-agent observability `AIAgentRun` for this session. Used as the
+     * `ParentRunID` for delegated target-agent runs and finalized on session close. Optional —
+     * absent when observability run creation was skipped/failed (best-effort).
+     */
+    coAgentRunID?: string;
+    /** ID of the co-agent `AIPromptRun` linked to {@link RealtimeSessionConfig.coAgentRunID}. Optional. */
+    promptRunID?: string;
 }
 
 /**
@@ -159,12 +167,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<string> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
-        const targetAgentID = this.readTargetAgentID(session);
+        const config = this.readSessionConfig(session);
 
         const { ResultJson } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
-                TargetAgentID: targetAgentID,
+                TargetAgentID: config.targetAgentID,
+                // Nest the delegated target-agent run under the co-agent observability run (when present).
+                ParentRunID: config.coAgentRunID,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
             },
             contextUser,
@@ -179,9 +189,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Persist a transcript turn (user or assistant) as a `Conversation Detail` on the session's
      * conversation. Ownership-gated; heartbeats the session on success.
      *
-     * TODO (deferred — out of MVP scope): relay incremental usage telemetry onto an `AIPromptRun`
-     * (RelayRealtimeUsage) and open a co-agent observability `AIAgentRun` so the voice session is
-     * visible in the agent-run timeline. Neither is wired here yet.
+     * The co-agent observability `AIAgentRun`/`AIPromptRun` are now created at session start (see
+     * {@link RealtimeClientSessionResolver.StartRealtimeClientSession}) and finalized on close.
+     * Still deferred: relaying incremental usage telemetry onto the `AIPromptRun` (RelayRealtimeUsage)
+     * and linking persisted transcript turns to those runs.
      *
      * @returns `true` when the transcript turn was persisted.
      */
@@ -270,6 +281,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 CoAgentID: coAgentID,
                 TargetAgentID: targetAgentId,
                 AgentSessionID: session.ID,
+                ConversationID: session.ConversationID ?? undefined,
                 // MVP: conversation history is not yet hydrated into ChatMessage[]; the co-agent
                 // companion prompt runs without prior turns. A later phase loads the session's
                 // Conversation into ChatMessage[] for richer context.
@@ -285,6 +297,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             throw new Error(prep.ErrorMessage ?? 'Failed to prepare the client realtime session.');
         }
 
+        await this.persistObservabilityRunIDs(session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID);
+
         const cfg = prep.ClientConfig;
         return {
             AgentSessionId: session.ID,
@@ -295,6 +309,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             ExpiresAt: cfg.ExpiresAt,
             SessionConfigJson: JSON.stringify(cfg.SessionConfig),
         };
+    }
+
+    /**
+     * Writes the co-agent observability run ids into the session's `Config_` alongside the
+     * authoritative `targetAgentID`, then saves the session. These ids are read back on close to
+     * finalize the runs (and on relay to nest delegated runs). Best-effort: a save failure is logged,
+     * not thrown — the voice session still proceeds, it just won't carry the run ids.
+     */
+    private async persistObservabilityRunIDs(
+        session: MJAIAgentSessionEntity,
+        targetAgentID: string,
+        coAgentRunID?: string,
+        promptRunID?: string,
+    ): Promise<void> {
+        const config: RealtimeSessionConfig = { targetAgentID, coAgentRunID, promptRunID };
+        session.Config_ = JSON.stringify(config);
+        const saved = await session.Save();
+        if (!saved) {
+            LogError(
+                `RealtimeClientSessionResolver.persistObservabilityRunIDs save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
     }
 
     /**
@@ -324,16 +360,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Reads the authoritative target agent id from the session's persisted config. Throws when the
-     * config is missing/malformed — a relay cannot proceed without a target.
+     * Parses the session's persisted config, returning the authoritative `targetAgentID` plus any
+     * observability run ids (`coAgentRunID`/`promptRunID`). Throws when the config is missing/malformed
+     * or carries no target — a relay cannot proceed without a target.
      */
-    private readTargetAgentID(session: MJAIAgentSessionEntity): string {
+    private readSessionConfig(session: MJAIAgentSessionEntity): RealtimeSessionConfig {
         const raw = session.Config_;
         if (raw) {
             try {
                 const parsed = JSON.parse(raw) as Partial<RealtimeSessionConfig>;
                 if (typeof parsed.targetAgentID === 'string' && parsed.targetAgentID.length > 0) {
-                    return parsed.targetAgentID;
+                    return {
+                        targetAgentID: parsed.targetAgentID,
+                        coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
+                        promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+                    };
                 }
             } catch {
                 /* fall through to the error below */

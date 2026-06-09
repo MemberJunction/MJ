@@ -124,12 +124,15 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(prepareClientSessionMock).not.toHaveBeenCalled();
     });
 
-    it('returns the ephemeral config and stores targetAgentID in session config on success', async () => {
+    it('returns the ephemeral config and stores targetAgentID + run ids in session config on success', async () => {
         hasPermissionMock.mockResolvedValue(true);
         currentProvider = makeProvider(() => makeSessionEntity());
-        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-9', ConversationID: 'conv-9' }));
+        const createdSession = makeSessionEntity({ ID: 'session-9', ConversationID: 'conv-9' });
+        createSessionMock.mockResolvedValue(createdSession);
         prepareClientSessionMock.mockResolvedValue({
             Success: true,
+            CoAgentRunID: 'co-run-9',
+            PromptRunID: 'prompt-run-9',
             ClientConfig: {
                 Provider: 'openai',
                 Model: 'gpt-realtime',
@@ -148,6 +151,11 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         const createArg = createSessionMock.mock.calls[0][0] as { agentID: string; config: string };
         expect(createArg.agentID).toBe('co-agent-1');
         expect(JSON.parse(createArg.config)).toEqual({ targetAgentID: 'target-1' });
+        // After prepare, the observability run ids are written back into the session config + saved.
+        expect(JSON.parse(createdSession.Config_ as string)).toEqual({
+            targetAgentID: 'target-1', coAgentRunID: 'co-run-9', promptRunID: 'prompt-run-9',
+        });
+        expect(createdSession.Save).toHaveBeenCalled();
         // Ephemeral config surfaced to the browser.
         expect(result.AgentSessionId).toBe('session-9');
         expect(result.ConversationId).toBe('conv-9');
@@ -185,9 +193,11 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         expect(executeRelayedToolMock).not.toHaveBeenCalled();
     });
 
-    it('reads the target from the session config and returns ResultJson', async () => {
+    it('reads the target + co-agent run id from the session config and returns ResultJson', async () => {
         currentProvider = makeProvider(() =>
-            makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-from-session' }) }),
+            makeSessionEntity({
+                Config_: JSON.stringify({ targetAgentID: 'target-from-session', coAgentRunID: 'co-run-77' }),
+            }),
         );
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
         const resolver = makeResolver();
@@ -203,10 +213,13 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         expect(out).toBe('{"ok":true}');
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as {
             TargetAgentID: string;
+            ParentRunID?: string;
             Call: { CallID: string; ToolName: string; Arguments: string };
         };
         // Target comes from the session, NOT the client.
         expect(relayArg.TargetAgentID).toBe('target-from-session');
+        // Delegated run nests under the co-agent observability run from the session config.
+        expect(relayArg.ParentRunID).toBe('co-run-77');
         expect(relayArg.Call).toEqual({ CallID: 'call-1', ToolName: 'invoke-target-agent', Arguments: '{"request":"do it"}' });
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
     });
