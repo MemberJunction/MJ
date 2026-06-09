@@ -3,23 +3,6 @@
   width: 100%;
 }
 
-.message-input-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-.message-input-row mj-message-input-box {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.voice-mic-button {
-  flex: 0 0 auto;
-}
-.voice-mic-button--active {
-  color: var(--mj-brand-primary);
-}
-
 .processing-indicator {
   position: absolute;
   top: 50%;

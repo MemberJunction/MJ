@@ -201,3 +201,14 @@
     font-size: 0.875rem;
   }
 }
+
+/* Voice (mic) button — sits in the attach-buttons cluster, left of send.
+   Inherits .attach-button-icon base; active state uses the brand color while a
+   realtime voice session is live. */
+.voice-button-icon--active {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+.voice-button-icon--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+}

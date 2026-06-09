@@ -46,17 +46,20 @@ interface StartRealtimeClientSessionResult {
 // larger, but we type the fields we read so there are no `any` leaks. The exact
 // field names are confirmed against the live API in P7 (see TODO(P7) markers).
 
-/** Streaming delta of the assistant's spoken-text transcript. */
+/** Streaming delta of the assistant's spoken-text transcript.
+ *  GA (gpt-realtime) emits `response.output_audio_transcript.delta`; the older beta
+ *  emitted `response.audio_transcript.delta`. We accept both so captions populate
+ *  regardless of the model generation. */
 interface OAIResponseAudioTranscriptDelta {
-  type: 'response.audio_transcript.delta';
+  type: 'response.output_audio_transcript.delta' | 'response.audio_transcript.delta';
   delta: string;
   response_id?: string;
   item_id?: string;
 }
 
-/** Final assistant transcript for a turn. */
+/** Final assistant transcript for a turn (GA or beta event name). */
 interface OAIResponseAudioTranscriptDone {
-  type: 'response.audio_transcript.done';
+  type: 'response.output_audio_transcript.done' | 'response.audio_transcript.done';
   transcript: string;
   response_id?: string;
   item_id?: string;
@@ -293,14 +296,11 @@ export class VoiceSessionService {
   /**
    * Performs the offer/answer SDP exchange with OpenAI's Realtime WebRTC endpoint.
    *
-   * This is the SINGLE place to tune the live handshake in P7 — endpoint URL,
-   * headers, and SDP content all live here.
-   *
-   * TODO(P7): confirm OpenAI WebRTC endpoint + handshake against the live API.
-   *   - Endpoint currently uses the `calls` endpoint: `https://api.openai.com/v1/realtime/calls?model=<model>`.
-   *     OpenAI has shipped both `/v1/realtime` (SDP) and `/v1/realtime/calls`; verify the current GA path.
-   *   - Confirm the `OpenAI-Beta: realtime=v1` header is still required (it was for the beta SDP flow).
-   *   - Confirm the answer is returned as raw `application/sdp` (vs. JSON-wrapped).
+   * GA browser flow (confirmed against the OpenAI Realtime WebRTC guide): POST the raw
+   * SDP offer to `https://api.openai.com/v1/realtime/calls` with **no** query params and
+   * **no** `OpenAI-Beta` header. The ephemeral client secret already encodes the model +
+   * session config (set server-side at mint), so the browser must not specify the model —
+   * passing `?model=` returns an empty 400. The answer comes back as raw `application/sdp`.
    */
   private async performSdpHandshake(
     pc: RTCPeerConnection,
@@ -309,17 +309,12 @@ export class VoiceSessionService {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    const baseUrl = 'https://api.openai.com/v1/realtime/calls';
-    const url = `${baseUrl}?model=${encodeURIComponent(session.Model)}`;
-
-    const response = await fetch(url, {
+    const response = await fetch('https://api.openai.com/v1/realtime/calls', {
       method: 'POST',
       body: offer.sdp ?? '',
       headers: {
         Authorization: `Bearer ${session.EphemeralToken}`,
-        'Content-Type': 'application/sdp',
-        // TODO(P7): confirm this beta header is still required for the GA endpoint.
-        'OpenAI-Beta': 'realtime=v1'
+        'Content-Type': 'application/sdp'
       }
     });
 
@@ -393,9 +388,11 @@ export class VoiceSessionService {
   /** Dispatches a typed OpenAI realtime event to the appropriate behavior. */
   private async handleEvent(event: OpenAIRealtimeEvent): Promise<void> {
     switch (event.type) {
+      case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta':
         this.onAssistantDelta((event as OAIResponseAudioTranscriptDelta).delta);
         break;
+      case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
         await this.onAssistantDone((event as OAIResponseAudioTranscriptDone).transcript);
         break;

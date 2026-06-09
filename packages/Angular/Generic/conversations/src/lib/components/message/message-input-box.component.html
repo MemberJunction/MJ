@@ -19,9 +19,10 @@
       (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
 
-    <!-- Attach Buttons - Positioned over editor -->
-    @if (enableAttachments) {
+    <!-- Attach + voice buttons - Positioned over editor -->
+    @if (enableAttachments || enableVoice) {
       <div class="attach-buttons">
+        @if (enableAttachments) {
         <button
           class="attach-button-icon"
           [disabled]="disabled"
@@ -58,6 +59,18 @@
           >
           <i class="fa-solid fa-cube"></i>
         </button>
+        }
+        @if (enableVoice) {
+        <button
+          class="attach-button-icon voice-button-icon"
+          [class.voice-button-icon--active]="voiceActive"
+          [disabled]="!canStartVoice"
+          (click)="onVoiceClick(); $event.stopPropagation()"
+          [title]="voiceActive ? 'Voice session active' : 'Start voice'"
+          >
+          <i class="fa-solid fa-microphone"></i>
+        </button>
+        }
       </div>
     }
 

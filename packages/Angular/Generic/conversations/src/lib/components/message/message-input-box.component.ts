@@ -41,12 +41,25 @@ export class MessageInputBoxComponent {
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB
   @Input() acceptedFileTypes: string = 'image/*';
 
+  /** Shows the in-composer mic button when true. */
+  @Input() enableVoice: boolean = false;
+  /** Whether a realtime voice session is currently active (mic renders in its active state). */
+  @Input() voiceActive: boolean = false;
+  /** Whether a voice session can be started right now (mic disabled when false). */
+  @Input() canStartVoice: boolean = true;
+
   @Output() textSubmitted = new EventEmitter<string>();
   @Output() valueChange = new EventEmitter<string>();
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
   @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
   @Output() artifactPickerRequested = new EventEmitter<void>();
+  /** Emitted when the user clicks the mic button to start/stop a voice session. */
+  @Output() voiceRequested = new EventEmitter<void>();
+
+  onVoiceClick(): void {
+    this.voiceRequested.emit();
+  }
 
   get canSend(): boolean {
     const hasText = this.value.trim().length > 0;
