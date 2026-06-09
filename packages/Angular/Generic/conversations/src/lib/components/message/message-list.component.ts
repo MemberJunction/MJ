@@ -19,6 +19,7 @@ import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { selectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
@@ -208,32 +209,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.userAvatarMap = this.userAvatarMap;
           instance.isLastMessage = (index === messages.length - 1); // Update last message flag
 
-          // Get artifact from lazy-loading map
-          const artifactList = this.artifactMap.get(message.ID);
-          // Use LAST artifact (most recent) instead of first for display
-          const lastArtifact = artifactList && artifactList.length > 0
-            ? artifactList[artifactList.length - 1]
-            : undefined;
-
-          // Trigger lazy load and set properties
-          if (lastArtifact) {
-            // Lazy load in background - don't block UI
-            Promise.all([
-              lastArtifact.getArtifact(),
-              lastArtifact.getVersion()
-            ]).then(([artifact, version]) => {
-              instance.artifact = artifact;
-              instance.artifactVersion = version;
-              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
-              existing.changeDetectorRef.detectChanges();
-              this.cdRef.detectChanges();
-            }).catch(err => {
-              console.error('Failed to lazy-load artifact:', err);
-            });
-          } else {
-            instance.artifact = undefined;
-            instance.artifactVersion = undefined;
-          }
+          // Surface ALL distinct artifacts on this message (latest version each),
+          // not just the most recent one. Loads lazily in the background.
+          this.applyArtifactsToInstance(instance, message.ID, existing.changeDetectorRef);
 
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
@@ -265,29 +243,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.userAvatarMap = this.userAvatarMap;
           instance.isLastMessage = (index === messages.length - 1); // Mark last message
 
-          // Get artifact from lazy-loading map
-          const artifactList = this.artifactMap.get(message.ID);
-          // Use LAST artifact (most recent) instead of first for display
-          const lastArtifact = artifactList && artifactList.length > 0
-            ? artifactList[artifactList.length - 1]
-            : undefined;
-
-          // Trigger lazy load and set properties
-          if (lastArtifact) {
-            // Lazy load in background - don't block UI
-            Promise.all([
-              lastArtifact.getArtifact(),
-              lastArtifact.getVersion()
-            ]).then(([artifact, version]) => {
-              instance.artifact = artifact;
-              instance.artifactVersion = version;
-              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
-              componentRef.changeDetectorRef.detectChanges();
-              this.cdRef.detectChanges();
-            }).catch(err => {
-              console.error('Failed to lazy-load artifact:', err);
-            });
-          }
+          // Surface ALL distinct artifacts on this message (latest version each).
+          this.applyArtifactsToInstance(instance, message.ID, componentRef.changeDetectorRef);
 
           // Pass agent run from map (loaded once per conversation)
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
@@ -340,6 +297,72 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.cdRef.reattach();
       this.cdRef.detectChanges();
     }
+  }
+
+  /**
+   * Resolves the DISTINCT artifacts for a message (one entry per artifactId at its
+   * latest version), lazy-loads them all, and applies them to the rendered
+   * message-item. Loads in the background so the UI never blocks.
+   *
+   * WHY WE SURFACE THEM ALL (design rationale — see PR discussion w/ Pranav & Ethan):
+   * A single message can legitimately carry more than one DISTINCT artifact — e.g. a
+   * research report PLUS a *standalone* generated infographic. This is deliberately
+   * NOT in conflict with the server-side consolidation in AgentRunner
+   * (Pranav, 5664b86: "keep the report's embedded image in the report, not as a
+   * duplicate artifact"): that logic only suppresses media that is *embedded inline*
+   * (base64) in another artifact's payload — a true duplicate. Genuinely standalone
+   * sibling artifacts (the report uses SVG charts; the infographic is a separate JPEG)
+   * are correctly kept as separate artifacts, and the UI must show every one of them.
+   *
+   * The earlier `artifactList[length - 1]` ("show only the most recent") approach
+   * (EL-BC, 95492622) assumed consolidation always left exactly one artifact per
+   * message; when it legitimately leaves two, that silently hid the report behind the
+   * image. Grouping by artifactId (latest version each) shows all distinct artifacts
+   * while still collapsing multiple *versions* of the same artifact to one card.
+   */
+  private applyArtifactsToInstance(
+    instance: MessageItemComponent,
+    messageId: string,
+    childCdRef: ChangeDetectorRef
+  ): void {
+    const infos = this.resolveDistinctArtifacts(messageId);
+    if (infos.length === 0) {
+      instance.artifacts = [];
+      instance.artifact = undefined;
+      instance.artifactVersion = undefined;
+      return;
+    }
+
+    Promise.all(
+      infos.map(info =>
+        Promise.all([info.getArtifact(), info.getVersion()]).then(([artifact, version]) => ({ artifact, version }))
+      )
+    )
+      .then(refs => {
+        instance.artifacts = refs;
+        // Keep the legacy single inputs pointed at the first entry for back-compat.
+        instance.artifact = refs[0]?.artifact;
+        instance.artifactVersion = refs[0]?.version;
+        // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+        childCdRef.detectChanges();
+        this.cdRef.detectChanges();
+      })
+      .catch(err => {
+        console.error('Failed to lazy-load artifacts:', err);
+      });
+  }
+
+  /**
+   * Groups a message's artifact list by artifactId, keeping the highest version of
+   * each. Multiple versions of the SAME artifact collapse to one card (latest wins),
+   * while genuinely distinct artifacts are all retained.
+   */
+  private resolveDistinctArtifacts(messageId: string): LazyArtifactInfo[] {
+    const list = this.artifactMap.get(messageId);
+    if (!list || list.length === 0) {
+      return [];
+    }
+    return selectDistinctLatestArtifacts(list);
   }
 
   /**

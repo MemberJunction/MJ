@@ -16014,8 +16014,8 @@ export class MJAIPromptRunResolver extends ResolverBase {
     async MJContentItemTags_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaipromptrun_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -20369,8 +20369,8 @@ export class MJApplicationResolver extends ResolverBase {
     async MJMagicLinkInviteApplications_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('ApplicationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjapplication_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Applications', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -20379,8 +20379,8 @@ export class MJApplicationResolver extends ResolverBase {
     async MJMagicLinkInvites_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ApplicationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjapplication_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -22702,8 +22702,8 @@ export class MJArtifactVersionResolver extends ResolverBase {
     async MJSignatureRequestDocuments_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ArtifactVersionID')}='${mjartifactversion_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ArtifactVersionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjartifactversion_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -22952,8 +22952,8 @@ export class MJArtifactResolver extends ResolverBase {
     async MJSignatureRequestDocuments_ArtifactIDArray(@Root() mjartifact_: MJArtifact_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ArtifactID')}='${mjartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ArtifactID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjartifact_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -24072,8 +24072,8 @@ export class MJClusterAnalysisResolver extends ResolverBase {
     async MJClusterAnalysis(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJClusterAnalysis_ | null> {
         this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Cluster Analysis', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -24082,8 +24082,8 @@ export class MJClusterAnalysisResolver extends ResolverBase {
     async MJClusterAnalysisClusters_ClusterAnalysisIDArray(@Root() mjclusteranalysis_: MJClusterAnalysis_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Cluster Analysis Clusters', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ClusterAnalysisID')}='${mjclusteranalysis_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ClusterAnalysisID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjclusteranalysis_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis Clusters', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -24274,8 +24274,8 @@ export class MJClusterAnalysisClusterResolver extends ResolverBase {
     async MJClusterAnalysisCluster(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJClusterAnalysisCluster_ | null> {
         this.CheckUserReadPermissions('MJ: Cluster Analysis Clusters', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysisClusters')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis Clusters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Cluster Analysis Clusters', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -26262,8 +26262,8 @@ export class MJCompanyResolver extends ResolverBase {
     async MJSignatureAccounts_CompanyIDArray(@Root() mjcompany_: MJCompany_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CompanyID')}='${mjcompany_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CompanyID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcompany_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -35862,8 +35862,8 @@ export class MJCredentialResolver extends ResolverBase {
     async MJSignatureAccounts_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -42231,8 +42231,8 @@ export class MJEntityResolverBase extends ResolverBase {
     async MJClusterAnalysis_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -42241,8 +42241,8 @@ export class MJEntityResolverBase extends ResolverBase {
     async MJSignatureRequests_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Requests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Requests', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -53512,8 +53512,8 @@ export class MJMagicLinkInviteAllowedDomainResolver extends ResolverBase {
     async MJMagicLinkInviteAllowedDomain(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteAllowedDomain_ | null> {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Domains', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedDomains')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Domains', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedDomains')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Domains', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Domains', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -53663,8 +53663,8 @@ export class MJMagicLinkInviteAllowedPathResolver extends ResolverBase {
     async MJMagicLinkInviteAllowedPath(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteAllowedPath_ | null> {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Paths', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedPaths')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Paths', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedPaths')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Paths', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -53818,8 +53818,8 @@ export class MJMagicLinkInviteApplicationResolver extends ResolverBase {
     async MJMagicLinkInviteApplication(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteApplication_ | null> {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Applications', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -53973,8 +53973,8 @@ export class MJMagicLinkInviteRoleResolver extends ResolverBase {
     async MJMagicLinkInviteRole(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInviteRole_ | null> {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invite Roles', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54271,8 +54271,8 @@ export class MJMagicLinkInviteResolver extends ResolverBase {
     async MJMagicLinkInvite(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkInvite_ | null> {
         this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Invites', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54281,8 +54281,8 @@ export class MJMagicLinkInviteResolver extends ResolverBase {
     async MJMagicLinkInviteAllowedDomains_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Domains', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedDomains')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Domains', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedDomains')} WHERE ${provider.QuoteIdentifier('InviteID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Domains', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmagiclinkinvite_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Domains', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54291,8 +54291,8 @@ export class MJMagicLinkInviteResolver extends ResolverBase {
     async MJMagicLinkInviteAllowedPaths_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Allowed Paths', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedPaths')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Paths', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteAllowedPaths')} WHERE ${provider.QuoteIdentifier('InviteID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Allowed Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmagiclinkinvite_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Allowed Paths', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54301,8 +54301,8 @@ export class MJMagicLinkInviteResolver extends ResolverBase {
     async MJMagicLinkInviteApplications_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Applications', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteApplications')} WHERE ${provider.QuoteIdentifier('InviteID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmagiclinkinvite_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Applications', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54311,8 +54311,8 @@ export class MJMagicLinkInviteResolver extends ResolverBase {
     async MJMagicLinkInviteRoles_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('InviteID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmagiclinkinvite_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Roles', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54321,8 +54321,8 @@ export class MJMagicLinkInviteResolver extends ResolverBase {
     async MJMagicLinkRedemptions_InviteIDArray(@Root() mjmagiclinkinvite_: MJMagicLinkInvite_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Redemptions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('InviteID')}='${mjmagiclinkinvite_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('InviteID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmagiclinkinvite_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Redemptions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -54525,8 +54525,8 @@ export class MJMagicLinkRedemptionResolver extends ResolverBase {
     async MJMagicLinkRedemption(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMagicLinkRedemption_ | null> {
         this.CheckUserReadPermissions('MJ: Magic Link Redemptions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Magic Link Redemptions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -66011,8 +66011,8 @@ export class MJResourceTypeResolver extends ResolverBase {
     async MJMagicLinkInvites_ResourceTypeIDArray(@Root() mjresourcetype_: MJResourceType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ResourceTypeID')}='${mjresourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ResourceTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjresourcetype_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -66363,8 +66363,8 @@ export class MJRoleResolver extends ResolverBase {
     async MJMagicLinkInviteRoles_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invite Roles', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInviteRoles')} WHERE ${provider.QuoteIdentifier('RoleID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invite Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrole_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invite Roles', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -66373,8 +66373,8 @@ export class MJRoleResolver extends ResolverBase {
     async MJMagicLinkInvites_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('RoleID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrole_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -70347,8 +70347,8 @@ export class MJSignatureAccountResolver extends ResolverBase {
     async MJSignatureAccount(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureAccount_ | null> {
         this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Signature Accounts', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -70357,8 +70357,8 @@ export class MJSignatureAccountResolver extends ResolverBase {
     async MJSignatureRequests_SignatureAccountIDArray(@Root() mjsignatureaccount_: MJSignatureAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Requests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('SignatureAccountID')}='${mjsignatureaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('SignatureAccountID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjsignatureaccount_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Requests', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -70565,8 +70565,8 @@ export class MJSignatureProviderResolver extends ResolverBase {
     async MJSignatureProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureProvider_ | null> {
         this.CheckUserReadPermissions('MJ: Signature Providers', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureProviders')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Providers', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureProviders')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Signature Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -70575,8 +70575,8 @@ export class MJSignatureProviderResolver extends ResolverBase {
     async MJSignatureAccounts_SignatureProviderIDArray(@Root() mjsignatureprovider_: MJSignatureProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Accounts', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('SignatureProviderID')}='${mjsignatureprovider_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('SignatureProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjsignatureprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -70647,6 +70647,10 @@ export class MJSignatureRequestDocument_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    SignatureRequest: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -70773,8 +70777,8 @@ export class MJSignatureRequestDocumentResolver extends ResolverBase {
     async MJSignatureRequestDocument(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequestDocument_ | null> {
         this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Signature Request Documents', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -70844,6 +70848,10 @@ export class MJSignatureRequestLog_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SignatureRequest?: string;
         
 }
 
@@ -70962,8 +70970,8 @@ export class MJSignatureRequestLogResolver extends ResolverBase {
     async MJSignatureRequestLog(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequestLog_ | null> {
         this.CheckUserReadPermissions('MJ: Signature Request Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestLogs')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestLogs')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Signature Request Logs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -71041,6 +71049,10 @@ export class MJSignatureRequestRecipient_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    SignatureRequest: string;
         
 }
 
@@ -71171,8 +71183,8 @@ export class MJSignatureRequestRecipientResolver extends ResolverBase {
     async MJSignatureRequestRecipient(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequestRecipient_ | null> {
         this.CheckUserReadPermissions('MJ: Signature Request Recipients', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestRecipients')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestRecipients')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Recipients', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Signature Request Recipients', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -71221,7 +71233,7 @@ export class MJSignatureRequest_ {
         
     @Field({description: `Envelope title / email subject.`}) 
     @MaxLength(255)
-    Title: string;
+    Name: string;
         
     @Field({nullable: true, description: `Optional email body / message sent to recipients with the envelope.`}) 
     Message?: string;
@@ -71269,11 +71281,11 @@ export class MJSignatureRequest_ {
     @Field(() => [MJSignatureRequestLog_])
     MJSignatureRequestLogs_SignatureRequestIDArray: MJSignatureRequestLog_[]; // Link to MJSignatureRequestLogs
     
-    @Field(() => [MJSignatureRequestDocument_])
-    MJSignatureRequestDocuments_SignatureRequestIDArray: MJSignatureRequestDocument_[]; // Link to MJSignatureRequestDocuments
-    
     @Field(() => [MJSignatureRequestRecipient_])
     MJSignatureRequestRecipients_SignatureRequestIDArray: MJSignatureRequestRecipient_[]; // Link to MJSignatureRequestRecipients
+    
+    @Field(() => [MJSignatureRequestDocument_])
+    MJSignatureRequestDocuments_SignatureRequestIDArray: MJSignatureRequestDocument_[]; // Link to MJSignatureRequestDocuments
     
 }
 
@@ -71289,7 +71301,7 @@ export class CreateMJSignatureRequestInput {
     SignatureAccountID?: string;
 
     @Field({ nullable: true })
-    Title?: string;
+    Name?: string;
 
     @Field({ nullable: true })
     Message: string | null;
@@ -71332,7 +71344,7 @@ export class UpdateMJSignatureRequestInput {
     SignatureAccountID?: string;
 
     @Field({ nullable: true })
-    Title?: string;
+    Name?: string;
 
     @Field({ nullable: true })
     Message?: string | null;
@@ -71416,8 +71428,8 @@ export class MJSignatureRequestResolver extends ResolverBase {
     async MJSignatureRequest(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSignatureRequest_ | null> {
         this.CheckUserReadPermissions('MJ: Signature Requests', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequests')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Signature Requests', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -71426,19 +71438,9 @@ export class MJSignatureRequestResolver extends ResolverBase {
     async MJSignatureRequestLogs_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Request Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestLogs')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}='${mjsignaturerequest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestLogs')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjsignaturerequest_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Logs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJSignatureRequestDocument_])
-    async MJSignatureRequestDocuments_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}='${mjsignaturerequest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -71446,9 +71448,19 @@ export class MJSignatureRequestResolver extends ResolverBase {
     async MJSignatureRequestRecipients_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Signature Request Recipients', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestRecipients')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}='${mjsignaturerequest_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestRecipients')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Recipients', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjsignaturerequest_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Recipients', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSignatureRequestDocument_])
+    async MJSignatureRequestDocuments_SignatureRequestIDArray(@Root() mjsignaturerequest_: MJSignatureRequest_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Signature Request Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureRequestDocuments')} WHERE ${provider.QuoteIdentifier('SignatureRequestID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Request Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjsignaturerequest_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Request Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -82568,8 +82580,8 @@ export class MJUserResolverBase extends ResolverBase {
     async MJClusterAnalysis_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Cluster Analysis', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwClusterAnalysis')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cluster Analysis', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Cluster Analysis', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -82578,8 +82590,8 @@ export class MJUserResolverBase extends ResolverBase {
     async MJMagicLinkRedemptions_ProvisionedUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Redemptions', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('ProvisionedUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkRedemptions')} WHERE ${provider.QuoteIdentifier('ProvisionedUserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Redemptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Redemptions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -82588,8 +82600,8 @@ export class MJUserResolverBase extends ResolverBase {
     async MJMagicLinkInvites_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Magic Link Invites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -84243,8 +84255,8 @@ export class MJViewTypeResolver extends ResolverBase {
     async MJViewType(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJViewType_ | null> {
         this.CheckUserReadPermissions('MJ: View Types', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwViewTypes')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: View Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwViewTypes')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: View Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: View Types', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -84253,8 +84265,8 @@ export class MJViewTypeResolver extends ResolverBase {
     async MJUserViews_ViewTypeIDArray(@Root() mjviewtype_: MJViewType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Views', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserViews')} WHERE ${provider.QuoteIdentifier('ViewTypeID')}='${mjviewtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Views', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserViews')} WHERE ${provider.QuoteIdentifier('ViewTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjviewtype_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Views', rows, this.GetUserFromPayload(userPayload));
         return result;
     }

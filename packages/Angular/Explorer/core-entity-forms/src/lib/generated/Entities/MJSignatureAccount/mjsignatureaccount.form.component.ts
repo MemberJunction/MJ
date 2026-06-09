@@ -17,11 +17,9 @@ export class MJSignatureAccountFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'accountDetails', sectionName: 'Account Details', isExpanded: true },
-            { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
+            { sectionKey: 'accountConfiguration', sectionName: 'Account Configuration', isExpanded: true },
             { sectionKey: 'accountStatus', sectionName: 'Account Status', isExpanded: true },
-            { sectionKey: 'defaultEnvelopeSettings', sectionName: 'Default Envelope Settings', isExpanded: true },
-            { sectionKey: 'advancedSettings', sectionName: 'Advanced Settings', isExpanded: true },
-            { sectionKey: 'lookupFields', sectionName: 'Lookup Fields', isExpanded: true },
+            { sectionKey: 'senderSettings', sectionName: 'Sender Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSignatureRequests', sectionName: 'Signature Requests', isExpanded: false }
         ]);
