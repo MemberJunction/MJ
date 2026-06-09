@@ -33,6 +33,7 @@ vi.mock('openai', () => ({
 
 import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection } from '../models/openAIRealtime';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
+import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
 
 /**
  * In-memory fake connection: records every outbound `send`, lets tests fire server events to all
@@ -73,6 +74,51 @@ class TestableOpenAIRealtime extends OpenAIRealtime {
         return this.Fake;
     }
 }
+
+/** Driver subclass that captures the mint request and returns a fake ephemeral secret (no network). */
+class ClientDirectTestable extends OpenAIRealtime {
+    public MintBody: ClientSecretCreateParams | null = null;
+    protected override async mintClientSecret(body: ClientSecretCreateParams): Promise<ClientSecretCreateResponse> {
+        this.MintBody = body;
+        return {
+            value: 'ephem-secret-123',
+            expires_at: 1893456000,
+            session: { type: 'realtime' } as ClientSecretCreateResponse['session'],
+        };
+    }
+}
+
+describe('OpenAIRealtime client-direct (CreateClientSession)', () => {
+    it('advertises client-direct support', () => {
+        expect(new ClientDirectTestable('k').SupportsClientDirect).toBe(true);
+    });
+
+    it('mints a well-formed config carrying instructions, model, and tools', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession({
+            Model: 'gpt-realtime-2',
+            SystemPrompt: 'be the voice',
+            Tools: [{ Name: 'invoke-target-agent', Description: 'run target', ParametersSchema: { type: 'object' } }],
+        });
+        expect(cfg.Provider).toBe('openai');
+        expect(cfg.Model).toBe('gpt-realtime-2');
+        expect(cfg.EphemeralToken).toBe('ephem-secret-123');
+        expect(cfg.ExpiresAt).toBe(new Date(1893456000 * 1000).toISOString());
+        const sc = cfg.SessionConfig as Record<string, unknown>;
+        expect(sc.type).toBe('realtime');
+        expect(sc.model).toBe('gpt-realtime-2');
+        expect(sc.instructions).toBe('be the voice');
+        expect(Array.isArray(sc.tools)).toBe(true);
+        // The mint request carried the same server-controlled session config.
+        const sentSession = driver.MintBody?.session as Record<string, unknown> | undefined;
+        expect(sentSession?.instructions).toBe('be the voice');
+    });
+
+    it('omits tools when none are provided', async () => {
+        const cfg = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi' });
+        expect((cfg.SessionConfig as Record<string, unknown>).tools).toBeUndefined();
+    });
+});
 
 describe('OpenAIRealtime', () => {
     let driver: TestableOpenAIRealtime;

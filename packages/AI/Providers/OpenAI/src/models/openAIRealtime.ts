@@ -9,6 +9,7 @@ import {
     RealtimeUsage,
     JSONObject,
 } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 import type {
@@ -19,6 +20,30 @@ import type {
     RealtimeConversationItemUserMessage,
     RealtimeSessionCreateRequest,
 } from 'openai/resources/realtime/realtime';
+import type {
+    ClientSecretCreateParams,
+    ClientSecretCreateResponse,
+} from 'openai/resources/realtime/client-secrets';
+
+/**
+ * Maps Core {@link RealtimeToolDefinition}s up to OpenAI's native function-tool schema.
+ *
+ * The single mapping used everywhere a tool set is sent to the Realtime API: the live
+ * `session.update` path ({@link OpenAIRealtimeSession.mapTools}) and the client-direct
+ * ephemeral-secret path ({@link OpenAIRealtime.CreateClientSession}) both call this so the two
+ * topologies expose byte-for-byte identical tool schemas.
+ *
+ * @param tools The Core tool definitions to map.
+ * @returns The OpenAI realtime function-tool array.
+ */
+function mapRealtimeTools(tools: RealtimeToolDefinition[]): RealtimeFunctionTool[] {
+    return tools.map((tool) => ({
+        type: 'function',
+        name: tool.Name,
+        description: tool.Description,
+        parameters: tool.ParametersSchema,
+    }));
+}
 
 /**
  * Minimal connection surface the {@link OpenAIRealtime} driver depends on.
@@ -96,6 +121,55 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         const session = new OpenAIRealtimeSession(connection);
         session.applyInitialConfig(params);
         return session;
+    }
+
+    /**
+     * OpenAI supports the client-direct topology: the server mints a short-lived ephemeral
+     * client secret that the browser uses to open its OWN connection to OpenAI's Realtime API,
+     * while the server still controls the system prompt + tools via the returned SessionConfig.
+     */
+    public override get SupportsClientDirect(): boolean {
+        return true;
+    }
+
+    /**
+     * Mints the ephemeral client secret via OpenAI's Realtime client-secrets API. Overridable
+     * seam for testing — unit tests return a fake response so no network call is made.
+     *
+     * @param body The client-secret create request (carries the realtime session config).
+     * @returns The OpenAI client-secret create response (token value + expiry + echoed session).
+     */
+    protected async mintClientSecret(body: ClientSecretCreateParams): Promise<ClientSecretCreateResponse> {
+        return this._openAI.realtime.clientSecrets.create(body);
+    }
+
+    /**
+     * Mints an ephemeral, server-scoped realtime session credential for a browser to open its
+     * own provider connection (client-direct topology). The server builds the session config
+     * (system prompt + tools + model) so it retains control of behavior even though the browser
+     * owns the socket.
+     *
+     * @param params Session configuration (model, system prompt, tools).
+     * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
+     */
+    public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        const session: RealtimeSessionCreateRequest = {
+            type: 'realtime',
+            model: params.Model,
+            instructions: params.SystemPrompt,
+        };
+        if (params.Tools && params.Tools.length > 0) {
+            session.tools = mapRealtimeTools(params.Tools);
+        }
+        const response = await this.mintClientSecret({ session });
+        return {
+            Provider: 'openai',
+            Model: params.Model,
+            EphemeralToken: response.value,
+            ExpiresAt: new Date(response.expires_at * 1000).toISOString(),
+            // The provider-native session config the browser applies verbatim (plain JSON).
+            SessionConfig: JSON.parse(JSON.stringify(session)) as JSONObject,
+        };
     }
 }
 
@@ -291,14 +365,9 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.connection.send({ type: 'conversation.item.create', item });
     }
 
-    /** Maps Core tool definitions up to OpenAI's native function-tool schema. */
+    /** Maps Core tool definitions up to OpenAI's native function-tool schema (shared mapping). */
     private mapTools(tools: RealtimeToolDefinition[]): RealtimeFunctionTool[] {
-        return tools.map((tool) => ({
-            type: 'function',
-            name: tool.Name,
-            description: tool.Description,
-            parameters: tool.ParametersSchema,
-        }));
+        return mapRealtimeTools(tools);
     }
 
     // ---- Encoding helpers ----

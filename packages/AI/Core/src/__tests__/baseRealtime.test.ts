@@ -7,6 +7,7 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
+    ClientRealtimeSessionConfig,
 } from '../generic/baseRealtime';
 
 /**
@@ -122,6 +123,47 @@ describe('BaseRealtimeModel', () => {
             Tools: [sampleTool],
         })) as MockRealtimeSession;
         expect(session.RegisteredTools).toEqual([sampleTool]);
+    });
+});
+
+describe('BaseRealtimeModel client-direct capability', () => {
+    it('SupportsClientDirect defaults to false', () => {
+        const model = makeModel();
+        expect(model.SupportsClientDirect).toBe(false);
+    });
+
+    it('CreateClientSession throws "not supported" by default', async () => {
+        const model = makeModel();
+        await expect(model.CreateClientSession({ Model: 'm', SystemPrompt: 'sys' })).rejects.toThrow(
+            /does not support client-direct/
+        );
+    });
+
+    it('a provider may override SupportsClientDirect + CreateClientSession', async () => {
+        class ClientDirectModel extends BaseRealtimeModel {
+            public override get SupportsClientDirect(): boolean {
+                return true;
+            }
+            public async StartSession(): Promise<IRealtimeSession> {
+                return new MockRealtimeSession();
+            }
+            public override async CreateClientSession(
+                params: RealtimeSessionParams
+            ): Promise<ClientRealtimeSessionConfig> {
+                return {
+                    Provider: 'mock',
+                    Model: params.Model,
+                    EphemeralToken: 'ek_123',
+                    ExpiresAt: new Date(0).toISOString(),
+                    SessionConfig: { instructions: params.SystemPrompt },
+                };
+            }
+        }
+        const model = new ClientDirectModel('test-api-key');
+        expect(model.SupportsClientDirect).toBe(true);
+        const cfg = await model.CreateClientSession({ Model: 'gpt-realtime', SystemPrompt: 'be brief' });
+        expect(cfg.EphemeralToken).toBe('ek_123');
+        expect(cfg.SessionConfig).toEqual({ instructions: 'be brief' });
     });
 });
 

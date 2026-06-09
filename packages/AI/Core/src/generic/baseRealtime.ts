@@ -52,6 +52,84 @@ export abstract class BaseRealtimeModel extends BaseModel {
      * @returns A promise resolving to the live session handle.
      */
     public abstract StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession>;
+
+    /**
+     * Whether this driver can mint an ephemeral, server-scoped client credential for a
+     * **client-direct** realtime session (the browser opens its own provider socket using a
+     * short-lived token the server minted).
+     *
+     * Defaults to `false`. Providers that support browser-direct sessions override this to `true`
+     * and implement {@link CreateClientSession}. The server-bridged topology (where the provider
+     * socket lives on the server, via {@link StartSession}) is supported by every driver regardless
+     * of this flag.
+     *
+     * @returns `true` if {@link CreateClientSession} is supported; `false` otherwise.
+     */
+    public get SupportsClientDirect(): boolean {
+        return false;
+    }
+
+    /**
+     * Mints an ephemeral, server-scoped client credential plus a provider-native session config for
+     * a **client-direct** realtime session.
+     *
+     * In the client-direct topology the browser owns the provider socket (e.g. WebRTC), but the
+     * **server** still controls the prompt and tool set: it mints a short-lived token and hands back
+     * a {@link ClientRealtimeSessionConfig} whose `SessionConfig` the browser applies verbatim. This
+     * keeps prompt/tool authority server-side even though the media plane is client-direct.
+     *
+     * Not every provider supports this (some only expose a server-bridged socket), so this is a
+     * concrete method that throws by default rather than an abstract one — that would force every
+     * existing and future driver to implement it. Providers that support it override
+     * {@link SupportsClientDirect} to `true` and override this method.
+     *
+     * @param _params The session parameters (system prompt, tools, model, config bag).
+     * @returns A promise resolving to the minted {@link ClientRealtimeSessionConfig}.
+     * @throws Always, unless overridden by a provider that supports client-direct sessions.
+     */
+    public async CreateClientSession(_params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
+    }
+}
+
+/**
+ * The server-minted configuration a browser needs to open a **client-direct** realtime session.
+ *
+ * Returned by {@link BaseRealtimeModel.CreateClientSession}. The browser authenticates to the
+ * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} and applies
+ * {@link ClientRealtimeSessionConfig.SessionConfig} verbatim — so the server retains control of the
+ * prompt and tool set even though the browser owns the socket.
+ */
+export interface ClientRealtimeSessionConfig {
+    /**
+     * The provider that minted the credential (e.g. `'openai'`). Lets the browser select the
+     * correct provider-direct client implementation.
+     */
+    Provider: string;
+
+    /**
+     * The provider realtime model id the session is scoped to (e.g. `gpt-realtime`).
+     */
+    Model: string;
+
+    /**
+     * The short-lived client secret the browser presents to the provider to authenticate its
+     * direct session. Server-scoped and expiring (see {@link ClientRealtimeSessionConfig.ExpiresAt}).
+     */
+    EphemeralToken: string;
+
+    /**
+     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} expires.
+     */
+    ExpiresAt: string;
+
+    /**
+     * The provider-native session config the browser must apply when it opens its socket
+     * (instructions/system prompt, tools, audio formats, turn detection). Because the server builds
+     * this, prompt and tool authority stay server-side even in the client-direct topology. Typed as
+     * a JSON object so it stays serializable across the server→client boundary.
+     */
+    SessionConfig: JSONObject;
 }
 
 /**

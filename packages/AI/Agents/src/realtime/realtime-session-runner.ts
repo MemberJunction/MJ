@@ -30,76 +30,26 @@ import {
     RealtimeToolDefinition,
     JSONObject
 } from '@memberjunction/ai';
+import {
+    RealtimeToolBroker,
+    INVOKE_TARGET_AGENT_TOOL_NAME,
+    DelegateToTargetRequest,
+    DelegatedResult,
+    ToolExecutionResult,
+    RealtimeStatusLogger,
+    RealtimeErrorLogger
+} from './realtime-tool-broker';
 
-/**
- * The stable name of the primary tool every Voice Co-Agent registers with the realtime provider.
- *
- * Per the plan's design rule, the realtime-registered tool set is **target-independent**: the
- * co-agent always exposes this single `invoke-target-agent` tool, and the specific target is a
- * runtime parameter passed *inside* the call — never a different tool per target. This keeps the
- * provider contract identical across targets (and is what lets a pre-provisioned, fixed-tool
- * provider like Eleven Labs fit the same model later).
- */
-export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
-
-/**
- * A request to delegate work to the target agent, derived from an `invoke-target-agent` tool call.
- */
-export interface DelegateToTargetRequest {
-    /** The provider-assigned call ID, used to correlate the eventual tool result. */
-    CallID: string;
-    /**
-     * The raw arguments JSON string the model emitted for the call (e.g. the natural-language
-     * request to hand to the target agent). The delegate parses this into the target's expected
-     * input shape.
-     */
-    Arguments: string;
-    /**
-     * Abort signal owned by the runner for this specific delegated call. On barge-in
-     * ({@link IRealtimeSession.OnInterruption}), the runner aborts the controller behind this
-     * signal so a stale delegated result is never narrated into a conversation that has moved on.
-     */
-    AbortSignal: AbortSignal;
-}
-
-/**
- * The result of a delegated target-agent run, fed back to the realtime model as a tool response.
- */
-export interface DelegatedResult {
-    /** The provider call ID this result corresponds to. */
-    CallID: string;
-    /** Whether the delegated run completed successfully. */
-    Success: boolean;
-    /**
-     * The textual outcome to narrate (on success) or the error to surface (on failure). The
-     * driver feeds this back to the model as the `tool_response` so it can speak the outcome.
-     */
-    Output: string;
-}
-
-/**
- * A non-target tool call routed to the injected {@link RealtimeSessionRunnerDeps.ExecuteTool}
- * handler. This is any tool other than `invoke-target-agent` (e.g. a UI/control tool such as
- * `ShowChart`, or a fast server/client tool the co-agent was given directly).
- */
-export interface ToolExecutionResult {
-    /** The provider call ID this result corresponds to. */
-    CallID: string;
-    /** Whether the tool executed successfully. */
-    Success: boolean;
-    /** The textual result to feed back to the model as the tool response. */
-    Output: string;
-}
-
-/**
- * Verbose-aware status logging callback.
- */
-export type RealtimeStatusLogger = (message: string, verboseOnly?: boolean) => void;
-
-/**
- * Error logging callback.
- */
-export type RealtimeErrorLogger = (error: Error | string) => void;
+// Re-surface the shared tool-execution contract under this module so existing consumers and tests
+// keep their import paths. The single source of truth is `realtime-tool-broker.ts`.
+export {
+    INVOKE_TARGET_AGENT_TOOL_NAME,
+    DelegateToTargetRequest,
+    DelegatedResult,
+    ToolExecutionResult,
+    RealtimeStatusLogger,
+    RealtimeErrorLogger
+};
 
 /**
  * The injected collaborators that drive a realtime session.
@@ -199,8 +149,12 @@ export class RealtimeSessionRunner {
     /** Pending debounce timer handle for usage checkpoints. */
     private usageDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    /** The abort controller for the currently in-flight delegated run, if any. */
-    private currentDelegationController: AbortController | null = null;
+    /**
+     * The shared, topology-agnostic tool-execution path. The runner delegates all tool-call routing,
+     * abort-controller ownership, and result/error serialization to this broker so the server-bridged
+     * path executes a tool call identically to the client-direct relay path.
+     */
+    private toolBroker: RealtimeToolBroker;
 
     /** Count of transcript turns persisted, surfaced in the result. */
     private transcriptTurnCount = 0;
@@ -213,6 +167,12 @@ export class RealtimeSessionRunner {
      */
     constructor(deps: RealtimeSessionRunnerDeps) {
         this.deps = deps;
+        this.toolBroker = new RealtimeToolBroker({
+            DelegateToTarget: deps.DelegateToTarget,
+            ExecuteTool: deps.ExecuteTool,
+            LogStatus: deps.LogStatus,
+            LogError: deps.LogError
+        });
     }
 
     /**
@@ -308,88 +268,19 @@ export class RealtimeSessionRunner {
     }
 
     /**
-     * Routes a tool call by name: `invoke-target-agent` delegates to the target agent (with a
-     * fresh abort controller), every other tool routes to the injected tool executor.
+     * Routes a tool call through the shared {@link RealtimeToolBroker} and feeds its serialized
+     * result back to the model.
+     *
+     * The broker performs identical routing for both topologies (`invoke-target-agent` → delegate;
+     * everything else → the tool executor), owns the per-call abort controller, and serializes the
+     * success/error result. The runner only relays the broker's `ResultJson` over the live session
+     * via {@link IRealtimeSession.SendToolResult}.
      *
      * @param call The tool-call request emitted by the model.
      */
     private async handleToolCall(call: RealtimeToolCall): Promise<void> {
-        if (call.ToolName === INVOKE_TARGET_AGENT_TOOL_NAME) {
-            await this.handleInvokeTarget(call);
-        } else {
-            await this.handleOtherTool(call);
-        }
-    }
-
-    /**
-     * Delegates an `invoke-target-agent` call to the target agent.
-     *
-     * Creates and owns a fresh {@link AbortController} for this call so {@link handleInterruption}
-     * can cancel the in-flight delegated run on barge-in. Clears the current controller once the
-     * delegation settles.
-     *
-     * @param call The `invoke-target-agent` tool call.
-     */
-    private async handleInvokeTarget(call: RealtimeToolCall): Promise<void> {
-        const controller = new AbortController();
-        this.currentDelegationController = controller;
-        try {
-            const result = await this.deps.DelegateToTarget({
-                CallID: call.CallID,
-                Arguments: call.Arguments,
-                AbortSignal: controller.signal
-            });
-            await this.sendToolResult(call.CallID, result.Success, result.Output);
-        } catch (error) {
-            this.logError(error, 'delegating to target agent');
-            await this.sendToolError(call.CallID, error);
-        } finally {
-            // Only clear if this is still the active controller (a later delegation may have replaced it).
-            if (this.currentDelegationController === controller) {
-                this.currentDelegationController = null;
-            }
-        }
-    }
-
-    /**
-     * Routes a non-target tool call to the injected tool executor.
-     *
-     * @param call The tool call (any tool other than `invoke-target-agent`).
-     */
-    private async handleOtherTool(call: RealtimeToolCall): Promise<void> {
-        try {
-            const result = await this.deps.ExecuteTool(call);
-            await this.sendToolResult(call.CallID, result.Success, result.Output);
-        } catch (error) {
-            this.logError(error, `executing tool '${call.ToolName}'`);
-            await this.sendToolError(call.CallID, error);
-        }
-    }
-
-    /**
-     * Serializes a tool/delegation outcome to a JSON string and feeds it back to the model via
-     * {@link IRealtimeSession.SendToolResult} so the model can continue (and narrate) the turn.
-     *
-     * @param callID The originating tool call's id.
-     * @param success Whether the tool/delegation completed successfully.
-     * @param output The textual outcome (narration on success, error text on failure).
-     */
-    private async sendToolResult(callID: string, success: boolean, output: string): Promise<void> {
-        const resultJson = JSON.stringify({ success, output });
-        await this.dispatchToolResult(callID, resultJson, 'sending tool result');
-    }
-
-    /**
-     * Sends a structured error result back to the model so it can narrate the failure (consistent
-     * with the plan's spoken-error-handling) rather than leaving the tool call unanswered.
-     *
-     * @param callID The originating tool call's id.
-     * @param error The thrown error or message.
-     */
-    private async sendToolError(callID: string, error: unknown): Promise<void> {
-        const message = error instanceof Error ? error.message : String(error);
-        const resultJson = JSON.stringify({ success: false, error: message });
-        await this.dispatchToolResult(callID, resultJson, 'sending tool error result');
+        const executed = await this.toolBroker.ExecuteToolCall(call);
+        await this.dispatchToolResult(call.CallID, executed.ResultJson, 'sending tool result');
     }
 
     /**
@@ -471,10 +362,7 @@ export class RealtimeSessionRunner {
      */
     private handleInterruption(): void {
         this.deps.LogStatus?.('✋ Barge-in detected — aborting in-flight delegated run if any.', true);
-        if (this.currentDelegationController) {
-            this.currentDelegationController.abort();
-            this.currentDelegationController = null;
-        }
+        this.toolBroker.AbortInFlight();
     }
 
     /**
@@ -499,10 +387,7 @@ export class RealtimeSessionRunner {
         await this.flushUsage();
 
         // Abort any still-in-flight delegation before tearing down.
-        if (this.currentDelegationController) {
-            this.currentDelegationController.abort();
-            this.currentDelegationController = null;
-        }
+        this.toolBroker.AbortInFlight();
 
         let errorMessage: string | undefined;
         try {

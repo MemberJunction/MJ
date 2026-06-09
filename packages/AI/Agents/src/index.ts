@@ -43,6 +43,11 @@ export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
 export * from './ClientToolRequestManager';
 export * from './realtime/realtime-session-runner';
+// Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
+// DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
+// runner's `export *` above, so only the broker-specific symbols are named here to avoid a
+// duplicate-export collision.
+export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall } from './realtime/realtime-tool-broker';
 
 // Re-export from ai-reranker for backward compatibility
 export {

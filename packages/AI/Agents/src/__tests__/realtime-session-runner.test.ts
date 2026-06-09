@@ -222,6 +222,11 @@ describe('RealtimeSessionRunner', () => {
 
     // ── Tool-result round-trip (SendToolResult) ───────────────────────
 
+    // Drains all pending microtasks (real timers are active in this block) so the
+    // assertions don't depend on the exact number of async hops between OnToolCall
+    // and SendToolResult (the shared RealtimeToolBroker adds an await layer).
+    const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
     describe('tool-result round-trip', () => {
         it('sends the serialized delegated result back via SendToolResult after invoke-target', async () => {
             const h = buildHarness();
@@ -234,8 +239,7 @@ describe('RealtimeSessionRunner', () => {
                 Arguments: '{"request":"do work"}'
             });
             // Let the delegate promise and the subsequent SendToolResult hop settle.
-            await Promise.resolve();
-            await Promise.resolve();
+            await settle();
 
             expect(h.session.SentToolResults).toHaveLength(1);
             expect(h.session.SentToolResults[0].CallID).toBe('call-1');
@@ -249,8 +253,7 @@ describe('RealtimeSessionRunner', () => {
             await runner.Start();
 
             h.session.fireToolCall({ CallID: 'call-2', ToolName: 'ShowChart', Arguments: '{}' });
-            await Promise.resolve();
-            await Promise.resolve();
+            await settle();
 
             expect(h.session.SentToolResults).toHaveLength(1);
             expect(h.session.SentToolResults[0].CallID).toBe('call-2');
@@ -271,8 +274,7 @@ describe('RealtimeSessionRunner', () => {
                 ToolName: INVOKE_TARGET_AGENT_TOOL_NAME,
                 Arguments: '{}'
             });
-            await Promise.resolve();
-            await Promise.resolve();
+            await settle();
 
             expect(h.session.SentToolResults).toHaveLength(1);
             expect(h.session.SentToolResults[0].CallID).toBe('call-err');
@@ -289,8 +291,7 @@ describe('RealtimeSessionRunner', () => {
             await runner.Start();
 
             h.session.fireToolCall({ CallID: 'call-err2', ToolName: 'ShowChart', Arguments: '{}' });
-            await Promise.resolve();
-            await Promise.resolve();
+            await settle();
 
             expect(h.session.SentToolResults).toHaveLength(1);
             expect(h.session.SentToolResults[0].CallID).toBe('call-err2');
