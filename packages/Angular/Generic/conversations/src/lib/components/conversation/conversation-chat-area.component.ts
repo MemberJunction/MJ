@@ -352,19 +352,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Informational events (progress, shown notifications, session lifecycle)
   // stay as single emitters without a Before-pair.
   //
-  // WIRING STATUS (PR 2c):
-  //   All Before/After event emitters and SessionStarted/Ended events are
-  //   DECLARED in this commit so consumers can subscribe and depend on the
-  //   public surface. Actual firing wiring is deferred to follow-up commits
-  //   that touch the emission paths:
-  //     • beforeAgentTurn / afterAgentTurn — wire in message-input.component
-  //       around `agentService.processMessage()` (line ~1117).
-  //     • beforeToolInvoked / afterToolInvoked — wire to the runtime's
-  //       AgentClientSession tool-dispatch path.
-  //     • beforeResponseFormSubmitted / afterResponseFormSubmitted — wire
-  //       to message-item's response-form submission handler.
-  //     • session* — wire once PR #2787's SessionsObserver replaces the
-  //       no-op stub.
+  // WIRING STATUS:
+  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component
+  //     around `agentService.processMessage()` (re-emitted from chat-area).
+  //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
+  //     message-item.component's `onFormSubmitted()`, forwarded through
+  //     message-list to chat-area.
+  //   ✗ beforeToolInvoked / afterToolInvoked — DECLARED but firing requires
+  //     a `beforeDispatch` hook in AgentClientSession (the session executes
+  //     tools immediately when the ClientToolRequest subscription emits; no
+  //     cancellation hook exists today). Deferred to a runtime-side commit.
+  //   ✗ session* — DECLARED but the SessionsObserver is a no-op stub until
+  //     PR #2787 (ai-agent-sessions) lands.
 
   /** Cancelable — fired BEFORE a user message is sent to the agent. */
   @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();

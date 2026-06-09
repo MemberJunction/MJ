@@ -181,7 +181,9 @@
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
               (attachmentClicked)="onAttachmentClicked($event)"
               (diagnosticRequested)="onDiagnosticRequested($event)"
-              (messagePinToggled)="onMessagePinToggled($event)">
+              (messagePinToggled)="onMessagePinToggled($event)"
+              (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
+              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -221,6 +223,7 @@
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
+                    [applicationId]="applicationId"
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
                     [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
@@ -242,6 +245,8 @@
                     (conversationRenamed)="onConversationRenamed($event)"
                     (intentCheckStarted)="onIntentCheckStarted()"
                     (intentCheckCompleted)="onIntentCheckCompleted()"
+                    (beforeAgentTurn)="beforeAgentTurn.emit($event)"
+                    (afterAgentTurn)="afterAgentTurn.emit($event)"
                     (uploadStateChanged)="onUploadStateChanged($event)">
                   </mj-message-input>
                 }

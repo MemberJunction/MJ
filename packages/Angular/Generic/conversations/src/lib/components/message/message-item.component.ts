@@ -21,6 +21,10 @@ import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
+import {
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+} from '../../events/chat-events';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
@@ -104,6 +108,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * Cancelable — fired BEFORE the response form's values are sent back as a new
+   * conversation message. Listeners may set `event.Cancel = true` to halt the
+   * submission (e.g., a validation pass that finds required fields unfilled).
+   * When canceled, the corresponding {@link afterResponseFormSubmitted} event is
+   * NOT fired and `suggestedResponseSelected` is NOT emitted.
+   * Follows MJ's established Before/After cancelable event pattern.
+   */
+  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * Fired AFTER the response form's values have been submitted. Carries the form id
+   * (using the message ID as a stable per-message identifier) and the submitted
+   * values map. Not fired when {@link beforeResponseFormSubmitted} was canceled.
+   */
+  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -1267,6 +1288,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       };
     });
 
+    // ── PR 2c follow-up: Before/After cancelable event wiring ──
+    // Emit beforeResponseFormSubmitted so consumers can veto (e.g., a validation
+    // pass that finds required fields unfilled). Cancel propagates synchronously
+    // through the message-list + chat-area re-emit bindings, so by the time .emit()
+    // returns, event.Cancel reflects every subscriber's final answer. We use the
+    // message ID as the form id — each AgentResponseForm is attached to exactly
+    // one message, giving a stable per-message identifier.
+    const beforeEvent = new BeforeResponseFormSubmittedEventArgs(this.message.ID, formData);
+    this.beforeResponseFormSubmitted.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
+      return;
+    }
+
     // Create formatted message using ConversationUtility
     const formMessage = ConversationUtility.CreateFormResponse(
       'formSubmit', // Generic action name
@@ -1279,6 +1313,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       text: formMessage,
       customInput: undefined // No longer needed with new format
     });
+
+    this.afterResponseFormSubmitted.emit(
+      new AfterResponseFormSubmittedEventArgs(this.message.ID, formData)
+    );
   }
 
   /**

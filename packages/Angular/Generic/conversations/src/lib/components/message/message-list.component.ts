@@ -18,6 +18,10 @@ import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@m
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
+import {
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+} from '../../events/chat-events';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { selectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
@@ -57,6 +61,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /** Forwarded from MessageItemComponent — see its docs. */
+  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  /** Forwarded from MessageItemComponent — see its docs. */
+  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -267,6 +276,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
           instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
           instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
+          instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.beforeResponseFormSubmitted.emit(e));
+          instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.afterResponseFormSubmitted.emit(e));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {
