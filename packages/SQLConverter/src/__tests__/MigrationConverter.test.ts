@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertMigration, extractKeptTSQL } from '../MigrationConverter.js';
+import { convertMigration, extractKeptTSQL, type TSQLToPGTranspiler } from '../MigrationConverter.js';
 
 const codegenItem = (title: string, body: string) =>
   [
@@ -10,36 +10,54 @@ const codegenItem = (title: string, body: string) =>
     body,
   ].join('\n');
 
+/**
+ * Passthrough stub — returns the kept T-SQL verbatim so tests can assert on what
+ * classification fed the transpiler, without a Python runtime. The real
+ * implementation is MJPostgresTranspiler in @memberjunction/sqlglot-ts.
+ */
+const passthrough: TSQLToPGTranspiler = {
+  transpile: async (tsql) => ({ sql: tsql.split(/\nGO\n/), unhandled: [] }),
+};
+
 describe('convertMigration', () => {
-  it('transpiles regular DDL and drops the CodeGen block', () => {
+  it('transpiles regular DDL and drops the CodeGen block', async () => {
     const sql = [
       'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
       codegenItem('spCreate SQL for Widget', 'CREATE PROCEDURE [__mj].[spCreateWidget] AS BEGIN SELECT 1 END'),
     ].join('\n');
 
-    const r = convertMigration(sql, 'V_Widget.sql');
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
     expect(r.status).toBe('converted');
     // CodeGen sproc must not appear in the PG output — it is regenerated, not translated.
     expect(r.pgSQL).not.toContain('spCreateWidget');
     expect(r.droppedCodeGenLines).toBeGreaterThan(0);
-    // Regular DDL was transpiled (brackets removed → PG identifiers).
+    // Regular DDL was fed to the transpiler.
     expect(r.pgSQL).toContain('Widget');
     expect(r.notes.some((n) => n.includes('regenerated natively'))).toBe(true);
   });
 
-  it('flags a file with hand-written procedural SQL as needs-hand-authoring', () => {
+  it('throws when kept T-SQL exists but no transpiler was provided (content is never dropped)', async () => {
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    await expect(convertMigration(sql, 'V_Widget.sql')).rejects.toThrow(/transpiler/);
+  });
+
+  it('emits transpiled DDL AND flags the file when hand-written procedural SQL is present', async () => {
+    // Regression (ClusterAnalysisCluster lesson): a needs-hand file must still emit its
+    // schema DDL — only the routines are gaps, not the whole file.
     const sql = [
       'CREATE TABLE __mj.Job (ID INT);',
       'GO',
       'CREATE OR ALTER PROCEDURE __mj.spClaimJob AS BEGIN UPDATE __mj.Job SET X=1; END;',
     ].join('\n');
-    const r = convertMigration(sql, 'Scheduling_Engine_Atomic_Sprocs.sql');
+    const r = await convertMigration(sql, 'Scheduling_Engine_Atomic_Sprocs.sql', { transpiler: passthrough });
     expect(r.status).toBe('needs-hand-authoring');
     expect(r.pgSQL).toContain('NEEDS HAND-AUTHORING');
-    expect(r.notes[0]).toContain('hand-written procedural SQL');
+    expect(r.handProcedural.length).toBeGreaterThan(0);
+    // The CREATE TABLE was NOT discarded along with the routine.
+    expect(r.pgSQL).toContain('CREATE TABLE');
   });
 
-  it('treats a pure mj-sync Metadata_Sync file as reseed-or-regen-only (no DDL emitted)', () => {
+  it('treats a pure mj-sync Metadata_Sync file as reseed-or-regen-only (no DDL emitted)', async () => {
     const sql = [
       '-- SQL Logging Session',
       '-- Description: MetadataSync push operation',
@@ -47,14 +65,14 @@ describe('convertMigration', () => {
       "SET @Name_da319a9d = 'GPT';",
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
-    const r = convertMigration(sql, 'V_Metadata_Sync.sql');
+    const r = await convertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).toContain('mj sync push');
     // No spCreate call carried into the PG output — it is re-seeded, not transpiled.
     expect(r.pgSQL).not.toContain('spCreateAIModel');
   });
 
-  it('keeps an mj-sync file as reseed even when it contains incidental data DML (not schema DDL)', () => {
+  it('keeps an mj-sync file as reseed even when it contains incidental data DML (not schema DDL)', async () => {
     // Regression: a 964k-line Metadata_Sync file was mis-routed to "converted"
     // because an INSERT/UPDATE matched the DDL regex. Data DML in an mj-sync file
     // is the metadata seed itself — reproduced by `mj sync push`, never transpiled.
@@ -65,26 +83,140 @@ describe('convertMigration', () => {
       'UPDATE __mj.AIModel SET Name = @Name_da319a9d WHERE ID = 1;',
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
-    const r = convertMigration(sql, 'V202604271430__Metadata_Sync.sql');
+    const r = await convertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).not.toContain('spCreateAIModel');
   });
 
-  it('transpiles a Backfill_* data migration (data DML, no mj-sync fingerprints)', () => {
+  it('keeps an mj-sync file as reseed when a multi-line string literal contains DDL-looking text', async () => {
+    // Regression: stripCommentsPreservingLines reset its in-string state per line, so a
+    // prompt-template literal spanning lines whose content mentions "ALTER TABLE" was
+    // scanned as code → schema-ddl finding → the whole metadata seed was mis-routed to
+    // the transpiler (live corpus hit: V202605021448 Metadata_Sync, 14k lines).
+    const sql = [
+      '-- SQL Logging Session',
+      '-- Description: MetadataSync push operation',
+      "SET @Description_da319a9d = N'This template shows how to",
+      'CREATE TABLE Foo and ALTER TABLE Bar in SQL.',
+      "End of template';",
+      'EXEC __mj.spUpdateAIPrompt @Description = @Description_da319a9d;',
+    ].join('\n');
+    const r = await convertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: passthrough });
+    expect(r.status).toBe('reseed-or-regen-only');
+    expect(r.pgSQL).not.toContain('spUpdateAIPrompt');
+  });
+
+  it('transpiles a Backfill_* data migration (data DML, no mj-sync fingerprints)', async () => {
     const sql = "UPDATE __mj.UserView SET ViewTypeID = 'x' WHERE ViewTypeID IS NULL;";
-    const r = convertMigration(sql, 'V_Backfill_UserView_ViewTypeID.sql');
+    const r = await convertMigration(sql, 'V_Backfill_UserView_ViewTypeID.sql', { transpiler: passthrough });
     expect(r.status).toBe('converted');
   });
 
-  it('treats a pure CodeGen-only file as reseed-or-regen-only', () => {
+  it('treats a pure CodeGen-only file as reseed-or-regen-only', async () => {
     const sql = [
       '-- regen only',
       codegenItem('spDelete SQL for Foo', 'CREATE PROCEDURE __mj.spDeleteFoo AS BEGIN DELETE FROM __mj.Foo END'),
     ].join('\n');
-    const r = convertMigration(sql, 'spDelete_Force_Regen.sql');
+    const r = await convertMigration(sql, 'spDelete_Force_Regen.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).not.toContain('spDeleteFoo');
     expect(r.pgSQL).toContain('mj codegen');
+  });
+
+  it('recovers entity-registration INSERTs through the convertMigration path (not just extractKeptTSQL)', async () => {
+    // Regression: the registration-recovery fix originally landed only in extractKeptTSQL;
+    // the CLI path (convertMigration) had a copy-pasted routing that skipped it, so new
+    // entities (KnowledgeHub) never registered on PG. Single classification path now.
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      '-- CODE GEN RUN',
+      '/* SQL generated to create new entity MJ: Widgets */',
+      "INSERT INTO [${flyway:defaultSchema}].[Entity] ([ID],[Name]) VALUES ('aaaa', 'MJ: Widgets');",
+    ].join('\n');
+    const r = await convertMigration(sql, 'V_Widgets_Feature.sql', { transpiler: passthrough });
+    expect(r.status).toBe('converted');
+    expect(r.pgSQL).toContain("'MJ: Widgets'");
+  });
+
+  it('substitutes the flyway schema macro in the final output', async () => {
+    const sql = 'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    expect(r.pgSQL).toContain('__mj');
+  });
+
+  it('embeds transpiler-unhandled statements as gap comments and reports them', async () => {
+    const reporting: TSQLToPGTranspiler = {
+      transpile: async () => ({
+        sql: ['CREATE TABLE __mj."T" ("ID" UUID NOT NULL)'],
+        unhandled: [{ kind: 'Command', snippet: 'EXEC sp_rename ...' }],
+      }),
+    };
+    const sql = 'CREATE TABLE [__mj].[T] ([ID] UNIQUEIDENTIFIER NOT NULL);\nGO\nEXEC sp_rename ...;';
+    const r = await convertMigration(sql, 'V_Rename.sql', { transpiler: reporting });
+    expect(r.unhandled).toHaveLength(1);
+    expect(r.pgSQL).toContain('UNHANDLED BY THE AST TRANSPILER');
+    expect(r.pgSQL).toContain('sp_rename');
+  });
+});
+
+describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
+  const snapshot = (...batches: string[]) => batches.join('\nGO\n');
+
+  it('keeps unknown batches so the transpiler decides (never silently dropped)', () => {
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];', // codegen-object → triggers statement mode
+      "EXEC sp_rename '__mj.T.Old', 'New', 'COLUMN';", // unknown
+    );
+    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    expect(kept.tsql).toContain('sp_rename');
+    expect(kept.tsql).not.toContain('vwTs');
+    expect(kept.droppedObjects.some((o) => o.includes('vwTs'))).toBe(true);
+  });
+
+  it('keeps DECLARE-led batches (real seed statements, not noise)', () => {
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      "DECLARE @ID UNIQUEIDENTIFIER = 'aaaa'; INSERT INTO [__mj].[CustomThing] ([ID]) VALUES (@ID);",
+    );
+    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    expect(kept.tsql).toContain('CustomThing');
+  });
+
+  it('keeps allowlisted hand-written views despite the codegen vw* naming convention', () => {
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE VIEW [__mj].[vwEntitiesWithExternalChangeTracking] AS SELECT 1 AS X;',
+    );
+    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    expect(kept.tsql).toContain('vwEntitiesWithExternalChangeTracking');
+    expect(kept.tsql).not.toContain('[vwTs]');
+  });
+
+  it('keeps hand-procedural batches in the stream and flags the file', () => {
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE PROCEDURE [__mj].[GetWeirdStuff] AS BEGIN SELECT 1 END;',
+    );
+    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    expect(kept.status).toBe('needs-hand-authoring');
+    expect(kept.handProcedural.some((h) => h.includes('GetWeirdStuff'))).toBe(true);
+    expect(kept.tsql).toContain('GetWeirdStuff');
+  });
+
+  it('reports dropped metadata DML in the notes (audit trail)', () => {
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      "INSERT INTO [__mj].[Entity] ([ID],[Name]) VALUES ('aaaa','T');",
+    );
+    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    expect(kept.notes[0]).toMatch(/1 metadata DML/);
   });
 });
 
@@ -131,6 +263,22 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
     expect(kept.tsql).not.toMatch(/INSERT\s+INTO\s+\[\$\{flyway:defaultSchema\}\]\.\[Widget\]\s*\(/i);
     expect(kept.tsql).not.toContain('CREATE VIEW');
     expect(kept.tsql).not.toContain('GRANT SELECT');
+  });
+
+  it('recovers registration rows in a needs-hand file too (not skipped by the early return)', () => {
+    // Regression: the needs-hand path returned before recovery ran, silently excluding
+    // registration rows below the banner (live hit: IsComputed_To_EntityField).
+    const sql = [
+      'CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[DoCustomMaintenance] AS BEGIN SELECT 1 END;',
+      'GO',
+      '-- CODE GEN RUN',
+      '/* SQL text to insert new entity field */',
+      "IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cccc') BEGIN " +
+        "INSERT INTO [${flyway:defaultSchema}].[EntityField] ([ID],[Name]) VALUES ('cccc','IsComputed'); END",
+    ].join('\n');
+    const kept = extractKeptTSQL(sql, 'V_Add_IsComputed.sql');
+    expect(kept.status).toBe('needs-hand-authoring');
+    expect(kept.tsql).toContain('IsComputed');
   });
 
   it('truncates a registration batch that bundles a view regeneration without a GO separator', () => {

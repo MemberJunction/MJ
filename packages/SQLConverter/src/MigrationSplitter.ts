@@ -221,10 +221,14 @@ function addFindingOnce(
 function stripCommentsPreservingLines(lines: string[]): string[] {
   const out: string[] = [];
   let inBlockComment = false;
+  // T-SQL string literals span lines (mj-sync seeds embed whole prompt templates),
+  // so the in-string state must persist across lines exactly like block comments —
+  // otherwise literal content containing "ALTER TABLE"/"CREATE TABLE" text is
+  // scanned as code and misclassifies the file.
+  let inString = false;
 
   for (const raw of lines) {
     let result = '';
-    let inString = false;
     let i = 0;
     while (i < raw.length) {
       const two = raw.slice(i, i + 2);

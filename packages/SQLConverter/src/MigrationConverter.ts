@@ -4,132 +4,161 @@
  *
  * See `plans/pg-migration-architecture/SPLIT_AND_REGENERATE_PROPOSAL.md`.
  *
- * It does NOT try to translate everything. It uses `MigrationSplitter` to route
- * content by which generator produced it:
+ * It does NOT try to translate everything. Content is routed by which generator
+ * produced it:
  *   - Category A (CodeGen objects)      → DROPPED; regenerated natively by `mj codegen` on PG.
  *   - Category M (mj-sync metadata)     → DROPPED; re-seeded by `mj sync push` on PG.
- *   - Category B (regular hand DDL/DML) → transpiled via the existing rule pipeline.
- *   - Category C (hand-written procedural SQL) → file is flagged for human authoring.
+ *   - Category B (regular hand DDL/DML) → transpiled via the AST dialect (sqlglot `mj_postgres.py`).
+ *   - Category C (hand-written procedural SQL) → schema DDL still transpiled; the
+ *     procedural routines are surfaced as NEEDS-HAND-AUTHORING gaps.
  *
- * The output `.pg.sql` therefore contains only the transpiled Category-B content
- * (plus a header documenting what was regenerated/re-seeded). The assemble step
- * (apply DDL → `mj codegen` → `mj sync push` → diff) lives in the pipeline driver,
- * not here.
+ * The contract of this module is **nothing is dropped silently**: every statement
+ * either (a) lands in the transpiled output, (b) is dropped because a generator
+ * reproduces it natively on PG (counted + named in `notes`/`droppedObjects`), or
+ * (c) is surfaced as a gap (`unhandled` / `handProcedural`, embedded as comments in
+ * the output). Gap consumers — a human build engineer or an LLM last-mile pass —
+ * work from those artifacts.
+ *
+ * Classification (TypeScript, this file + MigrationSplitter/MigrationStatementSplitter)
+ * is deliberately separated from transpilation (the Python AST dialect), bridged by
+ * the `TSQLToPGTranspiler` interface so classification stays unit-testable without
+ * a Python runtime.
  */
-import { splitMigration, type MigrationSplitResult } from './MigrationSplitter.js';
-import { splitByStatement, type StatementBatch } from './MigrationStatementSplitter.js';
-import { convertFile, getTSQLToPostgresRules } from './rules/index.js';
-import type { ConversionStats } from './rules/types.js';
+import { splitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
+import { splitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
   | 'converted'
   /** File is purely regenerated/re-seeded — no DDL to translate; `pgSQL` is a marker only. */
   | 'reseed-or-regen-only'
-  /** File contains hand-written procedural SQL — needs a human-authored `.pg.sql`. */
+  /** File contains hand-written procedural SQL — transpiled DDL is emitted, but a human must author the routines. */
   | 'needs-hand-authoring';
 
-export interface MigrationConversionResult {
-  fileName: string;
-  status: ConversionStatus;
-  /** The `.pg.sql` body to write. For non-`converted` statuses this is a marker comment. */
-  pgSQL: string;
-  /** The underlying split (boundary, regions, routing) for transparency/reporting. */
-  split: MigrationSplitResult;
-  /** Conversion stats from the rule pipeline, when Category-B content was transpiled. */
-  conversionStats?: ConversionStats;
-  /** Lines of Category-A CodeGen output dropped (regenerated natively instead). */
-  droppedCodeGenLines: number;
-  /** Human-readable notes describing what happened to each category. */
-  notes: string[];
+/** One statement the AST transpiler refused to emit — a reported gap. */
+export interface UnhandledStatement {
+  /** What the dialect saw (e.g. 'Command', 'Declare', 'sys-guard'). */
+  kind: string;
+  /** The offending T-SQL (possibly truncated by the dialect). */
+  snippet: string;
 }
 
-export interface ConvertMigrationOptions {
-  /** Target schema for the rule pipeline (default '__mj'). */
-  schema?: string;
-  /** Emit the standard `.pg.sql` provenance header (default true). */
-  includeHeader?: boolean;
+/** Result of transpiling kept T-SQL to PostgreSQL. */
+export interface MJTranspileResult {
+  /** The emitted PostgreSQL statements, in order. */
+  sql: string[];
+  /** Per-statement T-SQL the transpiler refused to emit — the gap report. */
+  unhandled: UnhandledStatement[];
 }
 
 /**
- * Convert one SQL Server migration to its PG form via split-and-regenerate.
- * Pure function — no I/O. The caller decides whether/where to write `pgSQL`.
+ * The transpiler seam between classification (TS) and AST transpilation (Python
+ * sqlglot dialect). Production implementation: `MJPostgresTranspiler` in
+ * `@memberjunction/sqlglot-ts`. Tests inject a stub.
  */
-export function convertMigration(
-  sql: string,
-  fileName: string,
-  options: ConvertMigrationOptions = {},
-): MigrationConversionResult {
-  const split = splitMigration(sql, fileName);
-  const droppedCodeGenLines = split.codeGenBlock ? split.codeGenBlock.split('\n').length : 0;
-
-  // Baselines and old-style migrations have NO banner but DO contain generated
-  // objects (squashed snapshots). Banner-based splitting can't separate them — use
-  // statement-level classification instead (keep tables/indexes/comments, drop the
-  // codegen/metadata, flag hand-written routines).
-  const stmts = splitByStatement(sql);
-  const isUnbanneredSnapshot =
-    split.boundaryMethod === 'no-codegen-block' && stmts.some((s) => s.kind === 'codegen-object');
-  if (isUnbanneredSnapshot) {
-    return buildStatementModeResult(split, stmts, options);
-  }
-
-  if (split.routing === 'needs-hand-authoring') {
-    return buildHandAuthoringResult(split, droppedCodeGenLines);
-  }
-
-  const has = (k: string) => split.handAuthoredRegions.some((r) => r.kind === k);
-  // Transpile when there is real schema DDL, or data DML that isn't an mj-sync seed.
-  // Otherwise the file is entirely CodeGen objects and/or mj-sync metadata → regen/reseed.
-  const translatable = has('schema-ddl') || (has('data-dml') && !has('metadata-sync'));
-  if (!translatable) {
-    return buildRegenOnlyResult(split, droppedCodeGenLines);
-  }
-
-  return buildConvertedResult(split, droppedCodeGenLines, options);
+export interface TSQLToPGTranspiler {
+  transpile(tsql: string): Promise<MJTranspileResult>;
 }
 
 /**
  * The kept (T-SQL, NOT yet transpiled) content of a migration after classification —
  * codegen objects and mj-sync metadata dropped, hand-procedural flagged. This is the
- * input handed to the AST dialect (`mj_postgres.py`) for transpilation, keeping
- * classification (TS) and transpilation (AST) cleanly separated.
+ * single source of truth for what survives the split; `convertMigration` consumes it.
  */
 export interface KeptTSQL {
   fileName: string;
   status: ConversionStatus;
-  /** The kept SQL-Server SQL to transpile (schema DDL + comments). '' when nothing to keep. */
+  /** The kept SQL-Server SQL to transpile. '' when nothing to keep. */
   tsql: string;
-  /** Hand-written routines that need a human PG version (names). */
+  /** Hand-written routines that need a human PG version (names/evidence). */
   handProcedural: string[];
+  /** Names of objects dropped for native regeneration (audit trail; statement mode). */
+  droppedObjects: string[];
+  /** Human-readable notes describing what was dropped/kept and why. */
+  notes: string[];
+  /** The underlying banner split (boundary, regions, routing) for transparency. */
+  split: MigrationSplitResult;
+  /** Lines of Category-A CodeGen output dropped (regenerated natively instead). */
+  droppedCodeGenLines: number;
 }
 
-/** Classify a migration and return the kept T-SQL to transpile — the AST-path entry point. */
+export interface MigrationConversionResult {
+  fileName: string;
+  status: ConversionStatus;
+  /** The `.pg.sql` body to write. For `reseed-or-regen-only` this is a marker comment. */
+  pgSQL: string;
+  /** The underlying split (boundary, regions, routing) for transparency/reporting. */
+  split: MigrationSplitResult;
+  /** Lines of Category-A CodeGen output dropped (regenerated natively instead). */
+  droppedCodeGenLines: number;
+  /** Per-statement T-SQL the AST dialect refused to emit — also embedded as gap comments in `pgSQL`. */
+  unhandled: UnhandledStatement[];
+  /** Hand-written routines needing a human PG version — also embedded as gap comments. */
+  handProcedural: string[];
+  /** Names of objects dropped as codegen-regenerated (audit trail). */
+  droppedObjects: string[];
+  /** Human-readable notes describing what happened to each category. */
+  notes: string[];
+}
+
+export interface ConvertMigrationOptions {
+  /** Target schema substituted for `${flyway:defaultSchema}` in the output (default '__mj'). */
+  schema?: string;
+  /** Emit the standard `.pg.sql` provenance header (default true). */
+  includeHeader?: boolean;
+  /**
+   * The AST transpiler. Required whenever the migration has kept T-SQL to translate;
+   * pure regen/reseed files convert without it.
+   */
+  transpiler?: TSQLToPGTranspiler;
+}
+
+/** Statement kinds that survive statement-mode classification and flow to the transpiler. */
+const STATEMENT_MODE_KEEP: ReadonlySet<StatementKind> = new Set<StatementKind>([
+  'schema-ddl',
+  'comment',
+  'role-setup',
+  // Unclassifiable batches are NEVER silently dropped — the AST transpiler either
+  // emits them or reports them in `unhandled`.
+  'unknown',
+  // Hand routines stay in the stream too: the dialect transpiles any plain DDL around
+  // them and routes the routine bodies to `unhandled`, while we flag the file.
+  'hand-procedural',
+]);
+
+/** Classify a migration and return the kept T-SQL to transpile — the single classification entry point. */
 export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   const split = splitMigration(sql, fileName);
+  const droppedCodeGenLines = split.codeGenBlock ? split.codeGenBlock.split('\n').length : 0;
+
+  // Baselines and old-style migrations have NO banner but DO contain generated
+  // objects (squashed snapshots). Banner-based splitting can't separate them — use
+  // statement-level classification instead.
   const stmts = splitByStatement(sql);
   const isUnbanneredSnapshot =
     split.boundaryMethod === 'no-codegen-block' && stmts.some((s) => s.kind === 'codegen-object');
-
   if (isUnbanneredSnapshot) {
-    const KEEP = new Set(['schema-ddl', 'comment', 'role-setup']);
-    const kept = stmts.filter((s) => KEEP.has(s.kind)).map((s) => s.sql);
-    const hand = stmts.filter((s) => s.kind === 'hand-procedural').map((s) => s.evidence);
-    return {
-      fileName,
-      status: hand.length ? 'needs-hand-authoring' : 'converted',
-      tsql: kept.join('\nGO\n'),
-      handProcedural: hand,
-    };
+    return classifyStatementMode(split, stmts, droppedCodeGenLines);
   }
 
-  if (split.routing === 'needs-hand-authoring') {
-    const hand = split.handAuthoredRegions.filter((r) => r.kind === 'hand-procedural').map((r) => `${r.evidence}@${r.line}`);
-    return { fileName, status: 'needs-hand-authoring', tsql: split.handAuthored, handProcedural: hand };
-  }
+  return classifyBannerMode(split, droppedCodeGenLines);
+}
 
-  const has = (k: string) => split.handAuthoredRegions.some((r) => r.kind === k);
-  const translatable = has('schema-ddl') || (has('data-dml') && !has('metadata-sync'));
+/** Banner-split path: feature migrations with (or without) a CodeGen block. */
+function classifyBannerMode(split: MigrationSplitResult, droppedCodeGenLines: number): KeptTSQL {
+  const has = (k: MigrationRegionKind) => split.handAuthoredRegions.some((r) => r.kind === k);
+  const handProcedural =
+    split.routing === 'needs-hand-authoring'
+      ? split.handAuthoredRegions
+          .filter((r) => r.kind === 'hand-procedural')
+          .map((r) => `${r.evidence}@${r.line}`)
+      : [];
+
+  // Transpile when there is real schema DDL, data DML that isn't an mj-sync seed, or
+  // hand-procedural content (whose surrounding DDL must still be emitted — the dialect
+  // routes the routine bodies themselves to `unhandled`).
+  const translatable =
+    handProcedural.length > 0 || has('schema-ddl') || (has('data-dml') && !has('metadata-sync'));
 
   // Recover entity-REGISTRATION INSERTs from the dropped CodeGen block. On SQL Server,
   // CodeGen's schema-introspection sprocs (spUpdateExistingEntitiesFromSchema, …) recreate
@@ -141,18 +170,188 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   // below an explicit `-- CODE GEN RUN` banner (e.g. KnowledgeHub) never gets them to the
   // transpiler, because the splitter routes the whole post-banner block to codeGenBlock.
   // Files with no banner (e.g. Magic_Link) keep these registration INSERTs inline already;
-  // this recovery makes the bannered case match. Scope is the registration table set that
-  // survives in the no-banner path — NOT base-table seed rows or generated views/sprocs.
+  // this recovery makes the bannered case match — and applies to needs-hand files too
+  // (e.g. IsComputed_To_EntityField, whose registration rows sit below the banner).
   const recovered = split.codeGenBlock ? recoverEntityRegistrationInserts(split.codeGenBlock) : '';
   const baseTsql = translatable ? split.handAuthored : '';
   const tsql = recovered ? (baseTsql ? `${baseTsql}\nGO\n${recovered}` : recovered) : baseTsql;
 
+  const notes = regenReseedNotes(split, droppedCodeGenLines);
+  if (recovered) {
+    notes.push('Recovered entity-registration INSERTs from the dropped CodeGen block (no PG-side introspection recreates them).');
+  }
+
   return {
-    fileName,
-    status: tsql ? 'converted' : 'reseed-or-regen-only',
+    fileName: split.fileName,
+    status: handProcedural.length > 0 ? 'needs-hand-authoring' : tsql ? 'converted' : 'reseed-or-regen-only',
     tsql,
-    handProcedural: [],
+    handProcedural,
+    droppedObjects: [],
+    notes,
+    split,
+    droppedCodeGenLines,
   };
+}
+
+/** Statement-mode path: unbannered snapshots (baselines) classified per GO batch. */
+function classifyStatementMode(
+  split: MigrationSplitResult,
+  stmts: StatementBatch[],
+  droppedCodeGenLines: number,
+): KeptTSQL {
+  const kept = stmts.filter((s) => STATEMENT_MODE_KEEP.has(s.kind));
+  const hand = stmts.filter((s) => s.kind === 'hand-procedural');
+  const unknown = stmts.filter((s) => s.kind === 'unknown');
+  const droppedRegen = stmts.filter((s) => s.kind === 'codegen-object' || s.kind === 'grant');
+  const droppedMeta = stmts.filter((s) => s.kind === 'metadata-dml');
+
+  const notes = [
+    `Statement-mode (unbannered snapshot): kept ${kept.length} batches ` +
+      `(schema DDL/comments/roles, ${unknown.length} unclassified → transpiler decides), ` +
+      `dropped ${droppedRegen.length} CodeGen objects/grants (regenerated by \`mj codegen\`) and ` +
+      `${droppedMeta.length} metadata DML batches (re-seeded by \`mj sync push\`).`,
+  ];
+  if (hand.length > 0) {
+    notes.push(
+      `⚠ ${hand.length} hand-written routine(s) need a human PG version: ` +
+        hand.map((h) => h.evidence).slice(0, 20).join(', '),
+    );
+  }
+
+  return {
+    fileName: split.fileName,
+    status: hand.length > 0 ? 'needs-hand-authoring' : 'converted',
+    tsql: kept.map((s) => s.sql).join('\nGO\n'),
+    handProcedural: hand.map((h) => h.evidence),
+    droppedObjects: droppedRegen.map((s) => s.evidence),
+    notes,
+    split,
+    droppedCodeGenLines: droppedRegen.concat(droppedMeta).reduce((n, s) => n + s.sql.split('\n').length, 0),
+  };
+}
+
+/**
+ * Convert one SQL Server migration to its PG form via split-and-regenerate.
+ * No file I/O — the caller decides whether/where to write `pgSQL`.
+ *
+ * Classification comes from `extractKeptTSQL` (the single source of truth);
+ * transpilation goes through `options.transpiler` (the AST dialect). Throws when
+ * kept T-SQL exists but no transpiler was provided — content is never dropped
+ * because a backend was missing.
+ */
+export async function convertMigration(
+  sql: string,
+  fileName: string,
+  options: ConvertMigrationOptions = {},
+): Promise<MigrationConversionResult> {
+  const kept = extractKeptTSQL(sql, fileName);
+
+  if (!kept.tsql.trim()) {
+    return {
+      fileName: kept.fileName,
+      status: kept.status,
+      pgSQL: regenOnlyMarker(kept),
+      split: kept.split,
+      droppedCodeGenLines: kept.droppedCodeGenLines,
+      unhandled: [],
+      handProcedural: kept.handProcedural,
+      droppedObjects: kept.droppedObjects,
+      notes: kept.notes,
+    };
+  }
+
+  if (!options.transpiler) {
+    throw new Error(
+      `convertMigration: ${fileName} has kept T-SQL to translate but no transpiler was provided. ` +
+        'Pass options.transpiler (e.g. MJPostgresTranspiler from @memberjunction/sqlglot-ts).',
+    );
+  }
+
+  const transpiled = await options.transpiler.transpile(kept.tsql);
+  const schema = options.schema ?? '__mj';
+  const pgSQL = assemblePgSQL(kept, transpiled, schema, options.includeHeader ?? true);
+
+  return {
+    fileName: kept.fileName,
+    status: kept.status,
+    pgSQL,
+    split: kept.split,
+    droppedCodeGenLines: kept.droppedCodeGenLines,
+    unhandled: transpiled.unhandled,
+    handProcedural: kept.handProcedural,
+    droppedObjects: kept.droppedObjects,
+    notes: kept.notes,
+  };
+}
+
+/** Assemble the final `.pg.sql` text: header, gap comments, transpiled body. */
+function assemblePgSQL(
+  kept: KeptTSQL,
+  transpiled: MJTranspileResult,
+  schema: string,
+  includeHeader: boolean,
+): string {
+  const parts: string[] = [];
+  if (includeHeader) parts.push(pgHeader(kept.fileName));
+
+  const gaps = gapComments(kept.handProcedural, transpiled.unhandled);
+  if (gaps) parts.push(gaps);
+
+  const body = transpiled.sql
+    .map((s) => (s.trim().endsWith(';') ? s : `${s};`))
+    .join('\n\n');
+  parts.push(body);
+
+  // Committed .pg.sql files use the literal schema (Flyway placeholder substitution
+  // is not relied on for PG). Replace both the macro and the dialect's internal
+  // sentinel, should it ever leak.
+  return parts
+    .join('\n\n')
+    .replaceAll('${flyway:defaultSchema}', schema)
+    .replaceAll('__mj_flyway_default_schema__', schema)
+    .concat('\n');
+}
+
+/** The standard committed-`.pg.sql` provenance header. */
+function pgHeader(fileName: string): string {
+  return [
+    '-- ============================================================================',
+    `-- MemberJunction PostgreSQL Migration — ${fileName}`,
+    '-- Generated by the split-and-regenerate pipeline (AST dialect transpile of',
+    '-- hand-written DDL; CodeGen objects regenerated natively; metadata re-seeded).',
+    '-- ============================================================================',
+    '',
+    'CREATE EXTENSION IF NOT EXISTS "pgcrypto";',
+    'CREATE SCHEMA IF NOT EXISTS __mj;',
+    'SET search_path TO __mj, public;',
+    'SET standard_conforming_strings = on;',
+  ].join('\n');
+}
+
+/**
+ * Render the gap report as SQL comments embedded at the top of the output, so a
+ * reviewer (human or LLM last-mile pass) sees exactly what still needs authoring.
+ * This is the loud counterpart to the legacy pipeline's silent drops.
+ */
+function gapComments(handProcedural: string[], unhandled: UnhandledStatement[]): string {
+  if (handProcedural.length === 0 && unhandled.length === 0) return '';
+  const lines: string[] = ['-- ╔══ CONVERSION GAPS — resolve before relying on this migration ══╗'];
+  if (handProcedural.length > 0) {
+    lines.push(`-- NEEDS HAND-AUTHORING (${handProcedural.length} hand-written routine(s)):`);
+    for (const h of handProcedural) lines.push(`--   • ${h}`);
+    lines.push('--   Author the PostgreSQL equivalent of each routine and add it below.');
+  }
+  if (unhandled.length > 0) {
+    lines.push(`-- UNHANDLED BY THE AST TRANSPILER (${unhandled.length} statement(s)):`);
+    unhandled.forEach((u, i) => {
+      const snippet = u.snippet.replace(/\s+/g, ' ').trim();
+      const truncated = snippet.length > 300 ? `${snippet.slice(0, 300)} …[truncated]` : snippet;
+      lines.push(`--   [${i + 1}] (${u.kind}) ${truncated}`);
+    });
+    lines.push('--   Each statement above was REPORTED, not silently dropped — port it manually.');
+  }
+  lines.push('-- ╚════════════════════════════════════════════════════════════════╝');
+  return lines.join('\n');
 }
 
 /**
@@ -240,122 +439,6 @@ function stripLeadingCommentsAndNoise(batch: string): string {
   return s;
 }
 
-/** Statement-mode (baseline / unbannered snapshot): keep tables/indexes/comments, drop the rest. */
-function buildStatementModeResult(
-  split: MigrationSplitResult,
-  stmts: StatementBatch[],
-  options: ConvertMigrationOptions,
-): MigrationConversionResult {
-  const KEEP = new Set(['schema-ddl', 'comment', 'role-setup']);
-  const kept = stmts.filter((s) => KEEP.has(s.kind));
-  const handProc = stmts.filter((s) => s.kind === 'hand-procedural');
-  const dropped = stmts.filter((s) => !KEEP.has(s.kind) && s.kind !== 'hand-procedural');
-
-  // Transpile the kept DDL/comments through the rule pipeline in one pass.
-  const converted = convertFile({
-    Source: kept.map((s) => s.sql).join('\nGO\n'),
-    SourceIsFile: false,
-    Rules: getTSQLToPostgresRules(),
-    Schema: options.schema ?? '__mj',
-    SourceDialect: 'tsql',
-    TargetDialect: 'postgres',
-    IncludeHeader: options.includeHeader ?? true,
-    EnablePostProcess: true,
-  });
-
-  const notes = [
-    `Statement-mode (unbannered snapshot): kept ${kept.length} schema/comment batches, ` +
-      `dropped ${dropped.length} (CodeGen objects/grants/metadata → regenerated by \`mj codegen\` + \`mj sync push\`).`,
-  ];
-  if (handProc.length > 0) {
-    notes.push(
-      `⚠ ${handProc.length} hand-written routine(s) need a human PG version: ` +
-        handProc.map((h) => h.evidence).slice(0, 20).join(', '),
-    );
-  }
-
-  return {
-    fileName: split.fileName,
-    status: handProc.length > 0 ? 'needs-hand-authoring' : 'converted',
-    pgSQL: converted.OutputSQL,
-    split,
-    conversionStats: converted.Stats,
-    droppedCodeGenLines: dropped.reduce((n, s) => n + s.sql.split('\n').length, 0),
-    notes,
-  };
-}
-
-/** File has hand-written procedural SQL — do not auto-translate; flag it. */
-function buildHandAuthoringResult(
-  split: MigrationSplitResult,
-  droppedCodeGenLines: number,
-): MigrationConversionResult {
-  const proc = split.handAuthoredRegions.filter((r) => r.kind === 'hand-procedural');
-  const evidence = proc.map((p) => `${p.evidence} @ line ${p.line}`).join(', ');
-  return {
-    fileName: split.fileName,
-    status: 'needs-hand-authoring',
-    pgSQL: needsHandAuthoringMarker(split.fileName, evidence),
-    split,
-    droppedCodeGenLines,
-    notes: [
-      `Contains hand-written procedural SQL (${evidence}) — requires a human-authored .pg.sql.`,
-      ...regenReseedNotes(split, droppedCodeGenLines),
-    ],
-  };
-}
-
-/** File is purely regenerated objects and/or re-seeded metadata — no DDL to translate. */
-function buildRegenOnlyResult(
-  split: MigrationSplitResult,
-  droppedCodeGenLines: number,
-): MigrationConversionResult {
-  return {
-    fileName: split.fileName,
-    status: 'reseed-or-regen-only',
-    pgSQL: regenOnlyMarker(split.fileName, split),
-    split,
-    droppedCodeGenLines,
-    notes: regenReseedNotes(split, droppedCodeGenLines),
-  };
-}
-
-/** File has regular hand DDL/DML — transpile it through the existing rule pipeline. */
-function buildConvertedResult(
-  split: MigrationSplitResult,
-  droppedCodeGenLines: number,
-  options: ConvertMigrationOptions,
-): MigrationConversionResult {
-  const converted = convertFile({
-    Source: split.handAuthored,
-    SourceIsFile: false,
-    Rules: getTSQLToPostgresRules(),
-    Schema: options.schema ?? '__mj',
-    SourceDialect: 'tsql',
-    TargetDialect: 'postgres',
-    IncludeHeader: options.includeHeader ?? true,
-    EnablePostProcess: true,
-  });
-
-  const notes = regenReseedNotes(split, droppedCodeGenLines);
-  if (split.routing === 'transpile-plus-reseed') {
-    notes.push(
-      'File mixes regular DDL with mj-sync metadata; the metadata blocks were transpiled ' +
-        'by the rule pipeline. Future optimization: strip them and re-seed via `mj sync push`.',
-    );
-  }
-
-  return {
-    fileName: split.fileName,
-    status: 'converted',
-    pgSQL: converted.OutputSQL,
-    split,
-    conversionStats: converted.Stats,
-    droppedCodeGenLines,
-    notes,
-  };
-}
-
 /** Notes describing the dropped Category-A / re-seeded Category-M content. */
 function regenReseedNotes(split: MigrationSplitResult, droppedCodeGenLines: number): string[] {
   const notes: string[] = [];
@@ -368,20 +451,11 @@ function regenReseedNotes(split: MigrationSplitResult, droppedCodeGenLines: numb
   return notes;
 }
 
-function needsHandAuthoringMarker(fileName: string, evidence: string): string {
-  return [
-    `-- NEEDS HAND-AUTHORING: ${fileName}`,
-    `-- This migration contains hand-written procedural SQL (${evidence}).`,
-    '-- The split-and-regenerate pipeline does not translate procedural SQL automatically.',
-    '-- Author the PostgreSQL equivalent of the CREATE PROCEDURE/FUNCTION/TRIGGER body here.',
-    '',
-  ].join('\n');
-}
-
-function regenOnlyMarker(fileName: string, split: MigrationSplitResult): string {
-  const lines = [`-- ${fileName} — no DDL to translate.`];
-  if (split.codeGenBlock) lines.push('-- CodeGen objects are regenerated natively via `mj codegen` on PG.');
-  if (split.handAuthoredRegions.some((r) => r.kind === 'metadata-sync')) {
+/** Marker `.pg.sql` body for files with nothing to translate. */
+function regenOnlyMarker(kept: KeptTSQL): string {
+  const lines = [`-- ${kept.fileName} — no DDL to translate.`];
+  if (kept.split.codeGenBlock) lines.push('-- CodeGen objects are regenerated natively via `mj codegen` on PG.');
+  if (kept.split.handAuthoredRegions.some((r) => r.kind === 'metadata-sync')) {
     lines.push('-- Metadata is re-seeded via `mj sync push` against PG.');
   }
   lines.push('');

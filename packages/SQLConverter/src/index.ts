@@ -19,6 +19,9 @@ export type {
   ConversionStatus,
   ConvertMigrationOptions,
   KeptTSQL,
+  MJTranspileResult,
+  TSQLToPGTranspiler,
+  UnhandledStatement,
 } from './MigrationConverter.js';
 export { splitByStatement, summarizeStatements } from './MigrationStatementSplitter.js';
 export type { StatementBatch, StatementKind } from './MigrationStatementSplitter.js';

@@ -56,6 +56,10 @@ class MJPostgres(Postgres):
             exp.DataType.Type.DATETIME: "TIMESTAMPTZ",
             exp.DataType.Type.DATETIME2: "TIMESTAMPTZ",
             exp.DataType.Type.SMALLDATETIME: "TIMESTAMPTZ",
+            # SS currency types: PG's MONEY is locale-dependent and SMALLMONEY isn't a
+            # PG type at all; match codegen's regenerated schema (DECIMAL with SS scale).
+            exp.DataType.Type.MONEY: "DECIMAL(19, 4)",
+            exp.DataType.Type.SMALLMONEY: "DECIMAL(10, 4)",
         }
 
         def identifier_sql(self, expression: exp.Identifier) -> str:
@@ -210,11 +214,35 @@ def _rewrite_isjson_bare(node: exp.Expression) -> exp.Expression:
     return node
 
 
+def _is_outer_join(join: exp.Join) -> bool:
+    """True for LEFT/RIGHT/FULL (or explicit OUTER) joins."""
+    return (join.side or "").upper() in ("LEFT", "RIGHT", "FULL") or (join.kind or "").upper() == "OUTER"
+
+
+def _update_alias_outer_join(stmt: exp.Update) -> bool:
+    """True when the self-aliased `UPDATE alias … FROM Target AS alias JOIN …` shape uses
+    a LEFT/RIGHT/FULL join. `_rewrite_update_from_alias` moves join ON conditions into
+    WHERE, which is only sound for INNER joins — an outer-join anti-join (`LEFT JOIN o …
+    WHERE o.ID IS NULL`) would silently become inner-join semantics and update zero rows.
+    There is no safe mechanical PG rewrite, so these are reported as unhandled instead."""
+    frm = stmt.args.get("from")
+    tgt = stmt.this
+    if not frm or not isinstance(frm.this, exp.Table) or not isinstance(tgt, exp.Table):
+        return False
+    base = frm.this
+    joins = base.args.get("joins") or []
+    if not base.alias or tgt.name != base.alias or not joins:
+        return False
+    return any(_is_outer_join(j) for j in joins)
+
+
 def _rewrite_update_from_alias(node: exp.Expression) -> exp.Expression:
     """SS `UPDATE alias SET alias.c = … FROM Target AS alias [JOIN Other o ON j] WHERE w`
     → PG `UPDATE Target AS alias SET c = … FROM Other o WHERE j AND w`.
     PG forbids naming the target via an alias defined in FROM and forbids the alias
-    qualifier on SET targets; the target's join condition must move to WHERE."""
+    qualifier on SET targets; the target's join condition must move to WHERE.
+    INNER joins only — outer joins are routed to unhandled upstream (see
+    `_update_alias_outer_join`)."""
     if not isinstance(node, exp.Update):
         return node
     frm = node.args.get("from")
@@ -226,15 +254,26 @@ def _rewrite_update_from_alias(node: exp.Expression) -> exp.Expression:
     joins = base.args.get("joins") or []
     if not base_alias or tgt.name != base_alias or not joins:
         return node  # only the self-aliased-target + join shape
+    if any(_is_outer_join(j) for j in joins):
+        return node  # moving an outer ON to WHERE changes semantics — handled upstream
     # target ← the real FROM base table (alias preserved), stripped of its joins
     new_target = base.copy()
     new_target.set("joins", None)
     node.set("this", new_target)
-    # join ON conditions → WHERE; the joined tables become the new FROM
+    # ALL join ON conditions → WHERE; the joined tables become the new FROM. The
+    # extra joins keep only their table source (CROSS JOIN) so their predicate isn't
+    # duplicated between FROM and WHERE — WHERE alone carries it (inner semantics).
     conds = [j.args["on"].copy() for j in joins if j.args.get("on")]
     first = joins[0].this.copy()
     if len(joins) > 1:
-        first.set("joins", [j.copy() for j in joins[1:]])
+        extra = []
+        for j in joins[1:]:
+            jc = j.copy()
+            jc.set("on", None)
+            jc.set("side", None)
+            jc.set("kind", "CROSS")
+            extra.append(jc)
+        first.set("joins", extra)
     node.set("from", exp.From(this=first))
     existing = node.args["where"].this if node.args.get("where") else None
     clauses = conds + ([existing] if existing else [])
@@ -275,16 +314,13 @@ def _collect_bit_columns(sql: str) -> set[tuple[str, str]]:
     that sit in separate ALTER statements."""
     out: set[tuple[str, str]] = set()
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
-    # Parse per GO batch and tolerate failures — a single unparseable batch (common in
-    # baselines) must not wipe out the whole registry.
+    # Parse per GO batch via the resilient splitter — a single unparseable statement
+    # (common in baselines) must only drop itself, not wipe the registry for every
+    # other table declared in the same batch.
     for batch in _GO_SPLIT.split(protected):
         if not batch.strip():
             continue
-        try:
-            stmts = sqlglot.parse(batch, read="tsql")
-        except Exception:  # noqa: BLE001
-            continue
-        for st in stmts:
+        for st, _raw in _parse_resilient(batch):
             if st is None:
                 continue
             tbl = _table_name_of(st)
@@ -491,16 +527,167 @@ _CODEGEN_OBJECT_NAME = _re.compile(r"^(spCreate|spUpdate|spDelete|spRecompile|vw
 # routinely contain semicolons ("applies to all apps; when set, …"). A naive `.*?;`
 # cuts at the first in-string semicolon, corrupting this and every later envelope
 # boundary. Match args as a run of (whole single-quoted string | non-quote/non-`;` char).
+# The terminator itself is optional when the EXEC is the last statement of its chunk
+# (end-of-input, a GO separator, or the END of a surrounding BEGIN block) — T-SQL does
+# not require it, and a missing `;` must not skip the comment. Args are lazy so the
+# match stops at the first such boundary rather than swallowing following statements.
 _SP_EXTPROP = _re.compile(
-    r"EXEC(?:UTE)?\s+sp_addextendedproperty\b(?P<args>(?:'(?:[^']|'')*'|[^';])*);",
+    r"EXEC(?:UTE)?\s+sp_addextendedproperty\b(?P<args>(?:'(?:[^']|'')*'|[^';])*?)"
+    r"(?:;|(?=\s*(?:\Z|GO\b|END\b)))",
     _re.IGNORECASE | _re.DOTALL,
 )
 # IF [NOT] EXISTS (<select>) BEGIN <body> END  — the idempotency wrapper.
-# Body is matched non-greedily and must not itself contain a nested BEGIN/END.
-_IF_EXISTS_BEGIN = _re.compile(
-    r"IF\s+(?P<neg>NOT\s+)?EXISTS\s*\(\s*(?P<cond>SELECT\b.*?)\)\s*BEGIN\b(?P<body>(?:(?!\bBEGIN\b|\bEND\b).)*?)\bEND\s*;?",
-    _re.IGNORECASE | _re.DOTALL,
-)
+# Recognized by a scanner, not a regex: the body must terminate at the END that matches
+# the block's BEGIN, counting BEGIN/CASE nesting and skipping strings/comments/bracketed
+# identifiers — a regex stopping at any `\bEND\b` truncates on `CASE … END` (or the word
+# END inside a literal) and the leftover tail corrupts neighboring statements.
+_IF_EXISTS_HEAD = _re.compile(r"\bIF\s+(?P<neg>NOT\s+)?EXISTS\s*\(", _re.IGNORECASE)
+_WORD = _re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _scan_atom(s: str, i: int) -> int:
+    """If s[i] opens a string / comment / bracketed or quoted identifier, return the index
+    just past it; otherwise return i unchanged (plain code character)."""
+    c = s[i]
+    if c == "'":
+        i += 1
+        n = len(s)
+        while i < n:
+            if s[i] == "'":
+                if i + 1 < n and s[i + 1] == "'":  # escaped '' inside string
+                    i += 2
+                    continue
+                return i + 1
+            i += 1
+        return n
+    if c == "-" and s.startswith("--", i):
+        j = s.find("\n", i)
+        return len(s) if j < 0 else j + 1
+    if c == "/" and s.startswith("/*", i):
+        j = s.find("*/", i)
+        return len(s) if j < 0 else j + 2
+    if c == "[":
+        j = s.find("]", i)
+        return len(s) if j < 0 else j + 1
+    if c == '"':
+        j = s.find('"', i + 1)
+        return len(s) if j < 0 else j + 1
+    return i
+
+
+def _match_paren(s: str, i: int) -> int:
+    """s[i] == '(' → index just past the matching ')' (atom-aware), or -1 if unbalanced."""
+    depth = 0
+    n = len(s)
+    while i < n:
+        j = _scan_atom(s, i)
+        if j != i:
+            i = j
+            continue
+        if s[i] == "(":
+            depth += 1
+        elif s[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def _peek_word(s: str, i: int) -> str:
+    """Next word token at/after i (skipping whitespace/comments), uppercased; '' if none."""
+    n = len(s)
+    while i < n:
+        j = _scan_atom(s, i)
+        if j != i:
+            i = j
+            continue
+        if s[i].isspace():
+            i += 1
+            continue
+        m = _WORD.match(s, i)
+        return m.group(0).upper() if m else ""
+    return ""
+
+
+def _match_block_end(s: str, i: int) -> tuple[int, int]:
+    """From just after a block's BEGIN keyword, return (body_end, block_end): the start of
+    the matching END token and the index just past it (plus an optional trailing `;`).
+    BEGIN…END and CASE…END nest; BEGIN TRAN[SACTION] pairs with COMMIT, not END, so it
+    does not count. Returns (-1, -1) when the block never terminates."""
+    depth = 1
+    n = len(s)
+    while i < n:
+        j = _scan_atom(s, i)
+        if j != i:
+            i = j
+            continue
+        m = _WORD.match(s, i)
+        if not m:
+            i += 1
+            continue
+        word = m.group(0).upper()
+        if word == "BEGIN" and _peek_word(s, m.end()) not in ("TRAN", "TRANSACTION"):
+            depth += 1
+        elif word == "CASE":
+            depth += 1
+        elif word == "END":
+            depth -= 1
+            if depth == 0:
+                end = m.end()
+                t = _re.compile(r"\s*;").match(s, end)
+                return i, (t.end() if t else end)
+        i = m.end()
+    return -1, -1
+
+
+class _IfExistsMatch:
+    """Minimal re.Match-alike for _find_if_exists_begin results — start/end/group are
+    the only members the batch walk and _transpile_if_exists_begin use."""
+    __slots__ = ("_text", "_start", "_end", "_groups")
+
+    def __init__(self, text: str, start: int, end: int, neg: str | None, cond: str, body: str):
+        self._text, self._start, self._end = text, start, end
+        self._groups = {"neg": neg, "cond": cond, "body": body}
+
+    def start(self) -> int:
+        return self._start
+
+    def end(self) -> int:
+        return self._end
+
+    def group(self, key: str | int = 0) -> str | None:
+        return self._text[self._start:self._end] if key == 0 else self._groups[key]
+
+
+def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
+    """Find the next `IF [NOT] EXISTS (<select>) BEGIN <body> END` block at/after pos."""
+    for head in _IF_EXISTS_HEAD.finditer(text, pos):
+        cond_close = _match_paren(text, head.end() - 1)
+        if cond_close < 0:
+            continue
+        cond = text[head.end():cond_close - 1]
+        if not _re.match(r"\s*SELECT\b", _strip_leading_sql_comments(cond), _re.IGNORECASE):
+            continue
+        # Expect the block's BEGIN next (skipping whitespace/comments).
+        i, n = cond_close, len(text)
+        while i < n:
+            if text[i].isspace():
+                i += 1
+                continue
+            j = _scan_atom(text, i)
+            if j != i and text[i] in ("-", "/"):  # comments only; anything else breaks the shape
+                i = j
+                continue
+            break
+        m = _WORD.match(text, i)
+        if not m or m.group(0).upper() != "BEGIN":
+            continue
+        body_end, block_end = _match_block_end(text, m.end())
+        if body_end < 0:
+            continue
+        return _IfExistsMatch(text, head.start(), block_end, head.group("neg"), cond, text[m.end():body_end])
+    return None
 
 
 def _unquote_tsql_string(val: str) -> str:
@@ -692,23 +879,16 @@ def _transpile_alter_column(txt: str) -> str | None:
         return None
     col = m.group("col").strip().strip('[]"')
     tbl_ref = _emit_table_ref(m.group("tbl"))
-    nullability = None
+    # T-SQL: omitting the NULL/NOT NULL spec on ALTER COLUMN makes the column NULLable.
     if _re.search(r"\bNOT\s+NULL\b", rest, _re.IGNORECASE):
         nullability = f'ALTER COLUMN "{col}" SET NOT NULL'
-    elif _re.search(r"\bNULL\b", rest, _re.IGNORECASE):
+    else:
         nullability = f'ALTER COLUMN "{col}" DROP NOT NULL'
-    # Atomic (non-parameterized) types: an in-place type change is implausible in MJ, and
-    # SS restates the column type on EVERY `ALTER COLUMN` even for a nullability-only change.
-    # So emit only the nullability action — no TYPE restate. A no-op `ALTER … TYPE` would
-    # (a) be rejected by PG when a view depends on the column and (b) force dropping CodeGen
-    # metadata views (e.g. vwApplicationSettings) that `mj codegen` itself needs to bootstrap.
-    _ATOMIC = {"UUID", "BOOLEAN", "SMALLINT", "INTEGER", "BIGINT", "REAL",
-               "DOUBLE PRECISION", "DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ"}
-    if pgtype.split("(")[0].strip().upper() in _ATOMIC:
-        return f'ALTER TABLE {tbl_ref} {nullability}' if nullability else None
-    # Parameterized types (VARCHAR(n)/NUMERIC/TEXT/BYTEA): a genuine widening. Emit the TYPE
-    # change + nullability, dropping dependent CodeGen views first (regenerated by codegen).
-    actions = [f'ALTER COLUMN "{col}" TYPE {pgtype}'] + ([nullability] if nullability else [])
+    # Emit the TYPE change for every type — atomic ones included (an INT→BIGINT widening
+    # must not vanish) — plus the nullability action. PG rejects an `ALTER … TYPE` (even a
+    # no-op restate, which SS produces on every ALTER COLUMN) while a view depends on the
+    # column, so drop dependent CodeGen views first (regenerated by `mj codegen`).
+    actions = [f'ALTER COLUMN "{col}" TYPE {pgtype}', nullability]
     bare_tbl = m.group("tbl").strip().split(".")[-1].strip().strip('[]"')
     return _drop_dependent_views_block(bare_tbl, col) + "\n" + f'ALTER TABLE {tbl_ref} ' + ", ".join(actions)
 
@@ -738,8 +918,10 @@ def _drop_dependent_views_block(table: str, col: str) -> str:
 # EXEC sp_dropextendedproperty @name=N'MS_Description', … @level1name=…, @level2name=… ;
 # Same envelope shape as sp_addextendedproperty but with NO @value (it removes a comment).
 # Map to `COMMENT ON … IS NULL`; dropped today, so 7 stale column comments survive.
+# Terminator semantics match _SP_EXTPROP (optional at chunk boundaries).
 _SP_DROPEXTPROP = _re.compile(
-    r"EXEC(?:UTE)?\s+sp_dropextendedproperty\b(?P<args>(?:'(?:[^']|'')*'|[^';])*);",
+    r"EXEC(?:UTE)?\s+sp_dropextendedproperty\b(?P<args>(?:'(?:[^']|'')*'|[^';])*?)"
+    r"(?:;|(?=\s*(?:\Z|GO\b|END\b)))",
     _re.IGNORECASE | _re.DOTALL,
 )
 
@@ -837,7 +1019,16 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
     """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits."""
     out, unhandled = [], []
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
+    # Set after reporting a CREATE PROCEDURE/FUNCTION/TRIGGER: the routine's closing
+    # `END` often parses as its own dangling statement — it belongs to the routine we
+    # just reported, not to a new gap.
+    swallow_routine_end = False
     for stmt, raw in _parse_resilient(protected):
+        if swallow_routine_end:
+            swallow_routine_end = False
+            tail = (raw or (stmt.sql(dialect="tsql") if stmt is not None else "")).strip().rstrip(";").strip()
+            if tail.upper() == "END":
+                continue
         if stmt is None:
             unhandled.append({"kind": "parse-error", "snippet": raw.strip()[:80]})
             continue
@@ -852,11 +1043,35 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         # (`@v` parses to exp.Parameter; the protected Flyway macro is an Identifier, so
         # it never false-positives here.)
         if isinstance(stmt, exp.Declare) or (
-            isinstance(stmt, (exp.Set, exp.If, exp.Select, exp.Update))
+            isinstance(stmt, (exp.Set, exp.If, exp.Select, exp.Update, exp.Insert, exp.Delete))
             and stmt.find(exp.Parameter) is not None
         ):
             txt = stmt.sql(dialect="tsql")
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
+            continue
+        # Self-aliased UPDATE…FROM with an outer join: no semantics-preserving PG
+        # rewrite exists (see `_update_alias_outer_join`) — report, don't emit.
+        if isinstance(stmt, exp.Update) and _update_alias_outer_join(stmt):
+            txt = stmt.sql(dialect="tsql")
+            unhandled.append({"kind": "UPDATE-OUTER-JOIN", "snippet": txt[:80]})
+            continue
+        # Hand-written routines: a T-SQL PROCEDURE/FUNCTION/TRIGGER body cannot be
+        # transpiled mechanically (parameter syntax, control flow, and the body itself
+        # are all T-SQL) — naive emission produces invalid PG like `$x INT AS BEGIN …`.
+        # The classifier flags these files needs-hand-authoring; here we report the
+        # routine so it lands in the gap comments instead of half-translated output.
+        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() in (
+            "PROCEDURE",
+            "FUNCTION",
+            "TRIGGER",
+        ):
+            txt = stmt.sql(dialect="tsql")
+            name = stmt.find(exp.Table)
+            unhandled.append({
+                "kind": f"CREATE-{(stmt.args.get('kind') or '').upper()}",
+                "snippet": (name.sql(dialect="tsql") + " — " if name else "") + txt[:80],
+            })
+            swallow_routine_end = True
             continue
         if isinstance(stmt, exp.Command):
             # sqlglot may glom a preceding comment onto the Command (`/* note */ ALTER …`),
@@ -889,6 +1104,17 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         # (inside an IF…BEGIN guard it is handled as RAISE EXCEPTION by the DO-block path).
         if isinstance(stmt, exp.Anonymous) and (stmt.name or "").upper() == "RAISERROR":
             continue
+        # `ALTER TABLE t ALTER COLUMN c <type>` with NO nullability spec parses cleanly
+        # (unlike the `… NULL`/`… NOT NULL` forms, which land as opaque Commands). Route
+        # it through the same structured emission as those, so it gets the dependent-view
+        # drop and T-SQL's implied nullability reset (omitting the spec → NULLable).
+        if isinstance(stmt, exp.Alter):
+            acts = stmt.args.get("actions") or []
+            if len(acts) == 1 and isinstance(acts[0], exp.AlterColumn) and acts[0].args.get("dtype"):
+                ac = _transpile_alter_column(stmt.sql(dialect="tsql"))
+                if ac is not None:
+                    out.append(ac)
+                    continue
         if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "NONCLUSTERED INDEX":
             stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
         stmt = _rewrite_boolean_int_checks(stmt)
@@ -932,24 +1158,161 @@ _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNOR
 _METADATA_TABLES = _re.compile(r"(?!x)x")
 
 
-def _transpile_if_exists_begin(m: "_re.Match") -> tuple[str, list[dict]]:
+def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, list[dict]]:
+    """Transpile a text segment that may interleave sp_add/dropextendedproperty envelopes
+    with plain SQL — used for IF…BEGIN bodies, where a guarded INSERT can sit next to an
+    extprop EXEC (the top-level batch walker handles the same mix outside blocks)."""
+    out: list[str] = []
+    unhandled: list[dict] = []
+    pos = 0
+    while pos < len(text):
+        ext = _SP_EXTPROP.search(text, pos)
+        dxp = _SP_DROPEXTPROP.search(text, pos)
+        nxt = min([x for x in (ext, dxp) if x], key=lambda x: x.start(), default=None)
+        gap = text[pos:] if nxt is None else text[pos:nxt.start()]
+        if gap.strip():
+            s, u = _transpile_plain(gap, pretty)
+            if s.strip():
+                out.append(s)
+            unhandled.extend(u)
+        if nxt is None:
+            break
+        if nxt is ext:
+            comment = _transpile_sp_addextendedproperty(nxt.group("args"))
+            if comment:
+                out.append(comment)
+            elif comment is None:
+                unhandled.append({"kind": "sp_addextendedproperty", "snippet": nxt.group(0)[:80]})
+        else:
+            comment = _transpile_sp_dropextendedproperty(nxt.group("args"))
+            if comment:
+                out.append(comment)
+            elif comment is None:
+                unhandled.append({"kind": "sp_dropextendedproperty", "snippet": nxt.group(0)[:80]})
+        pos = nxt.end()
+    return "\n".join(out), unhandled
+
+
+# SS catalog references in a guard condition (sys.* views / OBJECT_ID()) — meaningless
+# on PG; the common shapes are translated to PG catalog equivalents, the rest reported.
+_SYS_CATALOG_REF = _re.compile(r"\bsys\s*\.\s*\w+|\bOBJECT_ID\s*\(", _re.IGNORECASE)
+_SYS_TABLE = _re.compile(r"\bsys\s*\.\s*(\w+)", _re.IGNORECASE)
+_OBJECT_ID_ARG = _re.compile(
+    r"\bOBJECT_ID\s*\(\s*N?'(?P<obj>[^']+)'\s*(?:,\s*N?'(?P<type>[^']*)'\s*)?\)", _re.IGNORECASE
+)
+_NAME_EQ = _re.compile(r"\bname\s*=\s*N?'(?P<name>[^']+)'", _re.IGNORECASE)
+# Predicate shapes the translator understands; anything left over in the WHERE clause
+# beyond these (plus AND/whitespace/parens) makes the guard untranslatable.
+_KNOWN_SYS_PREDS = (
+    _re.compile(r"\b\w+(?:\s*\.\s*\w+)?\s*=\s*OBJECT_ID\s*\([^)]*\)", _re.IGNORECASE),
+    _re.compile(r"\b(?:\w+\s*\.\s*)?name\s*=\s*N?'[^']*'", _re.IGNORECASE),
+    _re.compile(r"\btype\s*(?:=\s*N?'U'|IN\s*\(\s*N?'U'\s*\))", _re.IGNORECASE),
+    _re.compile(r"\bschema_id\s*=\s*SCHEMA_ID\s*\([^)]*\)", _re.IGNORECASE),
+)
+
+
+def _qualified_obj(obj: str) -> tuple[str, str]:
+    """Split an OBJECT_ID('sch.Tbl') argument into raw (schema, table) names; a missing
+    schema qualifier defaults to the Flyway macro (MJ's default schema)."""
+    toks = _IDENT_TOKEN.findall(obj)
+    names = [t[1:-1] if t[:1] in ("[", '"') else t for t in toks]
+    table = names[-1] if names else obj
+    schema = names[-2] if len(names) >= 2 else FLYWAY_MACRO
+    return schema, table
+
+
+def _sys_guard_residue_ok(cond: str) -> bool:
+    """True when the guard's WHERE clause consists only of recognized predicates joined
+    by AND — i.e. nothing semantically load-bearing would be dropped in translation."""
+    parts = _re.split(r"\bWHERE\b", cond, maxsplit=1, flags=_re.IGNORECASE)
+    if len(parts) != 2 or _re.search(r"\bJOIN\b", cond, _re.IGNORECASE):
+        return False
+    residue = parts[1]
+    for p in _KNOWN_SYS_PREDS:
+        residue = p.sub(" ", residue)
+    return not _re.search(r"[=<>']|\b(?:OR|IN|LIKE|EXISTS|NOT|SELECT)\b", residue, _re.IGNORECASE)
+
+
+def _translate_sys_guard(cond: str, neg: bool) -> str | None:
+    """Translate the common SQL-Server catalog guard conditions to a full PG predicate
+    (the text between `IF` and `THEN`). Handled shapes:
+      * sys.columns + OBJECT_ID(tbl) + name='col' → EXISTS (information_schema.columns …)
+      * sys.tables / sys.objects table existence  → to_regclass(…) IS [NOT] NULL
+      * sys.indexes + OBJECT_ID(tbl) + name='idx' → EXISTS (pg_indexes …)
+    Returns None when the shape isn't confidently recognized — the caller then routes the
+    whole IF block to unhandled rather than emitting sys.* references PG rejects."""
+    sys_tables = {t.lower() for t in _SYS_TABLE.findall(cond)}
+    obj = _OBJECT_ID_ARG.search(cond)
+    name = _NAME_EQ.search(cond)
+    exists = "NOT EXISTS" if neg else "EXISTS"
+    if not _sys_guard_residue_ok(cond):
+        return None
+    if sys_tables == {"columns"} and obj and name:
+        sch, tbl = _qualified_obj(obj.group("obj"))
+        return (
+            f"{exists} (SELECT 1 FROM information_schema.columns WHERE table_schema = '{sch}' "
+            f"AND table_name = '{tbl}' AND column_name = '{name.group('name')}')"
+        )
+    if sys_tables == {"indexes"} and obj and name:
+        sch, tbl = _qualified_obj(obj.group("obj"))
+        return (
+            f"{exists} (SELECT 1 FROM pg_indexes WHERE schemaname = '{sch}' "
+            f"AND tablename = '{tbl}' AND indexname = '{name.group('name')}')"
+        )
+    if sys_tables == {"objects"} and obj:
+        # Only a user-table check ('U' — in OBJECT_ID's 2nd arg or a type predicate) maps
+        # to to_regclass; procs/views/triggers are CodeGen objects handled out of band.
+        type_arg = (obj.group("type") or "").strip().upper()
+        if type_arg != "U" and not _re.search(r"\btype\s*(?:=\s*N?'U'|IN\s*\(\s*N?'U'\s*\))", cond, _re.IGNORECASE):
+            return None
+        sch, tbl = _qualified_obj(obj.group("obj"))
+        return f"to_regclass('{sch}.\"{tbl}\"') IS {'NULL' if neg else 'NOT NULL'}"
+    if sys_tables == {"tables"} and (obj or name):
+        if obj:
+            sch, tbl = _qualified_obj(obj.group("obj"))
+        else:
+            tbl = name.group("name")
+            ms = _re.search(r"\bSCHEMA_ID\s*\(\s*N?'([^']+)'\s*\)", cond, _re.IGNORECASE)
+            sch = ms.group(1) if ms else FLYWAY_MACRO
+        return f"to_regclass('{sch}.\"{tbl}\"') IS {'NULL' if neg else 'NOT NULL'}"
+    return None
+
+
+def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict]]:
     """IF [NOT] EXISTS(<sel>) BEGIN <body> END → PG DO $$ … IF … THEN … END IF; … $$;"""
     raw_body = m.group("body").strip()
     # Idempotent seed of schema-derived metadata → drop; CodeGen regenerates it.
     if _METADATA_TABLES.search(raw_body):
         return "", []
-    # Extended-property existence guard — IF EXISTS(sys.extended_properties …) BEGIN
-    # sp_dropextendedproperty/sp_addextendedproperty END. SQL-Server-only: PG
-    # `COMMENT ON … IS …` overwrites unconditionally and `mj codegen` re-syncs every
+    # Extended-property comment dance: a guard whose body consists EXCLUSIVELY of
+    # sp_add/dropextendedproperty EXECs (plus PRINT/comment noise) is SQL-Server-only —
+    # PG `COMMENT ON … IS …` overwrites unconditionally and `mj codegen` re-syncs every
     # MS_Description from EntityField.Description, so the drop-then-re-add dance is a
-    # no-op on PG. Drop the whole guard; the re-add `sp_addextendedproperty` that
-    # follows the END is a separate statement and still emits its COMMENT ON.
-    if _re.search(r"sys\.extended_properties", m.group("cond"), _re.IGNORECASE) or _re.search(
-        r"sp_(?:drop|add)extendedproperty", raw_body, _re.IGNORECASE
-    ):
-        return "", []
+    # no-op on PG. Drop the whole guard. A body that ALSO carries real statements (e.g.
+    # a guarded INSERT before the EXEC) is NOT dropped — it flows through the normal
+    # path below, where the extprop-aware segment walker handles the mix.
+    if _SP_EXTPROP.search(raw_body) or _SP_DROPEXTPROP.search(raw_body):
+        rest = _SP_DROPEXTPROP.sub("", _SP_EXTPROP.sub("", raw_body))
+        leftover = [
+            s for s in _split_top_level_statements(rest)
+            if _strip_leading_sql_comments(s).strip(" \t\r\n;")
+            and not _re.match(r"\s*PRINT\b", _strip_leading_sql_comments(s), _re.IGNORECASE)
+        ]
+        if not leftover:
+            return "", []
     neg = "NOT " if m.group("neg") else ""
-    cond_sql, u1 = _transpile_plain(m.group("cond").strip())
+    cond_raw = m.group("cond").strip()
+    u1: list[dict] = []
+    # SS catalog guards (sys.* / OBJECT_ID()) fail at apply on PG — translate the common
+    # shapes; anything unrecognized is reported whole, never emitted as sys.* SQL.
+    if _SYS_CATALOG_REF.search(cond_raw):
+        cond_full = _translate_sys_guard(cond_raw, bool(m.group("neg")))
+        if cond_full is None:
+            return "", [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]
+    else:
+        cond_sql, u1 = _transpile_plain(cond_raw)
+        cond_inner = cond_sql.rstrip(";").strip()
+        cond_full = f"{neg}EXISTS ({cond_inner})" if cond_inner else None
     # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION.
     rr = _RAISERROR.search(raw_body)
     if rr:
@@ -957,13 +1320,12 @@ def _transpile_if_exists_begin(m: "_re.Match") -> tuple[str, list[dict]]:
         msg = _pg_string(_unquote_tsql_string(msg)) if msg.lstrip("Nn").startswith("'") else "'migration guard failed'"
         body_sql, u2 = f"RAISE EXCEPTION {msg};", []
     else:
-        body_sql, u2 = _transpile_plain(raw_body)
-    cond_inner = cond_sql.rstrip(";").strip()
-    if not cond_inner or not body_sql.strip():
+        body_sql, u2 = _transpile_extprop_segment(raw_body)
+    if not cond_full or not body_sql.strip():
         return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}])
     do = (
         "DO $$\nBEGIN\n"
-        f"  IF {neg}EXISTS ({cond_inner}) THEN\n"
+        f"  IF {cond_full} THEN\n"
         f"    {body_sql.strip()}\n"
         "  END IF;\nEND $$;"
     )
@@ -1013,8 +1375,34 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
     # (it is harmless in a comment, but would be a real "schema does not exist" error if
     # it ever appeared in an unhandled executable position). Text-level, post-AST.
     out = [s.replace(FLYWAY_SENTINEL, FLYWAY_MACRO) for s in out]
+    # Same restoration for the gap report — snippets are shown to humans/LLMs and must
+    # read as the original macro, not the internal sentinel.
+    unhandled = [
+        {**u, "snippet": u["snippet"].replace(FLYWAY_SENTINEL, FLYWAY_MACRO)}
+        for u in unhandled
+    ]
 
     return {"sql": out, "unhandled": unhandled}
+
+
+# Baseline extended-property EXECs come wrapped in per-statement error handling:
+#   BEGIN TRY <EXEC sp_addextendedproperty …> END TRY
+#   BEGIN CATCH DECLARE @msg…; SELECT @msg=ERROR_MESSAGE()…; RAISERROR(…); SET NOEXEC ON END CATCH
+# The TRY/CATCH delimiters are dropped as batch noise downstream, but the CATCH-body
+# DECLARE/SELECT would surface as bogus "unhandled" procedural leaks. Strip a CATCH
+# block only when its body is purely that plumbing — anything substantive stays put
+# and is transpiled/reported by the batch walk.
+_CATCH_BLOCK = _re.compile(r"BEGIN\s+CATCH\b(?P<body>.*?)\bEND\s+CATCH\b\s*;?", _re.IGNORECASE | _re.DOTALL)
+_CATCH_NOISE_STMT = _re.compile(r"^\s*(DECLARE\b|SELECT\s+@|RAISERROR\s*\(|PRINT\b|SET\s+NOEXEC\b|THROW\b)", _re.IGNORECASE)
+
+
+def _strip_catch_noise(batch: str) -> str:
+    """Remove BEGIN CATCH…END CATCH wrappers whose body is purely error-reporting
+    plumbing (DECLARE / SELECT @x=ERROR_*() / RAISERROR / PRINT / SET NOEXEC / THROW)."""
+    def repl(m: "_re.Match") -> str:
+        stmts = [s for s in _split_top_level_statements(m.group("body")) if _strip_leading_sql_comments(s).strip(" \t\r\n;")]
+        return "" if all(_CATCH_NOISE_STMT.match(_strip_leading_sql_comments(s)) for s in stmts) else m.group(0)
+    return _CATCH_BLOCK.sub(repl, batch)
 
 
 def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[dict]]:
@@ -1022,24 +1410,18 @@ def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[
     out: list[str] = []
     unhandled: list[dict] = []
 
-    # Pure comment block: sp_addextendedproperty wrapped in BEGIN TRY…END CATCH error
-    # handling (DECLARE @msg / SELECT @x=ERROR_*() / RAISERROR / SET NOEXEC). Emit only
-    # the COMMENT ON; the entire error-handling wrapper is SS noise — drop it.
-    if _SP_EXTPROP.search(batch) and not _re.search(r"\bCREATE\s+TABLE|\bALTER\s+TABLE\b", batch, _re.IGNORECASE):
-        for m in _SP_EXTPROP.finditer(batch):
-            comment = _transpile_sp_addextendedproperty(m.group("args"))
-            if comment:
-                out.append(comment)
-            elif comment is None:
-                unhandled.append({"kind": "sp_addextendedproperty", "snippet": m.group(0)[:80]})
-        return out, unhandled
+    # Extended-property batches: drop the SS error-handling plumbing around the EXECs
+    # (see _strip_catch_noise), then let the walk below handle EVERYTHING in the batch —
+    # a CREATE INDEX / INSERT sharing the batch must transpile, never silently vanish.
+    if _SP_EXTPROP.search(batch) or _SP_DROPEXTPROP.search(batch):
+        batch = _strip_catch_noise(batch)
 
     pos = 0
     # Walk the batch, alternating between recognized envelopes and plain SQL gaps.
     while pos < len(batch):
         ext = _SP_EXTPROP.search(batch, pos)
         dxp = _SP_DROPEXTPROP.search(batch, pos)
-        ife = _IF_EXISTS_BEGIN.search(batch, pos)
+        ife = _find_if_exists_begin(batch, pos)
         nxt = min([m for m in (ext, dxp, ife) if m], key=lambda m: m.start(), default=None)
         if nxt is None:
             gap = batch[pos:]
@@ -1059,7 +1441,7 @@ def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[
             comment = _transpile_sp_addextendedproperty(nxt.group("args"))
             if comment:
                 out.append(comment)
-            else:
+            elif comment is None:  # "" is an intentional CodeGen-object skip, not a failure
                 unhandled.append({"kind": "sp_addextendedproperty", "snippet": nxt.group(0)[:80]})
         elif nxt is dxp:
             comment = _transpile_sp_dropextendedproperty(nxt.group("args"))

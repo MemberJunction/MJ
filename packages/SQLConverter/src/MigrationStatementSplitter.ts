@@ -47,6 +47,14 @@ const GO_SPLIT = /^[ \t]*GO[ \t]*;?[ \t]*$/im;
 const CODEGEN_NAME = /^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete|trg)/i;
 
 /**
+ * Hand-written objects whose names collide with the CodeGen conventions. CodeGen does
+ * NOT regenerate these (they only exist in the baselines), so dropping them as
+ * codegen-objects would silently lose them on PG. Names are matched case-insensitively.
+ * Extend this list when a new custom `vw*`/`fn*` object is hand-authored in a migration.
+ */
+const HAND_WRITTEN_OBJECT_ALLOWLIST = new Set(['vwentitieswithexternalchangetracking']);
+
+/**
  * Split SQL into GO batches and classify each by its leading statement.
  * Pure function — no I/O.
  */
@@ -75,6 +83,10 @@ function classifyBatch(batch: string): StatementBatch {
   const routine = head.match(/^\s*CREATE\s+(?:OR\s+ALTER\s+)?(VIEW|PROCEDURE|PROC|FUNCTION|TRIGGER)\b/i);
   if (routine) {
     const name = extractObjectName(head);
+    if (name && HAND_WRITTEN_OBJECT_ALLOWLIST.has(name.toLowerCase())) {
+      // Hand-written despite the codegen-style name — keep + transpile.
+      return mk('schema-ddl', batch, `${routine[1]} ${name} (hand-written allowlist)`);
+    }
     const isGenerated = !!name && CODEGEN_NAME.test(name);
     return isGenerated
       ? mk('codegen-object', batch, `${routine[1]} ${name}`)
@@ -84,8 +96,14 @@ function classifyBatch(batch: string): StatementBatch {
   if (/^\s*(?:GRANT|REVOKE|DENY)\b/i.test(head)) return mk('grant', batch, 'GRANT/REVOKE');
   // SQL Server allows `INSERT [table]` without INTO — metadata seeds use that form.
   if (/^\s*(?:INSERT\b|UPDATE\s|DELETE\s+FROM)/i.test(head)) return mk('metadata-dml', batch, 'INSERT/UPDATE/DELETE');
-  if (/^\s*(?:PRINT|SET|USE|DECLARE|IF\s+@@ERROR|EXEC(?:UTE)?\s+sp_executesql)\b/i.test(head) || head.length === 0) {
+  if (/^\s*(?:PRINT|SET|USE|IF\s+@@ERROR)\b/i.test(head) || head.length === 0) {
     return mk('noise', batch, 'batch-control');
+  }
+  // DECLARE-led batches and dynamic SQL carry real statements (seed INSERTs, guarded
+  // DDL) — they are NOT noise. Classify as unknown so they flow to the AST transpiler,
+  // which either emits them or reports them in `unhandled`. Nothing silent.
+  if (/^\s*(?:DECLARE|EXEC(?:UTE)?\s+sp_executesql)\b/i.test(head)) {
+    return mk('unknown', batch, head.slice(0, 40).replace(/\s+/g, ' ').trim());
   }
   return mk('unknown', batch, head.slice(0, 40).replace(/\s+/g, ' ').trim());
 }

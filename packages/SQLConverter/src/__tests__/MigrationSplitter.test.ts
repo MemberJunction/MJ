@@ -147,5 +147,29 @@ describe('splitMigration', () => {
       expect(r.handAuthoredRegions.some((f) => f.kind === 'hand-procedural')).toBe(false);
       expect(r.handAuthoredRegions.some((f) => f.kind === 'data-dml')).toBe(true);
     });
+
+    it('does not classify keywords inside MULTI-LINE string literals', () => {
+      // Regression: the in-string state reset per line, so continuation lines of a
+      // prompt-template literal mentioning ALTER/CREATE TABLE were scanned as code
+      // (live corpus hit: V202605021448 Metadata_Sync mis-routed to transpile).
+      const sql = [
+        "SET @Description = N'This template shows how to",
+        'CREATE TABLE Foo and ALTER TABLE Bar in SQL.',
+        "End of template';",
+      ].join('\n');
+      const r = splitMigration(sql);
+      expect(r.handAuthoredRegions.some((f) => f.kind === 'schema-ddl')).toBe(false);
+    });
+
+    it("handles doubled-quote escapes across the multi-line literal", () => {
+      const sql = [
+        "SET @Description = N'It''s a template that says",
+        "''CREATE TABLE'' is just text here';",
+        'ALTER TABLE __mj.Foo ADD Note NVARCHAR(50);',
+      ].join('\n');
+      const r = splitMigration(sql);
+      // The real ALTER TABLE after the literal IS classified; the quoted one is not.
+      expect(r.handAuthoredRegions.filter((f) => f.kind === 'schema-ddl')).toHaveLength(1);
+    });
   });
 });

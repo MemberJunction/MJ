@@ -325,6 +325,192 @@ check("flyway sentinel never leaks into a trailing comment either (final safety 
       "${flyway:defaultSchema}.MagicLinkInviteApplication */;",
       must_not_contain=['__mj_flyway_default_schema__'])
 
+# --- extprop batches must not drop sibling statements (no pure-comment shortcut) ---
+check("CREATE INDEX sharing a batch with an extprop is kept, both emitted",
+      "CREATE INDEX IDX_Foo_Bar ON [${flyway:defaultSchema}].[Foo] ([Bar]);\n"
+      "EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'x', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'Foo', @level2type=N'COLUMN', @level2name=N'Bar';",
+      must_contain=['CREATE INDEX "IDX_Foo_Bar"',
+                    'COMMENT ON COLUMN ${flyway:defaultSchema}."Foo"."Bar"'],
+      must_not_contain=["sp_addextendedproperty"])
+
+check("baseline TRY/CATCH extprop wrapper → only the COMMENT ON; plumbing dropped, not unhandled",
+      "BEGIN TRY\n"
+      "\tEXEC sp_addextendedproperty N'MS_Description', N'Active flag.', 'SCHEMA', N'__mj', "
+      "'TABLE', N'AIAction', 'COLUMN', N'IsActive'\n"
+      "END TRY\n"
+      "BEGIN CATCH\n"
+      "\tDECLARE @msg nvarchar(max);\n"
+      "\tDECLARE @severity int;\n"
+      "\tDECLARE @state int;\n"
+      "\tSELECT @msg = ERROR_MESSAGE(), @severity = ERROR_SEVERITY(), @state = ERROR_STATE();\n"
+      "\tRAISERROR(@msg, @severity, @state);\n"
+      "\n"
+      "\tSET NOEXEC ON\n"
+      "END CATCH",
+      must_contain=['COMMENT ON COLUMN __mj."AIAction"."IsActive" IS \'Active flag.\''],
+      must_not_contain=["DECLARE", "RAISERROR", "ERROR_MESSAGE", "BEGIN CATCH"])
+
+# --- IF body mixing a real statement with an extprop keeps BOTH ---------------
+check("guarded INSERT + extprop in one IF body → DO block with INSERT and COMMENT ON",
+      "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Widget WHERE ID = 'abc')\n"
+      "BEGIN\n"
+      "    INSERT INTO ${flyway:defaultSchema}.Widget (ID, Name) VALUES ('abc', 'X');\n"
+      "    EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'w', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'Widget';\n"
+      "END",
+      must_contain=["DO $$", 'INSERT INTO ${flyway:defaultSchema}."Widget"',
+                    'COMMENT ON TABLE ${flyway:defaultSchema}."Widget" IS \'w\''],
+      must_not_contain=["sp_addextendedproperty"])
+
+# --- UPDATE…FROM join semantics ------------------------------------------------
+check("UPDATE…FROM LEFT JOIN anti-join → unhandled (inner-join rewrite would update 0 rows)",
+      "UPDATE t SET t.Flag = 1 FROM ${flyway:defaultSchema}.Target AS t "
+      "LEFT JOIN ${flyway:defaultSchema}.Other o ON o.TargetID = t.ID WHERE o.ID IS NULL;",
+      must_not_contain=["UPDATE"],
+      expect_unhandled=1)
+
+check("UPDATE…FROM with two INNER joins: extra join's ON moves to WHERE once (not duplicated)",
+      "UPDATE uv SET uv.X = b.Y FROM ${flyway:defaultSchema}.UserView AS uv "
+      "INNER JOIN ${flyway:defaultSchema}.A a ON a.ID = uv.AID "
+      "INNER JOIN ${flyway:defaultSchema}.B b ON b.ID = a.BID "
+      "WHERE uv.X IS NULL;",
+      must_contain=['UPDATE ${flyway:defaultSchema}."UserView" AS "uv"',
+                    'CROSS JOIN ${flyway:defaultSchema}."B" AS "b"',
+                    '"b"."ID" = "a"."BID"'],
+      must_not_contain=['AS "b" ON'])
+
+# --- ALTER COLUMN atomic-type changes ------------------------------------------
+check("ALTER COLUMN INT→BIGINT widening emits the TYPE change, not just nullability",
+      "ALTER TABLE [__mj].[Foo] ALTER COLUMN [Counter] BIGINT NOT NULL;",
+      must_contain=['ALTER TABLE "__mj"."Foo" ALTER COLUMN "Counter" TYPE BIGINT',
+                    'ALTER COLUMN "Counter" SET NOT NULL', "DO $$"],
+      must_not_contain=["DROP NOT NULL"])
+
+check("ALTER COLUMN with no nullability spec → DROP NOT NULL (T-SQL default is NULLable)",
+      "ALTER TABLE [__mj].[Foo] ALTER COLUMN [Counter] BIGINT;",
+      must_contain=['ALTER COLUMN "Counter" TYPE BIGINT',
+                    'ALTER COLUMN "Counter" DROP NOT NULL'],
+      must_not_contain=["SET NOT NULL"])
+
+# --- procedural leak filter covers INSERT/DELETE with @variables ----------------
+check("INSERT with a T-SQL @variable → unhandled, no $var SQL emitted",
+      "INSERT INTO ${flyway:defaultSchema}.Widget (ID, Name) VALUES (@ID, 'X');",
+      must_not_contain=["$ID", "INSERT"],
+      expect_unhandled=1)
+
+check("DELETE with a T-SQL @variable → unhandled, no $var SQL emitted",
+      "DELETE FROM ${flyway:defaultSchema}.Widget WHERE ID = @ID;",
+      must_not_contain=["$ID", "DELETE"],
+      expect_unhandled=1)
+
+# --- extprop terminator optional at chunk boundaries ----------------------------
+check("extprop as the last statement with no trailing semicolon still emits its COMMENT ON",
+      "ALTER TABLE ${flyway:defaultSchema}.Foo ADD Bar INT NULL;\n"
+      "EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'tail', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'Foo', @level2type=N'COLUMN', @level2name=N'Bar'",
+      must_contain=['ADD COLUMN "Bar" INT',
+                    'COMMENT ON COLUMN ${flyway:defaultSchema}."Foo"."Bar" IS \'tail\''],
+      must_not_contain=["sp_addextendedproperty"])
+
+# --- intentional codegen-object extprop skips are NOT unhandled -----------------
+check("codegen-object extprop (vw*) in a mixed batch: skipped silently, not unhandled",
+      "ALTER TABLE ${flyway:defaultSchema}.Foo ADD Bar INT NULL;\n"
+      "EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'v', "
+      "@level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', "
+      "@level1type=N'TABLE', @level1name=N'vwFooViews';",
+      must_contain=['ADD COLUMN "Bar" INT'],
+      must_not_contain=["COMMENT ON", "vwFooViews"])
+
+# --- MONEY/SMALLMONEY mapping ----------------------------------------------------
+check("MONEY/SMALLMONEY → DECIMAL(19,4)/DECIMAL(10,4)",
+      "CREATE TABLE ${flyway:defaultSchema}.Invoice (Amount MONEY NOT NULL, Tip SMALLMONEY NULL);",
+      must_contain=['"Amount" DECIMAL(19, 4)', '"Tip" DECIMAL(10, 4)'],
+      must_not_contain=["MONEY"])
+
+# --- BIT registry survives a poison statement in the same batch -------------------
+check("poison statement doesn't wipe BIT registration for other tables in its batch",
+      "SELECT FROM FROM;\n"
+      "CREATE TABLE ${flyway:defaultSchema}.PoisonMate (IsCool BIT NOT NULL);\n"
+      "GO\n"
+      "ALTER TABLE ${flyway:defaultSchema}.PoisonMate ADD CONSTRAINT CK_pc CHECK (IsCool = (1));",
+      must_contain=['CHECK ("IsCool" = TRUE)'],
+      must_not_contain=['= (1)'],
+      expect_unhandled=1)
+
+# --- sys.* / OBJECT_ID() guard conditions ------------------------------------------
+check("sys.columns existence guard → information_schema.columns (no sys.* emitted)",
+      "IF NOT EXISTS (SELECT 1 FROM sys.columns "
+      "WHERE object_id = OBJECT_ID('${flyway:defaultSchema}.Foo') AND name = 'Bar')\n"
+      "BEGIN\n"
+      "    ALTER TABLE ${flyway:defaultSchema}.Foo ADD Bar INT NULL;\n"
+      "END",
+      must_contain=["DO $$", "NOT EXISTS (SELECT 1 FROM information_schema.columns",
+                    "table_schema = '${flyway:defaultSchema}'", "table_name = 'Foo'",
+                    "column_name = 'Bar'", 'ADD COLUMN "Bar" INT'],
+      must_not_contain=["sys.", "OBJECT_ID"])
+
+check("sys.objects user-table existence guard → to_regclass",
+      "IF NOT EXISTS (SELECT * FROM sys.objects "
+      "WHERE object_id = OBJECT_ID(N'${flyway:defaultSchema}.Widget') AND type = N'U')\n"
+      "BEGIN\n"
+      "    CREATE TABLE ${flyway:defaultSchema}.Widget (ID INT NOT NULL);\n"
+      "END",
+      must_contain=["to_regclass('${flyway:defaultSchema}.\"Widget\"') IS NULL",
+                    'CREATE TABLE ${flyway:defaultSchema}."Widget"'],
+      must_not_contain=["sys.", "OBJECT_ID"])
+
+check("sys.indexes guard → pg_indexes",
+      "IF NOT EXISTS (SELECT 1 FROM sys.indexes "
+      "WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID' "
+      "AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Entity]'))\n"
+      "BEGIN\n"
+      "    CREATE INDEX IDX_AUTO_MJ_FKEY_Entity_ParentID ON [${flyway:defaultSchema}].[Entity] ([ParentID]);\n"
+      "END",
+      must_contain=["pg_indexes", "schemaname = '${flyway:defaultSchema}'",
+                    "tablename = 'Entity'", "indexname = 'IDX_AUTO_MJ_FKEY_Entity_ParentID'",
+                    "CREATE INDEX"],
+      must_not_contain=["sys.", "OBJECT_ID"])
+
+check("unrecognized sys.* guard → whole IF routed to unhandled, sys.* never emitted",
+      "IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_x')\n"
+      "BEGIN\n"
+      "    ALTER TABLE ${flyway:defaultSchema}.Foo DROP CONSTRAINT FK_x;\n"
+      "END",
+      must_not_contain=["sys.", "DO $$", "DROP CONSTRAINT"],
+      expect_unhandled=1)
+
+# --- IF…BEGIN body scanner: CASE…END and in-string END don't truncate the block -----
+check("CASE…END (and 'END' in a literal) inside a guarded UPDATE; same-batch DDL after survives",
+      "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Widget WHERE ID = 'a')\n"
+      "BEGIN\n"
+      "    UPDATE ${flyway:defaultSchema}.Widget "
+      "SET Status = CASE WHEN Score > 5 THEN 'High' ELSE 'Low' END, Name = 'THE END';\n"
+      "END\n"
+      "CREATE TABLE ${flyway:defaultSchema}.AfterBlock (ID UNIQUEIDENTIFIER NOT NULL);",
+      must_contain=["DO $$", "CASE WHEN", "'High'", "'THE END'", "END IF;",
+                    'CREATE TABLE ${flyway:defaultSchema}."AfterBlock"'],
+      must_not_contain=[])
+
+# --- hand-written routines: report, never emit half-translated bodies ----------------
+check("bare CREATE PROCEDURE → unhandled, no invalid '$x' PG emitted; same-batch DDL survives",
+      "CREATE TABLE ${flyway:defaultSchema}.Job (ID UNIQUEIDENTIFIER NOT NULL);\n"
+      "GO\n"
+      "CREATE PROCEDURE ${flyway:defaultSchema}.spClaimJob @x INT AS BEGIN "
+      "UPDATE ${flyway:defaultSchema}.Job SET LockToken = @x; END;",
+      must_contain=['CREATE TABLE ${flyway:defaultSchema}."Job"'],
+      must_not_contain=["CREATE PROCEDURE", "$x"],
+      expect_unhandled=1)
+
+check("bare CREATE FUNCTION → unhandled (T-SQL body is not transpilable)",
+      "CREATE FUNCTION ${flyway:defaultSchema}.GetThing (@id UNIQUEIDENTIFIER) "
+      "RETURNS NVARCHAR(100) AS BEGIN RETURN 'x'; END;",
+      must_not_contain=["CREATE FUNCTION"],
+      expect_unhandled=1)
+
 if _failures:
     print(f"\n{_failures} test(s) FAILED")
     sys.exit(1)

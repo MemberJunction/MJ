@@ -143,11 +143,32 @@ Step 5 is the linchpin: every view/sproc/permission that category A would have t
 
 ## 6.5 Implementation status
 
+**UNIFIED 2026-06-09.** Classification and transpilation now run through ONE path:
+`extractKeptTSQL` (TS classification — the single source of truth for what survives the
+split) → `TSQLToPGTranspiler` (the AST dialect, invoked via `MJPostgresTranspiler` in
+`@memberjunction/sqlglot-ts`) → `convertMigration` (assembles the `.pg.sql` with gap
+comments). The legacy regex BatchConverter is no longer in the `--split` path.
+
+**The pipeline's contract — nothing drops silently.** Every statement either (a) lands in
+the output, (b) is dropped because a generator reproduces it natively (`mj codegen` /
+`mj sync push`), counted and named in the report, or (c) is surfaced as a GAP:
+- hand-written routines → the migration is written as `<name>.pg.sql.needs-hand`
+  (NOT a discoverable `.pg.sql`) with its transpiled DDL + a `NEEDS HAND-AUTHORING`
+  comment block; finish it (human or LLM last-mile) and rename to `.pg.sql`;
+- statements the AST dialect can't emit → embedded as `UNHANDLED` comments in the
+  output and listed in the summary;
+- any gap fails the run (non-zero exit) unless `--allow-gaps` is passed.
+
+**To run:** `mj migrate convert --split` (requires Python 3 + `pip install sqlglot`;
+set `MJ_SQLGLOT_PYTHON` if the interpreter isn't `python3` on PATH).
+
 | Piece | Status |
 |---|---|
-| `MigrationSplitter` (`splitMigration`) — deterministic split + classification | ✅ built, 10 unit tests |
-| `MigrationConverter` (`convertMigration`) — drop A, reseed M, transpile B, flag C | ✅ built, 6 unit tests |
-| `mj migrate convert --split` — opt-in CLI flow (non-breaking) | ✅ built, runs end-to-end |
+| `MigrationSplitter` (`splitMigration`) — deterministic split + classification | ✅ built, 12 unit tests (incl. multi-line string-literal state regression) |
+| `extractKeptTSQL` — single classification entry point (banner + statement mode) | ✅ built, 21 converter tests |
+| `convertMigration` — async, AST-transpiler-backed, gap-surfacing assembly | ✅ built (consumes `extractKeptTSQL`; registration recovery on every path) |
+| `MJPostgresTranspiler` (`@memberjunction/sqlglot-ts`) — one-shot dialect bridge | ✅ built, 5 integration tests |
+| `mj migrate convert --split` — AST-backed CLI, fail-loud on gaps | ✅ built, smoke-tested (KnowledgeHub: 63 registration INSERTs recovered; watchdog: `.needs-hand` + exit 2) |
 | Census + validation harnesses (`scripts/migration-census.mts`, `convert-validate.mts`) | ✅ built; produced the numbers above |
 | Backlog validation: 144 files, 2.0% transpile surface, 0 errors/TODOs | ✅ done |
 | mj-sync re-seed viability (does `mj sync push` reproduce metadata on PG?) | ✅ answered — **yes** for mj-sync-owned data; Entity/Field catalog comes from CodeGen; `Backfill_*` is plain DML (already routed to transpile) |
