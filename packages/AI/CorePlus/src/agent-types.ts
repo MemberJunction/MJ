@@ -1349,6 +1349,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     sessionID?: string;
 
     /**
+     * The persisted MJ: AI Agent Sessions record ID this run belongs to, if the run is part of
+     * a real-time/long-lived session. Distinct from the transport `sessionID` (per-connection
+     * correlation id). Used to group the multiple AIAgentRuns of one session and to stamp
+     * ConversationDetail/AIAgentRun rows.
+     */
+    agentSessionID?: string;
+
+    /**
      * Optional runtime override for client tool timeout (ms).
      * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
      */
