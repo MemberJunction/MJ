@@ -880,11 +880,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // See plans/scheduled-job-engine-decoupling.md and the migration
         // V202606022027__v5.39.x__Scheduling_Engine_Atomic_Stats_Update.sql.
         // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
+        // Dialect-aware call (EXEC on SQL Server, SELECT * FROM fn() on PostgreSQL)
+        // — see buildLockSprocCall.
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
-        const schema = provider.MJCoreSchemaName;
         await provider.ExecuteSQL(
-            `EXEC [${schema}].[spUpdateScheduledJobStatistics] ` +
-                `@JobID=@p0, @Success=@p1, @LastRunAt=@p2, @NextRunAt=@p3`,
+            this.buildLockSprocCall(provider, 'spUpdateScheduledJobStatistics',
+                ['JobID', 'Success', 'LastRunAt', 'NextRunAt']),
             [job.ID, success ? 1 : 0, now, nextRun],
             { isMutation: true, description: 'spUpdateScheduledJobStatistics' },
             this.Base.ContextUser
@@ -959,6 +960,37 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * Build a dialect-appropriate call to one of the scheduling lock sprocs,
+     * preserving the MJ positional-parameter-array convention.
+     *
+     * SQL Server: `EXEC [schema].[name] @JobID=@p0, @Token=@p1, …` — the sproc's
+     *   own parameters are bound by name to the positional `@pN` placeholders the
+     *   provider substitutes by index.
+     * PostgreSQL: `SELECT * FROM schema."name"($1, $2, …)` — the lock sprocs are
+     *   ported to plpgsql functions (see the v5.40.x scheduling-engine PG
+     *   migration) and `pg` binds `$N` placeholders positionally.
+     *
+     * In BOTH cases the SAME positional value array is handed to ExecuteSQL;
+     * only the call wrapper and placeholder syntax differ. The EXEC-vs-SELECT
+     * wrapper lives in `provider.Dialect.ProcedureCallSyntax`, so it is never
+     * duplicated here — this helper only supplies the per-dialect placeholders.
+     *
+     * @param sprocParamNames the sproc's parameter names IN DECLARED ORDER; their
+     *   positions must line up with the value array passed to ExecuteSQL.
+     * @private
+     */
+    private buildLockSprocCall(
+        provider: DatabaseProviderBase,
+        sprocName: string,
+        sprocParamNames: string[]
+    ): string {
+        const placeholders = provider.PlatformKey === 'postgresql'
+            ? sprocParamNames.map((_name, i) => `$${i + 1}`)
+            : sprocParamNames.map((name, i) => `@${name}=@p${i}`);
+        return provider.Dialect.ProcedureCallSyntax(provider.MJCoreSchemaName, sprocName, placeholders);
+    }
+
+    /**
      * Try to acquire a lock for job execution
      * @private
      */
@@ -982,14 +1014,16 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         const expectedCompletion = new Date(Date.now() + this._leaseTimeoutMs);
 
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
-        const schema = provider.MJCoreSchemaName;
-        // MJ pattern: positional parameter array with @p0/@p1/... placeholders.
-        // SQLServerDataProvider binds positional params by index (request.input('p0', val)).
-        // The sproc's own parameters are bound by name via `@SprocParam=@p0` syntax.
-        // See packages/SchemaEngine/src/RuntimeSchemaManager.ts for the canonical example.
+        // MJ pattern: positional parameter array. The placeholder + call-wrapper
+        // syntax differs per platform — SQL Server binds the sproc's params by
+        // name to positional @p0/@p1 placeholders (request.input('p0', val)) via
+        // `EXEC`; PostgreSQL binds $1/$2 positionally via `SELECT * FROM fn(...)`.
+        // buildLockSprocCall picks the right form; the SAME value array below
+        // serves both. See packages/SchemaEngine/src/RuntimeSchemaManager.ts for
+        // the canonical SQL Server example.
         const rows = await provider.ExecuteSQL<{ Acquired: number }>(
-            `EXEC [${schema}].[spAcquireScheduledJobLock] ` +
-                `@JobID=@p0, @Token=@p1, @Instance=@p2, @ExpectedCompletionAt=@p3`,
+            this.buildLockSprocCall(provider, 'spAcquireScheduledJobLock',
+                ['JobID', 'Token', 'Instance', 'ExpectedCompletionAt']),
             [jobId, token, instance, expectedCompletion],
             { isMutation: true, description: 'spAcquireScheduledJobLock' },
             this.Base.ContextUser
@@ -1012,11 +1046,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async releaseLockIfTokenMatches(jobId: string, expectedToken: string): Promise<boolean> {
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
-        const schema = provider.MJCoreSchemaName;
         // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
+        // Dialect-aware call — see buildLockSprocCall.
         const rows = await provider.ExecuteSQL<{ Released: number }>(
-            `EXEC [${schema}].[spReleaseScheduledJobLockIfTokenMatches] ` +
-                `@JobID=@p0, @ExpectedToken=@p1`,
+            this.buildLockSprocCall(provider, 'spReleaseScheduledJobLockIfTokenMatches',
+                ['JobID', 'ExpectedToken']),
             [jobId, expectedToken],
             { isMutation: true, description: 'spReleaseScheduledJobLockIfTokenMatches' },
             this.Base.ContextUser
@@ -1046,6 +1080,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async probeLockSprocPermissions(): Promise<void> {
         try {
             const provider = this.Base.ProviderToUse as DatabaseProviderBase;
+            // sys.fn_my_permissions is SQL Server-only. On other platforms
+            // (e.g. PostgreSQL) skip the probe rather than relying on the catch
+            // below — avoids an error-shaped log line at boot. Any real grant
+            // issue still surfaces at the first sproc call.
+            if (provider.PlatformKey !== 'sqlserver') {
+                this.log(`Lock sproc permission probe skipped (platform: ${provider.PlatformKey})`);
+                return;
+            }
             const schema = provider.MJCoreSchemaName;
             const sql = `SELECT permission_name FROM sys.fn_my_permissions(` +
                 `'${schema}.spAcquireScheduledJobLock', 'OBJECT') WHERE permission_name = 'EXECUTE'`;

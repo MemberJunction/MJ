@@ -99,6 +99,19 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
     /** Entity Document options for the selected entity. Only shown when 2+ docs exist. */
     @Input() EntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
 
+    /**
+     * All Entity Documents across entities (each with `EntityName`), used to power
+     * the optional multi-entity source selector. When two or more are selected the
+     * run becomes a multi-entity analysis (their vectors are merged server-side).
+     */
+    @Input() AllEntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
+
+    /** Whether to show the 2D/3D projection toggle. @default true */
+    @Input() ShowDimensionToggle = true;
+
+    /** Whether to show the multi-entity source selector. @default true */
+    @Input() ShowMultiEntity = true;
+
     // ================================================================
     // Customization Inputs
     // ================================================================
@@ -222,6 +235,13 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
      */
     @Output() AlgorithmChanged = new EventEmitter<ClusterAlgorithm>();
 
+    /**
+     * Fires when the 2D/3D projection toggle changes. Hosts should re-run (or
+     * re-project) so the change is reflected immediately — a 3D projection needs
+     * a Z coordinate that only a fresh run produces.
+     */
+    @Output() DimensionsChanged = new EventEmitter<2 | 3>();
+
     // ================================================================
     // Internal State
     // ================================================================
@@ -234,6 +254,9 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
 
     /** Whether the panel body is currently visible. */
     public IsExpanded = true;
+
+    /** Whether the multi-entity source selector is expanded. */
+    public ShowMultiSource = false;
 
     /** Algorithm options for the dropdown. */
     public AlgorithmOptions: Array<{ Value: ClusterAlgorithm; Label: string }> = [
@@ -338,12 +361,83 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
         this.emitConfigChanged();
     }
 
+    // ----- Multi-entity / dimensions / color-by -----
+
+    /** The currently selected entity-document IDs for multi-entity clustering. */
+    public get SelectedDocIDs(): string[] {
+        return this.Config.EntityDocumentIDs ?? [];
+    }
+
+    /** True when two or more source documents are selected (multi-entity mode). */
+    public get IsMultiEntity(): boolean {
+        return this.SelectedDocIDs.length >= 2;
+    }
+
+    /** Whether there are enough documents to offer multi-entity selection. */
+    public get HasMultiSourceOptions(): boolean {
+        return this.ShowMultiEntity && this.AllEntityDocOptions.length > 1;
+    }
+
+    /** Whether a given document is currently selected. */
+    public IsDocSelected(id: string): boolean {
+        return this.SelectedDocIDs.includes(id);
+    }
+
+    /** Toggle a document in/out of the multi-entity selection. */
+    public ToggleDoc(id: string): void {
+        const set = new Set(this.Config.EntityDocumentIDs ?? []);
+        if (set.has(id)) {
+            set.delete(id);
+        } else {
+            set.add(id);
+        }
+        this.Config.EntityDocumentIDs = [...set];
+        // Once a multi-entity selection exists, color-by-entity is the useful default.
+        if (this.IsMultiEntity && this.Config.ColorBy !== 'entity') {
+            this.Config.ColorBy = 'entity';
+        }
+        this.emitConfigChanged();
+        this.cdr.detectChanges();
+    }
+
+    /** Toggle the multi-source expander. */
+    public ToggleMultiSource(): void {
+        this.ShowMultiSource = !this.ShowMultiSource;
+        this.cdr.detectChanges();
+    }
+
+    /** Set the projection dimensionality (2 or 3). */
+    public SetDimensions(d: 2 | 3): void {
+        if (this.Config.Dimensions === d) return;
+        this.Config.Dimensions = d;
+        this.emitConfigChanged();
+        this.DimensionsChanged.emit(d);
+        this.cdr.detectChanges();
+    }
+
+    /** Set the legend/color mode. */
+    public SetColorBy(mode: 'cluster' | 'entity'): void {
+        this.Config.ColorBy = mode;
+        this.emitConfigChanged();
+        this.cdr.detectChanges();
+    }
+
+    /** Whether the Run button can be clicked. */
+    public get CanRun(): boolean {
+        return !this.IsRunning && (!!this.Config.EntityName || this.SelectedDocIDs.length > 0);
+    }
+
+    /** Whether the Save button should be offered (there are results to save). */
+    public get CanSave(): boolean {
+        return this.ShowSaveButton && !!this.Metrics && this.Metrics.RecordCount > 0;
+    }
+
     /**
      * Handle Run button click.  Fires `BeforeRunClustering`, and if not
      * canceled, emits `RunClustering`.
      */
     public OnRun(): void {
-        if (!this.Config.EntityName || this.IsRunning) return;
+        if (!this.CanRun) return;
 
         const snapshot = { ...this.Config };
         const cancelable: CancelableEvent<ClusterConfig> = { Data: snapshot, Cancel: false };

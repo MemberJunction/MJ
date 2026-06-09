@@ -447,6 +447,18 @@ export class ApplicationManager {
   }
 
   /**
+   * Canonical `/app/:slug` URL for an application. Uses the app's `Path`
+   * (what {@link GetAppByPath} matches on), falling back to `Name`, and
+   * url-encodes the segment. This is the single source of truth for app URLs —
+   * never hand-roll a slug from `Name` (e.g. spaces→hyphens), because a custom
+   * `Path` would then diverge from the URL and `GetAppByPath` would fail to
+   * resolve it (broken navigation / redirect loops).
+   */
+  GetAppUrl(app: BaseApplication): string {
+    return `/app/${encodeURIComponent(app.Path || app.Name)}`;
+  }
+
+  /**
    * Get application by name
    */
   GetAppByName(name: string): BaseApplication | undefined {

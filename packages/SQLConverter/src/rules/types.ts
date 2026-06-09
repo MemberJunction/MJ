@@ -5,6 +5,8 @@
  * or bypass sqlglot entirely for statement types it handles natively.
  */
 
+import { seedCoreMetadataBooleanColumns } from './CoreMetadataBooleanColumns.js';
+
 /** Classification labels for SQL batches/statements */
 export type StatementType =
   | 'CREATE_TABLE'
@@ -167,11 +169,18 @@ export function createConversionContext(
   targetDialect: string,
   schema: string = '__mj'
 ): ConversionContext {
+  // Seed boolean column types for MJ's long-lived core metadata tables (Entity,
+  // EntityField, EntityPermission, …). CodeGen emits metadata INSERTs into these
+  // baseline tables from inside migrations that never re-create them, so without
+  // this seed InsertRule can't know to rewrite BIT 0/1 literals to FALSE/TRUE.
+  const tableColumns = new Map<string, Map<string, string>>();
+  seedCoreMetadataBooleanColumns(tableColumns);
+
   return {
     SourceDialect: sourceDialect,
     TargetDialect: targetDialect,
     Schema: schema,
-    TableColumns: new Map(),
+    TableColumns: tableColumns,
     HandWrittenFunctions: new Map(),
     CreatedFunctions: new Set(),
     CreatedViews: new Set(),

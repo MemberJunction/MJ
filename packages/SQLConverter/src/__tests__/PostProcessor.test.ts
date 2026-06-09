@@ -440,12 +440,24 @@ describe('postProcess', () => {
   // 22. flyway_schema_history removal
   // ============================================================
   describe('flyway_schema_history removal', () => {
-    it('should remove lines containing flyway_schema_history', () => {
+    it('should remove structural (bare-identifier) references to flyway_schema_history', () => {
       const input = 'SELECT 1;\nINSERT INTO flyway_schema_history VALUES (1);\nSELECT 2;';
       const result = postProcess(input);
       expect(result).not.toContain('flyway_schema_history');
       expect(result).toContain('SELECT 1;');
       expect(result).toContain('SELECT 2;');
+    });
+
+    it('should preserve a data row where flyway_schema_history appears inside a string literal', () => {
+      // The Query seed row stores a saved SQL string that mentions the table.
+      // It must NOT be stripped — doing so dropped the Query and orphaned its
+      // QueryField FKs in the baseline.
+      const input =
+        "INSERT INTO __mj.\"Query\" (\"ID\", \"Name\", \"SQL\") VALUES ('23f8423e', 'Server Installed Version History', 'SELECT * FROM __mj.flyway_schema_history ORDER BY installed_on DESC');";
+      const result = postProcess(input);
+      expect(result).toContain("'23f8423e'");
+      expect(result).toContain('Server Installed Version History');
+      expect(result).toContain('flyway_schema_history'); // kept inside the string literal
     });
   });
 
