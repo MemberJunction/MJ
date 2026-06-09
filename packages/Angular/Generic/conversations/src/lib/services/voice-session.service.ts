@@ -117,6 +117,11 @@ interface OAIInputAudioBufferSpeechStarted {
   type: 'input_audio_buffer.speech_started';
 }
 
+/** A new response (turn) started — tracked so we never start a second overlapping response. */
+interface OAIResponseCreated {
+  type: 'response.created';
+}
+
 /** A full response (turn) completed — carries usage; ignored for the MVP. */
 interface OAIResponseDone {
   type: 'response.done';
@@ -140,6 +145,7 @@ type OpenAIRealtimeEvent =
   | OAIInputAudioTranscriptionCompleted
   | OAIFunctionCallArgumentsDone
   | OAIInputAudioBufferSpeechStarted
+  | OAIResponseCreated
   | OAIResponseDone
   | OAIErrorEvent
   | OAIUnknownEvent;
@@ -194,6 +200,12 @@ export class VoiceSessionService {
   private delegationProgressSub: Subscription | null = null;
   /** Timestamp (ms) of the last narration `response.create` we triggered; 0 = never. */
   private lastDelegationNarrationAt = 0;
+  /** The last progress message we narrated, so we never repeat the same update. */
+  private lastNarratedMessage = '';
+  /** True while the model has a response in flight; gates narration + queues the tool result. */
+  private responseActive = false;
+  /** Set when a tool result is ready while a response is active; sent on the next response.done. */
+  private pendingResultResponse = false;
 
   private _provider: IMetadataProvider | null = null;
 
@@ -453,8 +465,14 @@ export class VoiceSessionService {
         // that the user has the floor again.
         this._connectionState$.next('listening');
         break;
+      case 'response.created':
+        this.responseActive = true;
+        break;
       case 'response.done':
-        // Usage telemetry — ignored for the MVP (server checkpoints its own).
+        // A turn finished — release the lock and speak any queued tool result so the
+        // model always voices the answer when delegated work comes back.
+        this.responseActive = false;
+        this.flushPendingResultResponse();
         if (this._connectionState$.value === 'speaking') {
           this._connectionState$.next('listening');
         }
@@ -554,8 +572,36 @@ export class VoiceSessionService {
         output: resultJson
       }
     });
+    this.requestResultResponse();
+  }
+
+  /**
+   * Asks the model to speak the tool result — immediately if it's idle, otherwise queued
+   * until the current response (e.g. a progress narration) finishes. Without this the
+   * result's `response.create` would collide with an in-flight narration and be dropped,
+   * leaving the model silent when the delegated work comes back.
+   */
+  private requestResultResponse(): void {
+    if (!this.dataChannel) {
+      return;
+    }
+    if (this.responseActive) {
+      this.pendingResultResponse = true;
+      return;
+    }
+    this.responseActive = true;
     this.sendEvent(this.dataChannel, { type: 'response.create' });
-    // We're back to the model producing audio.
+    this._connectionState$.next('speaking');
+  }
+
+  /** On a turn completing, fire any queued tool-result response so the answer is spoken. */
+  private flushPendingResultResponse(): void {
+    if (!this.pendingResultResponse || !this.dataChannel) {
+      return;
+    }
+    this.pendingResultResponse = false;
+    this.responseActive = true;
+    this.sendEvent(this.dataChannel, { type: 'response.create' });
     this._connectionState$.next('speaking');
   }
 
@@ -654,10 +700,14 @@ export class VoiceSessionService {
       return;
     }
     this.injectProgressContext(channel, progress.Message);
-    if (this.shouldNarrateNow()) {
-      this.lastDelegationNarrationAt = Date.now();
-      this.requestProgressNarration(channel);
+    // Narrate only a genuinely-new update, while the model is idle (never collide with the
+    // tool-result response), and throttled — so it conveys real status, not robotic repeats.
+    if (progress.Message === this.lastNarratedMessage || this.responseActive || !this.shouldNarrateNow()) {
+      return;
     }
+    this.lastNarratedMessage = progress.Message;
+    this.lastDelegationNarrationAt = Date.now();
+    this.requestProgressNarration(channel, progress.Message);
   }
 
   /** Sends a developer-role context item describing the latest background progress. */
@@ -672,13 +722,16 @@ export class VoiceSessionService {
     });
   }
 
-  /** Triggers a short, conservative spoken update about the background progress. */
-  private requestProgressNarration(channel: RTCDataChannel): void {
+  /** Triggers a short spoken update that conveys THIS specific progress message naturally. */
+  private requestProgressNarration(channel: RTCDataChannel, message: string): void {
+    this.responseActive = true;
     this.sendEvent(channel, {
       type: 'response.create',
       response: {
         instructions:
-          'Briefly and naturally reassure the user about this background progress in one short sentence; skip if not helpful.'
+          `The agent doing the work in the background just reported: "${message}". ` +
+          `Tell the user what is happening right now in one short, natural sentence in your own words. ` +
+          `Do not repeat earlier updates and do not say generic things like "it's still running in the background".`
       }
     });
   }
@@ -695,6 +748,9 @@ export class VoiceSessionService {
       this.delegationProgressSub = null;
     }
     this.lastDelegationNarrationAt = 0;
+    this.lastNarratedMessage = '';
+    this.responseActive = false;
+    this.pendingResultResponse = false;
   }
 
   // ── Teardown ───────────────────────────────────────────────────────────────
