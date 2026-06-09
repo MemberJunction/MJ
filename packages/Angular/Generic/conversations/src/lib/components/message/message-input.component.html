@@ -7,23 +7,44 @@
     </div>
   }
 
-  <!-- Message Input Box -->
-  <mj-message-input-box
-    #inputBox
-    [placeholder]="placeholder"
-    [disabled]="disabled || isProcessing"
-    [showCharacterCount]="false"
-    [enableMentions]="enableMentions"
-    [enableAttachments]="enableAttachments"
-    [maxAttachments]="maxAttachments"
-    [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-    [acceptedFileTypes]="acceptedFileTypes"
-    [currentUser]="currentUser"
-    [rows]="3"
-    [(value)]="messageText"
-    (textSubmitted)="onTextSubmitted($event)"
-    (attachmentsChanged)="onAttachmentsChanged($event)"
-    (attachmentError)="onAttachmentError($event)"
-    (artifactPickerRequested)="onArtifactPickerRequested()">
-  </mj-message-input-box>
+  <!-- Composer row: input box + voice (mic) button -->
+  <div class="message-input-row">
+    <!-- Message Input Box -->
+    <mj-message-input-box
+      #inputBox
+      [placeholder]="placeholder"
+      [disabled]="disabled || isProcessing"
+      [showCharacterCount]="false"
+      [enableMentions]="enableMentions"
+      [enableAttachments]="enableAttachments"
+      [maxAttachments]="maxAttachments"
+      [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+      [acceptedFileTypes]="acceptedFileTypes"
+      [currentUser]="currentUser"
+      [rows]="3"
+      [(value)]="messageText"
+      (textSubmitted)="onTextSubmitted($event)"
+      (attachmentsChanged)="onAttachmentsChanged($event)"
+      (attachmentError)="onAttachmentError($event)"
+      (artifactPickerRequested)="onArtifactPickerRequested()">
+    </mj-message-input-box>
+
+    <!-- Start voice (mic) button -->
+    <button
+      mjButton
+      variant="icon"
+      size="md"
+      class="voice-mic-button"
+      [class.voice-mic-button--active]="voiceActive"
+      [disabled]="!canStartVoice"
+      (click)="onStartVoice()"
+      [title]="voiceActive ? 'Voice session active' : 'Start voice'">
+      <i class="fa-solid fa-microphone" aria-hidden="true"></i>
+    </button>
+  </div>
 </div>
+
+<!-- Live voice session overlay (rendered only while a session is active) -->
+@if (voiceActive) {
+  <mj-voice-overlay (Ended)="onVoiceEnded()"></mj-voice-overlay>
+}

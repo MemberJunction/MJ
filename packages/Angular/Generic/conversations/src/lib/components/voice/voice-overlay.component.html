@@ -1,0 +1,54 @@
+@if (ConnectionState$ | async; as state) {
+  <div class="voice-overlay" role="dialog" aria-label="Voice session">
+    <!-- Header / turn state -->
+    <div class="voice-overlay__header">
+      <div class="voice-overlay__state">
+        @if (IsConnecting(state)) {
+          <mj-loading text="Connecting…" size="small"></mj-loading>
+        } @else {
+          <i class="fa-solid voice-overlay__state-icon" [ngClass]="StateIcon(state)" aria-hidden="true"></i>
+          <span class="voice-overlay__state-label">{{ StateLabel(state) }}</span>
+        }
+      </div>
+
+      <!-- Voice-activity orb (state-driven) -->
+      <div class="voice-overlay__orb" [attr.data-state]="state" aria-hidden="true"></div>
+    </div>
+
+    <!-- Live captions -->
+    @if (ShowCaptions) {
+      <div class="voice-overlay__captions">
+        @for (caption of (Captions$ | async); track $index) {
+          <div class="voice-overlay__caption" [attr.data-role]="caption.Role">
+            <span class="voice-overlay__caption-role">{{ caption.Role === 'User' ? 'You' : 'Agent' }}</span>
+            <span class="voice-overlay__caption-text">{{ caption.Text }}</span>
+          </div>
+        } @empty {
+          <div class="voice-overlay__caption voice-overlay__caption--empty">
+            Captions will appear here as you speak.
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Controls: affirmative actions on the LEFT (MJ convention) -->
+    <div class="voice-overlay__controls">
+      <button mjButton variant="danger" size="md" (click)="EndCall()" title="End call">
+        <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+        <span>End</span>
+      </button>
+
+      <button mjButton variant="secondary" size="md" [selected]="IsMuted" (click)="ToggleMute()"
+              [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'">
+        <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+        <span>{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
+      </button>
+
+      <button mjButton variant="flat" size="md" [selected]="ShowCaptions" (click)="ToggleCaptions()"
+              [title]="ShowCaptions ? 'Hide captions' : 'Show captions'">
+        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+        <span>Captions</span>
+      </button>
+    </div>
+  </div>
+}

@@ -31,6 +31,7 @@ export * from './lib/services/collection-state.service';
 export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
+export * from './lib/services/voice-session.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -67,3 +68,4 @@ export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
+export * from './lib/components/voice/voice-overlay.component';

@@ -20,6 +20,7 @@ import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
+import { VoiceSessionService } from '../../services/voice-session.service';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -202,9 +203,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
-    private bridge: ConversationBridgeService
+    private bridge: ConversationBridgeService,
+    private voiceSession: VoiceSessionService
   ) {
   super();}
+
+  // ── Voice session (real-time Voice Co-Agent) ───────────────────────────────
+  /** True while a live voice session is active — drives the overlay + mic state. */
+  public voiceActive: boolean = false;
+  private voiceActiveSub?: Subscription;
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider.
@@ -213,6 +220,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.dataCache.Provider = p;
     this.activeTasks.Provider = p;
     this.attachmentService.Provider = p;
+    this.voiceSession.Provider = p;
+
+    // Reflect the live voice-session Active flag into a local field for the template.
+    this.voiceActiveSub = this.voiceSession.Active$.subscribe(active => {
+      this.voiceActive = active;
+    });
 
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
@@ -266,6 +279,60 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ngOnDestroy() {
     // Unregister all streaming callbacks
     this.unregisterAllCallbacks();
+    this.voiceActiveSub?.unsubscribe();
+    // If the user navigates away mid-call, tear the session down.
+    if (this.voiceSession.IsActive) {
+      void this.voiceSession.EndVoiceSession();
+    }
+  }
+
+  /**
+   * Resolve the agent the voice session should front for THIS conversation.
+   * Mirrors the routing precedence used for text turns ({@link routeMessage}):
+   *   1. last non-Sage agent (continuity)
+   *   2. per-conversation pinned default
+   *   3. embedder-supplied default
+   *   4. Sage fallback
+   * Returns null only if Sage itself failed to load.
+   */
+  public resolveCurrentAgentId(): string | null {
+    return this.findLastNonSageAgentId()
+      ?? this.conversationDefaultAgentId
+      ?? this.defaultAgentId
+      ?? this.converationManagerAgent?.ID
+      ?? null;
+  }
+
+  /** True when the mic button should be enabled (have an agent + not disabled). */
+  public get canStartVoice(): boolean {
+    return !this.disabled && !this.voiceActive && !!this.resolveCurrentAgentId();
+  }
+
+  /**
+   * Start a real-time voice session fronting the conversation's current agent.
+   * Client-direct: the VoiceSessionService mints an ephemeral token and connects
+   * the browser straight to the realtime provider over WebRTC.
+   */
+  public async onStartVoice(): Promise<void> {
+    if (!this.canStartVoice) {
+      return;
+    }
+    const targetAgentId = this.resolveCurrentAgentId();
+    if (!targetAgentId) {
+      this.toastService.error('No agent available for a voice session.');
+      return;
+    }
+    try {
+      await this.voiceSession.StartVoiceSession(targetAgentId, this.conversationId);
+    } catch (error) {
+      console.error('Failed to start voice session:', error);
+      this.toastService.error('Could not start the voice session.');
+    }
+  }
+
+  /** Overlay emitted "Ended" — nothing extra to do; Active$ already flipped false. */
+  public onVoiceEnded(): void {
+    // no-op: voiceActive is driven by the Active$ subscription
   }
 
   /**

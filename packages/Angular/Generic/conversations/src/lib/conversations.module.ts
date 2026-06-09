@@ -70,6 +70,7 @@ import { GlobalTasksPanelComponent } from './components/global-tasks/global-task
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
+import { VoiceOverlayComponent } from './components/voice/voice-overlay.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -150,13 +151,15 @@ const COMPONENTS = [
     CollectionShareModalComponent,
     UserPickerComponent,
     ArtifactCollectionPickerModalComponent,
-    ArtifactShareModalComponent
+    ArtifactShareModalComponent,
+    VoiceOverlayComponent
   ],
   exports: [
     ...COMPONENTS,
     SearchShortcutDirective,
     // Standalone components
-    TasksFullViewComponent
+    TasksFullViewComponent,
+    VoiceOverlayComponent
   ]
 })
 export class ConversationsModule { }
