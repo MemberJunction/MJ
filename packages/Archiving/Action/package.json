@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/archiving-action",
   "type": "module",
-  "version": "5.39.0",
+  "version": "5.40.0",
   "description": "Archive and restore actions for MemberJunction Archiving Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,11 +15,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.39.0",
-    "@memberjunction/global": "5.39.0",
-    "@memberjunction/actions-base": "5.39.0",
-    "@memberjunction/actions": "5.39.0",
-    "@memberjunction/archiving-engine": "5.39.0"
+    "@memberjunction/core": "5.40.0",
+    "@memberjunction/global": "5.40.0",
+    "@memberjunction/actions-base": "5.40.0",
+    "@memberjunction/actions": "5.40.0",
+    "@memberjunction/archiving-engine": "5.40.0"
   },
   "repository": {
     "type": "git",
