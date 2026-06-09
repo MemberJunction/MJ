@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons } from './ExpressionHelpers.js';
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
@@ -27,7 +27,7 @@ export class ConditionalDDLRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL IF NOT EXISTS / IF OBJECT_ID guards around DDL (CREATE INDEX, CREATE TABLE, etc.) need conversion to PG IF NOT EXISTS clauses or DO $ BEGIN ... EXCEPTION blocks. sqlglot does not perform this structural transformation.';
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;
 
     // Convert identifiers: [schema].[table] → schema."table"
@@ -69,6 +69,14 @@ export class ConditionalDDLRule implements IConversionRule {
 
     // Convert IF NOT EXISTS (...) BEGIN ... END → DO $$ BEGIN IF NOT EXISTS (...) THEN ... END IF; END $$;
     result = this.convertToDoBlock(result);
+
+    // CodeGen wraps its metadata INSERTs in IF-NOT-EXISTS guards, so the INSERT
+    // lands inside the DO block above and never passes through InsertRule. Cast
+    // its BIT (0/1) literals to PG boolean here using the same shared helper.
+    result = castBooleanInsertValues(result, context.TableColumns);
+    // Also fold any `"BoolCol" = 0/1` comparisons (e.g. inside the IF guard or an
+    // UPDATE body) to FALSE/TRUE.
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     return result + '\n';
   }
@@ -304,6 +312,12 @@ export class ConditionalDDLRule implements IConversionRule {
       }
     }
 
+    // Translate SQL Server constraint catalog views (sys.key_constraints,
+    // sys.check_constraints, sys.foreign_keys) into PG's pg_constraint before
+    // PascalCase quoting — these idempotency guards have no direct PG catalog
+    // equivalent and would otherwise reference a non-existent relation.
+    condition = this.convertConstraintCatalogCondition(condition);
+
     // Quote PascalCase column names that aren't already quoted
     condition = this.quoteColumnNames(condition);
     body = this.quoteColumnNames(body);
@@ -415,6 +429,39 @@ export class ConditionalDDLRule implements IConversionRule {
       if (ConditionalDDLRule.SQL_KEYWORDS.has(word.toUpperCase())) return match;
       return `"${word}"`;
     });
+  }
+
+  /**
+   * Convert T-SQL constraint-catalog existence checks to PG's pg_constraint.
+   *
+   * SQL Server exposes constraints through several catalog views — sys.key_constraints
+   * (PK/UNIQUE), sys.check_constraints (CHECK), and sys.foreign_keys (FK) — each keyed
+   * by a `name` column. PostgreSQL stores all of them in a single pg_constraint catalog
+   * keyed by `conname`. So an idempotency guard like:
+   *
+   *     SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_Foo'
+   *
+   * becomes:
+   *
+   *     SELECT 1 FROM pg_constraint WHERE conname = 'UQ_Foo'
+   *
+   * The `name = '...'` match is sufficient for the guard (constraint names are unique
+   * within a schema in our migrations). Returns the condition unchanged if none of the
+   * constraint catalogs are referenced.
+   */
+  private convertConstraintCatalogCondition(condition: string): string {
+    if (!/\bsys\.(key_constraints|check_constraints|foreign_keys)\b/i.test(condition)) {
+      return condition;
+    }
+    let result = condition.replace(
+      /\bsys\.(key_constraints|check_constraints|foreign_keys)\b/gi,
+      'pg_constraint'
+    );
+    // Map the SS catalog's `name` column to pg_constraint's `conname`. Only the
+    // bare `name` identifier (not part of a larger word, not already prefixed)
+    // is rewritten.
+    result = result.replace(/(?<![\w.])name\b/gi, 'conname');
+    return result;
   }
 
   private convertTypes(sql: string): string {

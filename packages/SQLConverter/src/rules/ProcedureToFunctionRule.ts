@@ -42,7 +42,7 @@ const ORPHANED_RETURN_VIEWS = new Set<string>([
  * for PostgreSQL via the `*_JSON_Arg_Shape.pg-only.sql` overrides. (This restores
  * the documented behavior — the converted v5.37 baseline already skipped these.)
  */
-const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
+export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
 
 export class ProcedureToFunctionRule implements IConversionRule {
   Name = 'ProcedureToFunctionRule';
