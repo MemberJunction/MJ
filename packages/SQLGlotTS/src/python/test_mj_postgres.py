@@ -302,6 +302,29 @@ check("UPDATE alias…FROM target alias JOIN → PG UPDATE target AS alias…FRO
       # above already proves the rewrite.
       must_not_contain=['JSON_EXTRACT_PATH_TEXT', 'UPDATE "uv" SET', 'SET "uv"."ViewTypeID"'])
 
+check("flyway macro inside a string literal (Entity.SchemaName seed) is restored, not left as the sentinel",
+      "INSERT INTO ${flyway:defaultSchema}.[Entity] ([Name], [SchemaName]) "
+      "VALUES ('MJ: Magic Link Invites', '${flyway:defaultSchema}');",
+      must_contain=[
+          'INSERT INTO ${flyway:defaultSchema}."Entity"',
+          "VALUES ('MJ: Magic Link Invites', '${flyway:defaultSchema}')",
+      ],
+      must_not_contain=['__mj_flyway_default_schema__'])
+
+check("flyway macro as a schema qualifier embedded in a stored predicate string is restored",
+      "INSERT INTO ${flyway:defaultSchema}.[RowLevelSecurityFilter] ([FilterText]) "
+      "VALUES ('RoleID IN (SELECT RoleID FROM ${flyway:defaultSchema}.vwUserRoles "
+      "WHERE UserID = ''{{UserID}}'')');",
+      must_contain=['FROM ${flyway:defaultSchema}.vwUserRoles'],
+      must_not_contain=['__mj_flyway_default_schema__'])
+
+check("flyway sentinel never leaks into a trailing comment either (final safety net)",
+      "ALTER TABLE ${flyway:defaultSchema}.[MagicLinkInviteApplication] "
+      "ADD [__mj_CreatedAt] DATETIMEOFFSET NULL "
+      "/* SQL text to add special date field __mj_CreatedAt to entity "
+      "${flyway:defaultSchema}.MagicLinkInviteApplication */;",
+      must_not_contain=['__mj_flyway_default_schema__'])
+
 if _failures:
     print(f"\n{_failures} test(s) FAILED")
     sys.exit(1)

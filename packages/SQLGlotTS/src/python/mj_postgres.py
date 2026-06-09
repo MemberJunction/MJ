@@ -64,6 +64,19 @@ class MJPostgres(Postgres):
                 return FLYWAY_MACRO
             return super().identifier_sql(expression)
 
+        def literal_sql(self, expression: exp.Literal) -> str:
+            # The macro is protected to the sentinel by a blanket text replace before the
+            # parse, so it also gets baked into the *content* of string literals — e.g. the
+            # Entity.SchemaName seed value `'${flyway:defaultSchema}'`, or a schema qualifier
+            # embedded in a stored RowLevelSecurityFilter predicate. `identifier_sql` only
+            # restores the macro in identifier position; string-literal content never passes
+            # through it, so restore the sentinel here too (substring, since it may be a
+            # qualifier inside a larger predicate string). AST-level, not an output rewrite.
+            if expression.is_string and expression.this and FLYWAY_SENTINEL in expression.this:
+                restored = expression.this.replace(FLYWAY_SENTINEL, FLYWAY_MACRO)
+                return f"{self.dialect.QUOTE_START}{self.escape_str(restored)}{self.dialect.QUOTE_END}"
+            return super().literal_sql(expression)
+
         def datatype_sql(self, expression: exp.DataType) -> str:
             has_max = any(
                 isinstance(e, exp.DataTypeParam) and isinstance(e.this, exp.Var) and e.name.upper() == "MAX"
@@ -990,6 +1003,16 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
         out_sql, u = _transpile_batch(batch, pretty)
         out.extend(out_sql)
         unhandled.extend(u)
+
+    # Final safety net: the macro is protected to FLYWAY_SENTINEL by a blanket text
+    # replace before parsing, and restored at the AST level in identifier_sql (identifier
+    # position) and literal_sql (string-literal content). Anything sqlglot carries as
+    # opaque text — chiefly trailing `/* … */` comments attached to a statement — never
+    # passes through either hook, so a sentinel can survive there. Restoring it in the
+    # emitted SQL guarantees no `__mj_flyway_default_schema__` ever leaks into output
+    # (it is harmless in a comment, but would be a real "schema does not exist" error if
+    # it ever appeared in an unhandled executable position). Text-level, post-AST.
+    out = [s.replace(FLYWAY_SENTINEL, FLYWAY_MACRO) for s in out]
 
     return {"sql": out, "unhandled": unhandled}
 
