@@ -202,16 +202,22 @@ export class VoiceSessionService {
   private narrationTemplate: string | null = null;
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
-  /** Minimum gap between spoken progress narrations, to avoid chatter / interrupting. */
-  private static readonly DelegationNarrationThrottleMs = 4000;
+  /** First spoken update fires no earlier than this long after delegated work starts. */
+  private static readonly FirstNarrationDelayMs = 5000;
+  /** Minimum gap between SUBSEQUENT spoken updates (the 7–10s band; floods aggregate). */
+  private static readonly NarrationIntervalMs = 8000;
+  /** Retry delay when the fire moment finds the model busy / audio still playing. */
+  private static readonly NarrationBusyRetryMs = 1500;
+  /** Max progress messages aggregated into one spoken digest. */
+  private static readonly MaxDigestMessages = 4;
+  /** Max prior spoken narrations chained into the instructions (anti-repetition). */
+  private static readonly MaxPriorNarrations = 3;
   /**
-   * Defer before SPEAKING a progress update. Fast agents (e.g. Sage answering in ~1-2s)
-   * often return before an interim utterance would even finish — deferring lets the
-   * result cancel a now-pointless narration; slower work still gets narrated.
+   * Aggregation buffer: distinct progress messages since the last spoken update (oldest
+   * first, capped at {@link VoiceSessionService.MaxDigestMessages}). A flood of small
+   * updates becomes ONE digest; the buffer is discarded when the result lands first.
    */
-  private static readonly NarrationDeferMs = 1200;
-  /** Pending (deferred) narration message — updated in place if newer progress arrives. */
-  private pendingNarrationMessage: string | null = null;
+  private pendingNarrationMessages: string[] = [];
   /**
    * Tool calls currently executing on the server. Progress events ride PubSub and can
    * lag the (fast) mutation result — any progress for a call NOT in this set is stale
@@ -225,8 +231,14 @@ export class VoiceSessionService {
   private delegationProgressSub: Subscription | null = null;
   /** Timestamp (ms) of the last narration we triggered; 0 = never. */
   private lastDelegationNarrationAt = 0;
-  /** The last progress message we narrated, so we never repeat the same update. */
-  private lastNarratedMessage = '';
+  /** When the current delegation burst began (first in-flight call); anchors the 5s first update. */
+  private delegationBurstStartedAt = 0;
+  /** Spoken updates so far in this burst (1-based numbering for the instructions). */
+  private narrationCount = 0;
+  /** What the model actually SAID for prior updates this burst — chained in so it never repeats itself. */
+  private spokenNarrations: string[] = [];
+  /** Tail message of the last digest, so an identical trailing progress event isn't re-buffered. */
+  private lastNarratedTail = '';
 
   private _provider: IMetadataProvider | null = null;
 
@@ -466,6 +478,11 @@ export class VoiceSessionService {
     if (transcript.Role === 'Assistant') {
       if (transcript.Kind === 'narration') {
         this._delegationNarration$.next({ Text: transcript.Text });
+        // Remember what was actually SAID so later updates build on it instead of repeating.
+        this.spokenNarrations.push(transcript.Text);
+        if (this.spokenNarrations.length > VoiceSessionService.MaxPriorNarrations) {
+          this.spokenNarrations.shift();
+        }
       } else {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
@@ -492,6 +509,16 @@ export class VoiceSessionService {
    */
   private async handleToolCall(call: RealtimeClientToolCall): Promise<void> {
     this._connectionState$.next('thinking');
+    if (this.inFlightCallIds.size === 0) {
+      // A fresh delegation burst: anchor the first-update delay and reset the
+      // narration story (count, digest buffer, what's already been said aloud).
+      this.delegationBurstStartedAt = Date.now();
+      this.narrationCount = 0;
+      this.pendingNarrationMessages = [];
+      this.spokenNarrations = [];
+      this.lastNarratedTail = '';
+      this.lastDelegationNarrationAt = 0;
+    }
     this.inFlightCallIds.add(call.CallID);
     try {
       const resultJson = await this.executeSessionTool(call.CallID, call.ToolName, call.ArgumentsJson);
@@ -689,35 +716,57 @@ export class VoiceSessionService {
       return;
     }
     client.SendContextNote(`[delegated-agent progress] ${progress.Message}`);
-    // Narrate only a genuinely-new update, throttled — so it conveys real status, not
-    // robotic repeats. The actual utterance is DEFERRED (NarrationDeferMs) so a fast
-    // result can cancel it; newer progress just refreshes the pending message.
-    if (progress.Message === this.lastNarratedMessage || !this.shouldNarrateNow()) {
-      return;
-    }
-    this.pendingNarrationMessage = progress.Message;
-    if (!this.narrationTimer) {
-      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), VoiceSessionService.NarrationDeferMs);
+    // Floods of small updates AGGREGATE: each distinct message joins the digest buffer,
+    // and ONE spoken update fires per window (first at ~5s into the burst, then every
+    // ~8s). The buffer is discarded if the final result lands first.
+    this.bufferNarrationMessage(progress.Message);
+    if (this.pendingNarrationMessages.length > 0 && !this.narrationTimer) {
+      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), this.nextNarrationDelayMs());
     }
   }
 
-  /** Speaks the deferred progress update — unless it was cancelled or the model is busy. */
-  private fireDeferredNarration(): void {
-    this.narrationTimer = null;
-    const message = this.pendingNarrationMessage;
-    this.pendingNarrationMessage = null;
-    const client = this.client;
-    // Checked at fire time (not schedule time): the model may have gone busy/idle during
-    // the defer window. IsAudioPlaying matters as much as IsBusy — generation ends
-    // before playback does, and a narration issued while speech is still playing queues
-    // behind it and comes out late/stale. Skipping is safe: the next progress event
-    // re-schedules, and if none comes the work is done and silence is correct.
-    if (!message || !client || client.IsBusy || client.IsAudioPlaying || message === this.lastNarratedMessage) {
+  /** Adds a progress message to the digest buffer (deduped, capped, oldest-first). */
+  private bufferNarrationMessage(message: string): void {
+    if (message === this.lastNarratedTail || this.pendingNarrationMessages.includes(message)) {
       return;
     }
-    this.lastNarratedMessage = message;
+    this.pendingNarrationMessages.push(message);
+    if (this.pendingNarrationMessages.length > VoiceSessionService.MaxDigestMessages) {
+      this.pendingNarrationMessages.shift();
+    }
+  }
+
+  /** ms until the next spoken update is allowed: ~5s into the burst for the first, ~8s spacing after. */
+  private nextNarrationDelayMs(): number {
+    const now = Date.now();
+    const fireAt = this.narrationCount === 0
+      ? this.delegationBurstStartedAt + VoiceSessionService.FirstNarrationDelayMs
+      : this.lastDelegationNarrationAt + VoiceSessionService.NarrationIntervalMs;
+    return Math.max(250, fireAt - now);
+  }
+
+  /**
+   * Speaks the aggregated progress digest — unless the work already finished (buffer
+   * cancelled) or the model is busy / audio is still playing, in which case it retries
+   * shortly with the buffer intact (work is still running, so the update stays relevant).
+   */
+  private fireDeferredNarration(): void {
+    this.narrationTimer = null;
+    const client = this.client;
+    if (this.pendingNarrationMessages.length === 0 || !client || this.inFlightCallIds.size === 0) {
+      this.pendingNarrationMessages = [];
+      return;
+    }
+    if (client.IsBusy || client.IsAudioPlaying) {
+      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), VoiceSessionService.NarrationBusyRetryMs);
+      return;
+    }
+    const digest = this.pendingNarrationMessages.join(' → ');
+    this.lastNarratedTail = this.pendingNarrationMessages[this.pendingNarrationMessages.length - 1];
+    this.pendingNarrationMessages = [];
+    this.narrationCount++;
     this.lastDelegationNarrationAt = Date.now();
-    client.RequestSpokenUpdate(this.buildNarrationInstructions(message));
+    client.RequestSpokenUpdate(this.buildNarrationInstructions(digest));
   }
 
   /** Cancels any deferred narration — the result is about to be spoken, so it's moot. */
@@ -726,7 +775,7 @@ export class VoiceSessionService {
       clearTimeout(this.narrationTimer);
       this.narrationTimer = null;
     }
-    this.pendingNarrationMessage = null;
+    this.pendingNarrationMessages = [];
   }
 
   /**
@@ -738,13 +787,11 @@ export class VoiceSessionService {
    * The client tags the resulting turn as narration, keeping it EPHEMERAL — surfaced on
    * {@link DelegationNarration$} instead of becoming a caption / persisted ConversationDetail.
    */
-  private buildNarrationInstructions(message: string): string {
-    return BuildNarrationInstructions(this.narrationTemplate, message);
-  }
-
-  /** True when the narration throttle window has elapsed since the last spoken update. */
-  private shouldNarrateNow(): boolean {
-    return Date.now() - this.lastDelegationNarrationAt >= VoiceSessionService.DelegationNarrationThrottleMs;
+  private buildNarrationInstructions(digest: string): string {
+    return BuildNarrationInstructions(this.narrationTemplate, digest, {
+      PriorNarrations: this.spokenNarrations.slice(-VoiceSessionService.MaxPriorNarrations),
+      UpdateNumber: this.narrationCount
+    });
   }
 
   /** Tears down the delegation progress subscription and resets the narration throttle. */
@@ -756,7 +803,10 @@ export class VoiceSessionService {
     this.cancelPendingNarration();
     this.inFlightCallIds.clear();
     this.lastDelegationNarrationAt = 0;
-    this.lastNarratedMessage = '';
+    this.delegationBurstStartedAt = 0;
+    this.narrationCount = 0;
+    this.spokenNarrations = [];
+    this.lastNarratedTail = '';
   }
 
   // ── Teardown ───────────────────────────────────────────────────────────────
