@@ -870,7 +870,11 @@ export class VoiceSessionService {
     } catch (error) {
       console.error('[VoiceSession] Tool execution failed:', error);
       // Feed the error back so the model can narrate it rather than going silent.
+      // success:false matters: ParseDelegationResultJson treats anything else as
+      // success, which would flip the overlay's working card to a SUCCESS card
+      // carrying the error text (matches the server broker's failure shape).
       const errorJson = JSON.stringify({
+        success: false,
         error: error instanceof Error ? error.message : String(error)
       });
       this.emitDelegationResult(call.CallID, errorJson);
