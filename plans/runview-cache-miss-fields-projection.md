@@ -91,3 +91,50 @@ silently miss columns. This predates the fix here and needs its own design decis
 either widen `Fields` client-side before sending when `CacheLocal` (mirroring the
 traditional flow, at the cost of wider wire payloads), or include `Fields` in the
 client-side fingerprint. Tracked separately.
+
+## Addendum (review follow-up, same branch)
+
+A skeptical review of the original commit surfaced two gaps, both fixed here:
+
+### 1. Dedup/linger key now includes `Fields` and `ResultType`
+
+`GenerateDedupKey` excluded `Fields` with the rationale "cache stores full entity
+width and filters on return" — but that premise describes the **cache** layer, not
+the **dedup** layer. The dedup/linger machinery (`RunViews` in-flight sharing, the
+5s linger window, `RunViewsUncoalesced`, and per-param coalescing slots) shares the
+FINAL pipeline output: rows already projected down to one caller's `Fields` and
+already transformed per that caller's `ResultType`, handed to subsequent callers
+via shallow array copy with no re-projection. So caller B requesting
+`['ID','Name','Description']` within the linger window of caller A's `['ID','Name']`
+query received A's narrower rows and silently lost `Description`.
+
+This was **pre-existing** on the hit path (since the May 2026 widening change) and
+for non-cacheable calls (where Fields is respected end-to-end); the miss-projection
+fix made shapes consistently narrow and so removed the last configuration in which
+the stale rationale happened to hold. The fix: `Fields` (normalized — trim,
+lowercase, sort — so semantically identical requests still share) and `ResultType`
+(entity objects vs plain rows vs count-only are not interchangeable representations)
+are now part of the dedup key. The **cache** fingerprint correctly still excludes
+both — the cache stores the superset and projects/transforms per-read.
+
+Trade-off: truly concurrent same-query-different-Fields callers no longer share one
+execution. The second caller typically lands a cache hit written by the first, so
+the realistic cost is one extra cache read — correctness over a marginal share.
+
+### 2. End-to-end integration tests for the pipeline wiring
+
+The original commit unit-tested only the pure `ProjectRowsToFields` helper. The
+pipeline wiring — the guard conditions in `PostRunView`, the hit-skip + per-index
+alignment in `PostRunViews`, and the cache-write-before-projection ordering — is
+the part a refactor is most likely to break, and `providerBase.fieldsOverride.test.ts`
+already had a full harness (`FieldsOverrideTestProvider` + `MockCacheStorageProvider`)
+capable of exercising it. Added a `cache MISS projection (hit/miss shape symmetry)`
+describe block: miss returns narrow while cache stores wide; miss/hit shape equality;
+no-Fields pass-through; batch per-index projection; and a mixed HIT+MISS batch that
+pins merge/projection index alignment. Also corrected a stale comment in the existing
+cache-coherence test that documented the old "MISS returns wide rows" behavior, and
+strengthened that test to assert the projected miss shape.
+
+`providerBase.dedup.test.ts`: inverted the test that locked in Fields-exclusion
+(now asserts separation), plus new tests for normalization-equivalence sharing,
+ResultType separation, and linger isolation across different-Fields callers.

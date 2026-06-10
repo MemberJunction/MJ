@@ -1031,15 +1031,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Generates a deterministic dedup key for a batch of RunViewParams.
      * Extends the local-cache fingerprint with additional fields that
-     * affect result identity (Fields, UserSearchString, ViewID, ViewName,
-     * contextUser).
+     * affect result identity (Fields, ResultType, UserSearchString, ViewID,
+     * ViewName, contextUser).
+     *
+     * Unlike the cache fingerprint — which deliberately excludes Fields and
+     * ResultType because the cache stores the full-width superset and projects
+     * / transforms per-read — the dedup layer shares the FINAL pipeline output:
+     * results already projected to one caller's Fields and already transformed
+     * per that caller's ResultType. A linger or in-flight hit hands those rows
+     * to the next caller verbatim (shallow array copy only), so callers with
+     * different Fields or ResultType must NOT share a dedup slot or the second
+     * caller silently receives the first caller's shape.
      */
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
-            // Fields is intentionally excluded — cache stores full entity width
-            // and filters on return, so different Fields values are the same query.
+            // Normalize Fields the same way the projection does (trim + lowercase),
+            // plus sort, so semantically identical requests still dedup together.
+            const fieldsKey = p.Fields && p.Fields.length > 0
+                ? p.Fields.map(f => f.trim().toLowerCase()).sort().join(',')
+                : '*';
             const extras = [
+                fieldsKey,
+                p.ResultType ?? 'simple',
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
                 p.ViewName ?? '',
