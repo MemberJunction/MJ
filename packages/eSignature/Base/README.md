@@ -138,7 +138,7 @@ interface EnvelopeResult {
 interface NormalizedSignatureEvent {
   externalEnvelopeId: string;
   status: EnvelopeStatus;
-  occurredAt: Date;
+  occurredAt: string;   // ISO 8601 timestamp
   raw: unknown;
 }
 ```
@@ -297,7 +297,7 @@ import { SignatureEngine } from '@memberjunction/esignature/server';
 
 // 1. Send — from raw bytes
 const sent = await SignatureEngine.Instance.SendForSignature({
-  accountId,
+  signatureAccountId,
   title: 'Service Agreement',
   message: 'Please review and sign.',
   documents: [{ bytes: pdf, filename: 'agreement.pdf', contentType: 'application/pdf' }],

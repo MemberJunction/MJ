@@ -245,7 +245,7 @@ See the provider-specific guide for exactly which credential fields each vendor 
 import { SignatureEngine } from '@memberjunction/esignature/server';
 
 const result = await SignatureEngine.Instance.SendForSignature({
-  accountId: myAccountId,
+  signatureAccountId: myAccountId,
   title: 'Membership Agreement',
   documents: [{ bytes: pdfBuffer, filename: 'agreement.pdf', contentType: 'application/pdf' }],
   recipients: [{ email: 'alice@acme.com', name: 'Alice Smith' }],
@@ -254,7 +254,7 @@ const result = await SignatureEngine.Instance.SendForSignature({
   recordId: contractId,
 }, contextUser);
 
-console.log(result.Status); // "Sent"
+console.log(result.status); // "Sent"
 ```
 
 That's the whole integration. Status updates arrive via webhook; the signed PDF is filed back automatically on download.

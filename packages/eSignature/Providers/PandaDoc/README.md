@@ -82,7 +82,7 @@ PandaDoc's native document statuses map onto MemberJunction's [normalized lifecy
 | PandaDoc status | MJ `EnvelopeStatus` |
 |---|---|
 | `document.uploaded`, `document.draft` | `Draft` |
-| `document.sent` | `Sent` |
+| `document.sent`, `document.waiting_approval`, `document.approved`, `document.waiting_pay` | `Sent` |
 | `document.viewed` | `Delivered` |
 | `document.completed`, `document.paid` | `Completed` |
 | `document.declined` | `Declined` |
