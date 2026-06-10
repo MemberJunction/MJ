@@ -3,6 +3,7 @@ import {
   Input, OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import {
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardHighlightItem,
@@ -230,7 +231,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   public IsSelected(item: WhiteboardItem): boolean {
-    return this.State.SelectedID === item.ID;
+    return UUIDsEqual(this.State.SelectedID, item.ID);
   }
 
   public IsDragging(item: WhiteboardItem): boolean {
@@ -418,7 +419,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (event.button !== 0) {
       return;
     }
-    if (this.EditingID === item.ID) {
+    if (UUIDsEqual(this.EditingID, item.ID)) {
       event.stopPropagation();
       return;
     }
