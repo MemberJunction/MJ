@@ -510,14 +510,15 @@ export class VoiceSessionService {
   private async handleToolCall(call: RealtimeClientToolCall): Promise<void> {
     this._connectionState$.next('thinking');
     if (this.inFlightCallIds.size === 0) {
-      // A fresh delegation burst: anchor the first-update delay and reset the
-      // narration story (count, digest buffer, what's already been said aloud).
+      // A fresh delegation burst: anchor the first-update delay and clear the digest
+      // buffer. Deliberately NOT reset: lastDelegationNarrationAt (the 8s spacing floor
+      // is SESSION-global — sequential tool calls seconds apart must not re-arm the
+      // faster first-update path, which read as "no debounce") and spokenNarrations
+      // (so the story never repeats across closely-spaced calls).
       this.delegationBurstStartedAt = Date.now();
       this.narrationCount = 0;
       this.pendingNarrationMessages = [];
-      this.spokenNarrations = [];
       this.lastNarratedTail = '';
-      this.lastDelegationNarrationAt = 0;
     }
     this.inFlightCallIds.add(call.CallID);
     try {
@@ -736,13 +737,21 @@ export class VoiceSessionService {
     }
   }
 
-  /** ms until the next spoken update is allowed: ~5s into the burst for the first, ~8s spacing after. */
+  /**
+   * ms until the next spoken update is allowed. Two constraints, BOTH enforced:
+   * - first update of a burst: no earlier than ~5s after the burst started;
+   * - ~8s since the last spoken update, SESSION-global — so sequential tool calls
+   *   that reset the burst can never narrate faster than the interval.
+   */
   private nextNarrationDelayMs(): number {
     const now = Date.now();
-    const fireAt = this.narrationCount === 0
+    const firstAnchor = this.narrationCount === 0
       ? this.delegationBurstStartedAt + VoiceSessionService.FirstNarrationDelayMs
-      : this.lastDelegationNarrationAt + VoiceSessionService.NarrationIntervalMs;
-    return Math.max(250, fireAt - now);
+      : 0;
+    const spacingFloor = this.lastDelegationNarrationAt > 0
+      ? this.lastDelegationNarrationAt + VoiceSessionService.NarrationIntervalMs
+      : 0;
+    return Math.max(250, Math.max(firstAnchor, spacingFloor) - now);
   }
 
   /**
