@@ -21,6 +21,8 @@ export interface RealtimeDelegationCardVM {
   Done: boolean;
   /** Short run identifier (e.g. "#a3f1") if known; shown in the provenance badge. */
   RunRef?: string;
+  /** The real result text once the delegation completes (rendered in the done card). */
+  Result?: string | null;
 }
 
 /**

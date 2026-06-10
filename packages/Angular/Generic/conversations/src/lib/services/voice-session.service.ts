@@ -43,6 +43,20 @@ export interface VoiceDelegationProgress {
 }
 
 /**
+ * The terminal result of a delegated tool call, emitted on {@link VoiceSessionService.DelegationResult$}
+ * when the delegation finishes so the overlay can flip the "working" card into a result card with real
+ * content + provenance.
+ */
+export interface VoiceDelegationResult {
+  /** The `invoke-target-agent` call this result belongs to. */
+  CallID: string;
+  /** Whether the delegated work succeeded. */
+  Success: boolean;
+  /** The result text — the agent's output, or an error message on failure. */
+  Output: string;
+}
+
+/**
  * Raw shape of the JSON `message` the server publishes on the push-status topic during a delegated run.
  * We filter on `resolver` + `type` before correlating by `agentSessionID`; normal agent runs publish
  * other shapes on the same topic and are ignored.
@@ -169,6 +183,7 @@ export class VoiceSessionService {
   private _captions$ = new BehaviorSubject<VoiceCaption[]>([]);
   private _active$ = new BehaviorSubject<boolean>(false);
   private _delegationProgress$ = new Subject<VoiceDelegationProgress>();
+  private _delegationResult$ = new Subject<VoiceDelegationResult>();
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -181,6 +196,8 @@ export class VoiceSessionService {
    * The future overlay subscribes to render a "working" card; the model also narrates these aloud.
    */
   public readonly DelegationProgress$: Observable<VoiceDelegationProgress> = this._delegationProgress$.asObservable();
+  /** Terminal result of a delegation, so the overlay can complete the working card with real content. */
+  public readonly DelegationResult$: Observable<VoiceDelegationResult> = this._delegationResult$.asObservable();
 
   // ── WebRTC / session internals ─────────────────────────────────────────────
   private peerConnection: RTCPeerConnection | null = null;
@@ -568,6 +585,7 @@ export class VoiceSessionService {
     this._connectionState$.next('thinking');
     try {
       const resultJson = await this.executeSessionTool(call.call_id, call.name, call.arguments);
+      this.emitDelegationResult(call.call_id, resultJson);
       this.sendToolResult(call.call_id, resultJson);
     } catch (error) {
       console.error('[VoiceSession] Tool execution failed:', error);
@@ -575,8 +593,28 @@ export class VoiceSessionService {
       const errorJson = JSON.stringify({
         error: error instanceof Error ? error.message : String(error)
       });
+      this.emitDelegationResult(call.call_id, errorJson);
       this.sendToolResult(call.call_id, errorJson);
     }
+  }
+
+  /**
+   * Emits a delegation result so the overlay's "working" card flips to a result card with real
+   * content. Parses the broker's `{success, output}` | `{success:false, error}` shape; if it isn't
+   * JSON, surfaces the raw string. Only delegation cards (created from progress events) react —
+   * non-delegation tool results have no card and are harmlessly ignored downstream.
+   */
+  private emitDelegationResult(callId: string, resultJson: string): void {
+    let success = true;
+    let output = '';
+    try {
+      const parsed = JSON.parse(resultJson) as { success?: boolean; output?: string; error?: string };
+      success = parsed.success !== false;
+      output = parsed.output ?? parsed.error ?? '';
+    } catch {
+      output = resultJson;
+    }
+    this._delegationResult$.next({ CallID: callId, Success: success, Output: output });
   }
 
   /** Calls the `ExecuteRealtimeSessionTool` mutation; returns the ResultJson string. */

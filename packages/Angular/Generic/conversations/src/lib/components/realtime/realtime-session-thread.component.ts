@@ -4,7 +4,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import {
-  VoiceSessionService, VoiceCaption, VoiceDelegationProgress
+  VoiceSessionService, VoiceCaption, VoiceDelegationProgress, VoiceDelegationResult
 } from '../../services/voice-session.service';
 import {
   RealtimeDelegationCardComponent, RealtimeDelegationCardVM
@@ -81,12 +81,14 @@ export class RealtimeSessionThreadComponent implements AfterViewChecked, OnDestr
 
   private captionsSub?: Subscription;
   private delegationSub?: Subscription;
+  private resultSub?: Subscription;
 
   private voice = inject(VoiceSessionService);
 
   constructor() {
     this.captionsSub = this.voice.Captions$.subscribe(captions => this.onCaptions(captions));
     this.delegationSub = this.voice.DelegationProgress$.subscribe(p => this.onDelegation(p));
+    this.resultSub = this.voice.DelegationResult$.subscribe(r => this.onDelegationResult(r));
   }
 
   ngAfterViewChecked(): void {
@@ -99,6 +101,7 @@ export class RealtimeSessionThreadComponent implements AfterViewChecked, OnDestr
   ngOnDestroy(): void {
     this.captionsSub?.unsubscribe();
     this.delegationSub?.unsubscribe();
+    this.resultSub?.unsubscribe();
   }
 
   /** track fn for the @for over thread items. */
@@ -118,9 +121,6 @@ export class RealtimeSessionThreadComponent implements AfterViewChecked, OnDestr
     for (let i = this.placedCaptionCount; i < captions.length; i++) {
       const c = captions[i];
       this.Items.push({ Kind: 'caption', Role: c.Role, Text: c.Text });
-      if (c.Role === 'Assistant') {
-        this.markOpenCardsDone();
-      }
     }
     this.placedCaptionCount = captions.length;
     this.Items = [...this.Items];
@@ -159,12 +159,16 @@ export class RealtimeSessionThreadComponent implements AfterViewChecked, OnDestr
    * Marks any still-working cards done. Called when the assistant narrates a turn after
    * delegation — the only completion signal the progress-only stream gives us today.
    */
-  private markOpenCardsDone(): void {
-    for (const item of this.cardsByCallId.values()) {
-      if (!item.Card.Done) {
-        item.Card.Done = true;
-      }
+  /** Completes the working card for a finished delegation with its real result + provenance. */
+  private onDelegationResult(result: VoiceDelegationResult): void {
+    const item = this.cardsByCallId.get(result.CallID);
+    if (!item) {
+      return;
     }
+    item.Card.Done = true;
+    item.Card.Result = result.Output;
+    this.Items = [...this.Items];
+    this.pendingScroll = true;
   }
 
   /** Derives a short, stable run reference (e.g. "#a3f1") from the call id for the provenance badge. */

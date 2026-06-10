@@ -19,7 +19,7 @@
         }
       }
       @case ('delegation') {
-        <mj-realtime-delegation-card [Card]="item.Card"></mj-realtime-delegation-card>
+        <mj-realtime-delegation-card [Card]="item.Card" [Result]="item.Card.Result ?? null"></mj-realtime-delegation-card>
       }
     }
   } @empty {
