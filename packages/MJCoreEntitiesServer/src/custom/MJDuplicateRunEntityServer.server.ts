@@ -5,6 +5,35 @@ import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
 
+/**
+ * Key under which we stash the "detection in flight" set in the MJ global object
+ * store. Using the global store (rather than a plain module-level variable) keeps
+ * this a true process-singleton even if this module is bundled into more than one
+ * execution path — matching the BaseSingleton rationale in the repo guidelines.
+ */
+const DETECTION_IN_FLIGHT_KEY = '___MJDuplicateRunDetectionInFlight';
+
+/**
+ * Returns the process-global set of Duplicate Run IDs that currently have a
+ * detection pass in flight.
+ *
+ * WHY THIS EXISTS: {@link MJDuplicateRunEntityServer.runDetectionAsync} drives
+ * `DuplicateRecordDetector.GetDuplicateRecords()`, which legitimately re-saves the
+ * SAME run record many times mid-run (total-count update, per-batch resume cursor,
+ * completion). Every one of those saves re-enters `Save()`, and while `EndedAt` is
+ * still null each previously kicked off ANOTHER detection pass — an exponential
+ * fan-out that produced thousands of duplicate Duplicate Run Detail rows and
+ * eventually failed the run. Guarding on the run ID makes detection fire exactly
+ * once per run.
+ */
+function detectionInFlightSet(): Set<string> {
+    const store = GetGlobalObjectStore();
+    if (!store[DETECTION_IN_FLIGHT_KEY]) {
+        store[DETECTION_IN_FLIGHT_KEY] = new Set<string>();
+    }
+    return store[DETECTION_IN_FLIGHT_KEY] as Set<string>;
+}
+
 /** Map DuplicateDetectionProgress phases to pipeline stage names */
 const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
     'Loading': 'extract',
@@ -20,11 +49,21 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
     public async Save(): Promise<boolean> {
         const saveResult: boolean = await super.Save();
 
-        if (saveResult && this.EndedAt === null) {
+        // Only kick off detection on the INITIAL save of an unfinished run, and never
+        // while a detection pass for this run is already in flight. The detector saves
+        // this record repeatedly mid-run (progress + resume cursor) — without this guard
+        // each of those saves would spawn another detection pass. See detectionInFlightSet().
+        const inFlight = detectionInFlightSet();
+        if (saveResult && this.EndedAt === null && !inFlight.has(this.ID)) {
+            inFlight.add(this.ID);
             // Fire-and-forget: run detection asynchronously so the save returns immediately
-            this.runDetectionAsync().catch((error) => {
-                LogError(`Async duplicate detection failed for run ${this.ID}`, undefined, error);
-            });
+            this.runDetectionAsync()
+                .catch((error) => {
+                    LogError(`Async duplicate detection failed for run ${this.ID}`, undefined, error);
+                })
+                .finally(() => {
+                    inFlight.delete(this.ID);
+                });
         }
 
         return saveResult;

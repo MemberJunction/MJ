@@ -1631,7 +1631,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         matches: MJDuplicateRunDetailMatchEntity[],
         limit: number
     ): Array<{ Name: string; Score: number }> {
-        return matches
+        return [...matches]
+            .sort((a, b) => b.MatchProbability - a.MatchProbability)
             .slice(0, limit)
             .map(m => {
                 const meta = this.parseRecordMetadata(m.RecordMetadata);
@@ -1775,6 +1776,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const to = new Date(+parts[0], +parts[1] - 1, +parts[2], 23, 59, 59, 999);
             filtered = filtered.filter(g => new Date(g.MatchedAt) <= to);
         }
+
+        // Highest-confidence matches first; break ties by record name for stable ordering.
+        filtered.sort((a, b) =>
+            (b.HighestScore - a.HighestScore) || a.RecordName.localeCompare(b.RecordName)
+        );
 
         this.PendingGroups = filtered.filter(g => g.ApprovalStatus === 'Pending');
         this.ApprovedGroups = filtered.filter(g => g.ApprovalStatus === 'Approved');
