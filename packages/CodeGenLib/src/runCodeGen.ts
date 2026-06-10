@@ -11,7 +11,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MSSQLConnection, sqlConfig } from './Config/db-connection';
+import { MSSQLConnection, getSqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
@@ -83,11 +83,11 @@ export class RunCodeGenBase {
     const provider: SQLServerDataProvider = await setupSQLServerClient(config);
     const conn: CodeGenConnection = new SQLServerCodeGenConnection(pool);
 
-    // `sqlConfig` is lazily populated by MSSQLConnection() above (it was
-    // previously built at module load and could capture stale empty defaults).
-    // The non-null assertion is safe because the call to MSSQLConnection on
-    // the line above is what guarantees the assignment.
-    const cfg = sqlConfig!;
+    // `getSqlConfig()` returns the config that was built lazily by
+    // MSSQLConnection() above. The non-null assertion is safe because the
+    // call to MSSQLConnection on the line above is what guarantees the
+    // accessor has a value to return.
+    const cfg = getSqlConfig()!;
     let connectionInfo = cfg.server;
     if (cfg.port) connectionInfo += ':' + cfg.port;
     if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;

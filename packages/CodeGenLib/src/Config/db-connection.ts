@@ -1,17 +1,23 @@
 /**
- * Database connection configuration and management for MemberJunction CodeGen.
- * Provides SQL Server connection setup using mssql package with configuration
- * from the main config file.
+ * SQL Server-specific connection configuration and management for
+ * MemberJunction CodeGen. Provides the lazy mssql pool used by the
+ * SQL Server codegen path (see `runCodeGen.ts` → `setupSQLServerDataSource`).
  *
- * **Lazy resolution**: `sqlConfig` is built each time `MSSQLConnection()` is
- * called rather than at module load. The previous implementation destructured
- * `configInfo` at module load time, which baked in empty/default values
- * before `initializeConfig()` had a chance to populate the live config (an
- * invocation order that breaks when a command does
- * `await import('@memberjunction/codegen-lib')` and then calls
- * `initializeConfig()` afterward). Lazy resolution fixes that race so
- * `mj codegen` and `mj install`'s codegen phase pick up the actual `.env`
- * and `mj.config.cjs` values.
+ * **Scope** — this file is intentionally SQL-Server-only; it imports `mssql`
+ * directly. The PostgreSQL codegen path (`setupPostgreSQLDataSource` in
+ * `runCodeGen.ts`) creates its `pg.Pool` inline and does not touch
+ * `MSSQLConnection` or `getSqlConfig`. A future refactor may unify both
+ * paths behind the existing `CodeGenDatabaseProvider` factory; for now the
+ * SQL Server and PostgreSQL halves stay separate.
+ *
+ * **Lazy resolution** — the mssql config is built lazily on the first call
+ * to {@link MSSQLConnection} instead of at module load. The previous
+ * implementation destructured `configInfo` at module load time, capturing
+ * empty/default values *before* `initializeConfig()` had a chance to
+ * populate the live config (a real race when any caller does
+ * `await import('@memberjunction/codegen-lib')` and then `initializeConfig()`
+ * afterward). Lazy resolution fixes the race so `mj codegen` and `mj install`'s
+ * codegen phase pick up the actual `.env` and `mj.config.cjs` values.
  */
 
 import mssql from 'mssql';
@@ -57,13 +63,12 @@ function buildSqlConfig(): mssql.config {
 }
 
 /**
- * SQL Server configuration object for mssql package — exported for
- * backwards compatibility with callers that read it directly. Built once on
- * first access via the same lazy path as {@link MSSQLConnection}. Most code
- * should prefer `MSSQLConnection()` so the config reflects the latest
- * `initializeConfig()` state.
+ * Module-internal cache for the resolved mssql config. Populated on first
+ * call to {@link MSSQLConnection}. Read via the {@link getSqlConfig}
+ * accessor — never exported directly so callers cannot observe (or depend
+ * on) the mutable-`let` shape.
  */
-export let sqlConfig: mssql.config | undefined;
+let _sqlConfig: mssql.config | undefined;
 
 /** Cached connection pool instance for reuse across code generation operations */
 let _pool: mssql.ConnectionPool;
@@ -84,8 +89,23 @@ let _pool: mssql.ConnectionPool;
  */
 export async function MSSQLConnection(): Promise<mssql.ConnectionPool> {
   if (!_pool) {
-    sqlConfig = buildSqlConfig();
-    _pool = await mssql.connect(sqlConfig);
+    _sqlConfig = buildSqlConfig();
+    _pool = await mssql.connect(_sqlConfig);
   }
   return _pool;
+}
+
+/**
+ * Returns the resolved mssql config used by the active connection pool, or
+ * `undefined` if {@link MSSQLConnection} has not been called yet. Use this
+ * when you need to read connection details (server, port, instance,
+ * database) for logging or diagnostics.
+ *
+ * Always call {@link MSSQLConnection} before relying on this accessor in
+ * the same code path — the config is populated as a side effect of opening
+ * the pool. (`await MSSQLConnection()` followed by `getSqlConfig()` is
+ * guaranteed to return the live config.)
+ */
+export function getSqlConfig(): mssql.config | undefined {
+  return _sqlConfig;
 }
