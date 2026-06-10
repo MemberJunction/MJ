@@ -15906,9 +15906,9 @@
   },
   {
     "fields": {
-      "Name": "Gemini 2.5 Flash Native Audio",
+      "Name": "Gemini 3.1 Flash Live",
       "PowerRank": 11,
-      "Description": "Google's Gemini 2.5 Flash native-audio live model — a streaming, full-duplex, tool-calling realtime model for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "Description": "Google's Gemini 3.1 Flash Live model — its highest-quality native-audio realtime model (supersedes the deprecated 2.5 native-audio previews): streaming, full-duplex, tool-calling, for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -15923,7 +15923,7 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "DriverClass": "GeminiRealtime",
-            "APIName": "gemini-2.5-flash-native-audio-preview-12-2025",
+            "APIName": "gemini-3.1-flash-live-preview",
             "Priority": 0,
             "Status": "Active",
             "SupportedResponseFormats": "Any",
@@ -15934,8 +15934,8 @@
             "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
           },
           "sync": {
-            "lastModified": "2026-06-09T16:24:11.854Z",
-            "checksum": "05face04b82d5df598fc94ee5c4787a8b754ae7996497c7d69a144ece73ef65d"
+            "lastModified": "2026-06-10T18:34:44.566Z",
+            "checksum": "014978244a9f15bac0efaf67a18dc530e6c40efe3291be12622eb95fdcbadc35"
           }
         }
       ]
@@ -15944,8 +15944,8 @@
       "ID": "F1AEF71E-9E93-4C27-870E-620E75FA5552"
     },
     "sync": {
-      "lastModified": "2026-06-09T16:24:11.304Z",
-      "checksum": "b2b4e641a808ab4e17c4399e890e3a0242832b2e3336e9fd7ab3cb71397abf3d"
+      "lastModified": "2026-06-10T18:34:44.118Z",
+      "checksum": "f56ab8319539c962b6230c7b1f57f6db7f11f6e0d348c8e2ca39a06fa79d894f"
     }
   }
 ]
