@@ -79,18 +79,37 @@ provider`): module-level `vi.fn()` mocks kept call history across tests because
 
 Full MJCore suite: 64 files, 1,230 tests passing.
 
-## Follow-up (not in this branch)
+## Client smart-cache `Fields` handling (implemented in this branch)
 
-**Client smart-cache `Fields` handling** ([providerBase.ts](../packages/MJCore/src/generic/providerBase.ts),
-`prepareSmartCacheCheckParams` / `executeSmartCacheCheck`): the client-side smart-cache
-flow only widens `Fields` for `entity_object` results. A `simple` + narrow-`Fields` +
-`CacheLocal` query sends narrow fields to the server and stores the (now consistently
-narrow) response under a `Fields`-agnostic client fingerprint — a later client query for
-a *different* field subset of the same entity+filter would hit that narrow entry and
-silently miss columns. This predates the fix here and needs its own design decision:
-either widen `Fields` client-side before sending when `CacheLocal` (mirroring the
-traditional flow, at the cost of wider wire payloads), or include `Fields` in the
-client-side fingerprint. Tracked separately.
+Originally documented here as a tracked follow-up; implemented after review sizing
+showed the fix could be small. The client-side smart-cache flow
+(`prepareSmartCacheCheckParams` / `executeSmartCacheCheck` /
+`processSingleSmartCacheResult`) does NOT widen `Fields` (narrow wire payloads are
+the point client-side) and does NOT project on read — rows are stored exactly as
+the server returned them. Under the `Fields`-agnostic fingerprint, a narrow cached
+entry passed the staleness check for a DIFFERENT field subset of the same
+entity+filter (`maxUpdatedAt`/`rowCount` are column-independent) and silently
+served rows missing the newly requested columns.
+
+**Fix — exact-match per-Fields client slots:** a new `clientCacheFingerprint()`
+appends `|f:<normalized fields>` (trim + lowercase + sort; `*` for all-fields) to
+the shared fingerprint, used at all five client smart-cache read/write/merge
+sites. Each field subset now stores, validates, and serves its own shape. The
+SERVER fingerprint is unchanged — it stores one widened superset per entity+filter
+and projects per-read, so a single Fields-agnostic slot remains correct there.
+
+**Deliberately rejected:** subset-serving narrow requests from wider cached
+entries (candidate enumeration + per-entry field metadata + "prefer widest" +
+row-level differential merge). Codebase scan found exactly one file (13 call
+sites, Testing dashboard KPIs) combining client `CacheLocal` + narrow `Fields` —
+the hit-rate upside doesn't justify the machinery, and the design carries two
+correctness traps: staleness validation must target the candidate entry actually
+served, and `{...existingWideRow, ...freshNarrowRow}` merges can blend fresh and
+stale column values into one row under an advanced `maxUpdatedAt` that never
+re-validates.
+
+Cost: client entries written before this change are orphaned (new suffixed keys
+miss them); they expire/invalidate normally. One-time cold start, no migration.
 
 ## Addendum (review follow-up, same branch)
 
@@ -138,3 +157,12 @@ strengthened that test to assert the projected miss shape.
 `providerBase.dedup.test.ts`: inverted the test that locked in Fields-exclusion
 (now asserts separation), plus new tests for normalization-equivalence sharing,
 ResultType separation, and linger isolation across different-Fields callers.
+
+### 3. Client-side Fields-aware cache fingerprint (see section above)
+
+`providerBase.clientFieldsFingerprint.test.ts` adds a client-mode harness (stub
+`RunViewsWithCacheCheck` server) pinning: cross-subset isolation (the poisoning
+regression), same-subset revalidation, normalization equivalence, all-fields
+slot separation, and the `|f:` storage key shape. `MockCacheStorageProvider`
+gained the batched `GetItems` API that `LocalCacheManager.GetRunViewResults`
+requires (its absence silently disabled smart-cache reads in tests).

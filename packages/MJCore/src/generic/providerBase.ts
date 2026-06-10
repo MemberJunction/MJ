@@ -1046,13 +1046,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
-            // Normalize Fields the same way the projection does (trim + lowercase),
-            // plus sort, so semantically identical requests still dedup together.
-            const fieldsKey = p.Fields && p.Fields.length > 0
-                ? p.Fields.map(f => f.trim().toLowerCase()).sort().join(',')
-                : '*';
             const extras = [
-                fieldsKey,
+                ProviderBase.NormalizeFieldsKey(p.Fields),
                 p.ResultType ?? 'simple',
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
@@ -1062,6 +1057,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return `${base}|${extras}`;
         });
         return parts.join('||');
+    }
+
+    /**
+     * Normalizes a Fields list into a stable key segment: trimmed, lowercased,
+     * sorted, comma-joined — `'*'` when the caller wants all fields. Matches the
+     * matching semantics of `ProjectRowsToFields` (trim + lowercase) so that
+     * semantically identical requests collapse to the same key. Used by both the
+     * request-dedup key and the client-side cache fingerprint.
+     */
+    private static NormalizeFieldsKey(fields: string[] | undefined): string {
+        return fields && fields.length > 0
+            ? fields.map(f => f.trim().toLowerCase()).sort().join(',')
+            : '*';
+    }
+
+    /**
+     * Client-side cache fingerprint: the shared RunView fingerprint plus a
+     * normalized Fields suffix (`|f:<fields>` or `|f:*`).
+     *
+     * Why the client fingerprint includes Fields when the server's deliberately
+     * does NOT: the server cache widens every cacheable query to ALL entity
+     * fields before the DB hit, stores one full-width superset per entity+filter,
+     * and projects per-read — so a single Fields-agnostic slot can serve any
+     * field subset. The client smart-cache flow does NOT widen (narrow wire
+     * payloads are the point of `Fields` client-side) and does NOT project on
+     * read: rows are stored exactly as the server returned them. Under a
+     * Fields-agnostic fingerprint, a narrow entry would pass the staleness check
+     * for a DIFFERENT field subset of the same entity+filter — `maxUpdatedAt`
+     * and `rowCount` are column-independent — and silently serve rows missing
+     * the newly requested columns. Per-Fields slots make client entries
+     * exact-match only: each field subset stores, validates, and serves its own
+     * shape. (Subset-serving from wider entries was considered and deliberately
+     * rejected: it requires candidate enumeration, per-entry field metadata, and
+     * careful staleness attribution for marginal hit-rate gains.)
+     */
+    private clientCacheFingerprint(param: RunViewParams): string {
+        const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+        return `${base}|f:${ProviderBase.NormalizeFieldsKey(param.Fields)}`;
     }
 
     /**
@@ -1928,8 +1961,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                cacheable.push({ paramIndex: i, fingerprint });
+                cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
         }
 
@@ -2008,12 +2040,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const currentFingerprints: string[] = [];
         for (const sr of response.results) {
             if (sr.status === 'current' && params[sr.viewIndex]) {
-                currentFingerprints.push(
-                    LocalCacheManager.Instance.GenerateRunViewFingerprint(
-                        params[sr.viewIndex],
-                        this.InstanceConnectionString
-                    )
-                );
+                currentFingerprints.push(this.clientCacheFingerprint(params[sr.viewIndex]));
             }
         }
         const preResolvedCache = currentFingerprints.length > 0
@@ -2092,7 +2119,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Cache is current - use the pre-resolved cache entry from the batched read
             // (executeSmartCacheCheck reads all 'current' fingerprints in one IDB
             // transaction up front, so we don't pay per-param transaction overhead here).
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+            const fingerprint = this.clientCacheFingerprint(param);
             const cached = preResolvedCache.get(fingerprint) ?? null;
 
             if (cached) {
@@ -2127,7 +2154,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         } else if (checkResult.status === 'differential') {
             // Cache is stale but we have differential data - merge with cached data
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+            const fingerprint = this.clientCacheFingerprint(param);
 
             // Get entity info for primary key field name
             const entity = this.EntityByName(param.EntityName);
@@ -2189,7 +2216,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Update the local cache with fresh data (don't await - fire and forget for performance)
             if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
                 LocalCacheManager.Instance.SetRunViewResult(
