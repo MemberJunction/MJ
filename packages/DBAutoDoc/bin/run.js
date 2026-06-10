@@ -9,13 +9,13 @@ dotenvConfig({ path: resolve(__dirname, '../../../.env') });
 // Also load from CWD if present (for local overrides)
 dotenvConfig();
 
-// Commands that need the full MJ server bootstrap (database connectivity, AI providers, etc.)
+// Commands that need MJ class registrations (AI providers for LLM/embedding calls)
 const heavyCommands = ['analyze', 'generate-queries', 'export-sample-queries', 'prune'];
 const commandArg = process.argv[2];
 const needsBootstrap = heavyCommands.includes(commandArg);
 
 if (needsBootstrap) {
-  await import('@memberjunction/server-bootstrap/mj-class-registrations');
+  await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');
 }
 
 const { execute } = await import('@oclif/core');

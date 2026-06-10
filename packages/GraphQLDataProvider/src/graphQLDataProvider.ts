@@ -149,6 +149,14 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
     /**
+     * Opt-in verbose logging for the real-time cache-invalidation subscription. Off by default — these
+     * messages fire on every cross-server save/delete and flood the console. Set to `true` (e.g. from
+     * the console: `GraphQLDataProvider.VerboseCacheInvalidationLogging = true`) only when debugging
+     * cache-invalidation / cross-server sync behavior.
+     */
+    public static VerboseCacheInvalidationLogging = false;
+
+    /**
      * Global Object Store key — follows BaseSingleton's naming convention so the
      * singleton is discoverable in the same way as BaseSingleton-derived classes.
      *
@@ -3243,11 +3251,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Skip events that originated from this browser session — we already
                 // handled the cache update locally via the BaseEntity.Save()/Delete() event.
                 if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                        console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    }
                     return;
                 }
 
-                console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                    console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                }
 
                 // Raise a MJGlobal event so BaseEngine instances can react
                 const baseEntityEvent: BaseEntityEvent = {
