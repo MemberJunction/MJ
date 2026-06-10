@@ -76,7 +76,7 @@ async function wipeEventsRuns(pool: sql.ConnectionPool, schema: string): Promise
 }
 
 async function createAndTriggerRun(user): Promise<string> {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: standalone CLI harness, single provider bootstrapped via setupSQLServerClient
     const run = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
     run.NewRecord();
     run.EntityID = EVENTS_ENTITY_ID;
@@ -92,7 +92,7 @@ async function createAndTriggerRun(user): Promise<string> {
 }
 
 async function pollUntilDone(user, runID: string): Promise<string> {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: standalone CLI harness, single provider bootstrapped via setupSQLServerClient
     const start = Date.now();
     while (Date.now() - start < POLL_TIMEOUT_MS) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
