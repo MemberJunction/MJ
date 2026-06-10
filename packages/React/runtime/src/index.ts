@@ -140,6 +140,14 @@ export {
   unwrapAllComponents
 } from './utilities/component-unwrapper';
 
+export {
+  USER_STATE_KEY_PREFIX,
+  resolveUserStateScope,
+  userStateStorageKey,
+  parseStoredUserSettings,
+  mergeUserSettings
+} from './utilities/user-state';
+
 // Version information
 export const VERSION = '2.69.1';
 

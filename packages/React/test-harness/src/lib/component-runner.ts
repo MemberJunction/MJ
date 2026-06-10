@@ -74,6 +74,14 @@ export interface ComponentExecutionOptions extends LinterOptions {
   debug?: boolean;
 
   /**
+   * Initial per-user settings to seed the component's `savedUserSettings` prop
+   * with. Mirrors what the production host loads from `UserInfoEngine`. The
+   * component's `onSaveUserSettings` callback mutates this snapshot in place so
+   * tests can inspect persisted preferences after interactions. Defaults to `{}`.
+   */
+  savedUserSettings?: Record<string, unknown>;
+
+  /**
    * Optional callback invoked with the live Playwright page after the component
    * has rendered successfully. The page remains open until this callback resolves,
    * allowing the caller to perform interactions (clicks, form fills, etc.) and
@@ -368,7 +376,7 @@ export class ComponentRunner {
       // }
 
       // Execute the component using the real React runtime with timeout (Recommendation #1)
-      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
+      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries, savedUserSettings }: { spec: any; props: any; debug: boolean; componentLibraries: any[]; savedUserSettings: Record<string, unknown> }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
           console.log('📚 BROWSER: Component libraries available for loading:', componentLibraries?.length || 0);
@@ -847,15 +855,25 @@ export class ComponentRunner {
             }, 100); // Check every 100ms
           }
           
+          // Per-user settings: seed from the caller-supplied snapshot and let the
+          // component's onSaveUserSettings callback mutate it in place, mirroring
+          // the production host's persist behavior so tests can inspect prefs.
+          const userSettingsState: Record<string, unknown> = { ...(savedUserSettings || {}) };
+
           // Build complete props
           const componentProps = {
             ...props,
             utilities,
             styles,
             components,
-            savedUserSettings: {},
+            savedUserSettings: userSettingsState,
             onSaveUserSettings: (settings: any) => {
-              console.log('User settings saved:', settings);
+              // Replace the snapshot contents in place (keep the same reference).
+              Object.keys(userSettingsState).forEach((k) => delete userSettingsState[k]);
+              Object.assign(userSettingsState, settings || {});
+              if (debug) {
+                console.log('User settings saved:', settings);
+              }
             },
             callbacks: {
               OpenEntityRecord: (entityName: string, key: any) => {
@@ -980,11 +998,12 @@ export class ComponentRunner {
             error: error.message || String(error)
           };
         }
-      }, { 
-        spec: options.componentSpec, 
-        props: options.props, 
+      }, {
+        spec: options.componentSpec,
+        props: options.props,
         debug,
-        componentLibraries: allLibraries || []
+        componentLibraries: allLibraries || [],
+        savedUserSettings: options.savedUserSettings || {}
       }) as Promise<{ success: boolean; error?: string; componentCount?: number }>;
       
       // Create timeout promise (Recommendation #1)
