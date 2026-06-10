@@ -1,7 +1,7 @@
 ---
-"@memberjunction/react-runtime": minor
-"@memberjunction/ng-react": minor
-"@memberjunction/react-test-harness": minor
+"@memberjunction/react-runtime": patch
+"@memberjunction/ng-react": patch
+"@memberjunction/react-test-harness": patch
 ---
 
 Interactive components: persist `savedUserSettings` per-user, cross-device
