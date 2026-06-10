@@ -248,6 +248,13 @@ export class VoiceSessionService {
   private static readonly NarrationDeferMs = 1200;
   /** Pending (deferred) narration message — updated in place if newer progress arrives. */
   private pendingNarrationMessage: string | null = null;
+  /**
+   * Tool calls currently executing on the server. Progress events ride PubSub and can
+   * lag the (fast) mutation result — any progress for a call NOT in this set is stale
+   * (already completed) and is dropped, so we never narrate "starting up" after the
+   * answer was already spoken.
+   */
+  private inFlightCallIds = new Set<string>();
   /** Timer for the deferred narration; cancelled when the delegation result lands first. */
   private narrationTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
@@ -660,6 +667,7 @@ export class VoiceSessionService {
    */
   private async handleToolCall(call: OAIFunctionCallArgumentsDone): Promise<void> {
     this._connectionState$.next('thinking');
+    this.inFlightCallIds.add(call.call_id);
     try {
       const resultJson = await this.executeSessionTool(call.call_id, call.name, call.arguments);
       this.emitDelegationResult(call.call_id, resultJson);
@@ -683,7 +691,9 @@ export class VoiceSessionService {
    */
   private emitDelegationResult(callId: string, resultJson: string): void {
     // The result will be spoken next — a deferred interim update is now pointless
-    // (this is what keeps fast agents like Sage from narrating over their own answer).
+    // (this is what keeps fast agents like Sage from narrating over their own answer),
+    // and any progress still in the PubSub pipe for this call is stale.
+    this.inFlightCallIds.delete(callId);
     this.cancelPendingNarration();
     let success = true;
     let output = '';
@@ -845,6 +855,11 @@ export class VoiceSessionService {
 
   /** Emits the progress to the UI observable and feeds it to the realtime model. */
   private dispatchProgress(progress: VoiceDelegationProgress): void {
+    // Drop stale progress: PubSub delivery can lag the mutation result, so events for a
+    // call that already completed (or was never seen) must not update cards or narrate.
+    if (!this.inFlightCallIds.has(progress.CallID)) {
+      return;
+    }
     this._delegationProgress$.next(progress);
     this.narrateProgress(progress);
   }
@@ -897,13 +912,15 @@ export class VoiceSessionService {
     this.pendingNarrationMessage = null;
   }
 
-  /** Sends a developer-role context item describing the latest background progress. */
+  /** Sends a system-role context item describing the latest background progress.
+   *  NOTE: role must be 'system' — gpt-realtime rejects 'developer' items
+   *  ("Developer messages are only supported for quicksilver sessions"). */
   private injectProgressContext(channel: RTCDataChannel, message: string): void {
     this.sendEvent(channel, {
       type: 'conversation.item.create',
       item: {
         type: 'message',
-        role: 'developer',
+        role: 'system',
         content: [{ type: 'input_text', text: `[delegated-agent progress] ${message}` }]
       }
     });
@@ -922,11 +939,12 @@ export class VoiceSessionService {
       type: 'response.create',
       response: {
         instructions:
-          `Progress on the work you are doing for the user: "${message}". ` +
-          `Tell the user what is happening right now in one short, natural sentence, speaking in FIRST PERSON ` +
-          `as the one doing the work ("I'm pulling up the forecasts now"). Never refer to the agent or the work ` +
-          `in third person — no "it's doing", "the agent is", or "Sage is". ` +
-          `Do not repeat earlier updates and do not say generic things like "it's still running in the background".`
+          `Progress on the work YOU are doing for the user: "${message}". ` +
+          `Say ONE short, natural sentence about what you are doing right now, strictly in the first person ` +
+          `("I'm…"). Example: if the progress says "Analyzing the request", say "I'm looking at that now" — ` +
+          `NOT "It's analyzing" or "Sage is analyzing". The words "it" and the agent's name must not be the ` +
+          `subject of your sentence. Do not repeat earlier updates and never say generic filler like ` +
+          `"it's still running in the background".`
       }
     });
   }
@@ -943,6 +961,7 @@ export class VoiceSessionService {
       this.delegationProgressSub = null;
     }
     this.cancelPendingNarration();
+    this.inFlightCallIds.clear();
     this.lastDelegationNarrationAt = 0;
     this.lastNarratedMessage = '';
     this.responseActive = false;
