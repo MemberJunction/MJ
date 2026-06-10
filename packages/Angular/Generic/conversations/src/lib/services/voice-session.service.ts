@@ -2,10 +2,25 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { MJGlobal } from '@memberjunction/global';
+import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import {
+  BaseRealtimeClient,
+  LoadOpenAIRealtimeClient,
+  RealtimeClientError,
+  RealtimeClientState,
+  RealtimeClientToolCall,
+  RealtimeClientTranscript
+} from '@memberjunction/ai-realtime-client';
+
+// Tree-shaking prevention: the OpenAI client is resolved dynamically through the
+// ClassFactory (by the server-reported Provider key), so this static call is what keeps
+// its @RegisterClass side effect from being eliminated by the bundler.
+LoadOpenAIRealtimeClient();
 
 /**
  * Connection / turn state for a real-time voice session, surfaced to the UI overlay.
- * - `connecting`  — negotiating the session + WebRTC handshake
+ * - `connecting`  — negotiating the session + provider handshake
  * - `listening`   — connected, mic open, waiting for / hearing the user
  * - `speaking`    — the agent is producing audio
  * - `thinking`    — the agent delegated work (tool call) and is waiting on a result
@@ -85,7 +100,7 @@ interface RealtimeDelegationProgressPayload {
 
 /**
  * Result shape returned by the `StartRealtimeClientSession` server mutation.
- * The browser uses these values to open a client-direct WebRTC session.
+ * The browser uses these values to open a client-direct realtime session.
  */
 interface StartRealtimeClientSessionResult {
   AgentSessionId: string;
@@ -94,112 +109,26 @@ interface StartRealtimeClientSessionResult {
   Model: string;
   EphemeralToken: string;
   ExpiresAt: string;
-  /** JSON.stringify of the provider session config (instructions + tools) to apply via `session.update`. */
+  /** JSON.stringify of the provider session config (instructions + tools) to apply at connect. */
   SessionConfigJson: string;
 }
 
-// ── OpenAI Realtime event interfaces (discriminated union by `type`) ───────────
-// These model only the frames this MVP consumes; provider event payloads are far
-// larger, but we type the fields we read so there are no `any` leaks. The exact
-// field names are confirmed against the live API in P7 (see TODO(P7) markers).
-
-/** Streaming delta of the assistant's spoken-text transcript.
- *  GA (gpt-realtime) emits `response.output_audio_transcript.delta`; the older beta
- *  emitted `response.audio_transcript.delta`. We accept both so captions populate
- *  regardless of the model generation. */
-interface OAIResponseAudioTranscriptDelta {
-  type: 'response.output_audio_transcript.delta' | 'response.audio_transcript.delta';
-  delta: string;
-  response_id?: string;
-  item_id?: string;
-}
-
-/** Final assistant transcript for a turn (GA or beta event name). */
-interface OAIResponseAudioTranscriptDone {
-  type: 'response.output_audio_transcript.done' | 'response.audio_transcript.done';
-  transcript: string;
-  response_id?: string;
-  item_id?: string;
-}
-
-/** Final transcription of the user's spoken input for a turn. */
-interface OAIInputAudioTranscriptionCompleted {
-  type: 'conversation.item.input_audio_transcription.completed';
-  transcript: string;
-  item_id?: string;
-}
-
-/** The model finished assembling a function (tool) call and wants it executed. */
-interface OAIFunctionCallArgumentsDone {
-  type: 'response.function_call_arguments.done';
-  call_id: string;
-  name: string;
-  /** JSON-encoded arguments. */
-  arguments: string;
-}
-
-/** The provider detected the user starting to speak (barge-in). */
-interface OAIInputAudioBufferSpeechStarted {
-  type: 'input_audio_buffer.speech_started';
-}
-
-/** A new response (turn) started — tracked so we never start a second overlapping response. */
-interface OAIResponseCreated {
-  type: 'response.created';
-}
-
-/** A full response (turn) completed — carries usage; ignored for the MVP. */
-interface OAIResponseDone {
-  type: 'response.done';
-  response?: { usage?: Record<string, number> };
-}
-
 /**
- * WebRTC-only playback events: the client audio buffer started/stopped PLAYING.
- * Critical distinction from response.done (generation finished): audio plays at
- * realtime while generation runs ahead, so the model can be "idle" while speech
- * is still audibly coming out of the speaker.
- */
-interface OAIOutputAudioBufferStarted {
-  type: 'output_audio_buffer.started';
-}
-interface OAIOutputAudioBufferStopped {
-  type: 'output_audio_buffer.stopped' | 'output_audio_buffer.cleared';
-}
-
-/** Provider-side error frame. */
-interface OAIErrorEvent {
-  type: 'error';
-  error?: { message?: string; code?: string };
-}
-
-/** Events whose `type` we don't explicitly handle still parse to this shape. */
-interface OAIUnknownEvent {
-  type: string;
-}
-
-type OpenAIRealtimeEvent =
-  | OAIResponseAudioTranscriptDelta
-  | OAIResponseAudioTranscriptDone
-  | OAIInputAudioTranscriptionCompleted
-  | OAIFunctionCallArgumentsDone
-  | OAIInputAudioBufferSpeechStarted
-  | OAIResponseCreated
-  | OAIResponseDone
-  | OAIOutputAudioBufferStarted
-  | OAIOutputAudioBufferStopped
-  | OAIErrorEvent
-  | OAIUnknownEvent;
-
-/**
- * Drives a **client-direct** real-time voice session: the browser mints an
- * ephemeral token from the MJ server, then connects DIRECTLY to OpenAI over
- * WebRTC. Audio frames never transit the MJ server (low latency); only tool
- * calls and final transcripts are relayed back to MJ over GraphQL.
+ * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
+ * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
+ * frames never transit the MJ server (low latency); only tool calls and final
+ * transcripts are relayed back to MJ over GraphQL.
  *
- * The Voice Co-Agent (server-side) fronts the conversation's current agent —
- * the server bakes the companion instructions + tool set into `SessionConfigJson`,
- * which this service applies verbatim via `session.update`.
+ * This service is PROVIDER-AGNOSTIC policy/orchestration. All provider wire concerns
+ * (transport, event translation, the response state machine, narration-kind tagging,
+ * playback tracking) live in a {@link BaseRealtimeClient} driver resolved through the
+ * MJ ClassFactory by the server-reported `Provider` key (e.g. `'openai'` →
+ * `OpenAIRealtimeClient`). Future providers (Gemini Live, …) snap in by registering a
+ * new driver — this service does not change.
+ *
+ * The Voice Co-Agent (server-side) fronts the conversation's current agent — the server
+ * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
+ * driver applies verbatim.
  *
  * Lifecycle: {@link StartVoiceSession} → live duplex → {@link EndVoiceSession}.
  */
@@ -241,16 +170,12 @@ export class VoiceSessionService {
     return this._agentName$.value;
   }
 
-  // ── WebRTC / session internals ─────────────────────────────────────────────
-  private peerConnection: RTCPeerConnection | null = null;
-  private dataChannel: RTCDataChannel | null = null;
+  // ── Session internals ──────────────────────────────────────────────────────
+  /** The provider-direct realtime client driving the live session (ClassFactory-resolved). */
+  private client: BaseRealtimeClient | null = null;
+  /** The mic capture stream — acquired here (permission UX) and handed to the client. */
   private localStream: MediaStream | null = null;
-  private remoteAudioEl: HTMLAudioElement | null = null;
   private agentSessionId: string | null = null;
-  private sessionConfigJson: string | null = null;
-
-  /** Accumulates the in-flight assistant transcript across delta frames. */
-  private pendingAssistantText = '';
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** Minimum gap between spoken progress narrations, to avoid chatter / interrupting. */
@@ -270,40 +195,14 @@ export class VoiceSessionService {
    * answer was already spoken.
    */
   private inFlightCallIds = new Set<string>();
-  /**
-   * True while the model's audio is audibly PLAYING in the browser (WebRTC
-   * output_audio_buffer started/stopped). Narration must wait for this, not just
-   * responseActive — generation finishes ahead of playback, and a narration queued
-   * while speech is still playing comes out late and stale.
-   */
-  private audioPlaying = false;
   /** Timer for the deferred narration; cancelled when the delegation result lands first. */
   private narrationTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
   private delegationProgressSub: Subscription | null = null;
-  /** Timestamp (ms) of the last narration `response.create` we triggered; 0 = never. */
+  /** Timestamp (ms) of the last narration we triggered; 0 = never. */
   private lastDelegationNarrationAt = 0;
   /** The last progress message we narrated, so we never repeat the same update. */
   private lastNarratedMessage = '';
-  /** True while the model has a response in flight; gates narration + queues the tool result. */
-  private responseActive = false;
-  /** Set when a tool result is ready while a response is active; sent on the next response.done. */
-  private pendingResultResponse = false;
-  /**
-   * Set by {@link requestProgressNarration} just before it sends its `response.create`,
-   * and CONSUMED by the very next `response.created` frame, which stamps
-   * {@link activeResponseKind} for that turn. Narration only fires while the model is idle
-   * (`!responseActive`), so under normal ordering the next `response.created` is ours.
-   */
-  private pendingNarrationKind = false;
-  /**
-   * The kind of the response currently in flight. Event ordering (confirmed against the
-   * handler flow): `response.created` → transcript deltas → `*_audio_transcript.done` →
-   * `response.done`. The transcript-done frame therefore arrives while the kind is still
-   * set, letting {@link onAssistantDone} classify the turn; `response.done` then resets
-   * the kind to `'normal'`.
-   */
-  private activeResponseKind: 'normal' | 'narration' = 'normal';
 
   private _provider: IMetadataProvider | null = null;
 
@@ -353,11 +252,17 @@ export class VoiceSessionService {
     try {
       const session = await this.mintSession(targetAgentId, conversationId, lastSessionId);
       this.agentSessionId = session.AgentSessionId;
-      this.sessionConfigJson = session.SessionConfigJson;
 
-      await this.openWebRtcConnection(session);
+      const client = this.createRealtimeClient(session.Provider);
+      this.client = client;
+      this.wireClientHandlers(client);
+
+      this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      await client.Connect(this.buildClientConfig(session), this.localStream);
+
       this.subscribeDelegationProgress();
-      // State advances to 'listening' once the data channel opens (see wireDataChannel).
+      // State advances to 'listening' once the provider control channel opens
+      // (driven by the client's OnStateChange events).
     } catch (error) {
       console.error('[VoiceSession] Failed to start session:', error);
       this._connectionState$.next('error');
@@ -366,8 +271,8 @@ export class VoiceSessionService {
   }
 
   /**
-   * End the active session: stop the mic, tear down WebRTC, and close the
-   * server-side agent session. Safe to call when no session is active.
+   * End the active session: stop the mic, tear down the provider connection, and close
+   * the server-side agent session. Safe to call when no session is active.
    */
   public async EndVoiceSession(): Promise<void> {
     if (!this.IsActive && !this.agentSessionId) {
@@ -379,43 +284,28 @@ export class VoiceSessionService {
   /**
    * Inject a typed message into the live session as a user turn.
    *
-   * Decomposed into three steps, each mirroring an existing voice path so the typed
+   * Decomposed into two steps, each mirroring an existing voice path so the typed
    * turn behaves identically to a spoken one:
-   *  1. Send a `conversation.item.create` `message` item (role 'user', `input_text`)
-   *     over the data channel so the model treats the text as user input.
-   *  2. Trigger a response the SAME way tool results do — {@link requestResultResponse} —
-   *     so it queues behind any in-flight response (progress narration / prior turn)
-   *     instead of colliding with a second `response.create`.
-   *  3. Relay the turn through the same caption + transcript paths user speech uses
+   *  1. {@link BaseRealtimeClient.SendText} injects the text as user input and triggers a
+   *     reply through the SAME collision-safe path tool results use — so it queues behind
+   *     any in-flight response (progress narration / prior turn) instead of colliding.
+   *  2. Relay the turn through the same caption + transcript paths user speech uses
    *     ({@link onUserTranscript}) so it shows in the live thread AND persists to MJ.
    *
-   * No-op when no session is open / the data channel isn't ready, or when the text is empty.
+   * No-op when no session is open / the control channel isn't ready, or when the text is empty.
    */
   public SendText(text: string): void {
     const trimmed = text?.trim() ?? '';
     if (trimmed.length === 0) {
       return;
     }
-    const channel = this.dataChannel;
-    if (!channel || channel.readyState !== 'open') {
+    const client = this.client;
+    if (!client || !this.isSessionLive()) {
       return;
     }
-    this.injectUserTextItem(channel, trimmed);
-    this.requestResultResponse();
+    client.SendText(trimmed);
     // Relay as a user turn — same path spoken input uses (caption + persisted transcript).
     void this.onUserTranscript(trimmed);
-  }
-
-  /** Sends the typed text as a user-role `message` conversation item over the data channel. */
-  private injectUserTextItem(channel: RTCDataChannel, text: string): void {
-    this.sendEvent(channel, {
-      type: 'conversation.item.create',
-      item: {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text }]
-      }
-    });
   }
 
   /** Mute / unmute the local microphone track. Returns the new muted state. */
@@ -424,11 +314,192 @@ export class VoiceSessionService {
     if (tracks.length === 0) {
       return false;
     }
-    const newEnabled = !tracks[0].enabled;
-    for (const t of tracks) {
-      t.enabled = newEnabled;
+    const muted = tracks[0].enabled; // currently enabled → becomes muted
+    this.client?.SetMuted(muted);
+    return muted;
+  }
+
+  // ── Realtime client resolution + wiring ────────────────────────────────────
+
+  /**
+   * Resolves the provider-direct realtime client for `provider` through the MJ
+   * ClassFactory — the client-side mirror of how server drivers are resolved from
+   * `BaseRealtimeModel`. Throws a clear error when no driver is registered for the
+   * provider (e.g. its Load function was never called).
+   */
+  private createRealtimeClient(provider: string): BaseRealtimeClient {
+    const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRealtimeClient, provider);
+    if (!registration) {
+      throw new Error(
+        `No realtime client registered for provider '${provider}'. ` +
+          `Ensure the provider's client driver package is imported and its Load function called.`
+      );
     }
-    return !newEnabled; // muted = !enabled
+    const client = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeClient>(BaseRealtimeClient, provider);
+    if (!client) {
+      throw new Error(`Failed to instantiate the realtime client for provider '${provider}'`);
+    }
+    return client;
+  }
+
+  /** Builds the client-direct session config the realtime client connects with. */
+  private buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+    return {
+      Provider: session.Provider,
+      Model: session.Model,
+      EphemeralToken: session.EphemeralToken,
+      ExpiresAt: session.ExpiresAt,
+      SessionConfig: this.parseSessionConfig(session.SessionConfigJson)
+    };
+  }
+
+  /**
+   * Parses the server-built session config JSON. On failure, logs and returns an empty
+   * object — the client treats an empty config as "nothing to apply", so the session
+   * still opens (mirroring the prior behavior of skipping the config update).
+   */
+  private parseSessionConfig(sessionConfigJson: string | null): JSONObject {
+    if (!sessionConfigJson) {
+      return {};
+    }
+    try {
+      return JSON.parse(sessionConfigJson) as JSONObject;
+    } catch (error) {
+      console.error('[VoiceSession] Failed to parse/apply SessionConfigJson:', error);
+      return {};
+    }
+  }
+
+  /** Subscribes this service's policy handlers to the realtime client's events. */
+  private wireClientHandlers(client: BaseRealtimeClient): void {
+    client.OnStateChange((state: RealtimeClientState) => this.onClientStateChange(state));
+    client.OnTranscript((transcript: RealtimeClientTranscript) => {
+      void this.onClientTranscript(transcript);
+    });
+    client.OnToolCall((call: RealtimeClientToolCall) => {
+      void this.handleToolCall(call);
+    });
+    client.OnError((error: RealtimeClientError) => {
+      console.error('[VoiceSession] Provider error event:', error);
+    });
+  }
+
+  /** Maps a client state event onto the UI connection state. */
+  private onClientStateChange(state: RealtimeClientState): void {
+    const mapped = this.mapClientState(state);
+    if (mapped) {
+      this._connectionState$.next(mapped);
+    }
+  }
+
+  /**
+   * Translates {@link RealtimeClientState} into {@link VoiceConnectionState}. `'connected'`
+   * is suppressed (the UI stays 'connecting' until the control channel opens → 'listening'),
+   * and `'closed'` never overwrites a terminal 'error' the service itself recorded.
+   */
+  private mapClientState(state: RealtimeClientState): VoiceConnectionState | null {
+    switch (state) {
+      case 'connecting':
+        return 'connecting';
+      case 'connected':
+        return null;
+      case 'listening':
+        return 'listening';
+      case 'speaking':
+        return 'speaking';
+      case 'error':
+        return 'error';
+      case 'closed':
+        return this._connectionState$.value === 'error' ? null : 'closed';
+    }
+  }
+
+  /** True when the live control channel is usable (open and not torn down / failed). */
+  private isSessionLive(): boolean {
+    const state = this._connectionState$.value;
+    return state === 'listening' || state === 'speaking' || state === 'thinking';
+  }
+
+  // ── Transcript policy ──────────────────────────────────────────────────────
+
+  /**
+   * Applies transcript policy to client transcript events. Interim deltas are ignored
+   * (the client already drives the speaking state). Final NORMAL assistant turns become
+   * captions + persisted transcripts; final NARRATION turns are EPHEMERAL by product
+   * decision — emitted on {@link DelegationNarration$} only, never a caption, never
+   * relayed/persisted. User turns ride the caption + relay path.
+   */
+  private async onClientTranscript(transcript: RealtimeClientTranscript): Promise<void> {
+    if (!transcript.IsFinal) {
+      return;
+    }
+    if (transcript.Role === 'Assistant') {
+      if (transcript.Kind === 'narration') {
+        this._delegationNarration$.next({ Text: transcript.Text });
+      } else {
+        this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
+        await this.relayTranscript('assistant', transcript.Text);
+      }
+    } else {
+      await this.onUserTranscript(transcript.Text);
+    }
+  }
+
+  /** Finalizes the user turn: push a caption + relay the final transcript. */
+  private async onUserTranscript(transcript: string): Promise<void> {
+    if (transcript.trim().length === 0) {
+      return;
+    }
+    this.appendCaption({ Role: 'User', Text: transcript });
+    await this.relayTranscript('user', transcript);
+  }
+
+  // ── Tool calling ───────────────────────────────────────────────────────────
+
+  /**
+   * Executes a provider tool call on the MJ server, then feeds the result back to the
+   * model via {@link BaseRealtimeClient.SendToolResult} so it speaks the outcome.
+   */
+  private async handleToolCall(call: RealtimeClientToolCall): Promise<void> {
+    this._connectionState$.next('thinking');
+    this.inFlightCallIds.add(call.CallID);
+    try {
+      const resultJson = await this.executeSessionTool(call.CallID, call.ToolName, call.ArgumentsJson);
+      this.emitDelegationResult(call.CallID, resultJson);
+      this.client?.SendToolResult(call.CallID, resultJson);
+    } catch (error) {
+      console.error('[VoiceSession] Tool execution failed:', error);
+      // Feed the error back so the model can narrate it rather than going silent.
+      const errorJson = JSON.stringify({
+        error: error instanceof Error ? error.message : String(error)
+      });
+      this.emitDelegationResult(call.CallID, errorJson);
+      this.client?.SendToolResult(call.CallID, errorJson);
+    }
+  }
+
+  /**
+   * Emits a delegation result so the overlay's "working" card flips to a result card with real
+   * content. Parses the broker's `{success, output}` | `{success:false, error}` shape; if it isn't
+   * JSON, surfaces the raw string. Only delegation cards (created from progress events) react —
+   * non-delegation tool results have no card and are harmlessly ignored downstream.
+   */
+  private emitDelegationResult(callId: string, resultJson: string): void {
+    // The result will be spoken next — a deferred interim update is now pointless
+    // (this is what keeps fast agents like Sage from narrating over their own answer),
+    // and any progress still in the PubSub pipe for this call is stale.
+    this.inFlightCallIds.delete(callId);
+    this.cancelPendingNarration();
+    let success = true;
+    let output = '';
+    try {
+      const parsed = JSON.parse(resultJson) as { success?: boolean; output?: string; error?: string };
+      success = parsed.success !== false;
+      output = parsed.output ?? parsed.error ?? '';
+    } catch {
+      output = resultJson;
+    }
+    this._delegationResult$.next({ CallID: callId, Success: success, Output: output });
   }
 
   // ── Session minting (GraphQL) ──────────────────────────────────────────────
@@ -465,280 +536,6 @@ export class VoiceSessionService {
     return payload;
   }
 
-  // ── WebRTC handshake ───────────────────────────────────────────────────────
-
-  /**
-   * Opens the client-direct OpenAI Realtime WebRTC connection: mic capture,
-   * peer connection, data channel, remote audio sink, and the SDP handshake.
-   */
-  private async openWebRtcConnection(session: StartRealtimeClientSessionResult): Promise<void> {
-    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    const pc = new RTCPeerConnection();
-    this.peerConnection = pc;
-
-    // Mic → provider.
-    for (const track of this.localStream.getAudioTracks()) {
-      pc.addTrack(track, this.localStream);
-    }
-
-    // Provider audio → <audio> sink.
-    this.remoteAudioEl = this.createAudioSink();
-    pc.ontrack = (e: RTCTrackEvent) => {
-      if (this.remoteAudioEl && e.streams[0]) {
-        this.remoteAudioEl.srcObject = e.streams[0];
-      }
-    };
-
-    // Control / events channel.
-    const channel = pc.createDataChannel('oai-events');
-    this.dataChannel = channel;
-    this.wireDataChannel(channel);
-
-    await this.performSdpHandshake(pc, session);
-  }
-
-  /**
-   * Performs the offer/answer SDP exchange with OpenAI's Realtime WebRTC endpoint.
-   *
-   * GA browser flow (confirmed against the OpenAI Realtime WebRTC guide): POST the raw
-   * SDP offer to `https://api.openai.com/v1/realtime/calls` with **no** query params and
-   * **no** `OpenAI-Beta` header. The ephemeral client secret already encodes the model +
-   * session config (set server-side at mint), so the browser must not specify the model —
-   * passing `?model=` returns an empty 400. The answer comes back as raw `application/sdp`.
-   */
-  private async performSdpHandshake(
-    pc: RTCPeerConnection,
-    session: StartRealtimeClientSessionResult
-  ): Promise<void> {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    const response = await fetch('https://api.openai.com/v1/realtime/calls', {
-      method: 'POST',
-      body: offer.sdp ?? '',
-      headers: {
-        Authorization: `Bearer ${session.EphemeralToken}`,
-        'Content-Type': 'application/sdp'
-      }
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`OpenAI WebRTC handshake failed (${response.status}): ${detail}`);
-    }
-
-    const answerSdp = await response.text();
-    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-  }
-
-  /** Creates a hidden `<audio>` element to play the model's audio output. */
-  private createAudioSink(): HTMLAudioElement {
-    const el = document.createElement('audio');
-    el.autoplay = true;
-    el.style.display = 'none';
-    document.body.appendChild(el);
-    return el;
-  }
-
-  // ── Data channel wiring ────────────────────────────────────────────────────
-
-  /** Attaches open / message / error / close handlers to the events data channel. */
-  private wireDataChannel(channel: RTCDataChannel): void {
-    channel.onopen = () => {
-      this.applySessionConfig(channel);
-      this._connectionState$.next('listening');
-    };
-    channel.onmessage = (e: MessageEvent) => {
-      void this.handleChannelMessage(e);
-    };
-    channel.onerror = (e: Event) => {
-      console.error('[VoiceSession] Data channel error:', e);
-      this._connectionState$.next('error');
-    };
-    channel.onclose = () => {
-      if (this._connectionState$.value !== 'error') {
-        this._connectionState$.next('closed');
-      }
-    };
-  }
-
-  /**
-   * Sends the server-controlled session config (instructions + tools) as a
-   * `session.update` so the Voice Co-Agent's identity and tool set apply.
-   */
-  private applySessionConfig(channel: RTCDataChannel): void {
-    if (!this.sessionConfigJson) {
-      return;
-    }
-    try {
-      const sessionConfig = JSON.parse(this.sessionConfigJson) as Record<string, unknown>;
-      this.sendEvent(channel, { type: 'session.update', session: sessionConfig });
-    } catch (error) {
-      console.error('[VoiceSession] Failed to parse/apply SessionConfigJson:', error);
-    }
-  }
-
-  /** Parses an inbound channel message and dispatches it to the typed handler. */
-  private async handleChannelMessage(e: MessageEvent): Promise<void> {
-    let event: OpenAIRealtimeEvent;
-    try {
-      event = JSON.parse(e.data as string) as OpenAIRealtimeEvent;
-    } catch {
-      return; // non-JSON frame — ignore
-    }
-    await this.handleEvent(event);
-  }
-
-  /** Dispatches a typed OpenAI realtime event to the appropriate behavior. */
-  private async handleEvent(event: OpenAIRealtimeEvent): Promise<void> {
-    switch (event.type) {
-      case 'response.output_audio_transcript.delta':
-      case 'response.audio_transcript.delta':
-        this.onAssistantDelta((event as OAIResponseAudioTranscriptDelta).delta);
-        break;
-      case 'response.output_audio_transcript.done':
-      case 'response.audio_transcript.done':
-        await this.onAssistantDone((event as OAIResponseAudioTranscriptDone).transcript);
-        break;
-      case 'conversation.item.input_audio_transcription.completed':
-        await this.onUserTranscript((event as OAIInputAudioTranscriptionCompleted).transcript);
-        break;
-      case 'response.function_call_arguments.done':
-        await this.handleToolCall(event as OAIFunctionCallArgumentsDone);
-        break;
-      case 'input_audio_buffer.speech_started':
-        // Barge-in: provider handles cancelling its own turn. We just reflect
-        // that the user has the floor again.
-        this._connectionState$.next('listening');
-        break;
-      case 'response.created':
-        this.responseActive = true;
-        // Stamp the kind of THIS response: 'narration' only when the flag was set by
-        // requestProgressNarration immediately before its response.create (consumed here).
-        this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
-        this.pendingNarrationKind = false;
-        break;
-      case 'output_audio_buffer.started':
-        this.audioPlaying = true;
-        break;
-      case 'output_audio_buffer.stopped':
-      case 'output_audio_buffer.cleared':
-        this.audioPlaying = false;
-        if (this._connectionState$.value === 'speaking' && !this.responseActive) {
-          this._connectionState$.next('listening');
-        }
-        break;
-      case 'response.done':
-        // A turn finished — release the lock and speak any queued tool result so the
-        // model always voices the answer when delegated work comes back.
-        // The transcript-done frame for this turn has already arrived (it precedes
-        // response.done), so it's safe to reset the response kind here.
-        this.responseActive = false;
-        this.activeResponseKind = 'normal';
-        this.flushPendingResultResponse();
-        if (this._connectionState$.value === 'speaking') {
-          this._connectionState$.next('listening');
-        }
-        break;
-      case 'error':
-        console.error('[VoiceSession] Provider error event:', (event as OAIErrorEvent).error);
-        break;
-      default:
-        // Unhandled event types are expected (the provider emits many); no-op.
-        break;
-    }
-  }
-
-  /** Appends an assistant transcript delta and reflects the speaking state. */
-  private onAssistantDelta(delta: string): void {
-    if (this._connectionState$.value !== 'speaking') {
-      this._connectionState$.next('speaking');
-    }
-    this.pendingAssistantText += delta;
-  }
-
-  /**
-   * Finalizes the assistant turn. Normal turns push a caption + relay (persist) the
-   * transcript. NARRATION turns (interim delegated-progress speech triggered by
-   * {@link requestProgressNarration}) are EPHEMERAL by product decision: they are emitted
-   * on {@link DelegationNarration$} only — never a caption, never relayed/persisted.
-   * The transcript-done frame arrives BEFORE `response.done`, so {@link activeResponseKind}
-   * still reflects this turn's kind when we classify it here.
-   */
-  private async onAssistantDone(transcript: string): Promise<void> {
-    const finalText = transcript || this.pendingAssistantText;
-    this.pendingAssistantText = '';
-    if (finalText.trim().length > 0) {
-      if (this.activeResponseKind === 'narration') {
-        this._delegationNarration$.next({ Text: finalText });
-      } else {
-        this.appendCaption({ Role: 'Assistant', Text: finalText });
-        await this.relayTranscript('assistant', finalText);
-      }
-    }
-    if (this._connectionState$.value === 'speaking') {
-      this._connectionState$.next('listening');
-    }
-  }
-
-  /** Finalizes the user turn: push a caption + relay the final transcript. */
-  private async onUserTranscript(transcript: string): Promise<void> {
-    if (transcript.trim().length === 0) {
-      return;
-    }
-    this.appendCaption({ Role: 'User', Text: transcript });
-    await this.relayTranscript('user', transcript);
-  }
-
-  // ── Tool calling ───────────────────────────────────────────────────────────
-
-  /**
-   * Executes a provider tool call on the MJ server, then feeds the result back
-   * to the model as a `function_call_output` and asks it to continue.
-   */
-  private async handleToolCall(call: OAIFunctionCallArgumentsDone): Promise<void> {
-    this._connectionState$.next('thinking');
-    this.inFlightCallIds.add(call.call_id);
-    try {
-      const resultJson = await this.executeSessionTool(call.call_id, call.name, call.arguments);
-      this.emitDelegationResult(call.call_id, resultJson);
-      this.sendToolResult(call.call_id, resultJson);
-    } catch (error) {
-      console.error('[VoiceSession] Tool execution failed:', error);
-      // Feed the error back so the model can narrate it rather than going silent.
-      const errorJson = JSON.stringify({
-        error: error instanceof Error ? error.message : String(error)
-      });
-      this.emitDelegationResult(call.call_id, errorJson);
-      this.sendToolResult(call.call_id, errorJson);
-    }
-  }
-
-  /**
-   * Emits a delegation result so the overlay's "working" card flips to a result card with real
-   * content. Parses the broker's `{success, output}` | `{success:false, error}` shape; if it isn't
-   * JSON, surfaces the raw string. Only delegation cards (created from progress events) react —
-   * non-delegation tool results have no card and are harmlessly ignored downstream.
-   */
-  private emitDelegationResult(callId: string, resultJson: string): void {
-    // The result will be spoken next — a deferred interim update is now pointless
-    // (this is what keeps fast agents like Sage from narrating over their own answer),
-    // and any progress still in the PubSub pipe for this call is stale.
-    this.inFlightCallIds.delete(callId);
-    this.cancelPendingNarration();
-    let success = true;
-    let output = '';
-    try {
-      const parsed = JSON.parse(resultJson) as { success?: boolean; output?: string; error?: string };
-      success = parsed.success !== false;
-      output = parsed.output ?? parsed.error ?? '';
-    } catch {
-      output = resultJson;
-    }
-    this._delegationResult$.next({ CallID: callId, Success: success, Output: output });
-  }
-
   /** Calls the `ExecuteRealtimeSessionTool` mutation; returns the ResultJson string. */
   private async executeSessionTool(callId: string, toolName: string, argsJson: string): Promise<string> {
     if (!this.agentSessionId) {
@@ -756,55 +553,6 @@ export class VoiceSessionService {
       argsJson
     });
     return (result?.ExecuteRealtimeSessionTool as string) ?? '{}';
-  }
-
-  /**
-   * Sends the tool result back over the data channel as a function_call_output
-   * conversation item, then triggers a new response so the model speaks it.
-   */
-  private sendToolResult(callId: string, resultJson: string): void {
-    if (!this.dataChannel) {
-      return;
-    }
-    this.sendEvent(this.dataChannel, {
-      type: 'conversation.item.create',
-      item: {
-        type: 'function_call_output',
-        call_id: callId,
-        output: resultJson
-      }
-    });
-    this.requestResultResponse();
-  }
-
-  /**
-   * Asks the model to speak the tool result — immediately if it's idle, otherwise queued
-   * until the current response (e.g. a progress narration) finishes. Without this the
-   * result's `response.create` would collide with an in-flight narration and be dropped,
-   * leaving the model silent when the delegated work comes back.
-   */
-  private requestResultResponse(): void {
-    if (!this.dataChannel) {
-      return;
-    }
-    if (this.responseActive) {
-      this.pendingResultResponse = true;
-      return;
-    }
-    this.responseActive = true;
-    this.sendEvent(this.dataChannel, { type: 'response.create' });
-    this._connectionState$.next('speaking');
-  }
-
-  /** On a turn completing, fire any queued tool-result response so the answer is spoken. */
-  private flushPendingResultResponse(): void {
-    if (!this.pendingResultResponse || !this.dataChannel) {
-      return;
-    }
-    this.pendingResultResponse = false;
-    this.responseActive = true;
-    this.sendEvent(this.dataChannel, { type: 'response.create' });
-    this._connectionState$.next('speaking');
   }
 
   // ── Transcript relay (GraphQL) ─────────────────────────────────────────────
@@ -897,16 +645,16 @@ export class VoiceSessionService {
   }
 
   /**
-   * Injects the progress into the model's context as a developer item every time,
+   * Injects the progress into the model's context as a background note every time,
    * then (throttled) asks the model to briefly voice a reassuring update so the
    * background work doesn't sit in silence — without chattering or interrupting.
    */
   private narrateProgress(progress: VoiceDelegationProgress): void {
-    const channel = this.dataChannel;
-    if (!channel) {
+    const client = this.client;
+    if (!client) {
       return;
     }
-    this.injectProgressContext(channel, progress.Message);
+    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`);
     // Narrate only a genuinely-new update, throttled — so it conveys real status, not
     // robotic repeats. The actual utterance is DEFERRED (NarrationDeferMs) so a fast
     // result can cancel it; newer progress just refreshes the pending message.
@@ -924,18 +672,18 @@ export class VoiceSessionService {
     this.narrationTimer = null;
     const message = this.pendingNarrationMessage;
     this.pendingNarrationMessage = null;
-    const channel = this.dataChannel;
+    const client = this.client;
     // Checked at fire time (not schedule time): the model may have gone busy/idle during
-    // the defer window. audioPlaying matters as much as responseActive — generation ends
+    // the defer window. IsAudioPlaying matters as much as IsBusy — generation ends
     // before playback does, and a narration issued while speech is still playing queues
     // behind it and comes out late/stale. Skipping is safe: the next progress event
     // re-schedules, and if none comes the work is done and silence is correct.
-    if (!message || !channel || this.responseActive || this.audioPlaying || message === this.lastNarratedMessage) {
+    if (!message || !client || client.IsBusy || client.IsAudioPlaying || message === this.lastNarratedMessage) {
       return;
     }
     this.lastNarratedMessage = message;
     this.lastDelegationNarrationAt = Date.now();
-    this.requestProgressNarration(channel, message);
+    client.RequestSpokenUpdate(this.buildNarrationInstructions(message));
   }
 
   /** Cancels any deferred narration — the result is about to be spoken, so it's moot. */
@@ -947,41 +695,21 @@ export class VoiceSessionService {
     this.pendingNarrationMessage = null;
   }
 
-  /** Sends a system-role context item describing the latest background progress.
-   *  NOTE: role must be 'system' — gpt-realtime rejects 'developer' items
-   *  ("Developer messages are only supported for quicksilver sessions"). */
-  private injectProgressContext(channel: RTCDataChannel, message: string): void {
-    this.sendEvent(channel, {
-      type: 'conversation.item.create',
-      item: {
-        type: 'message',
-        role: 'system',
-        content: [{ type: 'input_text', text: `[delegated-agent progress] ${message}` }]
-      }
-    });
-  }
-
   /**
-   * Triggers a short spoken update that conveys THIS specific progress message naturally.
-   * Marks the upcoming response as 'narration' (flag consumed by the next `response.created`)
-   * so its transcript is treated as EPHEMERAL — surfaced on {@link DelegationNarration$}
-   * instead of becoming a caption / persisted ConversationDetail.
+   * Builds the one-off instructions for a short spoken update that conveys THIS specific
+   * progress message naturally — strictly first person, since the co-agent owns the work.
+   * The client tags the resulting turn as narration, keeping it EPHEMERAL — surfaced on
+   * {@link DelegationNarration$} instead of becoming a caption / persisted ConversationDetail.
    */
-  private requestProgressNarration(channel: RTCDataChannel, message: string): void {
-    this.responseActive = true;
-    this.pendingNarrationKind = true;
-    this.sendEvent(channel, {
-      type: 'response.create',
-      response: {
-        instructions:
-          `Progress on the work YOU are doing for the user: "${message}". ` +
-          `Say ONE short, natural sentence about what you are doing right now, strictly in the first person ` +
-          `("I'm…"). Example: if the progress says "Analyzing the request", say "I'm looking at that now" — ` +
-          `NOT "It's analyzing" or "Sage is analyzing". The words "it" and the agent's name must not be the ` +
-          `subject of your sentence. Do not repeat earlier updates and never say generic filler like ` +
-          `"it's still running in the background".`
-      }
-    });
+  private buildNarrationInstructions(message: string): string {
+    return (
+      `Progress on the work YOU are doing for the user: "${message}". ` +
+      `Say ONE short, natural sentence about what you are doing right now, strictly in the first person ` +
+      `("I'm…"). Example: if the progress says "Analyzing the request", say "I'm looking at that now" — ` +
+      `NOT "It's analyzing" or "Sage is analyzing". The words "it" and the agent's name must not be the ` +
+      `subject of your sentence. Do not repeat earlier updates and never say generic filler like ` +
+      `"it's still running in the background".`
+    );
   }
 
   /** True when the narration throttle window has elapsed since the last spoken update. */
@@ -997,13 +725,8 @@ export class VoiceSessionService {
     }
     this.cancelPendingNarration();
     this.inFlightCallIds.clear();
-    this.audioPlaying = false;
     this.lastDelegationNarrationAt = 0;
     this.lastNarratedMessage = '';
-    this.responseActive = false;
-    this.pendingResultResponse = false;
-    this.pendingNarrationKind = false;
-    this.activeResponseKind = 'normal';
   }
 
   // ── Teardown ───────────────────────────────────────────────────────────────
@@ -1015,21 +738,14 @@ export class VoiceSessionService {
   private async teardown(closeServerSession: boolean): Promise<void> {
     this.teardownDelegationProgress();
 
+    // Defensive: stop the mic even when Connect never ran (the client also stops the
+    // tracks it was handed — track.stop() is idempotent).
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
 
-    if (this.dataChannel) {
-      try { this.dataChannel.close(); } catch { /* already closing */ }
-      this.dataChannel = null;
-    }
-    if (this.peerConnection) {
-      try { this.peerConnection.close(); } catch { /* already closing */ }
-      this.peerConnection = null;
-    }
-    if (this.remoteAudioEl) {
-      this.remoteAudioEl.srcObject = null;
-      this.remoteAudioEl.remove();
-      this.remoteAudioEl = null;
+    if (this.client) {
+      await this.client.Disconnect();
+      this.client = null;
     }
 
     if (closeServerSession && this.agentSessionId) {
@@ -1037,8 +753,6 @@ export class VoiceSessionService {
     }
 
     this.agentSessionId = null;
-    this.sessionConfigJson = null;
-    this.pendingAssistantText = '';
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
       this._connectionState$.next('closed');
@@ -1061,13 +775,6 @@ export class VoiceSessionService {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /** Serializes + sends an event object over the data channel. */
-  private sendEvent(channel: RTCDataChannel, event: Record<string, unknown>): void {
-    if (channel.readyState === 'open') {
-      channel.send(JSON.stringify(event));
-    }
-  }
-
   /** Pushes a caption onto the live list (immutable update for change detection). */
   private appendCaption(caption: VoiceCaption): void {
     this._captions$.next([...this._captions$.value, caption]);
@@ -1076,7 +783,6 @@ export class VoiceSessionService {
   /** Resets reactive + internal state at the start of a session. */
   private resetState(): void {
     this._captions$.next([]);
-    this.pendingAssistantText = '';
   }
 
   /** The GraphQL provider used for relay mutations. */
