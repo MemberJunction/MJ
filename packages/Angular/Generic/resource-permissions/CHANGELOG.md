@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-container-directives@5.40.2
+- @memberjunction/ng-generic-dialog@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-container-directives@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ng-generic-dialog@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-container-directives@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-shared-generic@5.40.0
+  - @memberjunction/ng-generic-dialog@5.40.0
+  - @memberjunction/ng-ui-components@5.40.0
+  - @memberjunction/global@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes

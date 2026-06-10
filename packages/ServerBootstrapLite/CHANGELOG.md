@@ -1,5 +1,236 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-agents@5.40.2
+  - @memberjunction/core-actions@5.40.2
+  - @memberjunction/ai-agent-manager@5.40.2
+  - @memberjunction/ai-form-builder@5.40.2
+  - @memberjunction/scheduling-engine@5.40.2
+  - @memberjunction/testing-engine@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/tag-engine-base@5.40.2
+  - @memberjunction/ai-anthropic@5.40.2
+  - @memberjunction/ai-azure@5.40.2
+  - @memberjunction/ai-bedrock@5.40.2
+  - @memberjunction/ai-betty-bot@5.40.2
+  - @memberjunction/ai-blackforestlabs@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/ai-cerebras@5.40.2
+  - @memberjunction/ai-cohere@5.40.2
+  - @memberjunction/ai-elevenlabs@5.40.2
+  - @memberjunction/ai-fireworks@5.40.2
+  - @memberjunction/ai-gemini@5.40.2
+  - @memberjunction/ai-groq@5.40.2
+  - @memberjunction/ai-heygen@5.40.2
+  - @memberjunction/ai-inception@5.40.2
+  - @memberjunction/ai-lmstudio@5.40.2
+  - @memberjunction/ai-llamacpp@5.40.2
+  - @memberjunction/ai-local-embeddings@5.40.2
+  - @memberjunction/ai-minimax@5.40.2
+  - @memberjunction/ai-mistral@5.40.2
+  - @memberjunction/ai-ollama@5.40.2
+  - @memberjunction/ai-openai@5.40.2
+  - @memberjunction/ai-openrouter@5.40.2
+  - @memberjunction/ai-recommendations-rex@5.40.2
+  - @memberjunction/ai-vertex@5.40.2
+  - @memberjunction/ai-zhipu@5.40.2
+  - @memberjunction/ai-xai@5.40.2
+  - @memberjunction/ai-reranker@5.40.2
+  - @memberjunction/ai-vectors-memory@5.40.2
+  - @memberjunction/ai-vectors-pinecone@5.40.2
+  - @memberjunction/ai-vectors-qdrant@5.40.2
+  - @memberjunction/ai-vectors-sqlserver@5.40.2
+  - @memberjunction/ai-vectors-pgvector@5.40.2
+  - @memberjunction/actions-apollo@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions-bizapps-accounting@5.40.2
+  - @memberjunction/actions-bizapps-crm@5.40.2
+  - @memberjunction/actions-bizapps-formbuilders@5.40.2
+  - @memberjunction/actions-bizapps-lms@5.40.2
+  - @memberjunction/actions-bizapps-social@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/communication-types@5.40.2
+  - @memberjunction/content-autotagging@5.40.2
+  - @memberjunction/doc-utils@5.40.2
+  - @memberjunction/encryption@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/data-context-server@5.40.2
+  - @memberjunction/queue@5.40.2
+  - @memberjunction/storage@5.40.2
+  - @memberjunction/react-linter@5.40.2
+  - @memberjunction/scheduling-actions@5.40.2
+  - @memberjunction/scheduling-engine-base@5.40.2
+  - @memberjunction/search-engine@5.40.2
+  - @memberjunction/templates@5.40.2
+  - @memberjunction/geo-core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-agent-manager@5.40.1
+  - @memberjunction/ai-agents@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/ai-form-builder@5.40.1
+  - @memberjunction/tag-engine-base@5.40.1
+  - @memberjunction/ai-recommendations-rex@5.40.1
+  - @memberjunction/ai-reranker@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/ai-vectors-pinecone@5.40.1
+  - @memberjunction/ai-vectors-qdrant@5.40.1
+  - @memberjunction/ai-vectors-sqlserver@5.40.1
+  - @memberjunction/ai-vectors-pgvector@5.40.1
+  - @memberjunction/actions-apollo@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions-bizapps-accounting@5.40.1
+  - @memberjunction/actions-bizapps-crm@5.40.1
+  - @memberjunction/actions-bizapps-formbuilders@5.40.1
+  - @memberjunction/actions-bizapps-lms@5.40.1
+  - @memberjunction/actions-bizapps-social@5.40.1
+  - @memberjunction/core-actions@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/communication-types@5.40.1
+  - @memberjunction/content-autotagging@5.40.1
+  - @memberjunction/doc-utils@5.40.1
+  - @memberjunction/encryption@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/core-entities-server@5.40.1
+  - @memberjunction/data-context-server@5.40.1
+  - @memberjunction/queue@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/react-linter@5.40.1
+  - @memberjunction/scheduling-actions@5.40.1
+  - @memberjunction/scheduling-engine-base@5.40.1
+  - @memberjunction/scheduling-engine@5.40.1
+  - @memberjunction/search-engine@5.40.1
+  - @memberjunction/templates@5.40.1
+  - @memberjunction/testing-engine@5.40.1
+  - @memberjunction/geo-core@5.40.1
+  - @memberjunction/ai-provider-bundle@5.40.1
+  - @memberjunction/ai-anthropic@5.40.1
+  - @memberjunction/ai-azure@5.40.1
+  - @memberjunction/ai-bedrock@5.40.1
+  - @memberjunction/ai-betty-bot@5.40.1
+  - @memberjunction/ai-blackforestlabs@5.40.1
+  - @memberjunction/ai-cerebras@5.40.1
+  - @memberjunction/ai-cohere@5.40.1
+  - @memberjunction/ai-elevenlabs@5.40.1
+  - @memberjunction/ai-fireworks@5.40.1
+  - @memberjunction/ai-gemini@5.40.1
+  - @memberjunction/ai-groq@5.40.1
+  - @memberjunction/ai-heygen@5.40.1
+  - @memberjunction/ai-inception@5.40.1
+  - @memberjunction/ai-lmstudio@5.40.1
+  - @memberjunction/ai-llamacpp@5.40.1
+  - @memberjunction/ai-local-embeddings@5.40.1
+  - @memberjunction/ai-minimax@5.40.1
+  - @memberjunction/ai-mistral@5.40.1
+  - @memberjunction/ai-ollama@5.40.1
+  - @memberjunction/ai-openai@5.40.1
+  - @memberjunction/ai-openrouter@5.40.1
+  - @memberjunction/ai-vertex@5.40.1
+  - @memberjunction/ai-zhipu@5.40.1
+  - @memberjunction/ai-xai@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [f2cca15]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [6ea4de7]
+- Updated dependencies [54c9526]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ai-agents@5.40.0
+  - @memberjunction/content-autotagging@5.40.0
+  - @memberjunction/core-actions@5.40.0
+  - @memberjunction/tag-engine-base@5.40.0
+  - @memberjunction/scheduling-engine@5.40.0
+  - @memberjunction/ai-agent-manager@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/ai-form-builder@5.40.0
+  - @memberjunction/ai-recommendations-rex@5.40.0
+  - @memberjunction/ai-reranker@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/ai-vectors-pinecone@5.40.0
+  - @memberjunction/ai-vectors-qdrant@5.40.0
+  - @memberjunction/ai-vectors-sqlserver@5.40.0
+  - @memberjunction/ai-vectors-pgvector@5.40.0
+  - @memberjunction/actions-apollo@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions-bizapps-accounting@5.40.0
+  - @memberjunction/actions-bizapps-crm@5.40.0
+  - @memberjunction/actions-bizapps-formbuilders@5.40.0
+  - @memberjunction/actions-bizapps-lms@5.40.0
+  - @memberjunction/actions-bizapps-social@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/communication-types@5.40.0
+  - @memberjunction/doc-utils@5.40.0
+  - @memberjunction/encryption@5.40.0
+  - @memberjunction/core-entities-server@5.40.0
+  - @memberjunction/data-context-server@5.40.0
+  - @memberjunction/queue@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/react-linter@5.40.0
+  - @memberjunction/scheduling-actions@5.40.0
+  - @memberjunction/scheduling-engine-base@5.40.0
+  - @memberjunction/search-engine@5.40.0
+  - @memberjunction/templates@5.40.0
+  - @memberjunction/testing-engine@5.40.0
+  - @memberjunction/geo-core@5.40.0
+  - @memberjunction/ai-provider-bundle@5.40.0
+  - @memberjunction/ai-anthropic@5.40.0
+  - @memberjunction/ai-azure@5.40.0
+  - @memberjunction/ai-bedrock@5.40.0
+  - @memberjunction/ai-betty-bot@5.40.0
+  - @memberjunction/ai-blackforestlabs@5.40.0
+  - @memberjunction/ai-cerebras@5.40.0
+  - @memberjunction/ai-cohere@5.40.0
+  - @memberjunction/ai-elevenlabs@5.40.0
+  - @memberjunction/ai-fireworks@5.40.0
+  - @memberjunction/ai-gemini@5.40.0
+  - @memberjunction/ai-groq@5.40.0
+  - @memberjunction/ai-heygen@5.40.0
+  - @memberjunction/ai-inception@5.40.0
+  - @memberjunction/ai-lmstudio@5.40.0
+  - @memberjunction/ai-llamacpp@5.40.0
+  - @memberjunction/ai-local-embeddings@5.40.0
+  - @memberjunction/ai-minimax@5.40.0
+  - @memberjunction/ai-mistral@5.40.0
+  - @memberjunction/ai-ollama@5.40.0
+  - @memberjunction/ai-openai@5.40.0
+  - @memberjunction/ai-openrouter@5.40.0
+  - @memberjunction/ai-vertex@5.40.0
+  - @memberjunction/ai-zhipu@5.40.0
+  - @memberjunction/ai-xai@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes

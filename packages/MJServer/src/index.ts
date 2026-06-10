@@ -955,7 +955,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Without this, the browser blocks 401 responses from the auth middleware
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
-  app.use(cors<cors.CorsRequest>());
+  const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
+  app.use(cors<cors.CorsRequest>({
+    origin: (origin, callback) => {
+      // Allow all origins when ['*'] (default/backward-compatible),
+      // or when no Origin header (server-to-server calls).
+      if (corsAllowed.includes('*') || !origin || corsAllowed.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+    },
+    credentials: configInfo.cors?.allowCredentials ?? true,
+    maxAge: configInfo.cors?.maxAge ?? 86400,
+  }));
 
   // ─── Server extensions (before auth — extensions handle their own auth) ─────
   // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.

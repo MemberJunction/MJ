@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-connectors",
   "type": "module",
-  "version": "5.39.0",
+  "version": "5.40.2",
   "description": "MemberJunction Integration Connectors - HubSpot, Salesforce, YourMembership, and FileFeed connectors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,11 +14,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "5.39.0",
-    "@memberjunction/core-entities": "5.39.0",
-    "@memberjunction/global": "5.39.0",
-    "@memberjunction/integration-engine": "5.39.0",
-    "@memberjunction/integration-engine-base": "5.39.0",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/global": "5.40.2",
+    "@memberjunction/integration-engine": "5.40.2",
+    "@memberjunction/integration-engine-base": "5.40.2",
     "jsonwebtoken": "9.0.3",
     "mssql": "^12.2.0"
   },

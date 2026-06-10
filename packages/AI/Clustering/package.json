@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/clustering-engine",
   "type": "module",
-  "version": "5.39.0",
+  "version": "5.40.2",
   "description": "MemberJunction: Framework-agnostic clustering + dimensionality-reduction engine with persistence to Cluster Analysis entities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,14 +17,14 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai-core-plus": "5.39.0",
-    "@memberjunction/ai-prompts": "5.39.0",
-    "@memberjunction/ai-vectors-memory": "5.39.0",
-    "@memberjunction/core": "5.39.0",
-    "@memberjunction/core-entities": "5.39.0",
-    "@memberjunction/global": "5.39.0",
+    "@memberjunction/ai-core-plus": "5.40.2",
+    "@memberjunction/ai-prompts": "5.40.2",
+    "@memberjunction/ai-vectors-memory": "5.40.2",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/global": "5.40.2",
     "umap-js": "^1.4.0",
-    "@memberjunction/ai-engine-base": "5.39.0"
+    "@memberjunction/ai-engine-base": "5.40.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
