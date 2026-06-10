@@ -252,7 +252,8 @@ const result = await SignatureEngine.Instance.SendForSignature({
   // optionally link to the originating record:
   entityId: contractsEntityId,
   recordId: contractId,
-}, contextUser);
+  contextUser,
+});
 
 console.log(result.status); // "Sent"
 ```
@@ -273,7 +274,6 @@ Not every vendor exposes every feature. The engine advertises each provider's ca
 | Void | ✅ | ✅ | ✅ |
 | Embedded signing | ✅ | — | — |
 | Templates | ✅ | — | — |
-| Resend notification | ✅ | — | — |
 | Inbound webhooks | ✅ | ✅ | ✅ |
 
 ---
@@ -282,7 +282,7 @@ Not every vendor exposes every feature. The engine advertises each provider's ca
 
 - **Pluggable drivers.** Each provider is a class registered with `@RegisterClass(BaseSignatureProvider, '<Key>')` and resolved at runtime by driver key — adding a vendor never touches the engine.
 - **Client/server split.** The browser-safe entry (`@memberjunction/esignature`) carries only the contract and metadata cache; the credential-decrypting, database-writing engine lives behind `@memberjunction/esignature/server`, so client bundles stay free of server-only dependencies.
-- **Fail-closed webhooks.** When a signing secret is configured, an inbound webhook with a bad signature is rejected; the document store and audit log are never updated on unverified input.
+- **Verify-if-configured webhooks.** When a signing secret is configured, an inbound webhook whose signature doesn't match is logged and **does not update** the envelope status; only verified (or, where no secret is configured, accepted-with-warning) events change state.
 - **Graceful degradation.** Optional operations a provider doesn't support return a clear "not supported" result rather than throwing. Document file-back is best-effort — a download still returns bytes even if no storage account is configured.
 
 For the full engineering detail — every type, every method, the credential flow, and the webhook contract — read the core primitive docs:

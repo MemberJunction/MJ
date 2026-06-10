@@ -104,7 +104,7 @@ DocuSign's native envelope statuses map onto MemberJunction's [normalized lifecy
 
 ## Webhooks (DocuSign Connect)
 
-DocuSign Connect pushes envelope events to `POST /esignature/webhook/DocuSign`. The driver verifies the `x-docusign-signature-1` header as an HMAC over the **raw request body** using your `connectHmacKey`. If the key is configured and the signature doesn't match, the request is rejected — see the [webhook flow](../../Base/README.md#inbound-webhooks).
+DocuSign Connect pushes envelope events to `POST /esignature/webhook/DocuSign`. The driver verifies the `x-docusign-signature-1` header as an HMAC over the **raw request body** using your `connectHmacKey`. If the key is configured and the signature doesn't match, the event is logged and the envelope status is left unchanged — see the [webhook flow](../../Base/README.md#inbound-webhooks).
 
 ---
 

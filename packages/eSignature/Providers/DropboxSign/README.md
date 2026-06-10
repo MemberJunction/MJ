@@ -65,7 +65,16 @@ Dropbox Sign supports a first-class **test mode** that creates non-billable sign
 
 ## Status mapping
 
-Dropbox Sign's native signature-request statuses map onto MemberJunction's [normalized lifecycle](../../Base/README.md#status):
+Dropbox Sign reports state two ways: request-level booleans (`is_complete`, `is_declined`) and a per-signer `status_code`. The driver checks the booleans first, then falls back to the lead signer's `status_code` (defaulting to `Sent` when none is present). Both map onto MemberJunction's [normalized lifecycle](../../Base/README.md#status):
+
+**Request-level (checked first):**
+
+| Dropbox Sign flag | MJ `EnvelopeStatus` |
+|---|---|
+| `is_complete` | `Completed` |
+| `is_declined` | `Declined` |
+
+**Per-signer `status_code` (fallback):**
 
 | Dropbox Sign status | MJ `EnvelopeStatus` |
 |---|---|
@@ -73,7 +82,8 @@ Dropbox Sign's native signature-request statuses map onto MemberJunction's [norm
 | `on_hold` | `Delivered` |
 | `signed` | `Signed` |
 | `declined` | `Declined` |
-| `error` | `Unknown` |
+| `error`, *(any unrecognized code)* | `Unknown` |
+| *(no signer status present)* | `Sent` |
 
 ---
 

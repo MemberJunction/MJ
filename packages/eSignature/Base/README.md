@@ -252,6 +252,7 @@ The envelope. Links to an originating record via the polymorphic pair.
 | `SignatureRequestID` | guid → Request | Parent envelope. |
 | `ArtifactID` / `ArtifactVersionID` | guid | Source or signed artifact provenance. |
 | `Name` | string | Filename. |
+| `Sequence` | int | Document order in the envelope; defaults `1`. |
 | `Role` | string | `Source` (sent) or `Signed` (received back). |
 
 ### MJ: Signature Request Recipients
@@ -259,6 +260,7 @@ The envelope. Links to an originating record via the polymorphic pair.
 |---|---|---|
 | `SignatureRequestID` | guid → Request | Parent envelope. |
 | `Email` / `Name` | string | Signer identity. |
+| `RoutingOrder` | int | Signing order; defaults `1`. |
 | `Role` | string | Template role (optional). |
 | `Status` | string | Per-recipient status, defaults `Created`. |
 | `SignedAt` | datetimeoffset | When this signer completed. |
@@ -285,7 +287,7 @@ The simplest path. Four Actions (in `@memberjunction/core-actions`) wrap the eng
 
 | Action | Key inputs | Key outputs |
 |---|---|---|
-| **Send Document for Signature** | `SignatureAccountID`, `Title`, `Documents` *(or `ArtifactVersionID`)*, `Recipients`, `Message?`, `EntityID?`/`RecordID?`, `SendImmediately?` | `SignatureRequestID`, `ExternalEnvelopeID`, `Status` |
+| **Send Document for Signature** | `SignatureAccountID`, `Title`, `Documents` *(or `ArtifactVersionID` / `ArtifactID`)*, `Recipients`, `Message?`, `EntityID?`/`RecordID?`, `SendImmediately?`, `Metadata?` | `SignatureRequestID`, `ExternalEnvelopeID`, `Status` |
 | **Get Signature Status** | `SignatureRequestID` | `Status` |
 | **Download Signed Document** | `SignatureRequestID` | `DocumentBase64`, `Filename`, `ContentType` |
 | **Void Signature Request** | `SignatureRequestID`, `Reason` | `Status` (`Voided`) |
@@ -303,9 +305,10 @@ const sent = await SignatureEngine.Instance.SendForSignature({
   documents: [{ bytes: pdf, filename: 'agreement.pdf', contentType: 'application/pdf' }],
   recipients: [{ email: 'alice@acme.com', name: 'Alice Smith', routingOrder: 1 }],
   entityId, recordId,           // link to your domain record
-}, contextUser);
+  contextUser,                  // passed inside the options object
+});
 
-// 2. Check status later
+// 2. Check status later (these methods take contextUser as a positional argument)
 const status = await SignatureEngine.Instance.RefreshStatus(sent.signatureRequestId, contextUser);
 
 // 3. Download the signed copy (filed back to storage automatically)
@@ -351,26 +354,29 @@ Configuration is **layered**: provider-type defaults (non-secret) → per-accoun
 
 ## Inbound webhooks
 
-Signing vendors push status changes to MemberJunction at `POST /esignature/webhook/:driverKey`. The endpoint (in MJ Server) is intentionally **unauthenticated by MJ** — trust comes from the provider's own signature, verified over the raw request bytes:
+Signing vendors push status changes to MemberJunction at `POST /esignature/webhook/:driverKey`. The endpoint (in MJ Server) is intentionally **unauthenticated by MJ** — trust comes from the provider's own signature, verified over the raw request bytes. The policy is **verify-if-configured**: a configured-but-invalid signature is logged and *not* applied; a missing secret is accepted with a warning.
 
 ```mermaid
 flowchart TD
     In["POST /esignature/webhook/:driverKey"] --> Parse["Bare driver parses payload<br/>(no credentials needed)"]
     Parse --> Find{"Owning Signature Request<br/>found by envelope ID?"}
-    Find -->|no| Accept202["202 Accepted<br/>(logged, not actioned)"]
+    Find -->|no| Accept202["202 — received, not actioned<br/>(logged)"]
     Find -->|yes| Verify{"HMAC over raw bytes"}
-    Verify -->|secret set & mismatch| Reject["403 Forbidden"]
-    Verify -->|verified| Apply["Update status + log"]
-    Verify -->|no secret configured| ApplyWarn["Apply + warn (fail-open)"]
+    Verify -->|secret set & mismatch| Mismatch["202 — verification failed<br/>logged, status NOT applied"]
+    Verify -->|verified| Apply["200 — update status + log"]
+    Verify -->|no secret configured| ApplyWarn["200 — apply + warn"]
 
-    style Reject fill:#8a2d2d,stroke:#5c1a1a,color:#fff
+    style Mismatch fill:#8a2d2d,stroke:#5c1a1a,color:#fff
     style Apply fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style ApplyWarn fill:#8a5a2d,stroke:#5c3a1a,color:#fff
     style Accept202 fill:#8a5a2d,stroke:#5c3a1a,color:#fff
 ```
 
-- **Fail-closed** when a signing secret is configured: a bad signature is rejected and nothing is updated.
-- **Fail-open with a warning** when no secret is configured — so you can get going in development, with a log nudge to lock it down for production.
-- **Unknown envelope → 202**: accepted (so the provider stops retrying) but not actioned.
+- **Invalid signature** (a secret is configured but the HMAC doesn't match): the failure is logged, the envelope status is **left unchanged**, and the endpoint returns **202** — accepted-but-not-actioned, so the provider doesn't hammer the endpoint with retries of a payload MJ will never trust.
+- **No secret configured**: the event is applied with a warning logged — convenient for development, with a nudge to configure a secret for production.
+- **Verified** event: status applied and logged, **200**.
+- **Unknown envelope**: **202** — accepted (so the provider stops retrying) but not actioned.
+- Malformed requests fail fast: missing driver key → **400**; no system user → **503**; unexpected error → **500**.
 
 ---
 
