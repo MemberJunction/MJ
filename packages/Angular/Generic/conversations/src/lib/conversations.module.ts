@@ -71,6 +71,7 @@ import { ImageViewerComponent } from './components/attachment/image-viewer.compo
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
 import { VoiceOverlayComponent } from './components/voice/voice-overlay.component';
+import { VoiceAgentPickerComponent } from './components/voice/voice-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
 
 // Directives
@@ -154,6 +155,7 @@ const COMPONENTS = [
     ArtifactCollectionPickerModalComponent,
     ArtifactShareModalComponent,
     VoiceOverlayComponent,
+    VoiceAgentPickerComponent,
     RealtimeSessionOverlayComponent
   ],
   exports: [
@@ -162,6 +164,7 @@ const COMPONENTS = [
     // Standalone components
     TasksFullViewComponent,
     VoiceOverlayComponent,
+    VoiceAgentPickerComponent,
     RealtimeSessionOverlayComponent
   ]
 })

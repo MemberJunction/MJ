@@ -326,14 +326,46 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this.converationManagerAgent?.Name ?? 'Sage';
   }
 
+  /** True while the "Start a voice call with…" agent picker popover is open. */
+  public showVoiceAgentPicker: boolean = false;
+
+  /**
+   * Agents the voice picker offers — the same cached set the @mention
+   * autocomplete and {@link resolveVoiceAgentName} use, so the picker can
+   * never offer an agent the conversation couldn't otherwise route to.
+   */
+  public get voicePickerAgents(): MJAIAgentEntityExtended[] {
+    return this.mentionAutocomplete.getAvailableAgents();
+  }
+
+  /** The agent the default resolution would call — preselected in the picker. */
+  public get voicePickerDefaultAgentId(): string | null {
+    return this.resolveCurrentAgentId();
+  }
+
   /**
    * Start a real-time voice session fronting the conversation's current agent.
    * Client-direct: the VoiceSessionService mints an ephemeral token and connects
    * the browser straight to the realtime provider over WebRTC. The "call mode"
    * overlay itself is hosted by the conversation chat area (driven by Active$).
+   *
+   * NEW vs EXISTING conversation:
+   * - When an agent has already participated (a prior non-Sage AI turn exists),
+   *   start immediately with the resolved agent — zero added friction.
+   * - When the conversation has NO prior agent participation (new / empty
+   *   conversation), the resolution would silently fall through to a default
+   *   the user never chose — so show a compact agent picker instead and start
+   *   with whichever agent they pick.
    */
   public async onStartVoice(): Promise<void> {
     if (!this.canStartVoice) {
+      return;
+    }
+    // New/empty conversation (no prior agent turn): let the user choose who
+    // to call. Falls through to the immediate path if the agent cache is
+    // empty (nothing to pick from — the resolved default is the only option).
+    if (!this.findLastNonSageAgentId() && this.voicePickerAgents.length > 0) {
+      this.showVoiceAgentPicker = true;
       return;
     }
     const targetAgentId = this.resolveCurrentAgentId();
@@ -341,12 +373,33 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.toastService.error('No agent available for a voice session.');
       return;
     }
+    await this.startVoiceWithAgent(targetAgentId, this.resolveVoiceAgentName());
+  }
+
+  /** User confirmed an agent in the voice picker — start the call with it. */
+  public async onVoiceAgentPicked(agent: MJAIAgentEntityExtended): Promise<void> {
+    this.showVoiceAgentPicker = false;
+    await this.startVoiceWithAgent(agent.ID, agent.Name || this.resolveVoiceAgentName());
+  }
+
+  /** User dismissed the voice picker without starting a call. */
+  public onVoiceAgentPickerCancelled(): void {
+    this.showVoiceAgentPicker = false;
+  }
+
+  /**
+   * Shared session-start path for both the immediate (existing conversation)
+   * and picker (new conversation) flows. The agent NAME is passed through to
+   * VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
+   * shows who the call fronts without re-resolving.
+   */
+  private async startVoiceWithAgent(agentId: string, agentName: string): Promise<void> {
     try {
       await this.voiceSession.StartVoiceSession(
-        targetAgentId,
+        agentId,
         this.conversationId,
         null,
-        this.resolveVoiceAgentName()
+        agentName
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);
