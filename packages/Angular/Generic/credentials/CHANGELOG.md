@@ -1,5 +1,16 @@
 # @memberjunction/ng-credentials
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

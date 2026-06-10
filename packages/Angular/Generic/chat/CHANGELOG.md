@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-chat
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.40.2
+- @memberjunction/ng-markdown@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/core@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

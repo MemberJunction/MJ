@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/archiving-engine",
   "type": "module",
-  "version": "5.40.1",
+  "version": "5.40.2",
   "description": "Core archiving engine for MemberJunction - handles field-level archiving, storage, and recovery of entity records.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,10 +22,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "5.40.1",
-    "@memberjunction/core-entities": "5.40.1",
-    "@memberjunction/global": "5.40.1",
-    "@memberjunction/storage": "5.40.1"
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/global": "5.40.2",
+    "@memberjunction/storage": "5.40.2"
   },
   "repository": {
     "type": "git",

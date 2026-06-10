@@ -1,5 +1,7 @@
 # @memberjunction/config
 
+## 5.40.2
+
 ## 5.40.1
 
 ## 5.40.0

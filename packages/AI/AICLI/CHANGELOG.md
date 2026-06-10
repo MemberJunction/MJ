@@ -1,5 +1,27 @@
 # @memberjunction/ai-cli
 
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-agents@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/core-actions@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-anthropic@5.40.2
+  - @memberjunction/ai-betty-bot@5.40.2
+  - @memberjunction/ai-cerebras@5.40.2
+  - @memberjunction/ai-groq@5.40.2
+  - @memberjunction/ai-mistral@5.40.2
+  - @memberjunction/ai-openai@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

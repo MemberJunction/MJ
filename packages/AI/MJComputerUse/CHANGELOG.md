@@ -1,5 +1,21 @@
 # @memberjunction/computer-use-engine
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/testing-engine@5.40.2
+- @memberjunction/computer-use@5.40.2
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/aiengine@5.40.2
+- @memberjunction/ai-prompts@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/actions@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

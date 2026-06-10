@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/interactive-component-types@5.40.2
+- @memberjunction/lists-base@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

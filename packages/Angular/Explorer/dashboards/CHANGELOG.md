@@ -1,5 +1,65 @@
 # @memberjunction/ng-dashboards
 
+## 5.40.2
+
+### Patch Changes
+
+- da2ee38: Fix duplicate detection defects: drop stale "ghost" vector matches to deleted/re-seeded records (the apparent record-matching-itself), guard against recursive re-triggering that exploded detail rows, skip auto-merge for merge-disallowed entities instead of failing the run, and sort the Record Duplicates UI groups and per-card matches by match probability descending.
+  - @memberjunction/ng-conversations@5.40.2
+  - @memberjunction/ng-dashboard-viewer@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/tag-engine-base@5.40.2
+  - @memberjunction/api-keys-base@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/ng-base-application@5.40.2
+  - @memberjunction/ng-core-entity-forms@5.40.2
+  - @memberjunction/ng-explorer-settings@5.40.2
+  - @memberjunction/ng-shared@5.40.2
+  - @memberjunction/ng-testing@5.40.2
+  - @memberjunction/ng-action-gallery@5.40.2
+  - @memberjunction/ng-actions@5.40.2
+  - @memberjunction/ng-agent-requests@5.40.2
+  - @memberjunction/ng-agents@5.40.2
+  - @memberjunction/ng-ai-test-harness@5.40.2
+  - @memberjunction/ng-archive-manager@5.40.2
+  - @memberjunction/ng-base-forms@5.40.2
+  - @memberjunction/ng-base-types@5.40.2
+  - @memberjunction/ng-clustering@5.40.2
+  - @memberjunction/ng-code-editor@5.40.2
+  - @memberjunction/ng-container-directives@5.40.2
+  - @memberjunction/ng-credentials@5.40.2
+  - @memberjunction/ng-entity-relationship-diagram@5.40.2
+  - @memberjunction/ng-entity-viewer@5.40.2
+  - @memberjunction/ng-export-service@5.40.2
+  - @memberjunction/ng-filter-builder@5.40.2
+  - @memberjunction/ng-list-management@5.40.2
+  - @memberjunction/ng-markdown@5.40.2
+  - @memberjunction/ng-map-view@5.40.2
+  - @memberjunction/ng-notifications@5.40.2
+  - @memberjunction/ng-query-viewer@5.40.2
+  - @memberjunction/ng-react@5.40.2
+  - @memberjunction/ng-resource-permissions@5.40.2
+  - @memberjunction/ng-scheduling@5.40.2
+  - @memberjunction/ng-search@5.40.2
+  - @memberjunction/ng-shared-generic@5.40.2
+  - @memberjunction/ng-trees@5.40.2
+  - @memberjunction/ng-ui-components@5.40.2
+  - @memberjunction/ng-versions@5.40.2
+  - @memberjunction/ng-word-cloud@5.40.2
+  - @memberjunction/credentials@5.40.2
+  - @memberjunction/graphql-dataprovider@5.40.2
+  - @memberjunction/integration-engine-base@5.40.2
+  - @memberjunction/interactive-component-types@5.40.2
+  - @memberjunction/lists-base@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/export-engine@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/skip-types@5.40.2
+  - @memberjunction/templates-base-types@5.40.2
+  - @memberjunction/testing-engine-base@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes
