@@ -2492,7 +2492,10 @@ ORDER BY "EntityID", "Sequence";
      * Builds the CASE expression for AllowUpdateAPI in the pending entity fields query.
      */
     private buildAllowUpdateAPICase(): string {
-        return `CASE WHEN sf."IsVirtual" = true THEN FALSE
+        // sf is the schema view (vwSQLColumnsAndEntityFields), whose "IsVirtual"
+        // is an INTEGER 1/0 (not the EntityField table's BOOLEAN). Compare with
+        // <> 0, not `= true`, or PG raises `operator does not exist: integer = boolean`.
+        return `CASE WHEN sf."IsVirtual" <> 0 THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.CreatedAtFieldName}' THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.UpdatedAtFieldName}' THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.DeletedAtFieldName}' THEN FALSE

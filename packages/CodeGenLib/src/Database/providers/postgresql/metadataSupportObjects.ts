@@ -578,4 +578,72 @@ BEGIN
   WHERE "ID" = p_EntityFieldID;
 END;
 $func$;
+
+-- ----------------------------------------------------------------------------
+-- spGetPrimaryKeyForTable — PG port of the SQL Server proc used by
+-- ManageMetadataBase.shouldCreateNewEntity to confirm a new table has a PK
+-- before creating an Entity for it. Self-ensured here (rather than relying on
+-- a migration having run) so a fresh PG database always has it available;
+-- without it, every new entity fails validation with
+-- "function __mj.spGetPrimaryKeyForTable(unknown, unknown) does not exist".
+-- ----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS __mj."spGetPrimaryKeyForTable"(VARCHAR, VARCHAR);
+CREATE OR REPLACE FUNCTION __mj."spGetPrimaryKeyForTable"(
+    p_TableName  VARCHAR(255),
+    p_SchemaName VARCHAR(255)
+)
+RETURNS TABLE(
+    "SchemaName"  VARCHAR,
+    "TableName"   VARCHAR,
+    "ColumnName"  VARCHAR,
+    "DataType"    VARCHAR,
+    "max_length"  INTEGER,
+    "precision"   INTEGER,
+    "scale"       INTEGER,
+    "is_nullable" BOOLEAN
+) AS
+$spgetpk$
+BEGIN
+    RETURN QUERY
+    SELECT
+        n.nspname::VARCHAR                         AS "SchemaName",
+        c.relname::VARCHAR                         AS "TableName",
+        a.attname::VARCHAR                         AS "ColumnName",
+        COALESCE(base_t.typname, t.typname)::VARCHAR
+                                                   AS "DataType",
+        CASE
+            WHEN t.typname IN ('varchar', 'bpchar', 'char')
+                THEN CASE WHEN a.atttypmod = -1 THEN -1 ELSE a.atttypmod - 4 END
+            WHEN t.typname = 'text' THEN -1
+            ELSE a.attlen::integer
+        END                                        AS "max_length",
+        CASE
+            WHEN t.typname = 'numeric' AND a.atttypmod <> -1
+                THEN ((a.atttypmod - 4) >> 16) & 65535
+            ELSE 0
+        END                                        AS "precision",
+        CASE
+            WHEN t.typname = 'numeric' AND a.atttypmod <> -1
+                THEN (a.atttypmod - 4) & 65535
+            ELSE 0
+        END                                        AS "scale",
+        (NOT a.attnotnull)                         AS "is_nullable"
+    FROM
+        pg_catalog.pg_index     i
+    INNER JOIN pg_catalog.pg_class     c  ON c.oid = i.indrelid
+    INNER JOIN pg_catalog.pg_namespace n  ON n.oid = c.relnamespace
+    CROSS JOIN LATERAL unnest(i.indkey) AS cols(col_num)
+    INNER JOIN pg_catalog.pg_attribute a
+        ON a.attrelid = c.oid AND a.attnum = cols.col_num
+    INNER JOIN pg_catalog.pg_type      t  ON t.oid = a.atttypid
+    LEFT  JOIN pg_catalog.pg_type      base_t
+        ON base_t.oid = t.typbasetype AND t.typtype = 'd'
+    WHERE
+        i.indisprimary = true
+        AND c.relname = p_TableName
+        AND n.nspname = p_SchemaName
+        AND a.attnum > 0
+        AND NOT a.attisdropped;
+END;
+$spgetpk$ LANGUAGE plpgsql;
 `;
