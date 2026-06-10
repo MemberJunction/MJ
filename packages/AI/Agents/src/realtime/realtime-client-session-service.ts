@@ -601,7 +601,9 @@ export class RealtimeClientSessionService {
 
         const framing =
             `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
-            `conversation with the user. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
+            `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
+            `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
+            `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
             `tool and narrate progress while it runs — do not attempt to do the work yourself.`;
 
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
@@ -876,7 +878,7 @@ export class RealtimeClientSessionService {
             return {
                 CallID: callID,
                 Success: true,
-                Output: `The target agent needs a response before it can continue. Ask the user: ${question}`,
+                Output: `You need an answer from the user before you can continue this work. Ask them, in your own first-person voice: ${question}`,
                 PausedRunID: result.agentRun.ID
             };
         }
@@ -884,8 +886,8 @@ export class RealtimeClientSessionService {
             CallID: callID,
             Success: result.success,
             Output: result.success
-                ? (result.agentRun?.Message || 'The target agent completed the request.')
-                : (result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.')
+                ? (result.agentRun?.Message || 'The delegated work is complete. Share the outcome with the user in your own first-person voice.')
+                : (result.agentRun?.ErrorMessage || 'The work could not be completed. Tell the user, in first person, that you hit a problem and offer a next step.')
         };
     }
 

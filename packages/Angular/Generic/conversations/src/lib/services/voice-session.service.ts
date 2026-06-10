@@ -882,8 +882,10 @@ export class VoiceSessionService {
       type: 'response.create',
       response: {
         instructions:
-          `The agent doing the work in the background just reported: "${message}". ` +
-          `Tell the user what is happening right now in one short, natural sentence in your own words. ` +
+          `Progress on the work you are doing for the user: "${message}". ` +
+          `Tell the user what is happening right now in one short, natural sentence, speaking in FIRST PERSON ` +
+          `as the one doing the work ("I'm pulling up the forecasts now"). Never refer to the agent or the work ` +
+          `in third person — no "it's doing", "the agent is", or "Sage is". ` +
           `Do not repeat earlier updates and do not say generic things like "it's still running in the background".`
       }
     });
