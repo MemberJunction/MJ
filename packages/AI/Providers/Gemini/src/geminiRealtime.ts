@@ -2,6 +2,8 @@
 import {
     GoogleGenAI,
     Modality,
+    type AuthToken,
+    type CreateAuthTokenParameters,
     type LiveServerMessage,
     type LiveServerContent,
     type LiveConnectConfig,
@@ -16,6 +18,7 @@ import {
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
@@ -33,6 +36,19 @@ import { RegisterClass } from '@memberjunction/global';
  * raw `ArrayBuffer` and leaves resampling/playback to the consumer.
  */
 const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
+
+/**
+ * Window (ms) within which a client-direct browser must OPEN its Live session using a minted
+ * ephemeral token. After this the token can no longer start a NEW session (an already-open
+ * session continues until {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}).
+ */
+const GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Total lifetime (ms) of a minted client-direct ephemeral token: messages on a Live session
+ * authenticated with the token are rejected after this point.
+ */
+const GEMINI_CLIENT_TOKEN_EXPIRY_MS = 30 * 60 * 1000;
 
 /**
  * The minimal subset of `@google/genai`'s `Session` that the realtime driver depends on. Declaring
@@ -82,6 +98,7 @@ export interface GeminiConnectArgs {
 @RegisterClass(BaseRealtimeModel, 'GeminiRealtime')
 export class GeminiRealtime extends BaseRealtimeModel {
     private geminiClient: GoogleGenAI | null = null;
+    private geminiTokenClient: GoogleGenAI | null = null;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -108,6 +125,87 @@ export class GeminiRealtime extends BaseRealtimeModel {
             session.SeedInitialContext(params.InitialContext);
         }
         return session;
+    }
+
+    /**
+     * Gemini Live supports the client-direct topology: the server mints a short-lived ephemeral
+     * auth token (`v1alpha` `auth_tokens` API) that the browser uses to open its OWN Live
+     * websocket, while the server keeps prompt/tool authority by LOCKING the connect config into
+     * the token via `liveConnectConstraints`.
+     */
+    public override get SupportsClientDirect(): boolean {
+        return true;
+    }
+
+    /**
+     * Mints an ephemeral, server-scoped Live credential for a **client-direct** session.
+     *
+     * The connect config is built EXACTLY as {@link StartSession} builds it (same
+     * {@link buildConnectConfig}: audio modality, input+output transcription, system instruction,
+     * mapped tools) and is **locked into the token** via `liveConnectConstraints` +
+     * `lockAdditionalFields: []` — so the API ignores any attempt by the browser to change the
+     * locked fields. The same config is ALSO carried in `SessionConfig` (as `{ model, config }`)
+     * because the SDK still expects the client to pass a model/config at `live.connect` time; the
+     * token-side lock is what makes the server's prompt and tool set authoritative.
+     *
+     * Expiry: the browser must open its session within
+     * {@link GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS}; the token (and thus the session's
+     * ability to send messages) dies at {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}.
+     *
+     * @param params Session configuration (model, system prompt, tools, config bag).
+     * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
+     */
+    public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        const config = this.buildConnectConfig(params);
+        const now = Date.now();
+        const expireTime = new Date(now + GEMINI_CLIENT_TOKEN_EXPIRY_MS).toISOString();
+        const newSessionExpireTime = new Date(now + GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS).toISOString();
+        const token = await this.mintAuthToken({
+            config: {
+                uses: 1,
+                expireTime,
+                newSessionExpireTime,
+                // Lock the server-built model + config into the token (lockAdditionalFields: []
+                // means "lock exactly the fields set in liveConnectConstraints.config").
+                liveConnectConstraints: { model: params.Model, config },
+                lockAdditionalFields: [],
+            },
+        });
+        if (!token.name) {
+            throw new Error('Gemini auth-token mint returned no token name');
+        }
+        return {
+            Provider: 'gemini',
+            Model: params.Model,
+            EphemeralToken: token.name,
+            ExpiresAt: expireTime,
+            // Plain-JSON copy of what the browser passes to live.connect (model + config). The
+            // token lock above makes these values authoritative even if a client tampers.
+            SessionConfig: JSON.parse(JSON.stringify({ model: params.Model, config })) as JSONObject,
+        };
+    }
+
+    /**
+     * Mint seam for the ephemeral auth token. Production routes through the SDK's
+     * `authTokens.create` on a `v1alpha` client (ephemeral tokens are v1alpha-only); unit tests
+     * override this to return a fake token with no network.
+     *
+     * @param params The auth-token create parameters (expiry, uses, live-connect constraints).
+     * @returns The created {@link AuthToken} (its `name` is the credential the browser presents).
+     */
+    protected async mintAuthToken(params: CreateAuthTokenParameters): Promise<AuthToken> {
+        return this.ensureTokenClient().authTokens.create(params);
+    }
+
+    /**
+     * Lazily constructs the `v1alpha` `GoogleGenAI` client used ONLY for auth-token minting
+     * (the ephemeral-token API is exposed on `v1alpha`; the regular live client stays default).
+     */
+    private ensureTokenClient(): GoogleGenAI {
+        if (!this.geminiTokenClient) {
+            this.geminiTokenClient = new GoogleGenAI({ apiKey: this.apiKey, httpOptions: { apiVersion: 'v1alpha' } });
+        }
+        return this.geminiTokenClient;
     }
 
     /**

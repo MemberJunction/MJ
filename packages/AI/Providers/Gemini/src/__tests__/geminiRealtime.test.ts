@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Modality, type LiveServerMessage, type Blob as GeminiBlob, type FunctionResponse, type Content } from '@google/genai';
+import {
+    Modality,
+    type AuthToken,
+    type CreateAuthTokenParameters,
+    type LiveConnectConfig,
+    type LiveServerMessage,
+    type Blob as GeminiBlob,
+    type FunctionResponse,
+    type Content,
+} from '@google/genai';
 import type {
     IRealtimeSession,
     RealtimeSessionParams,
@@ -63,6 +72,96 @@ function makeParams(overrides: Partial<RealtimeSessionParams> = {}): RealtimeSes
         ...overrides,
     };
 }
+
+/**
+ * Driver subclass that captures the mint request and returns a fake ephemeral auth token —
+ * no network. Mirrors the OpenAI driver's `ClientDirectTestable` mint-seam pattern.
+ */
+class ClientDirectTestable extends GeminiRealtime {
+    public MintParams: CreateAuthTokenParameters | null = null;
+
+    protected override async mintAuthToken(params: CreateAuthTokenParameters): Promise<AuthToken> {
+        this.MintParams = params;
+        return { name: 'auth_tokens/fake-ephemeral-token' };
+    }
+}
+
+describe('GeminiRealtime client-direct (CreateClientSession)', () => {
+    it('advertises client-direct support', () => {
+        expect(new ClientDirectTestable('k').SupportsClientDirect).toBe(true);
+    });
+
+    it('mints a well-formed config carrying provider, model, token, and expiry', async () => {
+        const driver = new ClientDirectTestable('k');
+        const before = Date.now();
+        const cfg = await driver.CreateClientSession(makeParams());
+        const after = Date.now();
+
+        expect(cfg.Provider).toBe('gemini');
+        expect(cfg.Model).toBe('gemini-live-2.5-flash-preview');
+        expect(cfg.EphemeralToken).toBe('auth_tokens/fake-ephemeral-token');
+        // Expiry is ~30 minutes out (token lifetime), expressed as ISO-8601.
+        const expires = new Date(cfg.ExpiresAt).getTime();
+        expect(expires).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
+        expect(expires).toBeLessThanOrEqual(after + 30 * 60 * 1000);
+    });
+
+    it('locks the server-built connect config into the token via liveConnectConstraints', async () => {
+        const driver = new ClientDirectTestable('k');
+        await driver.CreateClientSession(makeParams({
+            Tools: [{
+                Name: 'get_weather',
+                Description: 'Get the weather for a city',
+                ParametersSchema: { type: 'object', properties: { city: { type: 'string' } } },
+            }],
+        }));
+
+        const mintConfig = driver.MintParams?.config;
+        expect(mintConfig).toBeDefined();
+        expect(mintConfig?.uses).toBe(1);
+        expect(mintConfig?.lockAdditionalFields).toEqual([]);
+        expect(typeof mintConfig?.expireTime).toBe('string');
+        expect(typeof mintConfig?.newSessionExpireTime).toBe('string');
+        // The new-session window precedes the token expiry.
+        expect(new Date(mintConfig!.newSessionExpireTime!).getTime())
+            .toBeLessThan(new Date(mintConfig!.expireTime!).getTime());
+
+        const constraints = mintConfig?.liveConnectConstraints;
+        expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');
+        const locked = constraints?.config as LiveConnectConfig;
+        expect(locked.systemInstruction).toBe('You are a helpful voice assistant.');
+        expect(locked.responseModalities).toEqual([Modality.AUDIO]);
+        expect(locked.inputAudioTranscription).toBeDefined();
+        expect(locked.outputAudioTranscription).toBeDefined();
+        const decls = (locked.tools![0] as { functionDeclarations?: unknown[] }).functionDeclarations!;
+        expect(decls[0]).toMatchObject({ name: 'get_weather', description: 'Get the weather for a city' });
+    });
+
+    it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({
+            Tools: [{ Name: 'lookup', Description: 'Look something up', ParametersSchema: { type: 'object' } }],
+        }));
+
+        const sc = cfg.SessionConfig as { model: string; config: Record<string, unknown> };
+        expect(sc.model).toBe('gemini-live-2.5-flash-preview');
+        expect(sc.config.systemInstruction).toBe('You are a helpful voice assistant.');
+        expect(sc.config.responseModalities).toEqual(['AUDIO']);
+        const tools = sc.config.tools as Array<{ functionDeclarations: Array<{ name: string }> }>;
+        expect(tools[0].functionDeclarations[0].name).toBe('lookup');
+        // SessionConfig matches what was locked into the token (plain-JSON equivalent).
+        expect(sc.config).toEqual(JSON.parse(JSON.stringify(driver.MintParams!.config!.liveConnectConstraints!.config)));
+    });
+
+    it('throws when the mint returns no token name', async () => {
+        class NoNameMint extends GeminiRealtime {
+            protected override async mintAuthToken(): Promise<AuthToken> {
+                return {};
+            }
+        }
+        await expect(new NoNameMint('k').CreateClientSession(makeParams())).rejects.toThrow(/no token name/);
+    });
+});
 
 describe('GeminiRealtime', () => {
     let driver: TestGeminiRealtime;

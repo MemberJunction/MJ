@@ -17,7 +17,8 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/global": "5.39.0",
-    "@memberjunction/ai": "5.39.0"
+    "@memberjunction/ai": "5.39.0",
+    "@google/genai": "^1.40.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
