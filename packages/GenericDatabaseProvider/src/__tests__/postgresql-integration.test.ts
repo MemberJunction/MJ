@@ -35,6 +35,8 @@ function makeQueryInfo(overrides: Partial<{
 
     const status = overrides.Status ?? 'Approved';
 
+    const canRun = overrides.UserCanRun ?? true;
+
     const q: Record<string, unknown> = {
         ID: overrides.ID ?? 'query-1',
         Name: overrides.Name ?? 'Test Query',
@@ -42,7 +44,7 @@ function makeQueryInfo(overrides: Partial<{
         Reusable: overrides.Reusable ?? true,
         Status: status,
         UsesTemplate: false,
-        UserCanRun: vi.fn().mockReturnValue(overrides.UserCanRun ?? true),
+        UserCanRun: vi.fn().mockReturnValue({ canRun, deniedEntities: [] }),
         GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
     };
 

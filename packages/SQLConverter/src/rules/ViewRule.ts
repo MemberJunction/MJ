@@ -10,6 +10,7 @@ import {
   convertIdentifiers, convertDateFunctions, convertCharIndex, convertStuff,
   convertStringConcat, convertTopToLimit, convertCastTypes, convertIIF,
   convertConvertFunction, removeNPrefix, removeCollate, convertCommonFunctions,
+  convertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -85,6 +86,10 @@ export class ViewRule implements IConversionRule {
     result = convertTopToLimit(result);
     result = removeCollate(result);
     result = convertDateFunctions(result);
+
+    // SS BIT comparisons (`bool_col = 1`) → PG boolean literals (`= TRUE`).
+    // Required for views: the boolean=integer mismatch errors at CREATE time.
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     // Fix DATEDIFF TIME column casts — TIME columns can't be cast to TIMESTAMPTZ.
     // Remove ::TIMESTAMPTZ from references to columns known to be TIME type.

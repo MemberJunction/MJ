@@ -230,3 +230,63 @@
 @media (max-width: 480px) {
     .cls-budget-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Domain context: effective-context preview ── */
+.cls-context-preview {
+    margin: 0;
+    padding: 10px 12px;
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    color: var(--mj-text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* ── Inline Entity Document creation ── */
+.cls-doc-callout {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 12px;
+    background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-info-border, var(--mj-border-default));
+    border-radius: 6px;
+}
+.cls-doc-callout-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--mj-text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+.cls-doc-callout-head i { color: var(--mj-status-info); margin-top: 2px; }
+.cls-doc-form {
+    margin-top: 10px;
+    padding: 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+}
+.cls-doc-field-list {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+.cls-doc-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 0.82rem;
+    color: var(--mj-text-primary);
+    cursor: pointer;
+}

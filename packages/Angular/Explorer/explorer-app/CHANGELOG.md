@@ -1,5 +1,116 @@
 # @memberjunction/ng-explorer-app
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-bootstrap@5.40.2
+- @memberjunction/ng-explorer-core@5.40.2
+- @memberjunction/ng-conversations@5.40.2
+- @memberjunction/ng-workspace-initializer@5.40.2
+- @memberjunction/ai-agent-client@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/ng-auth-services@5.40.2
+- @memberjunction/ng-base-application@5.40.2
+- @memberjunction/ng-explorer-service-worker@5.40.2
+- @memberjunction/ng-shared@5.40.2
+- @memberjunction/ng-agent-client@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-feedback@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-agent-client@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/ng-bootstrap@5.40.1
+  - @memberjunction/ng-auth-services@5.40.1
+  - @memberjunction/ng-base-application@5.40.1
+  - @memberjunction/ng-explorer-core@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-workspace-initializer@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-conversations@5.40.1
+  - @memberjunction/ng-feedback@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-agent-client@5.40.1
+  - @memberjunction/ng-explorer-service-worker@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- 7bbfd62: Add PreShellGuard for request-scoped TenantContext and auth fixes in MJServer CurrentUserContextResolver
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [40e90fa]
+- Updated dependencies [6957711]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/ng-bootstrap@5.40.0
+  - @memberjunction/ng-auth-services@5.40.0
+  - @memberjunction/ng-explorer-core@5.40.0
+  - @memberjunction/ng-shared@5.40.0
+  - @memberjunction/ng-conversations@5.40.0
+  - @memberjunction/ai-agent-client@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/ng-base-application@5.40.0
+  - @memberjunction/ng-workspace-initializer@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-feedback@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-agent-client@5.40.0
+  - @memberjunction/ng-explorer-service-worker@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [bd95e83]
+- Updated dependencies [3c53858]
+- Updated dependencies [3b29882]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ng-explorer-core@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/ng-bootstrap@5.39.0
+  - @memberjunction/ai-agent-client@5.39.0
+  - @memberjunction/ng-auth-services@5.39.0
+  - @memberjunction/ng-base-application@5.39.0
+  - @memberjunction/ng-shared@5.39.0
+  - @memberjunction/ng-workspace-initializer@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-conversations@5.39.0
+  - @memberjunction/ng-feedback@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/ng-agent-client@5.39.0
+  - @memberjunction/ng-explorer-service-worker@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

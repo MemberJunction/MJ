@@ -51,6 +51,11 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'install:claude',
   'update:claude',
 
+  // CodeGen manifest - uses @memberjunction/codegen-lib for AST scanning only, no bootstrap needed.
+  // Must be light to break the circular dependency: server-bootstrap-lite's prebuild calls
+  // `mj codegen manifest`, but bootstrap-lite must be built before MJCLI's prerun can import it.
+  'codegen manifest',
+
   // DBDoc commands - already use dynamic imports internally
   'dbdoc init',
   'dbdoc analyze',

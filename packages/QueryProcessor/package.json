@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/query-processor",
   "type": "module",
-  "version": "5.38.0",
+  "version": "5.40.2",
   "description": "Shared query parameter validation and Nunjucks template processing for MemberJunction data providers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,9 +22,9 @@
     "vitest": "^3.1.1"
   },
   "dependencies": {
-    "@memberjunction/core": "5.38.0",
-    "@memberjunction/core-entities": "5.38.0",
-    "@memberjunction/global": "5.38.0",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/global": "5.40.2",
     "nunjucks": "^3.2.4"
   },
   "repository": {

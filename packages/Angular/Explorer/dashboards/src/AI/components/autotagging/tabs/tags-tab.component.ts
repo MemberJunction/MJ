@@ -13,7 +13,7 @@ import { NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { WordCloudItem } from '@memberjunction/ng-word-cloud';
 import { TagRow, TagBySource } from '../shared/classify.types';
-import { formatWeight, tagFontSize, formatShortDate } from '../shared/classify.format';
+import { formatWeight, tagFontSize, formatShortDate, deriveDisplayName } from '../shared/classify.format';
 
 /** One row in the per-tag drill-down (content items carrying a given tag). */
 interface TagDrillDownItem {
@@ -56,6 +56,9 @@ export class ClassifyTagsTabComponent extends BaseAngularComponent {
         return this._contentItems;
     }
 
+    /** Shown while a manual Refresh() rebuilds the tag view models. */
+    public IsLoading = false;
+
     public TagRows: TagRow[] = [];
     public FilteredTagRows: TagRow[] = [];
     public TagCloudWordItems: WordCloudItem[] = [];
@@ -86,6 +89,19 @@ export class ClassifyTagsTabComponent extends BaseAngularComponent {
         this.buildTagCloud();
         this.buildTagsBySource();
         this.FilterTags();
+    }
+
+    /**
+     * Rebuild the tag view models from the current host-supplied inputs. The tag
+     * data is host-owned (flows in via [ContentTags]/[ContentItems]); Refresh
+     * recomputes the rows/cloud/breakdown and surfaces a brief loading state.
+     */
+    public async Refresh(): Promise<void> {
+        this.IsLoading = true;
+        this.cdr.detectChanges();
+        this.rebuild();
+        this.IsLoading = false;
+        this.cdr.detectChanges();
     }
 
     // ── External control surface (host deep-link + agent tool) ──
@@ -185,7 +201,7 @@ export class ClassifyTagsTabComponent extends BaseAngularComponent {
             if (weight !== undefined) {
                 this.TagDrillDownItems.push({
                     ID: item['ID'] as string,
-                    Name: (item['Name'] as string) ?? 'Unnamed',
+                    Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                     SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                     Weight: weight,
                     UpdatedAt: formatShortDate((item['__mj_UpdatedAt'] as string) ?? ''),

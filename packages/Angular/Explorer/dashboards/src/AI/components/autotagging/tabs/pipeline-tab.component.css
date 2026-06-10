@@ -6,3 +6,7 @@
  * renders inside the host shell. Tab-specific rules would live here as the
  * shared CSS is partitioned during the host-slim step.
  */
+
+.at-analytics-section {
+    margin: 12px 0 16px;
+}

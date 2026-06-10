@@ -1,5 +1,102 @@
 # @memberjunction/scheduling-engine
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.40.2
+- @memberjunction/sqlserver-dataprovider@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/actions@5.40.2
+- @memberjunction/integration-engine@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/scheduling-engine-base@5.40.2
+- @memberjunction/scheduling-base-types@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-agents@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/integration-engine@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/scheduling-engine-base@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/scheduling-base-types@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 54c9526: Make the scheduling engine's lock/stats sproc calls dialect-aware so scheduled jobs fire on PostgreSQL. The three atomic lock sprocs (acquire → stats-update → release) previously emitted hardcoded T-SQL `EXEC`, which PostgreSQL rejects with a syntax error on the first dispatch tick — meaning no scheduled job ever fired on PG. Calls now route through `provider.Dialect.ProcedureCallSyntax` (`EXEC` on SQL Server, `SELECT * FROM fn(...)` on PostgreSQL) via a new `buildLockSprocCall` helper, the lock-sproc permission probe skips cleanly on non-SQL-Server platforms, and a PG-only migration ports the three routines to plpgsql functions. SQL Server output is byte-identical to before — no behavioral change on the default platform.
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [f2cca15]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [6ea4de7]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/ai-agents@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/integration-engine@5.40.0
+  - @memberjunction/scheduling-engine-base@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/scheduling-base-types@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- 3d4510c: Add an agent-run watchdog that prevents `AIAgentRun` records from being left in `Status='Running'` after a process restart, crash/OOM, or a failed terminal-state write. While a run is in flight the owning process stamps a new `LastHeartbeatAt` column; a staleness-based sweep (once on boot and on a timer) force-fails any `Running` run whose heartbeat has gone stale, and a graceful-shutdown handler cancels the in-flight runs the process owns. All timing is anchored to the database clock and the sweep only ever touches `Status='Running'` rows, so it is safe across multiple MJAPI instances behind a load balancer. Also adds an optional, opt-in `Agent Run Sweep` scheduled-job type (`AgentRunSweepScheduledJobDriver`) that runs the same idempotent sweep through MJ's scheduler for audit/observability.
+- 0bef51b: decouple poll loop from job execution to prevent single hung job from stalling the scheduler
+
+### Patch Changes
+
+- Updated dependencies [26761b8]
+- Updated dependencies [3d4510c]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [a1e2776]
+- Updated dependencies [eaee99f]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/ai-agents@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/sqlserver-dataprovider@5.39.0
+  - @memberjunction/integration-engine@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/scheduling-engine-base@5.39.0
+  - @memberjunction/scheduling-base-types@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes
