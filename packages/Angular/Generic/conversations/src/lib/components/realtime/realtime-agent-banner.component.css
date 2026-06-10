@@ -42,6 +42,16 @@
 .banner__for b {
   color: var(--mj-text-secondary);
 }
+/* Subtle realtime-model suffix (e.g. "· GPT Realtime 2") in the identity line. */
+.banner__model {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
 
 .banner__state {
   display: flex;

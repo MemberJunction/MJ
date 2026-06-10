@@ -3,7 +3,7 @@
 
     <!-- MAIN column: banner → thread → channel strip → in-call composer → controls -->
     <div class="call-main">
-      <mj-realtime-agent-banner [State]="state" [AgentName]="AgentName"></mj-realtime-agent-banner>
+      <mj-realtime-agent-banner [State]="state" [AgentName]="AgentName" [ModelName]="ModelName$ | async"></mj-realtime-agent-banner>
 
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
       @if (State.Narration && !State.ActiveCallId) {

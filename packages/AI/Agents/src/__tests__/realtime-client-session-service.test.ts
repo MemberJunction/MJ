@@ -15,7 +15,7 @@ import {
     RealtimeToolCall
 } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
 import {
     RealtimeClientSessionService,
@@ -246,6 +246,145 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('provider down');
     });
+
+    it('surfaces the resolved ModelID + ModelName on success', async () => {
+        const svc = new TestableService();
+        svc.ResolveModelResult = {
+            Model: svc.Model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime', ModelName: 'Mock Realtime'
+        };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+        expect(result.Success).toBe(true);
+        expect(result.ModelID).toBe('m1');
+        expect(result.ModelName).toBe('Mock Realtime');
+    });
+
+    it('omits NarrationInstructionsTemplate when the narration prompt is not in metadata', async () => {
+        const svc = new TestableService();
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+        expect(result.Success).toBe(true);
+        // AIEngine is unconfigured in tests → the tolerant resolver yields null → undefined here.
+        expect(result.NarrationInstructionsTemplate).toBeUndefined();
+    });
+
+    it('surfaces NarrationInstructionsTemplate when the narration prompt resolves', async () => {
+        class NarrationService extends TestableService {
+            protected override resolveNarrationInstructionsTemplate(): string | null {
+                return 'Progress: "{{ progressMessage }}" — say one first-person sentence.';
+            }
+        }
+        const result = await new NarrationService().PrepareClientSession(makePrepInput(), contextUser, provider);
+
+        expect(result.Success).toBe(true);
+        expect(result.NarrationInstructionsTemplate).toContain('{{ progressMessage }}');
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Preferred-model resolution (explicit user choice — strict, no fallback)
+// ════════════════════════════════════════════════════════════════════
+
+function makeModelEntity(
+    overrides: Partial<{ ID: string; Name: string; IsActive: boolean; AIModelType: string }> = {}
+): MJAIModelEntityExtended {
+    return {
+        ID: 'pref-model-1', Name: 'GPT Realtime 2', IsActive: true, AIModelType: 'Realtime', ...overrides
+    } as unknown as MJAIModelEntityExtended;
+}
+
+/**
+ * Exercises the REAL {@link RealtimeClientSessionService.resolvePreferredRealtimeModel} path by
+ * stubbing only the metadata/environment seams: model lookup, vendor selection, API-key lookup, and
+ * driver instantiation. The default-resolution seam ({@link TestableService.ResolveModelResult})
+ * still SUCCEEDS, so any preferred-model failure below also proves there is no silent fallback.
+ */
+class PreferredModelTestService extends TestableService {
+    public ModelEntity: MJAIModelEntityExtended | null = makeModelEntity();
+    public Vendor: { VendorID: string; DriverClass: string; APIName: string } | null = {
+        VendorID: 'v-pref', DriverClass: 'MockRealtimeDriver', APIName: 'mock-realtime-preferred'
+    };
+    public ApiKey: string | undefined = 'key-123';
+
+    protected override findModelByID(): MJAIModelEntityExtended | null { return this.ModelEntity; }
+    protected override selectRealtimeVendor(): { VendorID: string; DriverClass: string; APIName: string } | null {
+        return this.Vendor;
+    }
+    protected override getAPIKeyForDriver(): string | undefined { return this.ApiKey; }
+    protected override createModelInstance(): BaseRealtimeModel | null { return this.Model; }
+}
+
+describe('RealtimeClientSessionService preferred-model resolution', () => {
+    it('honors PreferredModelID: mints with the chosen model and surfaces its id + name', async () => {
+        const svc = new PreferredModelTestService();
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ PreferredModelID: 'pref-model-1' }), contextUser, provider
+        );
+
+        expect(result.Success).toBe(true);
+        expect(result.ModelID).toBe('pref-model-1');
+        expect(result.ModelName).toBe('GPT Realtime 2');
+        // The provider session was minted with the PREFERRED model's vendor API name.
+        expect(svc.Model.LastParams!.Model).toBe('mock-realtime-preferred');
+    });
+
+    it('fails (naming the id, no fallback) when the preferred model is not found', async () => {
+        const svc = new PreferredModelTestService();
+        svc.ModelEntity = null;
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ PreferredModelID: 'missing-model' }), contextUser, provider
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('missing-model');
+        expect(result.ErrorMessage).toContain('not found');
+        // No silent fallback: the default seam would have succeeded.
+        expect(svc.Model.ClientCalled).toBe(false);
+    });
+
+    it('fails when the preferred model is inactive', async () => {
+        const svc = new PreferredModelTestService();
+        svc.ModelEntity = makeModelEntity({ IsActive: false });
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ PreferredModelID: 'pref-model-1' }), contextUser, provider
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('GPT Realtime 2');
+        expect(result.ErrorMessage).toContain('not active');
+    });
+
+    it('fails when the preferred model is not a Realtime model', async () => {
+        const svc = new PreferredModelTestService();
+        svc.ModelEntity = makeModelEntity({ AIModelType: 'LLM' });
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ PreferredModelID: 'pref-model-1' }), contextUser, provider
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('not a Realtime model');
+        expect(result.ErrorMessage).toContain("'LLM'");
+    });
+
+    it('fails when the preferred model has no usable vendor/API key', async () => {
+        const svc = new PreferredModelTestService();
+        svc.Vendor = null;
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ PreferredModelID: 'pref-model-1' }), contextUser, provider
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('GPT Realtime 2');
+        expect(result.ErrorMessage).toContain('no active vendor');
+    });
+
+    it('does not consult the preferred path when PreferredModelID is absent (default behavior unchanged)', async () => {
+        const svc = new PreferredModelTestService();
+        svc.ModelEntity = null; // would fail the preferred path if it were consulted
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+        expect(result.Success).toBe(true); // default seam (ResolveModelResult) used
+    });
 });
 
 describe('RealtimeClientSessionService.ExecuteRelayedTool', () => {
@@ -457,7 +596,7 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(result.PausedRunID).toBe('paused-run-1');
         expect(result.Output).toContain('Should I include archived rows?');
         // Phrased so the model relays it as a question, not a completed task.
-        expect(result.Output.toLowerCase()).toContain('ask the user');
+        expect(result.Output.toLowerCase()).toContain('ask them');
     });
 
     it('passes lastRunId + autoPopulateLastRunPayload when ResumeRunID is set', async () => {

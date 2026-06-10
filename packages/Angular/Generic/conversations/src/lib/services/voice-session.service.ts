@@ -6,17 +6,20 @@ import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import {
   BaseRealtimeClient,
+  LoadGeminiRealtimeClient,
   LoadOpenAIRealtimeClient,
   RealtimeClientError,
   RealtimeClientState,
   RealtimeClientToolCall,
   RealtimeClientTranscript
 } from '@memberjunction/ai-realtime-client';
+import { BuildNarrationInstructions } from './narration-template';
 
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
 // its @RegisterClass side effect from being eliminated by the bundler.
 LoadOpenAIRealtimeClient();
+LoadGeminiRealtimeClient();
 
 /**
  * Connection / turn state for a real-time voice session, surfaced to the UI overlay.
@@ -111,6 +114,14 @@ interface StartRealtimeClientSessionResult {
   ExpiresAt: string;
   /** JSON.stringify of the provider session config (instructions + tools) to apply at connect. */
   SessionConfigJson: string;
+  /** Display name of the realtime model the session uses (e.g. "GPT Realtime 2"). Null when unknown. */
+  ModelName: string | null;
+  /**
+   * DB-driven progress-narration instruction template (contains a `{{ progressMessage }}`
+   * placeholder). Null when the deployment hasn't synced the narration prompt — the client
+   * falls back to its built-in wording.
+   */
+  NarrationInstructionsTemplate: string | null;
 }
 
 /**
@@ -142,6 +153,7 @@ export class VoiceSessionService {
   private _delegationResult$ = new Subject<VoiceDelegationResult>();
   private _delegationNarration$ = new Subject<VoiceDelegationNarration>();
   private _agentName$ = new BehaviorSubject<string>('Sage');
+  private _modelName$ = new BehaviorSubject<string | null>(null);
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -164,6 +176,12 @@ export class VoiceSessionService {
   public readonly DelegationNarration$: Observable<VoiceDelegationNarration> = this._delegationNarration$.asObservable();
   /** Display name of the agent the active session fronts (set at session start). */
   public readonly AgentName$: Observable<string> = this._agentName$.asObservable();
+  /**
+   * Display name of the realtime MODEL the active session runs on (server-reported at session
+   * start, e.g. "GPT Realtime 2"). `null` before a session starts / when the server didn't report
+   * one. The overlay banner shows it subtly next to the agent identity.
+   */
+  public readonly ModelName$: Observable<string | null> = this._modelName$.asObservable();
 
   /** Synchronous access to the display name of the agent the active session fronts. */
   public get CurrentAgentName(): string {
@@ -176,6 +194,12 @@ export class VoiceSessionService {
   /** The mic capture stream — acquired here (permission UX) and handed to the client. */
   private localStream: MediaStream | null = null;
   private agentSessionId: string | null = null;
+  /**
+   * The DB-driven narration instruction template (server-resolved at session start, containing a
+   * `{{ progressMessage }}` placeholder). `null` when the deployment hasn't synced the narration
+   * prompt — {@link buildNarrationInstructions} then falls back to the built-in wording.
+   */
+  private narrationTemplate: string | null = null;
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** Minimum gap between spoken progress narrations, to avoid chatter / interrupting. */
@@ -231,12 +255,16 @@ export class VoiceSessionService {
    * @param agentName Optional display name of the target agent — resolved by the caller
    *   (which knows the conversation's routing context) and surfaced on {@link AgentName$}
    *   so ANY host (composer trigger, chat-area overlay) can render it without re-resolving.
+   * @param preferredModelId Optional EXPLICIT realtime model choice (`MJ: AI Models.ID`). When
+   *   set, the server uses exactly that model and FAILS with a clear reason if it can't (no
+   *   silent fallback). Omit for the server's automatic (highest-PowerRank) selection.
    */
   public async StartVoiceSession(
     targetAgentId: string,
     conversationId?: string | null,
     lastSessionId?: string | null,
-    agentName?: string | null
+    agentName?: string | null,
+    preferredModelId?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -250,8 +278,10 @@ export class VoiceSessionService {
     this._connectionState$.next('connecting');
 
     try {
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId);
       this.agentSessionId = session.AgentSessionId;
+      this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
+      this._modelName$.next(session.ModelName ?? null);
 
       const client = this.createRealtimeClient(session.Provider);
       this.client = client;
@@ -508,11 +538,12 @@ export class VoiceSessionService {
   private async mintSession(
     targetAgentId: string,
     conversationId?: string | null,
-    lastSessionId?: string | null
+    lastSessionId?: string | null,
+    preferredModelId?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId) {
           AgentSessionId
           ConversationId
           Provider
@@ -520,13 +551,16 @@ export class VoiceSessionService {
           EphemeralToken
           ExpiresAt
           SessionConfigJson
+          ModelName
+          NarrationInstructionsTemplate
         }
       }
     `;
     const variables = {
       targetAgentId,
       conversationId: conversationId ?? null,
-      lastSessionId: lastSessionId ?? null
+      lastSessionId: lastSessionId ?? null,
+      preferredModelId: preferredModelId ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -698,18 +732,14 @@ export class VoiceSessionService {
   /**
    * Builds the one-off instructions for a short spoken update that conveys THIS specific
    * progress message naturally — strictly first person, since the co-agent owns the work.
+   * The wording is DB-driven: the server-resolved `Voice Co-Agent - Progress Narration`
+   * template (substituting `{{ progressMessage }}`) when present, otherwise the built-in
+   * fallback so deployments that haven't synced the prompt behave exactly as before.
    * The client tags the resulting turn as narration, keeping it EPHEMERAL — surfaced on
    * {@link DelegationNarration$} instead of becoming a caption / persisted ConversationDetail.
    */
   private buildNarrationInstructions(message: string): string {
-    return (
-      `Progress on the work YOU are doing for the user: "${message}". ` +
-      `Say ONE short, natural sentence about what you are doing right now, strictly in the first person ` +
-      `("I'm…"). Example: if the progress says "Analyzing the request", say "I'm looking at that now" — ` +
-      `NOT "It's analyzing" or "Sage is analyzing". The words "it" and the agent's name must not be the ` +
-      `subject of your sentence. Do not repeat earlier updates and never say generic filler like ` +
-      `"it's still running in the background".`
-    );
+    return BuildNarrationInstructions(this.narrationTemplate, message);
   }
 
   /** True when the narration throttle window has elapsed since the last spoken update. */
@@ -753,6 +783,8 @@ export class VoiceSessionService {
     }
 
     this.agentSessionId = null;
+    this.narrationTemplate = null;
+    this._modelName$.next(null);
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
       this._connectionState$.next('closed');

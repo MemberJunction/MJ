@@ -69,6 +69,9 @@ export class RealtimeSessionOverlayComponent implements OnDestroy {
   /** Live turn-state from the session service — drives the banner + connecting screen. */
   public readonly ConnectionState$ = this.voice.ConnectionState$;
 
+  /** Server-reported realtime model name for the active session — shown subtly in the banner. */
+  public readonly ModelName$ = this.voice.ModelName$;
+
   /** Whether caption bubbles are shown in the thread (toggled from the controls). */
   public ShowCaptions = true;
 

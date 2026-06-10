@@ -56,9 +56,19 @@ export class MessageInputBoxComponent {
   @Output() artifactPickerRequested = new EventEmitter<void>();
   /** Emitted when the user clicks the mic button to start/stop a voice session. */
   @Output() voiceRequested = new EventEmitter<void>();
+  /**
+   * Emitted when the user clicks the small caret next to the phone button — the host opens the
+   * voice agent/model picker so call options (which agent, which voice model) stay reachable
+   * without adding friction to the plain phone click's instant-start path.
+   */
+  @Output() voiceOptionsRequested = new EventEmitter<void>();
 
   onVoiceClick(): void {
     this.voiceRequested.emit();
+  }
+
+  onVoiceOptionsClick(): void {
+    this.voiceOptionsRequested.emit();
   }
 
   get canSend(): boolean {

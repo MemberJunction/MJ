@@ -5,6 +5,9 @@
     <span class="banner__name">Voice for {{ AgentName }}</span>
     <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
     <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
+    @if (ModelName) {
+      <span class="banner__model" [title]="'Realtime voice model: ' + ModelName">· {{ ModelName }}</span>
+    }
   </div>
 
   <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">

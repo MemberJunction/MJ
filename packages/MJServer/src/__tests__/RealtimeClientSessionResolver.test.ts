@@ -171,6 +171,76 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
     });
 
+    it('threads preferredModelId to the prepare service and surfaces ModelName + narration template', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-10' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ModelID: 'model-77',
+            ModelName: 'GPT Realtime 2',
+            NarrationInstructionsTemplate: 'Progress: "{{ progressMessage }}" — narrate it.',
+            ClientConfig: {
+                Provider: 'openai',
+                Model: 'gpt-realtime-2',
+                EphemeralToken: 'ek_xyz',
+                ExpiresAt: '2026-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', undefined, 'model-77');
+
+        // The explicit model choice is threaded into the prepare input.
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { PreferredModelID?: string };
+        expect(prepArg.PreferredModelID).toBe('model-77');
+        // The active model name + narration template surface on the result.
+        expect(result.ModelName).toBe('GPT Realtime 2');
+        expect(result.NarrationInstructionsTemplate).toContain('{{ progressMessage }}');
+    });
+
+    it('omits preferredModelId from the prepare input when not supplied (nullable result fields)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-11' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'openai',
+                Model: 'gpt-realtime',
+                EphemeralToken: 'ek_abc',
+                ExpiresAt: '2026-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx());
+
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { PreferredModelID?: string };
+        expect(prepArg.PreferredModelID).toBeUndefined();
+        expect(result.ModelName).toBeUndefined();
+        expect(result.NarrationInstructionsTemplate).toBeUndefined();
+    });
+
+    it('propagates the preferred-model failure (and closes the session) — no silent fallback', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-12' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: false,
+            ErrorMessage: "The requested model 'Old Realtime' is not active and cannot be used for a voice session.",
+        });
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, undefined, 'model-old'),
+        ).rejects.toThrow(/not active/);
+
+        expect(closeSessionMock).toHaveBeenCalledWith('session-12', USER, currentProvider);
+    });
+
     it('closes the session and throws when prepare fails (no half-open session)', async () => {
         hasPermissionMock.mockResolvedValue(true);
         currentProvider = makeProvider(() => makeSessionEntity());

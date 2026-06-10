@@ -221,3 +221,21 @@
 .voice-button-icon--active:hover:not(:disabled) {
   background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
 }
+
+/* Voice OPTIONS caret — a slim chevron hugging the phone button. Opens the agent/model
+   picker; intentionally quieter (smaller icon, narrower hit area) than the phone so the
+   common instant-start click stays the visual primary. */
+.voice-options-button-icon {
+  width: 20px;
+  margin-left: -4px;
+}
+.voice-options-button-icon i {
+  font-size: 0.7rem;
+  color: var(--mj-text-muted);
+}
+.voice-options-button-icon:hover:not(:disabled) i {
+  color: var(--mj-brand-primary);
+}
+.voice-options-button-icon:disabled i {
+  color: var(--mj-text-disabled);
+}

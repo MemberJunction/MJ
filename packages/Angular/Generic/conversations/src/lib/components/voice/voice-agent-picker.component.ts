@@ -15,19 +15,47 @@ import {
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+
+/**
+ * A selectable realtime model option in the voice picker (narrow read-only projection of
+ * `MJ: AI Models` — only the fields the dropdown renders).
+ */
+export interface VoiceModelOption {
+    /** The `MJ: AI Models` row id. */
+    ID: string;
+    /** The model's display name. */
+    Name: string;
+}
+
+/**
+ * The user's confirmed choice from the voice picker: the agent to call plus an optional
+ * EXPLICIT realtime model (`null` = "Auto (recommended)", i.e. let the server pick).
+ */
+export interface VoiceAgentPick {
+    /** The agent the voice call should front. */
+    Agent: MJAIAgentEntityExtended;
+    /** Explicit realtime model id, or `null` for the server's automatic selection. */
+    PreferredModelId: string | null;
+}
 
 /**
  * Compact anchored popover that lets the user choose WHICH agent a realtime
- * voice call should front, shown by {@link MessageInputComponent} when the
+ * voice call should front — shown by {@link MessageInputComponent} when the
  * phone button is clicked on a conversation with **no prior agent
- * participation** (new / empty conversation). Existing conversations keep
- * their friction-free "call the resolved agent immediately" behavior — this
- * picker never appears there.
+ * participation** (new / empty conversation), and on demand via the caret
+ * button next to the phone (any conversation), where it doubles as the way
+ * to pick a specific **voice model**. The plain phone click on an existing
+ * conversation keeps its friction-free "call the resolved agent immediately"
+ * behavior.
  *
- * Deliberately dumb: the host supplies the agent list (the same cached set
- * the @mention autocomplete / routing logic uses) and the resolved default
- * agent to preselect; the picker just emits the user's choice. It does NOT
- * persist anything (unlike `mj-conversation-agent-picker`, which pins
+ * Mostly dumb: the host supplies the agent list (the same cached set the
+ * @mention autocomplete / routing logic uses) and the resolved default agent
+ * to preselect; the picker emits the user's choice. The ONLY data it loads
+ * itself is the compact "Voice model" option list (active Realtime models via
+ * a narrow RunView). It does NOT persist anything (unlike
+ * `mj-conversation-agent-picker`, which pins
  * `MJConversationEntity.DefaultAgentID` and saves the conversation — a
  * different job, which is why this is a separate component).
  *
@@ -78,6 +106,25 @@ import { UUIDsEqual } from '@memberjunction/global';
                     }
                 }
             </div>
+            @if (Models.length > 0) {
+                <div class="mj-voice-picker__model">
+                    <label class="mj-voice-picker__model-label" for="mjVoiceModelSelect">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Voice model</span>
+                    </label>
+                    <select
+                        #modelSelect
+                        id="mjVoiceModelSelect"
+                        class="mj-voice-picker__model-select"
+                        [value]="SelectedModelId ?? ''"
+                        (change)="OnModelChange(modelSelect.value)">
+                        <option value="">Auto (recommended)</option>
+                        @for (model of Models; track model.ID) {
+                            <option [value]="model.ID">{{ model.Name }}</option>
+                        }
+                    </select>
+                </div>
+            }
             <div class="mj-voice-picker__footer">
                 <button mjButton variant="primary" size="sm" [disabled]="!SelectedAgent" (click)="StartCall()">
                     <i class="fa-solid fa-phone"></i> Start
@@ -159,21 +206,42 @@ import { UUIDsEqual } from '@memberjunction/global';
         .mj-voice-picker__empty {
             padding: 12px; font-size: 12px; color: var(--mj-text-muted); text-align: center;
         }
+        .mj-voice-picker__model {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px 0;
+        }
+        .mj-voice-picker__model-label {
+            display: flex; align-items: center; gap: 6px;
+            flex-shrink: 0;
+            font-size: 12px; color: var(--mj-text-secondary);
+        }
+        .mj-voice-picker__model-label i { font-size: 11px; color: var(--mj-text-muted); }
+        .mj-voice-picker__model-select {
+            flex: 1; min-width: 0;
+            padding: 5px 8px;
+            font-size: 12px;
+            color: var(--mj-text-primary);
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-subtle);
+            border-radius: 6px;
+            outline: none;
+        }
+        .mj-voice-picker__model-select:focus { border-color: var(--mj-border-focus); }
         .mj-voice-picker__footer {
             display: flex; align-items: center; gap: 8px;
             padding: 10px 12px;
         }
     `]
 })
-export class VoiceAgentPickerComponent implements OnInit, AfterViewInit {
+export class VoiceAgentPickerComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
     /** Agents the user can call — same cached set the @mention / routing logic uses. */
     @Input() Agents: MJAIAgentEntityExtended[] = [];
 
     /** The agent the default resolution would pick — preselected and listed first. */
     @Input() DefaultAgentId: string | null = null;
 
-    /** Emitted with the chosen agent when the user confirms. */
-    @Output() AgentPicked = new EventEmitter<MJAIAgentEntityExtended>();
+    /** Emitted with the chosen agent + optional explicit voice model when the user confirms. */
+    @Output() AgentPicked = new EventEmitter<VoiceAgentPick>();
 
     /** Emitted when the user dismisses without starting a call. */
     @Output() Cancelled = new EventEmitter<void>();
@@ -182,6 +250,12 @@ export class VoiceAgentPickerComponent implements OnInit, AfterViewInit {
 
     public SearchText = '';
     public SelectedAgentId: string | null = null;
+
+    /** Active Realtime models the "Voice model" selector offers (empty until loaded / when none exist). */
+    public Models: VoiceModelOption[] = [];
+
+    /** The explicitly chosen voice model id, or `null` for "Auto (recommended)" (the default). */
+    public SelectedModelId: string | null = null;
 
     // Template helper — expose the shared UUID comparator to the view.
     public readonly UUIDsEqual = UUIDsEqual;
@@ -194,6 +268,36 @@ export class VoiceAgentPickerComponent implements OnInit, AfterViewInit {
             ? this.DefaultAgentId
             : this.FilteredAgents[0]?.ID ?? null;
         this.SelectedAgentId = initial;
+        void this.loadVoiceModels();
+    }
+
+    /**
+     * Loads the "Voice model" options: active models whose type is `Realtime`, via a narrow,
+     * read-only RunView (`ResultType: 'simple'`, just ID + Name). Tolerant — a failure simply
+     * leaves the selector hidden (the server's automatic selection still applies).
+     */
+    private async loadVoiceModels(): Promise<void> {
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<VoiceModelOption>({
+                EntityName: 'MJ: AI Models',
+                Fields: ['ID', 'Name'],
+                ExtraFilter: `IsActive = 1 AND AIModelType = 'Realtime'`,
+                OrderBy: 'Name',
+                ResultType: 'simple'
+            });
+            this.Models = result.Success ? (result.Results ?? []) : [];
+        } catch (error) {
+            console.error('[VoiceAgentPicker] Failed to load realtime models:', error);
+            this.Models = [];
+        }
+        this.cdr.markForCheck();
+    }
+
+    /** Records the voice-model choice (`''` = Auto → `null`). */
+    public OnModelChange(value: string): void {
+        this.SelectedModelId = value && value.length > 0 ? value : null;
+        this.cdr.markForCheck();
     }
 
     public ngAfterViewInit(): void {
@@ -256,13 +360,13 @@ export class VoiceAgentPickerComponent implements OnInit, AfterViewInit {
 
     /** Confirm a specific agent immediately (double-click shortcut). */
     public Pick(agent: MJAIAgentEntityExtended): void {
-        this.AgentPicked.emit(agent);
+        this.AgentPicked.emit({ Agent: agent, PreferredModelId: this.SelectedModelId });
     }
 
     public StartCall(): void {
         const agent = this.SelectedAgent;
         if (agent) {
-            this.AgentPicked.emit(agent);
+            this.AgentPicked.emit({ Agent: agent, PreferredModelId: this.SelectedModelId });
         }
     }
 

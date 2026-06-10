@@ -110,6 +110,18 @@ export class StartRealtimeClientSessionResult {
     /** JSON string of the provider-native session config the browser applies verbatim. */
     @Field(() => String)
     SessionConfigJson: string;
+
+    /** Display name of the realtime model the session uses (e.g. `GPT Realtime 2`). Null when unknown. */
+    @Field(() => String, { nullable: true })
+    ModelName?: string;
+
+    /**
+     * DB-driven progress-narration instruction template (contains a `{{ progressMessage }}`
+     * placeholder). Null when the narration prompt is not present in this deployment's metadata —
+     * the browser falls back to its built-in narration text.
+     */
+    @Field(() => String, { nullable: true })
+    NarrationInstructionsTemplate?: string;
 }
 
 /**
@@ -142,6 +154,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
         @Arg('conversationId', () => String, { nullable: true }) conversationId?: string,
         @Arg('lastSessionId', () => String, { nullable: true }) lastSessionId?: string,
+        @Arg('preferredModelId', () => String, { nullable: true }) preferredModelId?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -161,7 +174,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             provider,
         );
 
-        return this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider);
+        return this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider, preferredModelId);
     }
 
     /**
@@ -353,6 +366,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     /**
      * Mints the client session config for a just-created session. On failure, closes the session so
      * no half-open record leaks, then throws the service's error message.
+     *
+     * @param preferredModelId Optional explicit realtime model choice — threaded to the service,
+     *   which FAILS (no silent fallback) when the chosen model cannot be satisfied.
      */
     private async prepareClientSessionOrClose(
         session: MJAIAgentSessionEntity,
@@ -360,6 +376,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         targetAgentId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        preferredModelId?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -372,6 +389,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Conversation into ChatMessage[] for richer context.
                 ConversationMessages: [],
                 UserID: contextUser.ID,
+                PreferredModelID: preferredModelId,
             },
             contextUser,
             provider,
@@ -393,6 +411,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             EphemeralToken: cfg.EphemeralToken,
             ExpiresAt: cfg.ExpiresAt,
             SessionConfigJson: JSON.stringify(cfg.SessionConfig),
+            ModelName: prep.ModelName,
+            NarrationInstructionsTemplate: prep.NarrationInstructionsTemplate,
         };
     }
 

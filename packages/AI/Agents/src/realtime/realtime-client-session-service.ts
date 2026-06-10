@@ -85,6 +85,14 @@ export interface PrepareClientSessionInput {
     Config?: JSONObject;
     /** Optional extra, target-independent tools to expose in addition to `invoke-target-agent`. */
     ExtraTools?: RealtimeToolDefinition[];
+    /**
+     * Optional EXPLICIT realtime model choice (`MJ: AI Models.ID`). When set, that exact model is
+     * used — it must be Active, of AIModelType `Realtime`, and have an active vendor whose
+     * `DriverClass` resolves an API key. If the preferred model cannot be satisfied the prepare
+     * FAILS with a clear reason (no silent fallback — the user explicitly chose). When omitted,
+     * the default highest-PowerRank resolution applies.
+     */
+    PreferredModelID?: string;
 }
 
 /**
@@ -117,6 +125,17 @@ export interface RealtimeClientSessionPrepResult {
     PromptRunID?: string;
     /** A human-readable failure reason. Present on failure. */
     ErrorMessage?: string;
+    /** The `MJ: AI Models` row id of the realtime model the session was minted with. Present on success. */
+    ModelID?: string;
+    /** The display name of the realtime model the session was minted with. Present on success. */
+    ModelName?: string;
+    /**
+     * The DB-driven progress-narration instruction template (the `Voice Co-Agent - Progress
+     * Narration` prompt's `TemplateText`, containing a `{{ progressMessage }}` placeholder).
+     * `undefined` when that prompt is not present in metadata — clients fall back to their
+     * built-in narration instruction text.
+     */
+    NarrationInstructionsTemplate?: string;
 }
 
 /**
@@ -178,6 +197,20 @@ export interface RealtimeModelResolution {
     VendorID: string;
     /** The vendor API name passed to the provider as the model id. */
     APIName: string;
+    /** The model's display name (`MJ: AI Models.Name`). Optional for back-compat with test seams. */
+    ModelName?: string;
+}
+
+/**
+ * Outcome of resolving the realtime model for a session: either a usable {@link RealtimeModelResolution}
+ * or a specific, human-readable failure reason (used for explicit preferred-model failures, where the
+ * generic "no model" message would hide WHY the user's chosen model couldn't be used).
+ */
+export interface RealtimeModelResolutionOutcome {
+    /** The resolved model. Present on success. */
+    Resolution?: RealtimeModelResolution;
+    /** Why resolution failed. Present on failure. */
+    ErrorMessage?: string;
 }
 
 /**
@@ -189,6 +222,13 @@ export interface RealtimeModelResolution {
  * reaches for the global default provider, so it is safe in multi-provider/multi-tenant servers.
  */
 export class RealtimeClientSessionService {
+    /**
+     * The seeded name of the `MJ: AI Prompts` row whose `TemplateText` carries the first-person
+     * progress-narration instructions (with a `{{ progressMessage }}` placeholder). Resolved at
+     * session prepare time so the browser narrates with DB-driven, product-tunable wording.
+     */
+    public static readonly NarrationPromptName = 'Voice Co-Agent - Progress Narration';
+
     /**
      * Prepares a client-direct realtime session: resolves the model, assembles the companion
      * system prompt + stable tool set, and mints the {@link ClientRealtimeSessionConfig}.
@@ -213,10 +253,11 @@ export class RealtimeClientSessionService {
             return { Success: false, ErrorMessage: 'The Voice Co-Agent could not be resolved from the supplied id or entity.' };
         }
 
-        const resolution = await this.resolveRealtimeModel(coAgent);
-        if (!resolution) {
-            return { Success: false, ErrorMessage: this.noModelMessage() };
+        const outcome = await this.resolveModelForSession(input, coAgent);
+        if (!outcome.Resolution) {
+            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
         }
+        const resolution = outcome.Resolution;
 
         if (!resolution.Model.SupportsClientDirect) {
             return {
@@ -251,6 +292,9 @@ export class RealtimeClientSessionService {
             SessionParams: sessionParams,
             CoAgentRunID: obs?.CoAgentRunID,
             PromptRunID: obs?.PromptRunID,
+            ModelID: resolution.ModelID,
+            ModelName: resolution.ModelName,
+            NarrationInstructionsTemplate: this.resolveNarrationInstructionsTemplate() ?? undefined,
         };
     }
 
@@ -471,6 +515,75 @@ export class RealtimeClientSessionService {
     }
 
     /**
+     * Resolves the realtime model for a session, honoring an explicit user choice when present.
+     *
+     * - With {@link PrepareClientSessionInput.PreferredModelID}: resolve THAT model strictly via
+     *   {@link resolvePreferredRealtimeModel} — failures return a specific reason and never fall
+     *   back to another model (the user explicitly chose).
+     * - Without: the existing default behavior via {@link resolveRealtimeModel} (highest-PowerRank
+     *   active Realtime model), with the generic {@link noModelMessage} on failure.
+     *
+     * @param input The prepare-session input (carries the optional preferred model id).
+     * @param coAgent The resolved co-agent (threaded to the default-resolution seam).
+     * @returns The resolution outcome (resolution or failure reason).
+     */
+    protected async resolveModelForSession(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended
+    ): Promise<RealtimeModelResolutionOutcome> {
+        if (input.PreferredModelID) {
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID);
+        }
+        const resolution = await this.resolveRealtimeModel(coAgent);
+        return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+    }
+
+    /**
+     * Strictly resolves an EXPLICITLY requested realtime model. Each precondition failure returns
+     * a clear, user-facing reason naming the model — there is NO fallback to another model, because
+     * the caller's user explicitly chose this one.
+     *
+     * @param preferredModelID The `MJ: AI Models.ID` the user chose.
+     * @returns The resolution outcome (resolution or a specific failure reason).
+     */
+    protected resolvePreferredRealtimeModel(preferredModelID: string): RealtimeModelResolutionOutcome {
+        const model = this.findModelByID(preferredModelID);
+        if (!model) {
+            return { ErrorMessage: `The requested realtime model (id '${preferredModelID}') was not found in AI model metadata.` };
+        }
+        if (!model.IsActive) {
+            return { ErrorMessage: `The requested model '${model.Name}' is not active and cannot be used for a voice session.` };
+        }
+        if (!this.isRealtimeModel(model)) {
+            return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
+        }
+        const resolution = this.resolveVendorAndInstantiate(model);
+        if (!resolution) {
+            return {
+                ErrorMessage:
+                    `The requested model '${model.Name}' has no active vendor with a usable DriverClass/API key ` +
+                    '(e.g. AI_VENDOR_API_KEY__<driver>), so the voice session could not be started with it.'
+            };
+        }
+        return { Resolution: resolution };
+    }
+
+    /**
+     * Looks up a model by id in {@link AIEngine}'s cached models. **Overridable seam** for tests.
+     *
+     * @param modelID The `MJ: AI Models.ID` to find.
+     * @returns The model entity, or `null` when not present.
+     */
+    protected findModelByID(modelID: string): MJAIModelEntityExtended | null {
+        return (AIEngine.Instance.Models ?? []).find(m => UUIDsEqual(m.ID, modelID)) ?? null;
+    }
+
+    /** True when the model's denormalized `AIModelType` name is `Realtime` (case/whitespace-insensitive). */
+    private isRealtimeModel(model: MJAIModelEntityExtended): boolean {
+        return typeof model.AIModelType === 'string' && model.AIModelType.trim().toLowerCase() === 'realtime';
+    }
+
+    /**
      * Resolves the Realtime model + vendor driver + API key, mirroring `BaseAgent`'s server-bridged
      * resolution: highest-power active model of AIModelType `Realtime`; highest-priority active
      * vendor whose `DriverClass` has a resolvable API key; instantiated via the `ClassFactory`.
@@ -487,27 +600,62 @@ export class RealtimeClientSessionService {
         if (!model) {
             return null;
         }
+        return this.resolveVendorAndInstantiate(model);
+    }
 
+    /**
+     * Shared tail of model resolution: picks the vendor (with a usable API key) for an
+     * already-chosen model entity and instantiates its realtime driver.
+     *
+     * @param model The chosen model entity.
+     * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
+     */
+    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended): RealtimeModelResolution | null {
         const vendor = this.selectRealtimeVendor(model.ID);
         if (!vendor) {
             return null;
         }
 
-        const apiKey = GetAIAPIKey(vendor.DriverClass);
+        const apiKey = this.getAPIKeyForDriver(vendor.DriverClass);
         if (!apiKey) {
             return null;
         }
 
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel,
-            vendor.DriverClass,
-            apiKey
-        );
+        const instance = this.createModelInstance(vendor.DriverClass, apiKey);
         if (!instance) {
             return null;
         }
 
-        return { Model: instance, ModelID: model.ID, VendorID: vendor.VendorID, APIName: vendor.APIName };
+        return {
+            Model: instance,
+            ModelID: model.ID,
+            VendorID: vendor.VendorID,
+            APIName: vendor.APIName,
+            ModelName: model.Name
+        };
+    }
+
+    /**
+     * Resolves the API key for a vendor driver class. **Overridable seam** (wraps the module-level
+     * {@link GetAIAPIKey}) so tests can simulate present/absent keys without environment setup.
+     *
+     * @param driverClass The vendor's `DriverClass`.
+     * @returns The API key, or a falsy value when none is configured.
+     */
+    protected getAPIKeyForDriver(driverClass: string): string | undefined {
+        return GetAIAPIKey(driverClass) || undefined;
+    }
+
+    /**
+     * Instantiates the realtime driver for a vendor driver class via the ClassFactory.
+     * **Overridable seam** so tests can return a mock driver.
+     *
+     * @param driverClass The vendor's `DriverClass` (the ClassFactory key).
+     * @param apiKey The resolved API key (constructor argument).
+     * @returns The driver instance, or `null` when the factory cannot create one.
+     */
+    protected createModelInstance(driverClass: string, apiKey: string): BaseRealtimeModel | null {
+        return MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, driverClass, apiKey) ?? null;
     }
 
     /**
@@ -518,10 +666,7 @@ export class RealtimeClientSessionService {
      * @returns The chosen model entity, or `null`.
      */
     private selectRealtimeModelEntity(coAgent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
-        const isRealtime = (m: MJAIModelEntityExtended): boolean =>
-            typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
-
-        const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && isRealtime(m));
+        const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && this.isRealtimeModel(m));
         if (realtimeModels.length === 0) {
             return null;
         }
@@ -536,17 +681,39 @@ export class RealtimeClientSessionService {
      * @param modelID The chosen model's id.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    private selectRealtimeVendor(modelID: string): { VendorID: string; DriverClass: string; APIName: string } | null {
+    protected selectRealtimeVendor(modelID: string): { VendorID: string; DriverClass: string; APIName: string } | null {
         const vendors = AIEngine.Instance.ModelVendors
             .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
             .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
 
         for (const v of vendors) {
-            if (GetAIAPIKey(v.DriverClass!)) {
+            if (this.getAPIKeyForDriver(v.DriverClass!)) {
                 return { VendorID: v.VendorID ?? '', DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
             }
         }
         return null;
+    }
+
+    /**
+     * Resolves the DB-driven progress-narration instruction template: the Active `MJ: AI Prompts`
+     * row named {@link RealtimeClientSessionService.NarrationPromptName}, read from
+     * {@link AIEngine}'s cached prompts. **Tolerant**: returns `null` (never throws) when the
+     * prompt is missing, empty, or the engine cache is unavailable — clients fall back to their
+     * built-in narration instruction text.
+     *
+     * @returns The template text (containing a `{{ progressMessage }}` placeholder), or `null`.
+     */
+    protected resolveNarrationInstructionsTemplate(): string | null {
+        try {
+            const wanted = RealtimeClientSessionService.NarrationPromptName.toLowerCase();
+            const prompt = (AIEngine.Instance.Prompts ?? []).find(
+                p => p.Name?.trim().toLowerCase() === wanted && p.Status === 'Active'
+            );
+            const text = prompt?.TemplateText;
+            return text && text.trim().length > 0 ? text : null;
+        } catch {
+            return null; // engine cache unavailable — tolerated, client falls back
+        }
     }
 
     /**

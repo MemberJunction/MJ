@@ -24,6 +24,12 @@ export class RealtimeAgentBannerComponent {
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input() AgentName = 'the agent';
 
+  /**
+   * Display name of the realtime model the live session runs on (e.g. "GPT Realtime 2").
+   * Rendered as a subtle suffix in the identity line; hidden when null/empty.
+   */
+  @Input() ModelName: string | null = null;
+
   /** Maps the realtime state to the orb's `data-state` (the orb only models active turn-states). */
   public OrbState(state: VoiceConnectionState): 'speaking' | 'listening' | 'thinking' {
     switch (state) {

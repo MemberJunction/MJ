@@ -21,6 +21,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
+import { VoiceAgentPick } from '../voice/voice-agent-picker.component';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -376,10 +377,32 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     await this.startVoiceWithAgent(targetAgentId, this.resolveVoiceAgentName());
   }
 
-  /** User confirmed an agent in the voice picker — start the call with it. */
-  public async onVoiceAgentPicked(agent: MJAIAgentEntityExtended): Promise<void> {
+  /**
+   * Caret-next-to-the-phone click: open the agent/model picker ON DEMAND, even when the
+   * conversation already has agent history (where the plain phone click instant-starts).
+   * The resolved agent is preselected, so "open → Start" matches the instant path while
+   * keeping the voice-model choice one click away. Falls through to the instant path
+   * when there is nothing to pick from.
+   */
+  public onVoiceOptions(): void {
+    if (!this.canStartVoice) {
+      return;
+    }
+    if (this.voicePickerAgents.length > 0) {
+      this.showVoiceAgentPicker = true;
+      return;
+    }
+    void this.onStartVoice();
+  }
+
+  /** User confirmed an agent (+ optional voice model) in the voice picker — start the call. */
+  public async onVoiceAgentPicked(pick: VoiceAgentPick): Promise<void> {
     this.showVoiceAgentPicker = false;
-    await this.startVoiceWithAgent(agent.ID, agent.Name || this.resolveVoiceAgentName());
+    await this.startVoiceWithAgent(
+      pick.Agent.ID,
+      pick.Agent.Name || this.resolveVoiceAgentName(),
+      pick.PreferredModelId ?? undefined
+    );
   }
 
   /** User dismissed the voice picker without starting a call. */
@@ -389,17 +412,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Shared session-start path for both the immediate (existing conversation)
-   * and picker (new conversation) flows. The agent NAME is passed through to
-   * VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
-   * shows who the call fronts without re-resolving.
+   * and picker (new conversation / caret options) flows. The agent NAME is passed
+   * through to VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
+   * shows who the call fronts without re-resolving. An explicit voice-model choice
+   * (picker only) rides along as `preferredModelId` — the server uses exactly that
+   * model or fails with a clear reason (no silent fallback).
    */
-  private async startVoiceWithAgent(agentId: string, agentName: string): Promise<void> {
+  private async startVoiceWithAgent(agentId: string, agentName: string, preferredModelId?: string): Promise<void> {
     try {
       await this.voiceSession.StartVoiceSession(
         agentId,
         this.conversationId,
         null,
-        agentName
+        agentName,
+        preferredModelId ?? null
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);
