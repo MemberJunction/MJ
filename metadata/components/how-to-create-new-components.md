@@ -198,6 +198,7 @@ state instead.
 - Own a single settings object; initialize state from it with fallbacks (`savedUserSettings?.sortBy ?? 'Name'`).
 - On change, call `onSaveUserSettings({ ...savedUserSettings, changedKey: value })` with the FULL object.
 - Don't namespace keys (the host scopes the whole object per component) and don't await the call (it's debounced, fire-and-forget).
+- The host MERGES your payload over the saved settings (never replaces), so a partial object can't wipe other keys. To remove a saved key, set it explicitly to `null` — omitting it does not remove it.
 
 ### Data Access Rules
 - Always check `result.Success` before using data

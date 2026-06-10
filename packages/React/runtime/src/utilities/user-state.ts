@@ -92,3 +92,38 @@ export function mergeUserSettings(
 ): Record<string, unknown> {
   return { ...(hostDefaults ?? {}), ...(stored ?? {}) };
 }
+
+/**
+ * Apply an `onSaveUserSettings` payload to the host's current settings snapshot.
+ *
+ * **Merge, not replace.** The contract asks components to pass the complete
+ * settings object, but the host must be resilient to a component (especially an
+ * AI-generated one) passing only the changed keys — and to the stale-prop case
+ * where a component spreads the mount-time `savedUserSettings` prop, which the
+ * host deliberately never refreshes mid-session (no re-render on save). Under
+ * full-replace semantics either slip silently wipes every other saved
+ * preference; under merge the worst case is a no-op.
+ *
+ * **Removing a key requires explicit intent**: set its value to `null` and the
+ * key is deleted from the snapshot (reads fall back to defaults via the
+ * documented `savedUserSettings?.key ?? fallback` pattern). `undefined` values
+ * are treated the same way, since `JSON.stringify` would drop them from the
+ * persisted blob anyway and the in-memory snapshot must stay consistent with
+ * what is stored.
+ *
+ * @returns a new object — neither input is mutated.
+ */
+export function applyUserSettingsUpdate(
+  current: Record<string, unknown> | undefined | null,
+  incoming: Record<string, unknown> | undefined | null
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...(current ?? {}) };
+  for (const [key, value] of Object.entries(incoming ?? {})) {
+    if (value === null || value === undefined) {
+      delete next[key];
+    } else {
+      next[key] = value;
+    }
+  }
+  return next;
+}

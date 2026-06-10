@@ -72,6 +72,8 @@ expanded/collapsed, active sub-tab, density toggle, etc. Initialize state from
 `savedUserSettings` (with fallbacks), and on change call
 `onSaveUserSettings({ ...savedUserSettings, key: value })` with the full object. Don't
 namespace keys and don't await it. Keep transient state (in-flight edits) in plain React state.
+The host merges your payload over the saved settings (a partial object can't wipe other
+keys); to remove a saved key, set it explicitly to `null`.
 
 ## Standard events to emit
 

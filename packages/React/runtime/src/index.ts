@@ -145,7 +145,8 @@ export {
   resolveUserStateScope,
   userStateStorageKey,
   parseStoredUserSettings,
-  mergeUserSettings
+  mergeUserSettings,
+  applyUserSettingsUpdate
 } from './utilities/user-state';
 
 // Version information

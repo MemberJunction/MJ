@@ -231,6 +231,14 @@ Notes:
 - You do **not** namespace keys — the host scopes the whole object to your component.
 - `onSaveUserSettings` is debounced and fire-and-forget; don't await it.
 - Always guard with `?.` / fallbacks: `savedUserSettings` may be `{}` on first run.
+- **The host merges, never replaces.** Whatever you pass is overlaid onto the saved
+  settings, so a partial object can't wipe other preferences. Still pass the full
+  spread (it's the contract and keeps your intent explicit), but a forgotten spread
+  degrades to a harmless no-op for the other keys instead of data loss.
+- **To remove a saved key, set it explicitly to `null`** (e.g.
+  `onSaveUserSettings?.({ ...savedUserSettings, sortBy: null })`). The host deletes
+  it from the stored object and your `?? fallback` read picks up the default again.
+  Omitting a key does NOT remove it.
 
 ### 8. Data Requirements
 Specify exactly what data the component needs:

@@ -4,7 +4,8 @@ import {
   resolveUserStateScope,
   userStateStorageKey,
   parseStoredUserSettings,
-  mergeUserSettings
+  mergeUserSettings,
+  applyUserSettingsUpdate
 } from '../utilities/user-state';
 
 describe('user-state helpers', () => {
@@ -97,6 +98,58 @@ describe('user-state helpers', () => {
       expect(merged).not.toBe(stored);
       expect(defaults).toEqual({ a: 1 });
       expect(stored).toEqual({ b: 2 });
+    });
+  });
+
+  describe('applyUserSettingsUpdate', () => {
+    it('overlays incoming keys onto the current snapshot', () => {
+      expect(applyUserSettingsUpdate({ viewMode: 'grid', sortBy: 'CloseDate' }, { sortBy: 'Name' }))
+        .toEqual({ viewMode: 'grid', sortBy: 'Name' });
+    });
+
+    it('preserves untouched keys when a component passes only a delta', () => {
+      // The AI-forgot-the-spread case: a delta must not wipe other preferences.
+      expect(applyUserSettingsUpdate({ viewMode: 'grid', page: 3 }, { sortBy: 'Name' }))
+        .toEqual({ viewMode: 'grid', page: 3, sortBy: 'Name' });
+    });
+
+    it('survives the stale-prop spread (two sequential saves keep both changes)', () => {
+      // Component spreads the mount-time prop both times; the host snapshot
+      // must still accumulate both changes.
+      const mountProp = { viewMode: 'grid' };
+      let snapshot = applyUserSettingsUpdate(mountProp, { ...mountProp, sortBy: 'Name' });
+      snapshot = applyUserSettingsUpdate(snapshot, { ...mountProp, viewMode: 'list' });
+      expect(snapshot).toEqual({ viewMode: 'list', sortBy: 'Name' });
+    });
+
+    it('removes a key when its incoming value is explicitly null', () => {
+      expect(applyUserSettingsUpdate({ sortBy: 'Name', viewMode: 'grid' }, { sortBy: null }))
+        .toEqual({ viewMode: 'grid' });
+    });
+
+    it('removes a key when its incoming value is undefined', () => {
+      expect(applyUserSettingsUpdate({ sortBy: 'Name', viewMode: 'grid' }, { sortBy: undefined }))
+        .toEqual({ viewMode: 'grid' });
+    });
+
+    it('treats a full-object payload as a superset (replace-equivalent)', () => {
+      expect(applyUserSettingsUpdate({ a: 1, b: 2 }, { a: 10, b: 20 })).toEqual({ a: 10, b: 20 });
+    });
+
+    it('handles null/undefined on either side', () => {
+      expect(applyUserSettingsUpdate(null, { x: 1 })).toEqual({ x: 1 });
+      expect(applyUserSettingsUpdate({ x: 1 }, null)).toEqual({ x: 1 });
+      expect(applyUserSettingsUpdate(null, null)).toEqual({});
+    });
+
+    it('returns a new object (does not mutate inputs)', () => {
+      const current = { a: 1 };
+      const incoming = { b: 2 };
+      const next = applyUserSettingsUpdate(current, incoming);
+      expect(next).not.toBe(current);
+      expect(next).not.toBe(incoming);
+      expect(current).toEqual({ a: 1 });
+      expect(incoming).toEqual({ b: 2 });
     });
   });
 });

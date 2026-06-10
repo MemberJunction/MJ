@@ -76,8 +76,10 @@ export interface ComponentExecutionOptions extends LinterOptions {
   /**
    * Initial per-user settings to seed the component's `savedUserSettings` prop
    * with. Mirrors what the production host loads from `UserInfoEngine`. The
-   * component's `onSaveUserSettings` callback mutates this snapshot in place so
-   * tests can inspect persisted preferences after interactions. Defaults to `{}`.
+   * component's `onSaveUserSettings` callback merges each payload into this
+   * snapshot in place (null/undefined values remove the key — same semantics as
+   * the production host) so tests can inspect persisted preferences after
+   * interactions. Defaults to `{}`.
    */
   savedUserSettings?: Record<string, unknown>;
 
@@ -868,9 +870,18 @@ export class ComponentRunner {
             components,
             savedUserSettings: userSettingsState,
             onSaveUserSettings: (settings: any) => {
-              // Replace the snapshot contents in place (keep the same reference).
-              Object.keys(userSettingsState).forEach((k) => delete userSettingsState[k]);
-              Object.assign(userSettingsState, settings || {});
+              // Merge (don't replace) in place, keeping the same reference —
+              // mirrors the production host (applyUserSettingsUpdate in
+              // @memberjunction/react-runtime, inlined here because this code
+              // runs inside page.evaluate): a delta-only payload must not wipe
+              // other preferences; an explicit null/undefined value removes the key.
+              Object.entries((settings as Record<string, unknown>) || {}).forEach(([k, v]) => {
+                if (v === null || v === undefined) {
+                  delete userSettingsState[k];
+                } else {
+                  userSettingsState[k] = v;
+                }
+              });
               if (debug) {
                 console.log('User settings saved:', settings);
               }

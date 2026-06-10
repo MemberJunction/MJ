@@ -16,11 +16,17 @@ store on load and saves (debounced) on every `onSaveUserSettings` call, under th
 `UserStateScope` input). Set the new `PersistUserSettings` input to `false` to opt out
 and own persistence via the `userSettingsChanged` output instead.
 
+Saves **merge, never replace**: the host overlays each `onSaveUserSettings` payload
+onto the saved settings, so a component that passes only the changed keys (or spreads
+a stale prop) cannot wipe other preferences. Removing a key requires explicit intent —
+set its value to `null`.
+
 - `@memberjunction/react-runtime`: new framework-agnostic `user-state` helpers
   (`resolveUserStateScope`, `userStateStorageKey`, `parseStoredUserSettings`,
-  `mergeUserSettings`) plus unit tests.
+  `mergeUserSettings`, `applyUserSettingsUpdate`) plus unit tests.
 - `@memberjunction/react-test-harness`: `ComponentExecutionOptions.savedUserSettings`
-  seeds the prop and `onSaveUserSettings` now mutates a real in-memory snapshot.
+  seeds the prop and `onSaveUserSettings` now merges into a real in-memory snapshot
+  with the same null-removes-key semantics as the production host.
 
 Fully additive — existing components that already use the blob gain durable
 persistence for free.
