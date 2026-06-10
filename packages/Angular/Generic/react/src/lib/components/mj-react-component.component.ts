@@ -1076,18 +1076,39 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   /**
    * Handle onSaveUserSettings from components.
    *
-   * This implements the SavedUserSettings pattern: the component owns its single
-   * settings object and hands us the full latest copy whenever it changes. We
-   * (1) keep our in-memory snapshot in sync so any future re-render passes the
-   * latest values, (2) persist it per-user via UserInfoEngine (debounced,
-   * auto-scoped) unless the host opted out, and (3) still bubble the event up for
-   * any parent container that wants to observe changes.
+   * This implements the SavedUserSettings pattern with DEFENSIVE MERGE SEMANTICS:
+   * instead of full-replace (which breaks when AI agents forget the spread pattern),
+   * we merge incoming settings over existing ones. Components can still pass the
+   * full settings object (preferred) or just the delta (safe fallback). Explicit
+   * null values remove keys. We (1) keep our in-memory snapshot in sync with merge
+   * semantics, (2) persist it per-user via UserInfoEngine (debounced, auto-scoped)
+   * unless the host opted out, and (3) still bubble the event up for any parent
+   * container that wants to observe changes.
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
+    // DEFENSIVE MERGE: Instead of full replace, merge incoming settings over existing.
+    // This prevents data loss when AI agents forget the spread pattern and only pass
+    // a delta like { sortBy: 'Name' } instead of { ...savedUserSettings, sortBy: 'Name' }.
+    const incomingSettings = newSettings || {};
+    
+    // Start with current settings as the base
+    const mergedSettings = { ...this._savedUserSettings };
+    
+    // Overlay incoming settings, with explicit null handling for key removal
+    for (const [key, value] of Object.entries(incomingSettings)) {
+      if (value === null) {
+        // Explicit null means "remove this key"
+        delete mergedSettings[key];
+      } else {
+        // Any other value (including undefined) sets/updates the key
+        mergedSettings[key] = value;
+      }
+    }
+
     // Keep our snapshot current WITHOUT going through the setter (which would
     // re-render). The component already holds the correct state — it's the one
     // that told us about the change — so re-rendering would only cause flicker.
-    this._savedUserSettings = newSettings || {};
+    this._savedUserSettings = mergedSettings;
 
     // Durably persist the latest settings for this user, scoped to this component.
     this.persistUserSettings(this._savedUserSettings);
