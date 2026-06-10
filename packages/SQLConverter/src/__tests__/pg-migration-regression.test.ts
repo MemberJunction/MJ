@@ -205,20 +205,23 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
     // the conversion regression tests above; this keeps the standard unit-test
     // gate fast while preserving full coverage on local dev runs and nightly.
     const result = deduplicateEntityFieldSequences(PG_MIGRATIONS_DIR, true);
-    // KNOWN DEBT: V202603042042__v5.8.x__Integration_System.pg.sql contains 2
-    // duplicate-EntityField INSERTs guarded by `IF NOT EXISTS` (runtime-idempotent
-    // — only the first insert fires). The deduper counts them as collisions
-    // because it scans raw VALUES tuples without parsing the surrounding
-    // DO $$ ... END $$ guard.
+    // Cross-file collisions inside CodeGen's +100000 staging zone are benign
+    // by design: every committed Metadata_Sync/CodeGen migration stages new
+    // EntityField sequences at maxSequence+100000, and CodeGen's
+    // spUpdateExistingEntityFieldsFromSchema renumbers them to real values
+    // before the NEXT migration is authored. So the same staged value
+    // recurring in a LATER file never collides at runtime (the earlier row no
+    // longer holds it). The deduper still reports them because it scans files
+    // statically.
     //
-    // Bumping the sequences in that committed file would invalidate Flyway
-    // checksums in deployed environments. Tracked for v5.30.1: either teach
-    // the deduper to recognize IF NOT EXISTS guards (without breaking the
-    // SequenceDeduplicator unit tests, which use the guard pattern in their
-    // fixtures and intentionally expect collision detection), or
-    // post-process the v5.8 file with a Flyway repair note.
-    const KNOWN_LEGACY_COLLISION_BUDGET = 2;
-    expect(result.totalCollisions).toBeLessThanOrEqual(KNOWN_LEGACY_COLLISION_BUDGET);
+    // What this gate must catch is REAL collisions: two inserts at the same
+    // (EntityID, Sequence) in the SAME file (no CodeGen run between them), or
+    // collisions on real (sub-100000) sequence values.
+    const STAGING_ZONE = 100_000;
+    const realCollisions = result.collisions.filter(c =>
+      c.first.file === c.duplicate.file || c.duplicate.sequence < STAGING_ZONE
+    );
+    expect(realCollisions).toEqual([]);
   }, 300_000);
 
   it('every PG file should be valid UTF-8 with no null bytes', () => {

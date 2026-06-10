@@ -1171,6 +1171,23 @@ export class ManageMetadataBase {
       }
       const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
 
+      // Ensure the platform's metadata-management support objects exist and
+      // match this CodeGenLib version. These routines/views are CodeGen's own
+      // machinery — when the provider supplies DDL (PostgreSQL), we install it
+      // idempotently here rather than depending on migrations to have shipped
+      // it. Nothing below can work without them, so a failure here is fatal.
+      const supportObjectsSQL = this.dbProvider.getMetadataSupportObjectsSQL(mj_core_schema());
+      if (supportObjectsSQL) {
+         try {
+            await pool.query(supportObjectsSQL);
+            logStatus('   Ensured metadata-management support objects (views/routines) are current');
+         }
+         catch (e) {
+            logError(`   Error ensuring metadata-management support objects: ${e instanceof Error ? e.message : e}`);
+            return false;
+         }
+      }
+
       let bSuccess = true;
       let start = new Date();
       

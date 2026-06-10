@@ -988,6 +988,25 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;
 
+    /**
+     * Returns DDL that creates/replaces the platform's metadata-management
+     * support objects (introspection views and the routines manage-metadata
+     * invokes via {@link callRoutineSQL}), or `null` when the platform ships
+     * them through migrations instead.
+     *
+     * These objects are CodeGen's own machinery — only CodeGen calls them —
+     * so platforms that return DDL here get it executed (idempotently) at the
+     * start of every manageMetadata run. That guarantees the objects can
+     * never be missing or version-skewed relative to the CodeGenLib code that
+     * calls them.
+     *
+     * SQL Server: returns `null` (objects ship in the baseline migrations).
+     * PostgreSQL: returns the full support-object DDL.
+     */
+    getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {
+        return null;
+    }
+
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
     /**

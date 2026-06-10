@@ -177,6 +177,10 @@ set `MJ_SQLGLOT_PYTHON` if the interpreter isn't `python3` on PATH).
 | `mj migrate convert --split` end-to-end on live PG (apply DDL + reseed M) | ⏳ partial — codegen-A proven; full new-way build not assembled |
 | Hand-author the 11 Category-C `.pg.sql` files | ⏳ not done — manual, one-time |
 | Retire the 6-phase Docker `/pg-migrate` skill | ⏳ pending cutover after parallel-run |
+| **PG metadata-introspection stack** (5 routines + `vwSQLColumnsAndEntityFields`) — self-ensured by CodeGen | ✅ built + self-heal validated — see §6.7 |
+| **View semantic-equivalence harness** (`scripts/ss-pg-view-equivalence.mjs`) | ✅ built, `realDiffers: []` on current build — see §6.7 |
+| **CRUD behavioral oracle** (`scripts/pg-crud-oracle.mjs`) | ✅ built, 335 pass / 0 fail — see §6.7 |
+| Wire both harnesses into `pg-migrations.yml` as CI gates | ⏳ deliberately deferred — snippet + prereqs in §6.7 |
 
 ## 6.6 Live-PG validation results
 
@@ -192,6 +196,124 @@ diff               0       0         0           0          0           +362 (al
 **Findings:**
 1. **CodeGen runs cleanly against PostgreSQL** (324 entities, ~41s) and is **schema-preserving** — tables, columns, constraints, views, and all 2,309 column comments are byte-identical. The +362 routines are `fn_*_get_root_id` self-FK helpers + 2 sprocs the older committed set predated — legitimate CodeGen output, not drift. → **Category A regenerates correctly on PG.** ✅
 2. **Column descriptions must be transpiled, not dropped.** A subagent traced the data flow: on PG, CodeGen *reads* `col_description()` into `EntityField.Description` (`B202605241137…Baseline.pg.sql:32312`; `PostgreSQLCodeGenProvider.ts:2436`) and **never emits** `COMMENT ON COLUMN`. Drop the comments → blank descriptions. Hence the `sp_addextendedproperty`→`COMMENT ON` transform is **required** (now implemented in the dialect).
+
+## 6.7 Verification stack & handoff state (2026-06-10)
+
+A fresh PG database built from `migrations-pg/` + one `mj codegen` run is now
+verified at **four independent layers**, all green. Each layer caught at least
+one real bug the layers above it could not see (4 total this cycle).
+
+| Layer | Gate | Result | Where |
+|---|---|---|---|
+| Migration conversion | zero-diff regression + file parity | 146/146 | `scripts/check-pg-migration-parity.mjs`, SQLConverter vitest |
+| Metadata | introspection census ≈ 0; idempotent sync (0 churn on 2nd run) | ✅ | self-ensured support objects (below) |
+| Views | semantic equivalence vs SS definitions | `realDiffers: []` (299/349 compared) | `scripts/ss-pg-view-equivalence.mjs` |
+| Generated CRUD | behavioral create→update→delete per entity | 335 pass / 0 fail / 4 documented skips | `scripts/pg-crud-oracle.mjs` |
+
+### CodeGen self-ensures its PG support objects (architectural change)
+
+The five metadata-management routines (`spUpdateExistingEntityFieldsFromSchema`,
+`spUpdateExistingEntitiesFromSchema`, `spDeleteUnneededEntityFields`,
+`spSetDefaultColumnWidthWhereNeeded`, `spUpdateSchemaInfoFromDatabase`), the
+`vwSQLColumnsAndEntityFields` introspection view, and the default-value helper
+functions are **not delivered by migrations on PG**. They are CodeGen's own
+machinery — only CodeGen calls them — so CodeGen installs them itself
+(idempotent `DROP IF EXISTS` + `CREATE OR REPLACE`) at the start of every
+`manageMetadata` run:
+
+- DDL: `packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts`
+- Provider hook: `CodeGenDatabaseProvider.getMetadataSupportObjectsSQL()` (SQL
+  Server returns `null` — its counterparts ship in the baseline migrations)
+- Ensure call: top of `ManageMetadataBase.manageMetadata()`; failure is fatal
+  and loud, but the failure mode "routines missing/stale" is structurally gone —
+  the objects always match the CodeGenLib version that calls them.
+
+**Why:** previously these were expected from migrations; four of five never
+existed on PG, the call failures were caught-and-logged, and metadata silently
+desynced. Concrete damage: `ApplicationSetting.ApplicationID` went nullable in
+v5.40, PG metadata never updated, `vwApplicationSettings` kept an INNER JOIN
+and silently hid NULL-ApplicationID rows — and since `spCreate` returns the new
+row *through* the view, creating a global setting also presented as a failed
+save. The old PG `vwSQLColumnsAndEntityFields` was additionally unusable as an
+introspection source (raw PG typenames, view-attribute nullability, PG
+length/default conventions, no IsComputed) — the replacement emits MJ-canonical
+(SS-flavored) vocabulary so EntityField metadata stays platform-stable.
+
+**Self-heal validated:** a clone with no routines + broken view + stale
+metadata → one codegen run → routines present, `AllowsNull` corrected, LEFT
+JOIN view regenerated, both harnesses green. No migration needed.
+
+What remains in migrations:
+`migrations-pg/v5/V202606100800__v5.40.x__Fix_View_Null_Ordering.pg-only.sql` —
+`DESC NULLS LAST` fixes for `vwCompanyIntegrations` /
+`vwCompanyIntegrationRunsRanked` (old-converter fossils in data views; T-SQL
+`DESC` sorts NULLs last, PG's default is NULLS FIRST).
+
+### Bugs found & fixed this cycle (all by the new gates)
+
+1. **vwApplicationSettings INNER JOIN** (rows silently hidden + saves
+   presenting as failed) — root cause was the missing introspection stack above.
+2. **`DESC` NULLS-ordering divergence** in two custom views — old-converter
+   drop; the AST dialect already gets this right.
+3. **Missing PG metadata-introspection stack** — see above; also
+   `spUpdateEntityFieldRelatedEntityNameFieldMap` existed but was broken
+   (1-param signature, undefined variable in body).
+4. **`formatDefaultValue` missing `sysutcdatetime()`**
+   (`PostgreSQLCodeGenProvider.ts` function map) — emitted as a quoted *string
+   literal* in `COALESCE`; `spCreateMagicLinkRedemption` failed on every insert
+   omitting `AttemptedAt`. Found by the CRUD oracle's first full run.
+
+### Running the harnesses
+
+```bash
+EQUIV_DB=<db>  node scripts/ss-pg-view-equivalence.mjs   # exit 1 on real divergence
+ORACLE_DB=<db> node scripts/pg-crud-oracle.mjs           # exit 1 on any CRUD failure
+```
+
+Full reports: `/tmp/ss-pg-view-equiv-report.json`, `/tmp/pg-crud-oracle-report.json`.
+
+Known-benign buckets (do not chase):
+- equivalence `cosmeticOnly` (~230): join-alias quoting/case only.
+- equivalence `createFailed` (~49): recursive-CTE and `sys.*` catalog views the
+  transpiler can't round-trip — paths production never transpiles (CodeGen
+  regenerates them natively); unvalidated, not failing.
+- oracle skips (4): `p_data` / `p_entityname` custom proc shapes (identical on
+  SS) and `MJ: Entities` / `MJ: Entity Fields` (required columns have no create
+  param on either platform — CodeGen inserts those rows directly).
+
+### ⚠️ CI wiring — deliberately NOT done yet
+
+Both harnesses are CI-ready (non-zero exit on failure) but are **not** wired
+into `.github/workflows/pg-migrations.yml`. When wiring, add after the codegen
+step:
+
+```yaml
+- name: View semantic equivalence (SS ↔ PG)
+  run: EQUIV_DB=$PG_DB node scripts/ss-pg-view-equivalence.mjs
+- name: CRUD behavioral oracle
+  run: ORACLE_DB=$PG_DB node scripts/pg-crud-oracle.mjs
+```
+
+Prereqs: (a) the equivalence harness shells out to Python sqlglot
+(`SQLGLOT_PYTHON` env; pinned deps in `packages/SQLGlotTS`) — one `pip install`
+step; (b) both scripts currently exec `psql` via `docker exec` into a named
+container (`PG_CONTAINER`) — for a CI PG service either point `PG_CONTAINER`
+at it or switch the scripts' `psql` helper to direct TCP (`psql -h`); the
+change is isolated to one function in each script.
+
+### Remaining open items
+
+1. **Behavioral suite against a PG-backed MJAPI** — the long-term gate above
+   the DB layer (resolvers/providers).
+2. **Legacy `converts:` regression tests** (3 failing, inherited from `next`)
+   still exercise the OLD rule-based converter; migrate them to
+   `convertMigration`.
+3. **`MJ: List Invitations.ExpiresAt`** is `TIMESTAMPTZ` on PG vs `DATETIME`
+   on SS — one-column DDL conversion drift; decide `ALTER` vs accept.
+4. **R__ codegen-snapshot release artifact** — architect decision pending on
+   whether a customer PG deploy should be complete after `mj migrate` alone
+   (`publish.yml` is SS-only today; PG codegen runs at install time).
+5. **CI idempotency step** in `pg-migrations.yml` is still `continue-on-error`.
 
 ## 7. Risks & open questions
 

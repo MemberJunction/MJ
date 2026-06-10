@@ -10,6 +10,7 @@ import {
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
+import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
@@ -1255,6 +1256,7 @@ END $$;
             'getutcdate()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetimeoffset()': "NOW() AT TIME ZONE 'UTC'",
+            'sysutcdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'now()': 'NOW()',
             'current_timestamp': 'CURRENT_TIMESTAMP',
             'user_name()': 'CURRENT_USER',
@@ -1679,6 +1681,11 @@ ORDER BY ordinal_position`;
     getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
         return this.buildFixVirtualFieldNullabilityUpdateSQL(mjCoreSchema, qs);
+    }
+
+    /** @inheritdoc */
+    getMetadataSupportObjectsSQL(mjCoreSchema: string): string | null {
+        return buildMetadataSupportObjectsSQL(mjCoreSchema);
     }
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
