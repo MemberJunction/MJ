@@ -31,7 +31,7 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIPromptRunEntity, MJArtifactEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
@@ -54,6 +54,7 @@ import {
     INVOKE_TARGET_AGENT_TOOL_NAME,
     DelegateToTargetRequest,
     DelegatedResult,
+    DelegatedRunArtifact,
     ToolExecutionResult
 } from './realtime-tool-broker';
 
@@ -982,11 +983,88 @@ export class RealtimeClientSessionService {
 
         try {
             const result = await this.runDelegatedAgent(input, request, target, contextUser, provider);
-            return this.buildDelegatedResult(request.CallID, result);
+            const artifacts = await this.createDelegatedRunArtifacts(result, contextUser, provider);
+            return this.buildDelegatedResult(request.CallID, result, artifacts);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             return { CallID: request.CallID, Success: false, Output: `Delegation failed: ${message}` };
         }
+    }
+
+    /**
+     * Creates artifact(s) from a completed delegated run's payload — the voice-path equivalent of
+     * the chat path's artifact step in `AgentRunner.RunAgentInConversation`. Delegated voice runs
+     * execute via `AgentRunner.RunAgent` directly (no conversation detail), so without this step
+     * they would never produce artifacts at all.
+     *
+     * Eligibility guards (all must hold, mirroring the chat path's `processArtifacts`):
+     *  - the run succeeded and did NOT pause awaiting feedback (a paused run has no deliverable yet);
+     *  - the run returned a non-empty payload.
+     *
+     * The DB work is delegated to {@link processRunArtifacts} (an overridable seam), which reuses
+     * `AgentRunner.ProcessAgentArtifacts` — so ArtifactCreationMode, DefaultArtifactTypeID,
+     * name extraction, and duplicate-version dedup all behave exactly as in chat. **Best-effort:**
+     * any failure is logged and returns `undefined`; artifact surfacing never fails the delegation.
+     *
+     * @param result The delegated agent execution result.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The produced artifact descriptor(s), or `undefined` when none were created.
+     */
+    protected async createDelegatedRunArtifacts(
+        result: ExecuteAgentResult,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<DelegatedRunArtifact[] | undefined> {
+        const paused = result.agentRun?.Status === 'AwaitingFeedback';
+        const payload = result.payload as Record<string, unknown> | null | undefined;
+        const hasPayload = payload != null && Object.keys(payload).length > 0;
+        if (!result.success || paused || !hasPayload) {
+            return undefined;
+        }
+        try {
+            return await this.processRunArtifacts(result, contextUser, provider);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`RealtimeClientSessionService.createDelegatedRunArtifacts failed (delegation continues): ${message}`);
+            return undefined;
+        }
+    }
+
+    /**
+     * The DB-backed artifact-creation seam: runs `AgentRunner.ProcessAgentArtifacts` WITHOUT a
+     * conversation detail (the voice path has none — the artifact + version are created and the
+     * junction link is skipped), then loads the artifact header for its display name.
+     *
+     * Artifacts whose Visibility resolved to `System Only` (the agent's ArtifactCreationMode) are
+     * created but NOT surfaced to the overlay — matching how chat hides them from users.
+     *
+     * **Overridable seam** so tests can exercise {@link createDelegatedRunArtifacts}' eligibility
+     * guards without a DB.
+     *
+     * @param result The delegated agent execution result (payload + agentRun).
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
+     * @returns The produced artifact descriptor(s), or `undefined`.
+     */
+    protected async processRunArtifacts(
+        result: ExecuteAgentResult,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<DelegatedRunArtifact[] | undefined> {
+        const runner = new AgentRunner(provider);
+        const info = await runner.ProcessAgentArtifacts(result, undefined, undefined, contextUser, provider);
+        if (!info) {
+            return undefined;
+        }
+        const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+        if (!(await artifact.Load(info.artifactId))) {
+            return undefined;
+        }
+        if (artifact.Visibility === 'System Only') {
+            return undefined; // created for system purposes, never user-surfaced
+        }
+        return [{ ArtifactID: info.artifactId, ArtifactVersionID: info.versionId, Name: artifact.Name }];
     }
 
     /**
@@ -1036,9 +1114,11 @@ export class RealtimeClientSessionService {
      *
      * @param callID The provider call id this result corresponds to.
      * @param result The agent execution result.
+     * @param artifacts Artifacts the run produced (from {@link createDelegatedRunArtifacts}),
+     *   threaded into the result so the broker serializes them for the call overlay.
      * @returns The delegated result for the model's tool_response.
      */
-    private buildDelegatedResult(callID: string, result: ExecuteAgentResult): DelegatedResult {
+    private buildDelegatedResult(callID: string, result: ExecuteAgentResult, artifacts?: DelegatedRunArtifact[]): DelegatedResult {
         if (result.agentRun?.Status === 'AwaitingFeedback') {
             const question = result.agentRun.Message?.trim()
                 || 'The target agent needs more information to continue.';
@@ -1046,7 +1126,8 @@ export class RealtimeClientSessionService {
                 CallID: callID,
                 Success: true,
                 Output: `You need an answer from the user before you can continue this work. Ask them, in your own first-person voice: ${question}`,
-                PausedRunID: result.agentRun.ID
+                PausedRunID: result.agentRun.ID,
+                RunID: result.agentRun.ID
             };
         }
         return {
@@ -1054,7 +1135,9 @@ export class RealtimeClientSessionService {
             Success: result.success,
             Output: result.success
                 ? (result.agentRun?.Message || 'The delegated work is complete. Share the outcome with the user in your own first-person voice.')
-                : (result.agentRun?.ErrorMessage || 'The work could not be completed. Tell the user, in first person, that you hit a problem and offer a next step.')
+                : (result.agentRun?.ErrorMessage || 'The work could not be completed. Tell the user, in first person, that you hit a problem and offer a next step.'),
+            RunID: result.agentRun?.ID,
+            Artifacts: artifacts
         };
     }
 

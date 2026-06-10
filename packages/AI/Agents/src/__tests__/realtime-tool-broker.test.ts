@@ -92,6 +92,62 @@ describe('RealtimeToolBroker', () => {
         expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'no data' });
     });
 
+    it('threads the delegated RunID into ResultJson as runId and onto ExecutedToolCall', async () => {
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn(async (): Promise<DelegatedResult> => ({
+                CallID: 'c1',
+                Success: true,
+                Output: 'delegated-ok',
+                RunID: 'run-123',
+            })),
+        });
+        const result = await broker.ExecuteToolCall(targetCall);
+        expect(result.RunID).toBe('run-123');
+        expect(JSON.parse(result.ResultJson)).toEqual({ success: true, output: 'delegated-ok', runId: 'run-123' });
+    });
+
+    it('omits runId from ResultJson when the delegation produced no run', async () => {
+        const { broker } = buildBroker();
+        const result = await broker.ExecuteToolCall(targetCall);
+        expect(result.RunID).toBeUndefined();
+        expect(JSON.parse(result.ResultJson)).toEqual({ success: true, output: 'delegated-ok' });
+    });
+
+    it('threads delegated Artifacts into ResultJson as artifacts and onto ExecutedToolCall', async () => {
+        const artifacts = [{ ArtifactID: 'a-1', ArtifactVersionID: 'av-1', Name: 'Weather Report' }];
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn(async (): Promise<DelegatedResult> => ({
+                CallID: 'c1',
+                Success: true,
+                Output: 'delegated-ok',
+                RunID: 'run-123',
+                Artifacts: artifacts,
+            })),
+        });
+        const result = await broker.ExecuteToolCall(targetCall);
+        expect(result.Artifacts).toEqual(artifacts);
+        expect(JSON.parse(result.ResultJson)).toEqual({
+            success: true,
+            output: 'delegated-ok',
+            runId: 'run-123',
+            artifacts: [{ artifactId: 'a-1', artifactVersionId: 'av-1', name: 'Weather Report' }],
+        });
+    });
+
+    it('omits artifacts from ResultJson when the delegation produced an empty list', async () => {
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn(async (): Promise<DelegatedResult> => ({
+                CallID: 'c1',
+                Success: true,
+                Output: 'delegated-ok',
+                Artifacts: [],
+            })),
+        });
+        const result = await broker.ExecuteToolCall(targetCall);
+        expect(result.Artifacts).toBeUndefined();
+        expect(JSON.parse(result.ResultJson)).toEqual({ success: true, output: 'delegated-ok' });
+    });
+
     it('aborts the in-flight delegated controller on AbortInFlight (barge-in)', async () => {
         let capturedSignal: AbortSignal | null = null;
         let resolveDelegate: ((r: DelegatedResult) => void) | null = null;

@@ -26,13 +26,14 @@
  */
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentSessionEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentSessionEntity, MJAIAgentSessionChannelEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -51,6 +52,15 @@ const VOICE_CO_AGENT_NAME = 'Voice Co-Agent';
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
+const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
+const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
+
+/** Maximum number of client-declared UI tools accepted at session mint. */
+const MAX_CLIENT_TOOLS = 16;
+/** Maximum accepted size (chars) of the serialized client tool declarations. */
+const MAX_CLIENT_TOOLS_JSON_CHARS = 64_000;
+/** Maximum accepted size (chars) of a persisted channel state blob. */
+const MAX_CHANNEL_STATE_CHARS = 2_000_000;
 
 /**
  * Authoritative shape persisted in `AIAgentSession.Config_` for a client-direct voice session.
@@ -146,6 +156,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * 4. Mint the {@link import('@memberjunction/ai').ClientRealtimeSessionConfig} via the service.
      *    On failure the just-created session is closed so no half-open session leaks.
      *
+     * **SECURITY NOTE — `clientToolsJson`:** these are CLIENT-EXECUTED UI tools (e.g. the live
+     * whiteboard's `Whiteboard.*` surface). The server only *declares* them to the realtime model
+     * so it can call them — the server NEVER executes them, and a relayed call for one of these
+     * names falls into the standard "not available" path on the server side. They grant no
+     * server-side capability whatsoever; server-executed tools remain exclusively server-declared
+     * (`invoke-target-agent` + future action wiring). The declarations are still validated
+     * (count cap, size cap, per-tool shape) so a hostile client can't bloat the session config.
+     *
      * @returns The ephemeral config + session linkage the browser needs to open its socket.
      */
     @Mutation(() => StartRealtimeClientSessionResult)
@@ -155,6 +173,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('conversationId', () => String, { nullable: true }) conversationId?: string,
         @Arg('lastSessionId', () => String, { nullable: true }) lastSessionId?: string,
         @Arg('preferredModelId', () => String, { nullable: true }) preferredModelId?: string,
+        @Arg('clientToolsJson', () => String, { nullable: true }) clientToolsJson?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -174,7 +193,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             provider,
         );
 
-        return this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider, preferredModelId);
+        const clientTools = this.parseClientTools(clientToolsJson);
+        return this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider, preferredModelId, clientTools);
     }
 
     /**
@@ -312,6 +332,52 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         return true;
     }
 
+    /**
+     * Persist an interactive channel's state of record (e.g. the live whiteboard's serialized
+     * scene) onto the session's `MJ: AI Agent Session Channels` row.
+     *
+     * Flow:
+     * 1. Ownership gate — like the sibling mutations, the session's `UserID` must equal the
+     *    caller's. Unlike Execute/Relay, a **Closed** session is accepted: the client's final
+     *    on-end flush legitimately lands after `CloseAgentSession` has run.
+     * 2. Resolve the channel definition (`MJ: AI Agent Channels`) by `channelName`. When no
+     *    active definition row exists (the deployment hasn't synced the channel seed yet),
+     *    return `false` gracefully and log — never throw for a missing definition.
+     * 3. Upsert the session-channel row: create it (Status `Connected`) when missing, store
+     *    `stateJson` in its `Config` field, and stamp `LastActiveAt`.
+     *
+     * v1 NOTE: state is write-only from the session's perspective — a new session starts with a
+     * fresh board (no restore of a prior session's channel state). Restore is a later phase.
+     *
+     * @returns `true` when the state was persisted; `false` on any tolerated failure (missing
+     *   channel definition, oversized state, save failure) — all logged.
+     */
+    @Mutation(() => Boolean)
+    async SaveSessionChannelState(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('channelName', () => String) channelName: string,
+        @Arg('stateJson', () => String) stateJson: string,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<boolean> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+
+        if (stateJson.length > MAX_CHANNEL_STATE_CHARS) {
+            LogError(
+                `SaveSessionChannelState: rejected oversized state for session ${agentSessionId} / channel '${channelName}' ` +
+                    `(${stateJson.length} chars > ${MAX_CHANNEL_STATE_CHARS}).`,
+            );
+            return false;
+        }
+
+        const channelID = await this.resolveChannelID(channelName, contextUser, provider);
+        if (!channelID) {
+            return false; // missing/inactive channel definition — logged in resolveChannelID
+        }
+
+        return this.upsertSessionChannelState(session.ID, channelID, stateJson, contextUser, provider);
+    }
+
     // ----- internals -------------------------------------------------------------------------
 
     /** Resolve the request user + read-write provider, throwing a clear error if unauthenticated. */
@@ -377,6 +443,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         preferredModelId?: string,
+        clientTools?: RealtimeToolDefinition[],
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -390,6 +457,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ConversationMessages: [],
                 UserID: contextUser.ID,
                 PreferredModelID: preferredModelId,
+                // Client-declared, CLIENT-EXECUTED UI tools (see the mutation's SECURITY NOTE) —
+                // merged after invoke-target-agent into the declared tool set.
+                ExtraTools: clientTools,
             },
             contextUser,
             provider,
@@ -447,6 +517,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity> {
+        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        if (session.Status === 'Closed') {
+            throw new Error(`Realtime session ${agentSessionId} is closed`);
+        }
+        return session;
+    }
+
+    /**
+     * Loads a session and enforces inbound ownership (`UserID === contextUser.ID`) WITHOUT
+     * rejecting `Closed` sessions — {@link SaveSessionChannelState}'s final on-end flush
+     * legitimately arrives after the session closed. Throws when not found / not owned.
+     */
+    private async loadOwnedSession(
+        agentSessionId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<MJAIAgentSessionEntity> {
         const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
         const loaded = await session.Load(agentSessionId);
         if (!loaded) {
@@ -458,10 +545,138 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             throw new Error('Not authorized: you do not own this realtime session');
         }
-        if (session.Status === 'Closed') {
-            throw new Error(`Realtime session ${agentSessionId} is closed`);
-        }
         return session;
+    }
+
+    /**
+     * Resolves an ACTIVE channel definition (`MJ: AI Agent Channels`) by name. Returns its id, or
+     * `null` (logged) when no active definition exists — the channel seed is deployed separately,
+     * so its absence is tolerated, never thrown.
+     */
+    private async resolveChannelID(
+        channelName: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const safeName = channelName.replace(/'/g, "''");
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<{ ID: string; IsActive: boolean }>(
+            {
+                EntityName: CHANNEL_ENTITY,
+                ExtraFilter: `Name='${safeName}'`,
+                Fields: ['ID', 'IsActive'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        const row = result.Success ? result.Results?.[0] : undefined;
+        if (!row || !row.IsActive) {
+            LogError(
+                `SaveSessionChannelState: no active '${channelName}' channel definition found in ${CHANNEL_ENTITY} — ` +
+                    'state not persisted (sync the channel seed metadata to enable persistence).',
+            );
+            return null;
+        }
+        return row.ID;
+    }
+
+    /**
+     * Upserts the session-channel row for `(agentSessionID, channelID)`: creates it with Status
+     * `Connected` when missing, stores `stateJson` in `Config`, and stamps `LastActiveAt`.
+     * Returns the boolean save result (logged on failure).
+     */
+    private async upsertSessionChannelState(
+        agentSessionID: string,
+        channelID: string,
+        stateJson: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const existing = await rv.RunView<MJAIAgentSessionChannelEntity>(
+            {
+                EntityName: SESSION_CHANNEL_ENTITY,
+                ExtraFilter: `AgentSessionID='${agentSessionID}' AND ChannelID='${channelID}'`,
+                ResultType: 'entity_object',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+
+        let row = existing.Success ? existing.Results?.[0] : undefined;
+        if (!row) {
+            row = await provider.GetEntityObject<MJAIAgentSessionChannelEntity>(SESSION_CHANNEL_ENTITY, contextUser);
+            row.NewRecord();
+            row.AgentSessionID = agentSessionID;
+            row.ChannelID = channelID;
+            row.Status = 'Connected';
+        }
+        row.Config_ = stateJson;
+        row.LastActiveAt = new Date();
+
+        const saved = await row.Save();
+        if (!saved) {
+            LogError(
+                `SaveSessionChannelState: save failed for session ${agentSessionID} / channel ${channelID}: ` +
+                    `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
+        return saved;
+    }
+
+    /**
+     * Tolerantly parses + validates client-declared UI tool definitions (see the SECURITY NOTE on
+     * {@link StartRealtimeClientSession}). Never throws — any rejection logs and returns
+     * `undefined` (the session simply minted without client tools):
+     *  - non-JSON / non-array payloads are rejected wholesale;
+     *  - payloads larger than {@link MAX_CLIENT_TOOLS_JSON_CHARS} are rejected wholesale;
+     *  - more than {@link MAX_CLIENT_TOOLS} declarations are rejected wholesale (a legitimate
+     *    client never sends that many — a flood is a misbehaving caller, not a trim candidate);
+     *  - individual entries failing the shape check (`Name`/`Description` non-empty strings,
+     *    `ParametersSchema` a plain object) are skipped, the rest survive.
+     */
+    private parseClientTools(clientToolsJson?: string): RealtimeToolDefinition[] | undefined {
+        if (!clientToolsJson) {
+            return undefined;
+        }
+        if (clientToolsJson.length > MAX_CLIENT_TOOLS_JSON_CHARS) {
+            LogError(`StartRealtimeClientSession: clientToolsJson rejected — ${clientToolsJson.length} chars exceeds the ${MAX_CLIENT_TOOLS_JSON_CHARS} cap.`);
+            return undefined;
+        }
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(clientToolsJson);
+        } catch {
+            LogError('StartRealtimeClientSession: clientToolsJson rejected — not valid JSON.');
+            return undefined;
+        }
+        if (!Array.isArray(parsed)) {
+            LogError('StartRealtimeClientSession: clientToolsJson rejected — expected a JSON array of tool definitions.');
+            return undefined;
+        }
+        if (parsed.length > MAX_CLIENT_TOOLS) {
+            LogError(`StartRealtimeClientSession: clientToolsJson rejected — ${parsed.length} tools exceeds the ${MAX_CLIENT_TOOLS} cap.`);
+            return undefined;
+        }
+        const valid = parsed.filter((t): t is RealtimeToolDefinition => this.isValidClientTool(t));
+        if (valid.length < parsed.length) {
+            LogError(`StartRealtimeClientSession: skipped ${parsed.length - valid.length} malformed client tool definition(s).`);
+        }
+        return valid.length > 0 ? valid : undefined;
+    }
+
+    /** Shape check for one client tool declaration: Name/Description non-empty strings, ParametersSchema a plain object. */
+    private isValidClientTool(candidate: unknown): boolean {
+        if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+            return false;
+        }
+        const tool = candidate as Partial<RealtimeToolDefinition>;
+        return (
+            typeof tool.Name === 'string' && tool.Name.trim().length > 0 && tool.Name.length <= 128 &&
+            typeof tool.Description === 'string' && tool.Description.trim().length > 0 &&
+            tool.ParametersSchema !== null && typeof tool.ParametersSchema === 'object' && !Array.isArray(tool.ParametersSchema)
+        );
     }
 
     /**

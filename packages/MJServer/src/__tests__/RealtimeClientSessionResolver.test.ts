@@ -422,3 +422,216 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         expect(detail.Role).toBe('AI');
     });
 });
+
+describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToolsJson validation', () => {
+    const okPrep = {
+        Success: true,
+        ClientConfig: {
+            Provider: 'openai',
+            Model: 'gpt-realtime',
+            EphemeralToken: 'ek_abc',
+            ExpiresAt: '2026-01-01T00:00:00Z',
+            SessionConfig: {},
+        },
+    };
+
+    function setupHappyStart(): void {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-ct' }));
+        prepareClientSessionMock.mockResolvedValue(okPrep);
+    }
+
+    /** Starts a session with `clientToolsJson` and returns the ExtraTools the prepare received. */
+    async function startWithClientTools(clientToolsJson?: string): Promise<unknown> {
+        const resolver = makeResolver();
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, undefined, undefined, clientToolsJson);
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ExtraTools?: unknown };
+        return prepArg.ExtraTools;
+    }
+
+    const validTool = { Name: 'Whiteboard.AddNote', Description: 'Add a sticky note', ParametersSchema: { type: 'object' } };
+
+    it('threads a valid declaration array through as ExtraTools (client-executed UI tools)', async () => {
+        setupHappyStart();
+        const extraTools = await startWithClientTools(JSON.stringify([validTool]));
+        expect(extraTools).toEqual([validTool]);
+    });
+
+    it('omits ExtraTools when no clientToolsJson is supplied', async () => {
+        setupHappyStart();
+        const extraTools = await startWithClientTools(undefined);
+        expect(extraTools).toBeUndefined();
+    });
+
+    it('tolerantly rejects non-JSON payloads (mints without client tools, never throws)', async () => {
+        setupHappyStart();
+        const extraTools = await startWithClientTools('not json at all {{{');
+        expect(extraTools).toBeUndefined();
+    });
+
+    it('rejects non-array JSON payloads', async () => {
+        setupHappyStart();
+        const extraTools = await startWithClientTools(JSON.stringify({ Name: 'x' }));
+        expect(extraTools).toBeUndefined();
+    });
+
+    it('rejects a declaration flood beyond the 16-tool cap wholesale', async () => {
+        setupHappyStart();
+        const flood = Array.from({ length: 17 }, (_, i) => ({ ...validTool, Name: `Tool.${i}` }));
+        const extraTools = await startWithClientTools(JSON.stringify(flood));
+        expect(extraTools).toBeUndefined();
+    });
+
+    it('skips malformed entries (bad Name / Description / ParametersSchema) but keeps valid ones', async () => {
+        setupHappyStart();
+        const extraTools = await startWithClientTools(JSON.stringify([
+            validTool,
+            { Name: '', Description: 'no name', ParametersSchema: {} },
+            { Name: 'NoDescription', ParametersSchema: {} },
+            { Name: 'BadSchema', Description: 'schema is an array', ParametersSchema: [] },
+            'not-an-object',
+        ]));
+        expect(extraTools).toEqual([validTool]);
+    });
+
+    it('rejects an oversized declarations payload wholesale', async () => {
+        setupHappyStart();
+        const huge = JSON.stringify([{ ...validTool, Description: 'x'.repeat(70_000) }]);
+        const extraTools = await startWithClientTools(huge);
+        expect(extraTools).toBeUndefined();
+    });
+});
+
+describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
+    const CHANNEL_ROW = { ID: 'channel-wb', IsActive: true };
+
+    /**
+     * Provider with both GetEntityObject (session load + new session-channel rows) and RunView
+     * (channel definition + session-channel lookup) under test control.
+     */
+    function makeChannelProvider(opts: {
+        session?: FakeSession;
+        channelRows?: Array<{ ID: string; IsActive: boolean }>;
+        sessionChannelRows?: FakeSession[];
+        newSessionChannel?: FakeSession;
+    }): { provider: unknown; runView: ReturnType<typeof vi.fn>; newRow: FakeSession } {
+        const newRow = opts.newSessionChannel ?? makeSessionEntity({ ID: 'sc-new' });
+        const runView = vi.fn(async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: AI Agent Channels') {
+                return { Success: true, Results: opts.channelRows ?? [] };
+            }
+            return { Success: true, Results: opts.sessionChannelRows ?? [] };
+        });
+        const provider = {
+            GetEntityObject: vi.fn(async (name: string) =>
+                name === 'MJ: AI Agent Session Channels' ? newRow : (opts.session ?? makeSessionEntity()),
+            ),
+            RunView: runView,
+        };
+        return { provider, runView, newRow };
+    }
+
+    it('enforces ownership — rejects when the caller does not own the session', async () => {
+        const { provider } = makeChannelProvider({ session: makeSessionEntity({ UserID: 'someone-else' }) });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx()),
+        ).rejects.toThrow(/do not own/i);
+    });
+
+    it('accepts a CLOSED session (the final on-end flush lands after close)', async () => {
+        const { provider, newRow } = makeChannelProvider({
+            session: makeSessionEntity({ Status: 'Closed' }),
+            channelRows: [CHANNEL_ROW],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"v":1}', makeCtx());
+        expect(ok).toBe(true);
+        expect(newRow.Save).toHaveBeenCalled();
+    });
+
+    it('returns false gracefully (no throw) when no channel definition row exists', async () => {
+        const { provider, newRow } = makeChannelProvider({ channelRows: [] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(false);
+        expect(newRow.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns false when the channel definition is inactive', async () => {
+        const { provider } = makeChannelProvider({ channelRows: [{ ID: 'channel-wb', IsActive: false }] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(false);
+    });
+
+    it('creates the session-channel row (Status Connected) and stores the state on first save', async () => {
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"items":[]}', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(newRow.NewRecord).toHaveBeenCalled();
+        expect(newRow.AgentSessionID).toBe('session-1');
+        expect(newRow.ChannelID).toBe('channel-wb');
+        expect(newRow.Status).toBe('Connected');
+        expect(newRow.Config_).toBe('{"items":[]}');
+        expect(newRow.LastActiveAt).toBeInstanceOf(Date);
+        expect(newRow.Save).toHaveBeenCalled();
+    });
+
+    it('updates the EXISTING session-channel row on later saves (no duplicate row)', async () => {
+        const existing = makeSessionEntity({ ID: 'sc-existing', Status: 'Connected' });
+        const { provider, newRow } = makeChannelProvider({
+            channelRows: [CHANNEL_ROW],
+            sessionChannelRows: [existing],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"items":[1]}', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(existing.Config_).toBe('{"items":[1]}');
+        expect(existing.Save).toHaveBeenCalled();
+        // The fresh-row path was never taken.
+        expect(newRow.NewRecord).not.toHaveBeenCalled();
+        expect(newRow.Save).not.toHaveBeenCalled();
+    });
+
+    it('rejects an oversized state blob (false, nothing queried/saved)', async () => {
+        const { provider, runView, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', 'x'.repeat(2_000_001), makeCtx());
+        expect(ok).toBe(false);
+        expect(runView).not.toHaveBeenCalled();
+        expect(newRow.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns false (logged, not thrown) when the row save fails', async () => {
+        const failingRow = makeSessionEntity({
+            ID: 'sc-fail',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'boom' },
+        });
+        const { provider } = makeChannelProvider({ channelRows: [CHANNEL_ROW], newSessionChannel: failingRow });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(false);
+    });
+});

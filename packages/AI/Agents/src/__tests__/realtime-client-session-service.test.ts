@@ -24,7 +24,7 @@ import {
     RealtimeModelResolution,
     CoAgentSystemPromptResolution
 } from '../realtime/realtime-client-session-service';
-import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult } from '../realtime/realtime-tool-broker';
+import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact } from '../realtime/realtime-tool-broker';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
 // `runAgentMock` is hoisted so the vi.mock factory can close over it.
@@ -205,6 +205,19 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         const names = (result.SessionParams!.Tools ?? []).map(t => t.Name);
         expect(names).toContain(INVOKE_TARGET_AGENT_TOOL_NAME);
         expect(names).toContain('ShowChart');
+    });
+
+    it('merges extra tools AFTER invoke-target, preserving caller order (client UI tool sets)', async () => {
+        const svc = new TestableService();
+        const result = await svc.PrepareClientSession(makePrepInput({
+            ExtraTools: [
+                { Name: 'Whiteboard.AddNote', Description: 'Add a sticky note', ParametersSchema: { type: 'object' } },
+                { Name: 'Whiteboard.Highlight', Description: 'Pulse a highlight', ParametersSchema: { type: 'object' } }
+            ]
+        }), contextUser, provider);
+
+        const names = (result.SessionParams!.Tools ?? []).map(t => t.Name);
+        expect(names).toEqual([INVOKE_TARGET_AGENT_TOOL_NAME, 'Whiteboard.AddNote', 'Whiteboard.Highlight']);
     });
 
     it('fails gracefully (no throw) when no Realtime model resolves', async () => {
@@ -532,12 +545,21 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
  * module-mocked AgentRunner so we can assert exactly what it passes to RunAgent + how it maps results.
  */
 class DelegateTestService extends RealtimeClientSessionService {
+    /** What the stubbed DB seam returns when artifact creation is eligible. */
+    public ArtifactsResult: DelegatedRunArtifact[] | undefined = undefined;
+    /** Spy on the DB-backed artifact seam — called ONLY when the eligibility guards pass. */
+    public ProcessArtifactsSpy = vi.fn();
+
     protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
         if (!targetAgentID) return null;
         return { ID: targetAgentID, Name: 'Query Builder', Description: 'Builds queries.' } as unknown as MJAIAgentEntityExtended;
     }
     protected override async loadParentRun(): Promise<null> {
         return null;
+    }
+    protected override async processRunArtifacts(): Promise<DelegatedRunArtifact[] | undefined> {
+        this.ProcessArtifactsSpy();
+        return this.ArtifactsResult;
     }
     public CallDelegate(
         input: ExecuteRelayedToolInput,
@@ -622,6 +644,95 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(result.Success).toBe(false);
         expect(result.Output).toContain('boom');
         expect(result.PausedRunID).toBeUndefined();
+    });
+
+    it('creates + threads artifacts when the run completed with a payload', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            payload: { report: { title: 'Weather Report' } },
+            agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' },
+        });
+        const svc = new DelegateTestService();
+        svc.ArtifactsResult = [{ ArtifactID: 'a-1', ArtifactVersionID: 'av-1', Name: 'Weather Report' }];
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(svc.ProcessArtifactsSpy).toHaveBeenCalledTimes(1);
+        expect(result.Artifacts).toEqual([{ ArtifactID: 'a-1', ArtifactVersionID: 'av-1', Name: 'Weather Report' }]);
+    });
+
+    it('skips artifact creation when the run failed', async () => {
+        runAgentMock.mockResolvedValue({
+            success: false,
+            payload: { partial: true },
+            agentRun: { ID: 'r1', Status: 'Failed', ErrorMessage: 'boom' },
+        });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(svc.ProcessArtifactsSpy).not.toHaveBeenCalled();
+        expect(result.Artifacts).toBeUndefined();
+    });
+
+    it('skips artifact creation when the run paused awaiting feedback', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            payload: { draft: true },
+            agentRun: { ID: 'paused-1', Status: 'AwaitingFeedback', Message: 'Confirm?' },
+        });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(svc.ProcessArtifactsSpy).not.toHaveBeenCalled();
+        expect(result.Artifacts).toBeUndefined();
+    });
+
+    it('skips artifact creation when the run returned no / empty payload', async () => {
+        runAgentMock.mockResolvedValue({ success: true, payload: {}, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(svc.ProcessArtifactsSpy).not.toHaveBeenCalled();
+        expect(result.Artifacts).toBeUndefined();
+    });
+
+    it('artifact-seam failures never fail the delegation (best-effort)', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            payload: { report: true },
+            agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' },
+        });
+        class ThrowingService extends DelegateTestService {
+            protected override async processRunArtifacts(): Promise<DelegatedRunArtifact[] | undefined> {
+                throw new Error('artifact DB down');
+            }
+        }
+        const svc = new ThrowingService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(true);
+        expect(result.Artifacts).toBeUndefined();
+        expect(result.Output).toContain('done');
+    });
+
+    it('ExecuteRelayedTool serializes artifacts end-to-end through the broker', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            payload: { report: true },
+            agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' },
+        });
+        const svc = new DelegateTestService();
+        svc.ArtifactsResult = [{ ArtifactID: 'a-9', ArtifactVersionID: 'av-9', Name: 'Q3 Summary' }];
+
+        const result = await svc.ExecuteRelayedTool(makeDelegateInput(), contextUser, provider);
+
+        const json = JSON.parse(result.ResultJson);
+        expect(json.artifacts).toEqual([{ artifactId: 'a-9', artifactVersionId: 'av-9', name: 'Q3 Summary' }]);
+        expect(json.runId).toBe('r1');
     });
 
     it('ExecuteRelayedTool surfaces PausedRunID end-to-end through the broker', async () => {

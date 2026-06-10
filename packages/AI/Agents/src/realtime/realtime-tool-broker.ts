@@ -56,6 +56,20 @@ export interface DelegateToTargetRequest {
 }
 
 /**
+ * One artifact a delegated target-agent run produced, surfaced to the transport layer (and into
+ * the serialized tool result as `artifacts: [{ artifactId, artifactVersionId, name }]`) so the
+ * client call overlay can open it in an artifact tab while the model narrates the outcome.
+ */
+export interface DelegatedRunArtifact {
+    /** The `MJ: Artifacts` row id. */
+    ArtifactID: string;
+    /** The `MJ: Artifact Versions` row id of the version this run produced. */
+    ArtifactVersionID: string;
+    /** The artifact's display name (tab title in the call overlay). */
+    Name: string;
+}
+
+/**
  * The result of a delegated target-agent run, fed back to the realtime model as a tool response.
  */
 export interface DelegatedResult {
@@ -77,6 +91,18 @@ export interface DelegatedResult {
      * intermediate outcome).
      */
     PausedRunID?: string;
+    /**
+     * ID of the delegated target-agent run (`MJ: AI Agent Runs`), when one was created. Serialized
+     * into the tool result as `runId` so client developer tooling (the call overlay's dev links)
+     * can open the underlying run record. Absent when the delegation failed before a run existed.
+     */
+    RunID?: string;
+    /**
+     * Artifacts the delegated run produced (when artifact creation is enabled for the target and
+     * the run returned a payload). Serialized into the tool result as `artifacts` so the call
+     * overlay can auto-open them in artifact tabs. Absent/empty when the run produced none.
+     */
+    Artifacts?: DelegatedRunArtifact[];
 }
 
 /**
@@ -127,6 +153,18 @@ export interface ExecutedToolCall {
      * for delegated runs that completed without pausing.
      */
     PausedRunID?: string;
+    /**
+     * ID of the delegated target-agent run (propagated from {@link DelegatedResult.RunID}) — also
+     * embedded in {@link ResultJson} as `runId`. Absent for non-delegation tools and for
+     * delegations that failed before a run was created.
+     */
+    RunID?: string;
+    /**
+     * Artifacts the delegated run produced (propagated from {@link DelegatedResult.Artifacts}) —
+     * also embedded in {@link ResultJson} as `artifacts: [{ artifactId, artifactVersionId, name }]`.
+     * Absent for non-delegation tools and for delegations that produced no artifacts.
+     */
+    Artifacts?: DelegatedRunArtifact[];
 }
 
 /**
@@ -227,7 +265,7 @@ export class RealtimeToolBroker {
                 Arguments: call.Arguments,
                 AbortSignal: controller.signal
             });
-            return this.serializeResult(result.Success, result.Output, result.PausedRunID);
+            return this.serializeResult(result.Success, result.Output, result.PausedRunID, result.RunID, result.Artifacts);
         } catch (error) {
             this.logError(error, 'delegating to target agent');
             return this.serializeError(error);
@@ -262,10 +300,45 @@ export class RealtimeToolBroker {
      * @param output The textual outcome (narration on success, error text on failure).
      * @param pausedRunID When the delegated run paused awaiting feedback, the paused run's id to
      *   surface for resumption. Omitted for completed runs and non-delegation tools.
+     * @param runID ID of the delegated agent run, when one was created. Embedded in the JSON as
+     *   `runId` so the client overlay's developer tooling can link to the run record. Omitted for
+     *   non-delegation tools.
+     * @param artifacts Artifacts the delegated run produced. Embedded in the JSON as
+     *   `artifacts: [{ artifactId, artifactVersionId, name }]` so the client overlay can open
+     *   them in artifact tabs. Omitted when absent or empty.
      * @returns The serialized result.
      */
-    private serializeResult(success: boolean, output: string, pausedRunID?: string): ExecutedToolCall {
-        return { ResultJson: JSON.stringify({ success, output }), Success: success, PausedRunID: pausedRunID };
+    private serializeResult(
+        success: boolean,
+        output: string,
+        pausedRunID?: string,
+        runID?: string,
+        artifacts?: DelegatedRunArtifact[]
+    ): ExecutedToolCall {
+        const payload: {
+            success: boolean;
+            output: string;
+            runId?: string;
+            artifacts?: { artifactId: string; artifactVersionId: string; name: string }[];
+        } = { success, output };
+        if (runID) {
+            payload.runId = runID;
+        }
+        const hasArtifacts = artifacts != null && artifacts.length > 0;
+        if (hasArtifacts) {
+            payload.artifacts = artifacts.map(a => ({
+                artifactId: a.ArtifactID,
+                artifactVersionId: a.ArtifactVersionID,
+                name: a.Name
+            }));
+        }
+        return {
+            ResultJson: JSON.stringify(payload),
+            Success: success,
+            PausedRunID: pausedRunID,
+            RunID: runID,
+            Artifacts: hasArtifacts ? artifacts : undefined
+        };
     }
 
     /**
