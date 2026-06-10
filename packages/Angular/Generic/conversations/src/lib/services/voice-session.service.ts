@@ -240,6 +240,16 @@ export class VoiceSessionService {
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** Minimum gap between spoken progress narrations, to avoid chatter / interrupting. */
   private static readonly DelegationNarrationThrottleMs = 4000;
+  /**
+   * Defer before SPEAKING a progress update. Fast agents (e.g. Sage answering in ~1-2s)
+   * often return before an interim utterance would even finish — deferring lets the
+   * result cancel a now-pointless narration; slower work still gets narrated.
+   */
+  private static readonly NarrationDeferMs = 1200;
+  /** Pending (deferred) narration message — updated in place if newer progress arrives. */
+  private pendingNarrationMessage: string | null = null;
+  /** Timer for the deferred narration; cancelled when the delegation result lands first. */
+  private narrationTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
   private delegationProgressSub: Subscription | null = null;
   /** Timestamp (ms) of the last narration `response.create` we triggered; 0 = never. */
@@ -672,6 +682,9 @@ export class VoiceSessionService {
    * non-delegation tool results have no card and are harmlessly ignored downstream.
    */
   private emitDelegationResult(callId: string, resultJson: string): void {
+    // The result will be spoken next — a deferred interim update is now pointless
+    // (this is what keeps fast agents like Sage from narrating over their own answer).
+    this.cancelPendingNarration();
     let success = true;
     let output = '';
     try {
@@ -847,14 +860,41 @@ export class VoiceSessionService {
       return;
     }
     this.injectProgressContext(channel, progress.Message);
-    // Narrate only a genuinely-new update, while the model is idle (never collide with the
-    // tool-result response), and throttled — so it conveys real status, not robotic repeats.
-    if (progress.Message === this.lastNarratedMessage || this.responseActive || !this.shouldNarrateNow()) {
+    // Narrate only a genuinely-new update, throttled — so it conveys real status, not
+    // robotic repeats. The actual utterance is DEFERRED (NarrationDeferMs) so a fast
+    // result can cancel it; newer progress just refreshes the pending message.
+    if (progress.Message === this.lastNarratedMessage || !this.shouldNarrateNow()) {
       return;
     }
-    this.lastNarratedMessage = progress.Message;
+    this.pendingNarrationMessage = progress.Message;
+    if (!this.narrationTimer) {
+      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), VoiceSessionService.NarrationDeferMs);
+    }
+  }
+
+  /** Speaks the deferred progress update — unless it was cancelled or the model is busy. */
+  private fireDeferredNarration(): void {
+    this.narrationTimer = null;
+    const message = this.pendingNarrationMessage;
+    this.pendingNarrationMessage = null;
+    const channel = this.dataChannel;
+    // responseActive check here (not at schedule time): the model may have gone busy/idle
+    // during the defer window; skipping is safe — the next progress event re-schedules.
+    if (!message || !channel || this.responseActive || message === this.lastNarratedMessage) {
+      return;
+    }
+    this.lastNarratedMessage = message;
     this.lastDelegationNarrationAt = Date.now();
-    this.requestProgressNarration(channel, progress.Message);
+    this.requestProgressNarration(channel, message);
+  }
+
+  /** Cancels any deferred narration — the result is about to be spoken, so it's moot. */
+  private cancelPendingNarration(): void {
+    if (this.narrationTimer) {
+      clearTimeout(this.narrationTimer);
+      this.narrationTimer = null;
+    }
+    this.pendingNarrationMessage = null;
   }
 
   /** Sends a developer-role context item describing the latest background progress. */
@@ -902,6 +942,7 @@ export class VoiceSessionService {
       this.delegationProgressSub.unsubscribe();
       this.delegationProgressSub = null;
     }
+    this.cancelPendingNarration();
     this.lastDelegationNarrationAt = 0;
     this.lastNarratedMessage = '';
     this.responseActive = false;
