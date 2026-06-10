@@ -1,5 +1,101 @@
 # @memberjunction/server-bootstrap
 
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+- Updated dependencies [3da89ef]
+- Updated dependencies [1131ff9]
+- Updated dependencies [da2ee38]
+  - @memberjunction/server@5.40.2
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-agents@5.40.2
+  - @memberjunction/core-actions@5.40.2
+  - @memberjunction/codegen-lib@5.40.2
+  - @memberjunction/ai-agent-manager@5.40.2
+  - @memberjunction/database-designer-core@5.40.2
+  - @memberjunction/ai-form-builder@5.40.2
+  - @memberjunction/action-runtime-host@5.40.2
+  - @memberjunction/messaging-adapters@5.40.2
+  - @memberjunction/scheduling-engine@5.40.2
+  - @memberjunction/testing-engine@5.40.2
+  - @memberjunction/communication-ms-graph@5.40.2
+  - @memberjunction/actions-content-autotag@5.40.2
+  - @memberjunction/database-designer-actions@5.40.2
+  - @memberjunction/computer-use-engine@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/tag-engine-base@5.40.2
+  - @memberjunction/ai-anthropic@5.40.2
+  - @memberjunction/ai-azure@5.40.2
+  - @memberjunction/ai-bedrock@5.40.2
+  - @memberjunction/ai-betty-bot@5.40.2
+  - @memberjunction/ai-blackforestlabs@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/ai-cerebras@5.40.2
+  - @memberjunction/ai-cohere@5.40.2
+  - @memberjunction/ai-elevenlabs@5.40.2
+  - @memberjunction/ai-fireworks@5.40.2
+  - @memberjunction/ai-gemini@5.40.2
+  - @memberjunction/ai-groq@5.40.2
+  - @memberjunction/ai-heygen@5.40.2
+  - @memberjunction/ai-inception@5.40.2
+  - @memberjunction/ai-lmstudio@5.40.2
+  - @memberjunction/ai-llamacpp@5.40.2
+  - @memberjunction/ai-local-embeddings@5.40.2
+  - @memberjunction/ai-minimax@5.40.2
+  - @memberjunction/ai-mistral@5.40.2
+  - @memberjunction/ai-ollama@5.40.2
+  - @memberjunction/ai-openai@5.40.2
+  - @memberjunction/ai-openrouter@5.40.2
+  - @memberjunction/ai-recommendations-rex@5.40.2
+  - @memberjunction/ai-vertex@5.40.2
+  - @memberjunction/ai-zhipu@5.40.2
+  - @memberjunction/ai-xai@5.40.2
+  - @memberjunction/ai-reranker@5.40.2
+  - @memberjunction/ai-vectors-memory@5.40.2
+  - @memberjunction/ai-vectors-pinecone@5.40.2
+  - @memberjunction/ai-vectors-qdrant@5.40.2
+  - @memberjunction/ai-vectors-sqlserver@5.40.2
+  - @memberjunction/ai-vectors-pgvector@5.40.2
+  - @memberjunction/actions-apollo@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions-bizapps-accounting@5.40.2
+  - @memberjunction/actions-bizapps-crm@5.40.2
+  - @memberjunction/actions-bizapps-formbuilders@5.40.2
+  - @memberjunction/actions-bizapps-lms@5.40.2
+  - @memberjunction/actions-bizapps-social@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/archiving-action@5.40.2
+  - @memberjunction/archiving-engine@5.40.2
+  - @memberjunction/auth-providers@5.40.2
+  - @memberjunction/communication-types@5.40.2
+  - @memberjunction/entity-communications-base@5.40.2
+  - @memberjunction/communication-sendgrid@5.40.2
+  - @memberjunction/content-autotagging@5.40.2
+  - @memberjunction/doc-utils@5.40.2
+  - @memberjunction/encryption@5.40.2
+  - @memberjunction/integration-actions@5.40.2
+  - @memberjunction/integration-connectors@5.40.2
+  - @memberjunction/integration-engine@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/data-context-server@5.40.2
+  - @memberjunction/queue@5.40.2
+  - @memberjunction/storage@5.40.2
+  - @memberjunction/react-linter@5.40.2
+  - @memberjunction/scheduling-actions@5.40.2
+  - @memberjunction/scheduling-engine-base@5.40.2
+  - @memberjunction/search-engine@5.40.2
+  - @memberjunction/server-extensions-core@5.40.2
+  - @memberjunction/templates@5.40.2
+  - @memberjunction/esignature@5.40.2
+  - @memberjunction/esignature-docusign@5.40.2
+  - @memberjunction/esignature-dropboxsign@5.40.2
+  - @memberjunction/esignature-pandadoc@5.40.2
+  - @memberjunction/geo-core@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

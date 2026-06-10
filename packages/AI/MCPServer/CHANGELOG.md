@@ -1,5 +1,31 @@
 # @memberjunction/ai-mcp-server
 
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [3da89ef]
+- Updated dependencies [1131ff9]
+  - @memberjunction/server@5.40.2
+  - @memberjunction/ai-agents@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/api-keys@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/auth-providers@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/credentials@5.40.2
+  - @memberjunction/encryption@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

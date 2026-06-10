@@ -1,5 +1,23 @@
 # @memberjunction/react-test-harness
 
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-vectors-memory@5.40.2
+  - @memberjunction/interactive-component-types@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/react-linter@5.40.2
+  - @memberjunction/react-runtime@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+  - @memberjunction/sql-parser@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

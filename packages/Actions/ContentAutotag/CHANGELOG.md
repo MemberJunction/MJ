@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core-actions@5.40.2
+- @memberjunction/ai-vector-sync@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/actions@5.40.2
+- @memberjunction/content-autotagging@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

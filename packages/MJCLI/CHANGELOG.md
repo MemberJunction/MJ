@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/cli
 
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+- Updated dependencies [3da89ef]
+  - @memberjunction/db-auto-doc@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/ai-cli@5.40.2
+  - @memberjunction/codegen-lib@5.40.2
+  - @memberjunction/metadata-sync@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/query-gen@5.40.2
+  - @memberjunction/testing-cli@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/installer@5.40.2
+  - @memberjunction/open-app-engine@5.40.2
+  - @memberjunction/sql-converter@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

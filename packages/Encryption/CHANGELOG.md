@@ -1,5 +1,15 @@
 # @memberjunction/encryption
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/credentials@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

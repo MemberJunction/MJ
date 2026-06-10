@@ -1,5 +1,17 @@
 # @memberjunction/database-designer-core
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.40.2
+- @memberjunction/ai-engine-base@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/schema-engine@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @memberjunction/testing-cli
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/sqlserver-dataprovider@5.40.2
+- @memberjunction/testing-engine@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/testing-engine-base@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

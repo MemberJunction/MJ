@@ -1,5 +1,22 @@
 # @memberjunction/metadata-sync
 
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/graphql-dataprovider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/postgresql-dataprovider@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

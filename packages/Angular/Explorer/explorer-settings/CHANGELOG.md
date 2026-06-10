@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-application@5.40.2
+- @memberjunction/ng-entity-form-dialog@5.40.2
+- @memberjunction/ng-entity-permissions@5.40.2
+- @memberjunction/ng-shared@5.40.2
+- @memberjunction/ng-simple-record-list@5.40.2
+- @memberjunction/ng-base-forms@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-code-editor@5.40.2
+- @memberjunction/ng-join-grid@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-tabstrip@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/ng-user-avatar@5.40.2
+- @memberjunction/graphql-dataprovider@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

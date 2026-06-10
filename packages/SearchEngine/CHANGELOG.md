@@ -1,5 +1,17 @@
 # @memberjunction/search-engine
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/aiengine@5.40.2
+- @memberjunction/ai-vectordb@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/storage@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes
