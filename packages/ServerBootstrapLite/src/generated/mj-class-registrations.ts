@@ -58,10 +58,11 @@ import {
     FireworksLLM,
 } from '@memberjunction/ai-fireworks';
 
-// @memberjunction/ai-gemini (2 classes)
+// @memberjunction/ai-gemini (3 classes)
 import {
     GeminiImageGenerator,
     GeminiLLM,
+    GeminiRealtime,
 } from '@memberjunction/ai-gemini';
 
 // @memberjunction/ai-groq (1 classes)
@@ -96,12 +97,13 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (4 classes)
+// @memberjunction/ai-openai (5 classes)
 import {
     OpenAIAudioGenerator,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAIRealtime,
 } from '@memberjunction/ai-openai';
 
 // @memberjunction/ai-inception (1 classes)
@@ -166,7 +168,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (364 classes)
+// @memberjunction/core-entities (367 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -179,6 +181,7 @@ import {
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
@@ -198,6 +201,8 @@ import {
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionChannelEntity,
+    MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -824,7 +829,7 @@ import {
     TemplateEmbedExtension,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-agents (14 classes)
+// @memberjunction/ai-agents (15 classes)
 import {
     CSVToolLibrary,
     DataSnapshotToolLibrary,
@@ -838,6 +843,7 @@ import {
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
+    RealtimeAgentType,
     SearchResultSetToolLibrary,
     TextToolLibrary,
 } from '@memberjunction/ai-agents';
@@ -1032,6 +1038,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FireworksLLM,
     GeminiImageGenerator,
     GeminiLLM,
+    GeminiRealtime,
     GroqLLM,
     HeyGenVideoGenerator,
     LMStudioLLM,
@@ -1044,6 +1051,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAIRealtime,
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
@@ -1069,6 +1077,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
@@ -1088,6 +1097,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionChannelEntity,
+    MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -1636,6 +1647,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
+    RealtimeAgentType,
     SearchResultSetToolLibrary,
     TextToolLibrary,
     AgentArchitectAgent,
@@ -1795,7 +1807,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 770;
+export const CLASS_REGISTRATIONS_COUNT = 776;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

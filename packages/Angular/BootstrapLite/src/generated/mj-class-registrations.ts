@@ -17,7 +17,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (364 classes)
+// @memberjunction/core-entities (367 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -30,6 +30,7 @@ import {
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
@@ -49,6 +50,8 @@ import {
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionChannelEntity,
+    MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -455,11 +458,13 @@ import {
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-core-entity-forms (18 classes)
+// @memberjunction/ng-core-entity-forms (20 classes)
 import {
     FlowAgentFormSectionComponent,
+    MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
+    MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
     MJAIPromptRunFormComponentExtended,
     MJActionExecutionLogFormComponentExtended,
@@ -526,6 +531,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
@@ -545,6 +551,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionChannelEntity,
+    MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -918,8 +926,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MapViewType,
     TimelineViewType,
     FlowAgentFormSectionComponent,
+    MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
+    MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
     MJAIPromptRunFormComponentExtended,
     MJActionExecutionLogFormComponentExtended,
@@ -959,7 +969,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 440;
+export const CLASS_REGISTRATIONS_COUNT = 445;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
