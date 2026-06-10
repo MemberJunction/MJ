@@ -301,6 +301,26 @@ container (`PG_CONTAINER`) — for a CI PG service either point `PG_CONTAINER`
 at it or switch the scripts' `psql` helper to direct TCP (`psql -h`); the
 change is isolated to one function in each script.
 
+### App-layer smoke (2026-06-10)
+
+MJAPI (:4006) + Explorer (:4201) run interactively against a PG database built
+from this pipeline (`pg_app_test`, clone of the self-healed build). Login,
+navigation, list views, record forms exercised by a human with an error
+monitor on the API log: **zero SQL errors** beyond the two known background
+sprocs below. Anecdotal, not a substitute for the systematic suite (open item
+1), but the first interactive confirmation that the resolver/provider layer
+works against this pipeline's output.
+
+Two **runtime-impacting** Category-C gaps confirmed at boot (background
+subsystems, non-blocking for UI):
+- `__mj.spAcquireScheduledJobLock` missing → ScheduledJobEngine cannot
+  dispatch on PG (errors every poll cycle)
+- `__mj.spSweepStaleAIAgentRuns` / `__mj.spStampAIAgentRunHeartbeat` missing →
+  AgentRunWatchdog stale-run sweep and heartbeat fail
+
+Both are hand-written sprocs from the Category-C hand-port backlog — now
+prioritized by observed runtime impact rather than just census membership.
+
 ### Remaining open items
 
 1. **Behavioral suite against a PG-backed MJAPI** — the long-term gate above
