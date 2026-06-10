@@ -154,6 +154,19 @@ interface OAIResponseDone {
   response?: { usage?: Record<string, number> };
 }
 
+/**
+ * WebRTC-only playback events: the client audio buffer started/stopped PLAYING.
+ * Critical distinction from response.done (generation finished): audio plays at
+ * realtime while generation runs ahead, so the model can be "idle" while speech
+ * is still audibly coming out of the speaker.
+ */
+interface OAIOutputAudioBufferStarted {
+  type: 'output_audio_buffer.started';
+}
+interface OAIOutputAudioBufferStopped {
+  type: 'output_audio_buffer.stopped' | 'output_audio_buffer.cleared';
+}
+
 /** Provider-side error frame. */
 interface OAIErrorEvent {
   type: 'error';
@@ -173,6 +186,8 @@ type OpenAIRealtimeEvent =
   | OAIInputAudioBufferSpeechStarted
   | OAIResponseCreated
   | OAIResponseDone
+  | OAIOutputAudioBufferStarted
+  | OAIOutputAudioBufferStopped
   | OAIErrorEvent
   | OAIUnknownEvent;
 
@@ -255,6 +270,13 @@ export class VoiceSessionService {
    * answer was already spoken.
    */
   private inFlightCallIds = new Set<string>();
+  /**
+   * True while the model's audio is audibly PLAYING in the browser (WebRTC
+   * output_audio_buffer started/stopped). Narration must wait for this, not just
+   * responseActive — generation finishes ahead of playback, and a narration queued
+   * while speech is still playing comes out late and stale.
+   */
+  private audioPlaying = false;
   /** Timer for the deferred narration; cancelled when the delegation result lands first. */
   private narrationTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
@@ -597,6 +619,16 @@ export class VoiceSessionService {
         this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
         this.pendingNarrationKind = false;
         break;
+      case 'output_audio_buffer.started':
+        this.audioPlaying = true;
+        break;
+      case 'output_audio_buffer.stopped':
+      case 'output_audio_buffer.cleared':
+        this.audioPlaying = false;
+        if (this._connectionState$.value === 'speaking' && !this.responseActive) {
+          this._connectionState$.next('listening');
+        }
+        break;
       case 'response.done':
         // A turn finished — release the lock and speak any queued tool result so the
         // model always voices the answer when delegated work comes back.
@@ -893,9 +925,12 @@ export class VoiceSessionService {
     const message = this.pendingNarrationMessage;
     this.pendingNarrationMessage = null;
     const channel = this.dataChannel;
-    // responseActive check here (not at schedule time): the model may have gone busy/idle
-    // during the defer window; skipping is safe — the next progress event re-schedules.
-    if (!message || !channel || this.responseActive || message === this.lastNarratedMessage) {
+    // Checked at fire time (not schedule time): the model may have gone busy/idle during
+    // the defer window. audioPlaying matters as much as responseActive — generation ends
+    // before playback does, and a narration issued while speech is still playing queues
+    // behind it and comes out late/stale. Skipping is safe: the next progress event
+    // re-schedules, and if none comes the work is done and silence is correct.
+    if (!message || !channel || this.responseActive || this.audioPlaying || message === this.lastNarratedMessage) {
       return;
     }
     this.lastNarratedMessage = message;
@@ -962,6 +997,7 @@ export class VoiceSessionService {
     }
     this.cancelPendingNarration();
     this.inFlightCallIds.clear();
+    this.audioPlaying = false;
     this.lastDelegationNarrationAt = 0;
     this.lastNarratedMessage = '';
     this.responseActive = false;
