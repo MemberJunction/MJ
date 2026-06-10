@@ -57,6 +57,18 @@ export interface VoiceDelegationResult {
 }
 
 /**
+ * One EPHEMERAL spoken narration of delegated-run progress, emitted on
+ * {@link VoiceSessionService.DelegationNarration$}. These are the interim "here's what's
+ * happening" utterances the realtime model speaks while a delegation runs. By product
+ * decision they are NOT captions and NOT persisted as ConversationDetails — they exist
+ * only as a live note in the overlay, replaced by each newer narration.
+ */
+export interface VoiceDelegationNarration {
+  /** The narration transcript text. */
+  Text: string;
+}
+
+/**
  * Raw shape of the JSON `message` the server publishes on the push-status topic during a delegated run.
  * We filter on `resolver` + `type` before correlating by `agentSessionID`; normal agent runs publish
  * other shapes on the same topic and are ignored.
@@ -184,6 +196,8 @@ export class VoiceSessionService {
   private _active$ = new BehaviorSubject<boolean>(false);
   private _delegationProgress$ = new Subject<VoiceDelegationProgress>();
   private _delegationResult$ = new Subject<VoiceDelegationResult>();
+  private _delegationNarration$ = new Subject<VoiceDelegationNarration>();
+  private _agentName$ = new BehaviorSubject<string>('Sage');
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -198,6 +212,19 @@ export class VoiceSessionService {
   public readonly DelegationProgress$: Observable<VoiceDelegationProgress> = this._delegationProgress$.asObservable();
   /** Terminal result of a delegation, so the overlay can complete the working card with real content. */
   public readonly DelegationResult$: Observable<VoiceDelegationResult> = this._delegationResult$.asObservable();
+  /**
+   * EPHEMERAL spoken progress narrations (see {@link VoiceDelegationNarration}). These are
+   * deliberately kept OUT of {@link Captions$} and never relayed/persisted — the overlay
+   * renders them as a transient "live note" near the active working card.
+   */
+  public readonly DelegationNarration$: Observable<VoiceDelegationNarration> = this._delegationNarration$.asObservable();
+  /** Display name of the agent the active session fronts (set at session start). */
+  public readonly AgentName$: Observable<string> = this._agentName$.asObservable();
+
+  /** Synchronous access to the display name of the agent the active session fronts. */
+  public get CurrentAgentName(): string {
+    return this._agentName$.value;
+  }
 
   // ── WebRTC / session internals ─────────────────────────────────────────────
   private peerConnection: RTCPeerConnection | null = null;
@@ -223,6 +250,21 @@ export class VoiceSessionService {
   private responseActive = false;
   /** Set when a tool result is ready while a response is active; sent on the next response.done. */
   private pendingResultResponse = false;
+  /**
+   * Set by {@link requestProgressNarration} just before it sends its `response.create`,
+   * and CONSUMED by the very next `response.created` frame, which stamps
+   * {@link activeResponseKind} for that turn. Narration only fires while the model is idle
+   * (`!responseActive`), so under normal ordering the next `response.created` is ours.
+   */
+  private pendingNarrationKind = false;
+  /**
+   * The kind of the response currently in flight. Event ordering (confirmed against the
+   * handler flow): `response.created` → transcript deltas → `*_audio_transcript.done` →
+   * `response.done`. The transcript-done frame therefore arrives while the kind is still
+   * set, letting {@link onAssistantDone} classify the turn; `response.done` then resets
+   * the kind to `'normal'`.
+   */
+  private activeResponseKind: 'normal' | 'narration' = 'normal';
 
   private _provider: IMetadataProvider | null = null;
 
@@ -248,16 +290,23 @@ export class VoiceSessionService {
    * @param targetAgentId The agent the Voice Co-Agent voices on behalf of.
    * @param conversationId Optional existing conversation to bind + seed context from.
    * @param lastSessionId Optional prior session to chain to (resume / continuation).
+   * @param agentName Optional display name of the target agent — resolved by the caller
+   *   (which knows the conversation's routing context) and surfaced on {@link AgentName$}
+   *   so ANY host (composer trigger, chat-area overlay) can render it without re-resolving.
    */
   public async StartVoiceSession(
     targetAgentId: string,
     conversationId?: string | null,
-    lastSessionId?: string | null
+    lastSessionId?: string | null,
+    agentName?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
     }
 
+    if (agentName) {
+      this._agentName$.next(agentName);
+    }
     this.resetState();
     this._active$.next(true);
     this._connectionState$.next('connecting');
@@ -526,11 +575,18 @@ export class VoiceSessionService {
         break;
       case 'response.created':
         this.responseActive = true;
+        // Stamp the kind of THIS response: 'narration' only when the flag was set by
+        // requestProgressNarration immediately before its response.create (consumed here).
+        this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
+        this.pendingNarrationKind = false;
         break;
       case 'response.done':
         // A turn finished — release the lock and speak any queued tool result so the
         // model always voices the answer when delegated work comes back.
+        // The transcript-done frame for this turn has already arrived (it precedes
+        // response.done), so it's safe to reset the response kind here.
         this.responseActive = false;
+        this.activeResponseKind = 'normal';
         this.flushPendingResultResponse();
         if (this._connectionState$.value === 'speaking') {
           this._connectionState$.next('listening');
@@ -553,13 +609,24 @@ export class VoiceSessionService {
     this.pendingAssistantText += delta;
   }
 
-  /** Finalizes the assistant turn: push a caption + relay the final transcript. */
+  /**
+   * Finalizes the assistant turn. Normal turns push a caption + relay (persist) the
+   * transcript. NARRATION turns (interim delegated-progress speech triggered by
+   * {@link requestProgressNarration}) are EPHEMERAL by product decision: they are emitted
+   * on {@link DelegationNarration$} only — never a caption, never relayed/persisted.
+   * The transcript-done frame arrives BEFORE `response.done`, so {@link activeResponseKind}
+   * still reflects this turn's kind when we classify it here.
+   */
   private async onAssistantDone(transcript: string): Promise<void> {
     const finalText = transcript || this.pendingAssistantText;
     this.pendingAssistantText = '';
     if (finalText.trim().length > 0) {
-      this.appendCaption({ Role: 'Assistant', Text: finalText });
-      await this.relayTranscript('assistant', finalText);
+      if (this.activeResponseKind === 'narration') {
+        this._delegationNarration$.next({ Text: finalText });
+      } else {
+        this.appendCaption({ Role: 'Assistant', Text: finalText });
+        await this.relayTranscript('assistant', finalText);
+      }
     }
     if (this._connectionState$.value === 'speaking') {
       this._connectionState$.next('listening');
@@ -802,9 +869,15 @@ export class VoiceSessionService {
     });
   }
 
-  /** Triggers a short spoken update that conveys THIS specific progress message naturally. */
+  /**
+   * Triggers a short spoken update that conveys THIS specific progress message naturally.
+   * Marks the upcoming response as 'narration' (flag consumed by the next `response.created`)
+   * so its transcript is treated as EPHEMERAL — surfaced on {@link DelegationNarration$}
+   * instead of becoming a caption / persisted ConversationDetail.
+   */
   private requestProgressNarration(channel: RTCDataChannel, message: string): void {
     this.responseActive = true;
+    this.pendingNarrationKind = true;
     this.sendEvent(channel, {
       type: 'response.create',
       response: {
@@ -831,6 +904,8 @@ export class VoiceSessionService {
     this.lastNarratedMessage = '';
     this.responseActive = false;
     this.pendingResultResponse = false;
+    this.pendingNarrationKind = false;
+    this.activeResponseKind = 'normal';
   }
 
   // ── Teardown ───────────────────────────────────────────────────────────────

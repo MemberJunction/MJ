@@ -302,6 +302,12 @@
       </mj-pinned-messages-panel>
     }
   </div>
+
+  <!-- Live voice "call mode" overlay — fills this conversation panel in place
+       (header + thread + composer) while a realtime session is active. -->
+  @if (VoiceSession.Active$ | async) {
+    <mj-realtime-session-overlay [AgentName]="VoiceSession.CurrentAgentName"></mj-realtime-session-overlay>
+  }
 </div>
 
 <!-- Thread Panel -->

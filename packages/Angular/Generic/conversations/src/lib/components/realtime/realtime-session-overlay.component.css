@@ -2,45 +2,69 @@
   display: contents;
 }
 
-/* Fixed, dimmed/blurred backdrop covering the conversation panel. The host renders this
-   inside the conversation panel's stacking context; inset:0 + position:fixed make it cover
-   the panel while the page chrome stays above (the conversation area is what gets dimmed). */
+/* Fills the conversation panel IN PLACE: the chat area host provides the positioned
+   context (position:relative on .chat-area) and this covers it edge to edge — header,
+   thread and composer included. Opaque-ish page surface with a slight blur so the
+   conversation underneath reads as "paused", not as an app-wide modal. */
 .call-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 1000;
+  z-index: 50;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  background: var(--mj-bg-overlay, rgba(2, 6, 23, 0.82));
+  background: color-mix(in srgb, var(--mj-bg-page) 94%, transparent);
   backdrop-filter: blur(8px);
-  padding: 22px;
+  overflow: hidden;
 }
 
-.call-panel {
-  width: 100%;
-  max-width: 760px;
-  margin-top: 4vh;
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-strong);
-  border-radius: var(--mj-radius-2xl, 24px);
-  box-shadow: var(--mj-shadow-2xl, 0 30px 60px -12px rgba(0, 0, 0, 0.7));
+/* MAIN column: banner (top) → scrolling thread → channel strip → composer → controls */
+.call-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  max-height: calc(100vh - 120px);
 }
 
 .call-body {
   flex: 1;
   overflow-y: auto;
-  padding: 22px;
-  min-height: 160px;
+  padding: 16px 22px;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mj-border-strong) transparent;
+}
+.call-body::-webkit-scrollbar {
+  width: 6px;
+}
+.call-body::-webkit-scrollbar-thumb {
+  background: var(--mj-border-strong);
+  border-radius: 3px;
 }
 
 .call-connecting {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 0;
+  height: 100%;
+  min-height: 160px;
+}
+
+/* Ephemeral narration shown under the banner when no working card anchors it */
+.banner-live-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 22px 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--mj-text-muted);
+  animation: overlay-note-in 220ms ease;
+}
+.banner-live-note i {
+  font-size: 10px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+@keyframes overlay-note-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }

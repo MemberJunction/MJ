@@ -32,7 +32,5 @@
   </mj-message-input-box>
 </div>
 
-<!-- Live voice session "call mode" overlay (rendered only while a session is active) -->
-@if (voiceActive) {
-  <mj-realtime-session-overlay [AgentName]="voiceAgentName" (Ended)="onVoiceEnded()"></mj-realtime-session-overlay>
-}
+<!-- The voice "call mode" overlay is hosted by <mj-conversation-chat-area> (it fills the
+     whole conversation panel in place); this component only owns the trigger wiring. -->

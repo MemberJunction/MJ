@@ -202,41 +202,22 @@
   }
 }
 
-/* Voice (orb) button — sits in the attach-buttons cluster, left of send.
-   Inherits .attach-button-icon base; renders a glowing gradient orb (more apt than a
-   mic) with a soft pulsing glow, echoing the live-session call orb. Active state intensifies
-   the glow + ring while a realtime voice session is live. */
-.voice-orb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  position: relative;
-  flex-shrink: 0;
-  background: radial-gradient(circle at 35% 30%,
-    var(--mj-brand-accent, var(--mj-brand-primary)),
-    var(--mj-brand-primary) 65%,
-    var(--mj-brand-primary-active, var(--mj-brand-primary)));
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent),
-    0 0 8px color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
-  animation: voice-orb-pulse 2.2s ease-in-out infinite;
+/* Voice call button — a phone icon in the attach-buttons cluster, left of send.
+   Inherits .attach-button-icon base. Subtle brand glow on hover; active state (call
+   live) renders a brand-color tint. The orb visual now lives ONLY inside the call
+   overlay's banner. */
+.voice-button-icon i {
+  color: var(--mj-brand-primary);
 }
-.attach-button-icon:disabled .voice-orb {
-  animation: none;
-  filter: grayscale(0.6);
+.voice-button-icon:hover:not(:disabled) i {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mj-brand-primary) 55%, transparent));
+}
+.voice-button-icon:disabled i {
+  color: var(--mj-text-disabled);
 }
 .voice-button-icon--active {
   background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
 }
 .voice-button-icon--active:hover:not(:disabled) {
   background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
-}
-.voice-button-icon--active .voice-orb {
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 22%, transparent),
-    0 0 12px color-mix(in srgb, var(--mj-brand-primary) 60%, transparent);
-}
-@keyframes voice-orb-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent), 0 0 8px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent); }
-  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 22%, transparent), 0 0 14px color-mix(in srgb, var(--mj-brand-primary) 60%, transparent); }
 }

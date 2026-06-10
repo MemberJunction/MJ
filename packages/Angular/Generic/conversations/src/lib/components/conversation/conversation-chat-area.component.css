@@ -10,6 +10,8 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  /* Positioned context for the in-place realtime "call mode" overlay (absolute inset:0) */
+  position: relative;
 }
 
 .chat-header {

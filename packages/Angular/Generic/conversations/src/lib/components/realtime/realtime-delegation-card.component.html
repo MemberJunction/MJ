@@ -1,57 +1,54 @@
 @if (!Card.Done) {
-  <!-- WORKING card (live step progress) -->
+  <!-- WORKING — compact live card -->
   <div class="work-card" role="status" aria-live="polite">
     <div class="work-card__head">
-      <div class="avatar avatar--sage">{{ Card.AgentName.charAt(0) }}</div>
-      <div class="work-card__id">
-        <div class="work-card__title">
-          <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
-          {{ Card.AgentName }} is working…
-        </div>
-        <div class="work-card__sub">Child run of this session</div>
-      </div>
-      <span class="pill pill--sage">
-        <i class="fa-solid fa-bolt" aria-hidden="true"></i> Running
+      <div class="avatar" aria-hidden="true">{{ Card.AgentName.charAt(0) }}</div>
+      <div class="work-card__title">{{ Card.AgentName }} is working…</div>
+      <span class="pill pill--running">
+        <i class="fa-solid fa-spinner spin" aria-hidden="true"></i> Running
       </span>
     </div>
-    <div class="work-steps">
-      <div class="work-step work-step--active">
-        <span class="si"><i class="fa-solid fa-spinner" aria-hidden="true"></i></span>
-        {{ StepLabel(Card.LatestStep) }}
-      </div>
-      @if (Card.LatestMessage) {
-        <div class="work-step__message">{{ Card.LatestMessage }}</div>
+    <div class="work-card__step">{{ StepLabel }}</div>
+    @if (ShowDetailLine) {
+      <div class="work-card__detail">{{ Card.LatestMessage }}</div>
+    }
+    <div class="work-progress" [class.work-progress--indeterminate]="Card.Percentage == null">
+      @if (Card.Percentage != null) {
+        <div class="work-progress__fill" [style.width.%]="Card.Percentage"></div>
+      } @else {
+        <div class="work-progress__fill work-progress__fill--slide"></div>
       }
     </div>
-    @if (Card.Percentage != null) {
-      <div class="work-progress">
-        <div class="work-progress__fill" [style.width.%]="Card.Percentage"></div>
-      </div>
-    }
   </div>
 } @else {
-  <!-- DONE — provenance-stamped completion -->
-  <div class="provenance">
-    <div class="result-card">
-      <div class="result-card__head">
-        <div class="avatar avatar--sage avatar--xs">{{ Card.AgentName.charAt(0) }}</div>
-        <span class="result-card__name">{{ Card.AgentName }} finished</span>
-        <span class="via-tag">
-          <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
-          via {{ Card.AgentName }}@if (Card.RunRef) { · run {{ Card.RunRef }} }
-        </span>
-      </div>
-      <div class="result-card__body">
-        @if (Result) {
-          {{ Result }}
-        } @else {
-          {{ Card.LatestMessage || (Card.AgentName + ' completed the delegated work.') }}
+  <!-- DONE / FAILED — collapsed single-line chip, expandable inline -->
+  <div class="done">
+    <button type="button"
+            class="done-chip"
+            [class.done-chip--failed]="!Card.Success"
+            (click)="ToggleExpanded()"
+            [attr.aria-expanded]="Expanded"
+            [title]="Expanded ? 'Collapse result' : 'Expand result'">
+      <i class="fa-solid done-chip__mark" [ngClass]="Card.Success ? 'fa-check' : 'fa-xmark'" aria-hidden="true"></i>
+      <span class="done-chip__agent">{{ Card.AgentName }}</span>
+      <span class="done-chip__sep" aria-hidden="true">·</span>
+      <span class="done-chip__preview">{{ ResultPreview }}</span>
+      <span class="via-badge">
+        <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
+        via {{ Card.AgentName }}
+      </span>
+      <i class="fa-solid done-chip__chev" [ngClass]="Expanded ? 'fa-chevron-up' : 'fa-chevron-down'" aria-hidden="true"></i>
+    </button>
+    @if (Expanded) {
+      <div class="done-detail">
+        <div class="done-detail__body">{{ ResultText }}</div>
+        @if (Card.RunRef) {
+          <div class="done-detail__meta">
+            <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
+            via {{ Card.AgentName }} · run {{ Card.RunRef }}
+          </div>
         }
       </div>
-    </div>
-    <div class="provenance__note">
-      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-      Result produced by {{ Card.AgentName }}'s own agent run — not invented by the voice co-agent.
-    </div>
+    }
   </div>
 }

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
@@ -29,6 +29,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
+import { VoiceSessionService } from '../../services/voice-session.service';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** Default width (percentage) for the artifact viewer pane */
@@ -441,6 +442,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private engine = ConversationEngine.Instance;
 
+  /**
+   * Voice session service — exposed to the template so the realtime "call mode"
+   * overlay can be hosted here (it fills this conversation panel in place while
+   * `Active$` is true). The trigger wiring lives in <mj-message-input>.
+   */
+  public readonly VoiceSession = inject(VoiceSessionService);
 
   constructor(
     private agentStateService: AgentStateService,

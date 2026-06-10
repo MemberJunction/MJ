@@ -309,11 +309,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Display name of the agent the voice session fronts, for the overlay banner +
-   * delegation cards. Resolves the current agent ID to its name from the available
-   * agents, falling back to Sage (the conversation manager) and finally "Sage".
+   * Display name of the agent the voice session fronts. Resolved here (this component
+   * owns the conversation's routing context) and passed to VoiceSessionService at
+   * session start so the chat-area-hosted overlay can read it from the service.
    */
-  public get voiceAgentName(): string {
+  private resolveVoiceAgentName(): string {
     const agentId = this.resolveCurrentAgentId();
     if (agentId) {
       const match = this.mentionAutocomplete
@@ -329,7 +329,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /**
    * Start a real-time voice session fronting the conversation's current agent.
    * Client-direct: the VoiceSessionService mints an ephemeral token and connects
-   * the browser straight to the realtime provider over WebRTC.
+   * the browser straight to the realtime provider over WebRTC. The "call mode"
+   * overlay itself is hosted by the conversation chat area (driven by Active$).
    */
   public async onStartVoice(): Promise<void> {
     if (!this.canStartVoice) {
@@ -341,16 +342,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return;
     }
     try {
-      await this.voiceSession.StartVoiceSession(targetAgentId, this.conversationId);
+      await this.voiceSession.StartVoiceSession(
+        targetAgentId,
+        this.conversationId,
+        null,
+        this.resolveVoiceAgentName()
+      );
     } catch (error) {
       console.error('Failed to start voice session:', error);
       this.toastService.error('Could not start the voice session.');
     }
-  }
-
-  /** Overlay emitted "Ended" — nothing extra to do; Active$ already flipped false. */
-  public onVoiceEnded(): void {
-    // no-op: voiceActive is driven by the Active$ subscription
   }
 
   /**

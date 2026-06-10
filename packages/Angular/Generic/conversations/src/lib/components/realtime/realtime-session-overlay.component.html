@@ -1,11 +1,18 @@
 @if (ConnectionState$ | async; as state) {
-  <div class="call-overlay" role="dialog" aria-label="Live voice session">
-    <div class="call-panel">
+  <div class="call-overlay" role="region" aria-label="Live voice session">
 
-      <!-- Identity header + glowing turn-state orb -->
+    <!-- MAIN column: banner → thread → channel strip → in-call composer → controls -->
+    <div class="call-main">
       <mj-realtime-agent-banner [State]="state" [AgentName]="AgentName"></mj-realtime-agent-banner>
 
-      <!-- Body: connecting screen, or the unified live thread -->
+      <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
+      @if (State.Narration && !State.ActiveCallId) {
+        <div class="banner-live-note" role="status" aria-live="polite">
+          <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+          {{ State.Narration }}
+        </div>
+      }
+
       <div class="call-body">
         @if (state === 'connecting') {
           <div class="call-connecting">
@@ -13,6 +20,7 @@
           </div>
         } @else {
           <mj-realtime-session-thread
+            [State]="State"
             [AgentName]="AgentName"
             [ShowCaptions]="ShowCaptions">
           </mj-realtime-session-thread>
@@ -31,7 +39,10 @@
         (CaptionsToggled)="OnCaptionsToggled($event)"
         (Ended)="OnEnded()">
       </mj-realtime-controls>
-
     </div>
+
+    <!-- RIGHT RAIL: all tool/agent calls of the session, newest first (collapsible) -->
+    <mj-realtime-activity-rail [State]="State"></mj-realtime-activity-rail>
+
   </div>
 }

@@ -2,11 +2,9 @@
   <div class="agent-orb" [attr.data-state]="OrbState(State)" aria-hidden="true"></div>
 
   <div class="banner__id">
-    <div class="banner__name">
-      Voice for {{ AgentName }}
-      <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
-    </div>
-    <div class="banner__for">Speaking as <b>{{ AgentName }}</b> · the ambient helper in MemberJunction</div>
+    <span class="banner__name">Voice for {{ AgentName }}</span>
+    <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
+    <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
   </div>
 
   <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">

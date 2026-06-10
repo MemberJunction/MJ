@@ -1,5 +1,5 @@
 <div class="thread">
-  @for (item of Items; track TrackItem($index, item)) {
+  @for (item of State.Items; track TrackItem($index, item)) {
     @switch (item.Kind) {
       @case ('caption') {
         @if (ShowCaptions) {
@@ -19,7 +19,16 @@
         }
       }
       @case ('delegation') {
-        <mj-realtime-delegation-card [Card]="item.Card" [Result]="item.Card.Result ?? null"></mj-realtime-delegation-card>
+        <div class="delegation-block">
+          <mj-realtime-delegation-card [Card]="item.Card"></mj-realtime-delegation-card>
+          @if (ShowsLiveNote(item)) {
+            <!-- Ephemeral narration: latest only, never persisted, fades with completion -->
+            <div class="live-note" role="status" aria-live="polite">
+              <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+              {{ State.Narration }}
+            </div>
+          }
+        </div>
       }
     }
   } @empty {
