@@ -29,11 +29,6 @@
       "sha256": "74756b6cefe6b85303364a7c6253dee8fc790f49174e08fc8aa6318992e8787c"
     },
     {
-      "path": ".claude/commands/generate-integration-actions.md",
-      "bytes": 6486,
-      "sha256": "ad456f44dc8c2a1698b7398431cf8dafd2b225c3d11c3c6e504247b5344f7ace"
-    },
-    {
       "path": ".claude/commands/new-branch.md",
       "bytes": 5354,
       "sha256": "ef2abccf510f34144cd47b0a726320d991c9545b6dd8fd256f4b5b1346fda3c7"
