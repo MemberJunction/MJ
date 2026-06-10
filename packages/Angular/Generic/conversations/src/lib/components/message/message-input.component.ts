@@ -309,6 +309,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
+   * Display name of the agent the voice session fronts, for the overlay banner +
+   * delegation cards. Resolves the current agent ID to its name from the available
+   * agents, falling back to Sage (the conversation manager) and finally "Sage".
+   */
+  public get voiceAgentName(): string {
+    const agentId = this.resolveCurrentAgentId();
+    if (agentId) {
+      const match = this.mentionAutocomplete
+        .getAvailableAgents()
+        .find(a => UUIDsEqual(a.ID, agentId));
+      if (match?.Name) {
+        return match.Name;
+      }
+    }
+    return this.converationManagerAgent?.Name ?? 'Sage';
+  }
+
+  /**
    * Start a real-time voice session fronting the conversation's current agent.
    * Client-direct: the VoiceSessionService mints an ephemeral token and connects
    * the browser straight to the realtime provider over WebRTC.

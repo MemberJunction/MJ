@@ -1,0 +1,28 @@
+<div class="controls">
+  <div class="ctrl-group">
+    <button type="button" class="ctrl" [class.ctrl--muted]="IsMuted"
+            (click)="ToggleMute()"
+            [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
+            [attr.aria-pressed]="IsMuted">
+      <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label">{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
+  </div>
+
+  <div class="ctrl-group">
+    <button type="button" class="ctrl" [class.ctrl--on]="CaptionsOn"
+            (click)="ToggleCaptions()"
+            [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+            [attr.aria-pressed]="CaptionsOn">
+      <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label">Captions</span>
+  </div>
+
+  <div class="ctrl-group">
+    <button type="button" class="ctrl ctrl--end" (click)="EndCall()" title="End call" aria-label="End call">
+      <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label ctrl-label--end">End call</span>
+  </div>
+</div>

@@ -1,0 +1,29 @@
+<div class="thread">
+  @for (item of Items; track TrackItem($index, item)) {
+    @switch (item.Kind) {
+      @case ('caption') {
+        @if (ShowCaptions) {
+          <div class="turn" [class.turn--user]="item.Role === 'User'" [class.turn--agent]="item.Role === 'Assistant'">
+            <div class="turn-avatar">{{ item.Role === 'User' ? 'You'.charAt(0) : AgentName.charAt(0) }}</div>
+            <div class="turn-body">
+              <div class="turn-meta">
+                @if (item.Role === 'User') {
+                  <span class="typed-tag">You</span>
+                } @else {
+                  {{ AgentName }} <span class="muted">· voice</span>
+                }
+              </div>
+              <div class="bubble">{{ item.Text }}</div>
+            </div>
+          </div>
+        }
+      }
+      @case ('delegation') {
+        <mj-realtime-delegation-card [Card]="item.Card"></mj-realtime-delegation-card>
+      }
+    }
+  } @empty {
+    <div class="thread-empty">The live transcript and any delegated work will appear here.</div>
+  }
+  <div #scrollAnchor></div>
+</div>

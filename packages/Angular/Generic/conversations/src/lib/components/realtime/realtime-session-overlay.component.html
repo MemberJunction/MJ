@@ -1,0 +1,37 @@
+@if (ConnectionState$ | async; as state) {
+  <div class="call-overlay" role="dialog" aria-label="Live voice session">
+    <div class="call-panel">
+
+      <!-- Identity header + glowing turn-state orb -->
+      <mj-realtime-agent-banner [State]="state" [AgentName]="AgentName"></mj-realtime-agent-banner>
+
+      <!-- Body: connecting screen, or the unified live thread -->
+      <div class="call-body">
+        @if (state === 'connecting') {
+          <div class="call-connecting">
+            <mj-loading text="Connecting to the live session…" size="medium"></mj-loading>
+          </div>
+        } @else {
+          <mj-realtime-session-thread
+            [AgentName]="AgentName"
+            [ShowCaptions]="ShowCaptions">
+          </mj-realtime-session-thread>
+        }
+      </div>
+
+      <!-- Active channels -->
+      <mj-realtime-channel-strip></mj-realtime-channel-strip>
+
+      <!-- In-session text composer (joins the SAME call) -->
+      <mj-realtime-composer></mj-realtime-composer>
+
+      <!-- Call controls -->
+      <mj-realtime-controls
+        [CaptionsOn]="ShowCaptions"
+        (CaptionsToggled)="OnCaptionsToggled($event)"
+        (Ended)="OnEnded()">
+      </mj-realtime-controls>
+
+    </div>
+  </div>
+}

@@ -32,7 +32,7 @@
   </mj-message-input-box>
 </div>
 
-<!-- Live voice session overlay (rendered only while a session is active) -->
+<!-- Live voice session "call mode" overlay (rendered only while a session is active) -->
 @if (voiceActive) {
-  <mj-voice-overlay (Ended)="onVoiceEnded()"></mj-voice-overlay>
+  <mj-realtime-session-overlay [AgentName]="voiceAgentName" (Ended)="onVoiceEnded()"></mj-realtime-session-overlay>
 }

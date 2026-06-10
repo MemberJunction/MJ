@@ -1,0 +1,69 @@
+:host {
+  display: block;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 16px 22px 22px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ctrl {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 150ms ease;
+}
+.ctrl:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.ctrl--on {
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+.ctrl--muted {
+  background: var(--mj-status-warning-bg);
+  border-color: var(--mj-status-warning);
+  color: var(--mj-status-warning);
+}
+.ctrl--end {
+  width: 60px;
+  height: 60px;
+  background: var(--mj-status-error);
+  border-color: var(--mj-status-error);
+  color: var(--mj-text-inverse, #fff);
+  font-size: 20px;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mj-status-error) 40%, transparent);
+}
+.ctrl--end:hover {
+  background: var(--mj-status-error);
+  filter: brightness(0.92);
+}
+
+.ctrl-label {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  text-align: center;
+  margin-top: 6px;
+  font-weight: 500;
+}
+.ctrl-label--end {
+  color: var(--mj-status-error);
+}

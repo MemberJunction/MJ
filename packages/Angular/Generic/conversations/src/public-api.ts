@@ -69,3 +69,11 @@ export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
 export * from './lib/components/voice/voice-overlay.component';
+// Real-time "call mode" overlay + its componentized parts
+export * from './lib/components/realtime/realtime-session-overlay.component';
+export * from './lib/components/realtime/realtime-agent-banner.component';
+export * from './lib/components/realtime/realtime-session-thread.component';
+export * from './lib/components/realtime/realtime-delegation-card.component';
+export * from './lib/components/realtime/realtime-composer.component';
+export * from './lib/components/realtime/realtime-channel-strip.component';
+export * from './lib/components/realtime/realtime-controls.component';

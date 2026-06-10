@@ -67,8 +67,10 @@
           [disabled]="!canStartVoice"
           (click)="onVoiceClick(); $event.stopPropagation()"
           [title]="voiceActive ? 'Voice session active' : 'Start voice'"
+          aria-label="Start voice session"
           >
-          <i class="fa-solid fa-microphone"></i>
+          <!-- Glowing orb (more apt than a mic) — a gradient circle with a soft pulsing glow -->
+          <span class="voice-orb" aria-hidden="true"></span>
         </button>
         }
       </div>

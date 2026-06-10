@@ -271,6 +271,48 @@ export class VoiceSessionService {
     await this.teardown(true);
   }
 
+  /**
+   * Inject a typed message into the live session as a user turn.
+   *
+   * Decomposed into three steps, each mirroring an existing voice path so the typed
+   * turn behaves identically to a spoken one:
+   *  1. Send a `conversation.item.create` `message` item (role 'user', `input_text`)
+   *     over the data channel so the model treats the text as user input.
+   *  2. Trigger a response the SAME way tool results do — {@link requestResultResponse} —
+   *     so it queues behind any in-flight response (progress narration / prior turn)
+   *     instead of colliding with a second `response.create`.
+   *  3. Relay the turn through the same caption + transcript paths user speech uses
+   *     ({@link onUserTranscript}) so it shows in the live thread AND persists to MJ.
+   *
+   * No-op when no session is open / the data channel isn't ready, or when the text is empty.
+   */
+  public SendText(text: string): void {
+    const trimmed = text?.trim() ?? '';
+    if (trimmed.length === 0) {
+      return;
+    }
+    const channel = this.dataChannel;
+    if (!channel || channel.readyState !== 'open') {
+      return;
+    }
+    this.injectUserTextItem(channel, trimmed);
+    this.requestResultResponse();
+    // Relay as a user turn — same path spoken input uses (caption + persisted transcript).
+    void this.onUserTranscript(trimmed);
+  }
+
+  /** Sends the typed text as a user-role `message` conversation item over the data channel. */
+  private injectUserTextItem(channel: RTCDataChannel, text: string): void {
+    this.sendEvent(channel, {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text }]
+      }
+    });
+  }
+
   /** Mute / unmute the local microphone track. Returns the new muted state. */
   public ToggleMute(): boolean {
     const tracks = this.localStream?.getAudioTracks() ?? [];
