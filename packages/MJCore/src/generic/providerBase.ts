@@ -160,6 +160,50 @@ export type OrganicKeyMetadataRow = BaseMetadataRow & {
 export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
 
 /**
+ * Projects plain-object rows down to a caller-requested field subset, matching
+ * field names case-insensitively (and ignoring surrounding whitespace).
+ *
+ * Used by the RunView caching pipeline: when a query is cacheable, the provider
+ * widens `params.Fields` to ALL entity fields so the cache entry is a universal
+ * superset that satisfies any future field subset. This helper restores the
+ * caller's originally requested shape — on cache hits (filtering the cached
+ * superset) AND on cache misses (filtering the widened DB result) — so callers
+ * always receive the same columns regardless of cache temperature.
+ *
+ * Returns the original array untouched when no projection is requested
+ * (`requestedFields` null/empty) or there are no rows. Never mutates input rows.
+ *
+ * @param rows - Plain-object result rows (NOT BaseEntity objects)
+ * @param requestedFields - The caller's original Fields list, or null for "all fields"
+ */
+export function ProjectRowsToFields<T = Record<string, unknown>>(
+    rows: T[],
+    requestedFields: string[] | null | undefined
+): T[] {
+    if (!requestedFields || requestedFields.length === 0 || !rows || rows.length === 0) {
+        return rows;
+    }
+    const requestedFieldSet = new Set(requestedFields.map(f => f.trim().toLowerCase()));
+    // Cache lowercase key→keep decisions across rows to avoid repeated allocations
+    const keyCache = new Map<string, boolean>();
+    return rows.map((row) => {
+        const source = row as Record<string, unknown>;
+        const filtered: Record<string, unknown> = {};
+        for (const key of Object.keys(source)) {
+            let keep = keyCache.get(key);
+            if (keep === undefined) {
+                keep = requestedFieldSet.has(key.toLowerCase());
+                keyCache.set(key, keep);
+            }
+            if (keep) {
+                filtered[key] = source[key];
+            }
+        }
+        return filtered as T;
+    });
+}
+
+/**
  * Base class for all metadata providers in MemberJunction.
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
@@ -1454,6 +1498,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired';
         cachedResult?: RunViewResult;
         fingerprint?: string;
+        /**
+         * The caller's original Fields list (lowercased), captured before PreRunView
+         * widened params.Fields to all entity fields for cache-superset storage.
+         * Non-null ONLY when that widening actually happened — PostRunView uses it
+         * to project cache-miss DB results back down to the requested shape.
+         */
+        callerRequestedFields?: string[] | null;
     };
 
     /**
@@ -1469,6 +1520,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         smartCacheCheckParams?: RunViewWithCacheCheckParams[];
         /** When CacheLocal is enabled, indicates we should use smart cache check */
         useSmartCacheCheck?: boolean;
+        /**
+         * Per-param-index caller Fields lists (lowercased), captured before PreRunViews
+         * widened params.Fields to all entity fields for cache-superset storage.
+         * An index is present ONLY when that widening actually happened — PostRunViews
+         * uses it to project cache-miss DB results back down to the requested shape.
+         */
+        callerFieldsMap?: Map<number, string[]>;
     };
 
     /**
@@ -1648,23 +1706,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Filter cached results to only the caller's requested fields (if specified)
                 let results = cached.results;
                 if (callerRequestedFields && params.ResultType !== 'entity_object') {
-                    // Cache lowercase key→keep decisions across rows to avoid repeated allocations
-                    const requestedFieldSet = new Set(callerRequestedFields);
-                    const keyCache = new Map<string, boolean>();
-                    results = results.map((row: Record<string, unknown>) => {
-                        const filtered: Record<string, unknown> = {};
-                        for (const key of Object.keys(row)) {
-                            let keep = keyCache.get(key);
-                            if (keep === undefined) {
-                                keep = requestedFieldSet.has(key.toLowerCase());
-                                keyCache.set(key, keep);
-                            }
-                            if (keep) {
-                                filtered[key] = row[key];
-                            }
-                        }
-                        return filtered;
-                    });
+                    results = ProjectRowsToFields(results, callerRequestedFields);
                 }
 
                 // Reconstruct RunViewResult from cached data
@@ -1697,7 +1739,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             telemetryEventId,
             cacheStatus,
             cachedResult,
-            fingerprint
+            fingerprint,
+            // Only non-null when params.Fields was actually widened above — tells
+            // PostRunView to project cache-miss DB results back to the caller's shape
+            callerRequestedFields: (entity && willCache) ? callerRequestedFields : null
         };
     }
 
@@ -1746,6 +1791,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Traditional caching flow
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
+        const callerFieldsMap = new Map<number, string[]>();
         const uncachedParams: RunViewParams[] = [];
         const cachedResults: (RunViewResult | null)[] = [];
         let allCached = true;
@@ -1775,6 +1821,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 batchEntityCacheAllowed;
             if (batchEntity && batchWillCache) {
                 param.Fields = batchEntity.Fields.map(f => f.Name);
+                // Remember the caller's original shape so PostRunViews can project
+                // cache-miss DB results back down to it
+                if (callerFields) {
+                    callerFieldsMap.set(i, callerFields);
+                }
             }
 
             // Check local cache if enabled or if server trusts its cache completely
@@ -1788,24 +1839,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // Filter cached results to caller's requested fields (if specified and not entity_object)
                     let results = cached.results;
                     if (callerFields && param.ResultType !== 'entity_object') {
-                        // ⚡ Bolt: Cache key-to-lowercase string resolutions to eliminate O(n*c) string allocations and array search operations.
-                        // This improves post-cache filtering by ~40-50% for large datasets with many columns.
-                        const requestedFieldSet = new Set(callerFields);
-                        const keyCache = new Map<string, boolean>();
-                        results = results.map((row: Record<string, unknown>) => {
-                            const filtered: Record<string, unknown> = {};
-                            for (const key of Object.keys(row)) {
-                                let keep = keyCache.get(key);
-                                if (keep === undefined) {
-                                    keep = requestedFieldSet.has(key.toLowerCase());
-                                    keyCache.set(key, keep);
-                                }
-                                if (keep) {
-                                    filtered[key] = row[key];
-                                }
-                            }
-                            return filtered;
-                        });
+                        results = ProjectRowsToFields(results, callerFields);
                     }
 
                     const cachedViewResult: RunViewResult = {
@@ -1848,7 +1882,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ? cachedResults.filter(r => r !== null) as RunViewResult[]
                 : (hasCacheHits ? cachedResults as RunViewResult[] : undefined),
             uncachedParams: allCached ? undefined : uncachedParams,
-            cacheStatusMap
+            cacheStatusMap,
+            callerFieldsMap: callerFieldsMap.size > 0 ? callerFieldsMap : undefined
         };
     }
 
@@ -2291,6 +2326,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
 
+        // Project cache-miss DB results back down to the caller's originally requested
+        // fields. PreRunView widened params.Fields to ALL entity fields so the cache
+        // entry (written above) is a universal superset — but the caller must receive
+        // the same shape on a miss as they do on a hit (which projects from cache).
+        // Must run AFTER the cache writes (cache keeps the superset) and only for
+        // plain-object results (entity objects need all fields).
+        if (result.Success && preResult.callerRequestedFields && params.ResultType !== 'entity_object') {
+            result.Results = ProjectRowsToFields(result.Results, preResult.callerRequestedFields);
+        }
+
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
@@ -2379,6 +2424,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
         await Promise.all(cachePromises);
+
+        // Project cache-miss DB results back down to each caller's originally
+        // requested fields. PreRunViews widened those params' Fields to ALL entity
+        // fields so the cache entries (written above) are universal supersets — but
+        // callers must receive the same shape on a miss as on a hit (which projects
+        // from cache). Skip hits (already projected) and entity_object results
+        // (need all fields).
+        if (preResult.callerFieldsMap) {
+            for (let i = 0; i < results.length; i++) {
+                const cacheInfo = preResult.cacheStatusMap?.get(i);
+                if (cacheInfo?.status === 'hit') {
+                    continue;
+                }
+                const callerFields = preResult.callerFieldsMap.get(i);
+                if (callerFields && results[i].Success && params[i].ResultType !== 'entity_object') {
+                    results[i].Results = ProjectRowsToFields(results[i].Results, callerFields);
+                }
+            }
+        }
 
         // Transform results to entity objects AFTER caching plain objects.
         // Skip results that came from cache hits — they're already entity objects.
