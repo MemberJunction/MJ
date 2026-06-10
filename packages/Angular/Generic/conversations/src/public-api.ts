@@ -80,6 +80,7 @@ export * from './lib/components/realtime/realtime-delegation-card.component';
 export * from './lib/components/realtime/realtime-activity-rail.component';
 export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
+export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-composer.component';
 export * from './lib/components/realtime/realtime-channel-strip.component';
 export * from './lib/components/realtime/realtime-controls.component';

@@ -14,6 +14,9 @@
   flex: 1;
   min-height: 0;
   height: 100%;
+  /* width container — drives the status footer's narrow-width collapse rules */
+  container-type: inline-size;
+  container-name: wb-host;
 }
 
 /* ---------- board header row ---------- */
@@ -144,17 +147,21 @@
   overflow: hidden;
 }
 
-/* ---------- agent action toast ---------- */
+/* ---------- agent action toast ----------
+   Bottom-center, raised ABOVE the zoom cluster's row (cluster: bottom 14px + ~38px
+   tall) so the two can never collide, and width-capped clear of the cluster at the
+   board's right edge. Sits just above the status footer per the mockup. */
 .board-toast {
   position: absolute;
   left: 50%;
-  bottom: 16px;
+  bottom: 64px;
   transform: translateX(-50%);
   z-index: 9;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 8px 16px;
+  max-width: calc(100% - 32px);
   border-radius: var(--mj-radius-full, 9999px);
   background: var(--sage-chip-bg);
   border: 1px solid var(--sage-border);
@@ -164,6 +171,19 @@
   box-shadow: var(--mj-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.3));
   animation: wb-toast-fade 300ms ease both;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-toast > i {
+  flex-shrink: 0;
+}
+.board-toast__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-toast .undo {
+  flex-shrink: 0;
 }
 @keyframes wb-toast-fade {
   from { opacity: 0; transform: translate(-50%, 4px); }

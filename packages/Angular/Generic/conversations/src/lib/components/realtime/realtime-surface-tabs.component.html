@@ -2,7 +2,24 @@
        [class.surface--collapsed]="Collapsed"
        [class.surface--wide]="IsWide"
        [class.surface--fill]="Fill && !Collapsed"
+       [class.surface--resizing]="Resizing"
+       [style.width.px]="AppliedWidthPx"
        aria-label="Session surfaces">
+
+  @if (ShowResizeHandle) {
+    <!-- Left-edge grab handle: drag to resize, double-click to reset to default -->
+    <div class="surface__resizer"
+         role="separator"
+         aria-orientation="vertical"
+         aria-label="Resize session panel"
+         title="Drag to resize · double-click to reset"
+         (pointerdown)="OnHandlePointerDown($event)"
+         (pointermove)="OnHandlePointerMove($event)"
+         (pointerup)="OnHandlePointerUp($event)"
+         (pointercancel)="OnHandlePointerUp($event)"
+         (dblclick)="OnHandleReset()">
+    </div>
+  }
 
   @if (Collapsed) {
     <!-- Slim strip: the panel's collapse target (lifted from the old rail behavior) -->

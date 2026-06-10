@@ -8,8 +8,10 @@
 }
 
 /* The surface panel: Activity-width by default, wider when a content tab is focused,
-   slim strip when collapsed (the collapse behavior lifted from the old standalone rail). */
+   slim strip when collapsed (the collapse behavior lifted from the old standalone rail).
+   An explicit user-dragged width (inline style, persisted per-user) overrides both tiers. */
 .surface {
+  position: relative;
   width: 308px;
   height: 100%;
   display: flex;
@@ -20,6 +22,30 @@
 }
 .surface--wide {
   width: clamp(380px, 44%, 640px);
+}
+/* While dragging the grab handle, track the pointer 1:1 (no eased transition). */
+.surface--resizing {
+  transition: none;
+}
+
+/* ---------- left-edge grab handle (drag to resize, double-click to reset) ---------- */
+.surface__resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  transition: background 140ms ease;
+}
+.surface__resizer:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+}
+.surface--resizing .surface__resizer {
+  background: color-mix(in srgb, var(--mj-brand-primary) 38%, transparent);
 }
 /* Board-focus fill: the panel owns the whole overlay (the main call column is hidden). */
 .surface--fill {
@@ -77,6 +103,10 @@
   display: none;
 }
 
+/* Tabs keep their natural width while there's room; when space gets genuinely tight
+   they shrink (ellipsizing their titles) down to a readable floor (icon + ~8ch).
+   The ACTIVE tab never shrinks — inactive tabs give way first. Only when everything
+   is at its floor does the strip actually overflow (horizontal scroll). */
 .s-tab {
   padding: 10px 14px;
   border: 0;
@@ -92,16 +122,18 @@
   border-bottom: 3px solid transparent;
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
   white-space: nowrap;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: calc(11px + 7px + 8ch + 28px); /* icon + gap + ~8ch + padding */
 }
 .s-tab i {
   font-size: 11px;
   flex-shrink: 0;
 }
 .s-tab__title {
-  max-width: 140px;
+  max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .s-tab:hover {
   color: var(--mj-text-secondary);
@@ -110,6 +142,8 @@
   color: var(--mj-text-primary);
   border-bottom-color: var(--mj-brand-primary);
   background: var(--mj-bg-surface);
+  /* the active tab stays fully readable — others shrink first */
+  flex-shrink: 0;
 }
 
 /* Brief violet flash for a just-arrived artifact tab (per the mockup's accent) */

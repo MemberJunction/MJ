@@ -64,19 +64,28 @@
   <!-- agent action toast -->
   @if (ToastText) {
     <div class="board-toast">
-      <i class="fa-solid fa-feather"></i> {{ ToastText }}
+      <i class="fa-solid fa-feather"></i>
+      <span class="board-toast__text">{{ ToastText }}</span>
       <span class="undo" (click)="OnToastUndo($event)"><i class="fa-solid fa-rotate-left"></i> Undo</span>
     </div>
   }
 </div>
 
-<!-- board status footer -->
+<!-- board status footer: ONE row, never wraps — items ellipsize, and the long
+     persistence prose collapses to an icon chip (full text on its tooltip) when
+     the host is narrow (container query on the host width). -->
 <div class="board-status">
-  <span><b>{{ ElementCount }}</b> elements</span>
-  <span>you <b>{{ UserCount }}</b> · {{ AgentName }} <b>{{ AgentCount }}</b></span>
-  <span>synced <b>{{ LastDeltaLabel }}</b> · seq <b>{{ CurrentSeq }}</b></span>
+  <span class="stat"><b>{{ ElementCount }}</b> elements</span>
+  <span class="stat">you <b>{{ UserCount }}</b> · {{ AgentName }} <b>{{ AgentCount }}</b></span>
+  <span class="stat">synced <b>{{ LastDeltaLabel }}</b> · seq <b>{{ CurrentSeq }}</b></span>
   <span class="seg-r">
-    <span class="ctx-live"><span class="d"></span> {{ AgentName }}'s live context: current</span>
-    <span>persists as <b>session artifact</b> when the call ends</span>
+    <span class="stat ctx-live" [title]="AgentName + '’s live context: current'">
+      <span class="d"></span><span class="ctx-live__text"> {{ AgentName }}'s live context: current</span>
+    </span>
+    <span class="stat persist" title="Persists as a session artifact when the call ends">
+      <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+      <span class="persist__long">persists as <b>session artifact</b> when the call ends</span>
+      <span class="persist__short">session artifact</span>
+    </span>
   </span>
 </div>

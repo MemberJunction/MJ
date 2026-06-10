@@ -38,6 +38,8 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 5; /* gives way before the name/pill, after the model suffix */
 }
 .banner__for b {
   color: var(--mj-text-secondary);
@@ -49,7 +51,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 1;
+  flex-shrink: 10; /* first to give way when the banner narrows */
   min-width: 0;
 }
 
