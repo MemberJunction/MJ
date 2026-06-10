@@ -1,5 +1,14 @@
 # Interactive Forms — Runtime Loop Phase
 
+> **Status: ✅ COMPLETE (archived).** All sub-tasks and the 14 retrospective items shipped
+> and were verified closed. Current documentation lives in
+> [packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md](../../../packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md)
+> (contract + runtime substrate) and
+> [guides/FORMS_ARCHITECTURE_GUIDE.md](../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
+> (rendering architecture). Where this plan and the implementation diverge, the
+> implementation wins — notably, variant selection persists via `UserInfoEngine`
+> (`mj.formVariant.<entityname>`), **not** localStorage as written below.
+
 Supplementary plan to [plan.md](plan.md). Captures the next-cut work: closing the runtime loop so AI-authored forms can be created, refined, previewed, applied, versioned, and reverted entirely from inside the product. **This is a single phase. Every sub-task below must ship for the work to be considered done.**
 
 ## TL;DR
@@ -74,7 +83,7 @@ This is the same code path whether the artifact came from Form Builder agent, Sa
 
 ### Migration & metadata
 
-1. **`Notes` column on `EntityFormOverride`** — folded into the original [V202605221100__v5.37.x__Interactive_Forms.sql](../../migrations/v5/V202605221100__v5.37.x__Interactive_Forms.sql) (combined ahead of LTS baseline collapse). Optional human commentary. Validator audited against the CHECK constraint; matches exactly, no patch needed.
+1. **`Notes` column on `EntityFormOverride`** — folded into the original [V202605242025__v5.38.x__Interactive_Forms.sql](../../../migrations/v5/V202605242025__v5.38.x__Interactive_Forms.sql) (combined ahead of LTS baseline collapse). Optional human commentary. Validator audited against the CHECK constraint; matches exactly, no patch needed.
 2. **Run codegen** so `EntityFormOverrideEntity` exposes a typed `Notes` property.
 
 ### Agent actions (Server, `@memberjunction/core-actions`)
@@ -105,7 +114,7 @@ This is the same code path whether the artifact came from Form Builder agent, Sa
 
 The existing chat-artifact rendering infrastructure already handles interactive components correctly — we don't need a new artifact card chrome, "Apply" button styling, etc. **We are only making the interactive-component type viewer form-aware**: when the spec being rendered declares `componentRole === 'form'`, the viewer's behavior changes; everything else (artifact card, header, actions area, chat embedding) is unchanged.
 
-10. **Add a form-role branch inside the interactive-component artifact viewer plugin** ([component-artifact-viewer.component.ts](../../packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts) or its renderer):
+10. **Add a form-role branch inside the interactive-component artifact viewer plugin** ([component-artifact-viewer.component.ts](../../../packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts) or its renderer):
     - Detect `spec.componentRole === 'form'`.
     - Resolve the declared entity name (`spec.entityName` / `spec.dataRequirements?.primaryEntity`).
     - Load Top-1 record via `RunView({ EntityName, MaxRows: 1, ResultType: 'entity_object' })`.
@@ -165,16 +174,16 @@ All 11 steps must work for this phase to be done.
 
 | Area | Files (representative, not exhaustive) |
 |---|---|
-| Migration | [migrations/v5/V202605221100__v5.37.x__Interactive_Forms.sql](../../migrations/v5/V202605221100__v5.37.x__Interactive_Forms.sql) — Notes column folded in ✅ |
-| Actions | [packages/Actions/CoreActions/src/custom/interactive-forms/](../../packages/Actions/CoreActions/src/custom/interactive-forms/) — split `create-interactive-form.action.ts` into 5 actions; add `get-default-form-scaffold.action.ts`, `get-active-form.action.ts`, `modify-interactive-form.action.ts`, `activate-form-version.action.ts`, `revert-interactive-form.action.ts` |
-| Actions metadata | [metadata/actions/.interactive-forms-actions.json](../../metadata/actions/.interactive-forms-actions.json) |
-| Agent prompt | [metadata/prompts/templates/sage/form-builder.template.md](../../metadata/prompts/templates/sage/form-builder.template.md) |
-| Resolver | [packages/Angular/Generic/base-forms/src/lib/](../../packages/Angular/Generic/base-forms/src/lib/) — `FormResolverService` extension |
-| Artifact viewer | [packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts](../../packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts) |
-| Fixture builder | [packages/Angular/Explorer/dashboards/src/ComponentStudio/services/form-host-props-fixture.ts](../../packages/Angular/Explorer/dashboards/src/ComponentStudio/services/form-host-props-fixture.ts) → promote to a shared package |
-| Cockpit | [packages/Angular/Explorer/dashboards/src/FormBuilder/](../../packages/Angular/Explorer/dashboards/src/FormBuilder/) |
-| Variant switcher | [packages/Angular/Generic/base-forms/src/lib/single-record-component/](../../packages/Angular/Generic/base-forms/src/lib/) — `<mj-record-form-container>` toolbar |
-| Sage prompt | [metadata/prompts/templates/sage/sage.template.md](../../metadata/prompts/templates/sage/sage.template.md) — add form-context routing line |
+| Migration | [migrations/v5/V202605242025__v5.38.x__Interactive_Forms.sql](../../../migrations/v5/V202605242025__v5.38.x__Interactive_Forms.sql) — Notes column folded in ✅ |
+| Actions | [packages/Actions/CoreActions/src/custom/interactive-forms/](../../../packages/Actions/CoreActions/src/custom/interactive-forms/) — split `create-interactive-form.action.ts` into 5 actions; add `get-default-form-scaffold.action.ts`, `get-active-form.action.ts`, `modify-interactive-form.action.ts`, `activate-form-version.action.ts`, `revert-interactive-form.action.ts` |
+| Actions metadata | [metadata/actions/.interactive-forms-actions.json](../../../metadata/actions/.interactive-forms-actions.json) |
+| Agent prompt | [metadata/prompts/templates/sage/form-builder.template.md](../../../metadata/prompts/templates/sage/form-builder.template.md) |
+| Resolver | [packages/Angular/Generic/base-forms/src/lib/](../../../packages/Angular/Generic/base-forms/src/lib/) — `FormResolverService` extension |
+| Artifact viewer | [packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts](../../../packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts) |
+| Fixture builder | [packages/Angular/Explorer/dashboards/src/ComponentStudio/services/form-host-props-fixture.ts](../../../packages/Angular/Explorer/dashboards/src/ComponentStudio/services/form-host-props-fixture.ts) → promote to a shared package |
+| Cockpit | [packages/Angular/Explorer/dashboards/src/FormBuilder/](../../../packages/Angular/Explorer/dashboards/src/FormBuilder/) |
+| Variant switcher | [packages/Angular/Generic/base-forms/src/lib/single-record-component/](../../../packages/Angular/Generic/base-forms/src/lib/) — `<mj-record-form-container>` toolbar |
+| Sage prompt | [metadata/prompts/templates/sage/sage.template.md](../../../metadata/prompts/templates/sage/sage.template.md) — add form-context routing line |
 
 ## Mockups
 

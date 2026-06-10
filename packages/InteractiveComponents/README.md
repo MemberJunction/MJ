@@ -8,8 +8,7 @@ The `@memberjunction/interactive-component-types` package provides the foundatio
 
 ```mermaid
 graph TD
-    A["InteractiveComponentSpec<br/>(Component Definition)"] --> B["ComponentInitFunction"]
-    B --> C["Props & Events"]
+    A["ComponentSpec<br/>(Component Definition)"] --> B["ComponentUtilities"]
     B --> D["SimpleDataContext"]
     B --> E["SimpleMetadata"]
     B --> F["SimpleRunView / RunQuery"]
@@ -23,14 +22,19 @@ graph TD
     K --> L["Standard Methods<br/>(print, refresh, isDirty)"]
     K --> M["Custom Methods<br/>(RegisterMethod)"]
 
+    A --> N["componentRole: 'form'<br/>(/forms subpath contract)"]
+
     style A fill:#2d6a9f,stroke:#1a4971,color:#fff
     style B fill:#7c5295,stroke:#563a6b,color:#fff
     style G fill:#2d8659,stroke:#1a5c3a,color:#fff
     style K fill:#b8762f,stroke:#8a5722,color:#fff
+    style N fill:#8a2d52,stroke:#5c1a38,color:#fff
     style H fill:#2d8659,stroke:#1a5c3a,color:#fff
     style I fill:#2d8659,stroke:#1a5c3a,color:#fff
     style J fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
+
+> **Building a runtime form?** Components that declare `componentRole: 'form'` follow a dedicated contract on the `/forms` subpath — see the **[Interactive Forms Guide](INTERACTIVE_FORMS_GUIDE.md)** in this package for the full contract, lifecycle, and security model, and the repo-level [Forms Architecture Guide](../../guides/FORMS_ARCHITECTURE_GUIDE.md) for how forms render across MJ surfaces.
 
 ## Key Features
 
@@ -145,20 +149,23 @@ interface SimpleRunQuery {
 }
 ```
 
-## Component Initialization
+## Component Utilities
 
-Interactive components receive initialization functions with access to all tools:
+At runtime the container passes every component a `ComponentUtilities` object giving it
+access to all of the tools above:
 
 ```typescript
-type ComponentInitFunction = (
-  props: ComponentInitProps,
-  events: ComponentEvents,
-  data: SimpleDataContext,
-  metadata: SimpleMetadata,
-  runView: SimpleRunView,
-  runQuery: SimpleRunQuery,
-  ai: SimpleAITools
-) => Promise<void>;
+interface ComponentUtilities {
+  md: SimpleMetadata;
+  rv: SimpleRunView;
+  rq: SimpleRunQuery;
+  /** AI tools — not available in all environments; code defensively. */
+  ai?: SimpleAITools;
+  /** Unified search across vector, full-text, entity, and storage sources. Optional. */
+  search?: SimpleSearch;
+  /** Geographic point resolution for map components. Optional. */
+  geoDataEngine?: SimpleGeoDataEngine;
+}
 ```
 
 ## Usage Examples
@@ -166,8 +173,8 @@ type ComponentInitFunction = (
 ### Using AI Tools in a Component
 
 ```typescript
-// In your interactive component initialization
-async function initComponent(props, events, data, metadata, runView, runQuery, ai) {
+// Inside a component, with utilities provided by the container
+async function analyzeData({ ai }: { ai: SimpleAITools }) {
   // Execute a prompt for data analysis
   const analysisResult = await ai.ExecutePrompt({
     systemPrompt: 'You are a data analyst. Analyze the provided dataset.',
@@ -206,7 +213,9 @@ async function initComponent(props, events, data, metadata, runView, runQuery, a
 ### Accessing Metadata and Running Views
 
 ```typescript
-async function loadComponentData(props, events, data, metadata, runView) {
+async function loadComponentData(utilities: ComponentUtilities) {
+  const { md: metadata, rv: runView } = utilities;
+
   // Get entity metadata
   const userEntity = metadata.Entities.find(e => e.Name === 'Users');
   
@@ -235,7 +244,7 @@ async function loadComponentData(props, events, data, metadata, runView) {
 ### Running Multiple Operations in Parallel
 
 ```typescript
-async function loadDashboardData(props, events, data, metadata, runView) {
+async function loadDashboardData({ rv: runView }: ComponentUtilities) {
   // Run multiple views in parallel for better performance
   const [salesData, customerData, productData] = await runView.RunViews([
     { EntityName: 'Sales', ExtraFilter: "Date >= '2024-01-01'" },
@@ -445,11 +454,12 @@ const spec: ComponentSpec = {
 
 The package includes comprehensive types for component specifications:
 
-- `InteractiveComponentSpec`: Full component specification including metadata, props, and initialization
-- `ComponentDataRequirement`: Defines data loading requirements
+- `ComponentSpec`: Full component specification — metadata, code, requirements, dependencies, child components
+- `ComponentRole` / `ComponentSpec.componentRole`: a *commitment* to a behavioral contract (`'form' | 'dashboard' | 'widget' | 'report' | 'detail-pane'`). Form-role components follow the contract in the [Interactive Forms Guide](INTERACTIVE_FORMS_GUIDE.md).
+- `ComponentDataRequirements` (with `ComponentEntityDataRequirement` / `ComponentQueryDataRequirement`): defines data-loading requirements
 - `ComponentOption`: Configuration options for components
 - `ComponentLibraryDependency`: External library dependencies
-- `ComponentSpecCategory`: Component categorization and metadata
+- `ComponentSpecRuntime`: Spec subclass with runtime-resolution additions (registry resolution state)
 
 ## Vector Service Capabilities
 
@@ -481,7 +491,7 @@ All interfaces are fully typed with TypeScript, providing:
 
 The `/forms` subpath provides the **form-role contract** for components that
 declare `componentRole: 'form'` — the substrate that lets MJ render
-runtime-author forms inside Explorer with the same toolbar / save / delete
+runtime-authored forms inside Explorer with the same toolbar / save / delete
 behavior as a CodeGen-generated Angular form.
 
 | Export | Purpose |
@@ -495,7 +505,12 @@ behavior as a CodeGen-generated Angular form.
 | `buildFixtureFormHostProps(schema, mode?)` | Synthesizes type-appropriate fixture values for live-preview rendering when no real `BaseEntity` is available (used by Component Studio preview + the chat artifact viewer's fallback mode). |
 | `getDeclaredFormEntityName(spec)` | Resolves the entity a form binds to from `spec.entityName` or `spec.dataRequirements.entities[0].name`. Pure helper shared by every form-role consumer. |
 
-See [/plans/interactive-forms/phase-2-runtime-loop.md](../../plans/interactive-forms/phase-2-runtime-loop.md) for the full architecture, lifecycle, and security model (Create / Modify / Activate / Revert + ownership checks).
+**📘 Full documentation: [Interactive Forms Guide](INTERACTIVE_FORMS_GUIDE.md)** — the
+complete contract (events, methods, layering invariant), the runtime substrate
+(`EntityFormOverride` resolution, versioning lifecycle, Create / Modify / Activate / Revert
+actions + ownership checks), variant switching, the Form Builder cockpit, and the
+form-aware chat artifact viewer. For how forms render across MJ surfaces generally, see
+the repo-level [Forms Architecture Guide](../../guides/FORMS_ARCHITECTURE_GUIDE.md).
 
 ## Dependencies
 

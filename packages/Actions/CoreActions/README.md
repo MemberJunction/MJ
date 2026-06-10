@@ -316,7 +316,7 @@ Orchestrate action execution with branching, iteration, parallelism, and retry l
 
 The lifecycle for runtime-author entity forms (form-role
 `ComponentSpec` + `EntityFormOverride`). See
-[/plans/interactive-forms/phase-2-runtime-loop.md](../../../plans/interactive-forms/phase-2-runtime-loop.md)
+the [Interactive Forms Guide](../../InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md)
 for the full architecture and security model. Mutation actions enforce
 ownership checks (User → caller, Role → membership, Global → admin).
 

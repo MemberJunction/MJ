@@ -65,6 +65,13 @@ The overrides are cached in memory by `InteractiveFormsEngine` (in
 `@memberjunction/core-entities`) with event-driven invalidation, so resolution is
 a sub-millisecond in-memory filter, not a per-open DB round-trip.
 
+> **Deep dive on interactive forms:** the form-role component contract
+> (`FormHostProps`, standard events/methods, the React-never-touches-BaseEntity
+> invariant), the `EntityFormOverride` versioning lifecycle (Create / Modify /
+> Activate / Revert + ownership checks), the agent action family, the Form Builder
+> cockpit, and the form-aware chat artifact viewer are all documented in
+> [packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md](../packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md).
+
 ---
 
 ## 3. Layer 1 — the form and its container
@@ -339,4 +346,5 @@ That keeps the Generic stack routing-free and lets each consumer pick the UX.
 - **Container:** `container/record-form-container.component.ts`
 - **Panels:** [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md)
 - **Custom forms + toolbar pattern:** [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md)
+- **Interactive (runtime) forms — contract + lifecycle:** [packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md](../packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md)
 - **Slide-in primitive:** `MjSlidePanelComponent` in `@memberjunction/ng-ui-components`

@@ -1,5 +1,10 @@
 # Run-Time / Interactive Forms
 
+> **Status: ✅ COMPLETE (archived).** Phases A–D shipped, followed by the runtime loop
+> phase ([phase-2-runtime-loop.md](phase-2-runtime-loop.md)). Current documentation lives in
+> [packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md](../../../packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md)
+> and [guides/FORMS_ARCHITECTURE_GUIDE.md](../../../guides/FORMS_ARCHITECTURE_GUIDE.md).
+
 **Status:** Proposal — for team review
 **Date:** 2026-05-15
 **Branch:** `an-interactive-forms-plan`

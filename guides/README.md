@@ -24,6 +24,7 @@ If you're about to start work in one of the areas below, **read the guide first*
 
 ## Angular / MJExplorer
 
+- **[Forms Architecture Guide](FORMS_ARCHITECTURE_GUIDE.md)** — How MJ renders/edits entity records across all surfaces (tabs, dialogs, slide-ins) from one set of forms: `MjEntityFormHostComponent`, presentation shells, `MJFormPresenterService`, `EntityFormConfig`, and how generated / custom / interactive forms coexist. For the runtime-authored (interactive) form contract and lifecycle, see the companion [Interactive Forms Guide](../packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md) co-located with `@memberjunction/interactive-component-types`.
 - **[Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)** — Architecture, naming, state management with getter/setters, engine class patterns, user preferences, layout, permission checking for MJ dashboards.
 - **[Lazy Loading Guide](LAZY_LOADING_GUIDE.md)** — How MJExplorer's code-split lazy loading works, how to add new dashboard components, how to make a package lazy-loadable, the auto-generated lazy config.
 - **[Navigation and Routing Guide](NAVIGATION_AND_ROUTING_GUIDE.md)** — How the shell owns URL state, back/forward navigation, adding URL-synced sub-navigation to a component.

@@ -295,6 +295,7 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - **`EntityFormConfig`** — per-instance control over toolbar / related-entity sections / collapsibility / width / in-form navigation, applied **without regenerating** any form
   - Imperative (`forms.open({...})`) and declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`) usage
   - **Read this before building any bespoke "edit a record in a dialog/slide-in" component** — the generic capability almost certainly covers it.
+  - Companion: **[Interactive Forms Guide](packages/InteractiveComponents/INTERACTIVE_FORMS_GUIDE.md)** — the runtime-authored form contract (`componentRole: 'form'`, `FormHostProps`, standard events/methods), the `EntityFormOverride` versioning lifecycle (Create / Modify / Activate / Revert + ownership checks), the Form Builder agent actions, and the form-aware chat artifact viewer. Read it before touching anything form-role / Form Builder / interactive-forms related.
 
 - **[Transport-Layer Architecture Guide](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md)**: The canonical **engine → resolver → GraphQL client → thin UI** layering (plus the optional **Action** layer for agentic/workflow/low-code invocation) for any *custom server-side capability* the browser or an agent invokes — clustering, search, classify, LLM calls, "run this pipeline" buttons. Covers:
   - Why business logic lives in the framework-agnostic **engine** exactly once, and what each adapter layer must NOT do
