@@ -33,7 +33,7 @@ import {
     RunView,
 } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import {
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
@@ -380,6 +380,11 @@ export class DuplicateRecordDetector extends VectorBase {
             );
             allQueryResults.push(...subQueryResults);
         }
+
+        // 6d.5: Drop matches that point to records which no longer exist in the source
+        //       entity (stale "ghost" vectors left behind when records are deleted or
+        //       re-seeded with new IDs). See FilterNonExistentMatches() for the why.
+        await this.FilterNonExistentMatches(allQueryResults, entityInfo);
 
         // 6e: Persist match results and update run details
         this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
@@ -970,7 +975,91 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     protected FilterSelfMatches(duplicates: PotentialDuplicate[], sourceKey: CompositeKey): PotentialDuplicate[] {
-        return duplicates.filter((d) => d.ToString() !== sourceKey.ToString());
+        // Use CompositeKey.Equals (case-insensitive for UUID values) rather than a raw
+        // ToString() string comparison. The vector metadata RecordID and the loaded
+        // record's PrimaryKey can differ in UUID casing across platforms (SQL Server
+        // uppercase vs. PostgreSQL lowercase), which would let a true self-match slip
+        // past a case-sensitive string compare.
+        return duplicates.filter((d) => !d.Equals(sourceKey));
+    }
+
+    /**
+     * Remove matches whose target record no longer exists in the source entity.
+     *
+     * Vector indexes (e.g. Pinecone) retain embeddings keyed by each record's composite
+     * key via a deterministic vector ID. When records are deleted — or re-seeded with new
+     * primary keys — their old vectors linger as "ghosts". A nearest-neighbour query then
+     * happily returns those ghosts, often the record's OWN former vector (identical name,
+     * ~0.98 score), which to a user looks exactly like a record matching itself. The
+     * per-record self-match filter can't catch these because the ghost carries the OLD id.
+     *
+     * We verify every distinct match key for the batch against the live table in a single
+     * batched query and drop any that don't resolve. Single-column primary keys only — the
+     * same assumption the rest of this engine makes.
+     *
+     * Mutates `queryResults` in place.
+     */
+    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo): Promise<void> {
+        const pkField = entityInfo.FirstPrimaryKey.Name;
+
+        // Collect every distinct match key value across the batch.
+        const matchIds = new Set<string>();
+        for (const qr of queryResults) {
+            for (const dupe of qr.Duplicates.Duplicates) {
+                const id = dupe.Values();
+                if (id) {
+                    matchIds.add(id);
+                }
+            }
+        }
+        if (matchIds.size === 0) {
+            return;
+        }
+
+        const existing = await this.LoadExistingRecordIDs(entityInfo, pkField, [...matchIds]);
+
+        // Drop ghost (non-existent) matches in place.
+        for (const qr of queryResults) {
+            const before = qr.Duplicates.Duplicates.length;
+            qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(
+                (d) => existing.has(NormalizeUUID(d.Values()))
+            );
+            const removed = before - qr.Duplicates.Duplicates.length;
+            if (removed > 0) {
+                LogStatus(`Duplicate detection: dropped ${removed} stale match(es) for source ${qr.SourceKey.ToString()} (records no longer exist — likely orphaned vectors)`);
+            }
+        }
+    }
+
+    /**
+     * Return the set of primary key values (normalized for case-insensitive UUID
+     * comparison) that actually exist in the entity, for the given candidate IDs.
+     * Batches the IN-list to stay within reasonable query sizes.
+     */
+    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[]): Promise<Set<string>> {
+        const existing = new Set<string>();
+        for (const chunk of chunkArray(ids, DEFAULT_BATCH_SIZE)) {
+            const inList = chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
+            const rv = await this.RunView.RunView<Record<string, string>>({
+                EntityName: entityInfo.Name,
+                ExtraFilter: `${pkField} IN (${inList})`,
+                Fields: [pkField],
+                ResultType: 'simple',
+            }, this.CurrentUser);
+
+            if (rv.Success) {
+                for (const r of rv.Results) {
+                    existing.add(NormalizeUUID(String(r[pkField])));
+                }
+            } else {
+                // Fail open: if we can't verify existence, don't silently delete every match.
+                LogError(`FilterNonExistentMatches: failed to verify record existence for ${entityInfo.Name}: ${rv.ErrorMessage}`);
+                for (const id of chunk) {
+                    existing.add(NormalizeUUID(id));
+                }
+            }
+        }
+        return existing;
     }
 
     // ─────────────────────────────────────────────
@@ -1120,6 +1209,16 @@ export class DuplicateRecordDetector extends VectorBase {
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions = {}
     ): Promise<void> {
+        // Respect the entity's merge policy. MergeRecords() throws when an entity has
+        // AllowRecordMerge = false, so attempting auto-merge on such an entity would not
+        // just fail to merge — it would abort the whole detection run. For these entities
+        // the matches are still persisted for manual review; we simply skip auto-merge.
+        const entityInfo = this.Metadata.EntityByName(entityDocument.Entity);
+        if (entityInfo && !entityInfo.AllowRecordMerge) {
+            LogStatus(`Auto-merge skipped for "${entityDocument.Entity}": entity does not allow record merging — matches recorded for manual review only.`);
+            return;
+        }
+
         const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
         for (const dupeResult of response.PotentialDuplicateResult) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
@@ -1132,11 +1231,17 @@ export class DuplicateRecordDetector extends VectorBase {
                 mergeParams.SurvivingRecordCompositeKey = dupeResult.RecordCompositeKey;
                 mergeParams.RecordsToMerge = [dupe];
 
-                const mergeResult = await this.Metadata.MergeRecords(mergeParams, this.CurrentUser);
-                if (mergeResult.Success) {
-                    await this.updateMatchRecordAfterMerge(dupeResult.DuplicateRunDetailMatchRecordIDs[index]);
-                } else {
-                    LogError(`Failed to merge ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}`);
+                // Guard each merge so a single failure (e.g. a permission or FK issue on
+                // one pair) is logged and skipped rather than aborting the entire run.
+                try {
+                    const mergeResult = await this.Metadata.MergeRecords(mergeParams, this.CurrentUser);
+                    if (mergeResult.Success) {
+                        await this.updateMatchRecordAfterMerge(dupeResult.DuplicateRunDetailMatchRecordIDs[index]);
+                    } else {
+                        LogError(`Failed to merge ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}: ${mergeResult.OverallStatus ?? 'unknown error'}`);
+                    }
+                } catch (err) {
+                    LogError(`Auto-merge threw for ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}`, undefined, err);
                 }
             }
         }
