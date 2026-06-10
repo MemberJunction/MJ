@@ -300,7 +300,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     expect(result.error).toContain('Unknown whiteboard tool');
   });
 
-  describe('Whiteboard.AddNote', () => {
+  describe('Whiteboard_AddNote', () => {
     it('should add an agent-authored sticky at the given position', () => {
       const result = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddNote,
         JSON.stringify({ text: 'segment by engagement score', x: 706, y: 84 })));
@@ -321,7 +321,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
-  describe('Whiteboard.AddShape', () => {
+  describe('Whiteboard_AddShape', () => {
     it('should add a labeled shape with defaults and validate the shape kind', () => {
       const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddShape,
         JSON.stringify({ label: 'Email sequence', sub: '5 touches · drip', x: 420, y: 118 })));
@@ -338,7 +338,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
-  describe('Whiteboard.AddText', () => {
+  describe('Whiteboard_AddText', () => {
     it('should add an agent text label and fail without text', () => {
       const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddText,
         JSON.stringify({ text: '= nurture track', x: 622, y: 128 })));
@@ -349,7 +349,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
-  describe('Whiteboard.DrawConnector', () => {
+  describe('Whiteboard_DrawConnector', () => {
     it('should connect two existing items by id', () => {
       const a = state.AddItem({ Kind: 'shape', Shape: 'rect', X: 0, Y: 0, W: 100, H: 50, Label: 'Email' }, 'user');
       const b = state.AddItem({ Kind: 'shape', Shape: 'rect', X: 0, Y: 200, W: 100, H: 50, Label: 'Webinar' }, 'user');
@@ -381,7 +381,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
-  describe('Whiteboard.Highlight', () => {
+  describe('Whiteboard_Highlight', () => {
     it('should highlight around existing items (union bounds + padding)', () => {
       const a = state.AddItem({ Kind: 'sticky', X: 182, Y: 92, Text: 'a' }, 'user');
       const b = state.AddItem({ Kind: 'sticky', X: 178, Y: 238, Text: 'b' }, 'user');
@@ -409,7 +409,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
-  describe('Whiteboard.MoveItem', () => {
+  describe('Whiteboard_MoveItem', () => {
     it('should move an item as the agent and validate args', () => {
       const sticky = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'm' }, 'user');
       const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.MoveItem,
@@ -425,7 +425,7 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
-  describe('Whiteboard.RemoveItem', () => {
+  describe('Whiteboard_RemoveItem', () => {
     it('should remove an item and report unknown ids', () => {
       const sticky = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'r' }, 'user');
       const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.RemoveItem,

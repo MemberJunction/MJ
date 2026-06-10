@@ -86,7 +86,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
   });
 
   it('ApplyAgentTool with NO surface bound falls back to the pure engine (collapsed panel)', () => {
-    const resultJson = channel.ApplyAgentTool('Whiteboard.AddNote', JSON.stringify({ text: 'hello' }));
+    const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'hello' }));
     const result = JSON.parse(resultJson) as WhiteboardToolResult;
 
     expect(result.success).toBe(true);
@@ -95,7 +95,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
   });
 
   it('every board mutation requests a state-of-record save (user edits AND agent tools)', () => {
-    channel.ApplyAgentTool('Whiteboard.AddNote', JSON.stringify({ text: 'note' }));
+    channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'note' }));
     expect(log.Saves.length).toBeGreaterThan(0);
     const lastSave = JSON.parse(log.Saves[log.Saves.length - 1]) as { Items?: unknown[] };
     expect(JSON.stringify(lastSave)).toBe(channel.SerializeState());
@@ -108,8 +108,8 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(fake.State).toBe(channel.State);
     expect(fake.AgentName).toBe('Sage');
 
-    const resultJson = channel.ApplyAgentTool('Whiteboard.AddNote', JSON.stringify({ text: 'via host' }));
-    expect(fake.AppliedTools).toEqual([{ ToolName: 'Whiteboard.AddNote', ArgsJson: JSON.stringify({ text: 'via host' }) }]);
+    const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'via host' }));
+    expect(fake.AppliedTools).toEqual([{ ToolName: 'Whiteboard_AddNote', ArgsJson: JSON.stringify({ text: 'via host' }) }]);
     expect((JSON.parse(resultJson) as WhiteboardToolResult).itemId).toBe('host-item');
 
     fake.SceneDelta.emit('{"added":[1]}');
@@ -124,7 +124,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.BindSurface(asHost(fake));
     channel.UnbindSurface();
 
-    channel.ApplyAgentTool('Whiteboard.AddNote', JSON.stringify({ text: 'after unbind' }));
+    channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'after unbind' }));
     expect(fake.AppliedTools).toEqual([]); // host no longer consulted
     expect(channel.State.ElementCount).toBe(1); // engine applied it
 
@@ -138,7 +138,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.BindSurface(asHost(first));
     channel.BindSurface(asHost(second));
 
-    channel.ApplyAgentTool('Whiteboard.AddText', JSON.stringify({ text: 'x' }));
+    channel.ApplyAgentTool('Whiteboard_AddText', JSON.stringify({ text: 'x' }));
     expect(first.AppliedTools).toEqual([]);
     expect(second.AppliedTools).toHaveLength(1);
 
@@ -172,7 +172,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
 
     // …and tool calls fall back to the engine (no host).
     const spy = vi.spyOn(fake, 'ApplyAgentTool');
-    channel.ApplyAgentTool('Whiteboard.AddNote', JSON.stringify({ text: 'still works' }));
+    channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'still works' }));
     expect(spy).not.toHaveBeenCalled();
   });
 });

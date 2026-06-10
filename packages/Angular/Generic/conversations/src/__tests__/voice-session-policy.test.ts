@@ -265,7 +265,7 @@ describe('VoiceSessionService — EndVoiceSession / teardown lifecycle', () => {
   it('teardown clears the client-tool handler registry', async () => {
     internals(service).agentSessionId = 'sess-9';
     const handler = vi.fn(() => '{"success":true}');
-    service.RegisterClientToolHandler('Whiteboard.', handler);
+    service.RegisterClientToolHandler('Whiteboard_', handler);
 
     await service.EndVoiceSession();
 
@@ -273,7 +273,7 @@ describe('VoiceSessionService — EndVoiceSession / teardown lifecycle', () => {
     internals(service).client = client;
     internals(service).agentSessionId = 'sess-10';
     await (service as unknown as { handleToolCall(c: { CallID: string; ToolName: string; ArgumentsJson: string }): Promise<void> })
-      .handleToolCall({ CallID: 'c1', ToolName: 'Whiteboard.AddNote', ArgumentsJson: '{}' });
+      .handleToolCall({ CallID: 'c1', ToolName: 'Whiteboard_AddNote', ArgumentsJson: '{}' });
     expect(handler).not.toHaveBeenCalled();
   });
 

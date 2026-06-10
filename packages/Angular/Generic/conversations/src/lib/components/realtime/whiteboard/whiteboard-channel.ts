@@ -15,7 +15,7 @@ import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
  * One instance per session (created via ClassFactory at session start). It owns the
  * board's {@link WhiteboardState} engine and contributes the channel's full contract:
  *
- *  - **Action**: the `Whiteboard.*` client-executed tool set
+ *  - **Action**: the `Whiteboard_*` client-executed tool set
  *    ({@link WHITEBOARD_TOOL_DEFINITIONS}); {@link ApplyAgentTool} prefers the BOUND host
  *    component (board mutation + violet pop-in / toast / presence-cursor garnish) and
  *    falls back to the pure {@link ApplyWhiteboardAgentTool} engine call when no surface
@@ -109,7 +109,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   }
 
   /**
-   * Executes one `Whiteboard.*` tool call LOCALLY. Prefers the live bound host (board
+   * Executes one `Whiteboard_*` tool call LOCALLY. Prefers the live bound host (board
    * mutation + UI garnish); falls back to the pure engine function when no surface is
    * bound so the channel keeps working with the pane collapsed.
    */

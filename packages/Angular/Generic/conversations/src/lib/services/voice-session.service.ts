@@ -92,7 +92,7 @@ export interface VoiceDelegationResult {
 }
 
 /**
- * Handler for a CLIENT-EXECUTED UI tool (e.g. the live whiteboard's `Whiteboard.*` surface),
+ * Handler for a CLIENT-EXECUTED UI tool (e.g. the live whiteboard's `Whiteboard_*` surface),
  * registered via {@link VoiceSessionService.RegisterClientToolHandler}. Receives the tool name +
  * raw arguments JSON from the realtime model and returns the result JSON string fed back as the
  * `tool_response`. May be sync or async; thrown errors are wrapped into a
@@ -346,7 +346,7 @@ export class VoiceSessionService {
 
   /**
    * Registry of CLIENT-EXECUTED UI tool handlers, keyed by tool-name prefix (e.g.
-   * `'Whiteboard.'`). Tool calls whose name matches a registered prefix run LOCALLY through the
+   * `'Whiteboard_'`). Tool calls whose name matches a registered prefix run LOCALLY through the
    * handler (never relayed to the server); everything else takes the standard server-relay path.
    * Cleared at teardown.
    */
@@ -508,7 +508,7 @@ export class VoiceSessionService {
 
   /**
    * Registers a handler for CLIENT-EXECUTED UI tools whose names start with `toolNamePrefix`
-   * (e.g. `'Whiteboard.'` → all `Whiteboard.*` calls). Matching tool calls execute LOCALLY via
+   * (e.g. `'Whiteboard_'` → all `Whiteboard_*` calls). Matching tool calls execute LOCALLY via
    * the handler — they are never relayed to the server — and the handler's result JSON is sent
    * back to the model as the `tool_response`. Re-registering the same prefix replaces the
    * handler. The registry is cleared at session teardown.

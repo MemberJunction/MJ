@@ -5,7 +5,7 @@ import { Observable, Subject } from 'rxjs';
  *
  * This file is intentionally Angular-free: it is the single mutation API used by BOTH the
  * user-facing board tools (pen, stickies, shapes, …) and the agent's channel tools
- * (`Whiteboard.AddNote`, `Whiteboard.DrawConnector`, …, see `whiteboard-tools.ts`).
+ * (`Whiteboard_AddNote`, `Whiteboard_DrawConnector`, …, see `whiteboard-tools.ts`).
  *
  * Perception model (per plans/ai-agent-sessions.md → "Interactive Channels"):
  *  - every mutation appends to a compact change journal and emits on {@link WhiteboardState.Changed$};

@@ -9,7 +9,7 @@ import {
  * Angular-free on purpose: `ApplyWhiteboardAgentTool` is the pure round-trip the host
  * component delegates to (the host adds the UI garnish — violet pop-in, toast, presence
  * cursor). The integration layer registers {@link WHITEBOARD_TOOL_DEFINITIONS} with the
- * realtime session so the co-agent can call `Whiteboard.AddNote` etc.; tool-call frames
+ * realtime session so the co-agent can call `Whiteboard_AddNote` etc.; tool-call frames
  * are routed back through {@link ApplyWhiteboardAgentTool}, which returns the JSON result
  * string fed to the model as the `tool_response`.
  */
@@ -27,20 +27,20 @@ export interface WhiteboardToolResult {
 
 /**
  * The shared name prefix of every whiteboard channel tool — the key the integration layer
- * registers with `VoiceSessionService.RegisterClientToolHandler` so all `Whiteboard.*` calls
+ * registers with `VoiceSessionService.RegisterClientToolHandler` so all `Whiteboard_*` calls
  * route locally to {@link ApplyWhiteboardAgentTool} instead of the server relay.
  */
-export const WHITEBOARD_TOOL_PREFIX = 'Whiteboard.';
+export const WHITEBOARD_TOOL_PREFIX = 'Whiteboard_';
 
 /** Names of the whiteboard channel tools, as registered with the realtime session. */
 export const WHITEBOARD_TOOL_NAMES = {
-  AddNote: 'Whiteboard.AddNote',
-  AddShape: 'Whiteboard.AddShape',
-  AddText: 'Whiteboard.AddText',
-  DrawConnector: 'Whiteboard.DrawConnector',
-  Highlight: 'Whiteboard.Highlight',
-  MoveItem: 'Whiteboard.MoveItem',
-  RemoveItem: 'Whiteboard.RemoveItem'
+  AddNote: 'Whiteboard_AddNote',
+  AddShape: 'Whiteboard_AddShape',
+  AddText: 'Whiteboard_AddText',
+  DrawConnector: 'Whiteboard_DrawConnector',
+  Highlight: 'Whiteboard_Highlight',
+  MoveItem: 'Whiteboard_MoveItem',
+  RemoveItem: 'Whiteboard_RemoveItem'
 } as const;
 
 /**

@@ -29,7 +29,7 @@ const PRESENCE_MS = 4200;
  *  - `SceneDelta` emits the debounced (750 ms), coalesced scene-delta JSON on user changes —
  *    the perception feed the integration pipes into the live agent context;
  *  - `ApplyAgentTool(toolName, argsJson)` executes one agent channel tool
- *    (`Whiteboard.AddNote` … see `WHITEBOARD_TOOL_DEFINITIONS`) with the violet pop-in,
+ *    (`Whiteboard_AddNote` … see `WHITEBOARD_TOOL_DEFINITIONS`) with the violet pop-in,
  *    toast and presence-cursor garnish, returning the result JSON for the tool round-trip;
  *  - `AgentUndo` fires when the user clicks Undo on the agent-action toast;
  *  - `FocusModeChange` asks the shell to collapse/restore the call rail ("Focus board").

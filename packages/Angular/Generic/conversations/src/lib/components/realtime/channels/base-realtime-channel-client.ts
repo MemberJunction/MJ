@@ -98,7 +98,7 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   public abstract get ChannelName(): string;
 
   /**
-   * The shared name prefix of every tool this channel exposes (e.g. `'Whiteboard.'`).
+   * The shared name prefix of every tool this channel exposes (e.g. `'Whiteboard_'`).
    * The host registers ONE local-execution route per plugin: tool calls whose name starts
    * with this prefix go to {@link ApplyAgentTool} instead of the server relay.
    */
