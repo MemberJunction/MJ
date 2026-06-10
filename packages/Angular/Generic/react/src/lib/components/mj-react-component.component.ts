@@ -241,7 +241,8 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   /**
    * Optional explicit scope for per-user settings persistence. When omitted, the
    * scope defaults to `<namespace>/<name>` of the component spec. Settings are
-   * stored per-user via `UserInfoEngine` under the key `ic.<scope>`. Provide an
+   * stored per-user via `UserInfoEngine` under the key
+   * `InteractiveComponents_UserState_Root/<scope>`. Provide an
    * explicit scope when a single component spec is rendered in multiple distinct
    * contexts that should NOT share preferences (e.g. the same form spec used for
    * different entities) — set it to something stable and unique per context.
@@ -1147,7 +1148,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * cross-device). Best effort — failures are logged when logging is enabled and
    * never surfaced to the component.
    */
-  private persistUserSettings(settings: Record<string, any>): void {
+  private persistUserSettings(settings: Record<string, any> | string): void {
     const key = this.getUserStateStorageKey();
     if (!key) {
       return;
@@ -1158,7 +1159,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       if (!user) {
         return;
       }
-      UserInfoEngine.Instance.SetSettingDebounced(key, JSON.stringify(settings), user);
+      // The component normally hands us an object, but guard against a caller
+      // that already serialized it — double-stringifying would store a quoted
+      // JSON string the seed path could not parse back into settings.
+      const serialized = typeof settings === 'string' ? settings : JSON.stringify(settings);
+      UserInfoEngine.Instance.SetSettingDebounced(key, serialized, user);
     } catch (error) {
       if (this.enableLogging) {
         console.warn('MJReactComponent: failed to persist user settings', error);

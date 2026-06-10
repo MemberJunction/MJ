@@ -39,9 +39,9 @@ describe('user-state helpers', () => {
   });
 
   describe('userStateStorageKey', () => {
-    it('prefixes a resolved scope with the ic. namespace', () => {
+    it('prefixes a resolved scope with the unique root namespace', () => {
       expect(userStateStorageKey('form/contacts')).toBe(`${USER_STATE_KEY_PREFIX}form/contacts`);
-      expect(userStateStorageKey('form/contacts')).toBe('ic.form/contacts');
+      expect(userStateStorageKey('form/contacts')).toBe('InteractiveComponents_UserState_Root/form/contacts');
     });
 
     it('returns null for a null scope', () => {

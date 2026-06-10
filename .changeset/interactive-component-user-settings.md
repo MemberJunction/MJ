@@ -11,7 +11,8 @@ The existing interactive-component settings contract (`savedUserSettings` in /
 `UserInfoEngine`, automatically scoped per component — with no change to the component
 contract. The Angular host (`MJReactComponent`) seeds `savedUserSettings` from the
 store on load and saves (debounced) on every `onSaveUserSettings` call, under the key
-`ic.<scope>` where scope defaults to `<namespace>/<name>` (override via the new
+`InteractiveComponents_UserState_Root/<scope>` where scope defaults to
+`<namespace>/<name>` (override via the new
 `UserStateScope` input). Set the new `PersistUserSettings` input to `false` to opt out
 and own persistence via the `userSettingsChanged` output instead.
 

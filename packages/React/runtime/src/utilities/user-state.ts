@@ -12,11 +12,13 @@
 
 /**
  * Prefix applied to every interactive-component user-settings storage key. The
- * full key is `ic.<scope>`, where `<scope>` is resolved by
- * {@link resolveUserStateScope}. Keeping the prefix in one place avoids
+ * full key is `InteractiveComponents_UserState_Root/<scope>`, where `<scope>` is
+ * resolved by {@link resolveUserStateScope}. It is deliberately long and unique
+ * to avoid collisions with other namespaced keys in the shared
+ * `MJ: User Settings` keyspace. Keeping the prefix in one place also avoids
  * stringly-typed drift between the seed (read) and persist (write) paths.
  */
-export const USER_STATE_KEY_PREFIX = 'ic.';
+export const USER_STATE_KEY_PREFIX = 'InteractiveComponents_UserState_Root/';
 
 /**
  * Resolve the stable per-component scope used to namespace a component's

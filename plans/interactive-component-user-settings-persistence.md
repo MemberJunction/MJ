@@ -36,9 +36,10 @@ self-contained. Do **not** add a per-key `utilities.settings.Get/Set` sugar API.
 Instead, wire the existing props to durable persistence **in the host (the Angular
 bridge)**, which is the single chokepoint every Angular host path flows through.
 
-Storage: **one `UserInfoEngine` blob per component scope** — key `ic.<scope>` →
-JSON object. Scope = explicit host-provided `UserStateScope` → fallback
-`<namespace>/<name>` from the component spec, lowercased.
+Storage: **one `UserInfoEngine` blob per component scope** — key
+`InteractiveComponents_UserState_Root/<scope>` → JSON object. Scope = explicit
+host-provided `UserStateScope` → fallback `<namespace>/<name>` from the component
+spec, lowercased.
 
 ## Changes by package
 
@@ -47,7 +48,7 @@ New pure module `src/utilities/user-state.ts` (so both hosts share one tested
 implementation, no framework deps):
 
 - `resolveUserStateScope(explicit, namespace, name): string | null`
-- `userStateStorageKey(scope): string | null` (`ic.` prefix)
+- `userStateStorageKey(scope): string | null` (`InteractiveComponents_UserState_Root/` prefix)
 - `parseStoredUserSettings(raw): Record<string, unknown>` (safe JSON parse)
 - `mergeUserSettings(hostDefaults, stored): Record<string, unknown>` (stored wins)
 
@@ -57,10 +58,10 @@ Exported from `src/index.ts`. Unit tested in `src/__tests__/user-state.test.ts`.
 - New `@Input() UserStateScope?: string`.
 - New `@Input() PersistUserSettings: boolean = true` (opt-out switch).
 - On init (before first render): `seedUserSettingsFromStore()` — lazy
-  `UserInfoEngine.Instance.Config(...)`, read `ic.<scope>`, merge over host-provided
-  defaults (stored wins), set `_savedUserSettings`.
+  `UserInfoEngine.Instance.Config(...)`, read `InteractiveComponents_UserState_Root/<scope>`,
+  merge over host-provided defaults (stored wins), set `_savedUserSettings`.
 - `handleSaveUserSettings(blob)` — store the latest blob in `_savedUserSettings`,
-  persist via `UserInfoEngine.Instance.SetSettingDebounced('ic.<scope>', JSON, user)`,
+  persist via `UserInfoEngine.Instance.SetSettingDebounced('InteractiveComponents_UserState_Root/<scope>', JSON, user)`,
   still emit `userSettingsChanged` (back-compat), no re-render.
 - Provider threaded via `this.ProviderToUse` / its `CurrentUser`, matching the
   existing `ComponentMetadataEngine.Instance.Config(...)` call in the same file.
