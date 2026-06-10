@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Channel Configuration Section -->
+    <!-- Channel Definition Section -->
     <mj-collapsible-panel
-        SectionKey="channelConfiguration"
-        SectionName="Channel Configuration"
+        SectionKey="channelDefinition"
+        SectionName="Channel Definition"
         Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
@@ -44,11 +44,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Technical Implementation Section -->
+    <!-- Integration Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="technicalImplementation"
-        SectionName="Technical Implementation"
-        Icon="fa fa-code"
+        SectionKey="integrationConfiguration"
+        SectionName="Integration Configuration"
+        Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -122,7 +122,7 @@
     <mj-collapsible-panel
         SectionKey="mJAIAgentSessionChannels"
         SectionName="AI Agent Session Channels"
-        Icon="fa fa-plug"
+        Icon="fa fa-network-wired"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

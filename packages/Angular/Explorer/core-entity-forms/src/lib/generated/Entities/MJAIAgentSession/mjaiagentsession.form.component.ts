@@ -18,13 +18,12 @@ export class MJAIAgentSessionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'sessionContext', sectionName: 'Session Context', isExpanded: true },
             { sectionKey: 'sessionLifecycle', sectionName: 'Session Lifecycle', isExpanded: true },
-            { sectionKey: 'sessionHistory', sectionName: 'Session History', isExpanded: true },
-            { sectionKey: 'sessionConfiguration', sectionName: 'Session Configuration', isExpanded: true },
+            { sectionKey: 'technicalInfrastructure', sectionName: 'Technical Infrastructure', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentSessionChannels', sectionName: 'AI Agent Session Channels', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
-            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false }
+            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessionChannels', sectionName: 'AI Agent Session Channels', isExpanded: false }
         ]);
     }
 }

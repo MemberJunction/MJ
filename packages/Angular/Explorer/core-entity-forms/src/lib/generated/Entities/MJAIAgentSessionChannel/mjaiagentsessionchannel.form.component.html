@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="sessionContext"
         SectionName="Session Context"
-        Icon="fa fa-link"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -38,10 +38,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Connection Details Section -->
+    <!-- Connection Status Section -->
     <mj-collapsible-panel
-        SectionKey="connectionDetails"
-        SectionName="Connection Details"
+        SectionKey="connectionStatus"
+        SectionName="Connection Status"
         Icon="fa fa-signal"
         [Form]="this"
         [FormContext]="formContext">
@@ -52,15 +52,6 @@
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SocketUrl"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -90,7 +81,16 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
+            FieldName="SocketUrl"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="Config"
             Type="code"
             [EditMode]="EditMode"

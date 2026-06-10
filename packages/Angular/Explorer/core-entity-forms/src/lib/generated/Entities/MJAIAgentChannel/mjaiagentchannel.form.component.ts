@@ -16,8 +16,8 @@ export class MJAIAgentChannelFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'channelConfiguration', sectionName: 'Channel Configuration', isExpanded: true },
-            { sectionKey: 'technicalImplementation', sectionName: 'Technical Implementation', isExpanded: true },
+            { sectionKey: 'channelDefinition', sectionName: 'Channel Definition', isExpanded: true },
+            { sectionKey: 'integrationConfiguration', sectionName: 'Integration Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentSessionChannels', sectionName: 'AI Agent Session Channels', isExpanded: false }
         ]);

@@ -1,37 +1,49 @@
 /* ============================================================================
-   AI Agent Sessions & Channels — Schema (Part II substrate for Real-Time Agents)
+   Real-Time AI Agents — Sessions, Channels & Co-Agent schema
    v5.41.x
 
    Companion plan: /plans/ai-agent-sessions.md
 
-   Adds the long-lived Session + pluggable Channel substrate that the real-time
-   (voice) agent capability runs inside. A Session wraps the multiple AIAgentRuns
-   of one real-time interaction; Channels are the bidirectional surfaces the
-   single real-time agent perceives and drives.
+   One consolidated migration for the real-time agents feature:
 
-   Tables (all new; no destructive changes):
-     AIAgentChannel         — pluggable channel-definition registry (reference data;
-                              seeded later via metadata files, NOT SQL INSERTs)
-     AIAgentSession         — the long-lived, stateful session record
+   New tables (no destructive changes):
+     AIAgentChannel         — pluggable channel-definition registry (reference
+                              data; seeded via metadata files, NOT SQL INSERTs)
+     AIAgentSession         — the long-lived, stateful session record, including
+                              CloseReason (authoritative close provenance)
      AIAgentSessionChannel  — one row per channel instance attached to a session
-                              (normalized replacement for an ActiveChannels JSON blob)
+                              (normalized replacement for an ActiveChannels blob)
 
-   Existing tables — additive nullable FK columns:
-     AIAgentRun.AgentSessionID        — links a run to its parent session
-     ConversationDetail.AgentSessionID — links a message to the session it occurred in
+   Existing tables — one additive nullable FK column each:
+     AIAgentRun.AgentSessionID         — links a run to its parent session
+     ConversationDetail.AgentSessionID — links a message to the session it
+                                         occurred in
+     AIAgentType.DefaultCoAgentID      — per-type default co-agent
+     AIAgent.DefaultCoAgentID          — per-agent co-agent persona
 
-   Naming note: the persisted session FK columns are AgentSessionID (NOT SessionID),
-   to stay distinct from the per-connection transport sessionID. See the plan's
-   "Unified Session Transport" section.
+   Co-agent resolution chain (a real-time session pairs a TARGET agent with the
+   CO-AGENT that is its live voice; both columns reference AIAgent because a
+   co-agent is just an agent of the Realtime type), resolved at session start:
+
+       runtime parameter (StartRealtimeClientSession coAgentId)
+         > AIAgent.DefaultCoAgentID          (per-agent persona)
+           > AIAgentType.DefaultCoAgentID    (per-type default)
+             > global default                (name lookup fallback)
+
+   Naming note: the persisted session FK columns are AgentSessionID (NOT
+   SessionID), to stay distinct from the per-connection transport sessionID.
+   See the plan's "Unified Session Transport" section.
 
    CodeGen convention (per CLAUDE.md migrations guide):
      * NO __mj_CreatedAt / __mj_UpdatedAt columns — CodeGen adds + triggers them.
-       (AIAgentSessionChannel therefore gets __mj_UpdatedAt for free.)
      * NO foreign-key indexes — CodeGen creates IDX_AUTO_MJ_FKEY_* automatically.
-     * sp_addextendedproperty for every non-PK / non-FK column so CodeGen surfaces
-       descriptions on regen.
-     * Status-style columns use CHECK constraints so CodeGen emits string-union types.
-     * AIAgentChannel rows are reference data — seeded via metadata/mj-sync, NOT here.
+     * sp_addextendedproperty on business columns (and the new FK columns, for
+       documentation) so CodeGen surfaces descriptions on regen.
+     * Status-style columns use CHECK constraints so CodeGen emits string-union
+       types. Server code that sets/reads the new columns ships AFTER CodeGen
+       generates the typed entity properties, per the no-weak-typing rule.
+     * Reference data (AIAgentChannel rows, realtime models, the Voice Co-Agent)
+       is seeded via metadata/mj-sync, NOT here.
 
    Entity metadata, views, and spCreate/Update/Delete are produced by CodeGen
    after this migration runs.
@@ -121,6 +133,7 @@ CREATE TABLE ${flyway:defaultSchema}.AIAgentSession (
     Config          NVARCHAR(MAX)    NULL,
     LastActiveAt    DATETIMEOFFSET   NOT NULL CONSTRAINT DF_AIAgentSession_LastActiveAt DEFAULT (SYSDATETIMEOFFSET()),
     ClosedAt        DATETIMEOFFSET   NULL,
+    CloseReason     NVARCHAR(20)     NULL,
     CONSTRAINT PK_AIAgentSession PRIMARY KEY (ID),
     CONSTRAINT FK_AIAgentSession_Agent FOREIGN KEY (AgentID)
         REFERENCES ${flyway:defaultSchema}.AIAgent (ID),
@@ -131,7 +144,9 @@ CREATE TABLE ${flyway:defaultSchema}.AIAgentSession (
     CONSTRAINT FK_AIAgentSession_LastSession FOREIGN KEY (LastSessionID)
         REFERENCES ${flyway:defaultSchema}.AIAgentSession (ID),
     CONSTRAINT CK_AIAgentSession_Status
-        CHECK (Status IN ('Active', 'Idle', 'Closed'))
+        CHECK (Status IN ('Active', 'Idle', 'Closed')),
+    CONSTRAINT CK_AIAgentSession_CloseReason
+        CHECK (CloseReason IN ('Explicit', 'Janitor', 'Shutdown', 'Error'))
 );
 GO
 
@@ -169,6 +184,13 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIAgentSession',
     @level2type = N'COLUMN', @level2name = N'ClosedAt';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSession',
+    @level2type = N'COLUMN', @level2name = N'CloseReason';
 
 
 -- ============================================================================
@@ -210,7 +232,7 @@ EXEC sp_addextendedproperty
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'JSON of per-instance channel configuration, validated against the channel definitions ConfigSchema.',
+    @value = N'JSON of per-instance channel configuration/state, validated against the channel definitions ConfigSchema.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIAgentSessionChannel',
     @level2type = N'COLUMN', @level2name = N'Config';
@@ -231,23 +253,31 @@ EXEC sp_addextendedproperty
 
 
 -- ============================================================================
--- 4. Existing-table additions — nullable AgentSessionID FK columns
---    (FK columns: CodeGen handles their descriptions + IDX_AUTO_MJ_FKEY_* index.)
+-- 4. Existing-table additions — one ALTER per table, FK inline
+--    (FK indexes + spCreate/Update/Delete handled by CodeGen.)
 -- ============================================================================
-ALTER TABLE ${flyway:defaultSchema}.AIAgentRun
-    ADD AgentSessionID UNIQUEIDENTIFIER NULL;
-GO
-ALTER TABLE ${flyway:defaultSchema}.AIAgentRun
-    ADD CONSTRAINT FK_AIAgentRun_AgentSession FOREIGN KEY (AgentSessionID)
+ALTER TABLE ${flyway:defaultSchema}.AIAgentRun ADD
+    AgentSessionID UNIQUEIDENTIFIER NULL
+        CONSTRAINT FK_AIAgentRun_AgentSession
         REFERENCES ${flyway:defaultSchema}.AIAgentSession (ID);
 GO
 
-ALTER TABLE ${flyway:defaultSchema}.ConversationDetail
-    ADD AgentSessionID UNIQUEIDENTIFIER NULL;
-GO
-ALTER TABLE ${flyway:defaultSchema}.ConversationDetail
-    ADD CONSTRAINT FK_ConversationDetail_AgentSession FOREIGN KEY (AgentSessionID)
+ALTER TABLE ${flyway:defaultSchema}.ConversationDetail ADD
+    AgentSessionID UNIQUEIDENTIFIER NULL
+        CONSTRAINT FK_ConversationDetail_AgentSession
         REFERENCES ${flyway:defaultSchema}.AIAgentSession (ID);
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.AIAgentType ADD
+    DefaultCoAgentID UNIQUEIDENTIFIER NULL
+        CONSTRAINT FK_AIAgentType_DefaultCoAgent
+        REFERENCES ${flyway:defaultSchema}.AIAgent (ID);
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.AIAgent ADD
+    DefaultCoAgentID UNIQUEIDENTIFIER NULL
+        CONSTRAINT FK_AIAgent_DefaultCoAgent
+        REFERENCES ${flyway:defaultSchema}.AIAgent (ID);
 GO
 
 EXEC sp_addextendedproperty
@@ -263,7 +293,20 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'ConversationDetail',
     @level2type = N'COLUMN', @level2name = N'AgentSessionID';
-GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentType',
+    @level2type = N'COLUMN', @level2name = N'DefaultCoAgentID';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type''s DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgent',
+    @level2type = N'COLUMN', @level2name = N'DefaultCoAgentID';
 
 
 
@@ -326,8 +369,15 @@ GO
 
 
 
- -- Code Gen Run
- /* SQL generated to create new entity MJ: AI Agent Channels */
+
+
+
+
+
+
+
+-- CODE GEN RUN
+/* SQL generated to create new entity MJ: AI Agent Channels */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
          [ID],
@@ -353,7 +403,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '7e052ef5-a16e-4bf3-9f0b-dccfc79dcc0e',
+         '417336be-9dd3-481b-9686-81a435f54147',
          'MJ: AI Agent Channels',
          'AI Agent Channels',
          NULL,
@@ -379,22 +429,22 @@ GO
 /* SQL generated to add new entity MJ: AI Agent Channels to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '7e052ef5-a16e-4bf3-9f0b-dccfc79dcc0e', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '417336be-9dd3-481b-9686-81a435f54147', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Channels for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('7e052ef5-a16e-4bf3-9f0b-dccfc79dcc0e', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('417336be-9dd3-481b-9686-81a435f54147', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Channels for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('7e052ef5-a16e-4bf3-9f0b-dccfc79dcc0e', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('417336be-9dd3-481b-9686-81a435f54147', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Channels for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('7e052ef5-a16e-4bf3-9f0b-dccfc79dcc0e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('417336be-9dd3-481b-9686-81a435f54147', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: AI Agent Sessions */
 
@@ -422,7 +472,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '813ecd99-833b-46f9-8722-03c6a897833a',
+         'df2b0246-1729-4552-9fb7-48891b5f4873',
          'MJ: AI Agent Sessions',
          'AI Agent Sessions',
          NULL,
@@ -448,22 +498,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: AI Agent Sessions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '813ecd99-833b-46f9-8722-03c6a897833a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'df2b0246-1729-4552-9fb7-48891b5f4873', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Sessions for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('813ecd99-833b-46f9-8722-03c6a897833a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('df2b0246-1729-4552-9fb7-48891b5f4873', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Sessions for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('813ecd99-833b-46f9-8722-03c6a897833a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('df2b0246-1729-4552-9fb7-48891b5f4873', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Sessions for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('813ecd99-833b-46f9-8722-03c6a897833a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('df2b0246-1729-4552-9fb7-48891b5f4873', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: AI Agent Session Channels */
 
@@ -491,7 +541,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '86ac51d4-9dc2-4573-983f-c441ab5ad79f',
+         'a909c8e5-d406-4899-878b-61972f736779',
          'MJ: AI Agent Session Channels',
          'AI Agent Session Channels',
          NULL,
@@ -517,22 +567,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: AI Agent Session Channels to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '86ac51d4-9dc2-4573-983f-c441ab5ad79f', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'a909c8e5-d406-4899-878b-61972f736779', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Session Channels for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('86ac51d4-9dc2-4573-983f-c441ab5ad79f', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('a909c8e5-d406-4899-878b-61972f736779', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Session Channels for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('86ac51d4-9dc2-4573-983f-c441ab5ad79f', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('a909c8e5-d406-4899-878b-61972f736779', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Session Channels for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('86ac51d4-9dc2-4573-983f-c441ab5ad79f', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('a909c8e5-d406-4899-878b-61972f736779', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSession */
 ALTER TABLE [${flyway:defaultSchema}].[AIAgentSession] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -632,7 +682,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dbd7cecd-eaa6-4f24-bc89-f46efd26058a' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '23d0314b-0894-4e38-a243-6fe6d13b79c0' OR (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'AgentSessionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -665,8 +715,203 @@ GO
          )
          VALUES
          (
-            'dbd7cecd-eaa6-4f24-bc89-f46efd26058a',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '23d0314b-0894-4e38-a243-6fe6d13b79c0',
+            '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
+            100114,
+            'AgentSessionID',
+            'Agent Session ID',
+            'Links this run to the long-lived AIAgentSession it executed within. NULL for runs outside any real-time session. This is the persisted session reference and is distinct from the per-connection transport sessionID.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'DF2B0246-1729-4552-9FB7-48891B5F4873',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5389e13a-6d4f-4eef-80a1-51b828ebd9c3' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'DefaultCoAgentID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5389e13a-6d4f-4eef-80a1-51b828ebd9c3',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: MJ: AI Agents
+            100143,
+            'DefaultCoAgentID',
+            'Default Co Agent ID',
+            'Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type''s DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c215d1c0-9eb6-43ec-a8c2-ac64e9bded0e' OR (EntityID = '65CDC348-C4A6-4D00-A57B-2D489C56F128' AND Name = 'DefaultCoAgentID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c215d1c0-9eb6-43ec-a8c2-ac64e9bded0e',
+            '65CDC348-C4A6-4D00-A57B-2D489C56F128', -- Entity: MJ: AI Agent Types
+            100034,
+            'DefaultCoAgentID',
+            'Default Co Agent ID',
+            'Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5feead82-55fc-4231-972a-b39511ee1410' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5feead82-55fc-4231-972a-b39511ee1410',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100001,
             'ID',
             'ID',
@@ -697,7 +942,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '325d3874-9acd-4224-b369-28b846bf6d3c' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'AgentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a1d999ab-cba5-4233-a296-87e026e40807' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'AgentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -730,8 +975,8 @@ GO
          )
          VALUES
          (
-            '325d3874-9acd-4224-b369-28b846bf6d3c',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            'a1d999ab-cba5-4233-a296-87e026e40807',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100002,
             'AgentID',
             'Agent ID',
@@ -762,7 +1007,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a88fc692-336b-4e1f-8155-fbf52ff7e84b' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'UserID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ee4f8641-bf5c-449f-b249-ef634d240c90' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'UserID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -795,8 +1040,8 @@ GO
          )
          VALUES
          (
-            'a88fc692-336b-4e1f-8155-fbf52ff7e84b',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            'ee4f8641-bf5c-449f-b249-ef634d240c90',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100003,
             'UserID',
             'User ID',
@@ -827,7 +1072,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9ef8ad06-c394-4e75-a811-2701a27910c6' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1ee2bc8d-fefc-4ae9-b3c6-e1cdf54f7893' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -860,8 +1105,8 @@ GO
          )
          VALUES
          (
-            '9ef8ad06-c394-4e75-a811-2701a27910c6',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '1ee2bc8d-fefc-4ae9-b3c6-e1cdf54f7893',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100004,
             'Status',
             'Status',
@@ -892,7 +1137,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '29b5338c-548f-4a18-a9f8-32979929271b' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'ConversationID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '61e0bcc1-5696-4f1d-9fdc-4c71a7bed310' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'ConversationID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -925,8 +1170,8 @@ GO
          )
          VALUES
          (
-            '29b5338c-548f-4a18-a9f8-32979929271b',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '61e0bcc1-5696-4f1d-9fdc-4c71a7bed310',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100005,
             'ConversationID',
             'Conversation ID',
@@ -957,7 +1202,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e5768066-571d-41c2-83c5-86a5c3f80020' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'LastSessionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'db4d8fc0-1480-4d34-8365-a107fee0f9ad' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'LastSessionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -990,8 +1235,8 @@ GO
          )
          VALUES
          (
-            'e5768066-571d-41c2-83c5-86a5c3f80020',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            'db4d8fc0-1480-4d34-8365-a107fee0f9ad',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100006,
             'LastSessionID',
             'Last Session ID',
@@ -1006,7 +1251,7 @@ GO
             1,
             0,
             0,
-            '813ECD99-833B-46F9-8722-03C6A897833A',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873',
             'ID',
             0,
             0,
@@ -1022,7 +1267,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '22fd81c9-faf1-4919-bb3f-47ed6296ec55' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'HostInstanceID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '69619e4b-2ef9-4763-90c3-afa942dc0aa1' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'HostInstanceID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1055,8 +1300,8 @@ GO
          )
          VALUES
          (
-            '22fd81c9-faf1-4919-bb3f-47ed6296ec55',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '69619e4b-2ef9-4763-90c3-afa942dc0aa1',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100007,
             'HostInstanceID',
             'Host Instance ID',
@@ -1087,7 +1332,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd9e13e66-3e85-4b42-b427-cc9ffec520e4' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'Config')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c783c488-ac96-413f-ada4-2377cbb0c35a' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'Config')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1120,8 +1365,8 @@ GO
          )
          VALUES
          (
-            'd9e13e66-3e85-4b42-b427-cc9ffec520e4',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            'c783c488-ac96-413f-ada4-2377cbb0c35a',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100008,
             'Config',
             'Config',
@@ -1152,7 +1397,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '49f56da2-55ba-42fc-ba37-1091d62b2bd3' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'LastActiveAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8c704f55-4757-462c-8c67-04920d9da336' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'LastActiveAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1185,8 +1430,8 @@ GO
          )
          VALUES
          (
-            '49f56da2-55ba-42fc-ba37-1091d62b2bd3',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '8c704f55-4757-462c-8c67-04920d9da336',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100009,
             'LastActiveAt',
             'Last Active At',
@@ -1217,7 +1462,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '884399eb-9020-4eae-bd6f-c9cf288ab7da' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'ClosedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8fc7db66-fb18-4a10-a7b1-17e871efbce2' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'ClosedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1250,8 +1495,8 @@ GO
          )
          VALUES
          (
-            '884399eb-9020-4eae-bd6f-c9cf288ab7da',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '8fc7db66-fb18-4a10-a7b1-17e871efbce2',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100010,
             'ClosedAt',
             'Closed At',
@@ -1282,7 +1527,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0dd45ff5-6be3-4cff-9a3a-9534a1fc0f1f' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3dcef25d-0546-4c75-8a9a-8cb891ab0e51' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'CloseReason')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1315,9 +1560,74 @@ GO
          )
          VALUES
          (
-            '0dd45ff5-6be3-4cff-9a3a-9534a1fc0f1f',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
+            '3dcef25d-0546-4c75-8a9a-8cb891ab0e51',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
             100011,
+            'CloseReason',
+            'Close Reason',
+            'Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'feafc3fd-1342-41b3-936a-508c6818fdc5' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'feafc3fd-1342-41b3-936a-508c6818fdc5',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
+            100012,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -1347,7 +1657,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4c7fed94-1ffc-4cf5-941c-7851a9a7ce54' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3dd79455-7665-46de-b1c0-2cbd208644a4' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1380,9 +1690,9 @@ GO
          )
          VALUES
          (
-            '4c7fed94-1ffc-4cf5-941c-7851a9a7ce54',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
-            100012,
+            '3dd79455-7665-46de-b1c0-2cbd208644a4',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
+            100013,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -1412,7 +1722,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c1bc9b1-cd77-4fca-a05b-748dc848cddb' OR (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'AgentSessionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5470c38c-cf11-45de-8dac-54b55dcc244c' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AgentSessionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1445,72 +1755,7 @@ GO
          )
          VALUES
          (
-            '2c1bc9b1-cd77-4fca-a05b-748dc848cddb',
-            '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
-            100114,
-            'AgentSessionID',
-            'Agent Session ID',
-            'Links this run to the long-lived AIAgentSession it executed within. NULL for runs outside any real-time session. This is the persisted session reference and is distinct from the per-connection transport sessionID.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '813ECD99-833B-46F9-8722-03C6A897833A',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a99dd61c-9866-47ad-8a8b-00999680fd73' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AgentSessionID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a99dd61c-9866-47ad-8a8b-00999680fd73',
+            '5470c38c-cf11-45de-8dac-54b55dcc244c',
             '12248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversation Details
             100064,
             'AgentSessionID',
@@ -1526,7 +1771,7 @@ GO
             1,
             0,
             0,
-            '813ECD99-833B-46F9-8722-03C6A897833A',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873',
             'ID',
             0,
             0,
@@ -1542,7 +1787,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c873ad86-b1f1-47a1-ac08-2fcc1f5bd343' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5e3d73a1-dd35-4709-aa02-10373242ca24' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1575,8 +1820,8 @@ GO
          )
          VALUES
          (
-            'c873ad86-b1f1-47a1-ac08-2fcc1f5bd343',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '5e3d73a1-dd35-4709-aa02-10373242ca24',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100001,
             'ID',
             'ID',
@@ -1607,7 +1852,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '875c4e35-3c15-4014-8e04-bf66ed3c8e48' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'AgentSessionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2bbc1988-61a7-4d21-ad19-eed50e2b0a05' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'AgentSessionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1640,8 +1885,8 @@ GO
          )
          VALUES
          (
-            '875c4e35-3c15-4014-8e04-bf66ed3c8e48',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '2bbc1988-61a7-4d21-ad19-eed50e2b0a05',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100002,
             'AgentSessionID',
             'Agent Session ID',
@@ -1656,7 +1901,7 @@ GO
             1,
             0,
             0,
-            '813ECD99-833B-46F9-8722-03C6A897833A',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873',
             'ID',
             0,
             0,
@@ -1672,7 +1917,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5c7b15ec-d976-4f87-9f53-6750f9087c26' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'ChannelID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '784b75f0-16c4-485f-b2f4-8b07f50fbc4e' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'ChannelID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1705,8 +1950,8 @@ GO
          )
          VALUES
          (
-            '5c7b15ec-d976-4f87-9f53-6750f9087c26',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '784b75f0-16c4-485f-b2f4-8b07f50fbc4e',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100003,
             'ChannelID',
             'Channel ID',
@@ -1721,7 +1966,7 @@ GO
             1,
             0,
             0,
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E',
+            '417336BE-9DD3-481B-9686-81A435F54147',
             'ID',
             0,
             0,
@@ -1737,7 +1982,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fa23f676-37e1-48c6-aad1-f6821d650380' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '17506f15-da0f-49c3-baba-a9f1c179ee3e' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1770,8 +2015,8 @@ GO
          )
          VALUES
          (
-            'fa23f676-37e1-48c6-aad1-f6821d650380',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '17506f15-da0f-49c3-baba-a9f1c179ee3e',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100004,
             'Status',
             'Status',
@@ -1802,7 +2047,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '420ab807-98f0-486d-bafe-55cfe1e6c7ee' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'SocketUrl')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f07fcb82-69fe-4ed4-aecd-1310377a439b' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'SocketUrl')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1835,8 +2080,8 @@ GO
          )
          VALUES
          (
-            '420ab807-98f0-486d-bafe-55cfe1e6c7ee',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            'f07fcb82-69fe-4ed4-aecd-1310377a439b',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100005,
             'SocketUrl',
             'Socket Url',
@@ -1867,7 +2112,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '449c3643-d9d9-485c-9f25-0a09c5153135' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'Config')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '989052bd-fcb6-44d7-a4d8-3fb3116a4c5c' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'Config')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1900,12 +2145,12 @@ GO
          )
          VALUES
          (
-            '449c3643-d9d9-485c-9f25-0a09c5153135',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '989052bd-fcb6-44d7-a4d8-3fb3116a4c5c',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100006,
             'Config',
             'Config',
-            'JSON of per-instance channel configuration, validated against the channel definitions ConfigSchema.',
+            'JSON of per-instance channel configuration/state, validated against the channel definitions ConfigSchema.',
             'nvarchar',
             -1,
             0,
@@ -1932,7 +2177,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '96b01199-9c62-4110-a7e1-ddf08ba83b78' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'LastActiveAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4cedb027-c266-400f-9f92-624fc9e658bd' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'LastActiveAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1965,8 +2210,8 @@ GO
          )
          VALUES
          (
-            '96b01199-9c62-4110-a7e1-ddf08ba83b78',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '4cedb027-c266-400f-9f92-624fc9e658bd',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100007,
             'LastActiveAt',
             'Last Active At',
@@ -1997,7 +2242,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8a001fbe-8856-4f78-951b-fa979e46ae4d' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'DisconnectedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ba18e18e-521f-44b2-bfe3-40b155c58ba3' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'DisconnectedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2030,8 +2275,8 @@ GO
          )
          VALUES
          (
-            '8a001fbe-8856-4f78-951b-fa979e46ae4d',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            'ba18e18e-521f-44b2-bfe3-40b155c58ba3',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100008,
             'DisconnectedAt',
             'Disconnected At',
@@ -2062,7 +2307,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fd98383c-dad4-4ebf-a399-137e5763cd61' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bff02a46-902c-4159-92de-ccd3ff211e37' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2095,8 +2340,8 @@ GO
          )
          VALUES
          (
-            'fd98383c-dad4-4ebf-a399-137e5763cd61',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            'bff02a46-902c-4159-92de-ccd3ff211e37',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100009,
             '__mj_CreatedAt',
             'Created At',
@@ -2127,7 +2372,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '80984c3f-0190-4926-b0fe-a7b150d456cf' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '241bafb0-da75-4e87-91d5-c8b341ebaa2d' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2160,8 +2405,8 @@ GO
          )
          VALUES
          (
-            '80984c3f-0190-4926-b0fe-a7b150d456cf',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '241bafb0-da75-4e87-91d5-c8b341ebaa2d',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100010,
             '__mj_UpdatedAt',
             'Updated At',
@@ -2192,7 +2437,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'accc3e71-08b8-4ebb-9504-bd89b32f3492' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18a62344-3698-4445-b2ee-48b19b3e323d' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2225,8 +2470,8 @@ GO
          )
          VALUES
          (
-            'accc3e71-08b8-4ebb-9504-bd89b32f3492',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            '18a62344-3698-4445-b2ee-48b19b3e323d',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100001,
             'ID',
             'ID',
@@ -2257,7 +2502,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '055accb7-5175-49b9-8ab3-eaa4887acf6c' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6ee074c4-60ed-4df5-b9dd-eec722a7b3c2' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2290,8 +2535,8 @@ GO
          )
          VALUES
          (
-            '055accb7-5175-49b9-8ab3-eaa4887acf6c',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            '6ee074c4-60ed-4df5-b9dd-eec722a7b3c2',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100002,
             'Name',
             'Name',
@@ -2322,7 +2567,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '896e1f2b-b67f-4d66-8d9e-eea7660c5aac' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd85030e0-5ada-4001-a4e3-92157b381fa0' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2355,8 +2600,8 @@ GO
          )
          VALUES
          (
-            '896e1f2b-b67f-4d66-8d9e-eea7660c5aac',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            'd85030e0-5ada-4001-a4e3-92157b381fa0',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100003,
             'Description',
             'Description',
@@ -2387,7 +2632,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '32609e2b-dffe-443b-8e6a-dbb3d834ce05' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'ServerPluginClass')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '40c2da29-40ad-4f49-8121-7fcd282f28af' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'ServerPluginClass')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2420,8 +2665,8 @@ GO
          )
          VALUES
          (
-            '32609e2b-dffe-443b-8e6a-dbb3d834ce05',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            '40c2da29-40ad-4f49-8121-7fcd282f28af',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100004,
             'ServerPluginClass',
             'Server Plugin Class',
@@ -2452,7 +2697,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0a5bdd15-2b3f-47ea-abc4-cd4f307b0ade' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'ClientPluginClass')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed708ea1-ddbd-4027-840a-4d35896cfda2' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'ClientPluginClass')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2485,8 +2730,8 @@ GO
          )
          VALUES
          (
-            '0a5bdd15-2b3f-47ea-abc4-cd4f307b0ade',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            'ed708ea1-ddbd-4027-840a-4d35896cfda2',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100005,
             'ClientPluginClass',
             'Client Plugin Class',
@@ -2517,7 +2762,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '19aff278-cc5f-4c9e-8c39-87bc7afe78bb' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'TransportType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b8279ec1-5264-4070-bd8a-9927df140745' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'TransportType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2550,8 +2795,8 @@ GO
          )
          VALUES
          (
-            '19aff278-cc5f-4c9e-8c39-87bc7afe78bb',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            'b8279ec1-5264-4070-bd8a-9927df140745',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100006,
             'TransportType',
             'Transport Type',
@@ -2582,7 +2827,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f4308226-d24b-487e-a045-2b63e563ff16' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'ConfigSchema')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b0a0b7a6-5d3e-4a56-a410-112f51a5de51' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'ConfigSchema')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2615,8 +2860,8 @@ GO
          )
          VALUES
          (
-            'f4308226-d24b-487e-a045-2b63e563ff16',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            'b0a0b7a6-5d3e-4a56-a410-112f51a5de51',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100007,
             'ConfigSchema',
             'Config Schema',
@@ -2647,7 +2892,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '58f80bb2-de2d-4cbb-9fc9-ac2a862687c2' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = 'IsActive')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a80023d7-4d33-4443-9504-37fe6ae132ff' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = 'IsActive')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2680,8 +2925,8 @@ GO
          )
          VALUES
          (
-            '58f80bb2-de2d-4cbb-9fc9-ac2a862687c2',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            'a80023d7-4d33-4443-9504-37fe6ae132ff',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100008,
             'IsActive',
             'Is Active',
@@ -2712,7 +2957,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8469adf0-db56-4f14-9d37-623386768a70' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5844e14d-27b7-43a2-adcc-e1732f3a947d' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2745,8 +2990,8 @@ GO
          )
          VALUES
          (
-            '8469adf0-db56-4f14-9d37-623386768a70',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            '5844e14d-27b7-43a2-adcc-e1732f3a947d',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100009,
             '__mj_CreatedAt',
             'Created At',
@@ -2777,7 +3022,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '180e3ee8-6fe2-4d9b-96f9-d50225f628e6' OR (EntityID = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e5b1c8b8-bed9-406a-9403-9413a0554639' OR (EntityID = '417336BE-9DD3-481B-9686-81A435F54147' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2810,8 +3055,8 @@ GO
          )
          VALUES
          (
-            '180e3ee8-6fe2-4d9b-96f9-d50225f628e6',
-            '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', -- Entity: MJ: AI Agent Channels
+            'e5b1c8b8-bed9-406a-9403-9413a0554639',
+            '417336BE-9DD3-481B-9686-81A435F54147', -- Entity: MJ: AI Agent Channels
             100010,
             '__mj_UpdatedAt',
             'Updated At',
@@ -2840,151 +3085,197 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID cceafd15-cbb3-4cef-9aa9-59908b236f14 */
+/* SQL text to insert entity field value with ID 63563b50-ef9b-4fb4-8328-889202904510 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('cceafd15-cbb3-4cef-9aa9-59908b236f14', '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB', 1, 'PubSub', 'PubSub', GETUTCDATE(), GETUTCDATE());
+                                       ('63563b50-ef9b-4fb4-8328-889202904510', 'B8279EC1-5264-4070-BD8A-9927DF140745', 1, 'PubSub', 'PubSub', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 888f984f-365b-4b9e-a9c7-d0174035fed1 */
+/* SQL text to insert entity field value with ID acfaa429-9e91-465d-a6ff-e9f401f9fa3d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('888f984f-365b-4b9e-a9c7-d0174035fed1', '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB', 2, 'WebRTC', 'WebRTC', GETUTCDATE(), GETUTCDATE());
+                                       ('acfaa429-9e91-465d-a6ff-e9f401f9fa3d', 'B8279EC1-5264-4070-BD8A-9927DF140745', 2, 'WebRTC', 'WebRTC', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2efdda00-6d0c-4941-bf16-edd4ecb4b8ed */
+/* SQL text to insert entity field value with ID b8c3da68-c24d-473e-a357-3ec967a2900f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2efdda00-6d0c-4941-bf16-edd4ecb4b8ed', '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB', 3, 'WebSocket', 'WebSocket', GETUTCDATE(), GETUTCDATE());
+                                       ('b8c3da68-c24d-473e-a357-3ec967a2900f', 'B8279EC1-5264-4070-BD8A-9927DF140745', 3, 'WebSocket', 'WebSocket', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB';
+/* SQL text to update ValueListType for entity field ID B8279EC1-5264-4070-BD8A-9927DF140745 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B8279EC1-5264-4070-BD8A-9927DF140745';
 
-/* SQL text to insert entity field value with ID 3a9b80ab-a58e-465f-a546-d88c33038733 */
+/* SQL text to insert entity field value with ID f3ec11a0-1a3e-4c65-905b-c92640b7f747 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3a9b80ab-a58e-465f-a546-d88c33038733', '9EF8AD06-C394-4E75-A811-2701A27910C6', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('f3ec11a0-1a3e-4c65-905b-c92640b7f747', '1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2fc62b79-d3aa-42c4-93bd-ac4b9f2e9173 */
+/* SQL text to insert entity field value with ID 4992c7ee-0129-42e9-bd9b-20b18502eb66 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2fc62b79-d3aa-42c4-93bd-ac4b9f2e9173', '9EF8AD06-C394-4E75-A811-2701A27910C6', 2, 'Closed', 'Closed', GETUTCDATE(), GETUTCDATE());
+                                       ('4992c7ee-0129-42e9-bd9b-20b18502eb66', '1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893', 2, 'Closed', 'Closed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID fa377a21-2723-46c0-b661-8bb10ff68c46 */
+/* SQL text to insert entity field value with ID e83e3051-4ba7-4067-83f5-ed5e36bf37c9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('fa377a21-2723-46c0-b661-8bb10ff68c46', '9EF8AD06-C394-4E75-A811-2701A27910C6', 3, 'Idle', 'Idle', GETUTCDATE(), GETUTCDATE());
+                                       ('e83e3051-4ba7-4067-83f5-ed5e36bf37c9', '1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893', 3, 'Idle', 'Idle', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 9EF8AD06-C394-4E75-A811-2701A27910C6 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='9EF8AD06-C394-4E75-A811-2701A27910C6';
+/* SQL text to update ValueListType for entity field ID 1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893';
 
-/* SQL text to insert entity field value with ID 9fb376ef-202a-47a4-b888-3970d7d616c8 */
+/* SQL text to insert entity field value with ID 1358d5b1-3943-42a6-b6bb-ab67139b241a */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9fb376ef-202a-47a4-b888-3970d7d616c8', 'FA23F676-37E1-48C6-AAD1-F6821D650380', 1, 'Connected', 'Connected', GETUTCDATE(), GETUTCDATE());
+                                       ('1358d5b1-3943-42a6-b6bb-ab67139b241a', '3DCEF25D-0546-4C75-8A9A-8CB891AB0E51', 1, 'Error', 'Error', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7040de82-ae37-42f9-aa87-61a6d01ac9b5 */
+/* SQL text to insert entity field value with ID 69e7330f-b160-411e-9761-78480db2c8ee */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7040de82-ae37-42f9-aa87-61a6d01ac9b5', 'FA23F676-37E1-48C6-AAD1-F6821D650380', 2, 'Connecting', 'Connecting', GETUTCDATE(), GETUTCDATE());
+                                       ('69e7330f-b160-411e-9761-78480db2c8ee', '3DCEF25D-0546-4C75-8A9A-8CB891AB0E51', 2, 'Explicit', 'Explicit', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 9bd8883c-f66d-4e61-b56a-96ac906de7a6 */
+/* SQL text to insert entity field value with ID 428b6fd0-6cc6-4f9a-8b79-39c219c30802 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9bd8883c-f66d-4e61-b56a-96ac906de7a6', 'FA23F676-37E1-48C6-AAD1-F6821D650380', 3, 'Disconnected', 'Disconnected', GETUTCDATE(), GETUTCDATE());
+                                       ('428b6fd0-6cc6-4f9a-8b79-39c219c30802', '3DCEF25D-0546-4C75-8A9A-8CB891AB0E51', 3, 'Janitor', 'Janitor', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2798c78d-4fec-47d7-b677-28ed70aab2d7 */
+/* SQL text to insert entity field value with ID 0510f7fa-be9a-4d33-a962-f31639da1ffc */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2798c78d-4fec-47d7-b677-28ed70aab2d7', 'FA23F676-37E1-48C6-AAD1-F6821D650380', 4, 'Paused', 'Paused', GETUTCDATE(), GETUTCDATE());
+                                       ('0510f7fa-be9a-4d33-a962-f31639da1ffc', '3DCEF25D-0546-4C75-8A9A-8CB891AB0E51', 4, 'Shutdown', 'Shutdown', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID FA23F676-37E1-48C6-AAD1-F6821D650380 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='FA23F676-37E1-48C6-AAD1-F6821D650380';
+/* SQL text to update ValueListType for entity field ID 3DCEF25D-0546-4C75-8A9A-8CB891AB0E51 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='3DCEF25D-0546-4C75-8A9A-8CB891AB0E51';
+
+/* SQL text to insert entity field value with ID c73fdde7-453f-4722-91bf-c25b84b94277 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('c73fdde7-453f-4722-91bf-c25b84b94277', '17506F15-DA0F-49C3-BABA-A9F1C179EE3E', 1, 'Connected', 'Connected', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 9ae13d62-f701-4ed0-a6b8-de279b391172 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('9ae13d62-f701-4ed0-a6b8-de279b391172', '17506F15-DA0F-49C3-BABA-A9F1C179EE3E', 2, 'Connecting', 'Connecting', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 683f936b-efba-4e61-8b7c-d01e0b385665 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('683f936b-efba-4e61-8b7c-d01e0b385665', '17506F15-DA0F-49C3-BABA-A9F1C179EE3E', 3, 'Disconnected', 'Disconnected', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 2440eb11-293f-40fd-b022-5b843c0d8546 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('2440eb11-293f-40fd-b022-5b843c0d8546', '17506F15-DA0F-49C3-BABA-A9F1C179EE3E', 4, 'Paused', 'Paused', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 17506F15-DA0F-49C3-BABA-A9F1C179EE3E */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='17506F15-DA0F-49C3-BABA-A9F1C179EE3E';
 
 
-/* Create Entity Relationship: MJ: AI Agent Sessions -> MJ: AI Agent Session Channels (One To Many via AgentSessionID) */
+/* Create Entity Relationship: MJ: AI Agents -> MJ: AI Agent Types (One To Many via DefaultCoAgentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9c1026d5-6616-48cf-b799-9c51cfb9d04f'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ee64fb00-25c8-45a5-a0eb-22e8c800c378'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('9c1026d5-6616-48cf-b799-9c51cfb9d04f', '813ECD99-833B-46F9-8722-03C6A897833A', '86AC51D4-9DC2-4573-983F-C441AB5AD79F', 'AgentSessionID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('ee64fb00-25c8-45a5-a0eb-22e8c800c378', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '65CDC348-C4A6-4D00-A57B-2D489C56F128', 'DefaultCoAgentID', 'One To Many', 1, 1, 28, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: AI Agents -> MJ: AI Agent Sessions (One To Many via AgentID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '12e36473-b744-4e41-b3e3-c81289c05a50'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('12e36473-b744-4e41-b3e3-c81289c05a50', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'AgentID', 'One To Many', 1, 1, 29, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: AI Agents -> MJ: AI Agents (One To Many via DefaultCoAgentID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c51a49b2-a28d-45b5-ba1d-430d9bce9630'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('c51a49b2-a28d-45b5-ba1d-430d9bce9630', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', 'DefaultCoAgentID', 'One To Many', 1, 1, 30, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: AI Agent Sessions -> MJ: AI Agent Sessions (One To Many via LastSessionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0edb86b5-7d19-4e02-bfe6-6efd75843a5f'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '14ad014f-a718-4e90-9bbe-e423b7abf66f'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0edb86b5-7d19-4e02-bfe6-6efd75843a5f', '813ECD99-833B-46F9-8722-03C6A897833A', '813ECD99-833B-46F9-8722-03C6A897833A', 'LastSessionID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('14ad014f-a718-4e90-9bbe-e423b7abf66f', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'LastSessionID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
-                    
+
+
 /* Create Entity Relationship: MJ: AI Agent Sessions -> MJ: AI Agent Runs (One To Many via AgentSessionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'eba04b0c-8268-4ed8-9ba6-55a1d8362360'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6cd7f671-4b39-4960-b148-930f645bb693'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('eba04b0c-8268-4ed8-9ba6-55a1d8362360', '813ECD99-833B-46F9-8722-03C6A897833A', '5190AF93-4C39-4429-BDAA-0AEB492A0256', 'AgentSessionID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('6cd7f671-4b39-4960-b148-930f645bb693', 'DF2B0246-1729-4552-9FB7-48891B5F4873', '5190AF93-4C39-4429-BDAA-0AEB492A0256', 'AgentSessionID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: AI Agent Sessions -> MJ: Conversation Details (One To Many via AgentSessionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '7bb760be-c21e-4009-8ecd-0426615b4cb6'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '482aaaec-17e3-4d1c-985e-0a8401ff9f8f'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('7bb760be-c21e-4009-8ecd-0426615b4cb6', '813ECD99-833B-46F9-8722-03C6A897833A', '12248F34-2837-EF11-86D4-6045BDEE16E6', 'AgentSessionID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('482aaaec-17e3-4d1c-985e-0a8401ff9f8f', 'DF2B0246-1729-4552-9FB7-48891B5F4873', '12248F34-2837-EF11-86D4-6045BDEE16E6', 'AgentSessionID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
    END;
-
-
-/* Create Entity Relationship: MJ: AI Agents -> MJ: AI Agent Sessions (One To Many via AgentID) */
+                    
+/* Create Entity Relationship: MJ: AI Agent Sessions -> MJ: AI Agent Session Channels (One To Many via AgentSessionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd72d30b6-359d-49c2-8dc8-63de37cba1e7'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'fc4fb2fe-dd7b-4944-b7d6-7d818b69a984'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('d72d30b6-359d-49c2-8dc8-63de37cba1e7', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '813ECD99-833B-46F9-8722-03C6A897833A', 'AgentID', 'One To Many', 1, 1, 28, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('fc4fb2fe-dd7b-4944-b7d6-7d818b69a984', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'A909C8E5-D406-4899-878B-61972F736779', 'AgentSessionID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Users -> MJ: AI Agent Sessions (One To Many via UserID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ff3e0e16-94e2-4aac-9df2-235b18628ae6'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'acea4e6e-75e8-44a1-8d09-0444047573b9'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ff3e0e16-94e2-4aac-9df2-235b18628ae6', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '813ECD99-833B-46F9-8722-03C6A897833A', 'UserID', 'One To Many', 1, 1, 102, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('acea4e6e-75e8-44a1-8d09-0444047573b9', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'UserID', 'One To Many', 1, 1, 102, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Conversations -> MJ: AI Agent Sessions (One To Many via ConversationID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8764969f-71cd-4d77-8e86-08471ef707a1'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f55028e2-0d60-465a-97b3-a786d7947782'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('8764969f-71cd-4d77-8e86-08471ef707a1', '13248F34-2837-EF11-86D4-6045BDEE16E6', '813ECD99-833B-46F9-8722-03C6A897833A', 'ConversationID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('f55028e2-0d60-465a-97b3-a786d7947782', '13248F34-2837-EF11-86D4-6045BDEE16E6', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'ConversationID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: AI Agent Channels -> MJ: AI Agent Session Channels (One To Many via ChannelID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '18037af6-9a35-4ad6-af73-a87b70cba4a3'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '38ad5e19-b37b-485a-a3c0-b751476e6a33'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('18037af6-9a35-4ad6-af73-a87b70cba4a3', '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', '86AC51D4-9DC2-4573-983F-C441AB5AD79F', 'ChannelID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('38ad5e19-b37b-485a-a3c0-b751476e6a33', '417336BE-9DD3-481B-9686-81A435F54147', 'A909C8E5-D406-4899-878B-61972F736779', 'ChannelID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for AIAgentChannel */
@@ -3419,8 +3710,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentSessionChannel_ChannelID ON [${flyway:defaultSchema}].[AIAgentSessionChannel] ([ChannelID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 5C7B15EC-D976-4F87-9F53-6750F9087C26 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5C7B15EC-D976-4F87-9F53-6750F9087C26', @RelatedEntityNameFieldMap='Channel';
+/* SQL text to update entity field related entity name field map for entity field ID 784B75F0-16C4-485F-B2F4-8B07F50FBC4E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='784B75F0-16C4-485F-B2F4-8B07F50FBC4E', @RelatedEntityNameFieldMap='Channel';
 
 /* Root ID Function SQL for MJ: AI Agent Runs.ParentRunID */
 -----------------------------------------------------------------
@@ -5032,14 +5323,395 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentSession_LastSessionID ON [${flyway:defaultSchema}].[AIAgentSession] ([LastSessionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 325D3874-9ACD-4224-B369-28B846BF6D3C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='325D3874-9ACD-4224-B369-28B846BF6D3C', @RelatedEntityNameFieldMap='Agent';
+/* SQL text to update entity field related entity name field map for entity field ID A1D999AB-CBA5-4233-A296-87E026E40807 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A1D999AB-CBA5-4233-A296-87E026E40807', @RelatedEntityNameFieldMap='Agent';
 
-/* SQL text to update entity field related entity name field map for entity field ID A88FC692-336B-4E1F-8155-FBF52FF7E84B */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A88FC692-336B-4E1F-8155-FBF52FF7E84B', @RelatedEntityNameFieldMap='User';
+/* Index for Foreign Keys for AIAgentType */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agent Types
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key SystemPromptID in table AIAgentType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentType_SystemPromptID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentType_SystemPromptID ON [${flyway:defaultSchema}].[AIAgentType] ([SystemPromptID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 29B5338C-548F-4A18-A9F8-32979929271B */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='29B5338C-548F-4A18-A9F8-32979929271B', @RelatedEntityNameFieldMap='Conversation';
+-- Index for foreign key DefaultStorageAccountID in table AIAgentType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentType_DefaultStorageAccountID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentType_DefaultStorageAccountID ON [${flyway:defaultSchema}].[AIAgentType] ([DefaultStorageAccountID]);
+
+-- Index for foreign key DefaultCoAgentID in table AIAgentType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentType_DefaultCoAgentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentType_DefaultCoAgentID ON [${flyway:defaultSchema}].[AIAgentType] ([DefaultCoAgentID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID C215D1C0-9EB6-43EC-A8C2-AC64E9BDED0E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='C215D1C0-9EB6-43EC-A8C2-AC64E9BDED0E', @RelatedEntityNameFieldMap='DefaultCoAgent';
+
+/* Base View SQL for MJ: AI Agent Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agent Types
+-- Item: vwAIAgentTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Agent Types
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIAgentType
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIAgentTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAIAgentTypes];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIAgentTypes]
+AS
+SELECT
+    a.*,
+    MJAIPrompt_SystemPromptID.[Name] AS [SystemPrompt],
+    MJFileStorageAccount_DefaultStorageAccountID.[Name] AS [DefaultStorageAccount],
+    MJAIAgent_DefaultCoAgentID.[Name] AS [DefaultCoAgent]
+FROM
+    [${flyway:defaultSchema}].[AIAgentType] AS a
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIPrompt] AS MJAIPrompt_SystemPromptID
+  ON
+    [a].[SystemPromptID] = MJAIPrompt_SystemPromptID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[FileStorageAccount] AS MJFileStorageAccount_DefaultStorageAccountID
+  ON
+    [a].[DefaultStorageAccountID] = MJFileStorageAccount_DefaultStorageAccountID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS MJAIAgent_DefaultCoAgentID
+  ON
+    [a].[DefaultCoAgentID] = MJAIAgent_DefaultCoAgentID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: AI Agent Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agent Types
+-- Item: Permissions for vwAIAgentTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: AI Agent Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agent Types
+-- Item: spCreateAIAgentType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIAgentType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAIAgentType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentType]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(100),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @SystemPromptID_Clear bit = 0,
+    @SystemPromptID uniqueidentifier = NULL,
+    @IsActive bit = NULL,
+    @AgentPromptPlaceholder_Clear bit = 0,
+    @AgentPromptPlaceholder nvarchar(255) = NULL,
+    @DriverClass_Clear bit = 0,
+    @DriverClass nvarchar(255) = NULL,
+    @UIFormSectionKey_Clear bit = 0,
+    @UIFormSectionKey nvarchar(500) = NULL,
+    @UIFormKey_Clear bit = 0,
+    @UIFormKey nvarchar(500) = NULL,
+    @UIFormSectionExpandedByDefault bit = NULL,
+    @PromptParamsSchema_Clear bit = 0,
+    @PromptParamsSchema nvarchar(MAX) = NULL,
+    @AssignmentStrategy_Clear bit = 0,
+    @AssignmentStrategy nvarchar(MAX) = NULL,
+    @DefaultStorageAccountID_Clear bit = 0,
+    @DefaultStorageAccountID uniqueidentifier = NULL,
+    @DefaultCoAgentID_Clear bit = 0,
+    @DefaultCoAgentID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AIAgentType]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [SystemPromptID],
+                [IsActive],
+                [AgentPromptPlaceholder],
+                [DriverClass],
+                [UIFormSectionKey],
+                [UIFormKey],
+                [UIFormSectionExpandedByDefault],
+                [PromptParamsSchema],
+                [AssignmentStrategy],
+                [DefaultStorageAccountID],
+                [DefaultCoAgentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                CASE WHEN @SystemPromptID_Clear = 1 THEN NULL ELSE ISNULL(@SystemPromptID, NULL) END,
+                ISNULL(@IsActive, 1),
+                CASE WHEN @AgentPromptPlaceholder_Clear = 1 THEN NULL ELSE ISNULL(@AgentPromptPlaceholder, NULL) END,
+                CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, NULL) END,
+                CASE WHEN @UIFormSectionKey_Clear = 1 THEN NULL ELSE ISNULL(@UIFormSectionKey, NULL) END,
+                CASE WHEN @UIFormKey_Clear = 1 THEN NULL ELSE ISNULL(@UIFormKey, NULL) END,
+                ISNULL(@UIFormSectionExpandedByDefault, 1),
+                CASE WHEN @PromptParamsSchema_Clear = 1 THEN NULL ELSE ISNULL(@PromptParamsSchema, NULL) END,
+                CASE WHEN @AssignmentStrategy_Clear = 1 THEN NULL ELSE ISNULL(@AssignmentStrategy, NULL) END,
+                CASE WHEN @DefaultStorageAccountID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultStorageAccountID, NULL) END,
+                CASE WHEN @DefaultCoAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCoAgentID, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AIAgentType]
+            (
+                [Name],
+                [Description],
+                [SystemPromptID],
+                [IsActive],
+                [AgentPromptPlaceholder],
+                [DriverClass],
+                [UIFormSectionKey],
+                [UIFormKey],
+                [UIFormSectionExpandedByDefault],
+                [PromptParamsSchema],
+                [AssignmentStrategy],
+                [DefaultStorageAccountID],
+                [DefaultCoAgentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                CASE WHEN @SystemPromptID_Clear = 1 THEN NULL ELSE ISNULL(@SystemPromptID, NULL) END,
+                ISNULL(@IsActive, 1),
+                CASE WHEN @AgentPromptPlaceholder_Clear = 1 THEN NULL ELSE ISNULL(@AgentPromptPlaceholder, NULL) END,
+                CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, NULL) END,
+                CASE WHEN @UIFormSectionKey_Clear = 1 THEN NULL ELSE ISNULL(@UIFormSectionKey, NULL) END,
+                CASE WHEN @UIFormKey_Clear = 1 THEN NULL ELSE ISNULL(@UIFormKey, NULL) END,
+                ISNULL(@UIFormSectionExpandedByDefault, 1),
+                CASE WHEN @PromptParamsSchema_Clear = 1 THEN NULL ELSE ISNULL(@PromptParamsSchema, NULL) END,
+                CASE WHEN @AssignmentStrategy_Clear = 1 THEN NULL ELSE ISNULL(@AssignmentStrategy, NULL) END,
+                CASE WHEN @DefaultStorageAccountID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultStorageAccountID, NULL) END,
+                CASE WHEN @DefaultCoAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCoAgentID, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIAgentTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentType] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: AI Agent Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentType] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: AI Agent Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agent Types
+-- Item: spUpdateAIAgentType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIAgentType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAIAgentType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentType]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @SystemPromptID_Clear bit = 0,
+    @SystemPromptID uniqueidentifier = NULL,
+    @IsActive bit = NULL,
+    @AgentPromptPlaceholder_Clear bit = 0,
+    @AgentPromptPlaceholder nvarchar(255) = NULL,
+    @DriverClass_Clear bit = 0,
+    @DriverClass nvarchar(255) = NULL,
+    @UIFormSectionKey_Clear bit = 0,
+    @UIFormSectionKey nvarchar(500) = NULL,
+    @UIFormKey_Clear bit = 0,
+    @UIFormKey nvarchar(500) = NULL,
+    @UIFormSectionExpandedByDefault bit = NULL,
+    @PromptParamsSchema_Clear bit = 0,
+    @PromptParamsSchema nvarchar(MAX) = NULL,
+    @AssignmentStrategy_Clear bit = 0,
+    @AssignmentStrategy nvarchar(MAX) = NULL,
+    @DefaultStorageAccountID_Clear bit = 0,
+    @DefaultStorageAccountID uniqueidentifier = NULL,
+    @DefaultCoAgentID_Clear bit = 0,
+    @DefaultCoAgentID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgentType]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [SystemPromptID] = CASE WHEN @SystemPromptID_Clear = 1 THEN NULL ELSE ISNULL(@SystemPromptID, [SystemPromptID]) END,
+        [IsActive] = ISNULL(@IsActive, [IsActive]),
+        [AgentPromptPlaceholder] = CASE WHEN @AgentPromptPlaceholder_Clear = 1 THEN NULL ELSE ISNULL(@AgentPromptPlaceholder, [AgentPromptPlaceholder]) END,
+        [DriverClass] = CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, [DriverClass]) END,
+        [UIFormSectionKey] = CASE WHEN @UIFormSectionKey_Clear = 1 THEN NULL ELSE ISNULL(@UIFormSectionKey, [UIFormSectionKey]) END,
+        [UIFormKey] = CASE WHEN @UIFormKey_Clear = 1 THEN NULL ELSE ISNULL(@UIFormKey, [UIFormKey]) END,
+        [UIFormSectionExpandedByDefault] = ISNULL(@UIFormSectionExpandedByDefault, [UIFormSectionExpandedByDefault]),
+        [PromptParamsSchema] = CASE WHEN @PromptParamsSchema_Clear = 1 THEN NULL ELSE ISNULL(@PromptParamsSchema, [PromptParamsSchema]) END,
+        [AssignmentStrategy] = CASE WHEN @AssignmentStrategy_Clear = 1 THEN NULL ELSE ISNULL(@AssignmentStrategy, [AssignmentStrategy]) END,
+        [DefaultStorageAccountID] = CASE WHEN @DefaultStorageAccountID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultStorageAccountID, [DefaultStorageAccountID]) END,
+        [DefaultCoAgentID] = CASE WHEN @DefaultCoAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCoAgentID, [DefaultCoAgentID]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIAgentTypes] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIAgentTypes]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentType] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentType table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAIAgentType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAIAgentType];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgentType
+ON [${flyway:defaultSchema}].[AIAgentType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgentType]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIAgentType] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: AI Agent Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentType] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: AI Agent Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agent Types
+-- Item: spDeleteAIAgentType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIAgentType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAIAgentType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgentType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgentType]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIAgentType]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentType] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: AI Agent Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentType] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update entity field related entity name field map for entity field ID EE4F8641-BF5C-449F-B249-EF634D240C90 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='EE4F8641-BF5C-449F-B249-EF634D240C90', @RelatedEntityNameFieldMap='User';
+
+/* SQL text to update entity field related entity name field map for entity field ID 61E0BCC1-5696-4F1D-9FDC-4C71A7BED310 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='61E0BCC1-5696-4F1D-9FDC-4C71A7BED310', @RelatedEntityNameFieldMap='Conversation';
 
 /* Root ID Function SQL for MJ: AI Agent Sessions.LastSessionID */
 -----------------------------------------------------------------
@@ -5193,7 +5865,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentSession]
     @Config nvarchar(MAX) = NULL,
     @LastActiveAt datetimeoffset = NULL,
     @ClosedAt_Clear bit = 0,
-    @ClosedAt datetimeoffset = NULL
+    @ClosedAt datetimeoffset = NULL,
+    @CloseReason_Clear bit = 0,
+    @CloseReason nvarchar(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -5213,7 +5887,8 @@ BEGIN
                 [HostInstanceID],
                 [Config],
                 [LastActiveAt],
-                [ClosedAt]
+                [ClosedAt],
+                [CloseReason]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -5227,7 +5902,8 @@ BEGIN
                 CASE WHEN @HostInstanceID_Clear = 1 THEN NULL ELSE ISNULL(@HostInstanceID, NULL) END,
                 CASE WHEN @Config_Clear = 1 THEN NULL ELSE ISNULL(@Config, NULL) END,
                 ISNULL(@LastActiveAt, sysdatetimeoffset()),
-                CASE WHEN @ClosedAt_Clear = 1 THEN NULL ELSE ISNULL(@ClosedAt, NULL) END
+                CASE WHEN @ClosedAt_Clear = 1 THEN NULL ELSE ISNULL(@ClosedAt, NULL) END,
+                CASE WHEN @CloseReason_Clear = 1 THEN NULL ELSE ISNULL(@CloseReason, NULL) END
             )
     END
     ELSE
@@ -5243,7 +5919,8 @@ BEGIN
                 [HostInstanceID],
                 [Config],
                 [LastActiveAt],
-                [ClosedAt]
+                [ClosedAt],
+                [CloseReason]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -5256,7 +5933,8 @@ BEGIN
                 CASE WHEN @HostInstanceID_Clear = 1 THEN NULL ELSE ISNULL(@HostInstanceID, NULL) END,
                 CASE WHEN @Config_Clear = 1 THEN NULL ELSE ISNULL(@Config, NULL) END,
                 ISNULL(@LastActiveAt, sysdatetimeoffset()),
-                CASE WHEN @ClosedAt_Clear = 1 THEN NULL ELSE ISNULL(@ClosedAt, NULL) END
+                CASE WHEN @ClosedAt_Clear = 1 THEN NULL ELSE ISNULL(@ClosedAt, NULL) END,
+                CASE WHEN @CloseReason_Clear = 1 THEN NULL ELSE ISNULL(@CloseReason, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -5301,7 +5979,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentSession]
     @Config nvarchar(MAX) = NULL,
     @LastActiveAt datetimeoffset = NULL,
     @ClosedAt_Clear bit = 0,
-    @ClosedAt datetimeoffset = NULL
+    @ClosedAt datetimeoffset = NULL,
+    @CloseReason_Clear bit = 0,
+    @CloseReason nvarchar(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -5316,7 +5996,8 @@ BEGIN
         [HostInstanceID] = CASE WHEN @HostInstanceID_Clear = 1 THEN NULL ELSE ISNULL(@HostInstanceID, [HostInstanceID]) END,
         [Config] = CASE WHEN @Config_Clear = 1 THEN NULL ELSE ISNULL(@Config, [Config]) END,
         [LastActiveAt] = ISNULL(@LastActiveAt, [LastActiveAt]),
-        [ClosedAt] = CASE WHEN @ClosedAt_Clear = 1 THEN NULL ELSE ISNULL(@ClosedAt, [ClosedAt]) END
+        [ClosedAt] = CASE WHEN @ClosedAt_Clear = 1 THEN NULL ELSE ISNULL(@ClosedAt, [ClosedAt]) END,
+        [CloseReason] = CASE WHEN @CloseReason_Clear = 1 THEN NULL ELSE ISNULL(@CloseReason, [CloseReason]) END
     WHERE
         [ID] = @ID
 
@@ -6789,13 +7470,14 @@ BEGIN
     DECLARE @MJAIAgentSessions_ConversationID_Config nvarchar(MAX)
     DECLARE @MJAIAgentSessions_ConversationID_LastActiveAt datetimeoffset
     DECLARE @MJAIAgentSessions_ConversationID_ClosedAt datetimeoffset
+    DECLARE @MJAIAgentSessions_ConversationID_CloseReason nvarchar(20)
     DECLARE cascade_update_MJAIAgentSessions_ConversationID_cursor CURSOR FOR
-        SELECT [ID], [AgentID], [UserID], [Status], [ConversationID], [LastSessionID], [HostInstanceID], [Config], [LastActiveAt], [ClosedAt]
+        SELECT [ID], [AgentID], [UserID], [Status], [ConversationID], [LastSessionID], [HostInstanceID], [Config], [LastActiveAt], [ClosedAt], [CloseReason]
         FROM [${flyway:defaultSchema}].[AIAgentSession]
         WHERE [ConversationID] = @ID
 
     OPEN cascade_update_MJAIAgentSessions_ConversationID_cursor
-    FETCH NEXT FROM cascade_update_MJAIAgentSessions_ConversationID_cursor INTO @MJAIAgentSessions_ConversationIDID, @MJAIAgentSessions_ConversationID_AgentID, @MJAIAgentSessions_ConversationID_UserID, @MJAIAgentSessions_ConversationID_Status, @MJAIAgentSessions_ConversationID_ConversationID, @MJAIAgentSessions_ConversationID_LastSessionID, @MJAIAgentSessions_ConversationID_HostInstanceID, @MJAIAgentSessions_ConversationID_Config, @MJAIAgentSessions_ConversationID_LastActiveAt, @MJAIAgentSessions_ConversationID_ClosedAt
+    FETCH NEXT FROM cascade_update_MJAIAgentSessions_ConversationID_cursor INTO @MJAIAgentSessions_ConversationIDID, @MJAIAgentSessions_ConversationID_AgentID, @MJAIAgentSessions_ConversationID_UserID, @MJAIAgentSessions_ConversationID_Status, @MJAIAgentSessions_ConversationID_ConversationID, @MJAIAgentSessions_ConversationID_LastSessionID, @MJAIAgentSessions_ConversationID_HostInstanceID, @MJAIAgentSessions_ConversationID_Config, @MJAIAgentSessions_ConversationID_LastActiveAt, @MJAIAgentSessions_ConversationID_ClosedAt, @MJAIAgentSessions_ConversationID_CloseReason
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -6803,9 +7485,9 @@ BEGIN
         SET @MJAIAgentSessions_ConversationID_ConversationID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentSession] @ID = @MJAIAgentSessions_ConversationIDID, @AgentID = @MJAIAgentSessions_ConversationID_AgentID, @UserID = @MJAIAgentSessions_ConversationID_UserID, @Status = @MJAIAgentSessions_ConversationID_Status, @ConversationID_Clear = 1, @ConversationID = @MJAIAgentSessions_ConversationID_ConversationID, @LastSessionID = @MJAIAgentSessions_ConversationID_LastSessionID, @HostInstanceID = @MJAIAgentSessions_ConversationID_HostInstanceID, @Config = @MJAIAgentSessions_ConversationID_Config, @LastActiveAt = @MJAIAgentSessions_ConversationID_LastActiveAt, @ClosedAt = @MJAIAgentSessions_ConversationID_ClosedAt
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentSession] @ID = @MJAIAgentSessions_ConversationIDID, @AgentID = @MJAIAgentSessions_ConversationID_AgentID, @UserID = @MJAIAgentSessions_ConversationID_UserID, @Status = @MJAIAgentSessions_ConversationID_Status, @ConversationID_Clear = 1, @ConversationID = @MJAIAgentSessions_ConversationID_ConversationID, @LastSessionID = @MJAIAgentSessions_ConversationID_LastSessionID, @HostInstanceID = @MJAIAgentSessions_ConversationID_HostInstanceID, @Config = @MJAIAgentSessions_ConversationID_Config, @LastActiveAt = @MJAIAgentSessions_ConversationID_LastActiveAt, @ClosedAt = @MJAIAgentSessions_ConversationID_ClosedAt, @CloseReason = @MJAIAgentSessions_ConversationID_CloseReason
 
-        FETCH NEXT FROM cascade_update_MJAIAgentSessions_ConversationID_cursor INTO @MJAIAgentSessions_ConversationIDID, @MJAIAgentSessions_ConversationID_AgentID, @MJAIAgentSessions_ConversationID_UserID, @MJAIAgentSessions_ConversationID_Status, @MJAIAgentSessions_ConversationID_ConversationID, @MJAIAgentSessions_ConversationID_LastSessionID, @MJAIAgentSessions_ConversationID_HostInstanceID, @MJAIAgentSessions_ConversationID_Config, @MJAIAgentSessions_ConversationID_LastActiveAt, @MJAIAgentSessions_ConversationID_ClosedAt
+        FETCH NEXT FROM cascade_update_MJAIAgentSessions_ConversationID_cursor INTO @MJAIAgentSessions_ConversationIDID, @MJAIAgentSessions_ConversationID_AgentID, @MJAIAgentSessions_ConversationID_UserID, @MJAIAgentSessions_ConversationID_Status, @MJAIAgentSessions_ConversationID_ConversationID, @MJAIAgentSessions_ConversationID_LastSessionID, @MJAIAgentSessions_ConversationID_HostInstanceID, @MJAIAgentSessions_ConversationID_Config, @MJAIAgentSessions_ConversationID_LastActiveAt, @MJAIAgentSessions_ConversationID_ClosedAt, @MJAIAgentSessions_ConversationID_CloseReason
     END
 
     CLOSE cascade_update_MJAIAgentSessions_ConversationID_cursor
@@ -6911,6 +7593,970 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 /* spDelete Permissions for MJ: Conversations */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration];
+
+/* Index for Foreign Keys for AIAgent */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ParentID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [${flyway:defaultSchema}].[AIAgent] ([ParentID]);
+
+-- Index for foreign key ContextCompressionPromptID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [${flyway:defaultSchema}].[AIAgent] ([ContextCompressionPromptID]);
+
+-- Index for foreign key TypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_TypeID ON [${flyway:defaultSchema}].[AIAgent] ([TypeID]);
+
+-- Index for foreign key DefaultArtifactTypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_DefaultArtifactTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_DefaultArtifactTypeID ON [${flyway:defaultSchema}].[AIAgent] ([DefaultArtifactTypeID]);
+
+-- Index for foreign key OwnerUserID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_OwnerUserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_OwnerUserID ON [${flyway:defaultSchema}].[AIAgent] ([OwnerUserID]);
+
+-- Index for foreign key AttachmentStorageProviderID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_AttachmentStorageProviderID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_AttachmentStorageProviderID ON [${flyway:defaultSchema}].[AIAgent] ([AttachmentStorageProviderID]);
+
+-- Index for foreign key CategoryID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_CategoryID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_CategoryID ON [${flyway:defaultSchema}].[AIAgent] ([CategoryID]);
+
+-- Index for foreign key DefaultStorageAccountID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_DefaultStorageAccountID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_DefaultStorageAccountID ON [${flyway:defaultSchema}].[AIAgent] ([DefaultStorageAccountID]);
+
+-- Index for foreign key DefaultCoAgentID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_DefaultCoAgentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_DefaultCoAgentID ON [${flyway:defaultSchema}].[AIAgent] ([DefaultCoAgentID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 5389E13A-6D4F-4EEF-80A1-51B828EBD9C3 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5389E13A-6D4F-4EEF-80A1-51B828EBD9C3', @RelatedEntityNameFieldMap='DefaultCoAgent';
+
+/* Root ID Function SQL for MJ: AI Agents.ParentID */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: fnAIAgentParentID_GetRootID
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: [AIAgent].[ParentID]
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[fnAIAgentParentID_GetRootID]', 'IF') IS NOT NULL
+    DROP FUNCTION [${flyway:defaultSchema}].[fnAIAgentParentID_GetRootID];
+GO
+
+CREATE FUNCTION [${flyway:defaultSchema}].[fnAIAgentParentID_GetRootID]
+(
+    @RecordID uniqueidentifier,
+    @ParentID uniqueidentifier
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_RootParent AS (
+        SELECT
+            [ID],
+            [ParentID],
+            [ID] AS [RootParentID],
+            0 AS [Depth]
+        FROM
+            [${flyway:defaultSchema}].[AIAgent]
+        WHERE
+            [ID] = COALESCE(@ParentID, @RecordID)
+
+        UNION ALL
+
+        SELECT
+            c.[ID],
+            c.[ParentID],
+            c.[ID] AS [RootParentID],
+            p.[Depth] + 1 AS [Depth]
+        FROM
+            [${flyway:defaultSchema}].[AIAgent] c
+        INNER JOIN
+            CTE_RootParent p ON c.[ID] = p.[ParentID]
+        WHERE
+            p.[Depth] < 100
+    )
+    SELECT TOP 1
+        [RootParentID] AS RootID
+    FROM
+        CTE_RootParent
+    WHERE
+        [ParentID] IS NULL
+    ORDER BY
+        [RootParentID]
+);
+GO
+
+/* Root ID Function SQL for MJ: AI Agents.DefaultCoAgentID */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: fnAIAgentDefaultCoAgentID_GetRootID
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: [AIAgent].[DefaultCoAgentID]
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[fnAIAgentDefaultCoAgentID_GetRootID]', 'IF') IS NOT NULL
+    DROP FUNCTION [${flyway:defaultSchema}].[fnAIAgentDefaultCoAgentID_GetRootID];
+GO
+
+CREATE FUNCTION [${flyway:defaultSchema}].[fnAIAgentDefaultCoAgentID_GetRootID]
+(
+    @RecordID uniqueidentifier,
+    @ParentID uniqueidentifier
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_RootParent AS (
+        SELECT
+            [ID],
+            [DefaultCoAgentID],
+            [ID] AS [RootParentID],
+            0 AS [Depth]
+        FROM
+            [${flyway:defaultSchema}].[AIAgent]
+        WHERE
+            [ID] = COALESCE(@ParentID, @RecordID)
+
+        UNION ALL
+
+        SELECT
+            c.[ID],
+            c.[DefaultCoAgentID],
+            c.[ID] AS [RootParentID],
+            p.[Depth] + 1 AS [Depth]
+        FROM
+            [${flyway:defaultSchema}].[AIAgent] c
+        INNER JOIN
+            CTE_RootParent p ON c.[ID] = p.[DefaultCoAgentID]
+        WHERE
+            p.[Depth] < 100
+    )
+    SELECT TOP 1
+        [RootParentID] AS RootID
+    FROM
+        CTE_RootParent
+    WHERE
+        [DefaultCoAgentID] IS NULL
+    ORDER BY
+        [RootParentID]
+);
+GO
+
+/* Base View SQL for MJ: AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Agents
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIAgent
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIAgents]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAIAgents];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIAgents]
+AS
+SELECT
+    a.*,
+    MJAIAgent_ParentID.[Name] AS [Parent],
+    MJAIPrompt_ContextCompressionPromptID.[Name] AS [ContextCompressionPrompt],
+    MJAIAgentType_TypeID.[Name] AS [Type],
+    MJArtifactType_DefaultArtifactTypeID.[Name] AS [DefaultArtifactType],
+    MJUser_OwnerUserID.[Name] AS [OwnerUser],
+    MJFileStorageProvider_AttachmentStorageProviderID.[Name] AS [AttachmentStorageProvider],
+    MJAIAgentCategory_CategoryID.[Name] AS [Category],
+    MJFileStorageAccount_DefaultStorageAccountID.[Name] AS [DefaultStorageAccount],
+    MJAIAgent_DefaultCoAgentID.[Name] AS [DefaultCoAgent],
+    root_ParentID.RootID AS [RootParentID],
+    root_DefaultCoAgentID.RootID AS [RootDefaultCoAgentID]
+FROM
+    [${flyway:defaultSchema}].[AIAgent] AS a
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS MJAIAgent_ParentID
+  ON
+    [a].[ParentID] = MJAIAgent_ParentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIPrompt] AS MJAIPrompt_ContextCompressionPromptID
+  ON
+    [a].[ContextCompressionPromptID] = MJAIPrompt_ContextCompressionPromptID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgentType] AS MJAIAgentType_TypeID
+  ON
+    [a].[TypeID] = MJAIAgentType_TypeID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[ArtifactType] AS MJArtifactType_DefaultArtifactTypeID
+  ON
+    [a].[DefaultArtifactTypeID] = MJArtifactType_DefaultArtifactTypeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS MJUser_OwnerUserID
+  ON
+    [a].[OwnerUserID] = MJUser_OwnerUserID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[FileStorageProvider] AS MJFileStorageProvider_AttachmentStorageProviderID
+  ON
+    [a].[AttachmentStorageProviderID] = MJFileStorageProvider_AttachmentStorageProviderID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgentCategory] AS MJAIAgentCategory_CategoryID
+  ON
+    [a].[CategoryID] = MJAIAgentCategory_CategoryID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[FileStorageAccount] AS MJFileStorageAccount_DefaultStorageAccountID
+  ON
+    [a].[DefaultStorageAccountID] = MJFileStorageAccount_DefaultStorageAccountID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS MJAIAgent_DefaultCoAgentID
+  ON
+    [a].[DefaultCoAgentID] = MJAIAgent_DefaultCoAgentID.[ID]
+OUTER APPLY
+    [${flyway:defaultSchema}].[fnAIAgentParentID_GetRootID]([a].[ID], [a].[ParentID]) AS root_ParentID
+OUTER APPLY
+    [${flyway:defaultSchema}].[fnAIAgentDefaultCoAgentID_GetRootID]([a].[ID], [a].[DefaultCoAgentID]) AS root_DefaultCoAgentID
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: Permissions for vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: spCreateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAIAgent]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgent];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgent]
+    @ID uniqueidentifier = NULL,
+    @Name_Clear bit = 0,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @LogoURL_Clear bit = 0,
+    @LogoURL nvarchar(255) = NULL,
+    @ParentID_Clear bit = 0,
+    @ParentID uniqueidentifier = NULL,
+    @ExposeAsAction bit = NULL,
+    @ExecutionOrder int = NULL,
+    @ExecutionMode nvarchar(20) = NULL,
+    @EnableContextCompression bit = NULL,
+    @ContextCompressionMessageThreshold_Clear bit = 0,
+    @ContextCompressionMessageThreshold int = NULL,
+    @ContextCompressionPromptID_Clear bit = 0,
+    @ContextCompressionPromptID uniqueidentifier = NULL,
+    @ContextCompressionMessageRetentionCount_Clear bit = 0,
+    @ContextCompressionMessageRetentionCount int = NULL,
+    @TypeID_Clear bit = 0,
+    @TypeID uniqueidentifier = NULL,
+    @Status nvarchar(20) = NULL,
+    @DriverClass_Clear bit = 0,
+    @DriverClass nvarchar(255) = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @ModelSelectionMode nvarchar(50) = NULL,
+    @PayloadDownstreamPaths nvarchar(MAX) = NULL,
+    @PayloadUpstreamPaths nvarchar(MAX) = NULL,
+    @PayloadSelfReadPaths_Clear bit = 0,
+    @PayloadSelfReadPaths nvarchar(MAX) = NULL,
+    @PayloadSelfWritePaths_Clear bit = 0,
+    @PayloadSelfWritePaths nvarchar(MAX) = NULL,
+    @PayloadScope_Clear bit = 0,
+    @PayloadScope nvarchar(MAX) = NULL,
+    @FinalPayloadValidation_Clear bit = 0,
+    @FinalPayloadValidation nvarchar(MAX) = NULL,
+    @FinalPayloadValidationMode nvarchar(25) = NULL,
+    @FinalPayloadValidationMaxRetries int = NULL,
+    @MaxCostPerRun_Clear bit = 0,
+    @MaxCostPerRun decimal(10, 4) = NULL,
+    @MaxTokensPerRun_Clear bit = 0,
+    @MaxTokensPerRun int = NULL,
+    @MaxIterationsPerRun_Clear bit = 0,
+    @MaxIterationsPerRun int = NULL,
+    @MaxTimePerRun_Clear bit = 0,
+    @MaxTimePerRun int = NULL,
+    @MinExecutionsPerRun_Clear bit = 0,
+    @MinExecutionsPerRun int = NULL,
+    @MaxExecutionsPerRun_Clear bit = 0,
+    @MaxExecutionsPerRun int = NULL,
+    @StartingPayloadValidation_Clear bit = 0,
+    @StartingPayloadValidation nvarchar(MAX) = NULL,
+    @StartingPayloadValidationMode nvarchar(25) = NULL,
+    @DefaultPromptEffortLevel_Clear bit = 0,
+    @DefaultPromptEffortLevel int = NULL,
+    @ChatHandlingOption_Clear bit = 0,
+    @ChatHandlingOption nvarchar(30) = NULL,
+    @DefaultArtifactTypeID_Clear bit = 0,
+    @DefaultArtifactTypeID uniqueidentifier = NULL,
+    @OwnerUserID uniqueidentifier = NULL,
+    @InvocationMode nvarchar(20) = NULL,
+    @ArtifactCreationMode nvarchar(20) = NULL,
+    @FunctionalRequirements_Clear bit = 0,
+    @FunctionalRequirements nvarchar(MAX) = NULL,
+    @TechnicalDesign_Clear bit = 0,
+    @TechnicalDesign nvarchar(MAX) = NULL,
+    @InjectNotes bit = NULL,
+    @MaxNotesToInject int = NULL,
+    @NoteInjectionStrategy nvarchar(20) = NULL,
+    @InjectExamples bit = NULL,
+    @MaxExamplesToInject int = NULL,
+    @ExampleInjectionStrategy nvarchar(20) = NULL,
+    @IsRestricted bit = NULL,
+    @MessageMode nvarchar(50) = NULL,
+    @MaxMessages_Clear bit = 0,
+    @MaxMessages int = NULL,
+    @AttachmentStorageProviderID_Clear bit = 0,
+    @AttachmentStorageProviderID uniqueidentifier = NULL,
+    @AttachmentRootPath_Clear bit = 0,
+    @AttachmentRootPath nvarchar(500) = NULL,
+    @InlineStorageThresholdBytes_Clear bit = 0,
+    @InlineStorageThresholdBytes int = NULL,
+    @AgentTypePromptParams_Clear bit = 0,
+    @AgentTypePromptParams nvarchar(MAX) = NULL,
+    @ScopeConfig_Clear bit = 0,
+    @ScopeConfig nvarchar(MAX) = NULL,
+    @NoteRetentionDays_Clear bit = 0,
+    @NoteRetentionDays int = NULL,
+    @ExampleRetentionDays_Clear bit = 0,
+    @ExampleRetentionDays int = NULL,
+    @AutoArchiveEnabled bit = NULL,
+    @RerankerConfiguration_Clear bit = 0,
+    @RerankerConfiguration nvarchar(MAX) = NULL,
+    @CategoryID_Clear bit = 0,
+    @CategoryID uniqueidentifier = NULL,
+    @AllowEphemeralClientTools bit = NULL,
+    @DefaultStorageAccountID_Clear bit = 0,
+    @DefaultStorageAccountID uniqueidentifier = NULL,
+    @SearchScopeAccess nvarchar(20) = NULL,
+    @AcceptUnregisteredFiles bit = NULL,
+    @DefaultCoAgentID_Clear bit = 0,
+    @DefaultCoAgentID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope],
+                [FinalPayloadValidation],
+                [FinalPayloadValidationMode],
+                [FinalPayloadValidationMaxRetries],
+                [MaxCostPerRun],
+                [MaxTokensPerRun],
+                [MaxIterationsPerRun],
+                [MaxTimePerRun],
+                [MinExecutionsPerRun],
+                [MaxExecutionsPerRun],
+                [StartingPayloadValidation],
+                [StartingPayloadValidationMode],
+                [DefaultPromptEffortLevel],
+                [ChatHandlingOption],
+                [DefaultArtifactTypeID],
+                [OwnerUserID],
+                [InvocationMode],
+                [ArtifactCreationMode],
+                [FunctionalRequirements],
+                [TechnicalDesign],
+                [InjectNotes],
+                [MaxNotesToInject],
+                [NoteInjectionStrategy],
+                [InjectExamples],
+                [MaxExamplesToInject],
+                [ExampleInjectionStrategy],
+                [IsRestricted],
+                [MessageMode],
+                [MaxMessages],
+                [AttachmentStorageProviderID],
+                [AttachmentRootPath],
+                [InlineStorageThresholdBytes],
+                [AgentTypePromptParams],
+                [ScopeConfig],
+                [NoteRetentionDays],
+                [ExampleRetentionDays],
+                [AutoArchiveEnabled],
+                [RerankerConfiguration],
+                [CategoryID],
+                [AllowEphemeralClientTools],
+                [DefaultStorageAccountID],
+                [SearchScopeAccess],
+                [AcceptUnregisteredFiles],
+                [DefaultCoAgentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, NULL) END,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                CASE WHEN @LogoURL_Clear = 1 THEN NULL ELSE ISNULL(@LogoURL, NULL) END,
+                CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
+                ISNULL(@ExposeAsAction, 0),
+                ISNULL(@ExecutionOrder, 0),
+                ISNULL(@ExecutionMode, 'Sequential'),
+                ISNULL(@EnableContextCompression, 0),
+                CASE WHEN @ContextCompressionMessageThreshold_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionMessageThreshold, NULL) END,
+                CASE WHEN @ContextCompressionPromptID_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionPromptID, NULL) END,
+                CASE WHEN @ContextCompressionMessageRetentionCount_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionMessageRetentionCount, NULL) END,
+                CASE WHEN @TypeID_Clear = 1 THEN NULL ELSE ISNULL(@TypeID, NULL) END,
+                ISNULL(@Status, 'Pending'),
+                CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, NULL) END,
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                ISNULL(@ModelSelectionMode, 'Agent Type'),
+                ISNULL(@PayloadDownstreamPaths, '["*"]'),
+                ISNULL(@PayloadUpstreamPaths, '["*"]'),
+                CASE WHEN @PayloadSelfReadPaths_Clear = 1 THEN NULL ELSE ISNULL(@PayloadSelfReadPaths, NULL) END,
+                CASE WHEN @PayloadSelfWritePaths_Clear = 1 THEN NULL ELSE ISNULL(@PayloadSelfWritePaths, NULL) END,
+                CASE WHEN @PayloadScope_Clear = 1 THEN NULL ELSE ISNULL(@PayloadScope, NULL) END,
+                CASE WHEN @FinalPayloadValidation_Clear = 1 THEN NULL ELSE ISNULL(@FinalPayloadValidation, NULL) END,
+                ISNULL(@FinalPayloadValidationMode, 'Retry'),
+                ISNULL(@FinalPayloadValidationMaxRetries, 3),
+                CASE WHEN @MaxCostPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxCostPerRun, NULL) END,
+                CASE WHEN @MaxTokensPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxTokensPerRun, NULL) END,
+                CASE WHEN @MaxIterationsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxIterationsPerRun, NULL) END,
+                CASE WHEN @MaxTimePerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxTimePerRun, NULL) END,
+                CASE WHEN @MinExecutionsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MinExecutionsPerRun, NULL) END,
+                CASE WHEN @MaxExecutionsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxExecutionsPerRun, NULL) END,
+                CASE WHEN @StartingPayloadValidation_Clear = 1 THEN NULL ELSE ISNULL(@StartingPayloadValidation, NULL) END,
+                ISNULL(@StartingPayloadValidationMode, 'Fail'),
+                CASE WHEN @DefaultPromptEffortLevel_Clear = 1 THEN NULL ELSE ISNULL(@DefaultPromptEffortLevel, NULL) END,
+                CASE WHEN @ChatHandlingOption_Clear = 1 THEN NULL ELSE ISNULL(@ChatHandlingOption, NULL) END,
+                CASE WHEN @DefaultArtifactTypeID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultArtifactTypeID, NULL) END,
+                CASE WHEN @OwnerUserID = '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END,
+                ISNULL(@InvocationMode, 'Any'),
+                ISNULL(@ArtifactCreationMode, 'Always'),
+                CASE WHEN @FunctionalRequirements_Clear = 1 THEN NULL ELSE ISNULL(@FunctionalRequirements, NULL) END,
+                CASE WHEN @TechnicalDesign_Clear = 1 THEN NULL ELSE ISNULL(@TechnicalDesign, NULL) END,
+                ISNULL(@InjectNotes, 1),
+                ISNULL(@MaxNotesToInject, 5),
+                ISNULL(@NoteInjectionStrategy, 'Relevant'),
+                ISNULL(@InjectExamples, 0),
+                ISNULL(@MaxExamplesToInject, 3),
+                ISNULL(@ExampleInjectionStrategy, 'Semantic'),
+                ISNULL(@IsRestricted, 0),
+                ISNULL(@MessageMode, 'None'),
+                CASE WHEN @MaxMessages_Clear = 1 THEN NULL ELSE ISNULL(@MaxMessages, NULL) END,
+                CASE WHEN @AttachmentStorageProviderID_Clear = 1 THEN NULL ELSE ISNULL(@AttachmentStorageProviderID, NULL) END,
+                CASE WHEN @AttachmentRootPath_Clear = 1 THEN NULL ELSE ISNULL(@AttachmentRootPath, NULL) END,
+                CASE WHEN @InlineStorageThresholdBytes_Clear = 1 THEN NULL ELSE ISNULL(@InlineStorageThresholdBytes, NULL) END,
+                CASE WHEN @AgentTypePromptParams_Clear = 1 THEN NULL ELSE ISNULL(@AgentTypePromptParams, NULL) END,
+                CASE WHEN @ScopeConfig_Clear = 1 THEN NULL ELSE ISNULL(@ScopeConfig, NULL) END,
+                CASE WHEN @NoteRetentionDays_Clear = 1 THEN NULL ELSE ISNULL(@NoteRetentionDays, 90) END,
+                CASE WHEN @ExampleRetentionDays_Clear = 1 THEN NULL ELSE ISNULL(@ExampleRetentionDays, 180) END,
+                ISNULL(@AutoArchiveEnabled, 1),
+                CASE WHEN @RerankerConfiguration_Clear = 1 THEN NULL ELSE ISNULL(@RerankerConfiguration, NULL) END,
+                CASE WHEN @CategoryID_Clear = 1 THEN NULL ELSE ISNULL(@CategoryID, NULL) END,
+                ISNULL(@AllowEphemeralClientTools, 1),
+                CASE WHEN @DefaultStorageAccountID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultStorageAccountID, NULL) END,
+                ISNULL(@SearchScopeAccess, 'None'),
+                ISNULL(@AcceptUnregisteredFiles, 0),
+                CASE WHEN @DefaultCoAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCoAgentID, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope],
+                [FinalPayloadValidation],
+                [FinalPayloadValidationMode],
+                [FinalPayloadValidationMaxRetries],
+                [MaxCostPerRun],
+                [MaxTokensPerRun],
+                [MaxIterationsPerRun],
+                [MaxTimePerRun],
+                [MinExecutionsPerRun],
+                [MaxExecutionsPerRun],
+                [StartingPayloadValidation],
+                [StartingPayloadValidationMode],
+                [DefaultPromptEffortLevel],
+                [ChatHandlingOption],
+                [DefaultArtifactTypeID],
+                [OwnerUserID],
+                [InvocationMode],
+                [ArtifactCreationMode],
+                [FunctionalRequirements],
+                [TechnicalDesign],
+                [InjectNotes],
+                [MaxNotesToInject],
+                [NoteInjectionStrategy],
+                [InjectExamples],
+                [MaxExamplesToInject],
+                [ExampleInjectionStrategy],
+                [IsRestricted],
+                [MessageMode],
+                [MaxMessages],
+                [AttachmentStorageProviderID],
+                [AttachmentRootPath],
+                [InlineStorageThresholdBytes],
+                [AgentTypePromptParams],
+                [ScopeConfig],
+                [NoteRetentionDays],
+                [ExampleRetentionDays],
+                [AutoArchiveEnabled],
+                [RerankerConfiguration],
+                [CategoryID],
+                [AllowEphemeralClientTools],
+                [DefaultStorageAccountID],
+                [SearchScopeAccess],
+                [AcceptUnregisteredFiles],
+                [DefaultCoAgentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, NULL) END,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                CASE WHEN @LogoURL_Clear = 1 THEN NULL ELSE ISNULL(@LogoURL, NULL) END,
+                CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
+                ISNULL(@ExposeAsAction, 0),
+                ISNULL(@ExecutionOrder, 0),
+                ISNULL(@ExecutionMode, 'Sequential'),
+                ISNULL(@EnableContextCompression, 0),
+                CASE WHEN @ContextCompressionMessageThreshold_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionMessageThreshold, NULL) END,
+                CASE WHEN @ContextCompressionPromptID_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionPromptID, NULL) END,
+                CASE WHEN @ContextCompressionMessageRetentionCount_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionMessageRetentionCount, NULL) END,
+                CASE WHEN @TypeID_Clear = 1 THEN NULL ELSE ISNULL(@TypeID, NULL) END,
+                ISNULL(@Status, 'Pending'),
+                CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, NULL) END,
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                ISNULL(@ModelSelectionMode, 'Agent Type'),
+                ISNULL(@PayloadDownstreamPaths, '["*"]'),
+                ISNULL(@PayloadUpstreamPaths, '["*"]'),
+                CASE WHEN @PayloadSelfReadPaths_Clear = 1 THEN NULL ELSE ISNULL(@PayloadSelfReadPaths, NULL) END,
+                CASE WHEN @PayloadSelfWritePaths_Clear = 1 THEN NULL ELSE ISNULL(@PayloadSelfWritePaths, NULL) END,
+                CASE WHEN @PayloadScope_Clear = 1 THEN NULL ELSE ISNULL(@PayloadScope, NULL) END,
+                CASE WHEN @FinalPayloadValidation_Clear = 1 THEN NULL ELSE ISNULL(@FinalPayloadValidation, NULL) END,
+                ISNULL(@FinalPayloadValidationMode, 'Retry'),
+                ISNULL(@FinalPayloadValidationMaxRetries, 3),
+                CASE WHEN @MaxCostPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxCostPerRun, NULL) END,
+                CASE WHEN @MaxTokensPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxTokensPerRun, NULL) END,
+                CASE WHEN @MaxIterationsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxIterationsPerRun, NULL) END,
+                CASE WHEN @MaxTimePerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxTimePerRun, NULL) END,
+                CASE WHEN @MinExecutionsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MinExecutionsPerRun, NULL) END,
+                CASE WHEN @MaxExecutionsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxExecutionsPerRun, NULL) END,
+                CASE WHEN @StartingPayloadValidation_Clear = 1 THEN NULL ELSE ISNULL(@StartingPayloadValidation, NULL) END,
+                ISNULL(@StartingPayloadValidationMode, 'Fail'),
+                CASE WHEN @DefaultPromptEffortLevel_Clear = 1 THEN NULL ELSE ISNULL(@DefaultPromptEffortLevel, NULL) END,
+                CASE WHEN @ChatHandlingOption_Clear = 1 THEN NULL ELSE ISNULL(@ChatHandlingOption, NULL) END,
+                CASE WHEN @DefaultArtifactTypeID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultArtifactTypeID, NULL) END,
+                CASE WHEN @OwnerUserID = '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END,
+                ISNULL(@InvocationMode, 'Any'),
+                ISNULL(@ArtifactCreationMode, 'Always'),
+                CASE WHEN @FunctionalRequirements_Clear = 1 THEN NULL ELSE ISNULL(@FunctionalRequirements, NULL) END,
+                CASE WHEN @TechnicalDesign_Clear = 1 THEN NULL ELSE ISNULL(@TechnicalDesign, NULL) END,
+                ISNULL(@InjectNotes, 1),
+                ISNULL(@MaxNotesToInject, 5),
+                ISNULL(@NoteInjectionStrategy, 'Relevant'),
+                ISNULL(@InjectExamples, 0),
+                ISNULL(@MaxExamplesToInject, 3),
+                ISNULL(@ExampleInjectionStrategy, 'Semantic'),
+                ISNULL(@IsRestricted, 0),
+                ISNULL(@MessageMode, 'None'),
+                CASE WHEN @MaxMessages_Clear = 1 THEN NULL ELSE ISNULL(@MaxMessages, NULL) END,
+                CASE WHEN @AttachmentStorageProviderID_Clear = 1 THEN NULL ELSE ISNULL(@AttachmentStorageProviderID, NULL) END,
+                CASE WHEN @AttachmentRootPath_Clear = 1 THEN NULL ELSE ISNULL(@AttachmentRootPath, NULL) END,
+                CASE WHEN @InlineStorageThresholdBytes_Clear = 1 THEN NULL ELSE ISNULL(@InlineStorageThresholdBytes, NULL) END,
+                CASE WHEN @AgentTypePromptParams_Clear = 1 THEN NULL ELSE ISNULL(@AgentTypePromptParams, NULL) END,
+                CASE WHEN @ScopeConfig_Clear = 1 THEN NULL ELSE ISNULL(@ScopeConfig, NULL) END,
+                CASE WHEN @NoteRetentionDays_Clear = 1 THEN NULL ELSE ISNULL(@NoteRetentionDays, 90) END,
+                CASE WHEN @ExampleRetentionDays_Clear = 1 THEN NULL ELSE ISNULL(@ExampleRetentionDays, 180) END,
+                ISNULL(@AutoArchiveEnabled, 1),
+                CASE WHEN @RerankerConfiguration_Clear = 1 THEN NULL ELSE ISNULL(@RerankerConfiguration, NULL) END,
+                CASE WHEN @CategoryID_Clear = 1 THEN NULL ELSE ISNULL(@CategoryID, NULL) END,
+                ISNULL(@AllowEphemeralClientTools, 1),
+                CASE WHEN @DefaultStorageAccountID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultStorageAccountID, NULL) END,
+                ISNULL(@SearchScopeAccess, 'None'),
+                ISNULL(@AcceptUnregisteredFiles, 0),
+                CASE WHEN @DefaultCoAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCoAgentID, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Agents
+-- Item: spUpdateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAIAgent]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent]
+    @ID uniqueidentifier,
+    @Name_Clear bit = 0,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @LogoURL_Clear bit = 0,
+    @LogoURL nvarchar(255) = NULL,
+    @ParentID_Clear bit = 0,
+    @ParentID uniqueidentifier = NULL,
+    @ExposeAsAction bit = NULL,
+    @ExecutionOrder int = NULL,
+    @ExecutionMode nvarchar(20) = NULL,
+    @EnableContextCompression bit = NULL,
+    @ContextCompressionMessageThreshold_Clear bit = 0,
+    @ContextCompressionMessageThreshold int = NULL,
+    @ContextCompressionPromptID_Clear bit = 0,
+    @ContextCompressionPromptID uniqueidentifier = NULL,
+    @ContextCompressionMessageRetentionCount_Clear bit = 0,
+    @ContextCompressionMessageRetentionCount int = NULL,
+    @TypeID_Clear bit = 0,
+    @TypeID uniqueidentifier = NULL,
+    @Status nvarchar(20) = NULL,
+    @DriverClass_Clear bit = 0,
+    @DriverClass nvarchar(255) = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @ModelSelectionMode nvarchar(50) = NULL,
+    @PayloadDownstreamPaths nvarchar(MAX) = NULL,
+    @PayloadUpstreamPaths nvarchar(MAX) = NULL,
+    @PayloadSelfReadPaths_Clear bit = 0,
+    @PayloadSelfReadPaths nvarchar(MAX) = NULL,
+    @PayloadSelfWritePaths_Clear bit = 0,
+    @PayloadSelfWritePaths nvarchar(MAX) = NULL,
+    @PayloadScope_Clear bit = 0,
+    @PayloadScope nvarchar(MAX) = NULL,
+    @FinalPayloadValidation_Clear bit = 0,
+    @FinalPayloadValidation nvarchar(MAX) = NULL,
+    @FinalPayloadValidationMode nvarchar(25) = NULL,
+    @FinalPayloadValidationMaxRetries int = NULL,
+    @MaxCostPerRun_Clear bit = 0,
+    @MaxCostPerRun decimal(10, 4) = NULL,
+    @MaxTokensPerRun_Clear bit = 0,
+    @MaxTokensPerRun int = NULL,
+    @MaxIterationsPerRun_Clear bit = 0,
+    @MaxIterationsPerRun int = NULL,
+    @MaxTimePerRun_Clear bit = 0,
+    @MaxTimePerRun int = NULL,
+    @MinExecutionsPerRun_Clear bit = 0,
+    @MinExecutionsPerRun int = NULL,
+    @MaxExecutionsPerRun_Clear bit = 0,
+    @MaxExecutionsPerRun int = NULL,
+    @StartingPayloadValidation_Clear bit = 0,
+    @StartingPayloadValidation nvarchar(MAX) = NULL,
+    @StartingPayloadValidationMode nvarchar(25) = NULL,
+    @DefaultPromptEffortLevel_Clear bit = 0,
+    @DefaultPromptEffortLevel int = NULL,
+    @ChatHandlingOption_Clear bit = 0,
+    @ChatHandlingOption nvarchar(30) = NULL,
+    @DefaultArtifactTypeID_Clear bit = 0,
+    @DefaultArtifactTypeID uniqueidentifier = NULL,
+    @OwnerUserID uniqueidentifier = NULL,
+    @InvocationMode nvarchar(20) = NULL,
+    @ArtifactCreationMode nvarchar(20) = NULL,
+    @FunctionalRequirements_Clear bit = 0,
+    @FunctionalRequirements nvarchar(MAX) = NULL,
+    @TechnicalDesign_Clear bit = 0,
+    @TechnicalDesign nvarchar(MAX) = NULL,
+    @InjectNotes bit = NULL,
+    @MaxNotesToInject int = NULL,
+    @NoteInjectionStrategy nvarchar(20) = NULL,
+    @InjectExamples bit = NULL,
+    @MaxExamplesToInject int = NULL,
+    @ExampleInjectionStrategy nvarchar(20) = NULL,
+    @IsRestricted bit = NULL,
+    @MessageMode nvarchar(50) = NULL,
+    @MaxMessages_Clear bit = 0,
+    @MaxMessages int = NULL,
+    @AttachmentStorageProviderID_Clear bit = 0,
+    @AttachmentStorageProviderID uniqueidentifier = NULL,
+    @AttachmentRootPath_Clear bit = 0,
+    @AttachmentRootPath nvarchar(500) = NULL,
+    @InlineStorageThresholdBytes_Clear bit = 0,
+    @InlineStorageThresholdBytes int = NULL,
+    @AgentTypePromptParams_Clear bit = 0,
+    @AgentTypePromptParams nvarchar(MAX) = NULL,
+    @ScopeConfig_Clear bit = 0,
+    @ScopeConfig nvarchar(MAX) = NULL,
+    @NoteRetentionDays_Clear bit = 0,
+    @NoteRetentionDays int = NULL,
+    @ExampleRetentionDays_Clear bit = 0,
+    @ExampleRetentionDays int = NULL,
+    @AutoArchiveEnabled bit = NULL,
+    @RerankerConfiguration_Clear bit = 0,
+    @RerankerConfiguration nvarchar(MAX) = NULL,
+    @CategoryID_Clear bit = 0,
+    @CategoryID uniqueidentifier = NULL,
+    @AllowEphemeralClientTools bit = NULL,
+    @DefaultStorageAccountID_Clear bit = 0,
+    @DefaultStorageAccountID uniqueidentifier = NULL,
+    @SearchScopeAccess nvarchar(20) = NULL,
+    @AcceptUnregisteredFiles bit = NULL,
+    @DefaultCoAgentID_Clear bit = 0,
+    @DefaultCoAgentID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        [Name] = CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, [Name]) END,
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [LogoURL] = CASE WHEN @LogoURL_Clear = 1 THEN NULL ELSE ISNULL(@LogoURL, [LogoURL]) END,
+        [ParentID] = CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, [ParentID]) END,
+        [ExposeAsAction] = ISNULL(@ExposeAsAction, [ExposeAsAction]),
+        [ExecutionOrder] = ISNULL(@ExecutionOrder, [ExecutionOrder]),
+        [ExecutionMode] = ISNULL(@ExecutionMode, [ExecutionMode]),
+        [EnableContextCompression] = ISNULL(@EnableContextCompression, [EnableContextCompression]),
+        [ContextCompressionMessageThreshold] = CASE WHEN @ContextCompressionMessageThreshold_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionMessageThreshold, [ContextCompressionMessageThreshold]) END,
+        [ContextCompressionPromptID] = CASE WHEN @ContextCompressionPromptID_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionPromptID, [ContextCompressionPromptID]) END,
+        [ContextCompressionMessageRetentionCount] = CASE WHEN @ContextCompressionMessageRetentionCount_Clear = 1 THEN NULL ELSE ISNULL(@ContextCompressionMessageRetentionCount, [ContextCompressionMessageRetentionCount]) END,
+        [TypeID] = CASE WHEN @TypeID_Clear = 1 THEN NULL ELSE ISNULL(@TypeID, [TypeID]) END,
+        [Status] = ISNULL(@Status, [Status]),
+        [DriverClass] = CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, [DriverClass]) END,
+        [IconClass] = CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, [IconClass]) END,
+        [ModelSelectionMode] = ISNULL(@ModelSelectionMode, [ModelSelectionMode]),
+        [PayloadDownstreamPaths] = ISNULL(@PayloadDownstreamPaths, [PayloadDownstreamPaths]),
+        [PayloadUpstreamPaths] = ISNULL(@PayloadUpstreamPaths, [PayloadUpstreamPaths]),
+        [PayloadSelfReadPaths] = CASE WHEN @PayloadSelfReadPaths_Clear = 1 THEN NULL ELSE ISNULL(@PayloadSelfReadPaths, [PayloadSelfReadPaths]) END,
+        [PayloadSelfWritePaths] = CASE WHEN @PayloadSelfWritePaths_Clear = 1 THEN NULL ELSE ISNULL(@PayloadSelfWritePaths, [PayloadSelfWritePaths]) END,
+        [PayloadScope] = CASE WHEN @PayloadScope_Clear = 1 THEN NULL ELSE ISNULL(@PayloadScope, [PayloadScope]) END,
+        [FinalPayloadValidation] = CASE WHEN @FinalPayloadValidation_Clear = 1 THEN NULL ELSE ISNULL(@FinalPayloadValidation, [FinalPayloadValidation]) END,
+        [FinalPayloadValidationMode] = ISNULL(@FinalPayloadValidationMode, [FinalPayloadValidationMode]),
+        [FinalPayloadValidationMaxRetries] = ISNULL(@FinalPayloadValidationMaxRetries, [FinalPayloadValidationMaxRetries]),
+        [MaxCostPerRun] = CASE WHEN @MaxCostPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxCostPerRun, [MaxCostPerRun]) END,
+        [MaxTokensPerRun] = CASE WHEN @MaxTokensPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxTokensPerRun, [MaxTokensPerRun]) END,
+        [MaxIterationsPerRun] = CASE WHEN @MaxIterationsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxIterationsPerRun, [MaxIterationsPerRun]) END,
+        [MaxTimePerRun] = CASE WHEN @MaxTimePerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxTimePerRun, [MaxTimePerRun]) END,
+        [MinExecutionsPerRun] = CASE WHEN @MinExecutionsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MinExecutionsPerRun, [MinExecutionsPerRun]) END,
+        [MaxExecutionsPerRun] = CASE WHEN @MaxExecutionsPerRun_Clear = 1 THEN NULL ELSE ISNULL(@MaxExecutionsPerRun, [MaxExecutionsPerRun]) END,
+        [StartingPayloadValidation] = CASE WHEN @StartingPayloadValidation_Clear = 1 THEN NULL ELSE ISNULL(@StartingPayloadValidation, [StartingPayloadValidation]) END,
+        [StartingPayloadValidationMode] = ISNULL(@StartingPayloadValidationMode, [StartingPayloadValidationMode]),
+        [DefaultPromptEffortLevel] = CASE WHEN @DefaultPromptEffortLevel_Clear = 1 THEN NULL ELSE ISNULL(@DefaultPromptEffortLevel, [DefaultPromptEffortLevel]) END,
+        [ChatHandlingOption] = CASE WHEN @ChatHandlingOption_Clear = 1 THEN NULL ELSE ISNULL(@ChatHandlingOption, [ChatHandlingOption]) END,
+        [DefaultArtifactTypeID] = CASE WHEN @DefaultArtifactTypeID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultArtifactTypeID, [DefaultArtifactTypeID]) END,
+        [OwnerUserID] = ISNULL(@OwnerUserID, [OwnerUserID]),
+        [InvocationMode] = ISNULL(@InvocationMode, [InvocationMode]),
+        [ArtifactCreationMode] = ISNULL(@ArtifactCreationMode, [ArtifactCreationMode]),
+        [FunctionalRequirements] = CASE WHEN @FunctionalRequirements_Clear = 1 THEN NULL ELSE ISNULL(@FunctionalRequirements, [FunctionalRequirements]) END,
+        [TechnicalDesign] = CASE WHEN @TechnicalDesign_Clear = 1 THEN NULL ELSE ISNULL(@TechnicalDesign, [TechnicalDesign]) END,
+        [InjectNotes] = ISNULL(@InjectNotes, [InjectNotes]),
+        [MaxNotesToInject] = ISNULL(@MaxNotesToInject, [MaxNotesToInject]),
+        [NoteInjectionStrategy] = ISNULL(@NoteInjectionStrategy, [NoteInjectionStrategy]),
+        [InjectExamples] = ISNULL(@InjectExamples, [InjectExamples]),
+        [MaxExamplesToInject] = ISNULL(@MaxExamplesToInject, [MaxExamplesToInject]),
+        [ExampleInjectionStrategy] = ISNULL(@ExampleInjectionStrategy, [ExampleInjectionStrategy]),
+        [IsRestricted] = ISNULL(@IsRestricted, [IsRestricted]),
+        [MessageMode] = ISNULL(@MessageMode, [MessageMode]),
+        [MaxMessages] = CASE WHEN @MaxMessages_Clear = 1 THEN NULL ELSE ISNULL(@MaxMessages, [MaxMessages]) END,
+        [AttachmentStorageProviderID] = CASE WHEN @AttachmentStorageProviderID_Clear = 1 THEN NULL ELSE ISNULL(@AttachmentStorageProviderID, [AttachmentStorageProviderID]) END,
+        [AttachmentRootPath] = CASE WHEN @AttachmentRootPath_Clear = 1 THEN NULL ELSE ISNULL(@AttachmentRootPath, [AttachmentRootPath]) END,
+        [InlineStorageThresholdBytes] = CASE WHEN @InlineStorageThresholdBytes_Clear = 1 THEN NULL ELSE ISNULL(@InlineStorageThresholdBytes, [InlineStorageThresholdBytes]) END,
+        [AgentTypePromptParams] = CASE WHEN @AgentTypePromptParams_Clear = 1 THEN NULL ELSE ISNULL(@AgentTypePromptParams, [AgentTypePromptParams]) END,
+        [ScopeConfig] = CASE WHEN @ScopeConfig_Clear = 1 THEN NULL ELSE ISNULL(@ScopeConfig, [ScopeConfig]) END,
+        [NoteRetentionDays] = CASE WHEN @NoteRetentionDays_Clear = 1 THEN NULL ELSE ISNULL(@NoteRetentionDays, [NoteRetentionDays]) END,
+        [ExampleRetentionDays] = CASE WHEN @ExampleRetentionDays_Clear = 1 THEN NULL ELSE ISNULL(@ExampleRetentionDays, [ExampleRetentionDays]) END,
+        [AutoArchiveEnabled] = ISNULL(@AutoArchiveEnabled, [AutoArchiveEnabled]),
+        [RerankerConfiguration] = CASE WHEN @RerankerConfiguration_Clear = 1 THEN NULL ELSE ISNULL(@RerankerConfiguration, [RerankerConfiguration]) END,
+        [CategoryID] = CASE WHEN @CategoryID_Clear = 1 THEN NULL ELSE ISNULL(@CategoryID, [CategoryID]) END,
+        [AllowEphemeralClientTools] = ISNULL(@AllowEphemeralClientTools, [AllowEphemeralClientTools]),
+        [DefaultStorageAccountID] = CASE WHEN @DefaultStorageAccountID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultStorageAccountID, [DefaultStorageAccountID]) END,
+        [SearchScopeAccess] = ISNULL(@SearchScopeAccess, [SearchScopeAccess]),
+        [AcceptUnregisteredFiles] = ISNULL(@AcceptUnregisteredFiles, [AcceptUnregisteredFiles]),
+        [DefaultCoAgentID] = CASE WHEN @DefaultCoAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCoAgentID, [DefaultCoAgentID]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIAgents]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAIAgent]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAIAgent];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgent
+ON [${flyway:defaultSchema}].[AIAgent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIAgent] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration];
 
 /* spDelete SQL for MJ: AI Agents */
 -----------------------------------------------------------------
@@ -7457,6 +9103,43 @@ BEGIN
     CLOSE cascade_update_MJAIAgentSteps_SubAgentID_cursor
     DEALLOCATE cascade_update_MJAIAgentSteps_SubAgentID_cursor
     
+    -- Cascade update on AIAgentType using cursor to call spUpdateAIAgentType
+    DECLARE @MJAIAgentTypes_DefaultCoAgentIDID uniqueidentifier
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_Name nvarchar(100)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_Description nvarchar(MAX)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_SystemPromptID uniqueidentifier
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_IsActive bit
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_AgentPromptPlaceholder nvarchar(255)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_DriverClass nvarchar(255)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionKey nvarchar(500)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_UIFormKey nvarchar(500)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionExpandedByDefault bit
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_PromptParamsSchema nvarchar(MAX)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_AssignmentStrategy nvarchar(MAX)
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_DefaultStorageAccountID uniqueidentifier
+    DECLARE @MJAIAgentTypes_DefaultCoAgentID_DefaultCoAgentID uniqueidentifier
+    DECLARE cascade_update_MJAIAgentTypes_DefaultCoAgentID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [SystemPromptID], [IsActive], [AgentPromptPlaceholder], [DriverClass], [UIFormSectionKey], [UIFormKey], [UIFormSectionExpandedByDefault], [PromptParamsSchema], [AssignmentStrategy], [DefaultStorageAccountID], [DefaultCoAgentID]
+        FROM [${flyway:defaultSchema}].[AIAgentType]
+        WHERE [DefaultCoAgentID] = @ID
+
+    OPEN cascade_update_MJAIAgentTypes_DefaultCoAgentID_cursor
+    FETCH NEXT FROM cascade_update_MJAIAgentTypes_DefaultCoAgentID_cursor INTO @MJAIAgentTypes_DefaultCoAgentIDID, @MJAIAgentTypes_DefaultCoAgentID_Name, @MJAIAgentTypes_DefaultCoAgentID_Description, @MJAIAgentTypes_DefaultCoAgentID_SystemPromptID, @MJAIAgentTypes_DefaultCoAgentID_IsActive, @MJAIAgentTypes_DefaultCoAgentID_AgentPromptPlaceholder, @MJAIAgentTypes_DefaultCoAgentID_DriverClass, @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionKey, @MJAIAgentTypes_DefaultCoAgentID_UIFormKey, @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionExpandedByDefault, @MJAIAgentTypes_DefaultCoAgentID_PromptParamsSchema, @MJAIAgentTypes_DefaultCoAgentID_AssignmentStrategy, @MJAIAgentTypes_DefaultCoAgentID_DefaultStorageAccountID, @MJAIAgentTypes_DefaultCoAgentID_DefaultCoAgentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIAgentTypes_DefaultCoAgentID_DefaultCoAgentID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentType] @ID = @MJAIAgentTypes_DefaultCoAgentIDID, @Name = @MJAIAgentTypes_DefaultCoAgentID_Name, @Description = @MJAIAgentTypes_DefaultCoAgentID_Description, @SystemPromptID = @MJAIAgentTypes_DefaultCoAgentID_SystemPromptID, @IsActive = @MJAIAgentTypes_DefaultCoAgentID_IsActive, @AgentPromptPlaceholder = @MJAIAgentTypes_DefaultCoAgentID_AgentPromptPlaceholder, @DriverClass = @MJAIAgentTypes_DefaultCoAgentID_DriverClass, @UIFormSectionKey = @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionKey, @UIFormKey = @MJAIAgentTypes_DefaultCoAgentID_UIFormKey, @UIFormSectionExpandedByDefault = @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionExpandedByDefault, @PromptParamsSchema = @MJAIAgentTypes_DefaultCoAgentID_PromptParamsSchema, @AssignmentStrategy = @MJAIAgentTypes_DefaultCoAgentID_AssignmentStrategy, @DefaultStorageAccountID = @MJAIAgentTypes_DefaultCoAgentID_DefaultStorageAccountID, @DefaultCoAgentID_Clear = 1, @DefaultCoAgentID = @MJAIAgentTypes_DefaultCoAgentID_DefaultCoAgentID
+
+        FETCH NEXT FROM cascade_update_MJAIAgentTypes_DefaultCoAgentID_cursor INTO @MJAIAgentTypes_DefaultCoAgentIDID, @MJAIAgentTypes_DefaultCoAgentID_Name, @MJAIAgentTypes_DefaultCoAgentID_Description, @MJAIAgentTypes_DefaultCoAgentID_SystemPromptID, @MJAIAgentTypes_DefaultCoAgentID_IsActive, @MJAIAgentTypes_DefaultCoAgentID_AgentPromptPlaceholder, @MJAIAgentTypes_DefaultCoAgentID_DriverClass, @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionKey, @MJAIAgentTypes_DefaultCoAgentID_UIFormKey, @MJAIAgentTypes_DefaultCoAgentID_UIFormSectionExpandedByDefault, @MJAIAgentTypes_DefaultCoAgentID_PromptParamsSchema, @MJAIAgentTypes_DefaultCoAgentID_AssignmentStrategy, @MJAIAgentTypes_DefaultCoAgentID_DefaultStorageAccountID, @MJAIAgentTypes_DefaultCoAgentID_DefaultCoAgentID
+    END
+
+    CLOSE cascade_update_MJAIAgentTypes_DefaultCoAgentID_cursor
+    DEALLOCATE cascade_update_MJAIAgentTypes_DefaultCoAgentID_cursor
+    
     -- Cascade update on AIAgent using cursor to call spUpdateAIAgent
     DECLARE @MJAIAgents_ParentIDID uniqueidentifier
     DECLARE @MJAIAgents_ParentID_Name nvarchar(255)
@@ -7522,13 +9205,14 @@ BEGIN
     DECLARE @MJAIAgents_ParentID_DefaultStorageAccountID uniqueidentifier
     DECLARE @MJAIAgents_ParentID_SearchScopeAccess nvarchar(20)
     DECLARE @MJAIAgents_ParentID_AcceptUnregisteredFiles bit
+    DECLARE @MJAIAgents_ParentID_DefaultCoAgentID uniqueidentifier
     DECLARE cascade_update_MJAIAgents_ParentID_cursor CURSOR FOR
-        SELECT [ID], [Name], [Description], [LogoURL], [ParentID], [ExposeAsAction], [ExecutionOrder], [ExecutionMode], [EnableContextCompression], [ContextCompressionMessageThreshold], [ContextCompressionPromptID], [ContextCompressionMessageRetentionCount], [TypeID], [Status], [DriverClass], [IconClass], [ModelSelectionMode], [PayloadDownstreamPaths], [PayloadUpstreamPaths], [PayloadSelfReadPaths], [PayloadSelfWritePaths], [PayloadScope], [FinalPayloadValidation], [FinalPayloadValidationMode], [FinalPayloadValidationMaxRetries], [MaxCostPerRun], [MaxTokensPerRun], [MaxIterationsPerRun], [MaxTimePerRun], [MinExecutionsPerRun], [MaxExecutionsPerRun], [StartingPayloadValidation], [StartingPayloadValidationMode], [DefaultPromptEffortLevel], [ChatHandlingOption], [DefaultArtifactTypeID], [OwnerUserID], [InvocationMode], [ArtifactCreationMode], [FunctionalRequirements], [TechnicalDesign], [InjectNotes], [MaxNotesToInject], [NoteInjectionStrategy], [InjectExamples], [MaxExamplesToInject], [ExampleInjectionStrategy], [IsRestricted], [MessageMode], [MaxMessages], [AttachmentStorageProviderID], [AttachmentRootPath], [InlineStorageThresholdBytes], [AgentTypePromptParams], [ScopeConfig], [NoteRetentionDays], [ExampleRetentionDays], [AutoArchiveEnabled], [RerankerConfiguration], [CategoryID], [AllowEphemeralClientTools], [DefaultStorageAccountID], [SearchScopeAccess], [AcceptUnregisteredFiles]
+        SELECT [ID], [Name], [Description], [LogoURL], [ParentID], [ExposeAsAction], [ExecutionOrder], [ExecutionMode], [EnableContextCompression], [ContextCompressionMessageThreshold], [ContextCompressionPromptID], [ContextCompressionMessageRetentionCount], [TypeID], [Status], [DriverClass], [IconClass], [ModelSelectionMode], [PayloadDownstreamPaths], [PayloadUpstreamPaths], [PayloadSelfReadPaths], [PayloadSelfWritePaths], [PayloadScope], [FinalPayloadValidation], [FinalPayloadValidationMode], [FinalPayloadValidationMaxRetries], [MaxCostPerRun], [MaxTokensPerRun], [MaxIterationsPerRun], [MaxTimePerRun], [MinExecutionsPerRun], [MaxExecutionsPerRun], [StartingPayloadValidation], [StartingPayloadValidationMode], [DefaultPromptEffortLevel], [ChatHandlingOption], [DefaultArtifactTypeID], [OwnerUserID], [InvocationMode], [ArtifactCreationMode], [FunctionalRequirements], [TechnicalDesign], [InjectNotes], [MaxNotesToInject], [NoteInjectionStrategy], [InjectExamples], [MaxExamplesToInject], [ExampleInjectionStrategy], [IsRestricted], [MessageMode], [MaxMessages], [AttachmentStorageProviderID], [AttachmentRootPath], [InlineStorageThresholdBytes], [AgentTypePromptParams], [ScopeConfig], [NoteRetentionDays], [ExampleRetentionDays], [AutoArchiveEnabled], [RerankerConfiguration], [CategoryID], [AllowEphemeralClientTools], [DefaultStorageAccountID], [SearchScopeAccess], [AcceptUnregisteredFiles], [DefaultCoAgentID]
         FROM [${flyway:defaultSchema}].[AIAgent]
         WHERE [ParentID] = @ID
 
     OPEN cascade_update_MJAIAgents_ParentID_cursor
-    FETCH NEXT FROM cascade_update_MJAIAgents_ParentID_cursor INTO @MJAIAgents_ParentIDID, @MJAIAgents_ParentID_Name, @MJAIAgents_ParentID_Description, @MJAIAgents_ParentID_LogoURL, @MJAIAgents_ParentID_ParentID, @MJAIAgents_ParentID_ExposeAsAction, @MJAIAgents_ParentID_ExecutionOrder, @MJAIAgents_ParentID_ExecutionMode, @MJAIAgents_ParentID_EnableContextCompression, @MJAIAgents_ParentID_ContextCompressionMessageThreshold, @MJAIAgents_ParentID_ContextCompressionPromptID, @MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, @MJAIAgents_ParentID_TypeID, @MJAIAgents_ParentID_Status, @MJAIAgents_ParentID_DriverClass, @MJAIAgents_ParentID_IconClass, @MJAIAgents_ParentID_ModelSelectionMode, @MJAIAgents_ParentID_PayloadDownstreamPaths, @MJAIAgents_ParentID_PayloadUpstreamPaths, @MJAIAgents_ParentID_PayloadSelfReadPaths, @MJAIAgents_ParentID_PayloadSelfWritePaths, @MJAIAgents_ParentID_PayloadScope, @MJAIAgents_ParentID_FinalPayloadValidation, @MJAIAgents_ParentID_FinalPayloadValidationMode, @MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, @MJAIAgents_ParentID_MaxCostPerRun, @MJAIAgents_ParentID_MaxTokensPerRun, @MJAIAgents_ParentID_MaxIterationsPerRun, @MJAIAgents_ParentID_MaxTimePerRun, @MJAIAgents_ParentID_MinExecutionsPerRun, @MJAIAgents_ParentID_MaxExecutionsPerRun, @MJAIAgents_ParentID_StartingPayloadValidation, @MJAIAgents_ParentID_StartingPayloadValidationMode, @MJAIAgents_ParentID_DefaultPromptEffortLevel, @MJAIAgents_ParentID_ChatHandlingOption, @MJAIAgents_ParentID_DefaultArtifactTypeID, @MJAIAgents_ParentID_OwnerUserID, @MJAIAgents_ParentID_InvocationMode, @MJAIAgents_ParentID_ArtifactCreationMode, @MJAIAgents_ParentID_FunctionalRequirements, @MJAIAgents_ParentID_TechnicalDesign, @MJAIAgents_ParentID_InjectNotes, @MJAIAgents_ParentID_MaxNotesToInject, @MJAIAgents_ParentID_NoteInjectionStrategy, @MJAIAgents_ParentID_InjectExamples, @MJAIAgents_ParentID_MaxExamplesToInject, @MJAIAgents_ParentID_ExampleInjectionStrategy, @MJAIAgents_ParentID_IsRestricted, @MJAIAgents_ParentID_MessageMode, @MJAIAgents_ParentID_MaxMessages, @MJAIAgents_ParentID_AttachmentStorageProviderID, @MJAIAgents_ParentID_AttachmentRootPath, @MJAIAgents_ParentID_InlineStorageThresholdBytes, @MJAIAgents_ParentID_AgentTypePromptParams, @MJAIAgents_ParentID_ScopeConfig, @MJAIAgents_ParentID_NoteRetentionDays, @MJAIAgents_ParentID_ExampleRetentionDays, @MJAIAgents_ParentID_AutoArchiveEnabled, @MJAIAgents_ParentID_RerankerConfiguration, @MJAIAgents_ParentID_CategoryID, @MJAIAgents_ParentID_AllowEphemeralClientTools, @MJAIAgents_ParentID_DefaultStorageAccountID, @MJAIAgents_ParentID_SearchScopeAccess, @MJAIAgents_ParentID_AcceptUnregisteredFiles
+    FETCH NEXT FROM cascade_update_MJAIAgents_ParentID_cursor INTO @MJAIAgents_ParentIDID, @MJAIAgents_ParentID_Name, @MJAIAgents_ParentID_Description, @MJAIAgents_ParentID_LogoURL, @MJAIAgents_ParentID_ParentID, @MJAIAgents_ParentID_ExposeAsAction, @MJAIAgents_ParentID_ExecutionOrder, @MJAIAgents_ParentID_ExecutionMode, @MJAIAgents_ParentID_EnableContextCompression, @MJAIAgents_ParentID_ContextCompressionMessageThreshold, @MJAIAgents_ParentID_ContextCompressionPromptID, @MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, @MJAIAgents_ParentID_TypeID, @MJAIAgents_ParentID_Status, @MJAIAgents_ParentID_DriverClass, @MJAIAgents_ParentID_IconClass, @MJAIAgents_ParentID_ModelSelectionMode, @MJAIAgents_ParentID_PayloadDownstreamPaths, @MJAIAgents_ParentID_PayloadUpstreamPaths, @MJAIAgents_ParentID_PayloadSelfReadPaths, @MJAIAgents_ParentID_PayloadSelfWritePaths, @MJAIAgents_ParentID_PayloadScope, @MJAIAgents_ParentID_FinalPayloadValidation, @MJAIAgents_ParentID_FinalPayloadValidationMode, @MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, @MJAIAgents_ParentID_MaxCostPerRun, @MJAIAgents_ParentID_MaxTokensPerRun, @MJAIAgents_ParentID_MaxIterationsPerRun, @MJAIAgents_ParentID_MaxTimePerRun, @MJAIAgents_ParentID_MinExecutionsPerRun, @MJAIAgents_ParentID_MaxExecutionsPerRun, @MJAIAgents_ParentID_StartingPayloadValidation, @MJAIAgents_ParentID_StartingPayloadValidationMode, @MJAIAgents_ParentID_DefaultPromptEffortLevel, @MJAIAgents_ParentID_ChatHandlingOption, @MJAIAgents_ParentID_DefaultArtifactTypeID, @MJAIAgents_ParentID_OwnerUserID, @MJAIAgents_ParentID_InvocationMode, @MJAIAgents_ParentID_ArtifactCreationMode, @MJAIAgents_ParentID_FunctionalRequirements, @MJAIAgents_ParentID_TechnicalDesign, @MJAIAgents_ParentID_InjectNotes, @MJAIAgents_ParentID_MaxNotesToInject, @MJAIAgents_ParentID_NoteInjectionStrategy, @MJAIAgents_ParentID_InjectExamples, @MJAIAgents_ParentID_MaxExamplesToInject, @MJAIAgents_ParentID_ExampleInjectionStrategy, @MJAIAgents_ParentID_IsRestricted, @MJAIAgents_ParentID_MessageMode, @MJAIAgents_ParentID_MaxMessages, @MJAIAgents_ParentID_AttachmentStorageProviderID, @MJAIAgents_ParentID_AttachmentRootPath, @MJAIAgents_ParentID_InlineStorageThresholdBytes, @MJAIAgents_ParentID_AgentTypePromptParams, @MJAIAgents_ParentID_ScopeConfig, @MJAIAgents_ParentID_NoteRetentionDays, @MJAIAgents_ParentID_ExampleRetentionDays, @MJAIAgents_ParentID_AutoArchiveEnabled, @MJAIAgents_ParentID_RerankerConfiguration, @MJAIAgents_ParentID_CategoryID, @MJAIAgents_ParentID_AllowEphemeralClientTools, @MJAIAgents_ParentID_DefaultStorageAccountID, @MJAIAgents_ParentID_SearchScopeAccess, @MJAIAgents_ParentID_AcceptUnregisteredFiles, @MJAIAgents_ParentID_DefaultCoAgentID
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -7536,13 +9220,101 @@ BEGIN
         SET @MJAIAgents_ParentID_ParentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateAIAgent] @ID = @MJAIAgents_ParentIDID, @Name = @MJAIAgents_ParentID_Name, @Description = @MJAIAgents_ParentID_Description, @LogoURL = @MJAIAgents_ParentID_LogoURL, @ParentID_Clear = 1, @ParentID = @MJAIAgents_ParentID_ParentID, @ExposeAsAction = @MJAIAgents_ParentID_ExposeAsAction, @ExecutionOrder = @MJAIAgents_ParentID_ExecutionOrder, @ExecutionMode = @MJAIAgents_ParentID_ExecutionMode, @EnableContextCompression = @MJAIAgents_ParentID_EnableContextCompression, @ContextCompressionMessageThreshold = @MJAIAgents_ParentID_ContextCompressionMessageThreshold, @ContextCompressionPromptID = @MJAIAgents_ParentID_ContextCompressionPromptID, @ContextCompressionMessageRetentionCount = @MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, @TypeID = @MJAIAgents_ParentID_TypeID, @Status = @MJAIAgents_ParentID_Status, @DriverClass = @MJAIAgents_ParentID_DriverClass, @IconClass = @MJAIAgents_ParentID_IconClass, @ModelSelectionMode = @MJAIAgents_ParentID_ModelSelectionMode, @PayloadDownstreamPaths = @MJAIAgents_ParentID_PayloadDownstreamPaths, @PayloadUpstreamPaths = @MJAIAgents_ParentID_PayloadUpstreamPaths, @PayloadSelfReadPaths = @MJAIAgents_ParentID_PayloadSelfReadPaths, @PayloadSelfWritePaths = @MJAIAgents_ParentID_PayloadSelfWritePaths, @PayloadScope = @MJAIAgents_ParentID_PayloadScope, @FinalPayloadValidation = @MJAIAgents_ParentID_FinalPayloadValidation, @FinalPayloadValidationMode = @MJAIAgents_ParentID_FinalPayloadValidationMode, @FinalPayloadValidationMaxRetries = @MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, @MaxCostPerRun = @MJAIAgents_ParentID_MaxCostPerRun, @MaxTokensPerRun = @MJAIAgents_ParentID_MaxTokensPerRun, @MaxIterationsPerRun = @MJAIAgents_ParentID_MaxIterationsPerRun, @MaxTimePerRun = @MJAIAgents_ParentID_MaxTimePerRun, @MinExecutionsPerRun = @MJAIAgents_ParentID_MinExecutionsPerRun, @MaxExecutionsPerRun = @MJAIAgents_ParentID_MaxExecutionsPerRun, @StartingPayloadValidation = @MJAIAgents_ParentID_StartingPayloadValidation, @StartingPayloadValidationMode = @MJAIAgents_ParentID_StartingPayloadValidationMode, @DefaultPromptEffortLevel = @MJAIAgents_ParentID_DefaultPromptEffortLevel, @ChatHandlingOption = @MJAIAgents_ParentID_ChatHandlingOption, @DefaultArtifactTypeID = @MJAIAgents_ParentID_DefaultArtifactTypeID, @OwnerUserID = @MJAIAgents_ParentID_OwnerUserID, @InvocationMode = @MJAIAgents_ParentID_InvocationMode, @ArtifactCreationMode = @MJAIAgents_ParentID_ArtifactCreationMode, @FunctionalRequirements = @MJAIAgents_ParentID_FunctionalRequirements, @TechnicalDesign = @MJAIAgents_ParentID_TechnicalDesign, @InjectNotes = @MJAIAgents_ParentID_InjectNotes, @MaxNotesToInject = @MJAIAgents_ParentID_MaxNotesToInject, @NoteInjectionStrategy = @MJAIAgents_ParentID_NoteInjectionStrategy, @InjectExamples = @MJAIAgents_ParentID_InjectExamples, @MaxExamplesToInject = @MJAIAgents_ParentID_MaxExamplesToInject, @ExampleInjectionStrategy = @MJAIAgents_ParentID_ExampleInjectionStrategy, @IsRestricted = @MJAIAgents_ParentID_IsRestricted, @MessageMode = @MJAIAgents_ParentID_MessageMode, @MaxMessages = @MJAIAgents_ParentID_MaxMessages, @AttachmentStorageProviderID = @MJAIAgents_ParentID_AttachmentStorageProviderID, @AttachmentRootPath = @MJAIAgents_ParentID_AttachmentRootPath, @InlineStorageThresholdBytes = @MJAIAgents_ParentID_InlineStorageThresholdBytes, @AgentTypePromptParams = @MJAIAgents_ParentID_AgentTypePromptParams, @ScopeConfig = @MJAIAgents_ParentID_ScopeConfig, @NoteRetentionDays = @MJAIAgents_ParentID_NoteRetentionDays, @ExampleRetentionDays = @MJAIAgents_ParentID_ExampleRetentionDays, @AutoArchiveEnabled = @MJAIAgents_ParentID_AutoArchiveEnabled, @RerankerConfiguration = @MJAIAgents_ParentID_RerankerConfiguration, @CategoryID = @MJAIAgents_ParentID_CategoryID, @AllowEphemeralClientTools = @MJAIAgents_ParentID_AllowEphemeralClientTools, @DefaultStorageAccountID = @MJAIAgents_ParentID_DefaultStorageAccountID, @SearchScopeAccess = @MJAIAgents_ParentID_SearchScopeAccess, @AcceptUnregisteredFiles = @MJAIAgents_ParentID_AcceptUnregisteredFiles
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgent] @ID = @MJAIAgents_ParentIDID, @Name = @MJAIAgents_ParentID_Name, @Description = @MJAIAgents_ParentID_Description, @LogoURL = @MJAIAgents_ParentID_LogoURL, @ParentID_Clear = 1, @ParentID = @MJAIAgents_ParentID_ParentID, @ExposeAsAction = @MJAIAgents_ParentID_ExposeAsAction, @ExecutionOrder = @MJAIAgents_ParentID_ExecutionOrder, @ExecutionMode = @MJAIAgents_ParentID_ExecutionMode, @EnableContextCompression = @MJAIAgents_ParentID_EnableContextCompression, @ContextCompressionMessageThreshold = @MJAIAgents_ParentID_ContextCompressionMessageThreshold, @ContextCompressionPromptID = @MJAIAgents_ParentID_ContextCompressionPromptID, @ContextCompressionMessageRetentionCount = @MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, @TypeID = @MJAIAgents_ParentID_TypeID, @Status = @MJAIAgents_ParentID_Status, @DriverClass = @MJAIAgents_ParentID_DriverClass, @IconClass = @MJAIAgents_ParentID_IconClass, @ModelSelectionMode = @MJAIAgents_ParentID_ModelSelectionMode, @PayloadDownstreamPaths = @MJAIAgents_ParentID_PayloadDownstreamPaths, @PayloadUpstreamPaths = @MJAIAgents_ParentID_PayloadUpstreamPaths, @PayloadSelfReadPaths = @MJAIAgents_ParentID_PayloadSelfReadPaths, @PayloadSelfWritePaths = @MJAIAgents_ParentID_PayloadSelfWritePaths, @PayloadScope = @MJAIAgents_ParentID_PayloadScope, @FinalPayloadValidation = @MJAIAgents_ParentID_FinalPayloadValidation, @FinalPayloadValidationMode = @MJAIAgents_ParentID_FinalPayloadValidationMode, @FinalPayloadValidationMaxRetries = @MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, @MaxCostPerRun = @MJAIAgents_ParentID_MaxCostPerRun, @MaxTokensPerRun = @MJAIAgents_ParentID_MaxTokensPerRun, @MaxIterationsPerRun = @MJAIAgents_ParentID_MaxIterationsPerRun, @MaxTimePerRun = @MJAIAgents_ParentID_MaxTimePerRun, @MinExecutionsPerRun = @MJAIAgents_ParentID_MinExecutionsPerRun, @MaxExecutionsPerRun = @MJAIAgents_ParentID_MaxExecutionsPerRun, @StartingPayloadValidation = @MJAIAgents_ParentID_StartingPayloadValidation, @StartingPayloadValidationMode = @MJAIAgents_ParentID_StartingPayloadValidationMode, @DefaultPromptEffortLevel = @MJAIAgents_ParentID_DefaultPromptEffortLevel, @ChatHandlingOption = @MJAIAgents_ParentID_ChatHandlingOption, @DefaultArtifactTypeID = @MJAIAgents_ParentID_DefaultArtifactTypeID, @OwnerUserID = @MJAIAgents_ParentID_OwnerUserID, @InvocationMode = @MJAIAgents_ParentID_InvocationMode, @ArtifactCreationMode = @MJAIAgents_ParentID_ArtifactCreationMode, @FunctionalRequirements = @MJAIAgents_ParentID_FunctionalRequirements, @TechnicalDesign = @MJAIAgents_ParentID_TechnicalDesign, @InjectNotes = @MJAIAgents_ParentID_InjectNotes, @MaxNotesToInject = @MJAIAgents_ParentID_MaxNotesToInject, @NoteInjectionStrategy = @MJAIAgents_ParentID_NoteInjectionStrategy, @InjectExamples = @MJAIAgents_ParentID_InjectExamples, @MaxExamplesToInject = @MJAIAgents_ParentID_MaxExamplesToInject, @ExampleInjectionStrategy = @MJAIAgents_ParentID_ExampleInjectionStrategy, @IsRestricted = @MJAIAgents_ParentID_IsRestricted, @MessageMode = @MJAIAgents_ParentID_MessageMode, @MaxMessages = @MJAIAgents_ParentID_MaxMessages, @AttachmentStorageProviderID = @MJAIAgents_ParentID_AttachmentStorageProviderID, @AttachmentRootPath = @MJAIAgents_ParentID_AttachmentRootPath, @InlineStorageThresholdBytes = @MJAIAgents_ParentID_InlineStorageThresholdBytes, @AgentTypePromptParams = @MJAIAgents_ParentID_AgentTypePromptParams, @ScopeConfig = @MJAIAgents_ParentID_ScopeConfig, @NoteRetentionDays = @MJAIAgents_ParentID_NoteRetentionDays, @ExampleRetentionDays = @MJAIAgents_ParentID_ExampleRetentionDays, @AutoArchiveEnabled = @MJAIAgents_ParentID_AutoArchiveEnabled, @RerankerConfiguration = @MJAIAgents_ParentID_RerankerConfiguration, @CategoryID = @MJAIAgents_ParentID_CategoryID, @AllowEphemeralClientTools = @MJAIAgents_ParentID_AllowEphemeralClientTools, @DefaultStorageAccountID = @MJAIAgents_ParentID_DefaultStorageAccountID, @SearchScopeAccess = @MJAIAgents_ParentID_SearchScopeAccess, @AcceptUnregisteredFiles = @MJAIAgents_ParentID_AcceptUnregisteredFiles, @DefaultCoAgentID = @MJAIAgents_ParentID_DefaultCoAgentID
 
-        FETCH NEXT FROM cascade_update_MJAIAgents_ParentID_cursor INTO @MJAIAgents_ParentIDID, @MJAIAgents_ParentID_Name, @MJAIAgents_ParentID_Description, @MJAIAgents_ParentID_LogoURL, @MJAIAgents_ParentID_ParentID, @MJAIAgents_ParentID_ExposeAsAction, @MJAIAgents_ParentID_ExecutionOrder, @MJAIAgents_ParentID_ExecutionMode, @MJAIAgents_ParentID_EnableContextCompression, @MJAIAgents_ParentID_ContextCompressionMessageThreshold, @MJAIAgents_ParentID_ContextCompressionPromptID, @MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, @MJAIAgents_ParentID_TypeID, @MJAIAgents_ParentID_Status, @MJAIAgents_ParentID_DriverClass, @MJAIAgents_ParentID_IconClass, @MJAIAgents_ParentID_ModelSelectionMode, @MJAIAgents_ParentID_PayloadDownstreamPaths, @MJAIAgents_ParentID_PayloadUpstreamPaths, @MJAIAgents_ParentID_PayloadSelfReadPaths, @MJAIAgents_ParentID_PayloadSelfWritePaths, @MJAIAgents_ParentID_PayloadScope, @MJAIAgents_ParentID_FinalPayloadValidation, @MJAIAgents_ParentID_FinalPayloadValidationMode, @MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, @MJAIAgents_ParentID_MaxCostPerRun, @MJAIAgents_ParentID_MaxTokensPerRun, @MJAIAgents_ParentID_MaxIterationsPerRun, @MJAIAgents_ParentID_MaxTimePerRun, @MJAIAgents_ParentID_MinExecutionsPerRun, @MJAIAgents_ParentID_MaxExecutionsPerRun, @MJAIAgents_ParentID_StartingPayloadValidation, @MJAIAgents_ParentID_StartingPayloadValidationMode, @MJAIAgents_ParentID_DefaultPromptEffortLevel, @MJAIAgents_ParentID_ChatHandlingOption, @MJAIAgents_ParentID_DefaultArtifactTypeID, @MJAIAgents_ParentID_OwnerUserID, @MJAIAgents_ParentID_InvocationMode, @MJAIAgents_ParentID_ArtifactCreationMode, @MJAIAgents_ParentID_FunctionalRequirements, @MJAIAgents_ParentID_TechnicalDesign, @MJAIAgents_ParentID_InjectNotes, @MJAIAgents_ParentID_MaxNotesToInject, @MJAIAgents_ParentID_NoteInjectionStrategy, @MJAIAgents_ParentID_InjectExamples, @MJAIAgents_ParentID_MaxExamplesToInject, @MJAIAgents_ParentID_ExampleInjectionStrategy, @MJAIAgents_ParentID_IsRestricted, @MJAIAgents_ParentID_MessageMode, @MJAIAgents_ParentID_MaxMessages, @MJAIAgents_ParentID_AttachmentStorageProviderID, @MJAIAgents_ParentID_AttachmentRootPath, @MJAIAgents_ParentID_InlineStorageThresholdBytes, @MJAIAgents_ParentID_AgentTypePromptParams, @MJAIAgents_ParentID_ScopeConfig, @MJAIAgents_ParentID_NoteRetentionDays, @MJAIAgents_ParentID_ExampleRetentionDays, @MJAIAgents_ParentID_AutoArchiveEnabled, @MJAIAgents_ParentID_RerankerConfiguration, @MJAIAgents_ParentID_CategoryID, @MJAIAgents_ParentID_AllowEphemeralClientTools, @MJAIAgents_ParentID_DefaultStorageAccountID, @MJAIAgents_ParentID_SearchScopeAccess, @MJAIAgents_ParentID_AcceptUnregisteredFiles
+        FETCH NEXT FROM cascade_update_MJAIAgents_ParentID_cursor INTO @MJAIAgents_ParentIDID, @MJAIAgents_ParentID_Name, @MJAIAgents_ParentID_Description, @MJAIAgents_ParentID_LogoURL, @MJAIAgents_ParentID_ParentID, @MJAIAgents_ParentID_ExposeAsAction, @MJAIAgents_ParentID_ExecutionOrder, @MJAIAgents_ParentID_ExecutionMode, @MJAIAgents_ParentID_EnableContextCompression, @MJAIAgents_ParentID_ContextCompressionMessageThreshold, @MJAIAgents_ParentID_ContextCompressionPromptID, @MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, @MJAIAgents_ParentID_TypeID, @MJAIAgents_ParentID_Status, @MJAIAgents_ParentID_DriverClass, @MJAIAgents_ParentID_IconClass, @MJAIAgents_ParentID_ModelSelectionMode, @MJAIAgents_ParentID_PayloadDownstreamPaths, @MJAIAgents_ParentID_PayloadUpstreamPaths, @MJAIAgents_ParentID_PayloadSelfReadPaths, @MJAIAgents_ParentID_PayloadSelfWritePaths, @MJAIAgents_ParentID_PayloadScope, @MJAIAgents_ParentID_FinalPayloadValidation, @MJAIAgents_ParentID_FinalPayloadValidationMode, @MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, @MJAIAgents_ParentID_MaxCostPerRun, @MJAIAgents_ParentID_MaxTokensPerRun, @MJAIAgents_ParentID_MaxIterationsPerRun, @MJAIAgents_ParentID_MaxTimePerRun, @MJAIAgents_ParentID_MinExecutionsPerRun, @MJAIAgents_ParentID_MaxExecutionsPerRun, @MJAIAgents_ParentID_StartingPayloadValidation, @MJAIAgents_ParentID_StartingPayloadValidationMode, @MJAIAgents_ParentID_DefaultPromptEffortLevel, @MJAIAgents_ParentID_ChatHandlingOption, @MJAIAgents_ParentID_DefaultArtifactTypeID, @MJAIAgents_ParentID_OwnerUserID, @MJAIAgents_ParentID_InvocationMode, @MJAIAgents_ParentID_ArtifactCreationMode, @MJAIAgents_ParentID_FunctionalRequirements, @MJAIAgents_ParentID_TechnicalDesign, @MJAIAgents_ParentID_InjectNotes, @MJAIAgents_ParentID_MaxNotesToInject, @MJAIAgents_ParentID_NoteInjectionStrategy, @MJAIAgents_ParentID_InjectExamples, @MJAIAgents_ParentID_MaxExamplesToInject, @MJAIAgents_ParentID_ExampleInjectionStrategy, @MJAIAgents_ParentID_IsRestricted, @MJAIAgents_ParentID_MessageMode, @MJAIAgents_ParentID_MaxMessages, @MJAIAgents_ParentID_AttachmentStorageProviderID, @MJAIAgents_ParentID_AttachmentRootPath, @MJAIAgents_ParentID_InlineStorageThresholdBytes, @MJAIAgents_ParentID_AgentTypePromptParams, @MJAIAgents_ParentID_ScopeConfig, @MJAIAgents_ParentID_NoteRetentionDays, @MJAIAgents_ParentID_ExampleRetentionDays, @MJAIAgents_ParentID_AutoArchiveEnabled, @MJAIAgents_ParentID_RerankerConfiguration, @MJAIAgents_ParentID_CategoryID, @MJAIAgents_ParentID_AllowEphemeralClientTools, @MJAIAgents_ParentID_DefaultStorageAccountID, @MJAIAgents_ParentID_SearchScopeAccess, @MJAIAgents_ParentID_AcceptUnregisteredFiles, @MJAIAgents_ParentID_DefaultCoAgentID
     END
 
     CLOSE cascade_update_MJAIAgents_ParentID_cursor
     DEALLOCATE cascade_update_MJAIAgents_ParentID_cursor
+    
+    -- Cascade update on AIAgent using cursor to call spUpdateAIAgent
+    DECLARE @MJAIAgents_DefaultCoAgentIDID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_Name nvarchar(255)
+    DECLARE @MJAIAgents_DefaultCoAgentID_Description nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_LogoURL nvarchar(255)
+    DECLARE @MJAIAgents_DefaultCoAgentID_ParentID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_ExposeAsAction bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_ExecutionOrder int
+    DECLARE @MJAIAgents_DefaultCoAgentID_ExecutionMode nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_EnableContextCompression bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageThreshold int
+    DECLARE @MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRetentionCount int
+    DECLARE @MJAIAgents_DefaultCoAgentID_TypeID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_Status nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_DriverClass nvarchar(255)
+    DECLARE @MJAIAgents_DefaultCoAgentID_IconClass nvarchar(100)
+    DECLARE @MJAIAgents_DefaultCoAgentID_ModelSelectionMode nvarchar(50)
+    DECLARE @MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_PayloadScope nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_FinalPayloadValidation nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode nvarchar(25)
+    DECLARE @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries int
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxCostPerRun decimal(10, 4)
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxTokensPerRun int
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun int
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxTimePerRun int
+    DECLARE @MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun int
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun int
+    DECLARE @MJAIAgents_DefaultCoAgentID_StartingPayloadValidation nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode nvarchar(25)
+    DECLARE @MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel int
+    DECLARE @MJAIAgents_DefaultCoAgentID_ChatHandlingOption nvarchar(30)
+    DECLARE @MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_OwnerUserID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_InvocationMode nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_ArtifactCreationMode nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_FunctionalRequirements nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_TechnicalDesign nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_InjectNotes bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxNotesToInject int
+    DECLARE @MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_InjectExamples bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxExamplesToInject int
+    DECLARE @MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_IsRestricted bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_MessageMode nvarchar(50)
+    DECLARE @MJAIAgents_DefaultCoAgentID_MaxMessages int
+    DECLARE @MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_AttachmentRootPath nvarchar(500)
+    DECLARE @MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes int
+    DECLARE @MJAIAgents_DefaultCoAgentID_AgentTypePromptParams nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_ScopeConfig nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_NoteRetentionDays int
+    DECLARE @MJAIAgents_DefaultCoAgentID_ExampleRetentionDays int
+    DECLARE @MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_RerankerConfiguration nvarchar(MAX)
+    DECLARE @MJAIAgents_DefaultCoAgentID_CategoryID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID uniqueidentifier
+    DECLARE @MJAIAgents_DefaultCoAgentID_SearchScopeAccess nvarchar(20)
+    DECLARE @MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles bit
+    DECLARE @MJAIAgents_DefaultCoAgentID_DefaultCoAgentID uniqueidentifier
+    DECLARE cascade_update_MJAIAgents_DefaultCoAgentID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [LogoURL], [ParentID], [ExposeAsAction], [ExecutionOrder], [ExecutionMode], [EnableContextCompression], [ContextCompressionMessageThreshold], [ContextCompressionPromptID], [ContextCompressionMessageRetentionCount], [TypeID], [Status], [DriverClass], [IconClass], [ModelSelectionMode], [PayloadDownstreamPaths], [PayloadUpstreamPaths], [PayloadSelfReadPaths], [PayloadSelfWritePaths], [PayloadScope], [FinalPayloadValidation], [FinalPayloadValidationMode], [FinalPayloadValidationMaxRetries], [MaxCostPerRun], [MaxTokensPerRun], [MaxIterationsPerRun], [MaxTimePerRun], [MinExecutionsPerRun], [MaxExecutionsPerRun], [StartingPayloadValidation], [StartingPayloadValidationMode], [DefaultPromptEffortLevel], [ChatHandlingOption], [DefaultArtifactTypeID], [OwnerUserID], [InvocationMode], [ArtifactCreationMode], [FunctionalRequirements], [TechnicalDesign], [InjectNotes], [MaxNotesToInject], [NoteInjectionStrategy], [InjectExamples], [MaxExamplesToInject], [ExampleInjectionStrategy], [IsRestricted], [MessageMode], [MaxMessages], [AttachmentStorageProviderID], [AttachmentRootPath], [InlineStorageThresholdBytes], [AgentTypePromptParams], [ScopeConfig], [NoteRetentionDays], [ExampleRetentionDays], [AutoArchiveEnabled], [RerankerConfiguration], [CategoryID], [AllowEphemeralClientTools], [DefaultStorageAccountID], [SearchScopeAccess], [AcceptUnregisteredFiles], [DefaultCoAgentID]
+        FROM [${flyway:defaultSchema}].[AIAgent]
+        WHERE [DefaultCoAgentID] = @ID
+
+    OPEN cascade_update_MJAIAgents_DefaultCoAgentID_cursor
+    FETCH NEXT FROM cascade_update_MJAIAgents_DefaultCoAgentID_cursor INTO @MJAIAgents_DefaultCoAgentIDID, @MJAIAgents_DefaultCoAgentID_Name, @MJAIAgents_DefaultCoAgentID_Description, @MJAIAgents_DefaultCoAgentID_LogoURL, @MJAIAgents_DefaultCoAgentID_ParentID, @MJAIAgents_DefaultCoAgentID_ExposeAsAction, @MJAIAgents_DefaultCoAgentID_ExecutionOrder, @MJAIAgents_DefaultCoAgentID_ExecutionMode, @MJAIAgents_DefaultCoAgentID_EnableContextCompression, @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageThreshold, @MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID, @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRetentionCount, @MJAIAgents_DefaultCoAgentID_TypeID, @MJAIAgents_DefaultCoAgentID_Status, @MJAIAgents_DefaultCoAgentID_DriverClass, @MJAIAgents_DefaultCoAgentID_IconClass, @MJAIAgents_DefaultCoAgentID_ModelSelectionMode, @MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths, @MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths, @MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths, @MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths, @MJAIAgents_DefaultCoAgentID_PayloadScope, @MJAIAgents_DefaultCoAgentID_FinalPayloadValidation, @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode, @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries, @MJAIAgents_DefaultCoAgentID_MaxCostPerRun, @MJAIAgents_DefaultCoAgentID_MaxTokensPerRun, @MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun, @MJAIAgents_DefaultCoAgentID_MaxTimePerRun, @MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun, @MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun, @MJAIAgents_DefaultCoAgentID_StartingPayloadValidation, @MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode, @MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel, @MJAIAgents_DefaultCoAgentID_ChatHandlingOption, @MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID, @MJAIAgents_DefaultCoAgentID_OwnerUserID, @MJAIAgents_DefaultCoAgentID_InvocationMode, @MJAIAgents_DefaultCoAgentID_ArtifactCreationMode, @MJAIAgents_DefaultCoAgentID_FunctionalRequirements, @MJAIAgents_DefaultCoAgentID_TechnicalDesign, @MJAIAgents_DefaultCoAgentID_InjectNotes, @MJAIAgents_DefaultCoAgentID_MaxNotesToInject, @MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy, @MJAIAgents_DefaultCoAgentID_InjectExamples, @MJAIAgents_DefaultCoAgentID_MaxExamplesToInject, @MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy, @MJAIAgents_DefaultCoAgentID_IsRestricted, @MJAIAgents_DefaultCoAgentID_MessageMode, @MJAIAgents_DefaultCoAgentID_MaxMessages, @MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID, @MJAIAgents_DefaultCoAgentID_AttachmentRootPath, @MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes, @MJAIAgents_DefaultCoAgentID_AgentTypePromptParams, @MJAIAgents_DefaultCoAgentID_ScopeConfig, @MJAIAgents_DefaultCoAgentID_NoteRetentionDays, @MJAIAgents_DefaultCoAgentID_ExampleRetentionDays, @MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled, @MJAIAgents_DefaultCoAgentID_RerankerConfiguration, @MJAIAgents_DefaultCoAgentID_CategoryID, @MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools, @MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID, @MJAIAgents_DefaultCoAgentID_SearchScopeAccess, @MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles, @MJAIAgents_DefaultCoAgentID_DefaultCoAgentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIAgents_DefaultCoAgentID_DefaultCoAgentID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgent] @ID = @MJAIAgents_DefaultCoAgentIDID, @Name = @MJAIAgents_DefaultCoAgentID_Name, @Description = @MJAIAgents_DefaultCoAgentID_Description, @LogoURL = @MJAIAgents_DefaultCoAgentID_LogoURL, @ParentID = @MJAIAgents_DefaultCoAgentID_ParentID, @ExposeAsAction = @MJAIAgents_DefaultCoAgentID_ExposeAsAction, @ExecutionOrder = @MJAIAgents_DefaultCoAgentID_ExecutionOrder, @ExecutionMode = @MJAIAgents_DefaultCoAgentID_ExecutionMode, @EnableContextCompression = @MJAIAgents_DefaultCoAgentID_EnableContextCompression, @ContextCompressionMessageThreshold = @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageThreshold, @ContextCompressionPromptID = @MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID, @ContextCompressionMessageRetentionCount = @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRetentionCount, @TypeID = @MJAIAgents_DefaultCoAgentID_TypeID, @Status = @MJAIAgents_DefaultCoAgentID_Status, @DriverClass = @MJAIAgents_DefaultCoAgentID_DriverClass, @IconClass = @MJAIAgents_DefaultCoAgentID_IconClass, @ModelSelectionMode = @MJAIAgents_DefaultCoAgentID_ModelSelectionMode, @PayloadDownstreamPaths = @MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths, @PayloadUpstreamPaths = @MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths, @PayloadSelfReadPaths = @MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths, @PayloadSelfWritePaths = @MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths, @PayloadScope = @MJAIAgents_DefaultCoAgentID_PayloadScope, @FinalPayloadValidation = @MJAIAgents_DefaultCoAgentID_FinalPayloadValidation, @FinalPayloadValidationMode = @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode, @FinalPayloadValidationMaxRetries = @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries, @MaxCostPerRun = @MJAIAgents_DefaultCoAgentID_MaxCostPerRun, @MaxTokensPerRun = @MJAIAgents_DefaultCoAgentID_MaxTokensPerRun, @MaxIterationsPerRun = @MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun, @MaxTimePerRun = @MJAIAgents_DefaultCoAgentID_MaxTimePerRun, @MinExecutionsPerRun = @MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun, @MaxExecutionsPerRun = @MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun, @StartingPayloadValidation = @MJAIAgents_DefaultCoAgentID_StartingPayloadValidation, @StartingPayloadValidationMode = @MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode, @DefaultPromptEffortLevel = @MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel, @ChatHandlingOption = @MJAIAgents_DefaultCoAgentID_ChatHandlingOption, @DefaultArtifactTypeID = @MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID, @OwnerUserID = @MJAIAgents_DefaultCoAgentID_OwnerUserID, @InvocationMode = @MJAIAgents_DefaultCoAgentID_InvocationMode, @ArtifactCreationMode = @MJAIAgents_DefaultCoAgentID_ArtifactCreationMode, @FunctionalRequirements = @MJAIAgents_DefaultCoAgentID_FunctionalRequirements, @TechnicalDesign = @MJAIAgents_DefaultCoAgentID_TechnicalDesign, @InjectNotes = @MJAIAgents_DefaultCoAgentID_InjectNotes, @MaxNotesToInject = @MJAIAgents_DefaultCoAgentID_MaxNotesToInject, @NoteInjectionStrategy = @MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy, @InjectExamples = @MJAIAgents_DefaultCoAgentID_InjectExamples, @MaxExamplesToInject = @MJAIAgents_DefaultCoAgentID_MaxExamplesToInject, @ExampleInjectionStrategy = @MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy, @IsRestricted = @MJAIAgents_DefaultCoAgentID_IsRestricted, @MessageMode = @MJAIAgents_DefaultCoAgentID_MessageMode, @MaxMessages = @MJAIAgents_DefaultCoAgentID_MaxMessages, @AttachmentStorageProviderID = @MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID, @AttachmentRootPath = @MJAIAgents_DefaultCoAgentID_AttachmentRootPath, @InlineStorageThresholdBytes = @MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes, @AgentTypePromptParams = @MJAIAgents_DefaultCoAgentID_AgentTypePromptParams, @ScopeConfig = @MJAIAgents_DefaultCoAgentID_ScopeConfig, @NoteRetentionDays = @MJAIAgents_DefaultCoAgentID_NoteRetentionDays, @ExampleRetentionDays = @MJAIAgents_DefaultCoAgentID_ExampleRetentionDays, @AutoArchiveEnabled = @MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled, @RerankerConfiguration = @MJAIAgents_DefaultCoAgentID_RerankerConfiguration, @CategoryID = @MJAIAgents_DefaultCoAgentID_CategoryID, @AllowEphemeralClientTools = @MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools, @DefaultStorageAccountID = @MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID, @SearchScopeAccess = @MJAIAgents_DefaultCoAgentID_SearchScopeAccess, @AcceptUnregisteredFiles = @MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles, @DefaultCoAgentID_Clear = 1, @DefaultCoAgentID = @MJAIAgents_DefaultCoAgentID_DefaultCoAgentID
+
+        FETCH NEXT FROM cascade_update_MJAIAgents_DefaultCoAgentID_cursor INTO @MJAIAgents_DefaultCoAgentIDID, @MJAIAgents_DefaultCoAgentID_Name, @MJAIAgents_DefaultCoAgentID_Description, @MJAIAgents_DefaultCoAgentID_LogoURL, @MJAIAgents_DefaultCoAgentID_ParentID, @MJAIAgents_DefaultCoAgentID_ExposeAsAction, @MJAIAgents_DefaultCoAgentID_ExecutionOrder, @MJAIAgents_DefaultCoAgentID_ExecutionMode, @MJAIAgents_DefaultCoAgentID_EnableContextCompression, @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageThreshold, @MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID, @MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRetentionCount, @MJAIAgents_DefaultCoAgentID_TypeID, @MJAIAgents_DefaultCoAgentID_Status, @MJAIAgents_DefaultCoAgentID_DriverClass, @MJAIAgents_DefaultCoAgentID_IconClass, @MJAIAgents_DefaultCoAgentID_ModelSelectionMode, @MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths, @MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths, @MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths, @MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths, @MJAIAgents_DefaultCoAgentID_PayloadScope, @MJAIAgents_DefaultCoAgentID_FinalPayloadValidation, @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode, @MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries, @MJAIAgents_DefaultCoAgentID_MaxCostPerRun, @MJAIAgents_DefaultCoAgentID_MaxTokensPerRun, @MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun, @MJAIAgents_DefaultCoAgentID_MaxTimePerRun, @MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun, @MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun, @MJAIAgents_DefaultCoAgentID_StartingPayloadValidation, @MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode, @MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel, @MJAIAgents_DefaultCoAgentID_ChatHandlingOption, @MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID, @MJAIAgents_DefaultCoAgentID_OwnerUserID, @MJAIAgents_DefaultCoAgentID_InvocationMode, @MJAIAgents_DefaultCoAgentID_ArtifactCreationMode, @MJAIAgents_DefaultCoAgentID_FunctionalRequirements, @MJAIAgents_DefaultCoAgentID_TechnicalDesign, @MJAIAgents_DefaultCoAgentID_InjectNotes, @MJAIAgents_DefaultCoAgentID_MaxNotesToInject, @MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy, @MJAIAgents_DefaultCoAgentID_InjectExamples, @MJAIAgents_DefaultCoAgentID_MaxExamplesToInject, @MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy, @MJAIAgents_DefaultCoAgentID_IsRestricted, @MJAIAgents_DefaultCoAgentID_MessageMode, @MJAIAgents_DefaultCoAgentID_MaxMessages, @MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID, @MJAIAgents_DefaultCoAgentID_AttachmentRootPath, @MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes, @MJAIAgents_DefaultCoAgentID_AgentTypePromptParams, @MJAIAgents_DefaultCoAgentID_ScopeConfig, @MJAIAgents_DefaultCoAgentID_NoteRetentionDays, @MJAIAgents_DefaultCoAgentID_ExampleRetentionDays, @MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled, @MJAIAgents_DefaultCoAgentID_RerankerConfiguration, @MJAIAgents_DefaultCoAgentID_CategoryID, @MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools, @MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID, @MJAIAgents_DefaultCoAgentID_SearchScopeAccess, @MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles, @MJAIAgents_DefaultCoAgentID_DefaultCoAgentID
+    END
+
+    CLOSE cascade_update_MJAIAgents_DefaultCoAgentID_cursor
+    DEALLOCATE cascade_update_MJAIAgents_DefaultCoAgentID_cursor
     
     -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
     DECLARE @MJAIPromptRuns_AgentIDID uniqueidentifier
@@ -8258,9 +10030,743 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Developer], [cdp_Integration];
 
+/* spDelete SQL for MJ: AI Prompts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompts
+-- Item: spDeleteAIPrompt
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIPrompt
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAIPrompt]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAIPrompt];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIPrompt]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on Action using cursor to call spUpdateAction
+    DECLARE @MJActions_DefaultCompactPromptIDID uniqueidentifier
+    DECLARE @MJActions_DefaultCompactPromptID_CategoryID uniqueidentifier
+    DECLARE @MJActions_DefaultCompactPromptID_Name nvarchar(425)
+    DECLARE @MJActions_DefaultCompactPromptID_Description nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_Type nvarchar(20)
+    DECLARE @MJActions_DefaultCompactPromptID_UserPrompt nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_UserComments nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_Code nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_CodeComments nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_CodeApprovalStatus nvarchar(20)
+    DECLARE @MJActions_DefaultCompactPromptID_CodeApprovalComments nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_CodeApprovedByUserID uniqueidentifier
+    DECLARE @MJActions_DefaultCompactPromptID_CodeApprovedAt datetimeoffset
+    DECLARE @MJActions_DefaultCompactPromptID_CodeLocked bit
+    DECLARE @MJActions_DefaultCompactPromptID_ForceCodeGeneration bit
+    DECLARE @MJActions_DefaultCompactPromptID_RetentionPeriod int
+    DECLARE @MJActions_DefaultCompactPromptID_Status nvarchar(20)
+    DECLARE @MJActions_DefaultCompactPromptID_DriverClass nvarchar(255)
+    DECLARE @MJActions_DefaultCompactPromptID_ParentID uniqueidentifier
+    DECLARE @MJActions_DefaultCompactPromptID_IconClass nvarchar(100)
+    DECLARE @MJActions_DefaultCompactPromptID_DefaultCompactPromptID uniqueidentifier
+    DECLARE @MJActions_DefaultCompactPromptID_Config nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_RuntimeActionConfiguration nvarchar(MAX)
+    DECLARE @MJActions_DefaultCompactPromptID_MaxExecutionTimeMS int
+    DECLARE @MJActions_DefaultCompactPromptID_CreatedByAgentID uniqueidentifier
+    DECLARE cascade_update_MJActions_DefaultCompactPromptID_cursor CURSOR FOR
+        SELECT [ID], [CategoryID], [Name], [Description], [Type], [UserPrompt], [UserComments], [Code], [CodeComments], [CodeApprovalStatus], [CodeApprovalComments], [CodeApprovedByUserID], [CodeApprovedAt], [CodeLocked], [ForceCodeGeneration], [RetentionPeriod], [Status], [DriverClass], [ParentID], [IconClass], [DefaultCompactPromptID], [Config], [RuntimeActionConfiguration], [MaxExecutionTimeMS], [CreatedByAgentID]
+        FROM [${flyway:defaultSchema}].[Action]
+        WHERE [DefaultCompactPromptID] = @ID
+
+    OPEN cascade_update_MJActions_DefaultCompactPromptID_cursor
+    FETCH NEXT FROM cascade_update_MJActions_DefaultCompactPromptID_cursor INTO @MJActions_DefaultCompactPromptIDID, @MJActions_DefaultCompactPromptID_CategoryID, @MJActions_DefaultCompactPromptID_Name, @MJActions_DefaultCompactPromptID_Description, @MJActions_DefaultCompactPromptID_Type, @MJActions_DefaultCompactPromptID_UserPrompt, @MJActions_DefaultCompactPromptID_UserComments, @MJActions_DefaultCompactPromptID_Code, @MJActions_DefaultCompactPromptID_CodeComments, @MJActions_DefaultCompactPromptID_CodeApprovalStatus, @MJActions_DefaultCompactPromptID_CodeApprovalComments, @MJActions_DefaultCompactPromptID_CodeApprovedByUserID, @MJActions_DefaultCompactPromptID_CodeApprovedAt, @MJActions_DefaultCompactPromptID_CodeLocked, @MJActions_DefaultCompactPromptID_ForceCodeGeneration, @MJActions_DefaultCompactPromptID_RetentionPeriod, @MJActions_DefaultCompactPromptID_Status, @MJActions_DefaultCompactPromptID_DriverClass, @MJActions_DefaultCompactPromptID_ParentID, @MJActions_DefaultCompactPromptID_IconClass, @MJActions_DefaultCompactPromptID_DefaultCompactPromptID, @MJActions_DefaultCompactPromptID_Config, @MJActions_DefaultCompactPromptID_RuntimeActionConfiguration, @MJActions_DefaultCompactPromptID_MaxExecutionTimeMS, @MJActions_DefaultCompactPromptID_CreatedByAgentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJActions_DefaultCompactPromptID_DefaultCompactPromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAction] @ID = @MJActions_DefaultCompactPromptIDID, @CategoryID = @MJActions_DefaultCompactPromptID_CategoryID, @Name = @MJActions_DefaultCompactPromptID_Name, @Description = @MJActions_DefaultCompactPromptID_Description, @Type = @MJActions_DefaultCompactPromptID_Type, @UserPrompt = @MJActions_DefaultCompactPromptID_UserPrompt, @UserComments = @MJActions_DefaultCompactPromptID_UserComments, @Code = @MJActions_DefaultCompactPromptID_Code, @CodeComments = @MJActions_DefaultCompactPromptID_CodeComments, @CodeApprovalStatus = @MJActions_DefaultCompactPromptID_CodeApprovalStatus, @CodeApprovalComments = @MJActions_DefaultCompactPromptID_CodeApprovalComments, @CodeApprovedByUserID = @MJActions_DefaultCompactPromptID_CodeApprovedByUserID, @CodeApprovedAt = @MJActions_DefaultCompactPromptID_CodeApprovedAt, @CodeLocked = @MJActions_DefaultCompactPromptID_CodeLocked, @ForceCodeGeneration = @MJActions_DefaultCompactPromptID_ForceCodeGeneration, @RetentionPeriod = @MJActions_DefaultCompactPromptID_RetentionPeriod, @Status = @MJActions_DefaultCompactPromptID_Status, @DriverClass = @MJActions_DefaultCompactPromptID_DriverClass, @ParentID = @MJActions_DefaultCompactPromptID_ParentID, @IconClass = @MJActions_DefaultCompactPromptID_IconClass, @DefaultCompactPromptID_Clear = 1, @DefaultCompactPromptID = @MJActions_DefaultCompactPromptID_DefaultCompactPromptID, @Config = @MJActions_DefaultCompactPromptID_Config, @RuntimeActionConfiguration = @MJActions_DefaultCompactPromptID_RuntimeActionConfiguration, @MaxExecutionTimeMS = @MJActions_DefaultCompactPromptID_MaxExecutionTimeMS, @CreatedByAgentID = @MJActions_DefaultCompactPromptID_CreatedByAgentID
+
+        FETCH NEXT FROM cascade_update_MJActions_DefaultCompactPromptID_cursor INTO @MJActions_DefaultCompactPromptIDID, @MJActions_DefaultCompactPromptID_CategoryID, @MJActions_DefaultCompactPromptID_Name, @MJActions_DefaultCompactPromptID_Description, @MJActions_DefaultCompactPromptID_Type, @MJActions_DefaultCompactPromptID_UserPrompt, @MJActions_DefaultCompactPromptID_UserComments, @MJActions_DefaultCompactPromptID_Code, @MJActions_DefaultCompactPromptID_CodeComments, @MJActions_DefaultCompactPromptID_CodeApprovalStatus, @MJActions_DefaultCompactPromptID_CodeApprovalComments, @MJActions_DefaultCompactPromptID_CodeApprovedByUserID, @MJActions_DefaultCompactPromptID_CodeApprovedAt, @MJActions_DefaultCompactPromptID_CodeLocked, @MJActions_DefaultCompactPromptID_ForceCodeGeneration, @MJActions_DefaultCompactPromptID_RetentionPeriod, @MJActions_DefaultCompactPromptID_Status, @MJActions_DefaultCompactPromptID_DriverClass, @MJActions_DefaultCompactPromptID_ParentID, @MJActions_DefaultCompactPromptID_IconClass, @MJActions_DefaultCompactPromptID_DefaultCompactPromptID, @MJActions_DefaultCompactPromptID_Config, @MJActions_DefaultCompactPromptID_RuntimeActionConfiguration, @MJActions_DefaultCompactPromptID_MaxExecutionTimeMS, @MJActions_DefaultCompactPromptID_CreatedByAgentID
+    END
+
+    CLOSE cascade_update_MJActions_DefaultCompactPromptID_cursor
+    DEALLOCATE cascade_update_MJActions_DefaultCompactPromptID_cursor
+    
+    -- Cascade update on AIAgentAction using cursor to call spUpdateAIAgentAction
+    DECLARE @MJAIAgentActions_CompactPromptIDID uniqueidentifier
+    DECLARE @MJAIAgentActions_CompactPromptID_AgentID uniqueidentifier
+    DECLARE @MJAIAgentActions_CompactPromptID_ActionID uniqueidentifier
+    DECLARE @MJAIAgentActions_CompactPromptID_Status nvarchar(15)
+    DECLARE @MJAIAgentActions_CompactPromptID_MinExecutionsPerRun int
+    DECLARE @MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun int
+    DECLARE @MJAIAgentActions_CompactPromptID_ResultExpirationTurns int
+    DECLARE @MJAIAgentActions_CompactPromptID_ResultExpirationMode nvarchar(20)
+    DECLARE @MJAIAgentActions_CompactPromptID_CompactMode nvarchar(20)
+    DECLARE @MJAIAgentActions_CompactPromptID_CompactLength int
+    DECLARE @MJAIAgentActions_CompactPromptID_CompactPromptID uniqueidentifier
+    DECLARE cascade_update_MJAIAgentActions_CompactPromptID_cursor CURSOR FOR
+        SELECT [ID], [AgentID], [ActionID], [Status], [MinExecutionsPerRun], [MaxExecutionsPerRun], [ResultExpirationTurns], [ResultExpirationMode], [CompactMode], [CompactLength], [CompactPromptID]
+        FROM [${flyway:defaultSchema}].[AIAgentAction]
+        WHERE [CompactPromptID] = @ID
+
+    OPEN cascade_update_MJAIAgentActions_CompactPromptID_cursor
+    FETCH NEXT FROM cascade_update_MJAIAgentActions_CompactPromptID_cursor INTO @MJAIAgentActions_CompactPromptIDID, @MJAIAgentActions_CompactPromptID_AgentID, @MJAIAgentActions_CompactPromptID_ActionID, @MJAIAgentActions_CompactPromptID_Status, @MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, @MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, @MJAIAgentActions_CompactPromptID_ResultExpirationTurns, @MJAIAgentActions_CompactPromptID_ResultExpirationMode, @MJAIAgentActions_CompactPromptID_CompactMode, @MJAIAgentActions_CompactPromptID_CompactLength, @MJAIAgentActions_CompactPromptID_CompactPromptID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIAgentActions_CompactPromptID_CompactPromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentAction] @ID = @MJAIAgentActions_CompactPromptIDID, @AgentID = @MJAIAgentActions_CompactPromptID_AgentID, @ActionID = @MJAIAgentActions_CompactPromptID_ActionID, @Status = @MJAIAgentActions_CompactPromptID_Status, @MinExecutionsPerRun = @MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, @MaxExecutionsPerRun = @MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, @ResultExpirationTurns = @MJAIAgentActions_CompactPromptID_ResultExpirationTurns, @ResultExpirationMode = @MJAIAgentActions_CompactPromptID_ResultExpirationMode, @CompactMode = @MJAIAgentActions_CompactPromptID_CompactMode, @CompactLength = @MJAIAgentActions_CompactPromptID_CompactLength, @CompactPromptID_Clear = 1, @CompactPromptID = @MJAIAgentActions_CompactPromptID_CompactPromptID
+
+        FETCH NEXT FROM cascade_update_MJAIAgentActions_CompactPromptID_cursor INTO @MJAIAgentActions_CompactPromptIDID, @MJAIAgentActions_CompactPromptID_AgentID, @MJAIAgentActions_CompactPromptID_ActionID, @MJAIAgentActions_CompactPromptID_Status, @MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, @MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, @MJAIAgentActions_CompactPromptID_ResultExpirationTurns, @MJAIAgentActions_CompactPromptID_ResultExpirationMode, @MJAIAgentActions_CompactPromptID_CompactMode, @MJAIAgentActions_CompactPromptID_CompactLength, @MJAIAgentActions_CompactPromptID_CompactPromptID
+    END
+
+    CLOSE cascade_update_MJAIAgentActions_CompactPromptID_cursor
+    DEALLOCATE cascade_update_MJAIAgentActions_CompactPromptID_cursor
+    
+    -- Cascade delete from AIAgentPrompt using cursor to call spDeleteAIAgentPrompt
+    DECLARE @MJAIAgentPrompts_PromptIDID uniqueidentifier
+    DECLARE cascade_delete_MJAIAgentPrompts_PromptID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[AIAgentPrompt]
+        WHERE [PromptID] = @ID
+    
+    OPEN cascade_delete_MJAIAgentPrompts_PromptID_cursor
+    FETCH NEXT FROM cascade_delete_MJAIAgentPrompts_PromptID_cursor INTO @MJAIAgentPrompts_PromptIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteAIAgentPrompt] @ID = @MJAIAgentPrompts_PromptIDID
+        
+        FETCH NEXT FROM cascade_delete_MJAIAgentPrompts_PromptID_cursor INTO @MJAIAgentPrompts_PromptIDID
+    END
+    
+    CLOSE cascade_delete_MJAIAgentPrompts_PromptID_cursor
+    DEALLOCATE cascade_delete_MJAIAgentPrompts_PromptID_cursor
+    
+    -- Cascade update on AIAgentStep using cursor to call spUpdateAIAgentStep
+    DECLARE @MJAIAgentSteps_PromptIDID uniqueidentifier
+    DECLARE @MJAIAgentSteps_PromptID_AgentID uniqueidentifier
+    DECLARE @MJAIAgentSteps_PromptID_Name nvarchar(255)
+    DECLARE @MJAIAgentSteps_PromptID_Description nvarchar(MAX)
+    DECLARE @MJAIAgentSteps_PromptID_StepType nvarchar(20)
+    DECLARE @MJAIAgentSteps_PromptID_StartingStep bit
+    DECLARE @MJAIAgentSteps_PromptID_TimeoutSeconds int
+    DECLARE @MJAIAgentSteps_PromptID_RetryCount int
+    DECLARE @MJAIAgentSteps_PromptID_OnErrorBehavior nvarchar(20)
+    DECLARE @MJAIAgentSteps_PromptID_ActionID uniqueidentifier
+    DECLARE @MJAIAgentSteps_PromptID_SubAgentID uniqueidentifier
+    DECLARE @MJAIAgentSteps_PromptID_PromptID uniqueidentifier
+    DECLARE @MJAIAgentSteps_PromptID_ActionOutputMapping nvarchar(MAX)
+    DECLARE @MJAIAgentSteps_PromptID_PositionX int
+    DECLARE @MJAIAgentSteps_PromptID_PositionY int
+    DECLARE @MJAIAgentSteps_PromptID_Width int
+    DECLARE @MJAIAgentSteps_PromptID_Height int
+    DECLARE @MJAIAgentSteps_PromptID_Status nvarchar(20)
+    DECLARE @MJAIAgentSteps_PromptID_ActionInputMapping nvarchar(MAX)
+    DECLARE @MJAIAgentSteps_PromptID_LoopBodyType nvarchar(50)
+    DECLARE @MJAIAgentSteps_PromptID_Configuration nvarchar(MAX)
+    DECLARE cascade_update_MJAIAgentSteps_PromptID_cursor CURSOR FOR
+        SELECT [ID], [AgentID], [Name], [Description], [StepType], [StartingStep], [TimeoutSeconds], [RetryCount], [OnErrorBehavior], [ActionID], [SubAgentID], [PromptID], [ActionOutputMapping], [PositionX], [PositionY], [Width], [Height], [Status], [ActionInputMapping], [LoopBodyType], [Configuration]
+        FROM [${flyway:defaultSchema}].[AIAgentStep]
+        WHERE [PromptID] = @ID
+
+    OPEN cascade_update_MJAIAgentSteps_PromptID_cursor
+    FETCH NEXT FROM cascade_update_MJAIAgentSteps_PromptID_cursor INTO @MJAIAgentSteps_PromptIDID, @MJAIAgentSteps_PromptID_AgentID, @MJAIAgentSteps_PromptID_Name, @MJAIAgentSteps_PromptID_Description, @MJAIAgentSteps_PromptID_StepType, @MJAIAgentSteps_PromptID_StartingStep, @MJAIAgentSteps_PromptID_TimeoutSeconds, @MJAIAgentSteps_PromptID_RetryCount, @MJAIAgentSteps_PromptID_OnErrorBehavior, @MJAIAgentSteps_PromptID_ActionID, @MJAIAgentSteps_PromptID_SubAgentID, @MJAIAgentSteps_PromptID_PromptID, @MJAIAgentSteps_PromptID_ActionOutputMapping, @MJAIAgentSteps_PromptID_PositionX, @MJAIAgentSteps_PromptID_PositionY, @MJAIAgentSteps_PromptID_Width, @MJAIAgentSteps_PromptID_Height, @MJAIAgentSteps_PromptID_Status, @MJAIAgentSteps_PromptID_ActionInputMapping, @MJAIAgentSteps_PromptID_LoopBodyType, @MJAIAgentSteps_PromptID_Configuration
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIAgentSteps_PromptID_PromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentStep] @ID = @MJAIAgentSteps_PromptIDID, @AgentID = @MJAIAgentSteps_PromptID_AgentID, @Name = @MJAIAgentSteps_PromptID_Name, @Description = @MJAIAgentSteps_PromptID_Description, @StepType = @MJAIAgentSteps_PromptID_StepType, @StartingStep = @MJAIAgentSteps_PromptID_StartingStep, @TimeoutSeconds = @MJAIAgentSteps_PromptID_TimeoutSeconds, @RetryCount = @MJAIAgentSteps_PromptID_RetryCount, @OnErrorBehavior = @MJAIAgentSteps_PromptID_OnErrorBehavior, @ActionID = @MJAIAgentSteps_PromptID_ActionID, @SubAgentID = @MJAIAgentSteps_PromptID_SubAgentID, @PromptID_Clear = 1, @PromptID = @MJAIAgentSteps_PromptID_PromptID, @ActionOutputMapping = @MJAIAgentSteps_PromptID_ActionOutputMapping, @PositionX = @MJAIAgentSteps_PromptID_PositionX, @PositionY = @MJAIAgentSteps_PromptID_PositionY, @Width = @MJAIAgentSteps_PromptID_Width, @Height = @MJAIAgentSteps_PromptID_Height, @Status = @MJAIAgentSteps_PromptID_Status, @ActionInputMapping = @MJAIAgentSteps_PromptID_ActionInputMapping, @LoopBodyType = @MJAIAgentSteps_PromptID_LoopBodyType, @Configuration = @MJAIAgentSteps_PromptID_Configuration
+
+        FETCH NEXT FROM cascade_update_MJAIAgentSteps_PromptID_cursor INTO @MJAIAgentSteps_PromptIDID, @MJAIAgentSteps_PromptID_AgentID, @MJAIAgentSteps_PromptID_Name, @MJAIAgentSteps_PromptID_Description, @MJAIAgentSteps_PromptID_StepType, @MJAIAgentSteps_PromptID_StartingStep, @MJAIAgentSteps_PromptID_TimeoutSeconds, @MJAIAgentSteps_PromptID_RetryCount, @MJAIAgentSteps_PromptID_OnErrorBehavior, @MJAIAgentSteps_PromptID_ActionID, @MJAIAgentSteps_PromptID_SubAgentID, @MJAIAgentSteps_PromptID_PromptID, @MJAIAgentSteps_PromptID_ActionOutputMapping, @MJAIAgentSteps_PromptID_PositionX, @MJAIAgentSteps_PromptID_PositionY, @MJAIAgentSteps_PromptID_Width, @MJAIAgentSteps_PromptID_Height, @MJAIAgentSteps_PromptID_Status, @MJAIAgentSteps_PromptID_ActionInputMapping, @MJAIAgentSteps_PromptID_LoopBodyType, @MJAIAgentSteps_PromptID_Configuration
+    END
+
+    CLOSE cascade_update_MJAIAgentSteps_PromptID_cursor
+    DEALLOCATE cascade_update_MJAIAgentSteps_PromptID_cursor
+    
+    -- Cascade update on AIAgentType using cursor to call spUpdateAIAgentType
+    DECLARE @MJAIAgentTypes_SystemPromptIDID uniqueidentifier
+    DECLARE @MJAIAgentTypes_SystemPromptID_Name nvarchar(100)
+    DECLARE @MJAIAgentTypes_SystemPromptID_Description nvarchar(MAX)
+    DECLARE @MJAIAgentTypes_SystemPromptID_SystemPromptID uniqueidentifier
+    DECLARE @MJAIAgentTypes_SystemPromptID_IsActive bit
+    DECLARE @MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder nvarchar(255)
+    DECLARE @MJAIAgentTypes_SystemPromptID_DriverClass nvarchar(255)
+    DECLARE @MJAIAgentTypes_SystemPromptID_UIFormSectionKey nvarchar(500)
+    DECLARE @MJAIAgentTypes_SystemPromptID_UIFormKey nvarchar(500)
+    DECLARE @MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault bit
+    DECLARE @MJAIAgentTypes_SystemPromptID_PromptParamsSchema nvarchar(MAX)
+    DECLARE @MJAIAgentTypes_SystemPromptID_AssignmentStrategy nvarchar(MAX)
+    DECLARE @MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID uniqueidentifier
+    DECLARE @MJAIAgentTypes_SystemPromptID_DefaultCoAgentID uniqueidentifier
+    DECLARE cascade_update_MJAIAgentTypes_SystemPromptID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [SystemPromptID], [IsActive], [AgentPromptPlaceholder], [DriverClass], [UIFormSectionKey], [UIFormKey], [UIFormSectionExpandedByDefault], [PromptParamsSchema], [AssignmentStrategy], [DefaultStorageAccountID], [DefaultCoAgentID]
+        FROM [${flyway:defaultSchema}].[AIAgentType]
+        WHERE [SystemPromptID] = @ID
+
+    OPEN cascade_update_MJAIAgentTypes_SystemPromptID_cursor
+    FETCH NEXT FROM cascade_update_MJAIAgentTypes_SystemPromptID_cursor INTO @MJAIAgentTypes_SystemPromptIDID, @MJAIAgentTypes_SystemPromptID_Name, @MJAIAgentTypes_SystemPromptID_Description, @MJAIAgentTypes_SystemPromptID_SystemPromptID, @MJAIAgentTypes_SystemPromptID_IsActive, @MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, @MJAIAgentTypes_SystemPromptID_DriverClass, @MJAIAgentTypes_SystemPromptID_UIFormSectionKey, @MJAIAgentTypes_SystemPromptID_UIFormKey, @MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, @MJAIAgentTypes_SystemPromptID_PromptParamsSchema, @MJAIAgentTypes_SystemPromptID_AssignmentStrategy, @MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID, @MJAIAgentTypes_SystemPromptID_DefaultCoAgentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIAgentTypes_SystemPromptID_SystemPromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentType] @ID = @MJAIAgentTypes_SystemPromptIDID, @Name = @MJAIAgentTypes_SystemPromptID_Name, @Description = @MJAIAgentTypes_SystemPromptID_Description, @SystemPromptID_Clear = 1, @SystemPromptID = @MJAIAgentTypes_SystemPromptID_SystemPromptID, @IsActive = @MJAIAgentTypes_SystemPromptID_IsActive, @AgentPromptPlaceholder = @MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, @DriverClass = @MJAIAgentTypes_SystemPromptID_DriverClass, @UIFormSectionKey = @MJAIAgentTypes_SystemPromptID_UIFormSectionKey, @UIFormKey = @MJAIAgentTypes_SystemPromptID_UIFormKey, @UIFormSectionExpandedByDefault = @MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, @PromptParamsSchema = @MJAIAgentTypes_SystemPromptID_PromptParamsSchema, @AssignmentStrategy = @MJAIAgentTypes_SystemPromptID_AssignmentStrategy, @DefaultStorageAccountID = @MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID, @DefaultCoAgentID = @MJAIAgentTypes_SystemPromptID_DefaultCoAgentID
+
+        FETCH NEXT FROM cascade_update_MJAIAgentTypes_SystemPromptID_cursor INTO @MJAIAgentTypes_SystemPromptIDID, @MJAIAgentTypes_SystemPromptID_Name, @MJAIAgentTypes_SystemPromptID_Description, @MJAIAgentTypes_SystemPromptID_SystemPromptID, @MJAIAgentTypes_SystemPromptID_IsActive, @MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, @MJAIAgentTypes_SystemPromptID_DriverClass, @MJAIAgentTypes_SystemPromptID_UIFormSectionKey, @MJAIAgentTypes_SystemPromptID_UIFormKey, @MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, @MJAIAgentTypes_SystemPromptID_PromptParamsSchema, @MJAIAgentTypes_SystemPromptID_AssignmentStrategy, @MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID, @MJAIAgentTypes_SystemPromptID_DefaultCoAgentID
+    END
+
+    CLOSE cascade_update_MJAIAgentTypes_SystemPromptID_cursor
+    DEALLOCATE cascade_update_MJAIAgentTypes_SystemPromptID_cursor
+    
+    -- Cascade update on AIAgent using cursor to call spUpdateAIAgent
+    DECLARE @MJAIAgents_ContextCompressionPromptIDID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_Name nvarchar(255)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_Description nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_LogoURL nvarchar(255)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ParentID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ExposeAsAction bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ExecutionOrder int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ExecutionMode nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_EnableContextCompression bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageThreshold int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ContextCompressionPromptID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageRetentionCount int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_TypeID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_Status nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_DriverClass nvarchar(255)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_IconClass nvarchar(100)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ModelSelectionMode nvarchar(50)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_PayloadScope nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMode nvarchar(25)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMaxRetries int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxCostPerRun decimal(10, 4)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxTimePerRun int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidation nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidationMode nvarchar(25)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_DefaultPromptEffortLevel int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ChatHandlingOption nvarchar(30)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_OwnerUserID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_InvocationMode nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_FunctionalRequirements nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_TechnicalDesign nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_InjectNotes bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxNotesToInject int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_InjectExamples bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ExampleInjectionStrategy nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_IsRestricted bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MessageMode nvarchar(50)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_MaxMessages int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_AttachmentStorageProviderID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_AttachmentRootPath nvarchar(500)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_InlineStorageThresholdBytes int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ScopeConfig nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_NoteRetentionDays int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays int
+    DECLARE @MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_RerankerConfiguration nvarchar(MAX)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_CategoryID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_AllowEphemeralClientTools bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID uniqueidentifier
+    DECLARE @MJAIAgents_ContextCompressionPromptID_SearchScopeAccess nvarchar(20)
+    DECLARE @MJAIAgents_ContextCompressionPromptID_AcceptUnregisteredFiles bit
+    DECLARE @MJAIAgents_ContextCompressionPromptID_DefaultCoAgentID uniqueidentifier
+    DECLARE cascade_update_MJAIAgents_ContextCompressionPromptID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [LogoURL], [ParentID], [ExposeAsAction], [ExecutionOrder], [ExecutionMode], [EnableContextCompression], [ContextCompressionMessageThreshold], [ContextCompressionPromptID], [ContextCompressionMessageRetentionCount], [TypeID], [Status], [DriverClass], [IconClass], [ModelSelectionMode], [PayloadDownstreamPaths], [PayloadUpstreamPaths], [PayloadSelfReadPaths], [PayloadSelfWritePaths], [PayloadScope], [FinalPayloadValidation], [FinalPayloadValidationMode], [FinalPayloadValidationMaxRetries], [MaxCostPerRun], [MaxTokensPerRun], [MaxIterationsPerRun], [MaxTimePerRun], [MinExecutionsPerRun], [MaxExecutionsPerRun], [StartingPayloadValidation], [StartingPayloadValidationMode], [DefaultPromptEffortLevel], [ChatHandlingOption], [DefaultArtifactTypeID], [OwnerUserID], [InvocationMode], [ArtifactCreationMode], [FunctionalRequirements], [TechnicalDesign], [InjectNotes], [MaxNotesToInject], [NoteInjectionStrategy], [InjectExamples], [MaxExamplesToInject], [ExampleInjectionStrategy], [IsRestricted], [MessageMode], [MaxMessages], [AttachmentStorageProviderID], [AttachmentRootPath], [InlineStorageThresholdBytes], [AgentTypePromptParams], [ScopeConfig], [NoteRetentionDays], [ExampleRetentionDays], [AutoArchiveEnabled], [RerankerConfiguration], [CategoryID], [AllowEphemeralClientTools], [DefaultStorageAccountID], [SearchScopeAccess], [AcceptUnregisteredFiles], [DefaultCoAgentID]
+        FROM [${flyway:defaultSchema}].[AIAgent]
+        WHERE [ContextCompressionPromptID] = @ID
+
+    OPEN cascade_update_MJAIAgents_ContextCompressionPromptID_cursor
+    FETCH NEXT FROM cascade_update_MJAIAgents_ContextCompressionPromptID_cursor INTO @MJAIAgents_ContextCompressionPromptIDID, @MJAIAgents_ContextCompressionPromptID_Name, @MJAIAgents_ContextCompressionPromptID_Description, @MJAIAgents_ContextCompressionPromptID_LogoURL, @MJAIAgents_ContextCompressionPromptID_ParentID, @MJAIAgents_ContextCompressionPromptID_ExposeAsAction, @MJAIAgents_ContextCompressionPromptID_ExecutionOrder, @MJAIAgents_ContextCompressionPromptID_ExecutionMode, @MJAIAgents_ContextCompressionPromptID_EnableContextCompression, @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageThreshold, @MJAIAgents_ContextCompressionPromptID_ContextCompressionPromptID, @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageRetentionCount, @MJAIAgents_ContextCompressionPromptID_TypeID, @MJAIAgents_ContextCompressionPromptID_Status, @MJAIAgents_ContextCompressionPromptID_DriverClass, @MJAIAgents_ContextCompressionPromptID_IconClass, @MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, @MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, @MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, @MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, @MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, @MJAIAgents_ContextCompressionPromptID_PayloadScope, @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMode, @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMaxRetries, @MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, @MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, @MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, @MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, @MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, @MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidation, @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidationMode, @MJAIAgents_ContextCompressionPromptID_DefaultPromptEffortLevel, @MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, @MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, @MJAIAgents_ContextCompressionPromptID_OwnerUserID, @MJAIAgents_ContextCompressionPromptID_InvocationMode, @MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, @MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, @MJAIAgents_ContextCompressionPromptID_TechnicalDesign, @MJAIAgents_ContextCompressionPromptID_InjectNotes, @MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, @MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, @MJAIAgents_ContextCompressionPromptID_InjectExamples, @MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, @MJAIAgents_ContextCompressionPromptID_ExampleInjectionStrategy, @MJAIAgents_ContextCompressionPromptID_IsRestricted, @MJAIAgents_ContextCompressionPromptID_MessageMode, @MJAIAgents_ContextCompressionPromptID_MaxMessages, @MJAIAgents_ContextCompressionPromptID_AttachmentStorageProviderID, @MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, @MJAIAgents_ContextCompressionPromptID_InlineStorageThresholdBytes, @MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, @MJAIAgents_ContextCompressionPromptID_ScopeConfig, @MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, @MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, @MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, @MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, @MJAIAgents_ContextCompressionPromptID_CategoryID, @MJAIAgents_ContextCompressionPromptID_AllowEphemeralClientTools, @MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, @MJAIAgents_ContextCompressionPromptID_SearchScopeAccess, @MJAIAgents_ContextCompressionPromptID_AcceptUnregisteredFiles, @MJAIAgents_ContextCompressionPromptID_DefaultCoAgentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIAgents_ContextCompressionPromptID_ContextCompressionPromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgent] @ID = @MJAIAgents_ContextCompressionPromptIDID, @Name = @MJAIAgents_ContextCompressionPromptID_Name, @Description = @MJAIAgents_ContextCompressionPromptID_Description, @LogoURL = @MJAIAgents_ContextCompressionPromptID_LogoURL, @ParentID = @MJAIAgents_ContextCompressionPromptID_ParentID, @ExposeAsAction = @MJAIAgents_ContextCompressionPromptID_ExposeAsAction, @ExecutionOrder = @MJAIAgents_ContextCompressionPromptID_ExecutionOrder, @ExecutionMode = @MJAIAgents_ContextCompressionPromptID_ExecutionMode, @EnableContextCompression = @MJAIAgents_ContextCompressionPromptID_EnableContextCompression, @ContextCompressionMessageThreshold = @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageThreshold, @ContextCompressionPromptID_Clear = 1, @ContextCompressionPromptID = @MJAIAgents_ContextCompressionPromptID_ContextCompressionPromptID, @ContextCompressionMessageRetentionCount = @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageRetentionCount, @TypeID = @MJAIAgents_ContextCompressionPromptID_TypeID, @Status = @MJAIAgents_ContextCompressionPromptID_Status, @DriverClass = @MJAIAgents_ContextCompressionPromptID_DriverClass, @IconClass = @MJAIAgents_ContextCompressionPromptID_IconClass, @ModelSelectionMode = @MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, @PayloadDownstreamPaths = @MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, @PayloadUpstreamPaths = @MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, @PayloadSelfReadPaths = @MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, @PayloadSelfWritePaths = @MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, @PayloadScope = @MJAIAgents_ContextCompressionPromptID_PayloadScope, @FinalPayloadValidation = @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, @FinalPayloadValidationMode = @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMode, @FinalPayloadValidationMaxRetries = @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMaxRetries, @MaxCostPerRun = @MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, @MaxTokensPerRun = @MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, @MaxIterationsPerRun = @MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, @MaxTimePerRun = @MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, @MinExecutionsPerRun = @MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, @MaxExecutionsPerRun = @MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, @StartingPayloadValidation = @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidation, @StartingPayloadValidationMode = @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidationMode, @DefaultPromptEffortLevel = @MJAIAgents_ContextCompressionPromptID_DefaultPromptEffortLevel, @ChatHandlingOption = @MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, @DefaultArtifactTypeID = @MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, @OwnerUserID = @MJAIAgents_ContextCompressionPromptID_OwnerUserID, @InvocationMode = @MJAIAgents_ContextCompressionPromptID_InvocationMode, @ArtifactCreationMode = @MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, @FunctionalRequirements = @MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, @TechnicalDesign = @MJAIAgents_ContextCompressionPromptID_TechnicalDesign, @InjectNotes = @MJAIAgents_ContextCompressionPromptID_InjectNotes, @MaxNotesToInject = @MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, @NoteInjectionStrategy = @MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, @InjectExamples = @MJAIAgents_ContextCompressionPromptID_InjectExamples, @MaxExamplesToInject = @MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, @ExampleInjectionStrategy = @MJAIAgents_ContextCompressionPromptID_ExampleInjectionStrategy, @IsRestricted = @MJAIAgents_ContextCompressionPromptID_IsRestricted, @MessageMode = @MJAIAgents_ContextCompressionPromptID_MessageMode, @MaxMessages = @MJAIAgents_ContextCompressionPromptID_MaxMessages, @AttachmentStorageProviderID = @MJAIAgents_ContextCompressionPromptID_AttachmentStorageProviderID, @AttachmentRootPath = @MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, @InlineStorageThresholdBytes = @MJAIAgents_ContextCompressionPromptID_InlineStorageThresholdBytes, @AgentTypePromptParams = @MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, @ScopeConfig = @MJAIAgents_ContextCompressionPromptID_ScopeConfig, @NoteRetentionDays = @MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, @ExampleRetentionDays = @MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, @AutoArchiveEnabled = @MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, @RerankerConfiguration = @MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, @CategoryID = @MJAIAgents_ContextCompressionPromptID_CategoryID, @AllowEphemeralClientTools = @MJAIAgents_ContextCompressionPromptID_AllowEphemeralClientTools, @DefaultStorageAccountID = @MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, @SearchScopeAccess = @MJAIAgents_ContextCompressionPromptID_SearchScopeAccess, @AcceptUnregisteredFiles = @MJAIAgents_ContextCompressionPromptID_AcceptUnregisteredFiles, @DefaultCoAgentID = @MJAIAgents_ContextCompressionPromptID_DefaultCoAgentID
+
+        FETCH NEXT FROM cascade_update_MJAIAgents_ContextCompressionPromptID_cursor INTO @MJAIAgents_ContextCompressionPromptIDID, @MJAIAgents_ContextCompressionPromptID_Name, @MJAIAgents_ContextCompressionPromptID_Description, @MJAIAgents_ContextCompressionPromptID_LogoURL, @MJAIAgents_ContextCompressionPromptID_ParentID, @MJAIAgents_ContextCompressionPromptID_ExposeAsAction, @MJAIAgents_ContextCompressionPromptID_ExecutionOrder, @MJAIAgents_ContextCompressionPromptID_ExecutionMode, @MJAIAgents_ContextCompressionPromptID_EnableContextCompression, @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageThreshold, @MJAIAgents_ContextCompressionPromptID_ContextCompressionPromptID, @MJAIAgents_ContextCompressionPromptID_ContextCompressionMessageRetentionCount, @MJAIAgents_ContextCompressionPromptID_TypeID, @MJAIAgents_ContextCompressionPromptID_Status, @MJAIAgents_ContextCompressionPromptID_DriverClass, @MJAIAgents_ContextCompressionPromptID_IconClass, @MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, @MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, @MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, @MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, @MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, @MJAIAgents_ContextCompressionPromptID_PayloadScope, @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMode, @MJAIAgents_ContextCompressionPromptID_FinalPayloadValidationMaxRetries, @MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, @MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, @MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, @MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, @MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, @MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidation, @MJAIAgents_ContextCompressionPromptID_StartingPayloadValidationMode, @MJAIAgents_ContextCompressionPromptID_DefaultPromptEffortLevel, @MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, @MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, @MJAIAgents_ContextCompressionPromptID_OwnerUserID, @MJAIAgents_ContextCompressionPromptID_InvocationMode, @MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, @MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, @MJAIAgents_ContextCompressionPromptID_TechnicalDesign, @MJAIAgents_ContextCompressionPromptID_InjectNotes, @MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, @MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, @MJAIAgents_ContextCompressionPromptID_InjectExamples, @MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, @MJAIAgents_ContextCompressionPromptID_ExampleInjectionStrategy, @MJAIAgents_ContextCompressionPromptID_IsRestricted, @MJAIAgents_ContextCompressionPromptID_MessageMode, @MJAIAgents_ContextCompressionPromptID_MaxMessages, @MJAIAgents_ContextCompressionPromptID_AttachmentStorageProviderID, @MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, @MJAIAgents_ContextCompressionPromptID_InlineStorageThresholdBytes, @MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, @MJAIAgents_ContextCompressionPromptID_ScopeConfig, @MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, @MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, @MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, @MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, @MJAIAgents_ContextCompressionPromptID_CategoryID, @MJAIAgents_ContextCompressionPromptID_AllowEphemeralClientTools, @MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, @MJAIAgents_ContextCompressionPromptID_SearchScopeAccess, @MJAIAgents_ContextCompressionPromptID_AcceptUnregisteredFiles, @MJAIAgents_ContextCompressionPromptID_DefaultCoAgentID
+    END
+
+    CLOSE cascade_update_MJAIAgents_ContextCompressionPromptID_cursor
+    DEALLOCATE cascade_update_MJAIAgents_ContextCompressionPromptID_cursor
+    
+    -- Cascade update on AIConfiguration using cursor to call spUpdateAIConfiguration
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionIDID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_Name nvarchar(100)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_Description nvarchar(MAX)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_IsDefault bit
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_Status nvarchar(20)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextCompressionID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextSummarizationID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageProviderID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageRootPath nvarchar(500)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextCompressionID_ParentID uniqueidentifier
+    DECLARE cascade_update_MJAIConfigurations_DefaultPromptForContextCompressionID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [IsDefault], [Status], [DefaultPromptForContextCompressionID], [DefaultPromptForContextSummarizationID], [DefaultStorageProviderID], [DefaultStorageRootPath], [ParentID]
+        FROM [${flyway:defaultSchema}].[AIConfiguration]
+        WHERE [DefaultPromptForContextCompressionID] = @ID
+
+    OPEN cascade_update_MJAIConfigurations_DefaultPromptForContextCompressionID_cursor
+    FETCH NEXT FROM cascade_update_MJAIConfigurations_DefaultPromptForContextCompressionID_cursor INTO @MJAIConfigurations_DefaultPromptForContextCompressionIDID, @MJAIConfigurations_DefaultPromptForContextCompressionID_Name, @MJAIConfigurations_DefaultPromptForContextCompressionID_Description, @MJAIConfigurations_DefaultPromptForContextCompressionID_IsDefault, @MJAIConfigurations_DefaultPromptForContextCompressionID_Status, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextCompressionID, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextSummarizationID, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageProviderID, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageRootPath, @MJAIConfigurations_DefaultPromptForContextCompressionID_ParentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextCompressionID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIConfiguration] @ID = @MJAIConfigurations_DefaultPromptForContextCompressionIDID, @Name = @MJAIConfigurations_DefaultPromptForContextCompressionID_Name, @Description = @MJAIConfigurations_DefaultPromptForContextCompressionID_Description, @IsDefault = @MJAIConfigurations_DefaultPromptForContextCompressionID_IsDefault, @Status = @MJAIConfigurations_DefaultPromptForContextCompressionID_Status, @DefaultPromptForContextCompressionID_Clear = 1, @DefaultPromptForContextCompressionID = @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextCompressionID, @DefaultPromptForContextSummarizationID = @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextSummarizationID, @DefaultStorageProviderID = @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageProviderID, @DefaultStorageRootPath = @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageRootPath, @ParentID = @MJAIConfigurations_DefaultPromptForContextCompressionID_ParentID
+
+        FETCH NEXT FROM cascade_update_MJAIConfigurations_DefaultPromptForContextCompressionID_cursor INTO @MJAIConfigurations_DefaultPromptForContextCompressionIDID, @MJAIConfigurations_DefaultPromptForContextCompressionID_Name, @MJAIConfigurations_DefaultPromptForContextCompressionID_Description, @MJAIConfigurations_DefaultPromptForContextCompressionID_IsDefault, @MJAIConfigurations_DefaultPromptForContextCompressionID_Status, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextCompressionID, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultPromptForContextSummarizationID, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageProviderID, @MJAIConfigurations_DefaultPromptForContextCompressionID_DefaultStorageRootPath, @MJAIConfigurations_DefaultPromptForContextCompressionID_ParentID
+    END
+
+    CLOSE cascade_update_MJAIConfigurations_DefaultPromptForContextCompressionID_cursor
+    DEALLOCATE cascade_update_MJAIConfigurations_DefaultPromptForContextCompressionID_cursor
+    
+    -- Cascade update on AIConfiguration using cursor to call spUpdateAIConfiguration
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationIDID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_Name nvarchar(100)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_Description nvarchar(MAX)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_IsDefault bit
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_Status nvarchar(20)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextCompressionID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextSummarizationID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageProviderID uniqueidentifier
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageRootPath nvarchar(500)
+    DECLARE @MJAIConfigurations_DefaultPromptForContextSummarizationID_ParentID uniqueidentifier
+    DECLARE cascade_update_MJAIConfigurations_DefaultPromptForContextSummarizationID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [IsDefault], [Status], [DefaultPromptForContextCompressionID], [DefaultPromptForContextSummarizationID], [DefaultStorageProviderID], [DefaultStorageRootPath], [ParentID]
+        FROM [${flyway:defaultSchema}].[AIConfiguration]
+        WHERE [DefaultPromptForContextSummarizationID] = @ID
+
+    OPEN cascade_update_MJAIConfigurations_DefaultPromptForContextSummarizationID_cursor
+    FETCH NEXT FROM cascade_update_MJAIConfigurations_DefaultPromptForContextSummarizationID_cursor INTO @MJAIConfigurations_DefaultPromptForContextSummarizationIDID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_Name, @MJAIConfigurations_DefaultPromptForContextSummarizationID_Description, @MJAIConfigurations_DefaultPromptForContextSummarizationID_IsDefault, @MJAIConfigurations_DefaultPromptForContextSummarizationID_Status, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextCompressionID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextSummarizationID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageProviderID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageRootPath, @MJAIConfigurations_DefaultPromptForContextSummarizationID_ParentID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextSummarizationID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIConfiguration] @ID = @MJAIConfigurations_DefaultPromptForContextSummarizationIDID, @Name = @MJAIConfigurations_DefaultPromptForContextSummarizationID_Name, @Description = @MJAIConfigurations_DefaultPromptForContextSummarizationID_Description, @IsDefault = @MJAIConfigurations_DefaultPromptForContextSummarizationID_IsDefault, @Status = @MJAIConfigurations_DefaultPromptForContextSummarizationID_Status, @DefaultPromptForContextCompressionID = @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextCompressionID, @DefaultPromptForContextSummarizationID_Clear = 1, @DefaultPromptForContextSummarizationID = @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextSummarizationID, @DefaultStorageProviderID = @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageProviderID, @DefaultStorageRootPath = @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageRootPath, @ParentID = @MJAIConfigurations_DefaultPromptForContextSummarizationID_ParentID
+
+        FETCH NEXT FROM cascade_update_MJAIConfigurations_DefaultPromptForContextSummarizationID_cursor INTO @MJAIConfigurations_DefaultPromptForContextSummarizationIDID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_Name, @MJAIConfigurations_DefaultPromptForContextSummarizationID_Description, @MJAIConfigurations_DefaultPromptForContextSummarizationID_IsDefault, @MJAIConfigurations_DefaultPromptForContextSummarizationID_Status, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextCompressionID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultPromptForContextSummarizationID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageProviderID, @MJAIConfigurations_DefaultPromptForContextSummarizationID_DefaultStorageRootPath, @MJAIConfigurations_DefaultPromptForContextSummarizationID_ParentID
+    END
+
+    CLOSE cascade_update_MJAIConfigurations_DefaultPromptForContextSummarizationID_cursor
+    DEALLOCATE cascade_update_MJAIConfigurations_DefaultPromptForContextSummarizationID_cursor
+    
+    -- Cascade delete from AIPromptModel using cursor to call spDeleteAIPromptModel
+    DECLARE @MJAIPromptModels_PromptIDID uniqueidentifier
+    DECLARE cascade_delete_MJAIPromptModels_PromptID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[AIPromptModel]
+        WHERE [PromptID] = @ID
+    
+    OPEN cascade_delete_MJAIPromptModels_PromptID_cursor
+    FETCH NEXT FROM cascade_delete_MJAIPromptModels_PromptID_cursor INTO @MJAIPromptModels_PromptIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteAIPromptModel] @ID = @MJAIPromptModels_PromptIDID
+        
+        FETCH NEXT FROM cascade_delete_MJAIPromptModels_PromptID_cursor INTO @MJAIPromptModels_PromptIDID
+    END
+    
+    CLOSE cascade_delete_MJAIPromptModels_PromptID_cursor
+    DEALLOCATE cascade_delete_MJAIPromptModels_PromptID_cursor
+    
+    -- Cascade delete from AIPromptRun using cursor to call spDeleteAIPromptRun
+    DECLARE @MJAIPromptRuns_PromptIDID uniqueidentifier
+    DECLARE cascade_delete_MJAIPromptRuns_PromptID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[AIPromptRun]
+        WHERE [PromptID] = @ID
+    
+    OPEN cascade_delete_MJAIPromptRuns_PromptID_cursor
+    FETCH NEXT FROM cascade_delete_MJAIPromptRuns_PromptID_cursor INTO @MJAIPromptRuns_PromptIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteAIPromptRun] @ID = @MJAIPromptRuns_PromptIDID
+        
+        FETCH NEXT FROM cascade_delete_MJAIPromptRuns_PromptID_cursor INTO @MJAIPromptRuns_PromptIDID
+    END
+    
+    CLOSE cascade_delete_MJAIPromptRuns_PromptID_cursor
+    DEALLOCATE cascade_delete_MJAIPromptRuns_PromptID_cursor
+    
+    -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
+    DECLARE @MJAIPromptRuns_JudgeIDID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_PromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_ModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_VendorID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_AgentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_ConfigurationID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_RunAt datetimeoffset
+    DECLARE @MJAIPromptRuns_JudgeID_CompletedAt datetimeoffset
+    DECLARE @MJAIPromptRuns_JudgeID_ExecutionTimeMS int
+    DECLARE @MJAIPromptRuns_JudgeID_Messages nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_Result nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_TokensUsed int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensPrompt int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensCompletion int
+    DECLARE @MJAIPromptRuns_JudgeID_TotalCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_JudgeID_Success bit
+    DECLARE @MJAIPromptRuns_JudgeID_ErrorMessage nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_ParentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_RunType nvarchar(20)
+    DECLARE @MJAIPromptRuns_JudgeID_ExecutionOrder int
+    DECLARE @MJAIPromptRuns_JudgeID_AgentRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_Cost decimal(19, 8)
+    DECLARE @MJAIPromptRuns_JudgeID_CostCurrency nvarchar(10)
+    DECLARE @MJAIPromptRuns_JudgeID_TokensUsedRollup int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensPromptRollup int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensCompletionRollup int
+    DECLARE @MJAIPromptRuns_JudgeID_Temperature decimal(3, 2)
+    DECLARE @MJAIPromptRuns_JudgeID_TopP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_JudgeID_TopK int
+    DECLARE @MJAIPromptRuns_JudgeID_MinP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_JudgeID_FrequencyPenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_JudgeID_PresencePenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_JudgeID_Seed int
+    DECLARE @MJAIPromptRuns_JudgeID_StopSequences nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_ResponseFormat nvarchar(50)
+    DECLARE @MJAIPromptRuns_JudgeID_LogProbs bit
+    DECLARE @MJAIPromptRuns_JudgeID_TopLogProbs int
+    DECLARE @MJAIPromptRuns_JudgeID_DescendantCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_JudgeID_ValidationAttemptCount int
+    DECLARE @MJAIPromptRuns_JudgeID_SuccessfulValidationCount int
+    DECLARE @MJAIPromptRuns_JudgeID_FinalValidationPassed bit
+    DECLARE @MJAIPromptRuns_JudgeID_ValidationBehavior nvarchar(50)
+    DECLARE @MJAIPromptRuns_JudgeID_RetryStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_JudgeID_MaxRetriesConfigured int
+    DECLARE @MJAIPromptRuns_JudgeID_FinalValidationError nvarchar(500)
+    DECLARE @MJAIPromptRuns_JudgeID_ValidationErrorCount int
+    DECLARE @MJAIPromptRuns_JudgeID_CommonValidationError nvarchar(255)
+    DECLARE @MJAIPromptRuns_JudgeID_FirstAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_JudgeID_LastAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_JudgeID_TotalRetryDurationMS int
+    DECLARE @MJAIPromptRuns_JudgeID_ValidationAttempts nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_ValidationSummary nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_FailoverAttempts int
+    DECLARE @MJAIPromptRuns_JudgeID_FailoverErrors nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_FailoverDurations nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_OriginalModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_OriginalRequestStartTime datetimeoffset
+    DECLARE @MJAIPromptRuns_JudgeID_TotalFailoverDuration int
+    DECLARE @MJAIPromptRuns_JudgeID_RerunFromPromptRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_ModelSelection nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_Status nvarchar(50)
+    DECLARE @MJAIPromptRuns_JudgeID_Cancelled bit
+    DECLARE @MJAIPromptRuns_JudgeID_CancellationReason nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_ModelPowerRank int
+    DECLARE @MJAIPromptRuns_JudgeID_SelectionStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_JudgeID_CacheHit bit
+    DECLARE @MJAIPromptRuns_JudgeID_CacheKey nvarchar(500)
+    DECLARE @MJAIPromptRuns_JudgeID_JudgeID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_JudgeScore float(53)
+    DECLARE @MJAIPromptRuns_JudgeID_WasSelectedResult bit
+    DECLARE @MJAIPromptRuns_JudgeID_StreamingEnabled bit
+    DECLARE @MJAIPromptRuns_JudgeID_FirstTokenTime int
+    DECLARE @MJAIPromptRuns_JudgeID_ErrorDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_ChildPromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_QueueTime int
+    DECLARE @MJAIPromptRuns_JudgeID_PromptTime int
+    DECLARE @MJAIPromptRuns_JudgeID_CompletionTime int
+    DECLARE @MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_EffortLevel int
+    DECLARE @MJAIPromptRuns_JudgeID_RunName nvarchar(255)
+    DECLARE @MJAIPromptRuns_JudgeID_Comments nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_TestRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_JudgeID_AssistantPrefill nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_JudgeID_TokensCacheRead int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensCacheWrite int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensCacheReadRollup int
+    DECLARE @MJAIPromptRuns_JudgeID_TokensCacheWriteRollup int
+    DECLARE cascade_update_MJAIPromptRuns_JudgeID_cursor CURSOR FOR
+        SELECT [ID], [PromptID], [ModelID], [VendorID], [AgentID], [ConfigurationID], [RunAt], [CompletedAt], [ExecutionTimeMS], [Messages], [Result], [TokensUsed], [TokensPrompt], [TokensCompletion], [TotalCost], [Success], [ErrorMessage], [ParentID], [RunType], [ExecutionOrder], [AgentRunID], [Cost], [CostCurrency], [TokensUsedRollup], [TokensPromptRollup], [TokensCompletionRollup], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [ResponseFormat], [LogProbs], [TopLogProbs], [DescendantCost], [ValidationAttemptCount], [SuccessfulValidationCount], [FinalValidationPassed], [ValidationBehavior], [RetryStrategy], [MaxRetriesConfigured], [FinalValidationError], [ValidationErrorCount], [CommonValidationError], [FirstAttemptAt], [LastAttemptAt], [TotalRetryDurationMS], [ValidationAttempts], [ValidationSummary], [FailoverAttempts], [FailoverErrors], [FailoverDurations], [OriginalModelID], [OriginalRequestStartTime], [TotalFailoverDuration], [RerunFromPromptRunID], [ModelSelection], [Status], [Cancelled], [CancellationReason], [ModelPowerRank], [SelectionStrategy], [CacheHit], [CacheKey], [JudgeID], [JudgeScore], [WasSelectedResult], [StreamingEnabled], [FirstTokenTime], [ErrorDetails], [ChildPromptID], [QueueTime], [PromptTime], [CompletionTime], [ModelSpecificResponseDetails], [EffortLevel], [RunName], [Comments], [TestRunID], [AssistantPrefill], [TokensCacheRead], [TokensCacheWrite], [TokensCacheReadRollup], [TokensCacheWriteRollup]
+        FROM [${flyway:defaultSchema}].[AIPromptRun]
+        WHERE [JudgeID] = @ID
+
+    OPEN cascade_update_MJAIPromptRuns_JudgeID_cursor
+    FETCH NEXT FROM cascade_update_MJAIPromptRuns_JudgeID_cursor INTO @MJAIPromptRuns_JudgeIDID, @MJAIPromptRuns_JudgeID_PromptID, @MJAIPromptRuns_JudgeID_ModelID, @MJAIPromptRuns_JudgeID_VendorID, @MJAIPromptRuns_JudgeID_AgentID, @MJAIPromptRuns_JudgeID_ConfigurationID, @MJAIPromptRuns_JudgeID_RunAt, @MJAIPromptRuns_JudgeID_CompletedAt, @MJAIPromptRuns_JudgeID_ExecutionTimeMS, @MJAIPromptRuns_JudgeID_Messages, @MJAIPromptRuns_JudgeID_Result, @MJAIPromptRuns_JudgeID_TokensUsed, @MJAIPromptRuns_JudgeID_TokensPrompt, @MJAIPromptRuns_JudgeID_TokensCompletion, @MJAIPromptRuns_JudgeID_TotalCost, @MJAIPromptRuns_JudgeID_Success, @MJAIPromptRuns_JudgeID_ErrorMessage, @MJAIPromptRuns_JudgeID_ParentID, @MJAIPromptRuns_JudgeID_RunType, @MJAIPromptRuns_JudgeID_ExecutionOrder, @MJAIPromptRuns_JudgeID_AgentRunID, @MJAIPromptRuns_JudgeID_Cost, @MJAIPromptRuns_JudgeID_CostCurrency, @MJAIPromptRuns_JudgeID_TokensUsedRollup, @MJAIPromptRuns_JudgeID_TokensPromptRollup, @MJAIPromptRuns_JudgeID_TokensCompletionRollup, @MJAIPromptRuns_JudgeID_Temperature, @MJAIPromptRuns_JudgeID_TopP, @MJAIPromptRuns_JudgeID_TopK, @MJAIPromptRuns_JudgeID_MinP, @MJAIPromptRuns_JudgeID_FrequencyPenalty, @MJAIPromptRuns_JudgeID_PresencePenalty, @MJAIPromptRuns_JudgeID_Seed, @MJAIPromptRuns_JudgeID_StopSequences, @MJAIPromptRuns_JudgeID_ResponseFormat, @MJAIPromptRuns_JudgeID_LogProbs, @MJAIPromptRuns_JudgeID_TopLogProbs, @MJAIPromptRuns_JudgeID_DescendantCost, @MJAIPromptRuns_JudgeID_ValidationAttemptCount, @MJAIPromptRuns_JudgeID_SuccessfulValidationCount, @MJAIPromptRuns_JudgeID_FinalValidationPassed, @MJAIPromptRuns_JudgeID_ValidationBehavior, @MJAIPromptRuns_JudgeID_RetryStrategy, @MJAIPromptRuns_JudgeID_MaxRetriesConfigured, @MJAIPromptRuns_JudgeID_FinalValidationError, @MJAIPromptRuns_JudgeID_ValidationErrorCount, @MJAIPromptRuns_JudgeID_CommonValidationError, @MJAIPromptRuns_JudgeID_FirstAttemptAt, @MJAIPromptRuns_JudgeID_LastAttemptAt, @MJAIPromptRuns_JudgeID_TotalRetryDurationMS, @MJAIPromptRuns_JudgeID_ValidationAttempts, @MJAIPromptRuns_JudgeID_ValidationSummary, @MJAIPromptRuns_JudgeID_FailoverAttempts, @MJAIPromptRuns_JudgeID_FailoverErrors, @MJAIPromptRuns_JudgeID_FailoverDurations, @MJAIPromptRuns_JudgeID_OriginalModelID, @MJAIPromptRuns_JudgeID_OriginalRequestStartTime, @MJAIPromptRuns_JudgeID_TotalFailoverDuration, @MJAIPromptRuns_JudgeID_RerunFromPromptRunID, @MJAIPromptRuns_JudgeID_ModelSelection, @MJAIPromptRuns_JudgeID_Status, @MJAIPromptRuns_JudgeID_Cancelled, @MJAIPromptRuns_JudgeID_CancellationReason, @MJAIPromptRuns_JudgeID_ModelPowerRank, @MJAIPromptRuns_JudgeID_SelectionStrategy, @MJAIPromptRuns_JudgeID_CacheHit, @MJAIPromptRuns_JudgeID_CacheKey, @MJAIPromptRuns_JudgeID_JudgeID, @MJAIPromptRuns_JudgeID_JudgeScore, @MJAIPromptRuns_JudgeID_WasSelectedResult, @MJAIPromptRuns_JudgeID_StreamingEnabled, @MJAIPromptRuns_JudgeID_FirstTokenTime, @MJAIPromptRuns_JudgeID_ErrorDetails, @MJAIPromptRuns_JudgeID_ChildPromptID, @MJAIPromptRuns_JudgeID_QueueTime, @MJAIPromptRuns_JudgeID_PromptTime, @MJAIPromptRuns_JudgeID_CompletionTime, @MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, @MJAIPromptRuns_JudgeID_EffortLevel, @MJAIPromptRuns_JudgeID_RunName, @MJAIPromptRuns_JudgeID_Comments, @MJAIPromptRuns_JudgeID_TestRunID, @MJAIPromptRuns_JudgeID_AssistantPrefill, @MJAIPromptRuns_JudgeID_TokensCacheRead, @MJAIPromptRuns_JudgeID_TokensCacheWrite, @MJAIPromptRuns_JudgeID_TokensCacheReadRollup, @MJAIPromptRuns_JudgeID_TokensCacheWriteRollup
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIPromptRuns_JudgeID_JudgeID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIPromptRun] @ID = @MJAIPromptRuns_JudgeIDID, @PromptID = @MJAIPromptRuns_JudgeID_PromptID, @ModelID = @MJAIPromptRuns_JudgeID_ModelID, @VendorID = @MJAIPromptRuns_JudgeID_VendorID, @AgentID = @MJAIPromptRuns_JudgeID_AgentID, @ConfigurationID = @MJAIPromptRuns_JudgeID_ConfigurationID, @RunAt = @MJAIPromptRuns_JudgeID_RunAt, @CompletedAt = @MJAIPromptRuns_JudgeID_CompletedAt, @ExecutionTimeMS = @MJAIPromptRuns_JudgeID_ExecutionTimeMS, @Messages = @MJAIPromptRuns_JudgeID_Messages, @Result = @MJAIPromptRuns_JudgeID_Result, @TokensUsed = @MJAIPromptRuns_JudgeID_TokensUsed, @TokensPrompt = @MJAIPromptRuns_JudgeID_TokensPrompt, @TokensCompletion = @MJAIPromptRuns_JudgeID_TokensCompletion, @TotalCost = @MJAIPromptRuns_JudgeID_TotalCost, @Success = @MJAIPromptRuns_JudgeID_Success, @ErrorMessage = @MJAIPromptRuns_JudgeID_ErrorMessage, @ParentID = @MJAIPromptRuns_JudgeID_ParentID, @RunType = @MJAIPromptRuns_JudgeID_RunType, @ExecutionOrder = @MJAIPromptRuns_JudgeID_ExecutionOrder, @AgentRunID = @MJAIPromptRuns_JudgeID_AgentRunID, @Cost = @MJAIPromptRuns_JudgeID_Cost, @CostCurrency = @MJAIPromptRuns_JudgeID_CostCurrency, @TokensUsedRollup = @MJAIPromptRuns_JudgeID_TokensUsedRollup, @TokensPromptRollup = @MJAIPromptRuns_JudgeID_TokensPromptRollup, @TokensCompletionRollup = @MJAIPromptRuns_JudgeID_TokensCompletionRollup, @Temperature = @MJAIPromptRuns_JudgeID_Temperature, @TopP = @MJAIPromptRuns_JudgeID_TopP, @TopK = @MJAIPromptRuns_JudgeID_TopK, @MinP = @MJAIPromptRuns_JudgeID_MinP, @FrequencyPenalty = @MJAIPromptRuns_JudgeID_FrequencyPenalty, @PresencePenalty = @MJAIPromptRuns_JudgeID_PresencePenalty, @Seed = @MJAIPromptRuns_JudgeID_Seed, @StopSequences = @MJAIPromptRuns_JudgeID_StopSequences, @ResponseFormat = @MJAIPromptRuns_JudgeID_ResponseFormat, @LogProbs = @MJAIPromptRuns_JudgeID_LogProbs, @TopLogProbs = @MJAIPromptRuns_JudgeID_TopLogProbs, @DescendantCost = @MJAIPromptRuns_JudgeID_DescendantCost, @ValidationAttemptCount = @MJAIPromptRuns_JudgeID_ValidationAttemptCount, @SuccessfulValidationCount = @MJAIPromptRuns_JudgeID_SuccessfulValidationCount, @FinalValidationPassed = @MJAIPromptRuns_JudgeID_FinalValidationPassed, @ValidationBehavior = @MJAIPromptRuns_JudgeID_ValidationBehavior, @RetryStrategy = @MJAIPromptRuns_JudgeID_RetryStrategy, @MaxRetriesConfigured = @MJAIPromptRuns_JudgeID_MaxRetriesConfigured, @FinalValidationError = @MJAIPromptRuns_JudgeID_FinalValidationError, @ValidationErrorCount = @MJAIPromptRuns_JudgeID_ValidationErrorCount, @CommonValidationError = @MJAIPromptRuns_JudgeID_CommonValidationError, @FirstAttemptAt = @MJAIPromptRuns_JudgeID_FirstAttemptAt, @LastAttemptAt = @MJAIPromptRuns_JudgeID_LastAttemptAt, @TotalRetryDurationMS = @MJAIPromptRuns_JudgeID_TotalRetryDurationMS, @ValidationAttempts = @MJAIPromptRuns_JudgeID_ValidationAttempts, @ValidationSummary = @MJAIPromptRuns_JudgeID_ValidationSummary, @FailoverAttempts = @MJAIPromptRuns_JudgeID_FailoverAttempts, @FailoverErrors = @MJAIPromptRuns_JudgeID_FailoverErrors, @FailoverDurations = @MJAIPromptRuns_JudgeID_FailoverDurations, @OriginalModelID = @MJAIPromptRuns_JudgeID_OriginalModelID, @OriginalRequestStartTime = @MJAIPromptRuns_JudgeID_OriginalRequestStartTime, @TotalFailoverDuration = @MJAIPromptRuns_JudgeID_TotalFailoverDuration, @RerunFromPromptRunID = @MJAIPromptRuns_JudgeID_RerunFromPromptRunID, @ModelSelection = @MJAIPromptRuns_JudgeID_ModelSelection, @Status = @MJAIPromptRuns_JudgeID_Status, @Cancelled = @MJAIPromptRuns_JudgeID_Cancelled, @CancellationReason = @MJAIPromptRuns_JudgeID_CancellationReason, @ModelPowerRank = @MJAIPromptRuns_JudgeID_ModelPowerRank, @SelectionStrategy = @MJAIPromptRuns_JudgeID_SelectionStrategy, @CacheHit = @MJAIPromptRuns_JudgeID_CacheHit, @CacheKey = @MJAIPromptRuns_JudgeID_CacheKey, @JudgeID_Clear = 1, @JudgeID = @MJAIPromptRuns_JudgeID_JudgeID, @JudgeScore = @MJAIPromptRuns_JudgeID_JudgeScore, @WasSelectedResult = @MJAIPromptRuns_JudgeID_WasSelectedResult, @StreamingEnabled = @MJAIPromptRuns_JudgeID_StreamingEnabled, @FirstTokenTime = @MJAIPromptRuns_JudgeID_FirstTokenTime, @ErrorDetails = @MJAIPromptRuns_JudgeID_ErrorDetails, @ChildPromptID = @MJAIPromptRuns_JudgeID_ChildPromptID, @QueueTime = @MJAIPromptRuns_JudgeID_QueueTime, @PromptTime = @MJAIPromptRuns_JudgeID_PromptTime, @CompletionTime = @MJAIPromptRuns_JudgeID_CompletionTime, @ModelSpecificResponseDetails = @MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, @EffortLevel = @MJAIPromptRuns_JudgeID_EffortLevel, @RunName = @MJAIPromptRuns_JudgeID_RunName, @Comments = @MJAIPromptRuns_JudgeID_Comments, @TestRunID = @MJAIPromptRuns_JudgeID_TestRunID, @AssistantPrefill = @MJAIPromptRuns_JudgeID_AssistantPrefill, @TokensCacheRead = @MJAIPromptRuns_JudgeID_TokensCacheRead, @TokensCacheWrite = @MJAIPromptRuns_JudgeID_TokensCacheWrite, @TokensCacheReadRollup = @MJAIPromptRuns_JudgeID_TokensCacheReadRollup, @TokensCacheWriteRollup = @MJAIPromptRuns_JudgeID_TokensCacheWriteRollup
+
+        FETCH NEXT FROM cascade_update_MJAIPromptRuns_JudgeID_cursor INTO @MJAIPromptRuns_JudgeIDID, @MJAIPromptRuns_JudgeID_PromptID, @MJAIPromptRuns_JudgeID_ModelID, @MJAIPromptRuns_JudgeID_VendorID, @MJAIPromptRuns_JudgeID_AgentID, @MJAIPromptRuns_JudgeID_ConfigurationID, @MJAIPromptRuns_JudgeID_RunAt, @MJAIPromptRuns_JudgeID_CompletedAt, @MJAIPromptRuns_JudgeID_ExecutionTimeMS, @MJAIPromptRuns_JudgeID_Messages, @MJAIPromptRuns_JudgeID_Result, @MJAIPromptRuns_JudgeID_TokensUsed, @MJAIPromptRuns_JudgeID_TokensPrompt, @MJAIPromptRuns_JudgeID_TokensCompletion, @MJAIPromptRuns_JudgeID_TotalCost, @MJAIPromptRuns_JudgeID_Success, @MJAIPromptRuns_JudgeID_ErrorMessage, @MJAIPromptRuns_JudgeID_ParentID, @MJAIPromptRuns_JudgeID_RunType, @MJAIPromptRuns_JudgeID_ExecutionOrder, @MJAIPromptRuns_JudgeID_AgentRunID, @MJAIPromptRuns_JudgeID_Cost, @MJAIPromptRuns_JudgeID_CostCurrency, @MJAIPromptRuns_JudgeID_TokensUsedRollup, @MJAIPromptRuns_JudgeID_TokensPromptRollup, @MJAIPromptRuns_JudgeID_TokensCompletionRollup, @MJAIPromptRuns_JudgeID_Temperature, @MJAIPromptRuns_JudgeID_TopP, @MJAIPromptRuns_JudgeID_TopK, @MJAIPromptRuns_JudgeID_MinP, @MJAIPromptRuns_JudgeID_FrequencyPenalty, @MJAIPromptRuns_JudgeID_PresencePenalty, @MJAIPromptRuns_JudgeID_Seed, @MJAIPromptRuns_JudgeID_StopSequences, @MJAIPromptRuns_JudgeID_ResponseFormat, @MJAIPromptRuns_JudgeID_LogProbs, @MJAIPromptRuns_JudgeID_TopLogProbs, @MJAIPromptRuns_JudgeID_DescendantCost, @MJAIPromptRuns_JudgeID_ValidationAttemptCount, @MJAIPromptRuns_JudgeID_SuccessfulValidationCount, @MJAIPromptRuns_JudgeID_FinalValidationPassed, @MJAIPromptRuns_JudgeID_ValidationBehavior, @MJAIPromptRuns_JudgeID_RetryStrategy, @MJAIPromptRuns_JudgeID_MaxRetriesConfigured, @MJAIPromptRuns_JudgeID_FinalValidationError, @MJAIPromptRuns_JudgeID_ValidationErrorCount, @MJAIPromptRuns_JudgeID_CommonValidationError, @MJAIPromptRuns_JudgeID_FirstAttemptAt, @MJAIPromptRuns_JudgeID_LastAttemptAt, @MJAIPromptRuns_JudgeID_TotalRetryDurationMS, @MJAIPromptRuns_JudgeID_ValidationAttempts, @MJAIPromptRuns_JudgeID_ValidationSummary, @MJAIPromptRuns_JudgeID_FailoverAttempts, @MJAIPromptRuns_JudgeID_FailoverErrors, @MJAIPromptRuns_JudgeID_FailoverDurations, @MJAIPromptRuns_JudgeID_OriginalModelID, @MJAIPromptRuns_JudgeID_OriginalRequestStartTime, @MJAIPromptRuns_JudgeID_TotalFailoverDuration, @MJAIPromptRuns_JudgeID_RerunFromPromptRunID, @MJAIPromptRuns_JudgeID_ModelSelection, @MJAIPromptRuns_JudgeID_Status, @MJAIPromptRuns_JudgeID_Cancelled, @MJAIPromptRuns_JudgeID_CancellationReason, @MJAIPromptRuns_JudgeID_ModelPowerRank, @MJAIPromptRuns_JudgeID_SelectionStrategy, @MJAIPromptRuns_JudgeID_CacheHit, @MJAIPromptRuns_JudgeID_CacheKey, @MJAIPromptRuns_JudgeID_JudgeID, @MJAIPromptRuns_JudgeID_JudgeScore, @MJAIPromptRuns_JudgeID_WasSelectedResult, @MJAIPromptRuns_JudgeID_StreamingEnabled, @MJAIPromptRuns_JudgeID_FirstTokenTime, @MJAIPromptRuns_JudgeID_ErrorDetails, @MJAIPromptRuns_JudgeID_ChildPromptID, @MJAIPromptRuns_JudgeID_QueueTime, @MJAIPromptRuns_JudgeID_PromptTime, @MJAIPromptRuns_JudgeID_CompletionTime, @MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, @MJAIPromptRuns_JudgeID_EffortLevel, @MJAIPromptRuns_JudgeID_RunName, @MJAIPromptRuns_JudgeID_Comments, @MJAIPromptRuns_JudgeID_TestRunID, @MJAIPromptRuns_JudgeID_AssistantPrefill, @MJAIPromptRuns_JudgeID_TokensCacheRead, @MJAIPromptRuns_JudgeID_TokensCacheWrite, @MJAIPromptRuns_JudgeID_TokensCacheReadRollup, @MJAIPromptRuns_JudgeID_TokensCacheWriteRollup
+    END
+
+    CLOSE cascade_update_MJAIPromptRuns_JudgeID_cursor
+    DEALLOCATE cascade_update_MJAIPromptRuns_JudgeID_cursor
+    
+    -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
+    DECLARE @MJAIPromptRuns_ChildPromptIDID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_PromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_ModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_VendorID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_AgentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_ConfigurationID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_RunAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ChildPromptID_CompletedAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ChildPromptID_ExecutionTimeMS int
+    DECLARE @MJAIPromptRuns_ChildPromptID_Messages nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_Result nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensUsed int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensPrompt int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensCompletion int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TotalCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_ChildPromptID_Success bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_ErrorMessage nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ParentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_RunType nvarchar(20)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ExecutionOrder int
+    DECLARE @MJAIPromptRuns_ChildPromptID_AgentRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_Cost decimal(19, 8)
+    DECLARE @MJAIPromptRuns_ChildPromptID_CostCurrency nvarchar(10)
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensUsedRollup int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensPromptRollup int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensCompletionRollup int
+    DECLARE @MJAIPromptRuns_ChildPromptID_Temperature decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ChildPromptID_TopP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ChildPromptID_TopK int
+    DECLARE @MJAIPromptRuns_ChildPromptID_MinP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ChildPromptID_FrequencyPenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ChildPromptID_PresencePenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ChildPromptID_Seed int
+    DECLARE @MJAIPromptRuns_ChildPromptID_StopSequences nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ResponseFormat nvarchar(50)
+    DECLARE @MJAIPromptRuns_ChildPromptID_LogProbs bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_TopLogProbs int
+    DECLARE @MJAIPromptRuns_ChildPromptID_DescendantCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ValidationAttemptCount int
+    DECLARE @MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount int
+    DECLARE @MJAIPromptRuns_ChildPromptID_FinalValidationPassed bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_ValidationBehavior nvarchar(50)
+    DECLARE @MJAIPromptRuns_ChildPromptID_RetryStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured int
+    DECLARE @MJAIPromptRuns_ChildPromptID_FinalValidationError nvarchar(500)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ValidationErrorCount int
+    DECLARE @MJAIPromptRuns_ChildPromptID_CommonValidationError nvarchar(255)
+    DECLARE @MJAIPromptRuns_ChildPromptID_FirstAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ChildPromptID_LastAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS int
+    DECLARE @MJAIPromptRuns_ChildPromptID_ValidationAttempts nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ValidationSummary nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_FailoverAttempts int
+    DECLARE @MJAIPromptRuns_ChildPromptID_FailoverErrors nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_FailoverDurations nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_OriginalModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime datetimeoffset
+    DECLARE @MJAIPromptRuns_ChildPromptID_TotalFailoverDuration int
+    DECLARE @MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_ModelSelection nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_Status nvarchar(50)
+    DECLARE @MJAIPromptRuns_ChildPromptID_Cancelled bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_CancellationReason nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ModelPowerRank int
+    DECLARE @MJAIPromptRuns_ChildPromptID_SelectionStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_ChildPromptID_CacheHit bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_CacheKey nvarchar(500)
+    DECLARE @MJAIPromptRuns_ChildPromptID_JudgeID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_JudgeScore float(53)
+    DECLARE @MJAIPromptRuns_ChildPromptID_WasSelectedResult bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_StreamingEnabled bit
+    DECLARE @MJAIPromptRuns_ChildPromptID_FirstTokenTime int
+    DECLARE @MJAIPromptRuns_ChildPromptID_ErrorDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_ChildPromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_QueueTime int
+    DECLARE @MJAIPromptRuns_ChildPromptID_PromptTime int
+    DECLARE @MJAIPromptRuns_ChildPromptID_CompletionTime int
+    DECLARE @MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_EffortLevel int
+    DECLARE @MJAIPromptRuns_ChildPromptID_RunName nvarchar(255)
+    DECLARE @MJAIPromptRuns_ChildPromptID_Comments nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_TestRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ChildPromptID_AssistantPrefill nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensCacheRead int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensCacheWrite int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensCacheReadRollup int
+    DECLARE @MJAIPromptRuns_ChildPromptID_TokensCacheWriteRollup int
+    DECLARE cascade_update_MJAIPromptRuns_ChildPromptID_cursor CURSOR FOR
+        SELECT [ID], [PromptID], [ModelID], [VendorID], [AgentID], [ConfigurationID], [RunAt], [CompletedAt], [ExecutionTimeMS], [Messages], [Result], [TokensUsed], [TokensPrompt], [TokensCompletion], [TotalCost], [Success], [ErrorMessage], [ParentID], [RunType], [ExecutionOrder], [AgentRunID], [Cost], [CostCurrency], [TokensUsedRollup], [TokensPromptRollup], [TokensCompletionRollup], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [ResponseFormat], [LogProbs], [TopLogProbs], [DescendantCost], [ValidationAttemptCount], [SuccessfulValidationCount], [FinalValidationPassed], [ValidationBehavior], [RetryStrategy], [MaxRetriesConfigured], [FinalValidationError], [ValidationErrorCount], [CommonValidationError], [FirstAttemptAt], [LastAttemptAt], [TotalRetryDurationMS], [ValidationAttempts], [ValidationSummary], [FailoverAttempts], [FailoverErrors], [FailoverDurations], [OriginalModelID], [OriginalRequestStartTime], [TotalFailoverDuration], [RerunFromPromptRunID], [ModelSelection], [Status], [Cancelled], [CancellationReason], [ModelPowerRank], [SelectionStrategy], [CacheHit], [CacheKey], [JudgeID], [JudgeScore], [WasSelectedResult], [StreamingEnabled], [FirstTokenTime], [ErrorDetails], [ChildPromptID], [QueueTime], [PromptTime], [CompletionTime], [ModelSpecificResponseDetails], [EffortLevel], [RunName], [Comments], [TestRunID], [AssistantPrefill], [TokensCacheRead], [TokensCacheWrite], [TokensCacheReadRollup], [TokensCacheWriteRollup]
+        FROM [${flyway:defaultSchema}].[AIPromptRun]
+        WHERE [ChildPromptID] = @ID
+
+    OPEN cascade_update_MJAIPromptRuns_ChildPromptID_cursor
+    FETCH NEXT FROM cascade_update_MJAIPromptRuns_ChildPromptID_cursor INTO @MJAIPromptRuns_ChildPromptIDID, @MJAIPromptRuns_ChildPromptID_PromptID, @MJAIPromptRuns_ChildPromptID_ModelID, @MJAIPromptRuns_ChildPromptID_VendorID, @MJAIPromptRuns_ChildPromptID_AgentID, @MJAIPromptRuns_ChildPromptID_ConfigurationID, @MJAIPromptRuns_ChildPromptID_RunAt, @MJAIPromptRuns_ChildPromptID_CompletedAt, @MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, @MJAIPromptRuns_ChildPromptID_Messages, @MJAIPromptRuns_ChildPromptID_Result, @MJAIPromptRuns_ChildPromptID_TokensUsed, @MJAIPromptRuns_ChildPromptID_TokensPrompt, @MJAIPromptRuns_ChildPromptID_TokensCompletion, @MJAIPromptRuns_ChildPromptID_TotalCost, @MJAIPromptRuns_ChildPromptID_Success, @MJAIPromptRuns_ChildPromptID_ErrorMessage, @MJAIPromptRuns_ChildPromptID_ParentID, @MJAIPromptRuns_ChildPromptID_RunType, @MJAIPromptRuns_ChildPromptID_ExecutionOrder, @MJAIPromptRuns_ChildPromptID_AgentRunID, @MJAIPromptRuns_ChildPromptID_Cost, @MJAIPromptRuns_ChildPromptID_CostCurrency, @MJAIPromptRuns_ChildPromptID_TokensUsedRollup, @MJAIPromptRuns_ChildPromptID_TokensPromptRollup, @MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, @MJAIPromptRuns_ChildPromptID_Temperature, @MJAIPromptRuns_ChildPromptID_TopP, @MJAIPromptRuns_ChildPromptID_TopK, @MJAIPromptRuns_ChildPromptID_MinP, @MJAIPromptRuns_ChildPromptID_FrequencyPenalty, @MJAIPromptRuns_ChildPromptID_PresencePenalty, @MJAIPromptRuns_ChildPromptID_Seed, @MJAIPromptRuns_ChildPromptID_StopSequences, @MJAIPromptRuns_ChildPromptID_ResponseFormat, @MJAIPromptRuns_ChildPromptID_LogProbs, @MJAIPromptRuns_ChildPromptID_TopLogProbs, @MJAIPromptRuns_ChildPromptID_DescendantCost, @MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, @MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, @MJAIPromptRuns_ChildPromptID_FinalValidationPassed, @MJAIPromptRuns_ChildPromptID_ValidationBehavior, @MJAIPromptRuns_ChildPromptID_RetryStrategy, @MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, @MJAIPromptRuns_ChildPromptID_FinalValidationError, @MJAIPromptRuns_ChildPromptID_ValidationErrorCount, @MJAIPromptRuns_ChildPromptID_CommonValidationError, @MJAIPromptRuns_ChildPromptID_FirstAttemptAt, @MJAIPromptRuns_ChildPromptID_LastAttemptAt, @MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, @MJAIPromptRuns_ChildPromptID_ValidationAttempts, @MJAIPromptRuns_ChildPromptID_ValidationSummary, @MJAIPromptRuns_ChildPromptID_FailoverAttempts, @MJAIPromptRuns_ChildPromptID_FailoverErrors, @MJAIPromptRuns_ChildPromptID_FailoverDurations, @MJAIPromptRuns_ChildPromptID_OriginalModelID, @MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, @MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, @MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, @MJAIPromptRuns_ChildPromptID_ModelSelection, @MJAIPromptRuns_ChildPromptID_Status, @MJAIPromptRuns_ChildPromptID_Cancelled, @MJAIPromptRuns_ChildPromptID_CancellationReason, @MJAIPromptRuns_ChildPromptID_ModelPowerRank, @MJAIPromptRuns_ChildPromptID_SelectionStrategy, @MJAIPromptRuns_ChildPromptID_CacheHit, @MJAIPromptRuns_ChildPromptID_CacheKey, @MJAIPromptRuns_ChildPromptID_JudgeID, @MJAIPromptRuns_ChildPromptID_JudgeScore, @MJAIPromptRuns_ChildPromptID_WasSelectedResult, @MJAIPromptRuns_ChildPromptID_StreamingEnabled, @MJAIPromptRuns_ChildPromptID_FirstTokenTime, @MJAIPromptRuns_ChildPromptID_ErrorDetails, @MJAIPromptRuns_ChildPromptID_ChildPromptID, @MJAIPromptRuns_ChildPromptID_QueueTime, @MJAIPromptRuns_ChildPromptID_PromptTime, @MJAIPromptRuns_ChildPromptID_CompletionTime, @MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, @MJAIPromptRuns_ChildPromptID_EffortLevel, @MJAIPromptRuns_ChildPromptID_RunName, @MJAIPromptRuns_ChildPromptID_Comments, @MJAIPromptRuns_ChildPromptID_TestRunID, @MJAIPromptRuns_ChildPromptID_AssistantPrefill, @MJAIPromptRuns_ChildPromptID_TokensCacheRead, @MJAIPromptRuns_ChildPromptID_TokensCacheWrite, @MJAIPromptRuns_ChildPromptID_TokensCacheReadRollup, @MJAIPromptRuns_ChildPromptID_TokensCacheWriteRollup
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIPromptRuns_ChildPromptID_ChildPromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIPromptRun] @ID = @MJAIPromptRuns_ChildPromptIDID, @PromptID = @MJAIPromptRuns_ChildPromptID_PromptID, @ModelID = @MJAIPromptRuns_ChildPromptID_ModelID, @VendorID = @MJAIPromptRuns_ChildPromptID_VendorID, @AgentID = @MJAIPromptRuns_ChildPromptID_AgentID, @ConfigurationID = @MJAIPromptRuns_ChildPromptID_ConfigurationID, @RunAt = @MJAIPromptRuns_ChildPromptID_RunAt, @CompletedAt = @MJAIPromptRuns_ChildPromptID_CompletedAt, @ExecutionTimeMS = @MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, @Messages = @MJAIPromptRuns_ChildPromptID_Messages, @Result = @MJAIPromptRuns_ChildPromptID_Result, @TokensUsed = @MJAIPromptRuns_ChildPromptID_TokensUsed, @TokensPrompt = @MJAIPromptRuns_ChildPromptID_TokensPrompt, @TokensCompletion = @MJAIPromptRuns_ChildPromptID_TokensCompletion, @TotalCost = @MJAIPromptRuns_ChildPromptID_TotalCost, @Success = @MJAIPromptRuns_ChildPromptID_Success, @ErrorMessage = @MJAIPromptRuns_ChildPromptID_ErrorMessage, @ParentID = @MJAIPromptRuns_ChildPromptID_ParentID, @RunType = @MJAIPromptRuns_ChildPromptID_RunType, @ExecutionOrder = @MJAIPromptRuns_ChildPromptID_ExecutionOrder, @AgentRunID = @MJAIPromptRuns_ChildPromptID_AgentRunID, @Cost = @MJAIPromptRuns_ChildPromptID_Cost, @CostCurrency = @MJAIPromptRuns_ChildPromptID_CostCurrency, @TokensUsedRollup = @MJAIPromptRuns_ChildPromptID_TokensUsedRollup, @TokensPromptRollup = @MJAIPromptRuns_ChildPromptID_TokensPromptRollup, @TokensCompletionRollup = @MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, @Temperature = @MJAIPromptRuns_ChildPromptID_Temperature, @TopP = @MJAIPromptRuns_ChildPromptID_TopP, @TopK = @MJAIPromptRuns_ChildPromptID_TopK, @MinP = @MJAIPromptRuns_ChildPromptID_MinP, @FrequencyPenalty = @MJAIPromptRuns_ChildPromptID_FrequencyPenalty, @PresencePenalty = @MJAIPromptRuns_ChildPromptID_PresencePenalty, @Seed = @MJAIPromptRuns_ChildPromptID_Seed, @StopSequences = @MJAIPromptRuns_ChildPromptID_StopSequences, @ResponseFormat = @MJAIPromptRuns_ChildPromptID_ResponseFormat, @LogProbs = @MJAIPromptRuns_ChildPromptID_LogProbs, @TopLogProbs = @MJAIPromptRuns_ChildPromptID_TopLogProbs, @DescendantCost = @MJAIPromptRuns_ChildPromptID_DescendantCost, @ValidationAttemptCount = @MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, @SuccessfulValidationCount = @MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, @FinalValidationPassed = @MJAIPromptRuns_ChildPromptID_FinalValidationPassed, @ValidationBehavior = @MJAIPromptRuns_ChildPromptID_ValidationBehavior, @RetryStrategy = @MJAIPromptRuns_ChildPromptID_RetryStrategy, @MaxRetriesConfigured = @MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, @FinalValidationError = @MJAIPromptRuns_ChildPromptID_FinalValidationError, @ValidationErrorCount = @MJAIPromptRuns_ChildPromptID_ValidationErrorCount, @CommonValidationError = @MJAIPromptRuns_ChildPromptID_CommonValidationError, @FirstAttemptAt = @MJAIPromptRuns_ChildPromptID_FirstAttemptAt, @LastAttemptAt = @MJAIPromptRuns_ChildPromptID_LastAttemptAt, @TotalRetryDurationMS = @MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, @ValidationAttempts = @MJAIPromptRuns_ChildPromptID_ValidationAttempts, @ValidationSummary = @MJAIPromptRuns_ChildPromptID_ValidationSummary, @FailoverAttempts = @MJAIPromptRuns_ChildPromptID_FailoverAttempts, @FailoverErrors = @MJAIPromptRuns_ChildPromptID_FailoverErrors, @FailoverDurations = @MJAIPromptRuns_ChildPromptID_FailoverDurations, @OriginalModelID = @MJAIPromptRuns_ChildPromptID_OriginalModelID, @OriginalRequestStartTime = @MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, @TotalFailoverDuration = @MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, @RerunFromPromptRunID = @MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, @ModelSelection = @MJAIPromptRuns_ChildPromptID_ModelSelection, @Status = @MJAIPromptRuns_ChildPromptID_Status, @Cancelled = @MJAIPromptRuns_ChildPromptID_Cancelled, @CancellationReason = @MJAIPromptRuns_ChildPromptID_CancellationReason, @ModelPowerRank = @MJAIPromptRuns_ChildPromptID_ModelPowerRank, @SelectionStrategy = @MJAIPromptRuns_ChildPromptID_SelectionStrategy, @CacheHit = @MJAIPromptRuns_ChildPromptID_CacheHit, @CacheKey = @MJAIPromptRuns_ChildPromptID_CacheKey, @JudgeID = @MJAIPromptRuns_ChildPromptID_JudgeID, @JudgeScore = @MJAIPromptRuns_ChildPromptID_JudgeScore, @WasSelectedResult = @MJAIPromptRuns_ChildPromptID_WasSelectedResult, @StreamingEnabled = @MJAIPromptRuns_ChildPromptID_StreamingEnabled, @FirstTokenTime = @MJAIPromptRuns_ChildPromptID_FirstTokenTime, @ErrorDetails = @MJAIPromptRuns_ChildPromptID_ErrorDetails, @ChildPromptID_Clear = 1, @ChildPromptID = @MJAIPromptRuns_ChildPromptID_ChildPromptID, @QueueTime = @MJAIPromptRuns_ChildPromptID_QueueTime, @PromptTime = @MJAIPromptRuns_ChildPromptID_PromptTime, @CompletionTime = @MJAIPromptRuns_ChildPromptID_CompletionTime, @ModelSpecificResponseDetails = @MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, @EffortLevel = @MJAIPromptRuns_ChildPromptID_EffortLevel, @RunName = @MJAIPromptRuns_ChildPromptID_RunName, @Comments = @MJAIPromptRuns_ChildPromptID_Comments, @TestRunID = @MJAIPromptRuns_ChildPromptID_TestRunID, @AssistantPrefill = @MJAIPromptRuns_ChildPromptID_AssistantPrefill, @TokensCacheRead = @MJAIPromptRuns_ChildPromptID_TokensCacheRead, @TokensCacheWrite = @MJAIPromptRuns_ChildPromptID_TokensCacheWrite, @TokensCacheReadRollup = @MJAIPromptRuns_ChildPromptID_TokensCacheReadRollup, @TokensCacheWriteRollup = @MJAIPromptRuns_ChildPromptID_TokensCacheWriteRollup
+
+        FETCH NEXT FROM cascade_update_MJAIPromptRuns_ChildPromptID_cursor INTO @MJAIPromptRuns_ChildPromptIDID, @MJAIPromptRuns_ChildPromptID_PromptID, @MJAIPromptRuns_ChildPromptID_ModelID, @MJAIPromptRuns_ChildPromptID_VendorID, @MJAIPromptRuns_ChildPromptID_AgentID, @MJAIPromptRuns_ChildPromptID_ConfigurationID, @MJAIPromptRuns_ChildPromptID_RunAt, @MJAIPromptRuns_ChildPromptID_CompletedAt, @MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, @MJAIPromptRuns_ChildPromptID_Messages, @MJAIPromptRuns_ChildPromptID_Result, @MJAIPromptRuns_ChildPromptID_TokensUsed, @MJAIPromptRuns_ChildPromptID_TokensPrompt, @MJAIPromptRuns_ChildPromptID_TokensCompletion, @MJAIPromptRuns_ChildPromptID_TotalCost, @MJAIPromptRuns_ChildPromptID_Success, @MJAIPromptRuns_ChildPromptID_ErrorMessage, @MJAIPromptRuns_ChildPromptID_ParentID, @MJAIPromptRuns_ChildPromptID_RunType, @MJAIPromptRuns_ChildPromptID_ExecutionOrder, @MJAIPromptRuns_ChildPromptID_AgentRunID, @MJAIPromptRuns_ChildPromptID_Cost, @MJAIPromptRuns_ChildPromptID_CostCurrency, @MJAIPromptRuns_ChildPromptID_TokensUsedRollup, @MJAIPromptRuns_ChildPromptID_TokensPromptRollup, @MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, @MJAIPromptRuns_ChildPromptID_Temperature, @MJAIPromptRuns_ChildPromptID_TopP, @MJAIPromptRuns_ChildPromptID_TopK, @MJAIPromptRuns_ChildPromptID_MinP, @MJAIPromptRuns_ChildPromptID_FrequencyPenalty, @MJAIPromptRuns_ChildPromptID_PresencePenalty, @MJAIPromptRuns_ChildPromptID_Seed, @MJAIPromptRuns_ChildPromptID_StopSequences, @MJAIPromptRuns_ChildPromptID_ResponseFormat, @MJAIPromptRuns_ChildPromptID_LogProbs, @MJAIPromptRuns_ChildPromptID_TopLogProbs, @MJAIPromptRuns_ChildPromptID_DescendantCost, @MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, @MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, @MJAIPromptRuns_ChildPromptID_FinalValidationPassed, @MJAIPromptRuns_ChildPromptID_ValidationBehavior, @MJAIPromptRuns_ChildPromptID_RetryStrategy, @MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, @MJAIPromptRuns_ChildPromptID_FinalValidationError, @MJAIPromptRuns_ChildPromptID_ValidationErrorCount, @MJAIPromptRuns_ChildPromptID_CommonValidationError, @MJAIPromptRuns_ChildPromptID_FirstAttemptAt, @MJAIPromptRuns_ChildPromptID_LastAttemptAt, @MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, @MJAIPromptRuns_ChildPromptID_ValidationAttempts, @MJAIPromptRuns_ChildPromptID_ValidationSummary, @MJAIPromptRuns_ChildPromptID_FailoverAttempts, @MJAIPromptRuns_ChildPromptID_FailoverErrors, @MJAIPromptRuns_ChildPromptID_FailoverDurations, @MJAIPromptRuns_ChildPromptID_OriginalModelID, @MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, @MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, @MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, @MJAIPromptRuns_ChildPromptID_ModelSelection, @MJAIPromptRuns_ChildPromptID_Status, @MJAIPromptRuns_ChildPromptID_Cancelled, @MJAIPromptRuns_ChildPromptID_CancellationReason, @MJAIPromptRuns_ChildPromptID_ModelPowerRank, @MJAIPromptRuns_ChildPromptID_SelectionStrategy, @MJAIPromptRuns_ChildPromptID_CacheHit, @MJAIPromptRuns_ChildPromptID_CacheKey, @MJAIPromptRuns_ChildPromptID_JudgeID, @MJAIPromptRuns_ChildPromptID_JudgeScore, @MJAIPromptRuns_ChildPromptID_WasSelectedResult, @MJAIPromptRuns_ChildPromptID_StreamingEnabled, @MJAIPromptRuns_ChildPromptID_FirstTokenTime, @MJAIPromptRuns_ChildPromptID_ErrorDetails, @MJAIPromptRuns_ChildPromptID_ChildPromptID, @MJAIPromptRuns_ChildPromptID_QueueTime, @MJAIPromptRuns_ChildPromptID_PromptTime, @MJAIPromptRuns_ChildPromptID_CompletionTime, @MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, @MJAIPromptRuns_ChildPromptID_EffortLevel, @MJAIPromptRuns_ChildPromptID_RunName, @MJAIPromptRuns_ChildPromptID_Comments, @MJAIPromptRuns_ChildPromptID_TestRunID, @MJAIPromptRuns_ChildPromptID_AssistantPrefill, @MJAIPromptRuns_ChildPromptID_TokensCacheRead, @MJAIPromptRuns_ChildPromptID_TokensCacheWrite, @MJAIPromptRuns_ChildPromptID_TokensCacheReadRollup, @MJAIPromptRuns_ChildPromptID_TokensCacheWriteRollup
+    END
+
+    CLOSE cascade_update_MJAIPromptRuns_ChildPromptID_cursor
+    DEALLOCATE cascade_update_MJAIPromptRuns_ChildPromptID_cursor
+    
+    -- Cascade update on AIPrompt using cursor to call spUpdateAIPrompt
+    DECLARE @MJAIPrompts_ResultSelectorPromptIDID uniqueidentifier
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_Name nvarchar(255)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_Description nvarchar(MAX)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_TemplateID uniqueidentifier
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CategoryID uniqueidentifier
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_TypeID uniqueidentifier
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_Status nvarchar(50)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ResponseFormat nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ModelSpecificResponseFormat nvarchar(MAX)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_AIModelTypeID uniqueidentifier
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_MinPowerRank int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_SelectionStrategy nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_PowerPreference nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ParallelizationMode nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ParallelCount int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam nvarchar(100)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_OutputType nvarchar(50)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_OutputExample nvarchar(MAX)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ValidationBehavior nvarchar(50)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_MaxRetries int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_RetryDelayMS int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_RetryStrategy nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID uniqueidentifier
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_EnableCaching bit
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheMatchType nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold float(53)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel bit
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor bit
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent bit
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig bit
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_PromptRole nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_PromptPosition nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_Temperature decimal(3, 2)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_TopP decimal(3, 2)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_TopK int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_MinP decimal(3, 2)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty decimal(3, 2)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_PresencePenalty decimal(3, 2)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_Seed int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_StopSequences nvarchar(1000)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs bit
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_TopLogProbs int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_FailoverStrategy nvarchar(50)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy nvarchar(50)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope nvarchar(50)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_EffortLevel int
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_AssistantPrefill nvarchar(MAX)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode nvarchar(20)
+    DECLARE @MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels bit
+    DECLARE cascade_update_MJAIPrompts_ResultSelectorPromptID_cursor CURSOR FOR
+        SELECT [ID], [Name], [Description], [TemplateID], [CategoryID], [TypeID], [Status], [ResponseFormat], [ModelSpecificResponseFormat], [AIModelTypeID], [MinPowerRank], [SelectionStrategy], [PowerPreference], [ParallelizationMode], [ParallelCount], [ParallelConfigParam], [OutputType], [OutputExample], [ValidationBehavior], [MaxRetries], [RetryDelayMS], [RetryStrategy], [ResultSelectorPromptID], [EnableCaching], [CacheTTLSeconds], [CacheMatchType], [CacheSimilarityThreshold], [CacheMustMatchModel], [CacheMustMatchVendor], [CacheMustMatchAgent], [CacheMustMatchConfig], [PromptRole], [PromptPosition], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [IncludeLogProbs], [TopLogProbs], [FailoverStrategy], [FailoverMaxAttempts], [FailoverDelaySeconds], [FailoverModelStrategy], [FailoverErrorScope], [EffortLevel], [AssistantPrefill], [PrefillFallbackMode], [RequireSpecificModels]
+        FROM [${flyway:defaultSchema}].[AIPrompt]
+        WHERE [ResultSelectorPromptID] = @ID
+
+    OPEN cascade_update_MJAIPrompts_ResultSelectorPromptID_cursor
+    FETCH NEXT FROM cascade_update_MJAIPrompts_ResultSelectorPromptID_cursor INTO @MJAIPrompts_ResultSelectorPromptIDID, @MJAIPrompts_ResultSelectorPromptID_Name, @MJAIPrompts_ResultSelectorPromptID_Description, @MJAIPrompts_ResultSelectorPromptID_TemplateID, @MJAIPrompts_ResultSelectorPromptID_CategoryID, @MJAIPrompts_ResultSelectorPromptID_TypeID, @MJAIPrompts_ResultSelectorPromptID_Status, @MJAIPrompts_ResultSelectorPromptID_ResponseFormat, @MJAIPrompts_ResultSelectorPromptID_ModelSpecificResponseFormat, @MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, @MJAIPrompts_ResultSelectorPromptID_MinPowerRank, @MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, @MJAIPrompts_ResultSelectorPromptID_PowerPreference, @MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, @MJAIPrompts_ResultSelectorPromptID_ParallelCount, @MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, @MJAIPrompts_ResultSelectorPromptID_OutputType, @MJAIPrompts_ResultSelectorPromptID_OutputExample, @MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, @MJAIPrompts_ResultSelectorPromptID_MaxRetries, @MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, @MJAIPrompts_ResultSelectorPromptID_RetryStrategy, @MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, @MJAIPrompts_ResultSelectorPromptID_EnableCaching, @MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, @MJAIPrompts_ResultSelectorPromptID_CacheMatchType, @MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, @MJAIPrompts_ResultSelectorPromptID_PromptRole, @MJAIPrompts_ResultSelectorPromptID_PromptPosition, @MJAIPrompts_ResultSelectorPromptID_Temperature, @MJAIPrompts_ResultSelectorPromptID_TopP, @MJAIPrompts_ResultSelectorPromptID_TopK, @MJAIPrompts_ResultSelectorPromptID_MinP, @MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, @MJAIPrompts_ResultSelectorPromptID_PresencePenalty, @MJAIPrompts_ResultSelectorPromptID_Seed, @MJAIPrompts_ResultSelectorPromptID_StopSequences, @MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, @MJAIPrompts_ResultSelectorPromptID_TopLogProbs, @MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, @MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, @MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, @MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, @MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, @MJAIPrompts_ResultSelectorPromptID_EffortLevel, @MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, @MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, @MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIPrompt] @ID = @MJAIPrompts_ResultSelectorPromptIDID, @Name = @MJAIPrompts_ResultSelectorPromptID_Name, @Description = @MJAIPrompts_ResultSelectorPromptID_Description, @TemplateID = @MJAIPrompts_ResultSelectorPromptID_TemplateID, @CategoryID = @MJAIPrompts_ResultSelectorPromptID_CategoryID, @TypeID = @MJAIPrompts_ResultSelectorPromptID_TypeID, @Status = @MJAIPrompts_ResultSelectorPromptID_Status, @ResponseFormat = @MJAIPrompts_ResultSelectorPromptID_ResponseFormat, @ModelSpecificResponseFormat = @MJAIPrompts_ResultSelectorPromptID_ModelSpecificResponseFormat, @AIModelTypeID = @MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, @MinPowerRank = @MJAIPrompts_ResultSelectorPromptID_MinPowerRank, @SelectionStrategy = @MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, @PowerPreference = @MJAIPrompts_ResultSelectorPromptID_PowerPreference, @ParallelizationMode = @MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, @ParallelCount = @MJAIPrompts_ResultSelectorPromptID_ParallelCount, @ParallelConfigParam = @MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, @OutputType = @MJAIPrompts_ResultSelectorPromptID_OutputType, @OutputExample = @MJAIPrompts_ResultSelectorPromptID_OutputExample, @ValidationBehavior = @MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, @MaxRetries = @MJAIPrompts_ResultSelectorPromptID_MaxRetries, @RetryDelayMS = @MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, @RetryStrategy = @MJAIPrompts_ResultSelectorPromptID_RetryStrategy, @ResultSelectorPromptID_Clear = 1, @ResultSelectorPromptID = @MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, @EnableCaching = @MJAIPrompts_ResultSelectorPromptID_EnableCaching, @CacheTTLSeconds = @MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, @CacheMatchType = @MJAIPrompts_ResultSelectorPromptID_CacheMatchType, @CacheSimilarityThreshold = @MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, @CacheMustMatchModel = @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, @CacheMustMatchVendor = @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, @CacheMustMatchAgent = @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, @CacheMustMatchConfig = @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, @PromptRole = @MJAIPrompts_ResultSelectorPromptID_PromptRole, @PromptPosition = @MJAIPrompts_ResultSelectorPromptID_PromptPosition, @Temperature = @MJAIPrompts_ResultSelectorPromptID_Temperature, @TopP = @MJAIPrompts_ResultSelectorPromptID_TopP, @TopK = @MJAIPrompts_ResultSelectorPromptID_TopK, @MinP = @MJAIPrompts_ResultSelectorPromptID_MinP, @FrequencyPenalty = @MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, @PresencePenalty = @MJAIPrompts_ResultSelectorPromptID_PresencePenalty, @Seed = @MJAIPrompts_ResultSelectorPromptID_Seed, @StopSequences = @MJAIPrompts_ResultSelectorPromptID_StopSequences, @IncludeLogProbs = @MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, @TopLogProbs = @MJAIPrompts_ResultSelectorPromptID_TopLogProbs, @FailoverStrategy = @MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, @FailoverMaxAttempts = @MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, @FailoverDelaySeconds = @MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, @FailoverModelStrategy = @MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, @FailoverErrorScope = @MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, @EffortLevel = @MJAIPrompts_ResultSelectorPromptID_EffortLevel, @AssistantPrefill = @MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, @PrefillFallbackMode = @MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, @RequireSpecificModels = @MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels
+
+        FETCH NEXT FROM cascade_update_MJAIPrompts_ResultSelectorPromptID_cursor INTO @MJAIPrompts_ResultSelectorPromptIDID, @MJAIPrompts_ResultSelectorPromptID_Name, @MJAIPrompts_ResultSelectorPromptID_Description, @MJAIPrompts_ResultSelectorPromptID_TemplateID, @MJAIPrompts_ResultSelectorPromptID_CategoryID, @MJAIPrompts_ResultSelectorPromptID_TypeID, @MJAIPrompts_ResultSelectorPromptID_Status, @MJAIPrompts_ResultSelectorPromptID_ResponseFormat, @MJAIPrompts_ResultSelectorPromptID_ModelSpecificResponseFormat, @MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, @MJAIPrompts_ResultSelectorPromptID_MinPowerRank, @MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, @MJAIPrompts_ResultSelectorPromptID_PowerPreference, @MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, @MJAIPrompts_ResultSelectorPromptID_ParallelCount, @MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, @MJAIPrompts_ResultSelectorPromptID_OutputType, @MJAIPrompts_ResultSelectorPromptID_OutputExample, @MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, @MJAIPrompts_ResultSelectorPromptID_MaxRetries, @MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, @MJAIPrompts_ResultSelectorPromptID_RetryStrategy, @MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, @MJAIPrompts_ResultSelectorPromptID_EnableCaching, @MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, @MJAIPrompts_ResultSelectorPromptID_CacheMatchType, @MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, @MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, @MJAIPrompts_ResultSelectorPromptID_PromptRole, @MJAIPrompts_ResultSelectorPromptID_PromptPosition, @MJAIPrompts_ResultSelectorPromptID_Temperature, @MJAIPrompts_ResultSelectorPromptID_TopP, @MJAIPrompts_ResultSelectorPromptID_TopK, @MJAIPrompts_ResultSelectorPromptID_MinP, @MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, @MJAIPrompts_ResultSelectorPromptID_PresencePenalty, @MJAIPrompts_ResultSelectorPromptID_Seed, @MJAIPrompts_ResultSelectorPromptID_StopSequences, @MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, @MJAIPrompts_ResultSelectorPromptID_TopLogProbs, @MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, @MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, @MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, @MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, @MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, @MJAIPrompts_ResultSelectorPromptID_EffortLevel, @MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, @MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, @MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels
+    END
+
+    CLOSE cascade_update_MJAIPrompts_ResultSelectorPromptID_cursor
+    DEALLOCATE cascade_update_MJAIPrompts_ResultSelectorPromptID_cursor
+    
+    -- Cascade delete from AIResultCache using cursor to call spDeleteAIResultCache
+    DECLARE @MJAIResultCache_AIPromptIDID uniqueidentifier
+    DECLARE cascade_delete_MJAIResultCache_AIPromptID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[AIResultCache]
+        WHERE [AIPromptID] = @ID
+    
+    OPEN cascade_delete_MJAIResultCache_AIPromptID_cursor
+    FETCH NEXT FROM cascade_delete_MJAIResultCache_AIPromptID_cursor INTO @MJAIResultCache_AIPromptIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteAIResultCache] @ID = @MJAIResultCache_AIPromptIDID
+        
+        FETCH NEXT FROM cascade_delete_MJAIResultCache_AIPromptID_cursor INTO @MJAIResultCache_AIPromptIDID
+    END
+    
+    CLOSE cascade_delete_MJAIResultCache_AIPromptID_cursor
+    DEALLOCATE cascade_delete_MJAIResultCache_AIPromptID_cursor
+    
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIPrompt]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer];
+
+/* spDelete Permissions for MJ: AI Prompts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer];
+
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '60e67daa-5e00-4655-812a-701552c342f8' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'Agent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1a5da45-b7f4-4431-a4d4-664963e1a02c' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'DefaultCoAgent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8293,9 +10799,204 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
          )
          VALUES
          (
-            '60e67daa-5e00-4655-812a-701552c342f8',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
-            100025,
+            'e1a5da45-b7f4-4431-a4d4-664963e1a02c',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: MJ: AI Agents
+            100152,
+            'DefaultCoAgent',
+            'Default Co Agent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fcb06004-55f2-4245-bc9d-3762d292bf04' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'RootDefaultCoAgentID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fcb06004-55f2-4245-bc9d-3762d292bf04',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: MJ: AI Agents
+            100154,
+            'RootDefaultCoAgentID',
+            'Root Default Co Agent ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '20f00ce4-c7f5-4328-bc29-858cdfababc0' OR (EntityID = '65CDC348-C4A6-4D00-A57B-2D489C56F128' AND Name = 'DefaultCoAgent')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '20f00ce4-c7f5-4328-bc29-858cdfababc0',
+            '65CDC348-C4A6-4D00-A57B-2D489C56F128', -- Entity: MJ: AI Agent Types
+            100037,
+            'DefaultCoAgent',
+            'Default Co Agent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c157ced3-2570-465b-b9a8-1b748a03de41' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'Agent')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c157ced3-2570-465b-b9a8-1b748a03de41',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
+            100027,
             'Agent',
             'Agent',
             NULL,
@@ -8325,7 +11026,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'af7c179a-2859-40a3-8f02-d34ff1de4757' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'User')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd5872144-c342-4e6c-b8ab-97323a939b5c' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'User')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8358,9 +11059,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
          )
          VALUES
          (
-            'af7c179a-2859-40a3-8f02-d34ff1de4757',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
-            100026,
+            'd5872144-c342-4e6c-b8ab-97323a939b5c',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
+            100028,
             'User',
             'User',
             NULL,
@@ -8390,7 +11091,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '938ed5d5-bf36-4fda-8455-5868b123f401' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'Conversation')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b75d30aa-b9aa-4096-b598-0b95d640021c' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'Conversation')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8423,9 +11124,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
          )
          VALUES
          (
-            '938ed5d5-bf36-4fda-8455-5868b123f401',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
-            100027,
+            'b75d30aa-b9aa-4096-b598-0b95d640021c',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
+            100029,
             'Conversation',
             'Conversation',
             NULL,
@@ -8455,7 +11156,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3d5461b5-44fa-4e7a-8b75-3471ec4aa2b8' OR (EntityID = '813ECD99-833B-46F9-8722-03C6A897833A' AND Name = 'RootLastSessionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0eaeeadb-75b6-401e-a868-07f0400ed365' OR (EntityID = 'DF2B0246-1729-4552-9FB7-48891B5F4873' AND Name = 'RootLastSessionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8488,9 +11189,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
          )
          VALUES
          (
-            '3d5461b5-44fa-4e7a-8b75-3471ec4aa2b8',
-            '813ECD99-833B-46F9-8722-03C6A897833A', -- Entity: MJ: AI Agent Sessions
-            100028,
+            '0eaeeadb-75b6-401e-a868-07f0400ed365',
+            'DF2B0246-1729-4552-9FB7-48891B5F4873', -- Entity: MJ: AI Agent Sessions
+            100030,
             'RootLastSessionID',
             'Root Last Session ID',
             NULL,
@@ -8520,7 +11221,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0aa3d10-e896-4f84-8a5b-b3679971e4c6' OR (EntityID = '86AC51D4-9DC2-4573-983F-C441AB5AD79F' AND Name = 'Channel')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3b4f9b2c-1f98-463b-8712-ed29b825152f' OR (EntityID = 'A909C8E5-D406-4899-878B-61972F736779' AND Name = 'Channel')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8553,8 +11254,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
          )
          VALUES
          (
-            'a0aa3d10-e896-4f84-8a5b-b3679971e4c6',
-            '86AC51D4-9DC2-4573-983F-C441AB5AD79F', -- Entity: MJ: AI Agent Session Channels
+            '3b4f9b2c-1f98-463b-8712-ed29b825152f',
+            'A909C8E5-D406-4899-878B-61972F736779', -- Entity: MJ: AI Agent Session Channels
             100021,
             'Channel',
             'Channel',
@@ -8586,85 +11287,139 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '3B4F9B2C-1F98-463B-8712-ED29B825152F'
+               AND AutoUpdateIsNameField = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '896E1F2B-B67F-4D66-8D9E-EEA7660C5AAC'
+               WHERE ID = '17506F15-DA0F-49C3-BABA-A9F1C179EE3E'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB'
+               WHERE ID = '4CEDB027-C266-400F-9F92-624FC9E658BD'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '58F80BB2-DE2D-4CBB-9FC9-AC2A862687C2'
+               WHERE ID = 'BA18E18E-521F-44B2-BFE3-40B155C58BA3'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '3B4F9B2C-1F98-463B-8712-ED29B825152F'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '896E1F2B-B67F-4D66-8D9E-EEA7660C5AAC'
+               WHERE ID = '17506F15-DA0F-49C3-BABA-A9F1C179EE3E'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB'
+               WHERE ID = '3B4F9B2C-1F98-463B-8712-ED29B825152F'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '055ACCB7-5175-49B9-8AB3-EAA4887ACF6C'
+               WHERE ID = '3B4F9B2C-1F98-463B-8712-ED29B825152F'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB'
+               WHERE ID = '17506F15-DA0F-49C3-BABA-A9F1C179EE3E'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '5C0C0D1C-4B14-417E-9280-B4545A8AF1EF'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 1
+            WHERE ID = '65CDC348-C4A6-4D00-A57B-2D489C56F128'
+            AND AutoUpdateAllowUserSearchAPI = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IsNameField = 1
-               WHERE ID = 'A0AA3D10-E896-4F84-8A5B-B3679971E4C6'
+               WHERE ID = 'C157CED3-2570-465B-B9A8-1B748A03DE41'
+               AND AutoUpdateIsNameField = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = 'D5872144-C342-4E6C-B8AB-97323A939B5C'
                AND AutoUpdateIsNameField = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'FA23F676-37E1-48C6-AAD1-F6821D650380'
+               WHERE ID = '1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '96B01199-9C62-4110-A7E1-DDF08BA83B78'
+               WHERE ID = '8C704F55-4757-462C-8C67-04920D9DA336'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '8A001FBE-8856-4F78-951B-FA979E46AE4D'
+               WHERE ID = 'C157CED3-2570-465B-B9A8-1B748A03DE41'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'A0AA3D10-E896-4F84-8A5B-B3679971E4C6'
+               WHERE ID = 'D5872144-C342-4E6C-B8AB-97323A939B5C'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'B75D30AA-B9AA-4096-B598-0B95D640021C'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'FA23F676-37E1-48C6-AAD1-F6821D650380'
+               WHERE ID = 'C157CED3-2570-465B-B9A8-1B748A03DE41'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'A0AA3D10-E896-4F84-8A5B-B3679971E4C6'
+               WHERE ID = 'D5872144-C342-4E6C-B8AB-97323A939B5C'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'B75D30AA-B9AA-4096-B598-0B95D640021C'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'B8279EC1-5264-4070-BD8A-9927DF140745'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'A80023D7-4D33-4443-9504-37FE6AE132FF'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'B8279EC1-5264-4070-BD8A-9927DF140745'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'A0AA3D10-E896-4F84-8A5B-B3679971E4C6'
+               WHERE ID = '6EE074C4-60ED-4DF5-B9DD-EEC722A7B3C2'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = 'FA23F676-37E1-48C6-AAD1-F6821D650380'
+               WHERE ID = 'B8279EC1-5264-4070-BD8A-9927DF140745'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
@@ -8685,7 +11440,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
+               SET UserSearchPredicateAPI = 'BeginsWith'
                WHERE ID = '64FAC701-8AB3-43C0-B741-71252122E8B0'
                AND AutoUpdateUserSearchPredicate = 1;
 
@@ -8697,196 +11452,16 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfiguration] TO [cdp_Dev
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = '60E67DAA-5E00-4655-812A-701552C342F8'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = 'AF7C179A-2859-40A3-8F02-D34FF1DE4757'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '9EF8AD06-C394-4E75-A811-2701A27910C6'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '49F56DA2-55BA-42FC-BA37-1091D62B2BD3'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '884399EB-9020-4EAE-BD6F-C9CF288AB7DA'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '60E67DAA-5E00-4655-812A-701552C342F8'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'AF7C179A-2859-40A3-8F02-D34FF1DE4757'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '9EF8AD06-C394-4E75-A811-2701A27910C6'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '60E67DAA-5E00-4655-812A-701552C342F8'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'AF7C179A-2859-40A3-8F02-D34FF1DE4757'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '9EF8AD06-C394-4E75-A811-2701A27910C6'
+               SET UserSearchPredicateAPI = 'Contains'
+               WHERE ID = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '38A3F73F-9364-428E-A195-5DF74B9F9ACB'
+               WHERE ID = 'E1F5A7A4-9248-4C45-9D74-04E7B44A1DD5'
                AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '40EA5AB0-58A3-4CCE-B7E1-C9BB56E7D5A4'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set categories for 10 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'ACCC3E71-08B8-4EBB-9504-BD89B32F3492' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Channel Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '055ACCB7-5175-49B9-8AB3-EAA4887ACF6C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.Description 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Channel Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '896E1F2B-B67F-4D66-8D9E-EEA7660C5AAC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.IsActive 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Channel Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '58F80BB2-DE2D-4CBB-9FC9-AC2A862687C2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.TransportType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Technical Implementation',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '19AFF278-CC5F-4C9E-8C39-87BC7AFE78BB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.ServerPluginClass 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Technical Implementation',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '32609E2B-DFFE-443B-8E6A-DBB3D834CE05' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.ClientPluginClass 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Technical Implementation',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0A5BDD15-2B3F-47EA-ABC4-CD4F307B0ADE' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.ConfigSchema 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Technical Implementation',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Configuration Schema',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
-WHERE 
-   ID = 'F4308226-D24B-487E-A045-2B63E563FF16' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8469ADF0-DB56-4F14-9D37-623386768A70' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Channels.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '180E3EE8-6FE2-4D9B-96F9-D50225F628E6' AND AutoUpdateCategory = 1;
-
-/* Set entity icon to fa fa-robot */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-robot', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('30a80697-bf2f-4436-b7da-f1241576322c', '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', 'FieldCategoryInfo', '{"Channel Configuration":{"icon":"fa fa-info-circle","description":"Basic identification and operational status of the AI agent channel"},"Technical Implementation":{"icon":"fa fa-code","description":"Technical drivers, transport protocols, and configuration schemas"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('bd44c5c2-ca76-49ce-92a9-a1e3d5c53dcf', '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E', 'FieldCategoryIcons', '{"Channel Configuration":"fa fa-info-circle","Technical Implementation":"fa fa-code","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '7E052EF5-A16E-4BF3-9F0B-DCCFC79DCC0E';
 
 /* Set categories for 11 fields */
 
@@ -8898,7 +11473,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'C873AD86-B1F1-47A1-AC08-2FCC1F5BD343' AND AutoUpdateCategory = 1;
+   ID = '5E3D73A1-DD35-4709-AA02-10373242CA24' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.AgentSessionID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8909,7 +11484,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '875C4E35-3C15-4014-8E04-BF66ED3C8E48' AND AutoUpdateCategory = 1;
+   ID = '2BBC1988-61A7-4D21-AD19-EED50E2B0A05' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.ChannelID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8919,39 +11494,58 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5C7B15EC-D976-4F87-9F53-6750F9087C26' AND AutoUpdateCategory = 1;
+   ID = '784B75F0-16C4-485F-B2F4-8B07F50FBC4E' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.Channel 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Session Context',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Channel Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A0AA3D10-E896-4F84-8A5B-B3679971E4C6' AND AutoUpdateCategory = 1;
+   ID = '3B4F9B2C-1F98-463B-8712-ED29B825152F' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Connection Details',
+   Category = 'Connection Status',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FA23F676-37E1-48C6-AAD1-F6821D650380' AND AutoUpdateCategory = 1;
+   ID = '17506F15-DA0F-49C3-BABA-A9F1C179EE3E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.LastActiveAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Connection Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4CEDB027-C266-400F-9F92-624FC9E658BD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.DisconnectedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Connection Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BA18E18E-521F-44B2-BFE3-40B155C58BA3' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.SocketUrl 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Connection Details',
+   Category = 'Configuration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Socket URL',
    ExtendedType = 'URL',
    CodeType = NULL
 WHERE 
-   ID = '420AB807-98F0-486D-BAFE-55CFE1E6C7EE' AND AutoUpdateCategory = 1;
+   ID = 'F07FCB82-69FE-4ED4-AECD-1310377A439B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.Config 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8962,27 +11556,7 @@ SET
    ExtendedType = 'Code',
    CodeType = 'Other'
 WHERE 
-   ID = '449C3643-D9D9-485C-9F25-0A09C5153135' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.LastActiveAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Connection Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '96B01199-9C62-4110-A7E1-DDF08BA83B78' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.DisconnectedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Connection Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8A001FBE-8856-4F78-951B-FA979E46AE4D' AND AutoUpdateCategory = 1;
+   ID = '989052BD-FCB6-44D7-A4D8-3FB3116A4C5C' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8992,7 +11566,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FD98383C-DAD4-4EBF-A399-137E5763CD61' AND AutoUpdateCategory = 1;
+   ID = 'BFF02A46-902C-4159-92DE-CCD3FF211E37' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Session Channels.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9002,31 +11576,156 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '80984C3F-0190-4926-B0FE-A7B150D456CF' AND AutoUpdateCategory = 1;
+   ID = '241BAFB0-DA75-4E87-91D5-C8B341EBAA2D' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-plug */
+/* Set entity icon to fa fa-network-wired */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-plug', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '86AC51D4-9DC2-4573-983F-C441AB5AD79F';
+               SET [Icon] = 'fa fa-network-wired', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = 'A909C8E5-D406-4899-878B-61972F736779';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('feb6028b-b0f5-4cba-9e4b-86dd74ce148d', '86AC51D4-9DC2-4573-983F-C441AB5AD79F', 'FieldCategoryInfo', '{"Session Context":{"icon":"fa fa-link","description":"Core identifiers linking this channel to the agent session"},"Connection Details":{"icon":"fa fa-signal","description":"Status, timing, and connectivity information for the channel"},"Configuration":{"icon":"fa fa-sliders-h","description":"JSON-based settings for the channel instance"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('57482640-9ca2-4a4d-93c2-98ad1beae634', 'A909C8E5-D406-4899-878B-61972F736779', 'FieldCategoryInfo', '{"Session Context":{"icon":"fa fa-info-circle","description":"Core identifiers linking this channel instance to the active session"},"Connection Status":{"icon":"fa fa-signal","description":"Real-time status, activity tracking, and disconnection details"},"Configuration":{"icon":"fa fa-sliders-h","description":"Technical connection parameters and instance-specific state"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('55616659-1b29-4f79-8afe-6fec901a328f', '86AC51D4-9DC2-4573-983F-C441AB5AD79F', 'FieldCategoryIcons', '{"Session Context":"fa fa-link","Connection Details":"fa fa-signal","Configuration":"fa fa-sliders-h","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('a8abc25a-7b90-4d0a-b2a0-97fed1186610', 'A909C8E5-D406-4899-878B-61972F736779', 'FieldCategoryIcons', '{"Session Context":"fa fa-info-circle","Connection Status":"fa fa-signal","Configuration":"fa fa-sliders-h","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '86AC51D4-9DC2-4573-983F-C441AB5AD79F';
+         WHERE [EntityID] = 'A909C8E5-D406-4899-878B-61972F736779';
 
-/* Set categories for 16 fields */
+/* Set categories for 10 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '18A62344-3698-4445-B2EE-48B19B3E323D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Channel Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6EE074C4-60ED-4DF5-B9DD-EEC722A7B3C2' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Channel Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D85030E0-5ADA-4001-A4E3-92157B381FA0' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.IsActive 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Channel Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A80023D7-4D33-4443-9504-37FE6AE132FF' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.ServerPluginClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Integration Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '40C2DA29-40AD-4F49-8121-7FCD282F28AF' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.ClientPluginClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Integration Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'ED708EA1-DDBD-4027-840A-4D35896CFDA2' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.TransportType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Integration Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B8279EC1-5264-4070-BD8A-9927DF140745' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.ConfigSchema 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Integration Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Configuration Schema',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'B0A0B7A6-5D3E-4A56-A410-112F51A5DE51' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5844E14D-27B7-43A2-ADCC-E1732F3A947D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Channels.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E5B1C8B8-BED9-406A-9403-9413A0554639' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-broadcast-tower */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-broadcast-tower', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '417336BE-9DD3-481B-9686-81A435F54147';
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('8a60bbb1-e97c-47f5-aa2f-5dc5f044ea30', '417336BE-9DD3-481B-9686-81A435F54147', 'FieldCategoryInfo', '{"Channel Definition":{"icon":"fa fa-info-circle","description":"Basic identification and status settings for the AI agent channel"},"Integration Configuration":{"icon":"fa fa-plug","description":"Technical settings for server/client plugins and transport protocols"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('c819e33d-b1f9-402e-a1a9-cbd32d89df33', '417336BE-9DD3-481B-9686-81A435F54147', 'FieldCategoryIcons', '{"Channel Definition":"fa fa-info-circle","Integration Configuration":"fa fa-plug","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
+/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '417336BE-9DD3-481B-9686-81A435F54147';
+
+/* Set categories for 17 fields */
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9036,7 +11735,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'DBD7CECD-EAA6-4F24-BC89-F46EFD26058A' AND AutoUpdateCategory = 1;
+   ID = '5FEEAD82-55FC-4231-972A-B39511EE1410' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.AgentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9046,7 +11745,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '325D3874-9ACD-4224-B369-28B846BF6D3C' AND AutoUpdateCategory = 1;
+   ID = 'A1D999AB-CBA5-4233-A296-87E026E40807' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.UserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9056,7 +11755,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A88FC692-336B-4E1F-8155-FBF52FF7E84B' AND AutoUpdateCategory = 1;
+   ID = 'EE4F8641-BF5C-449F-B249-EF634D240C90' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.ConversationID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9066,7 +11765,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '29B5338C-548F-4A18-A9F8-32979929271B' AND AutoUpdateCategory = 1;
+   ID = '61E0BCC1-5696-4F1D-9FDC-4C71A7BED310' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.Agent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9076,7 +11775,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '60E67DAA-5E00-4655-812A-701552C342F8' AND AutoUpdateCategory = 1;
+   ID = 'C157CED3-2570-465B-B9A8-1B748A03DE41' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.User 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9086,7 +11785,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'AF7C179A-2859-40A3-8F02-D34FF1DE4757' AND AutoUpdateCategory = 1;
+   ID = 'D5872144-C342-4E6C-B8AB-97323A939B5C' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.Conversation 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9096,7 +11795,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '938ED5D5-BF36-4FDA-8455-5868B123F401' AND AutoUpdateCategory = 1;
+   ID = 'B75D30AA-B9AA-4096-B598-0B95D640021C' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9106,7 +11805,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '9EF8AD06-C394-4E75-A811-2701A27910C6' AND AutoUpdateCategory = 1;
+   ID = '1EE2BC8D-FEFC-4AE9-B3C6-E1CDF54F7893' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.LastActiveAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9116,7 +11815,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '49F56DA2-55BA-42FC-BA37-1091D62B2BD3' AND AutoUpdateCategory = 1;
+   ID = '8C704F55-4757-462C-8C67-04920D9DA336' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.ClosedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9126,48 +11825,58 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '884399EB-9020-4EAE-BD6F-C9CF288AB7DA' AND AutoUpdateCategory = 1;
+   ID = '8FC7DB66-FB18-4A10-A7B1-17E871EFBCE2' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agent Sessions.LastSessionID 
+-- UPDATE Entity Field Category Info MJ: AI Agent Sessions.CloseReason 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Session History',
+   Category = 'Session Lifecycle',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'E5768066-571D-41C2-83C5-86A5C3F80020' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Sessions.RootLastSessionID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Session History',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3D5461B5-44FA-4E7A-8B75-3471EC4AA2B8' AND AutoUpdateCategory = 1;
+   ID = '3DCEF25D-0546-4C75-8A9A-8CB891AB0E51' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.HostInstanceID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
+   Category = 'Technical Infrastructure',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '22FD81C9-FAF1-4919-BB3F-47ED6296EC55' AND AutoUpdateCategory = 1;
+   ID = '69619E4B-2EF9-4763-90C3-AFA942DC0AA1' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.Config 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Session Configuration',
+   Category = 'Technical Infrastructure',
    GeneratedFormSection = 'Category',
    DisplayName = 'Configuration',
    ExtendedType = 'Code',
    CodeType = 'Other'
 WHERE 
-   ID = 'D9E13E66-3E85-4B42-B427-CC9FFEC520E4' AND AutoUpdateCategory = 1;
+   ID = 'C783C488-AC96-413F-ADA4-2377CBB0C35A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Sessions.LastSessionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Technical Infrastructure',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DB4D8FC0-1480-4D34-8365-A107FEE0F9AD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Sessions.RootLastSessionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Technical Infrastructure',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0EAEEADB-75B6-401E-A868-07F0400ED365' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9177,7 +11886,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0DD45FF5-6BE3-4CFF-9A3A-9534A1FC0F1F' AND AutoUpdateCategory = 1;
+   ID = 'FEAFC3FD-1342-41B3-936A-508C6818FDC5' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Sessions.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9187,29 +11896,221 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '4C7FED94-1FFC-4CF5-941C-7851A9A7CE54' AND AutoUpdateCategory = 1;
+   ID = '3DD79455-7665-46DE-B1C0-2CBD208644A4' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-comments */
+/* Set categories for 19 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5BDF7CC2-8BB6-4B10-A69B-F5C4EF647FAF' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5C0C0D1C-4B14-417E-9280-B4545A8AF1EF' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0C6E768F-C587-4538-BC48-C869854F3A18' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.SystemPromptID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '24424A6A-C0E3-4DB0-9AF1-551D12AE7E10' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.AgentPromptPlaceholder 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '47FCBE6A-43EA-47FA-912B-ACB82A311471' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.PromptParamsSchema 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Prompt Parameters Schema',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '41DA3898-26C0-4AE9-B934-84EA97C726B7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.SystemPrompt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'System Prompt Content',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '200792E6-E7EC-4293-A821-77B42A49DAB5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.IsActive 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Is Active',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '980B9BE8-5C4E-45A4-BE62-32874A339AF6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.DriverClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DB83502E-F00C-4CF8-AD0E-FFE9BF3C8904' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.UIFormSectionKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7763B64B-E410-4247-89DE-5E9E565F15A0' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.UIFormKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FAC68362-126A-4F7E-B706-8DD7B40897A1' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.UIFormSectionExpandedByDefault 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DA3D74E3-D1A2-4932-A1FB-4219F3BE1CC9' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.AssignmentStrategy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '27C830A6-A889-4A9C-908C-33BB7A6CDB37' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.DefaultStorageAccountID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6B31A64B-6BD8-446B-B306-0BDD65645694' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.DefaultStorageAccount 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BC5FC66F-CDED-4316-8E1A-F0B3F0577F3D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.DefaultCoAgentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Agent Integration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Default Co-Agent',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C215D1C0-9EB6-43EC-A8C2-AC64E9BDED0E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.DefaultCoAgent 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Agent Integration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Default Co-Agent Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '20F00CE4-C7F5-4328-BC29-858CDFABABC0' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7A190481-BB1D-4B6D-8EA1-E554E56B83B9' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Types.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4AEB4F4F-664A-409A-AD4E-FD96800BF5FF' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-robot */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-comments', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '813ECD99-833B-46F9-8722-03C6A897833A';
+               SET [Icon] = 'fa fa-robot', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = 'DF2B0246-1729-4552-9FB7-48891B5F4873';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('23dd8b34-c99e-4a3b-adff-2288ff5e2dc9', '813ECD99-833B-46F9-8722-03C6A897833A', 'FieldCategoryInfo', '{"Session Context":{"icon":"fa fa-user-tag","description":"Information linking the session to agents, users, and specific conversations"},"Session Lifecycle":{"icon":"fa fa-clock","description":"Operational status and timing details for the session lifecycle"},"Session History":{"icon":"fa fa-history","description":"Historical references to previous related sessions"},"Session Configuration":{"icon":"fa fa-sliders-h","description":"Technical settings and state variables for the session"},"System Metadata":{"icon":"fa fa-cog","description":"Internal tracking, audit, and infrastructure identifiers"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('b7f4df0b-b7ef-48f6-8242-e60107c0e8ff', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'FieldCategoryInfo', '{"Session Context":{"icon":"fa fa-user-circle","description":"Information linking the session to agents, users, and conversations"},"Session Lifecycle":{"icon":"fa fa-clock","description":"Operational status, activity timestamps, and closure details"},"Technical Infrastructure":{"icon":"fa fa-server","description":"Server affinity, configuration, and session lineage metadata"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('49ae3dad-d0c5-4f81-9390-8c24c67a2773', '813ECD99-833B-46F9-8722-03C6A897833A', 'FieldCategoryIcons', '{"Session Context":"fa fa-user-tag","Session Lifecycle":"fa fa-clock","Session History":"fa fa-history","Session Configuration":"fa fa-sliders-h","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('40fa4d4d-b04c-4c2e-b2bc-d7d22a2e3785', 'DF2B0246-1729-4552-9FB7-48891B5F4873', 'FieldCategoryIcons', '{"Session Context":"fa fa-user-circle","Session Lifecycle":"fa fa-clock","Technical Infrastructure":"fa fa-server","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '813ECD99-833B-46F9-8722-03C6A897833A';
+         WHERE [EntityID] = 'DF2B0246-1729-4552-9FB7-48891B5F4873';
+
+/* Update FieldCategoryInfo setting for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET [Value] = '{"Agent Integration":{"icon":"fa fa-users","description":"Configuration for co-agents and real-time interaction partners"}}', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [EntityID] = '65CDC348-C4A6-4D00-A57B-2D489C56F128' AND [Name] = 'FieldCategoryInfo';
+
+/* Update FieldCategoryIcons setting (legacy) */
+
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET [Value] = '{"Agent Integration":"fa fa-users"}', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [EntityID] = '65CDC348-C4A6-4D00-A57B-2D489C56F128' AND [Name] = 'FieldCategoryIcons';
 
 /* Set categories for 36 fields */
 
@@ -9443,11 +12344,22 @@ SET
 WHERE 
    ID = '8BE14CF2-2F23-4208-8313-91259D312DB2' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: Conversation Details.AgentSessionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Related Entities',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Agent Session',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5470C38C-CF11-45DE-8DAC-54B55DCC244C' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: Conversation Details.Conversation 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Conversation Details',
+   DisplayName = 'Conversation Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9457,7 +12369,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'User Details',
+   DisplayName = 'User Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9467,7 +12379,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact Details',
+   DisplayName = 'Artifact Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9477,7 +12389,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact Version Details',
+   DisplayName = 'Artifact Version Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9487,7 +12399,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Parent Message Details',
+   DisplayName = 'Parent Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9497,7 +12409,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Agent Details',
+   DisplayName = 'Agent Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9508,29 +12420,18 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Related Entities',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Test Run Details',
+   DisplayName = 'Test Run Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '84FA19A3-7667-43C6-9273-070A9A925D7F' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: Conversation Details.AgentSessionID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Related Entities',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Agent Session',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A99DD61C-9866-47AD-8A8B-00999680FD73' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Conversation Details.ResponseForm 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
+   ExtendedType = NULL,
+   CodeType = NULL
 WHERE 
    ID = '811099AE-EFF5-4BAE-BFD1-66F68F95C36E' AND AutoUpdateCategory = 1;
 
@@ -9538,8 +12439,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
+   ExtendedType = NULL,
+   CodeType = NULL
 WHERE 
    ID = '2433C81E-0921-404B-969F-7A37DBF23D4A' AND AutoUpdateCategory = 1;
 
@@ -9547,8 +12448,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'Code',
-   CodeType = 'Other'
+   ExtendedType = NULL,
+   CodeType = NULL
 WHERE 
    ID = '5D185550-A536-43BD-8A45-1324F35B7BA1' AND AutoUpdateCategory = 1;
 
@@ -9612,6 +12513,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'External Reference ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9621,7 +12523,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Parent Run Name',
+   DisplayName = 'Parent Run (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9631,7 +12533,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Last Run Name',
+   DisplayName = 'Last Run (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9641,7 +12543,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Scheduled Job Run Name',
+   DisplayName = 'Scheduled Job Run (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9651,6 +12553,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Root Parent Run ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9660,6 +12563,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Root Last Run ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9723,8 +12627,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '6FF56877-27AE-47D9-A6CD-641088C2458E' AND AutoUpdateCategory = 1;
 
@@ -9750,8 +12654,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '6FFF2754-A03E-4DFD-AC17-FB16CDAD5346' AND AutoUpdateCategory = 1;
 
@@ -9769,8 +12673,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = 'B106357D-347F-45BE-89AA-B96298ED1DDA' AND AutoUpdateCategory = 1;
 
@@ -9788,8 +12692,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    DisplayName = 'Data',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '08037344-3952-4EBE-BA34-F87BD670C61A' AND AutoUpdateCategory = 1;
 
@@ -9816,7 +12720,6 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Execution Details & Outcome',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Last Heartbeat',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9863,7 +12766,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Agent Name',
+   DisplayName = 'Agent (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9873,7 +12776,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Conversation Name',
+   DisplayName = 'Conversation (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9883,7 +12786,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'User Name',
+   DisplayName = 'User (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9893,7 +12796,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Conversation Detail Name',
+   DisplayName = 'Conversation Detail (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9908,7 +12811,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '2C1BC9B1-CD77-4FCA-A05B-748DC848CDDB' AND AutoUpdateCategory = 1;
+   ID = '23D0314B-0894-4E38-A243-6FE6D13B79C0' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Runs.TotalTokensUsed 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9953,7 +12856,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Total Tokens Rollup',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9963,7 +12865,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Total Prompt Tokens Rollup',
+   DisplayName = 'Total Prompt Tokens (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9973,7 +12875,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Total Completion Tokens Rollup',
+   DisplayName = 'Total Completion Tokens (Rollup)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -9983,7 +12885,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Total Cost Rollup',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -10069,7 +12970,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Configuration Name',
+   DisplayName = 'Configuration (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -10079,7 +12980,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Model Override Name',
+   DisplayName = 'Model Override (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -10089,7 +12990,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Vendor Override Name',
+   DisplayName = 'Vendor Override (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -10108,7 +13009,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Test Run Name',
+   DisplayName = 'Test Run (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -10127,6 +13028,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Primary Scope Record ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -10136,8 +13038,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '21FC62F2-F9CC-40C4-A1BA-462699CCD289' AND AutoUpdateCategory = 1;
 
@@ -10154,9 +13056,720 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Primary Scope Entity Name',
+   DisplayName = 'Primary Scope Entity (Ref)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = 'ECFA16C9-1005-4B07-90CB-690623428037' AND AutoUpdateCategory = 1;
+
+/* Set categories for 78 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'AA64DA98-1DA1-4525-8CC5-BC3E3E4893B6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6EDC921F-36C4-4739-9F2A-8F9F00E95AE7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.LogoURL 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'URL',
+   CodeType = NULL
+WHERE 
+   ID = '77845738-5781-458B-AD3C-5DAE745373C2' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.TypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '91CA077D-3F59-48E1-A593-AF8686276115' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BC44595E-6FCA-42A9-AAF8-4A730088BE46' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DriverClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BB9AD9CB-40C0-41F1-B54B-750C844FD41B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.IconClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E3E05E29-CDAF-4BFE-9FC8-4450EEBE05E5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ModelSelectionMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FEEBD49D-5572-45D7-9F1E-08AE762F41D9' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultArtifactTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F58EA638-CE95-4D2A-9095-9909149B83C7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.OwnerUserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '261B4D18-464B-4AD9-9FFD-EA8B70C576D8' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ArtifactCreationMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4371BED0-7C4A-4D24-9E07-17E15D617607' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.FunctionalRequirements 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F613597C-C38F-4D71-B64A-8BBCFD87D8CC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.TechnicalDesign 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'CAEA2872-B089-4192-8FA8-1737FF357FFD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.IsRestricted 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E5B17B79-282F-4F19-9656-246DE119D588' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AgentTypePromptParams 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'FD515BF1-7E8A-4CB0-A8CE-D5C0C8C132D7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.CategoryID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7DCA7B3C-9A81-4D32-AF2E-5EA32B22D988' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Type 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C4F745BD-57E7-4F87-9B65-8BBDD2B50529' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultArtifactType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6C1C76DF-BBFF-4903-9BB9-3325B5ABB4B1' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.OwnerUser 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B098B41F-7953-473E-8257-DB6BFFEF48A0' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Category 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '353D4710-73B2-4AF5-8A93-9DC1F47FF6E5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3177830D-10A0-4003-B95D-8514974BA846' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ParentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A6F8773F-4021-45DD-B142-9BFE4F67EC87' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ExposeAsAction 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DF61AC7C-79A7-4058-96A1-85EBA9339D45' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ExecutionOrder 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '090830CE-4073-486C-BBF2-E2105BEADD91' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ExecutionMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8261D630-2560-4C03-BE14-C8A9682ABBB4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.InvocationMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3AFE3A93-073F-4EF0-A03F-BF1C1BE3C39C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Parent 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '52E74C81-D246-4B52-B7A7-91757C299671' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.RootParentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '644AA4B2-1044-430C-BCBA-245644294E02' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.EnableContextCompression 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '09AFE563-63E3-4F2B-B6F1-5945432FF07B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ContextCompressionMessageThreshold 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '451D5C8F-6749-4789-A158-658B38A74AE4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ContextCompressionPromptID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FFD209C5-48F3-45D1-9094-E76EC832EA07' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ContextCompressionMessageRetentionCount 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '73A50D68-976F-49A7-9737-12D1D26C6011' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ContextCompressionPrompt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'AD36EF69-1494-409C-A97E-FE73669DD28A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.PayloadDownstreamPaths 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '85B6AA86-796D-4970-9E35-5A483498B517' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.PayloadUpstreamPaths 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'DA784B76-66CD-434B-90BD-DEC808917E68' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.PayloadSelfReadPaths 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'EBF3B958-F07C-420B-82BE-2CB1E396A0F5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.PayloadSelfWritePaths 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '61E51FC3-8EFA-40D9-9525-F3FAD0A95DCA' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.PayloadScope 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2E542986-0164-4B9E-8457-06826A4AB892' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.FinalPayloadValidation 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '1C7959AE-F48B-4858-8383-28C3F4706314' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.FinalPayloadValidationMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8931DE12-4048-4DEB-A2A3-E821354CFFB2' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.FinalPayloadValidationMaxRetries 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'AF62DAAB-74D4-4539-9B47-58DD4A023E4B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.StartingPayloadValidation 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'B7A2371C-A22C-48EA-827E-824F8A40DA3D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.StartingPayloadValidationMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0947203D-A5CA-4ED2-895B-17A8007323FC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.InjectNotes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '37E075BD-CC4B-4AE1-8D12-7EC45B663F69' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxNotesToInject 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A8DA4C67-B2F7-4C1D-8522-A2B5B4BADA21' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.NoteInjectionStrategy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F5F6BE87-06F4-404D-A1C3-B315C562C32B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.InjectExamples 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1C9957C7-A851-4C05-83B3-F49A5FC3FE4D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxExamplesToInject 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DDEE3E91-4B0D-4264-9EF1-ACAAB8D105E5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ExampleInjectionStrategy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '291FEE7A-1245-4C82-A470-07EEB8847F1E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxCostPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '23850C5A-311A-4271-AE53-BD36921C5AA5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxTokensPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C5F8BB50-DC10-4DFC-AC45-8613C152EE94' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxIterationsPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3FA6B9F3-60BC-4631-8EB4-7ED0D04844C4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxTimePerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E64A4FF8-BAD5-491C-9D8D-E5E70378ED67' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MinExecutionsPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BCCCA2DC-8A15-4701-98E2-337FB60B463A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxExecutionsPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F0CCA759-DEA4-4F61-B233-C632EE9317E1' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultPromptEffortLevel 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DCBAEEFD-C5A2-449D-A4B9-EAB1290C2F89' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ChatHandlingOption 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BC671EC0-ED51-4F0B-A46C-50BE0CE53E51' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MessageMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '445C1618-EADB-4B34-B318-40C662141FE1' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxMessages 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F8924303-D53A-43B0-B70F-5B74FA6248D9' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AllowEphemeralClientTools 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '98BE9EE9-A855-488E-9D97-441AEBA2B34D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AcceptUnregisteredFiles 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1380146E-BF7D-4624-803A-45B1E65F0B52' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultCoAgentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Runtime Limits & Execution Settings',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Default Co-Agent',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5389E13A-6D4F-4EEF-80A1-51B828EBD9C3' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultCoAgent 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Runtime Limits & Execution Settings',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Default Co-Agent Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E1A5DA45-B7F4-4431-A4D4-664963E1A02C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.RootDefaultCoAgentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Runtime Limits & Execution Settings',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Root Default Co-Agent',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FCB06004-55F2-4245-BC9D-3762D292BF04' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentStorageProviderID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4B5A24CC-1BC2-40E3-B83E-C8E164E6CFED' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentRootPath 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BA112220-B0D8-4C6F-B63A-027EB706B132' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.InlineStorageThresholdBytes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Inline Storage Threshold (Bytes)',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'EC3D6539-FAF4-49B7-9A9B-6327249C9D06' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultStorageAccountID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '76AF4818-C79E-4DB5-8039-6B51C1C3A832' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentStorageProvider 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B6261245-1F52-43BA-9C92-A3E494D8C5BE' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultStorageAccount 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D900C3B8-F414-4468-AAA1-3CEB52C80ACD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ScopeConfig 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = 'F644A0DD-0C7D-44E5-A2D5-0DAE4F0455AD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.NoteRetentionDays 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '38ABFFF6-5E0D-4AF1-B5CC-AB46B2358FB4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ExampleRetentionDays 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A112A808-63DB-4B48-B38F-06554B912DED' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AutoArchiveEnabled 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '85774265-68C5-4067-9C2B-F70A7F21B94A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.RerankerConfiguration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '269087F5-DEBE-4B14-8FA3-5938ADCF7325' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.SearchScopeAccess 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '948E9C24-C50E-47BF-8A93-D4ABAA0BBBBB' AND AutoUpdateCategory = 1;
 

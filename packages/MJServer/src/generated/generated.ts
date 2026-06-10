@@ -8669,7 +8669,7 @@ export class MJAIAgentSessionChannel_ {
     @MaxLength(500)
     SocketUrl?: string;
         
-    @Field({nullable: true, description: `JSON of per-instance channel configuration, validated against the channel definitions ConfigSchema.`}) 
+    @Field({nullable: true, description: `JSON of per-instance channel configuration/state, validated against the channel definitions ConfigSchema.`}) 
     Config?: string;
         
     @Field({description: `Timestamp of the last activity (or heartbeat) on this channel instance.`}) 
@@ -8888,6 +8888,10 @@ export class MJAIAgentSession_ {
     @Field({nullable: true, description: `When the session was closed (terminal). NULL while the session is Active or Idle.`}) 
     ClosedAt?: Date;
         
+    @Field({nullable: true, description: `Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.`}) 
+    @MaxLength(20)
+    CloseReason?: string;
+        
     @Field() 
     _mj__CreatedAt: Date;
         
@@ -8910,9 +8914,6 @@ export class MJAIAgentSession_ {
     @MaxLength(36)
     RootLastSessionID?: string;
         
-    @Field(() => [MJAIAgentSessionChannel_])
-    MJAIAgentSessionChannels_AgentSessionIDArray: MJAIAgentSessionChannel_[]; // Link to MJAIAgentSessionChannels
-    
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_LastSessionIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
     
@@ -8921,6 +8922,9 @@ export class MJAIAgentSession_ {
     
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_AgentSessionIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
+    
+    @Field(() => [MJAIAgentSessionChannel_])
+    MJAIAgentSessionChannels_AgentSessionIDArray: MJAIAgentSessionChannel_[]; // Link to MJAIAgentSessionChannels
     
 }
 
@@ -8958,6 +8962,9 @@ export class CreateMJAIAgentSessionInput {
 
     @Field({ nullable: true })
     ClosedAt: Date | null;
+
+    @Field({ nullable: true })
+    CloseReason: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -8998,6 +9005,9 @@ export class UpdateMJAIAgentSessionInput {
 
     @Field({ nullable: true })
     ClosedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CloseReason?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9063,16 +9073,6 @@ export class MJAIAgentSessionResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAIAgentSessionChannel_])
-    async MJAIAgentSessionChannels_AgentSessionIDArray(@Root() mjaiagentsession_: MJAIAgentSession_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Session Channels', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionChannels')} WHERE ${provider.QuoteIdentifier('AgentSessionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Channels', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentsession_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Channels', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentSession_])
     async MJAIAgentSessions_LastSessionIDArray(@Root() mjaiagentsession_: MJAIAgentSession_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Sessions', userPayload);
@@ -9100,6 +9100,16 @@ export class MJAIAgentSessionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationDetails')} WHERE ${provider.QuoteIdentifier('AgentSessionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagentsession_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSessionChannel_])
+    async MJAIAgentSessionChannels_AgentSessionIDArray(@Root() mjaiagentsession_: MJAIAgentSession_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Channels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionChannels')} WHERE ${provider.QuoteIdentifier('AgentSessionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Channels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentsession_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Channels', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -9748,6 +9758,10 @@ export class MJAIAgentType_ {
     @MaxLength(36)
     DefaultStorageAccountID?: string;
         
+    @Field({nullable: true, description: `Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.`}) 
+    @MaxLength(36)
+    DefaultCoAgentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     SystemPrompt?: string;
@@ -9755,6 +9769,10 @@ export class MJAIAgentType_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     DefaultStorageAccount?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    DefaultCoAgent?: string;
         
     @Field(() => [MJAIAgent_])
     MJAIAgents_TypeIDArray: MJAIAgent_[]; // Link to MJAIAgents
@@ -9805,6 +9823,9 @@ export class CreateMJAIAgentTypeInput {
     @Field({ nullable: true })
     DefaultStorageAccountID: string | null;
 
+    @Field({ nullable: true })
+    DefaultCoAgentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9853,6 +9874,9 @@ export class UpdateMJAIAgentTypeInput {
 
     @Field({ nullable: true })
     DefaultStorageAccountID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultCoAgentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10193,6 +10217,10 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.`}) 
     AcceptUnregisteredFiles: boolean;
         
+    @Field({nullable: true, description: `Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type's DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.`}) 
+    @MaxLength(36)
+    DefaultCoAgentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -10226,8 +10254,16 @@ if this limit is exceeded.`})
     DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    DefaultCoAgent?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootDefaultCoAgentID?: string;
         
     @Field(() => [MJAIAgentAction_])
     MJAIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
@@ -10310,8 +10346,14 @@ if this limit is exceeded.`})
     @Field(() => [MJConversation_])
     MJConversations_DefaultAgentIDArray: MJConversation_[]; // Link to MJConversations
     
+    @Field(() => [MJAIAgentType_])
+    MJAIAgentTypes_DefaultCoAgentIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
+    
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_AgentIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
+    
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_DefaultCoAgentIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -10511,6 +10553,9 @@ export class CreateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AcceptUnregisteredFiles?: boolean;
+
+    @Field({ nullable: true })
+    DefaultCoAgentID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -10713,6 +10758,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AcceptUnregisteredFiles?: boolean;
+
+    @Field({ nullable: true })
+    DefaultCoAgentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11048,6 +11096,16 @@ export class MJAIAgentResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgentType_])
+    async MJAIAgentTypes_DefaultCoAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentTypes')} WHERE ${provider.QuoteIdentifier('DefaultCoAgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIAgentSession_])
     async MJAIAgentSessions_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Sessions', userPayload);
@@ -11055,6 +11113,16 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('AgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_DefaultCoAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('DefaultCoAgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

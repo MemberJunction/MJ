@@ -2921,22 +2921,22 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsedRollup
-        * * Display Name: Total Tokens Rollup
+        * * Display Name: Total Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens Rollup
+        * * Display Name: Total Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens Rollup
+        * * Display Name: Total Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
         * * Field Name: TotalCostRollup
-        * * Display Name: Total Cost Rollup
+        * * Display Name: Total Cost (Rollup)
         * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`),
     ConversationDetailID: z.string().nullable().describe(`
@@ -3067,7 +3067,7 @@ each time the agent processes a prompt step.`),
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Primary Scope Record
+        * * Display Name: Primary Scope Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
     SecondaryScopes: z.string().nullable().describe(`
@@ -3077,7 +3077,7 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference
+        * * Display Name: External Reference ID
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
@@ -3097,7 +3097,7 @@ each time the agent processes a prompt step.`),
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     LastHeartbeatAt: z.date().nullable().describe(`
         * * Field Name: LastHeartbeatAt
-        * * Display Name: Last Heartbeat
+        * * Display Name: Last Heartbeat At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`),
     AgentSessionID: z.string().nullable().describe(`
@@ -3108,59 +3108,59 @@ each time the agent processes a prompt step.`),
         * * Description: Links this run to the long-lived AIAgentSession it executed within. NULL for runs outside any real-time session. This is the persisted session reference and is distinct from the per-connection transport sessionID.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent (Ref)
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run Name
+        * * Display Name: Parent Run (Ref)
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Name
+        * * Display Name: Conversation (Ref)
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User (Ref)
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail (Ref)
         * * SQL Data Type: nvarchar(MAX)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run Name
+        * * Display Name: Last Run (Ref)
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Name
+        * * Display Name: Configuration (Ref)
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Model Override Name
+        * * Display Name: Model Override (Ref)
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Vendor Override Name
+        * * Display Name: Vendor Override (Ref)
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Name
+        * * Display Name: Scheduled Job Run (Ref)
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run (Ref)
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity Name
+        * * Display Name: Primary Scope Entity (Ref)
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
-        * * Display Name: Root Parent Run
+        * * Display Name: Root Parent Run ID
         * * SQL Data Type: uniqueidentifier`),
     RootLastRunID: z.string().nullable().describe(`
         * * Field Name: RootLastRunID
-        * * Display Name: Root Last Run
+        * * Display Name: Root Last Run ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -3315,7 +3315,7 @@ export const MJAIAgentSessionChannelSchema = z.object({
         * * Field Name: Config
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON of per-instance channel configuration, validated against the channel definitions ConfigSchema.`),
+        * * Description: JSON of per-instance channel configuration/state, validated against the channel definitions ConfigSchema.`),
     LastActiveAt: z.date().describe(`
         * * Field Name: LastActiveAt
         * * Display Name: Last Active At
@@ -3339,7 +3339,7 @@ export const MJAIAgentSessionChannelSchema = z.object({
         * * Default Value: getutcdate()`),
     Channel: z.string().describe(`
         * * Field Name: Channel
-        * * Display Name: Channel Name
+        * * Display Name: Channel
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -3406,6 +3406,17 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Closed At
         * * SQL Data Type: datetimeoffset
         * * Description: When the session was closed (terminal). NULL while the session is Active or Idle.`),
+    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Janitor'), z.literal('Shutdown')]).nullable().describe(`
+        * * Field Name: CloseReason
+        * * Display Name: Close Reason
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * Explicit
+    *   * Janitor
+    *   * Shutdown
+        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -3685,7 +3696,7 @@ export const MJAIAgentTypeSchema = z.object({
         * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.`),
@@ -3727,7 +3738,7 @@ export const MJAIAgentTypeSchema = z.object({
         * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     PromptParamsSchema: z.string().nullable().describe(`
         * * Field Name: PromptParamsSchema
-        * * Display Name: Prompt Params Schema
+        * * Display Name: Prompt Parameters Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.`),
     AssignmentStrategy: z.string().nullable().describe(`
@@ -3741,14 +3752,24 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
         * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.`),
+    DefaultCoAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultCoAgentID
+        * * Display Name: Default Co-Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
-        * * Display Name: System Prompt
+        * * Display Name: System Prompt Content
         * * SQL Data Type: nvarchar(255)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
         * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
+    DefaultCoAgent: z.string().nullable().describe(`
+        * * Field Name: DefaultCoAgent
+        * * Display Name: Default Co-Agent Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
@@ -4117,7 +4138,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold Bytes
+        * * Display Name: Inline Storage Threshold (Bytes)
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -4188,6 +4209,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.`),
+    DefaultCoAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultCoAgentID
+        * * Display Name: Default Co-Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type's DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
@@ -4220,9 +4247,17 @@ if this limit is exceeded.`),
         * * Field Name: DefaultStorageAccount
         * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
+    DefaultCoAgent: z.string().nullable().describe(`
+        * * Field Name: DefaultCoAgent
+        * * Display Name: Default Co-Agent Name
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+    RootDefaultCoAgentID: z.string().nullable().describe(`
+        * * Field Name: RootDefaultCoAgentID
+        * * Display Name: Root Default Co-Agent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -12285,31 +12320,31 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Details
+        * * Display Name: Conversation Reference
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Details
+        * * Display Name: User Reference
         * * SQL Data Type: nvarchar(100)`),
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact Details
+        * * Display Name: Artifact Reference
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version Details
+        * * Display Name: Artifact Version Reference
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Message Details
+        * * Display Name: Parent Reference
         * * SQL Data Type: nvarchar(MAX)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Details
+        * * Display Name: Agent Reference
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Details
+        * * Display Name: Test Run Reference
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -36358,7 +36393,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsedRollup
-    * * Display Name: Total Tokens Rollup
+    * * Display Name: Total Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
     */
@@ -36371,7 +36406,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens Rollup
+    * * Display Name: Total Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -36384,7 +36419,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens Rollup
+    * * Display Name: Total Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -36397,7 +36432,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCostRollup
-    * * Display Name: Total Cost Rollup
+    * * Display Name: Total Cost (Rollup)
     * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.
     */
@@ -36696,7 +36731,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Primary Scope Record
+    * * Display Name: Primary Scope Record ID
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.
     */
@@ -36722,7 +36757,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference
+    * * Display Name: External Reference ID
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -36774,7 +36809,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastHeartbeatAt
-    * * Display Name: Last Heartbeat
+    * * Display Name: Last Heartbeat At
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.
     */
@@ -36801,7 +36836,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent (Ref)
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -36810,7 +36845,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run Name
+    * * Display Name: Parent Run (Ref)
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -36819,7 +36854,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Name
+    * * Display Name: Conversation (Ref)
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -36828,7 +36863,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User (Ref)
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -36837,7 +36872,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail (Ref)
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -36846,7 +36881,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run Name
+    * * Display Name: Last Run (Ref)
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -36855,7 +36890,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Name
+    * * Display Name: Configuration (Ref)
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -36864,7 +36899,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Model Override Name
+    * * Display Name: Model Override (Ref)
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -36873,7 +36908,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Vendor Override Name
+    * * Display Name: Vendor Override (Ref)
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -36882,7 +36917,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Name
+    * * Display Name: Scheduled Job Run (Ref)
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -36891,7 +36926,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run (Ref)
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -36900,7 +36935,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity Name
+    * * Display Name: Primary Scope Entity (Ref)
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -36909,7 +36944,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: RootParentRunID
-    * * Display Name: Root Parent Run
+    * * Display Name: Root Parent Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentRunID(): string | null {
@@ -36918,7 +36953,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: RootLastRunID
-    * * Display Name: Root Last Run
+    * * Display Name: Root Last Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootLastRunID(): string | null {
@@ -37294,7 +37329,7 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
     * * Field Name: Config
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON of per-instance channel configuration, validated against the channel definitions ConfigSchema.
+    * * Description: JSON of per-instance channel configuration/state, validated against the channel definitions ConfigSchema.
     * * NOTE: Property renamed to `Config_` to avoid conflict with BaseEntity.Config
     */
     get Config_(): string | null {
@@ -37353,7 +37388,7 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
 
     /**
     * * Field Name: Channel
-    * * Display Name: Channel Name
+    * * Display Name: Channel
     * * SQL Data Type: nvarchar(100)
     */
     get Channel(): string {
@@ -37527,6 +37562,25 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
     set ClosedAt(value: Date | null) {
         this.Set('ClosedAt', value);
+    }
+
+    /**
+    * * Field Name: CloseReason
+    * * Display Name: Close Reason
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * Explicit
+    *   * Janitor
+    *   * Shutdown
+    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.
+    */
+    get CloseReason(): 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null {
+        return this.Get('CloseReason');
+    }
+    set CloseReason(value: 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null) {
+        this.Set('CloseReason', value);
     }
 
     /**
@@ -38319,7 +38373,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.
@@ -38419,7 +38473,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: PromptParamsSchema
-    * * Display Name: Prompt Params Schema
+    * * Display Name: Prompt Parameters Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.
     */
@@ -38458,8 +38512,22 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * * Field Name: DefaultCoAgentID
+    * * Display Name: Default Co-Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.
+    */
+    get DefaultCoAgentID(): string | null {
+        return this.Get('DefaultCoAgentID');
+    }
+    set DefaultCoAgentID(value: string | null) {
+        this.Set('DefaultCoAgentID', value);
+    }
+
+    /**
     * * Field Name: SystemPrompt
-    * * Display Name: System Prompt
+    * * Display Name: System Prompt Content
     * * SQL Data Type: nvarchar(255)
     */
     get SystemPrompt(): string | null {
@@ -38473,6 +38541,15 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     */
     get DefaultStorageAccount(): string | null {
         return this.Get('DefaultStorageAccount');
+    }
+
+    /**
+    * * Field Name: DefaultCoAgent
+    * * Display Name: Default Co-Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultCoAgent(): string | null {
+        return this.Get('DefaultCoAgent');
     }
 }
 
@@ -39450,7 +39527,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold Bytes
+    * * Display Name: Inline Storage Threshold (Bytes)
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -39618,6 +39695,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultCoAgentID
+    * * Display Name: Default Co-Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type's DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.
+    */
+    get DefaultCoAgentID(): string | null {
+        return this.Get('DefaultCoAgentID');
+    }
+    set DefaultCoAgentID(value: string | null) {
+        this.Set('DefaultCoAgentID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -39690,12 +39781,30 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultCoAgent
+    * * Display Name: Default Co-Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultCoAgent(): string | null {
+        return this.Get('DefaultCoAgent');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: RootDefaultCoAgentID
+    * * Display Name: Root Default Co-Agent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootDefaultCoAgentID(): string | null {
+        return this.Get('RootDefaultCoAgentID');
     }
 }
 
@@ -61177,7 +61286,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Details
+    * * Display Name: Conversation Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -61186,7 +61295,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: User
-    * * Display Name: User Details
+    * * Display Name: User Reference
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -61195,7 +61304,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Artifact
-    * * Display Name: Artifact Details
+    * * Display Name: Artifact Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string | null {
@@ -61204,7 +61313,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version Details
+    * * Display Name: Artifact Version Reference
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -61213,7 +61322,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Message Details
+    * * Display Name: Parent Reference
     * * SQL Data Type: nvarchar(MAX)
     */
     get Parent(): string | null {
@@ -61222,7 +61331,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Details
+    * * Display Name: Agent Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -61231,7 +61340,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Details
+    * * Display Name: Test Run Reference
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {

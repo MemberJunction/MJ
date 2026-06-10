@@ -64,7 +64,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PromptParamsSchema"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -122,7 +122,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AssignmentStrategy"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -133,13 +133,32 @@
     <mj-collapsible-panel
         SectionKey="storageSettings"
         SectionName="Storage Settings"
-        Icon="fa fa-database"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="false"
             FieldName="DefaultStorageAccountID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Agent Integration Section -->
+    <mj-collapsible-panel
+        SectionKey="agentIntegration"
+        SectionName="Agent Integration"
+        Icon="fa fa-users"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="DefaultCoAgentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"

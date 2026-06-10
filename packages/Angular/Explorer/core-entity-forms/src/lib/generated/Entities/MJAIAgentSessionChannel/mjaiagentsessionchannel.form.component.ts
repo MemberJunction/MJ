@@ -16,7 +16,7 @@ export class MJAIAgentSessionChannelFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'sessionContext', sectionName: 'Session Context', isExpanded: true },
-            { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: true },
+            { sectionKey: 'connectionStatus', sectionName: 'Connection Status', isExpanded: true },
             { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
