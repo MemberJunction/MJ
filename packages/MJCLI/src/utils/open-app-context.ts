@@ -38,9 +38,14 @@ async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
   _initPromise = (async () => {
     const config = getValidatedConfig();
     const platform = (config.dbPlatform ?? 'sqlserver').toLowerCase();
-    _provider = platform === 'postgresql'
-      ? await initPostgresProvider(config)
-      : await initSqlServerProvider(config);
+    // Composition root: select the concrete provider initializer from a table keyed by platform
+    // (data-driven — no `platform === …` branching). This is the single place a platform string is
+    // resolved to a provider; everything downstream uses the polymorphic DatabaseProviderBase.
+    const PROVIDER_INITIALIZERS: Record<string, (c: CliConfig) => Promise<DatabaseProviderBase>> = {
+      sqlserver: initSqlServerProvider,
+      postgresql: initPostgresProvider,
+    };
+    _provider = await (PROVIDER_INITIALIZERS[platform] ?? initSqlServerProvider)(config);
     return _provider;
   })();
 

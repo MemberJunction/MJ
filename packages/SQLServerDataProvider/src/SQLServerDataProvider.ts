@@ -276,6 +276,31 @@ export class SQLServerDataProvider
     return new SQLServerDialect();
   }
 
+  /**
+   * SQL Server has no `DROP SCHEMA ... CASCADE`, so the schema must be emptied first. Each batch
+   * catalog-drives the DROP of one object class (FKs → views → procedures → functions → tables →
+   * user-defined types → sequences), then the schema itself is dropped. QUOTENAME() guards every
+   * dynamic identifier against injection; the schema name is passed as an escaped string literal.
+   */
+  public override async DropSchemaWithContents(schemaName: string): Promise<void> {
+    const s = schemaName.replace(/'/g, "''");
+    const dropByCatalog = (selectExpr: string): string =>
+      `DECLARE @sql NVARCHAR(MAX) = N'';\n${selectExpr}\nIF @sql <> N'' EXEC sp_executesql @sql;`;
+    const batches = [
+      dropByCatalog(`SELECT @sql = @sql + N'ALTER TABLE ' + QUOTENAME('${s}') + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id)) + N' DROP CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.foreign_keys WHERE SCHEMA_NAME(schema_id) = '${s}';`),
+      dropByCatalog(`SELECT @sql = @sql + N'DROP VIEW ' + QUOTENAME('${s}') + N'.' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.views WHERE SCHEMA_NAME(schema_id) = '${s}';`),
+      dropByCatalog(`SELECT @sql = @sql + N'DROP PROCEDURE ' + QUOTENAME('${s}') + N'.' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.procedures WHERE SCHEMA_NAME(schema_id) = '${s}';`),
+      dropByCatalog(`SELECT @sql = @sql + N'DROP FUNCTION ' + QUOTENAME('${s}') + N'.' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.objects WHERE type IN ('FN','IF','TF') AND SCHEMA_NAME(schema_id) = '${s}';`),
+      dropByCatalog(`SELECT @sql = @sql + N'DROP TABLE ' + QUOTENAME('${s}') + N'.' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.tables WHERE SCHEMA_NAME(schema_id) = '${s}';`),
+      dropByCatalog(`SELECT @sql = @sql + N'DROP TYPE ' + QUOTENAME('${s}') + N'.' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.types WHERE SCHEMA_NAME(schema_id) = '${s}' AND is_user_defined = 1;`),
+      dropByCatalog(`SELECT @sql = @sql + N'DROP SEQUENCE ' + QUOTENAME('${s}') + N'.' + QUOTENAME(name) + N';' + CHAR(10) FROM sys.sequences WHERE SCHEMA_NAME(schema_id) = '${s}';`),
+    ];
+    for (const batch of batches) {
+      await this.ExecuteSQL(batch);
+    }
+    await this.ExecuteSQL(`DROP SCHEMA ${this.QuoteIdentifier(schemaName)}`);
+  }
+
   public override QuoteIdentifier(name: string): string {
     return `[${name}]`;
   }

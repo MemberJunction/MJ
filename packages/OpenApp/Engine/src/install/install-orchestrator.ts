@@ -22,7 +22,17 @@ import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDyna
 import { AngularConfigManager } from './angular-config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider, DatabasePlatform } from '@memberjunction/core';
+
+/**
+ * Resolves the migration source directory for a target platform, expressed as a lookup table
+ * rather than `if (platform === …)`. PostgreSQL apps keep their converted set in a sibling `-pg`
+ * folder (the same convention `mj migrate` uses); other platforms use the manifest directory as-is.
+ */
+const MIGRATION_DIR_RESOLVERS: Record<DatabasePlatform, (manifestDir: string) => string> = {
+  sqlserver: (manifestDir) => manifestDir,
+  postgresql: (manifestDir) => manifestDir.replace(/\bmigrations\b/, 'migrations-pg'),
+};
 import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
@@ -939,9 +949,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   // app's converted PG migration set. The target platform is read from the provider
   // (single source of truth).
   const platform = context.DatabaseProvider.PlatformKey;
-  const migrationsDirectory = platform === 'postgresql'
-    ? manifest.migrations.directory.replace(/\bmigrations\b/, 'migrations-pg')
-    : manifest.migrations.directory;
+  const migrationsDirectory = MIGRATION_DIR_RESOLVERS[platform](manifest.migrations.directory);
 
   const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, migrationsDirectory, tempDir, context.GitHubOptions);
 
