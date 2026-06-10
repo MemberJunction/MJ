@@ -403,6 +403,11 @@ export class VoiceSessionService {
    *   {@link ActiveChannels$}). The server only DECLARES these — execution stays in the
    *   browser via handlers registered with {@link RegisterClientToolHandler}. This is an
    *   extension point for hosts with bespoke (non-channel) UI tools; most callers omit it.
+   * @param coAgentId Optional EXPLICIT co-agent choice (`MJ: AI Agents.ID` of an Active,
+   *   Realtime-type agent) — the highest-precedence step of the server's co-agent resolution
+   *   chain. When set, the server uses exactly that co-agent and FAILS with a clear reason if
+   *   it can't (no silent fallback). Omit to let server metadata drive the choice: the target
+   *   agent's `DefaultCoAgentID`, then its agent type's, then the global Voice Co-Agent.
    */
   public async StartVoiceSession(
     targetAgentId: string,
@@ -410,7 +415,8 @@ export class VoiceSessionService {
     lastSessionId?: string | null,
     agentName?: string | null,
     preferredModelId?: string | null,
-    clientTools?: RealtimeToolDefinition[] | null
+    clientTools?: RealtimeToolDefinition[] | null,
+    coAgentId?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -427,7 +433,7 @@ export class VoiceSessionService {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId);
       this.agentSessionId = session.AgentSessionId;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
@@ -932,11 +938,12 @@ export class VoiceSessionService {
     conversationId?: string | null,
     lastSessionId?: string | null,
     preferredModelId?: string | null,
-    clientTools?: RealtimeToolDefinition[] | null
+    clientTools?: RealtimeToolDefinition[] | null,
+    coAgentId?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId) {
           AgentSessionId
           ConversationId
           Provider
@@ -954,7 +961,8 @@ export class VoiceSessionService {
       conversationId: conversationId ?? null,
       lastSessionId: lastSessionId ?? null,
       preferredModelId: preferredModelId ?? null,
-      clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null
+      clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null,
+      coAgentId: coAgentId ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;

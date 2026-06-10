@@ -148,6 +148,8 @@ describe('SessionManager.CloseSession', () => {
         expect(ok).toBe(true);
         expect(session.Status).toBe('Closed');
         expect(session.ClosedAt).toBeInstanceOf(Date);
+        // No reason supplied → the default stamps the common user-initiated case.
+        expect(session.CloseReason).toBe('Explicit');
         expect(channel.Status).toBe('Disconnected');
         expect(channel.DisconnectedAt).toBeInstanceOf(Date);
         // No observability run ids in this session's config — finalize is not invoked.
@@ -183,6 +185,44 @@ describe('SessionManager.CloseSession', () => {
         await mgr.CloseSession('session-no-runs', makeUser(), provider);
 
         expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
+    });
+
+    it('stamps CloseReason = Explicit by default (untouched call sites get the right reason)', async () => {
+        const session = makeSessionEntity({ ID: 'session-default', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSession('session-default', makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.CloseReason).toBe('Explicit');
+    });
+
+    it.each(['Janitor', 'Shutdown', 'Error', 'Explicit'] as const)(
+        'stamps the supplied closeReason: %s',
+        async (reason) => {
+            const session = makeSessionEntity({ ID: `session-${reason}`, Status: 'Active' });
+            const { provider } = makeProvider(() => session);
+            const mgr = new SessionManager();
+
+            const ok = await mgr.CloseSession(`session-${reason}`, makeUser(), provider, reason);
+
+            expect(ok).toBe(true);
+            expect(session.Status).toBe('Closed');
+            expect(session.CloseReason).toBe(reason);
+        },
+    );
+
+    it('does not overwrite the original CloseReason on an idempotent re-close', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Closed', CloseReason: 'Janitor' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSession('session-1', makeUser(), provider, 'Explicit');
+
+        expect(ok).toBe(true);
+        expect(session.CloseReason).toBe('Janitor'); // untouched — no save happened
+        expect(session.Save).not.toHaveBeenCalled();
     });
 
     it('is idempotent — closing an already-Closed session is a no-op returning true', async () => {

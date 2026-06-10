@@ -10,7 +10,7 @@ import {
 } from '@memberjunction/core';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { GetHostInstanceID, GetHostNamePrefix } from './HostInstance.js';
-import { SessionManager } from './SessionManager.js';
+import { SessionManager, SessionCloseReason } from './SessionManager.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -45,6 +45,10 @@ const DEFAULT_CONFIG: SessionJanitorConfig = {
  * 2. **Global staleness sweep ({@link RunStalenessSweep})** — run periodically on every instance.
  *    Closes any `Active`/`Idle` session whose `LastActiveAt` is older than `closeThresholdMinutes`,
  *    regardless of host. Catches sessions whose owner died without a clean reboot (OOM, scaled-down pod).
+ *
+ * Both sweeps stamp `CloseReason = 'Janitor'`. A third, shutdown-time path —
+ * {@link RunShutdownDrain}, invoked from {@link Shutdown} during the graceful ShutdownRegistry
+ * drain — closes this exact host instance's own live sessions with `CloseReason = 'Shutdown'`.
  *
  * Both sweeps are **idempotent and safe to run concurrently** on every instance: closing an
  * already-`Closed` session is a no-op, and the close path is last-writer-wins. Both page with keyset
@@ -100,9 +104,38 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         }
     }
 
-    /** {@link IShutdownable}: clear the timer on graceful shutdown. Never throws. */
+    /**
+     * {@link IShutdownable}: clear the timer, then drain this host's own live sessions so a
+     * graceful stop never strands `Active`/`Idle` rows for the next boot's janitor to mop up.
+     * Drained sessions are stamped `CloseReason = 'Shutdown'` (vs. `'Janitor'` for crash orphans),
+     * so the dashboards can tell a clean redeploy from a reconciled crash. Never throws; the drain
+     * is skipped when {@link Start} was never called (no captured provider/user).
+     */
     public async Shutdown(): Promise<void> {
         this.Stop();
+        if (this._provider && this._systemUser) {
+            try {
+                await this.RunShutdownDrain(this._provider, this._systemUser);
+            } catch (err) {
+                LogError(`SessionJanitor shutdown drain failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+    }
+
+    /**
+     * Close every `Active`/`Idle` session owned by **this exact host instance** (current boot),
+     * stamping `CloseReason = 'Shutdown'`. Invoked from {@link Shutdown} during the graceful
+     * shutdown drain; exposed publicly for tests and for hosts that want to drain explicitly.
+     * Returns the number of sessions closed.
+     */
+    public async RunShutdownDrain(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
+        const current = GetHostInstanceID().replace(/'/g, "''");
+        const filter = `Status IN ('Active','Idle') AND HostInstanceID = '${current}'`;
+        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Shutdown');
+        if (closed > 0) {
+            LogStatus(`[SessionJanitor] Shutdown drain closed ${closed} live session(s) owned by this host instance`);
+        }
+        return closed;
     }
 
     /**
@@ -116,7 +149,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             `Status IN ('Active','Idle') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
             `AND HostInstanceID <> '${current}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser);
+        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor');
         if (closed > 0) {
             LogStatus(`[SessionJanitor] Startup recovery closed ${closed} orphaned session(s) from a prior boot of this host`);
         }
@@ -130,7 +163,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     public async RunStalenessSweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
         const cutoffIso = new Date(Date.now() - this._config.closeThresholdMinutes * 60_000).toISOString();
         const filter = `Status IN ('Active','Idle') AND LastActiveAt < '${cutoffIso}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser);
+        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor');
         if (closed > 0) {
             LogStatus(`[SessionJanitor] Staleness sweep closed ${closed} stale session(s) (>${this._config.closeThresholdMinutes}m idle)`);
         }
@@ -173,13 +206,15 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
 
     /**
      * Page through every session matching `filter` with keyset (`AfterKey`) pagination and close each
-     * via {@link SessionManager.CloseSession}. Returns the number successfully closed. A `Closed`-by-now
-     * row (raced by another instance) is a harmless no-op.
+     * via {@link SessionManager.CloseSession}, stamping `closeReason` on every row it transitions.
+     * Returns the number successfully closed. A `Closed`-by-now row (raced by another instance) is a
+     * harmless no-op that keeps its original reason.
      */
     private async sweepAndClose(
         filter: string,
         provider: IMetadataProvider,
         systemUser: UserInfo,
+        closeReason: SessionCloseReason,
     ): Promise<number> {
         let closedCount = 0;
         let afterKey: CompositeKey | undefined;
@@ -194,7 +229,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                 break;
             }
             for (const session of page) {
-                const closed = await this.sessionManager.CloseSession(session.ID, systemUser, provider);
+                const closed = await this.sessionManager.CloseSession(session.ID, systemUser, provider, closeReason);
                 if (closed) {
                     closedCount++;
                 }

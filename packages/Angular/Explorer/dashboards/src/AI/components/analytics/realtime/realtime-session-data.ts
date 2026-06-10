@@ -5,7 +5,7 @@
  * and the delegated `MJ: AI Agent Runs` (linked via `AgentSessionID`) in a
  * single batched `RunViews` call, then aggregates everything client-side into
  * per-session rollups (target agent, channel set, delegated-run count, token /
- * cost totals, duration, janitor-close heuristic).
+ * cost totals, duration, close cause from the persisted `CloseReason` column).
  *
  * Used by both `AnalyticsRealtimeOverviewComponent` (KPIs + charts) and
  * `AnalyticsRealtimeSessionsComponent` (management grid) so the two sections
@@ -17,6 +17,13 @@ import { NormalizeUUID } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 // ── Raw row shapes (ResultType: 'simple', narrowed Fields) ──
+
+/**
+ * Why a session was closed, as stamped server-side by `SessionManager.CloseSession`
+ * (mirrors `AIAgentSessionEntity.CloseReason`). `null` means a legacy row closed
+ * before the column existed — rendered as "unknown".
+ */
+export type RealtimeSessionCloseReason = 'Error' | 'Explicit' | 'Janitor' | 'Shutdown';
 
 export interface RealtimeSessionRecord {
     ID: string;
@@ -31,6 +38,7 @@ export interface RealtimeSessionRecord {
     Config: string | null;
     LastActiveAt: string;
     ClosedAt: string | null;
+    CloseReason: RealtimeSessionCloseReason | null;
     __mj_CreatedAt: string;
 }
 
@@ -83,10 +91,17 @@ export interface RealtimeSessionRollup {
     /** Session resumed from a prior one (LastSessionID set). */
     IsResumed: boolean;
     /**
-     * Heuristic: Closed sessions whose ClosedAt trails LastActiveAt by more
-     * than the janitor gap were force-closed by the lifecycle janitor's
-     * staleness sweep (which only fires after >=15 minutes of silence) rather
-     * than closed by the user at hang-up time.
+     * Close cause persisted by the server (`AIAgentSession.CloseReason`).
+     * `null` either means the session is still open, or it's a legacy row
+     * closed before the column existed ("unknown" in the UI).
+     */
+    CloseReason: RealtimeSessionCloseReason | null;
+    /**
+     * `CloseReason === 'Janitor'` — the session was force-closed by the
+     * lifecycle janitor (startup orphan recovery or staleness sweep) rather
+     * than ended explicitly. Derived from the real column; the old
+     * ClosedAt−LastActiveAt timing heuristic has been retired, so legacy
+     * NULL-reason rows report `false` here and "unknown" in the UI.
      */
     IsJanitorClosed: boolean;
 }
@@ -105,12 +120,9 @@ export interface RealtimeSessionsDataset {
 
 // ── Constants ──
 
-/** ClosedAt − LastActiveAt gap that flags a close as janitor-swept (sweep threshold is 15m). */
-const JANITOR_GAP_MS = 10 * 60 * 1000;
-
 const SESSION_FIELDS = [
     'ID', 'AgentID', 'Agent', 'UserID', 'User', 'Status', 'ConversationID',
-    'LastSessionID', 'HostInstanceID', 'Config', 'LastActiveAt', 'ClosedAt', '__mj_CreatedAt'
+    'LastSessionID', 'HostInstanceID', 'Config', 'LastActiveAt', 'ClosedAt', 'CloseReason', '__mj_CreatedAt'
 ];
 
 const SESSION_CHANNEL_FIELDS = ['ID', 'AgentSessionID', 'Channel', 'Status', '__mj_CreatedAt'];
@@ -246,10 +258,7 @@ function buildRollup(
     const endAt = session.ClosedAt ? new Date(session.ClosedAt) : new Date(session.LastActiveAt);
     const durationMs = Math.max(0, endAt.getTime() - startedAt.getTime());
 
-    const isJanitorClosed =
-        session.Status === 'Closed' &&
-        session.ClosedAt != null &&
-        new Date(session.ClosedAt).getTime() - new Date(session.LastActiveAt).getTime() >= JANITOR_GAP_MS;
+    const closeReason = session.Status === 'Closed' ? session.CloseReason ?? null : null;
 
     const targetAgentID = config.targetAgentID ?? null;
     return {
@@ -263,7 +272,8 @@ function buildRollup(
         StartedAt: startedAt,
         DurationMs: durationMs,
         IsResumed: session.LastSessionID != null,
-        IsJanitorClosed: isJanitorClosed
+        CloseReason: closeReason,
+        IsJanitorClosed: closeReason === 'Janitor'
     };
 }
 
@@ -278,6 +288,43 @@ function parseSessionConfig(raw: string | null): RealtimeSessionConfigJson {
 }
 
 // ── Formatting helpers (shared by both sections) ──
+
+/** How a session's status pill should render — label, hover title, and Font Awesome icon. */
+export interface SessionStatusDisplay {
+    Label: string;
+    Title: string;
+    /** Icon class for the pill; empty for `Active` (the template renders the pulsing live dot instead). */
+    Icon: string;
+}
+
+/**
+ * Builds the status-pill presentation for a session from its `Status` and persisted
+ * `CloseReason`. `Closed` sessions surface the real close cause; a `null` reason
+ * (legacy rows written before the column existed) renders as "unknown".
+ */
+export function BuildSessionStatusDisplay(
+    status: RealtimeSessionRecord['Status'],
+    closeReason: RealtimeSessionCloseReason | null
+): SessionStatusDisplay {
+    if (status === 'Active') {
+        return { Label: 'Active', Title: 'Live duplex session', Icon: '' };
+    }
+    if (status === 'Idle') {
+        return { Label: 'Idle', Title: 'Holding — past the idle threshold', Icon: 'fa-solid fa-pause' };
+    }
+    switch (closeReason) {
+        case 'Explicit':
+            return { Label: 'Closed', Title: 'Closed explicitly (user hang-up / close mutation)', Icon: 'fa-solid fa-circle-stop' };
+        case 'Janitor':
+            return { Label: 'Closed · janitor', Title: 'Force-closed by the lifecycle janitor (staleness sweep / orphan reconciliation)', Icon: 'fa-solid fa-broom' };
+        case 'Shutdown':
+            return { Label: 'Closed · shutdown', Title: 'Closed by the host’s graceful shutdown drain', Icon: 'fa-solid fa-power-off' };
+        case 'Error':
+            return { Label: 'Closed · error', Title: 'Closed by a failure-path teardown', Icon: 'fa-solid fa-triangle-exclamation' };
+        default:
+            return { Label: 'Closed · unknown', Title: 'Closed before close-cause tracking existed (legacy row)', Icon: 'fa-solid fa-circle-question' };
+    }
+}
 
 /** Formats a duration as m:ss (or h:mm:ss past the hour) like the mockups' 4:51 / 11:18. */
 export function FormatSessionDuration(ms: number): string {

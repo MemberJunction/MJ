@@ -29,6 +29,7 @@ interface FakeSession {
     Save: () => Promise<boolean>;
     LatestResult?: { CompleteMessage?: string };
     ClosedAt?: Date | null;
+    CloseReason?: string | null;
 }
 
 function makeUser(): UserInfo {
@@ -43,8 +44,10 @@ function makeUser(): UserInfo {
 function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
     provider: IMetadataProvider;
     closedIds: string[];
+    closedReasons: Map<string, string | null>;
 } {
     const closedIds: string[] = [];
+    const closedReasons = new Map<string, string | null>();
     const provider = {
         GetEntityObject: vi.fn(async (entityName: string) => {
             // Both the session-load and (within close) channel rows come through here in real code,
@@ -63,6 +66,7 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
                     if (entity.Status === 'Closed') {
                         store.set(entity.ID, 'Closed');
                         closedIds.push(entity.ID);
+                        closedReasons.set(entity.ID, entity.CloseReason ?? null);
                     }
                     return true;
                 }),
@@ -71,7 +75,7 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
             return entity as unknown as Awaited<ReturnType<IMetadataProvider['GetEntityObject']>>;
         }),
     } as unknown as IMetadataProvider;
-    return { provider, closedIds };
+    return { provider, closedIds, closedReasons };
 }
 
 /**
@@ -110,12 +114,14 @@ describe('SessionJanitor.RunStartupRecovery', () => {
         sessionPages = [{ Success: true, Results: [orphan] }];
 
         const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['orphan-1', 'Active']]);
-        const { provider, closedIds } = makeProvider(store);
+        const { provider, closedIds, closedReasons } = makeProvider(store);
 
         const count = await SessionJanitor.Instance.RunStartupRecovery(provider, makeUser());
 
         expect(count).toBe(1);
         expect(closedIds).toContain('orphan-1');
+        // Orphan recovery stamps the janitor close cause.
+        expect(closedReasons.get('orphan-1')).toBe('Janitor');
 
         // Assert the recovery filter targets this host's *other* boots, never the current instance.
         const filter = sessionSweepCalls()[0][0].ExtraFilter as string;
@@ -131,12 +137,14 @@ describe('SessionJanitor.RunStalenessSweep', () => {
         sessionPages = [{ Success: true, Results: [stale] }];
 
         const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['stale-1', 'Idle']]);
-        const { provider, closedIds } = makeProvider(store);
+        const { provider, closedIds, closedReasons } = makeProvider(store);
 
         const count = await SessionJanitor.Instance.RunStalenessSweep(provider, makeUser());
 
         expect(count).toBe(1);
         expect(closedIds).toContain('stale-1');
+        // Staleness sweep stamps the janitor close cause.
+        expect(closedReasons.get('stale-1')).toBe('Janitor');
 
         const filter = sessionSweepCalls()[0][0].ExtraFilter as string;
         expect(filter).toContain("Status IN ('Active','Idle')");
@@ -185,5 +193,42 @@ describe('SessionJanitor.RunStalenessSweep', () => {
         const count = await SessionJanitor.Instance.RunStalenessSweep(provider, makeUser());
         expect(count).toBe(0);
         expect(closedIds.length).toBe(0);
+    });
+});
+
+describe('SessionJanitor shutdown drain', () => {
+    it('RunShutdownDrain closes only this exact host instance, stamping CloseReason = Shutdown', async () => {
+        const live = { ID: 'mine-1', Status: 'Active' };
+        sessionPages = [{ Success: true, Results: [live] }];
+
+        const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['mine-1', 'Active']]);
+        const { provider, closedIds, closedReasons } = makeProvider(store);
+
+        const count = await SessionJanitor.Instance.RunShutdownDrain(provider, makeUser());
+
+        expect(count).toBe(1);
+        expect(closedIds).toContain('mine-1');
+        expect(closedReasons.get('mine-1')).toBe('Shutdown');
+
+        // The drain targets the CURRENT boot's exact instance id — not the host-prefix orphan filter.
+        const filter = sessionSweepCalls()[0][0].ExtraFilter as string;
+        expect(filter).toContain("Status IN ('Active','Idle')");
+        expect(filter).toContain(`HostInstanceID = '${GetHostInstanceID()}'`);
+    });
+
+    it('Shutdown() drains this host\'s live sessions with the Shutdown reason after Start()', async () => {
+        // Start consumes one (empty) page for startup recovery; queue the drain page after it.
+        sessionPages = [
+            { Success: true, Results: [] },                                   // startup recovery
+            { Success: true, Results: [{ ID: 'mine-2', Status: 'Idle' }] },   // shutdown drain
+        ];
+        const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['mine-2', 'Idle']]);
+        const { provider, closedIds, closedReasons } = makeProvider(store);
+
+        await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+        await SessionJanitor.Instance.Shutdown();
+
+        expect(closedIds).toContain('mine-2');
+        expect(closedReasons.get('mine-2')).toBe('Shutdown');
     });
 });

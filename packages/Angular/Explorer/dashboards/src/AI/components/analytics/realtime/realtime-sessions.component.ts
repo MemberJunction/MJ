@@ -5,9 +5,9 @@
  * calls, idle holds, and closed history — with the channels each session
  * opened and the agent runs it delegated. KPI strip up top, a filter bar
  * (search · status · target agent · user · host), the data grid (Agent →
- * Target, status pills incl. the janitor-closed hint, channel icons, run
- * count, tokens / cost, started, duration, host instance), and row drill-in
- * to the session record.
+ * Target, status pills incl. the persisted close cause — explicit / janitor /
+ * shutdown / error / unknown-legacy, channel icons, run count, tokens / cost,
+ * started, duration, host instance), and row drill-in to the session record.
  */
 
 import {
@@ -20,7 +20,8 @@ import { KPICardData } from '../../widgets/kpi-card.component';
 import {
     RealtimeSessionRollup, RealtimeSessionsDataset,
     LoadRealtimeSessionsDataset, FormatSessionDuration, FormatTokenCount,
-    FormatSessionCost, FormatSessionStart, ChannelIconClass
+    FormatSessionCost, FormatSessionStart, ChannelIconClass,
+    BuildSessionStatusDisplay
 } from './realtime-session-data';
 
 // ── View models ──
@@ -34,7 +35,8 @@ interface SessionGridRow {
     StatusLabel: string;
     StatusClass: string;
     StatusTitle: string;
-    IsJanitorClosed: boolean;
+    /** Pill icon (close cause for Closed rows); empty for Active, which renders the live dot. */
+    StatusIcon: string;
     IsResumed: boolean;
     ChannelIcons: { Icon: string; Name: string }[];
     ChannelCount: number;
@@ -150,9 +152,7 @@ const PAGE_SIZE = 25;
                                     <td>
                                         <span class="status-pill" [class]="row.StatusClass" [title]="row.StatusTitle">
                                             @if (row.Status === 'Active') { <span class="dot dot--live"></span> }
-                                            @if (row.Status === 'Idle') { <i class="fa-solid fa-pause"></i> }
-                                            @if (row.Status === 'Closed' && !row.IsJanitorClosed) { <i class="fa-solid fa-circle-stop"></i> }
-                                            @if (row.IsJanitorClosed) { <i class="fa-solid fa-broom"></i> }
+                                            @else if (row.StatusIcon) { <i [class]="row.StatusIcon"></i> }
                                             {{ row.StatusLabel }}
                                         </span>
                                     </td>
@@ -609,18 +609,17 @@ export class AnalyticsRealtimeSessionsComponent extends BaseAngularComponent imp
         const host = s.Record.HostInstanceID ?? '—';
         const user = s.Record.User;
         const agent = s.Record.Agent ?? 'Unknown';
+        const statusDisplay = BuildSessionStatusDisplay(s.Record.Status, s.CloseReason);
         return {
             ID: s.Record.ID,
             Agent: agent,
             Target: target,
             User: user,
             Status: s.Record.Status,
-            StatusLabel: s.IsJanitorClosed ? 'Closed · janitor' : s.Record.Status,
+            StatusLabel: statusDisplay.Label,
             StatusClass: 'status-pill status-' + s.Record.Status.toLowerCase(),
-            StatusTitle: s.IsJanitorClosed
-                ? 'Force-closed by the lifecycle janitor (staleness sweep / orphan reconciliation)'
-                : '',
-            IsJanitorClosed: s.IsJanitorClosed,
+            StatusTitle: statusDisplay.Title,
+            StatusIcon: statusDisplay.Icon,
             IsResumed: s.IsResumed,
             ChannelIcons: s.ChannelNames.map(name => ({ Icon: ChannelIconClass(name), Name: name })),
             ChannelCount: s.ChannelNames.length,

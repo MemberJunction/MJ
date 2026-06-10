@@ -21,7 +21,8 @@ import { KPICardData } from '../../widgets/kpi-card.component';
 import {
     RealtimeSessionRollup, RealtimeSessionsDataset,
     LoadRealtimeSessionsDataset, FormatSessionDuration, FormatTokenCount,
-    FormatSessionCost, ChannelIconClass, TimeRangeToMs
+    FormatSessionCost, ChannelIconClass, TimeRangeToMs,
+    BuildSessionStatusDisplay
 } from './realtime-session-data';
 
 // ── View models ──
@@ -55,7 +56,10 @@ interface RecentSessionRow {
     User: string;
     Status: string;
     StatusClass: string;
-    IsJanitorClosed: boolean;
+    StatusLabel: string;
+    StatusTitle: string;
+    /** Pill icon (close cause for Closed rows); empty for Active, which renders the live dot. */
+    StatusIcon: string;
     ChannelIcons: string[];
     Runs: number;
     Cost: string;
@@ -200,10 +204,10 @@ const DONUT_COLORS = [
                                     <td>{{ row.User }}</td>
                                     <td>
                                         <span class="status-pill" [class]="row.StatusClass"
-                                              [title]="row.IsJanitorClosed ? 'Force-closed by the lifecycle janitor' : ''">
+                                              [title]="row.StatusTitle">
                                             @if (row.Status === 'Active') { <span class="dot dot--live"></span> }
-                                            @if (row.IsJanitorClosed) { <i class="fa-solid fa-broom"></i> }
-                                            {{ row.IsJanitorClosed ? 'Closed · janitor' : row.Status }}
+                                            @else if (row.StatusIcon) { <i [class]="row.StatusIcon"></i> }
+                                            {{ row.StatusLabel }}
                                         </span>
                                     </td>
                                     <td>
@@ -778,19 +782,24 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
         this.RecentSessions = [...this.windowSessions]
             .sort((a, b) => b.StartedAt.getTime() - a.StartedAt.getTime())
             .slice(0, 8)
-            .map(s => ({
-                ID: s.Record.ID,
-                Target: s.TargetAgentName ?? s.Record.Agent ?? 'Unknown',
-                ViaAgent: s.Record.Agent ?? 'Unknown',
-                User: s.Record.User,
-                Status: s.Record.Status,
-                StatusClass: 'status-pill status-' + s.Record.Status.toLowerCase(),
-                IsJanitorClosed: s.IsJanitorClosed,
-                ChannelIcons: s.ChannelNames.map(ChannelIconClass),
-                Runs: s.DelegatedRunCount,
-                Cost: FormatSessionCost(s.TotalCost),
-                Duration: FormatSessionDuration(s.DurationMs)
-            }));
+            .map(s => {
+                const statusDisplay = BuildSessionStatusDisplay(s.Record.Status, s.CloseReason);
+                return {
+                    ID: s.Record.ID,
+                    Target: s.TargetAgentName ?? s.Record.Agent ?? 'Unknown',
+                    ViaAgent: s.Record.Agent ?? 'Unknown',
+                    User: s.Record.User,
+                    Status: s.Record.Status,
+                    StatusClass: 'status-pill status-' + s.Record.Status.toLowerCase(),
+                    StatusLabel: statusDisplay.Label,
+                    StatusTitle: statusDisplay.Title,
+                    StatusIcon: statusDisplay.Icon,
+                    ChannelIcons: s.ChannelNames.map(ChannelIconClass),
+                    Runs: s.DelegatedRunCount,
+                    Cost: FormatSessionCost(s.TotalCost),
+                    Duration: FormatSessionDuration(s.DurationMs)
+                };
+            });
     }
 
     /** Exposed for testability / template type narrowing. */

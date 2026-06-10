@@ -41,6 +41,15 @@ export interface CreateSessionInput {
 }
 
 /**
+ * Why a session was closed — persisted to `AIAgentSession.CloseReason` alongside the
+ * `Status = 'Closed'` transition so the admin dashboards can distinguish a user hanging up
+ * (`Explicit`) from janitor reconciliation (`Janitor`), a graceful host drain (`Shutdown`),
+ * or a failure-path teardown (`Error`). `NULL` in the column means "legacy/unknown" — rows
+ * closed before this column existed.
+ */
+export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+
+/**
  * Thrown by {@link SessionManager.CreateSession} when the caller lacks `CanRun` on the target
  * agent. No session row is created — denial happens before any write. Distinct error type so the
  * resolver layer can map it to an authorization-shaped GraphQL error rather than a generic failure.
@@ -107,9 +116,15 @@ export class SessionManager {
     }
 
     /**
-     * Close a session (terminal). Sets `Status = 'Closed'` + `ClosedAt = now`, then disconnects all
-     * of its channel rows. Idempotent: closing an already-`Closed` session is a no-op that returns
-     * `true`. A missing/unloadable session returns `false`.
+     * Close a session (terminal). Sets `Status = 'Closed'` + `ClosedAt = now` + `CloseReason`, then
+     * disconnects all of its channel rows. Idempotent: closing an already-`Closed` session is a
+     * no-op that returns `true` (and never overwrites the original `CloseReason`). A
+     * missing/unloadable session returns `false`.
+     *
+     * @param closeReason Why the session is being closed. **Defaults to `'Explicit'`** so existing
+     *   call sites (the user-initiated close mutations) stamp the common case without modification;
+     *   background callers (janitor sweeps, shutdown drain, error teardowns) must pass their reason
+     *   explicitly. `NULL` rows remain only for legacy data closed before the column existed.
      *
      * @remarks P5 adds in-flight-run abort + `ClientToolRequestManager.ClearSession` here.
      */
@@ -117,6 +132,7 @@ export class SessionManager {
         agentSessionID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        closeReason: SessionCloseReason = 'Explicit',
     ): Promise<boolean> {
         const session = await this.loadSession(agentSessionID, contextUser, provider);
         if (!session) {
@@ -128,7 +144,7 @@ export class SessionManager {
             return true; // idempotent — already terminal
         }
 
-        const closed = await this.markSessionClosed(session);
+        const closed = await this.markSessionClosed(session, closeReason);
         if (!closed) {
             return false;
         }
@@ -289,10 +305,14 @@ export class SessionManager {
         return loaded ? session : null;
     }
 
-    /** Sets `Closed` + `ClosedAt` and saves. Returns the save result. */
-    private async markSessionClosed(session: MJAIAgentSessionEntity): Promise<boolean> {
+    /** Sets `Closed` + `ClosedAt` + `CloseReason` and saves. Returns the save result. */
+    private async markSessionClosed(
+        session: MJAIAgentSessionEntity,
+        closeReason: SessionCloseReason,
+    ): Promise<boolean> {
         session.Status = 'Closed';
         session.ClosedAt = new Date();
+        session.CloseReason = closeReason;
         return this.saveOrLog(session, 'CloseSession');
     }
 
