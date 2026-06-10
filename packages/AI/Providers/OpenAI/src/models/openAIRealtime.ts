@@ -17,6 +17,7 @@ import type {
     RealtimeServerEvent,
     RealtimeFunctionTool,
     RealtimeConversationItemFunctionCallOutput,
+    RealtimeConversationItemSystemMessage,
     RealtimeConversationItemUserMessage,
     RealtimeSessionCreateRequest,
 } from 'openai/resources/realtime/realtime';
@@ -192,6 +193,17 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private usageHandler?: (u: RealtimeUsage) => void;
     private eventListener: (event: RealtimeServerEvent) => void;
 
+    /**
+     * Whether a model response is currently in flight. Minimal response tracking that mirrors the
+     * client driver's state machine: set on `response.created` (and eagerly whenever this session
+     * sends its own `response.create`, so back-to-back local triggers can't race the server event),
+     * cleared on `response.done` — which the API emits for every terminal status, including
+     * `cancelled` after barge-in, so the flag can never stick. Consumed by
+     * {@link OpenAIRealtimeSession.RequestSpokenUpdate} to skip (not collide with) an active
+     * response, since the API rejects overlapping `response.create` requests.
+     */
+    private responseActive = false;
+
     constructor(connection: IOpenAIRealtimeConnection) {
         this.connection = connection;
         this.eventListener = (event: RealtimeServerEvent) => this.dispatch(event);
@@ -247,6 +259,52 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         };
         this.connection.send({ type: 'conversation.item.create', item });
         this.connection.send({ type: 'response.create' });
+        // This deliberately triggers a response — mark it active eagerly so an interim
+        // RequestSpokenUpdate arriving before the server's response.created cannot collide.
+        this.responseActive = true;
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Injects a **system-role** conversation item (`conversation.item.create`) the model can draw
+     * on the next time it speaks, WITHOUT a `response.create` — so no spoken reply is forced.
+     *
+     * NOTE: the role must be `'system'` — gpt-realtime rejects `'developer'` items ("Developer
+     * messages are only supported for quicksilver sessions"); same constraint the client-direct
+     * driver hit. Item creation is always safe mid-response on OpenAI, so no collision guard is
+     * needed here (unlike {@link OpenAIRealtimeSession.RequestSpokenUpdate}).
+     *
+     * @param text The context note to append to the conversation.
+     */
+    public SendContextNote(text: string): void {
+        const item: RealtimeConversationItemSystemMessage = {
+            type: 'message',
+            role: 'system',
+            content: [{ type: 'input_text', text }],
+        };
+        this.connection.send({ type: 'conversation.item.create', item });
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Triggers ONE short spoken update via `response.create` with per-response `instructions`.
+     *
+     * **Collision behavior: skip.** The Realtime API rejects a `response.create` while another
+     * response is active, so when {@link responseActive} is set the request is dropped — interim
+     * updates are disposable by contract (the next update or the final result supersedes them).
+     * When sent, the flag is set eagerly (before the server's `response.created` echo) so two
+     * back-to-back local triggers can't both fire.
+     *
+     * @param instructions Instructions for the single spoken update.
+     */
+    public RequestSpokenUpdate(instructions: string): void {
+        if (this.responseActive) {
+            return;
+        }
+        this.responseActive = true;
+        this.connection.send({ type: 'response.create', response: { instructions } });
     }
 
     // ---- IRealtimeSession handler registration ----
@@ -306,7 +364,13 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 return this.handleFunctionCall(event.call_id, event.name, event.arguments);
             case 'input_audio_buffer.speech_started':
                 return this.handleInterruption();
+            case 'response.created':
+                // A response is in flight (whether server-VAD-triggered or locally triggered).
+                this.responseActive = true;
+                return;
             case 'response.done':
+                // Emitted for every terminal status (completed, cancelled, failed) — always clears.
+                this.responseActive = false;
                 return this.handleResponseDone(event.response.usage);
             default:
                 return;

@@ -302,6 +302,24 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private pendingToolCallNames = new Map<string, string>();
 
     /**
+     * Whether a model turn is currently being generated. Minimal turn tracking mirroring the
+     * client driver: set when model output arrives (Gemini has no `response.created`-style frame,
+     * so the first `modelTurn` content is the signal) and eagerly when this session itself sends a
+     * turn-triggering client content; cleared on `turnComplete`, `interrupted`, and a tool-call
+     * frame (the model yields the floor pending the result). Consumed by {@link enqueueOrRun}:
+     * on Gemini Live ANY client content sent mid-turn INTERRUPTS the in-flight generation, so
+     * interim-update sends are deferred rather than sent into an active turn.
+     */
+    private responseActive = false;
+
+    /**
+     * Client-content sends deferred while a turn is in flight; drained in order when the turn
+     * completes (the drain stops at the first send that itself starts a new turn). Cleared on
+     * {@link Close} so a closed session never replays stale sends.
+     */
+    private queuedSends: Array<() => void> = [];
+
+    /**
      * Binds the underlying live session. Called by the driver once `connect` resolves.
      */
     public AttachLiveSession(live: GeminiLiveSession): void {
@@ -412,6 +430,72 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
     }
 
+    /**
+     * @inheritdoc
+     *
+     * Injects background context as a **user turn with `turnComplete: false`** — appended to the
+     * conversation WITHOUT starting generation, so the model draws on it the next time it speaks.
+     * Gemini Live turns have no system role, so the user role carries it (the same mapping the
+     * client-direct Gemini driver uses; the caller owns any prefixing policy).
+     *
+     * **Collision behavior: queue.** Any client content sent mid-turn interrupts in-flight
+     * generation on Gemini Live, so the send is deferred until the active turn completes.
+     *
+     * @param text The context note to append to the conversation.
+     */
+    public SendContextNote(text: string): void {
+        this.enqueueOrRun(() => {
+            this.requireLive().sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
+        });
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Triggers ONE short spoken update. Gemini Live has no per-response-instructions slot
+     * (OpenAI's `response.create.instructions`), so this is **emulated**: the instructions ride as
+     * a user turn with `turnComplete: true` — Gemini's "respond now" trigger — exactly as the
+     * client-direct Gemini driver emulates it.
+     *
+     * **Collision behavior: queue.** Deferred behind any in-flight turn (sending it mid-turn would
+     * interrupt the pending reply); when it does send, the turn it triggers is marked active so
+     * later queued sends wait for its completion.
+     *
+     * @param instructions Instructions for the single spoken update.
+     */
+    public RequestSpokenUpdate(instructions: string): void {
+        this.enqueueOrRun(() => {
+            this.responseActive = true;
+            this.requireLive().sendClientContent({ turns: [{ role: 'user', parts: [{ text: instructions }] }], turnComplete: true });
+        });
+    }
+
+    /**
+     * Runs a client-content send immediately when no turn is in flight; otherwise queues it for
+     * the next turn boundary. Gemini-specific collision rule: ANY client content interrupts
+     * in-flight generation on the Live API, so deferral (not skipping) is the safe default.
+     */
+    private enqueueOrRun(send: () => void): void {
+        if (this.responseActive) {
+            this.queuedSends.push(send);
+            return;
+        }
+        send();
+    }
+
+    /**
+     * Turn boundary (`turnComplete` or `interrupted`): releases the busy flag and drains queued
+     * sends in order, stopping at the first send that itself starts a new turn (a queued
+     * {@link RequestSpokenUpdate} re-sets {@link responseActive}).
+     */
+    private completeTurn(): void {
+        this.responseActive = false;
+        while (!this.responseActive && this.queuedSends.length > 0) {
+            const send = this.queuedSends.shift();
+            send?.();
+        }
+    }
+
     /** @inheritdoc */
     public async Close(): Promise<void> {
         this.live?.close();
@@ -442,9 +526,16 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private handleServerContent(content: LiveServerContent): void {
         if (content.interrupted) {
             this.interruptionHandler?.();
+            this.completeTurn();
         }
         if (content.modelTurn) {
+            // First model output of a turn marks generation in flight (Gemini emits no explicit
+            // "response started" frame), so interim-update sends defer instead of interrupting.
+            this.responseActive = true;
             this.emitAudioOutput(content.modelTurn);
+        }
+        if (content.turnComplete) {
+            this.completeTurn();
         }
         if (content.inputTranscription) {
             this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished);
@@ -487,6 +578,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (!functionCalls) {
             return;
         }
+        // The model has yielded the floor pending the tool result — clear the busy flag (without
+        // draining the queue; queued sends flush at the next real turn boundary) so the eventual
+        // SendToolResult and any fresh context note are not deferred behind a turn that will not
+        // complete until after the result is sent. Mirrors the client driver's deadlock guard.
+        this.responseActive = false;
         for (const call of functionCalls) {
             const callID = call.id ?? '';
             const toolName = call.name ?? '';
@@ -517,6 +613,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.interruptionHandler = null;
         this.usageHandler = null;
         this.pendingToolCallNames.clear();
+        this.queuedSends = [];
+        this.responseActive = false;
     }
 
     /** Returns the bound live session or throws if it was never attached / already closed. */

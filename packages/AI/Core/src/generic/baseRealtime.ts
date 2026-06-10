@@ -207,6 +207,47 @@ export interface IRealtimeSession {
     SendToolResult(callID: string, output: string): Promise<void>;
 
     /**
+     * **Optional capability** — injects background context (e.g. delegated-run progress, freshly
+     * retrieved data, or a state change the model should be aware of) into the model's
+     * conversation **without** forcing a spoken reply. The model simply has the note available
+     * the next time it speaks.
+     *
+     * This is the server-side counterpart of the client-direct `BaseRealtimeClient.SendContextNote`
+     * capability: in the server-bridged topology, the agent layer (e.g. a session runner observing
+     * a delegated agent run) calls this to keep the realtime model informed of long-running work
+     * so it can narrate naturally when asked or when it next takes the floor.
+     *
+     * Optionality models **capability**, not laziness: not every provider supports injecting
+     * conversation items into an already-open session (some only accept media frames and tool
+     * results mid-session). Drivers that cannot inject mid-session omit the member entirely, and
+     * callers must feature-detect (`if (session.SendContextNote) { ... }`) rather than assume it.
+     *
+     * @param text The context note to append to the conversation (plain text; the caller owns any
+     * prefixing/framing policy such as "[progress]" markers).
+     */
+    SendContextNote?(text: string): void;
+
+    /**
+     * **Optional capability** — asks the model to voice **one brief interim update** following the
+     * given instructions (e.g. "In one short sentence, tell the user the report agent has finished
+     * gathering data and is now drafting"). Used by the agent layer to narrate delegated-run
+     * progress while a long-running tool/agent call is still in flight.
+     *
+     * Implementations **must not collide with an in-flight model response**: providers reject or
+     * garble overlapping generation requests. A driver must either queue the request until the
+     * current response completes or skip it outright — skipping is explicitly acceptable because
+     * interim updates are disposable by contract (a stale "still working…" line has no value once
+     * the real result lands; the next update or the final result supersedes it).
+     *
+     * Like {@link IRealtimeSession.SendContextNote}, this is optional because it models provider
+     * capability: drivers whose provider cannot trigger an instructed, one-off spoken response
+     * mid-session omit the member, and callers must feature-detect before invoking.
+     *
+     * @param instructions Instructions for the single spoken update (tone, brevity, content).
+     */
+    RequestSpokenUpdate?(instructions: string): void;
+
+    /**
      * Registers a handler for provider-detected interruptions (barge-in).
      *
      * Turn detection / VAD is owned by the provider. The agent layer uses this hook to cancel

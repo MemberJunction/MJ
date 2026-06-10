@@ -229,6 +229,65 @@ describe('OpenAIRealtime', () => {
             }
             expect(respond.type).toBe('response.create');
         });
+
+        it('SendContextNote injects a system-role input_text item without a response.create', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.SendContextNote('[progress] delegated run gathering data');
+            expect(driver.Fake.Sent).toHaveLength(1);
+            const create = driver.Fake.Sent[0];
+            expect(create.type).toBe('conversation.item.create');
+            if (create.type === 'conversation.item.create' && create.item.type === 'message' && create.item.role === 'system') {
+                expect(create.item.content[0]).toMatchObject({ type: 'input_text', text: '[progress] delegated run gathering data' });
+            } else {
+                throw new Error('expected conversation.item.create system message');
+            }
+            // No reply is forced — context notes never trigger generation.
+            expect(driver.Fake.Sent.some((e) => e.type === 'response.create')).toBe(false);
+        });
+
+        it('RequestSpokenUpdate sends response.create with per-response instructions when idle', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('Briefly say the report agent is drafting.');
+            expect(driver.Fake.Sent).toHaveLength(1);
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+            }
+        });
+
+        it('RequestSpokenUpdate is SKIPPED while a response is active and resumes after response.done', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            // Server reports a response in flight.
+            driver.Fake.Fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent);
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('update 1');
+            expect(driver.Fake.Sent).toHaveLength(0); // dropped — interim updates are disposable
+            // Response completes (any terminal status clears the flag).
+            driver.Fake.Fire({ type: 'response.done', event_id: 'e', response: {} } as RealtimeServerEvent);
+            session.RequestSpokenUpdate('update 2');
+            expect(driver.Fake.Sent).toHaveLength(1);
+            expect(driver.Fake.Sent[0].type).toBe('response.create');
+        });
+
+        it('RequestSpokenUpdate sets the active flag eagerly so back-to-back updates collapse to one', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('first');
+            session.RequestSpokenUpdate('second'); // before any response.created echo arrives
+            const responds = driver.Fake.Sent.filter((e) => e.type === 'response.create');
+            expect(responds).toHaveLength(1);
+        });
+
+        it('SendToolResult marks a response active so a trailing spoken update is skipped', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            await session.SendToolResult('call_1', '{"ok":true}');
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('narrate'); // tool result already triggered a response
+            expect(driver.Fake.Sent).toHaveLength(0);
+        });
     });
 
     describe('inbound event translation', () => {

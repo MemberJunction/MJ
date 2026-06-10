@@ -367,6 +367,94 @@ describe('GeminiRealtime', () => {
             expect(responses[0]).toEqual({ id: 'call-2', name: 'do_thing', response: { result: 'plain text outcome' } });
         });
 
+        it('SendContextNote appends a user turn with turnComplete:false (no generation trigger)', () => {
+            expect(session.SendContextNote).toBeDefined();
+            session.SendContextNote?.('[progress] delegated run is gathering data');
+
+            expect(driver.Fake.ClientContents).toHaveLength(1);
+            const sent = driver.Fake.ClientContents[0];
+            expect(sent.turnComplete).toBe(false);
+            expect(sent.turns![0]).toEqual({ role: 'user', parts: [{ text: '[progress] delegated run is gathering data' }] });
+        });
+
+        it('RequestSpokenUpdate emulates per-response instructions as a turn-complete user turn', () => {
+            expect(session.RequestSpokenUpdate).toBeDefined();
+            session.RequestSpokenUpdate?.('Briefly say the report agent is drafting.');
+
+            expect(driver.Fake.ClientContents).toHaveLength(1);
+            const sent = driver.Fake.ClientContents[0];
+            expect(sent.turnComplete).toBe(true);
+            expect(sent.turns![0]).toEqual({ role: 'user', parts: [{ text: 'Briefly say the report agent is drafting.' }] });
+        });
+
+        it('queues interim-update sends while a model turn is in flight and flushes on turnComplete', () => {
+            // Model output marks a turn in flight (Gemini has no explicit "response started" frame).
+            const base64 = Buffer.from(new Uint8Array([1])).toString('base64');
+            driver.Fake.Emit({
+                serverContent: { modelTurn: { role: 'model', parts: [{ inlineData: { data: base64, mimeType: 'audio/pcm;rate=24000' } }] } },
+            } as LiveServerMessage);
+
+            session.SendContextNote?.('note while busy');
+            session.RequestSpokenUpdate?.('update while busy');
+            expect(driver.Fake.ClientContents).toHaveLength(0); // deferred — mid-turn client content interrupts on Gemini
+
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+
+            // Both flushed in order: the note (turnComplete:false), then the update (turnComplete:true).
+            expect(driver.Fake.ClientContents).toHaveLength(2);
+            expect(driver.Fake.ClientContents[0].turnComplete).toBe(false);
+            expect((driver.Fake.ClientContents[0].turns![0].parts![0] as { text: string }).text).toBe('note while busy');
+            expect(driver.Fake.ClientContents[1].turnComplete).toBe(true);
+            expect((driver.Fake.ClientContents[1].turns![0].parts![0] as { text: string }).text).toBe('update while busy');
+        });
+
+        it('a flushed RequestSpokenUpdate starts a new turn, so later queued sends keep waiting', () => {
+            const base64 = Buffer.from(new Uint8Array([1])).toString('base64');
+            driver.Fake.Emit({
+                serverContent: { modelTurn: { role: 'model', parts: [{ inlineData: { data: base64, mimeType: 'audio/pcm;rate=24000' } }] } },
+            } as LiveServerMessage);
+
+            session.RequestSpokenUpdate?.('first queued update');
+            session.SendContextNote?.('note behind the update');
+
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+
+            // The spoken update flushes and re-marks the turn active; the trailing note stays queued.
+            expect(driver.Fake.ClientContents).toHaveLength(1);
+            expect(driver.Fake.ClientContents[0].turnComplete).toBe(true);
+
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            expect(driver.Fake.ClientContents).toHaveLength(2);
+            expect(driver.Fake.ClientContents[1].turnComplete).toBe(false);
+        });
+
+        it('an interruption (barge-in) also releases the queue', () => {
+            const base64 = Buffer.from(new Uint8Array([1])).toString('base64');
+            driver.Fake.Emit({
+                serverContent: { modelTurn: { role: 'model', parts: [{ inlineData: { data: base64, mimeType: 'audio/pcm;rate=24000' } }] } },
+            } as LiveServerMessage);
+            session.SendContextNote?.('note while busy');
+            expect(driver.Fake.ClientContents).toHaveLength(0);
+
+            driver.Fake.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
+            expect(driver.Fake.ClientContents).toHaveLength(1);
+            expect(driver.Fake.ClientContents[0].turnComplete).toBe(false);
+        });
+
+        it('a tool-call frame clears the busy flag so fresh sends go out immediately', () => {
+            const base64 = Buffer.from(new Uint8Array([1])).toString('base64');
+            driver.Fake.Emit({
+                serverContent: { modelTurn: { role: 'model', parts: [{ inlineData: { data: base64, mimeType: 'audio/pcm;rate=24000' } }] } },
+            } as LiveServerMessage);
+            driver.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-1', name: 'get_weather', args: {} }] },
+            } as LiveServerMessage);
+
+            // Model yielded the floor pending the tool result — a new context note is not deferred.
+            session.SendContextNote?.('context while tool executes');
+            expect(driver.Fake.ClientContents).toHaveLength(1);
+        });
+
         it('Close closes the live session', async () => {
             await session.Close();
             expect(driver.Fake.Closed).toBe(true);

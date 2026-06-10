@@ -19,6 +19,8 @@ class MockRealtimeSession implements IRealtimeSession {
     public SentInput: ArrayBuffer[] = [];
     public Closed = false;
     public SentToolResults: { CallID: string; Output: string }[] = [];
+    public SentContextNotes: string[] = [];
+    public RequestedSpokenUpdates: string[] = [];
 
     public OutputHandler?: (chunk: ArrayBuffer) => void;
     public TranscriptHandler?: (t: RealtimeTranscript) => void;
@@ -48,6 +50,14 @@ class MockRealtimeSession implements IRealtimeSession {
 
     public async SendToolResult(callID: string, output: string): Promise<void> {
         this.SentToolResults.push({ CallID: callID, Output: output });
+    }
+
+    public SendContextNote(text: string): void {
+        this.SentContextNotes.push(text);
+    }
+
+    public RequestSpokenUpdate(instructions: string): void {
+        this.RequestedSpokenUpdates.push(instructions);
     }
 
     public OnInterruption(handler: () => void): void {
@@ -224,6 +234,44 @@ describe('IRealtimeSession', () => {
         await contract.SendToolResult('c1', '{"temp":72}');
         expect(session.SentToolResults).toHaveLength(1);
         expect(session.SentToolResults[0]).toEqual({ CallID: 'c1', Output: '{"temp":72}' });
+    });
+
+    it('SendContextNote is an OPTIONAL capability exercised when present', () => {
+        session = newSession();
+        const contract: IRealtimeSession = session;
+        // Feature-detect, then exercise — the calling pattern consumers must follow.
+        expect(typeof contract.SendContextNote).toBe('function');
+        contract.SendContextNote?.('[progress] delegated run is 50% complete');
+        expect(session.SentContextNotes).toEqual(['[progress] delegated run is 50% complete']);
+    });
+
+    it('RequestSpokenUpdate is an OPTIONAL capability exercised when present', () => {
+        session = newSession();
+        const contract: IRealtimeSession = session;
+        expect(typeof contract.RequestSpokenUpdate).toBe('function');
+        contract.RequestSpokenUpdate?.('In one short sentence, say the report is being drafted.');
+        expect(session.RequestedSpokenUpdates).toEqual(['In one short sentence, say the report is being drafted.']);
+    });
+
+    it('a session OMITTING the optional interim-update members still satisfies the contract', () => {
+        // Minimal session with NO SendContextNote / RequestSpokenUpdate — providers that cannot
+        // inject mid-session omit the members; optionality keeps them contract-conformant.
+        const minimal: IRealtimeSession = {
+            SendInput: () => undefined,
+            RegisterTools: async () => undefined,
+            SendToolResult: async () => undefined,
+            OnOutput: () => undefined,
+            OnTranscript: () => undefined,
+            OnToolCall: () => undefined,
+            OnInterruption: () => undefined,
+            OnUsage: () => undefined,
+            Close: async () => undefined,
+        };
+        expect(minimal.SendContextNote).toBeUndefined();
+        expect(minimal.RequestSpokenUpdate).toBeUndefined();
+        // Optional-chained invocation on an omitting session is a safe no-op for callers.
+        expect(() => minimal.SendContextNote?.('note')).not.toThrow();
+        expect(() => minimal.RequestSpokenUpdate?.('update')).not.toThrow();
     });
 
     it('OnInterruption registers a handler that fires on barge-in', () => {
