@@ -43,6 +43,9 @@
   border-color: var(--mj-status-warning);
   color: var(--mj-status-warning);
 }
+.ctrl--dev {
+  font-size: 16px;
+}
 .ctrl--end {
   width: 60px;
   height: 60px;

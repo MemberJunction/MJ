@@ -417,6 +417,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * shows who the call fronts without re-resolving. An explicit voice-model choice
    * (picker only) rides along as `preferredModelId` — the server uses exactly that
    * model or fails with a clear reason (no silent fallback).
+   *
+   * Interactive-channel tools (e.g. the live whiteboard's `Whiteboard.*` set) are NOT
+   * passed here — the session service resolves the active channel plugins from the
+   * `MJ: AI Agent Channels` registry and aggregates their tool sets at mint itself.
    */
   private async startVoiceWithAgent(agentId: string, agentName: string, preferredModelId?: string): Promise<void> {
     try {

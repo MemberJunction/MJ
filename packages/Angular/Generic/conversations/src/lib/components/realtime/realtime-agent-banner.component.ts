@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { VoiceConnectionState } from '../../services/voice-session.service';
 
@@ -29,6 +29,27 @@ export class RealtimeAgentBannerComponent {
    * Rendered as a subtle suffix in the identity line; hidden when null/empty.
    */
   @Input() ModelName: string | null = null;
+
+  /** Whether developer affordances (the "Open session" link) are revealed (gear-gated). */
+  @Input() DevMode = false;
+
+  /** ID of the server-side agent session record (`MJ: AI Agent Sessions`), when known. */
+  @Input() SessionID: string | null = null;
+
+  /** Emitted with the session record's ID when the dev "Open session" link is clicked. */
+  @Output() OpenSessionRequested = new EventEmitter<string>();
+
+  /** True when the dev "Open session" link should render (gear on + session id known). */
+  public get ShowOpenSession(): boolean {
+    return this.DevMode && !!this.SessionID;
+  }
+
+  /** Emits the open-session request for the live agent session record. */
+  public OpenSession(): void {
+    if (this.SessionID) {
+      this.OpenSessionRequested.emit(this.SessionID);
+    }
+  }
 
   /** Maps the realtime state to the orb's `data-state` (the orb only models active turn-states). */
   public OrbState(state: VoiceConnectionState): 'speaking' | 'listening' | 'thinking' {

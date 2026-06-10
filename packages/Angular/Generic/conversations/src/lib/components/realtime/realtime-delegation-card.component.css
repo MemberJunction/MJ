@@ -101,6 +101,81 @@
 .done {
   max-width: 560px;
 }
+.done-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.done-row .done-chip {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Developer link (gear-gated "Open run") ---------- */
+.dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.dev-link:hover {
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.dev-link i {
+  font-size: 9px;
+}
+.dev-link--inline {
+  margin-left: 8px;
+}
+
+/* ---------- "View →" artifact chip (focuses the artifact's surface tab) ---------- */
+.artifact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--sage-border);
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.artifact-link:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+}
+.artifact-link i {
+  font-size: 9px;
+}
+.artifact-link--detail {
+  margin-top: 8px;
+  max-width: 100%;
+}
+.artifact-link--detail span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .done-chip {
   display: flex;
   align-items: center;

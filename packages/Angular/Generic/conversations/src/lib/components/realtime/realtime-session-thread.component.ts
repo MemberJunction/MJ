@@ -1,11 +1,12 @@
 import {
-  Component, Input, ElementRef, ViewChild, AfterViewChecked, OnInit, OnDestroy,
+  Component, EventEmitter, Input, Output, ElementRef, ViewChild, AfterViewChecked, OnInit, OnDestroy,
   ChangeDetectorRef, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { RealtimeSessionState, RealtimeThreadItem } from './realtime-session-state';
 import { RealtimeDelegationCardComponent } from './realtime-delegation-card.component';
+import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
 /**
  * The unified, chronological live thread for the call overlay: caption bubbles
@@ -36,6 +37,15 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
 
   /** Whether to render caption bubbles (toggled by the controls' captions button). */
   @Input() ShowCaptions = true;
+
+  /** Whether developer affordances on delegation cards are revealed (gear-gated). */
+  @Input() DevMode = false;
+
+  /** Re-emitted from a delegation card's dev "Open run" link (the delegated run's ID). */
+  @Output() OpenRunRequested = new EventEmitter<string>();
+
+  /** Re-emitted from a delegation card's "View" artifact chip (focuses the artifact's surface tab). */
+  @Output() OpenArtifactRequested = new EventEmitter<ParsedDelegationArtifact>();
 
   /** Item count at the last change notification, to auto-scroll only when the list grows. */
   private lastItemCount = 0;

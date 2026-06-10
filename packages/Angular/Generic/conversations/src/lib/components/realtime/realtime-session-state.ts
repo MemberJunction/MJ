@@ -1,7 +1,24 @@
-import { Subject, Subscription } from 'rxjs';
+import { Observable, Subject, Subscription } from 'rxjs';
 import {
-  VoiceSessionService, VoiceCaption, VoiceDelegationProgress, VoiceDelegationResult, VoiceDelegationNarration
+  VoiceCaption, VoiceDelegationProgress, VoiceDelegationResult, VoiceDelegationNarration
 } from '../../services/voice-session.service';
+import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+
+/**
+ * The four reactive session streams {@link RealtimeSessionState} merges — structurally
+ * satisfied by `VoiceSessionService`. Narrowed to an interface so the state (and its unit
+ * tests) depend only on the streams, not on the full service / GraphQL import chain.
+ */
+export interface RealtimeSessionStreams {
+  /** Growing user/assistant caption list. */
+  Captions$: Observable<VoiceCaption[]>;
+  /** Progress updates from delegated agent runs. */
+  DelegationProgress$: Observable<VoiceDelegationProgress>;
+  /** Terminal delegation results. */
+  DelegationResult$: Observable<VoiceDelegationResult>;
+  /** Ephemeral spoken progress narrations. */
+  DelegationNarration$: Observable<VoiceDelegationNarration>;
+}
 
 /**
  * The view-model for one delegated tool/agent call in the live session. Built by
@@ -30,8 +47,18 @@ export interface RealtimeDelegationCardVM {
   Success: boolean;
   /** Short run identifier (e.g. "#a3f1") if known; shown in expanded provenance detail. */
   RunRef?: string;
+  /**
+   * ID of the delegated agent run (`MJ: AI Agent Runs`) once the result reports it.
+   * Powers the gear-gated "Open run" developer link on the card / rail entry.
+   */
+  RunID?: string;
   /** The real result text once the delegation completes. */
   Result?: string | null;
+  /**
+   * Artifacts the delegated run produced (set with the terminal result). Powers the
+   * "View" affordance on done cards / rail entries and the surface panel's artifact tabs.
+   */
+  Artifacts?: ParsedDelegationArtifact[];
   /** Epoch ms when the first progress event for this call arrived. */
   StartedAt: number;
   /** Epoch ms when the terminal result arrived. */
@@ -128,7 +155,7 @@ export class RealtimeSessionState {
   }
 
   /** Subscribes to the session streams. Call once from the owning overlay shell. */
-  public Attach(voice: VoiceSessionService): void {
+  public Attach(voice: RealtimeSessionStreams): void {
     if (this.subs.length > 0) {
       return; // already attached
     }
@@ -213,6 +240,8 @@ export class RealtimeSessionState {
       Done: true,
       Success: result.Success,
       Result: result.Output,
+      RunID: result.RunID ?? existing.RunID,
+      Artifacts: result.Artifacts ?? existing.Artifacts,
       FinishedAt: Date.now()
     });
     if (!this.HasRunningDelegation) {

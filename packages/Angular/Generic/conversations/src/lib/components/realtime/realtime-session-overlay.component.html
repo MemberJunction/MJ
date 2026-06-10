@@ -1,9 +1,19 @@
 @if (ConnectionState$ | async; as state) {
-  <div class="call-overlay" role="region" aria-label="Live voice session">
+  <div class="call-overlay"
+       [class.call-overlay--hidden]="Hidden"
+       [class.board-focus]="ChannelFocusMode"
+       role="region" aria-label="Live voice session">
 
     <!-- MAIN column: banner → thread → channel strip → in-call composer → controls -->
     <div class="call-main">
-      <mj-realtime-agent-banner [State]="state" [AgentName]="AgentName" [ModelName]="ModelName$ | async"></mj-realtime-agent-banner>
+      <mj-realtime-agent-banner
+        [State]="state"
+        [AgentName]="AgentName"
+        [ModelName]="ModelName$ | async"
+        [DevMode]="DevMode"
+        [SessionID]="SessionID"
+        (OpenSessionRequested)="OnOpenSessionRequested($event)">
+      </mj-realtime-agent-banner>
 
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
       @if (State.Narration && !State.ActiveCallId) {
@@ -22,7 +32,10 @@
           <mj-realtime-session-thread
             [State]="State"
             [AgentName]="AgentName"
-            [ShowCaptions]="ShowCaptions">
+            [ShowCaptions]="ShowCaptions"
+            [DevMode]="DevMode"
+            (OpenRunRequested)="OnOpenRunRequested($event)"
+            (OpenArtifactRequested)="OnOpenArtifactRequested($event)">
           </mj-realtime-session-thread>
         }
       </div>
@@ -36,13 +49,56 @@
       <!-- Call controls -->
       <mj-realtime-controls
         [CaptionsOn]="ShowCaptions"
+        [DevMode]="DevMode"
         (CaptionsToggled)="OnCaptionsToggled($event)"
+        (DevModeToggled)="OnDevModeToggled($event)"
         (Ended)="OnEnded()">
       </mj-realtime-controls>
     </div>
 
-    <!-- RIGHT RAIL: all tool/agent calls of the session, newest first (collapsible) -->
-    <mj-realtime-activity-rail [State]="State"></mj-realtime-activity-rail>
+    <!-- RIGHT: TABBED SURFACE PANEL — Activity rail | one tab per produced artifact |
+         one tab per registry-resolved interactive channel (surfaces created dynamically
+         from each plugin). Collapsible to a slim strip; fills the overlay when a channel
+         surface holds the focus layout. -->
+    <mj-realtime-surface-tabs
+      [State]="State"
+      [DevMode]="DevMode"
+      [CurrentUser]="CurrentUser"
+      [EnvironmentID]="EnvironmentID"
+      [Fill]="ChannelFocusMode"
+      (OpenRunRequested)="OnOpenRunRequested($event)">
+    </mj-realtime-surface-tabs>
+
+    <!-- FOCUS floating call pill: the main column is hidden, so the live call's
+         identity + state + mute / show-thread / end controls ride over the surface. -->
+    @if (ChannelFocusMode) {
+      <div class="board-focus-pill" role="status" aria-label="Live call (board focus)">
+        <span class="board-focus-pill__orb" [attr.data-state]="state" aria-hidden="true"></span>
+        <span class="board-focus-pill__text">
+          <span class="board-focus-pill__name">Voice for {{ AgentName }}</span>
+          @if (FocusStateLabel(state); as label) {
+            <span class="board-focus-pill__state">{{ label }}</span>
+          }
+        </span>
+        <button type="button" class="board-focus-pill__btn"
+                [class.board-focus-pill__btn--active]="FocusPillMuted"
+                (click)="OnFocusPillMute()"
+                [title]="FocusPillMuted ? 'Unmute' : 'Mute'"
+                [attr.aria-label]="FocusPillMuted ? 'Unmute microphone' : 'Mute microphone'">
+          <i class="fa-solid" [class.fa-microphone]="!FocusPillMuted" [class.fa-microphone-slash]="FocusPillMuted" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="board-focus-pill__btn"
+                (click)="OnFocusPillExit()"
+                title="Show thread" aria-label="Show the conversation thread">
+          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
+                (click)="OnFocusPillEnd()"
+                title="End call" aria-label="End the call">
+          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+        </button>
+      </div>
+    }
 
   </div>
 }

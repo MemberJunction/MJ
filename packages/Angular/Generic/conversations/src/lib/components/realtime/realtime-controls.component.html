@@ -20,6 +20,16 @@
   </div>
 
   <div class="ctrl-group">
+    <button type="button" class="ctrl ctrl--dev" [class.ctrl--on]="DevMode"
+            (click)="ToggleDevMode()"
+            [title]="DevMode ? 'Hide developer links' : 'Show developer links'"
+            [attr.aria-pressed]="DevMode">
+      <i class="fa-solid fa-gear" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label">Dev</span>
+  </div>
+
+  <div class="ctrl-group">
     <button type="button" class="ctrl ctrl--end" (click)="EndCall()" title="End call" aria-label="End call">
       <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
     </button>

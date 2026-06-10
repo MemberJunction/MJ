@@ -167,3 +167,29 @@
   color: var(--mj-color-violet-300, var(--mj-text-secondary));
   border-color: var(--sage-border);
 }
+
+/* Gear-gated developer link to the live agent session record */
+.dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.dev-link:hover {
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.dev-link i {
+  font-size: 9px;
+}

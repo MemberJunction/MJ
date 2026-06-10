@@ -32,6 +32,7 @@ export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
 export * from './lib/services/voice-session.service';
+export * from './lib/services/delegation-result-parser';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -77,6 +78,16 @@ export * from './lib/components/realtime/realtime-agent-banner.component';
 export * from './lib/components/realtime/realtime-session-thread.component';
 export * from './lib/components/realtime/realtime-delegation-card.component';
 export * from './lib/components/realtime/realtime-activity-rail.component';
+export * from './lib/components/realtime/realtime-surface-tabs.component';
+export * from './lib/components/realtime/realtime-surface-tabs.model';
 export * from './lib/components/realtime/realtime-composer.component';
 export * from './lib/components/realtime/realtime-channel-strip.component';
 export * from './lib/components/realtime/realtime-controls.component';
+// Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
+export * from './lib/components/realtime/channels/base-realtime-channel-client';
+export * from './lib/components/realtime/channels/realtime-channel-pane.component';
+// Live whiteboard channel (board engine + agent tool surface + host component + plugin)
+export * from './lib/components/realtime/whiteboard/whiteboard-host.component';
+export * from './lib/components/realtime/whiteboard/whiteboard-state';
+export * from './lib/components/realtime/whiteboard/whiteboard-tools';
+export * from './lib/components/realtime/whiteboard/whiteboard-channel';

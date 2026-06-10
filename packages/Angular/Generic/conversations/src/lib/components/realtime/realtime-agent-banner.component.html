@@ -8,6 +8,13 @@
     @if (ModelName) {
       <span class="banner__model" [title]="'Realtime voice model: ' + ModelName">· {{ ModelName }}</span>
     }
+    @if (ShowOpenSession) {
+      <button type="button" class="dev-link" (click)="OpenSession()"
+              title="Open the agent session record">
+        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+        <span>Open session</span>
+      </button>
+    }
   </div>
 
   <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">

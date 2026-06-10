@@ -1,9 +1,10 @@
-import { Component, Input, OnInit, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import {
   RealtimeSessionState, RealtimeDelegationCardVM, FriendlyStepLabel, FormatElapsed
 } from './realtime-session-state';
+import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
 /**
  * The "Session activity" RIGHT RAIL of the call overlay: a compact, newest-first list
@@ -31,6 +32,23 @@ export class RealtimeActivityRailComponent implements OnInit, OnDestroy {
 
   /** Shared live-session state, owned by the overlay shell. */
   @Input({ required: true }) State!: RealtimeSessionState;
+
+  /** Whether developer affordances ("Open run" links) are revealed (gear-gated). */
+  @Input() DevMode = false;
+
+  /**
+   * EMBEDDED mode: the rail renders as the content of the surface panel's Activity tab —
+   * its own header/collapse chrome is hidden (the panel's tab strip owns collapse) and it
+   * stretches to the pane's full width. Default `false` keeps the original standalone
+   * right-rail presentation for any other consumer.
+   */
+  @Input() Embedded = false;
+
+  /** Emitted with the delegated run's ID when an entry's dev "Open run" link is clicked. */
+  @Output() OpenRunRequested = new EventEmitter<string>();
+
+  /** Emitted when an entry's "View" artifact chip is clicked (focuses the artifact's tab). */
+  @Output() OpenArtifactRequested = new EventEmitter<ParsedDelegationArtifact>();
 
   /** Whether the rail is collapsed to its slim toggle strip. */
   public Collapsed = false;
@@ -67,6 +85,28 @@ export class RealtimeActivityRailComponent implements OnInit, OnDestroy {
       return null;
     }
     return FormatElapsed(card.FinishedAt - card.StartedAt);
+  }
+
+  /** True when the dev "Open run" link should render for this card (gear on + run id known). */
+  public ShowOpenRun(card: RealtimeDelegationCardVM): boolean {
+    return this.DevMode && !!card.RunID;
+  }
+
+  /** Emits the open-run request for the card's delegated run. */
+  public OpenRun(card: RealtimeDelegationCardVM): void {
+    if (card.RunID) {
+      this.OpenRunRequested.emit(card.RunID);
+    }
+  }
+
+  /** The artifacts a done card carries (empty array when none — keeps the template simple). */
+  public CardArtifacts(card: RealtimeDelegationCardVM): ParsedDelegationArtifact[] {
+    return card.Done && card.Artifacts ? card.Artifacts : [];
+  }
+
+  /** Emits the open-artifact request for a card's produced artifact. */
+  public OpenArtifact(artifact: ParsedDelegationArtifact): void {
+    this.OpenArtifactRequested.emit(artifact);
   }
 
   /** One-line result preview for done items. */

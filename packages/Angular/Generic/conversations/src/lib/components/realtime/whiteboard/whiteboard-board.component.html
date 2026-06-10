@@ -1,0 +1,219 @@
+<div #canvas
+     [class]="'board-canvas ' + CursorClass"
+     [class.is-panning]="Interaction?.Type === 'pan'"
+     [style.backgroundSize]="GridBackgroundSize"
+     [style.backgroundPosition]="GridBackgroundPosition"
+     tabindex="0"
+     (pointerdown)="OnCanvasPointerDown($event)"
+     (wheel)="OnWheel($event)"
+     (paste)="OnPaste($event)">
+
+  <div class="board-viewport" [style.transform]="ViewportTransform">
+
+    <!-- ink + connectors -->
+    <svg class="ink-layer">
+      @for (ink of InkItems; track ink.ID) {
+        <path [attr.d]="InkPath(ink.Points)"
+              [class.ink-sage]="ink.Author === 'agent'"
+              [class.wb-erasable]="Tool === 'eraser' || Tool === 'select'"
+              [class.wb-ink-selected]="IsSelected(ink)"
+              [attr.stroke]="ink.Author === 'agent' ? null : ink.Color"
+              [attr.stroke-width]="ink.StrokeWidth"
+              fill="none" stroke-linecap="round" stroke-linejoin="round"
+              (pointerdown)="OnItemPointerDown($event, ink)"/>
+      }
+      @for (conn of ConnectorItems; track conn.ID) {
+        <g [class.conn-sage]="conn.Author === 'agent'" [class.conn-user]="conn.Author === 'user'">
+          <path [attr.d]="ConnectorPath(conn)"
+                [class.draw-in]="PopInIDs.has(conn.ID)"
+                [class.wb-erasable]="Tool === 'eraser' || Tool === 'select'"
+                stroke-width="2.5" fill="none" stroke-linecap="round"
+                (pointerdown)="OnItemPointerDown($event, conn)"/>
+          <path [attr.d]="ConnectorArrow(conn)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        </g>
+      }
+      <!-- live transients -->
+      @if (LivePenPath) {
+        <path class="wb-live-pen" [attr.d]="LivePenPath" [attr.stroke]="PenColor" [attr.stroke-width]="PenWidth"
+              fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      }
+      @if (PendingConnector) {
+        <path class="wb-pending-conn" [attr.d]="PendingConnectorPath" stroke-width="2" fill="none" stroke-linecap="round"/>
+      }
+    </svg>
+
+    <!-- highlight regions (agent "pointing without touching"; click dismisses) -->
+    @for (hl of HighlightItems; track hl.ID) {
+      <div class="sage-highlight"
+           [class.user-highlight]="hl.Author === 'user'"
+           [style.left.px]="ItemX(hl)" [style.top.px]="ItemY(hl)"
+           [style.width.px]="ItemW(hl)" [style.height.px]="ItemH(hl)"
+           title="Click to dismiss"
+           (pointerdown)="OnHighlightClick($event, hl)">
+        <span class="hl-tag"><i class="fa-solid fa-highlighter"></i> {{ HighlightTag(hl) }}</span>
+      </div>
+    }
+
+    <!-- drag ghost ("from here") -->
+    @if (DragGhost; as ghost) {
+      <div class="drag-ghost"
+           [style.left.px]="ghost.X" [style.top.px]="ghost.Y"
+           [style.width.px]="ghost.W" [style.height.px]="ghost.H"></div>
+    }
+
+    <!-- shape drag-create preview -->
+    @if (ShapePreview; as preview) {
+      <div class="shape-preview"
+           [style.left.px]="preview.X" [style.top.px]="preview.Y"
+           [style.width.px]="preview.W" [style.height.px]="preview.H"></div>
+    }
+
+    <!-- board items -->
+    @for (item of BoxItems; track item.ID) {
+      @switch (item.Kind) {
+
+        @case ('sticky') {
+          <div [class]="'bi sticky ' + StickyTintClass(item)"
+               [class.selected]="IsSelected(item)"
+               [class.dragging]="IsDragging(item)"
+               [class.pop-in]="PopInIDs.has(item.ID)"
+               [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.width.px]="ItemW(item)"
+               [style.transform]="IsDragging(item) ? '' : StickyRotation(item)"
+               (pointerdown)="OnItemPointerDown($event, item)"
+               (dblclick)="BeginItemEdit($event, item)">
+            @if (item.Author === 'agent') {
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
+            } @else {
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user"></i> You</span>
+            }
+            @if (EditingID === item.ID) {
+              <textarea class="wb-edit" rows="3"
+                        [value]="item.Text"
+                        (keydown)="OnEditKeydown($event, edit.value)"
+                        (blur)="CommitEdit(edit.value)"
+                        #edit></textarea>
+            } @else {
+              {{ item.Text }}
+            }
+            @if (ShowHandles(item) && !IsDragging(item)) {
+              @for (h of Handles; track h) {
+                <span [class]="'sel-h ' + h" (pointerdown)="OnHandlePointerDown($event, item, h)"></span>
+              }
+            }
+          </div>
+        }
+
+        @case ('shape') {
+          <div class="bi shape-box"
+               [class.shape-box--ellipse]="item.Shape === 'ellipse'"
+               [class.shape-box--diamond]="item.Shape === 'diamond'"
+               [class.shape-box--sage]="item.Author === 'agent'"
+               [class.selected]="IsSelected(item)"
+               [class.dragging]="IsDragging(item)"
+               [class.pop-in]="PopInIDs.has(item.ID)"
+               [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.width.px]="ItemW(item)" [style.height.px]="ItemH(item)"
+               (pointerdown)="OnItemPointerDown($event, item)"
+               (dblclick)="BeginItemEdit($event, item)">
+            @if (item.Author === 'agent') {
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
+            } @else {
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user"></i> You</span>
+            }
+            @if (EditingID === item.ID) {
+              <textarea class="wb-edit wb-edit--shape" rows="1"
+                        [value]="item.Label"
+                        (keydown)="OnEditKeydown($event, editShape.value)"
+                        (blur)="CommitEdit(editShape.value)"
+                        #editShape></textarea>
+            } @else {
+              <span>{{ item.Label }}@if (item.Sub) {<span class="sub">{{ item.Sub }}</span>}</span>
+            }
+            @if (ShowHandles(item) && !IsDragging(item)) {
+              @for (h of Handles; track h) {
+                <span [class]="'sel-h ' + h" (pointerdown)="OnHandlePointerDown($event, item, h)"></span>
+              }
+            }
+          </div>
+        }
+
+        @case ('text') {
+          <div class="bi tlabel"
+               [class.tlabel--user]="item.Author === 'user'"
+               [class.selected]="IsSelected(item)"
+               [class.dragging]="IsDragging(item)"
+               [class.pop-in]="PopInIDs.has(item.ID)"
+               [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               (pointerdown)="OnItemPointerDown($event, item)"
+               (dblclick)="BeginItemEdit($event, item)">
+            @if (item.Author === 'agent') {
+              <i class="fa-solid fa-feather"></i>
+            }
+            @if (EditingID === item.ID) {
+              <input class="wb-edit wb-edit--text" type="text"
+                     [value]="item.Text"
+                     (keydown)="OnEditKeydown($event, editText.value)"
+                     (blur)="CommitEdit(editText.value)"
+                     #editText/>
+            } @else {
+              {{ item.Text }}
+            }
+          </div>
+        }
+
+        @case ('image') {
+          <div class="bi img-card"
+               [class.selected]="IsSelected(item)"
+               [class.dragging]="IsDragging(item)"
+               [class.pop-in]="PopInIDs.has(item.ID)"
+               [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.width.px]="ItemW(item)"
+               (pointerdown)="OnItemPointerDown($event, item)">
+            @if (item.Author === 'agent') {
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
+            } @else {
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-paste"></i> You · pasted</span>
+            }
+            <div class="img-card__body">
+              @if (item.Url) {
+                <img [src]="item.Url" [alt]="item.Name"/>
+              } @else {
+                <i class="fa-regular fa-image"></i>
+              }
+            </div>
+            <div class="img-card__name"><i class="fa-solid fa-chart-area"></i> {{ item.Name }}</div>
+            @if (ShowHandles(item) && !IsDragging(item)) {
+              @for (h of Handles; track h) {
+                <span [class]="'sel-h ' + h" (pointerdown)="OnHandlePointerDown($event, item, h)"></span>
+              }
+            }
+          </div>
+        }
+      }
+    }
+
+    <!-- agent presence cursor -->
+    @if (AgentPresence?.Active) {
+      <div class="cursor cursor--sage" [style.left.px]="AgentPresence!.X" [style.top.px]="AgentPresence!.Y">
+        <span class="tip"><i class="fa-solid fa-feather"></i></span>
+        <span class="lbl"><i class="fa-solid fa-pen"></i>{{ AgentPresence!.Label }}</span>
+      </div>
+    }
+  </div>
+
+  <!-- minimap -->
+  @if (MinimapOpen) {
+    <div class="minimap">
+      <svg [attr.viewBox]="MinimapViewBox" preserveAspectRatio="xMidYMid meet">
+        @for (mi of MinimapItems; track $index) {
+          <rect [attr.x]="mi.X" [attr.y]="mi.Y" [attr.width]="mi.W" [attr.height]="mi.H"
+                [attr.class]="mi.Agent ? 'mm-item mm-item--sage' : 'mm-item'" rx="6"/>
+        }
+        <rect class="mm-viewport"
+              [attr.x]="MinimapViewport.X" [attr.y]="MinimapViewport.Y"
+              [attr.width]="MinimapViewport.W" [attr.height]="MinimapViewport.H" rx="8"/>
+      </svg>
+    </div>
+  }
+</div>

@@ -1,21 +1,23 @@
-<aside class="rail" [class.rail--collapsed]="Collapsed" aria-label="Session activity">
-  <div class="rail__head">
-    <button type="button"
-            class="rail__toggle"
-            (click)="Toggle()"
-            [title]="Collapsed ? 'Show session activity' : 'Hide session activity'"
-            [attr.aria-expanded]="!Collapsed">
-      <i class="fa-solid" [ngClass]="Collapsed ? 'fa-chevron-left' : 'fa-chevron-right'" aria-hidden="true"></i>
-    </button>
-    @if (!Collapsed) {
-      <span class="rail__title">
-        <i class="fa-solid fa-list-check" aria-hidden="true"></i>
-        Session activity
-      </span>
-    }
-  </div>
+<aside class="rail" [class.rail--collapsed]="Collapsed && !Embedded" [class.rail--embedded]="Embedded" aria-label="Session activity">
+  @if (!Embedded) {
+    <div class="rail__head">
+      <button type="button"
+              class="rail__toggle"
+              (click)="Toggle()"
+              [title]="Collapsed ? 'Show session activity' : 'Hide session activity'"
+              [attr.aria-expanded]="!Collapsed">
+        <i class="fa-solid" [ngClass]="Collapsed ? 'fa-chevron-left' : 'fa-chevron-right'" aria-hidden="true"></i>
+      </button>
+      @if (!Collapsed) {
+        <span class="rail__title">
+          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+          Session activity
+        </span>
+      }
+    </div>
+  }
 
-  @if (!Collapsed) {
+  @if (!Collapsed || Embedded) {
     <div class="rail__list">
       @for (card of State.Cards; track TrackCard($index, card)) {
         <div class="act-card"
@@ -48,6 +50,21 @@
             @if (Preview(card)) {
               <div class="act-card__preview">{{ Preview(card) }}</div>
             }
+          }
+          @for (artifact of CardArtifacts(card); track artifact.ArtifactVersionID) {
+            <button type="button" class="act-card__artifact-link" (click)="OpenArtifact(artifact)"
+                    [title]="'View ' + artifact.Name">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+              <span>View</span>
+              <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+          }
+          @if (ShowOpenRun(card)) {
+            <button type="button" class="act-card__dev-link" (click)="OpenRun(card)"
+                    title="Open the delegated agent run record">
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+              <span>Open run</span>
+            </button>
           }
         </div>
       } @empty {

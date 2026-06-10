@@ -1,0 +1,82 @@
+<!-- board header -->
+<div class="board-head">
+  <span class="bt"><i class="fa-solid fa-chalkboard"></i> {{ BoardTitle }}</span>
+  <span class="board-save"><i class="fa-solid fa-circle-check"></i> {{ SavedLabel }}</span>
+  <span class="board-legend">
+    <span><span class="sw sw--you"></span>You</span>
+    <span><span class="sw sw--sage"></span>{{ AgentName }} <i class="fa-solid fa-feather legend-feather"></i></span>
+  </span>
+  <div class="head-end">
+    <button type="button" class="head-btn head-btn--sees" [class.on]="SeesOpen" (click)="ToggleSees($event)">
+      <span class="eye-pulse"></span><i class="fa-regular fa-eye"></i> What {{ AgentName }} sees
+      @if (SeesOpen) {
+        <mj-realtime-whiteboard-agent-sees-popover
+          [AgentName]="AgentName"
+          [DeltaJson]="LastDeltaJson"
+          [DebounceMs]="SceneDeltaDebounceMs"
+          [ElementCount]="ElementCount"
+          [LastDeltaLabel]="LastDeltaLabel"/>
+      }
+    </button>
+    <button type="button" class="head-btn" [class.on]="FocusMode" (click)="ToggleFocus()">
+      <i [class]="FocusMode ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
+      {{ FocusMode ? 'Show thread' : 'Focus board' }}
+    </button>
+    <button type="button" class="head-btn head-btn--more" title="More"><i class="fa-solid fa-ellipsis"></i></button>
+  </div>
+</div>
+
+<!-- the board -->
+<div class="board-wrap">
+  <mj-realtime-whiteboard #board
+    [State]="State"
+    [AgentName]="AgentName"
+    [Tool]="Tool"
+    [PenColor]="PenColor"
+    [PenWidth]="PenWidth"
+    [ShapeKind]="ShapeKind"
+    [AgentPresence]="AgentPresence"
+    (ToolChangeRequest)="Tool = $event"/>
+
+  <mj-realtime-whiteboard-toolbar
+    [ActiveTool]="Tool"
+    [PenColor]="PenColor"
+    [PenWidth]="PenWidth"
+    [ShapeKind]="ShapeKind"
+    [CanUndo]="State.CanUndo"
+    [CanRedo]="State.CanRedo"
+    [AgentName]="AgentName"
+    (ToolChange)="Tool = $event"
+    (PenColorChange)="PenColor = $event"
+    (PenWidthChange)="PenWidth = $event"
+    (ShapeKindChange)="ShapeKind = $event"
+    (Undo)="State.Undo()"
+    (Redo)="State.Redo()"/>
+
+  <mj-realtime-whiteboard-zoom
+    [ZoomPercent]="board.ZoomPercent"
+    [MinimapOpen]="board.MinimapOpen"
+    (ZoomOut)="board.ZoomOut()"
+    (ZoomIn)="board.ZoomIn()"
+    (Fit)="board.FitToContent()"
+    (ToggleMinimap)="board.ToggleMinimap()"/>
+
+  <!-- agent action toast -->
+  @if (ToastText) {
+    <div class="board-toast">
+      <i class="fa-solid fa-feather"></i> {{ ToastText }}
+      <span class="undo" (click)="OnToastUndo($event)"><i class="fa-solid fa-rotate-left"></i> Undo</span>
+    </div>
+  }
+</div>
+
+<!-- board status footer -->
+<div class="board-status">
+  <span><b>{{ ElementCount }}</b> elements</span>
+  <span>you <b>{{ UserCount }}</b> · {{ AgentName }} <b>{{ AgentCount }}</b></span>
+  <span>synced <b>{{ LastDeltaLabel }}</b> · seq <b>{{ CurrentSeq }}</b></span>
+  <span class="seg-r">
+    <span class="ctx-live"><span class="d"></span> {{ AgentName }}'s live context: current</span>
+    <span>persists as <b>session artifact</b> when the call ends</span>
+  </span>
+</div>

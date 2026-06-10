@@ -304,9 +304,29 @@
   </div>
 
   <!-- Live voice "call mode" overlay — fills this conversation panel in place
-       (header + thread + composer) while a realtime session is active. -->
+       (header + thread + composer) while a realtime session is active. When the
+       call is MINIMIZED (e.g. a dev link navigated to a record) the overlay HIDES
+       (not destroyed — its merged session state must survive), the session stays
+       fully live, and a floating "on call" pill offers the way back. -->
   @if (VoiceSession.Active$ | async) {
-    <mj-realtime-session-overlay [AgentName]="VoiceSession.CurrentAgentName"></mj-realtime-session-overlay>
+    <mj-realtime-session-overlay
+      [AgentName]="VoiceSession.CurrentAgentName"
+      [Hidden]="(VoiceSession.Minimized$ | async) === true"
+      [CurrentUser]="currentUser"
+      [EnvironmentID]="environmentId"
+      (NavigateRequest)="onVoiceNavigateRequest($event)">
+    </mj-realtime-session-overlay>
+    @if (VoiceSession.Minimized$ | async) {
+      <button type="button" class="voice-call-pill" (click)="VoiceSession.SetMinimized(false)"
+              title="Return to the live call" aria-label="Return to the live call">
+        <span class="voice-call-pill__pulse" aria-hidden="true"></span>
+        <i class="fa-solid fa-phone-volume" aria-hidden="true"></i>
+        <span class="voice-call-pill__text">
+          <span class="voice-call-pill__name">On call · {{ VoiceSession.CurrentAgentName }}</span>
+          <span class="voice-call-pill__hint">Tap to return</span>
+        </span>
+      </button>
+    }
   }
 </div>
 

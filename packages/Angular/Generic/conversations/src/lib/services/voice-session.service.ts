@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   BaseRealtimeClient,
   LoadGeminiRealtimeClient,
@@ -14,10 +14,16 @@ import {
   RealtimeClientTranscript
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from './narration-template';
+import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
 
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
 // its @RegisterClass side effect from being eliminated by the bundler.
+// NOTE: the interactive-channel plugins (resolved dynamically from the `MJ: AI Agent
+// Channels` registry by ClientPluginClass key) get the same treatment, but their Load
+// calls live in `conversations.module.ts` — plugins carry Angular surface COMPONENTS,
+// and this service stays component-free (it must stay importable in plain-node tests).
 LoadOpenAIRealtimeClient();
 LoadGeminiRealtimeClient();
 
@@ -72,6 +78,50 @@ export interface VoiceDelegationResult {
   Success: boolean;
   /** The result text — the agent's output, or an error message on failure. */
   Output: string;
+  /**
+   * ID of the delegated agent run (`MJ: AI Agent Runs`) when the server reported one
+   * (`runId` in the tool ResultJson). Powers the overlay's gear-gated "Open run" dev link.
+   */
+  RunID?: string;
+  /**
+   * Artifacts the delegated run produced, when the server reported any (`artifacts` in the
+   * tool ResultJson). The overlay's tabbed surface panel auto-opens one artifact tab per
+   * entry and focuses the newest on arrival.
+   */
+  Artifacts?: ParsedDelegationArtifact[];
+}
+
+/**
+ * Handler for a CLIENT-EXECUTED UI tool (e.g. the live whiteboard's `Whiteboard.*` surface),
+ * registered via {@link VoiceSessionService.RegisterClientToolHandler}. Receives the tool name +
+ * raw arguments JSON from the realtime model and returns the result JSON string fed back as the
+ * `tool_response`. May be sync or async; thrown errors are wrapped into a
+ * `{ success: false, error }` payload by the service so the model can narrate the failure.
+ */
+export type VoiceClientToolHandler = (toolName: string, argsJson: string) => string | Promise<string>;
+
+/**
+ * A channel's request to enter / leave the FOCUS layout, emitted on
+ * {@link VoiceSessionService.ChannelFocus$} when a plugin calls its context's
+ * `SetFocusMode`. The overlay shell subscribes: it collapses/restores the main call column
+ * and remembers which channel holds focus (so the floating pill's "exit" can be routed
+ * back via {@link BaseRealtimeChannelClient.RequestFocusExit}).
+ */
+export interface RealtimeChannelFocusEvent {
+  /** The channel plugin requesting the layout change. */
+  Channel: BaseRealtimeChannelClient;
+  /** `true` to enter focus mode (surface owns the screen), `false` to leave it. */
+  Focused: boolean;
+}
+
+/**
+ * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
+ * loads at session start (read-only lookup — `ResultType: 'simple'`, narrowed Fields).
+ */
+interface RealtimeChannelDefinitionRow {
+  ID: string;
+  Name: string;
+  ClientPluginClass: string;
 }
 
 /**
@@ -154,6 +204,9 @@ export class VoiceSessionService {
   private _delegationNarration$ = new Subject<VoiceDelegationNarration>();
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
+  private _minimized$ = new BehaviorSubject<boolean>(false);
+  private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
+  private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -183,9 +236,60 @@ export class VoiceSessionService {
    */
   public readonly ModelName$: Observable<string | null> = this._modelName$.asObservable();
 
+  /**
+   * True while the active call overlay is MINIMIZED to the host's floating "on call" pill
+   * (e.g. after a dev link navigated away). The mic and session stay fully live — this is
+   * pure presentation state, reset to `false` at session start and teardown.
+   */
+  public readonly Minimized$: Observable<boolean> = this._minimized$.asObservable();
+
+  /**
+   * The session's ACTIVE interactive-channel plugins, resolved from the `MJ: AI Agent
+   * Channels` registry at session start (one instance per session, per channel). Emits
+   * `[]` before a session starts and after teardown. The overlay subscribes to register
+   * one surface tab per plugin — it never knows any concrete channel type.
+   */
+  public readonly ActiveChannels$: Observable<BaseRealtimeChannelClient[]> = this._activeChannels$.asObservable();
+
+  /**
+   * Channel requests to enter / leave the FOCUS layout (see
+   * {@link RealtimeChannelFocusEvent}). Fired when a plugin calls its host context's
+   * `SetFocusMode` — e.g. the whiteboard's "Focus board" toggle.
+   */
+  public readonly ChannelFocus$: Observable<RealtimeChannelFocusEvent> = this._channelFocus$.asObservable();
+
+  /** Synchronous access to the session's active interactive-channel plugins. */
+  public get ActiveChannels(): readonly BaseRealtimeChannelClient[] {
+    return this._activeChannels$.value;
+  }
+
   /** Synchronous access to the display name of the agent the active session fronts. */
   public get CurrentAgentName(): string {
     return this._agentName$.value;
+  }
+
+  /**
+   * ID of the active server-side agent session (`MJ: AI Agent Sessions`), or `null` when no
+   * session is open / the session hasn't been minted yet. Powers the overlay's gear-gated
+   * "Open session" dev link.
+   */
+  public get CurrentAgentSessionId(): string | null {
+    return this.agentSessionId;
+  }
+
+  /** Synchronous access to the minimized presentation state. */
+  public get IsMinimized(): boolean {
+    return this._minimized$.value;
+  }
+
+  /**
+   * Minimizes / restores the active call overlay (host renders the floating pill while
+   * minimized). Presentation-only — the live audio session is untouched.
+   */
+  public SetMinimized(minimized: boolean): void {
+    if (this._minimized$.value !== minimized) {
+      this._minimized$.next(minimized);
+    }
   }
 
   // ── Session internals ──────────────────────────────────────────────────────
@@ -240,6 +344,29 @@ export class VoiceSessionService {
   /** Tail message of the last digest, so an identical trailing progress event isn't re-buffered. */
   private lastNarratedTail = '';
 
+  /**
+   * Registry of CLIENT-EXECUTED UI tool handlers, keyed by tool-name prefix (e.g.
+   * `'Whiteboard.'`). Tool calls whose name matches a registered prefix run LOCALLY through the
+   * handler (never relayed to the server); everything else takes the standard server-relay path.
+   * Cleared at teardown.
+   */
+  private clientToolHandlers = new Map<string, VoiceClientToolHandler>();
+
+  // ── Interactive channels (registry-resolved plugins) ───────────────────────
+  /** Debounce window for persisting a channel's state of record after a change burst. */
+  private static readonly ChannelSaveDebounceMs = 3000;
+  /**
+   * Pending DEBOUNCED channel-state saves, keyed by channel name. Each entry keeps the
+   * LATEST serialized state plus the session id captured while the session was live —
+   * the teardown flush runs as the live id is being torn down, so the capture guarantees
+   * the final save still lands on the just-closed session.
+   */
+  private pendingChannelSaves = new Map<string, {
+    Timer: ReturnType<typeof setTimeout>;
+    StateJson: string;
+    SessionID: string | null;
+  }>();
+
   private _provider: IMetadataProvider | null = null;
 
   /**
@@ -270,13 +397,20 @@ export class VoiceSessionService {
    * @param preferredModelId Optional EXPLICIT realtime model choice (`MJ: AI Models.ID`). When
    *   set, the server uses exactly that model and FAILS with a clear reason if it can't (no
    *   silent fallback). Omit for the server's automatic (highest-PowerRank) selection.
+   * @param clientTools Optional EXTRA client-executed UI tool declarations to expose to the
+   *   realtime model alongside the server's stable tool set and the interactive-channel
+   *   tools (which are aggregated automatically from the registry-resolved plugins — see
+   *   {@link ActiveChannels$}). The server only DECLARES these — execution stays in the
+   *   browser via handlers registered with {@link RegisterClientToolHandler}. This is an
+   *   extension point for hosts with bespoke (non-channel) UI tools; most callers omit it.
    */
   public async StartVoiceSession(
     targetAgentId: string,
     conversationId?: string | null,
     lastSessionId?: string | null,
     agentName?: string | null,
-    preferredModelId?: string | null
+    preferredModelId?: string | null,
+    clientTools?: RealtimeToolDefinition[] | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -290,7 +424,10 @@ export class VoiceSessionService {
     this._connectionState$.next('connecting');
 
     try {
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId);
+      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
+      // tool sets must be declared to the realtime model at session mint.
+      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools);
       this.agentSessionId = session.AgentSessionId;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
@@ -359,6 +496,195 @@ export class VoiceSessionService {
     const muted = tracks[0].enabled; // currently enabled → becomes muted
     this.client?.SetMuted(muted);
     return muted;
+  }
+
+  // ── Client-executed UI tools ───────────────────────────────────────────────
+
+  /**
+   * Registers a handler for CLIENT-EXECUTED UI tools whose names start with `toolNamePrefix`
+   * (e.g. `'Whiteboard.'` → all `Whiteboard.*` calls). Matching tool calls execute LOCALLY via
+   * the handler — they are never relayed to the server — and the handler's result JSON is sent
+   * back to the model as the `tool_response`. Re-registering the same prefix replaces the
+   * handler. The registry is cleared at session teardown.
+   */
+  public RegisterClientToolHandler(toolNamePrefix: string, handler: VoiceClientToolHandler): void {
+    this.clientToolHandlers.set(toolNamePrefix, handler);
+  }
+
+  /** Removes the handler registered for `toolNamePrefix` (no-op when none is registered). */
+  public UnregisterClientToolHandler(toolNamePrefix: string): void {
+    this.clientToolHandlers.delete(toolNamePrefix);
+  }
+
+  /**
+   * Feeds a background context note into the live model (no spoken reply is requested) — the
+   * perception channel interactive surfaces use (e.g. the whiteboard's coalesced scene deltas).
+   * No-op when no session is live.
+   */
+  public SendContextNote(text: string): void {
+    const trimmed = text?.trim() ?? '';
+    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+      return;
+    }
+    this.client.SendContextNote(trimmed);
+  }
+
+  // ── Interactive channels (registry-driven plugins) ─────────────────────────
+
+  /**
+   * Resolves, instantiates and initializes the session's interactive-channel plugins from
+   * the `MJ: AI Agent Channels` registry, publishes them on {@link ActiveChannels$}, and
+   * returns their aggregated client-executed tool declarations for the session mint.
+   * Tolerant by design: registry/resolution failures degrade to "no channels" — the voice
+   * session itself always proceeds.
+   */
+  private async startChannels(): Promise<RealtimeToolDefinition[]> {
+    const channels = await this.loadActiveChannels();
+    for (const plugin of channels) {
+      this.initializeChannel(plugin);
+    }
+    this._activeChannels$.next(channels);
+    return channels.flatMap(plugin => plugin.GetToolDefinitions());
+  }
+
+  /**
+   * Loads the ACTIVE channel definitions from the registry and resolves each row's
+   * `ClientPluginClass` through the MJ ClassFactory into a per-session plugin instance —
+   * the client-side mirror of how realtime-model drivers resolve from `BaseRealtimeModel`
+   * / `BaseRealtimeClient`. Rows whose plugin class isn't registered are skipped (logged),
+   * never fatal.
+   */
+  private async loadActiveChannels(): Promise<BaseRealtimeChannelClient[]> {
+    const rows = await this.fetchChannelDefinitions();
+    const channels: BaseRealtimeChannelClient[] = [];
+    for (const row of rows) {
+      const plugin = this.resolveChannelPlugin(row);
+      if (plugin) {
+        channels.push(plugin);
+      }
+    }
+    return channels;
+  }
+
+  /**
+   * Reads the ACTIVE `MJ: AI Agent Channels` rows (read-only lookup: simple results,
+   * narrowed fields). Failures are logged and degrade to an empty list — channel
+   * availability must never block the voice session.
+   */
+  private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.Provider);
+      const result = await rv.RunView<RealtimeChannelDefinitionRow>({
+        EntityName: 'MJ: AI Agent Channels',
+        ExtraFilter: 'IsActive = 1',
+        Fields: ['ID', 'Name', 'ClientPluginClass'],
+        ResultType: 'simple'
+      });
+      if (!result.Success) {
+        console.warn('[VoiceSession] Failed to load channel registry:', result.ErrorMessage);
+        return [];
+      }
+      return result.Results ?? [];
+    } catch (error) {
+      console.warn('[VoiceSession] Channel registry unavailable — starting with no channels:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Resolves one registry row's `ClientPluginClass` via the ClassFactory (registration
+   * checked first, exactly like the realtime-client drivers) and instantiates a fresh
+   * per-session plugin. Returns `null` (logged) when no plugin is registered for the key
+   * — e.g. its Load function was never called or the package isn't included client-side.
+   */
+  private resolveChannelPlugin(row: RealtimeChannelDefinitionRow): BaseRealtimeChannelClient | null {
+    const key = row.ClientPluginClass?.trim();
+    if (!key) {
+      console.warn(`[VoiceSession] Channel '${row.Name}' has no ClientPluginClass — skipping.`);
+      return null;
+    }
+    const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRealtimeChannelClient, key);
+    if (!registration) {
+      console.warn(`[VoiceSession] No client plugin registered for channel '${row.Name}' (key '${key}') — skipping.`);
+      return null;
+    }
+    const plugin = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeChannelClient>(BaseRealtimeChannelClient, key);
+    if (!plugin) {
+      console.warn(`[VoiceSession] Failed to instantiate client plugin for channel '${row.Name}' (key '${key}').`);
+      return null;
+    }
+    return plugin;
+  }
+
+  /**
+   * Wires one plugin into the session: hands it its host context and registers its
+   * prefix-routed local tool executor (so `<ToolNamePrefix>*` calls run in the browser
+   * through {@link BaseRealtimeChannelClient.ApplyAgentTool}, never the server relay).
+   */
+  private initializeChannel(plugin: BaseRealtimeChannelClient): void {
+    plugin.Initialize(this.buildChannelContext(plugin));
+    this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) =>
+      plugin.ApplyAgentTool(toolName, argsJson)
+    );
+  }
+
+  /** Builds the host-services context one channel plugin sees (its only line to the session). */
+  private buildChannelContext(plugin: BaseRealtimeChannelClient): RealtimeChannelContext {
+    return {
+      AgentName: this.CurrentAgentName,
+      SendContextNote: (text: string) => this.SendContextNote(text),
+      RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
+      SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on })
+    };
+  }
+
+  /**
+   * Schedules the DEBOUNCED state-of-record save for a channel: each request replaces the
+   * pending payload (latest state wins) and re-arms the timer; the session id is captured
+   * while live so the teardown flush can persist onto the just-closed session.
+   */
+  private scheduleChannelSave(channelName: string, stateJson: string): void {
+    const pending = this.pendingChannelSaves.get(channelName);
+    if (pending) {
+      clearTimeout(pending.Timer);
+    }
+    this.pendingChannelSaves.set(channelName, {
+      Timer: setTimeout(() => this.flushChannelSave(channelName), VoiceSessionService.ChannelSaveDebounceMs),
+      StateJson: stateJson,
+      SessionID: this.agentSessionId ?? pending?.SessionID ?? null
+    });
+  }
+
+  /** Fires one pending channel save (best-effort; {@link SaveChannelState} logs failures). */
+  private flushChannelSave(channelName: string): void {
+    const pending = this.pendingChannelSaves.get(channelName);
+    if (!pending) {
+      return;
+    }
+    this.pendingChannelSaves.delete(channelName);
+    clearTimeout(pending.Timer);
+    void this.SaveChannelState(channelName, pending.StateJson, pending.SessionID);
+  }
+
+  /** Final teardown flush: persist every channel's unsaved state immediately. */
+  private flushAllChannelSaves(): void {
+    for (const channelName of [...this.pendingChannelSaves.keys()]) {
+      this.flushChannelSave(channelName);
+    }
+  }
+
+  /** Disposes all channel plugins (errors contained per plugin) and clears the live set. */
+  private disposeChannels(): void {
+    for (const plugin of this._activeChannels$.value) {
+      try {
+        plugin.Dispose();
+      } catch (error) {
+        console.error(`[VoiceSession] Channel '${plugin.ChannelName}' Dispose failed:`, error);
+      }
+    }
+    if (this._activeChannels$.value.length > 0) {
+      this._activeChannels$.next([]);
+    }
   }
 
   // ── Realtime client resolution + wiring ────────────────────────────────────
@@ -504,10 +830,20 @@ export class VoiceSessionService {
   // ── Tool calling ───────────────────────────────────────────────────────────
 
   /**
-   * Executes a provider tool call on the MJ server, then feeds the result back to the
-   * model via {@link BaseRealtimeClient.SendToolResult} so it speaks the outcome.
+   * Routes a provider tool call: names matching a registered client-tool prefix execute
+   * LOCALLY (UI tools — see {@link RegisterClientToolHandler}); everything else executes on
+   * the MJ server. Either way the result feeds back to the model via
+   * {@link BaseRealtimeClient.SendToolResult} so it speaks the outcome.
    */
   private async handleToolCall(call: RealtimeClientToolCall): Promise<void> {
+    const clientHandler = this.findClientToolHandler(call.ToolName);
+    if (clientHandler) {
+      // Local UI tool: no server relay, no 'thinking' turn-state / narration burst — these
+      // are fast, in-browser surface mutations (e.g. drawing on the whiteboard).
+      const resultJson = await this.executeClientTool(clientHandler, call);
+      this.client?.SendToolResult(call.CallID, resultJson);
+      return;
+    }
     this._connectionState$.next('thinking');
     if (this.inFlightCallIds.size === 0) {
       // A fresh delegation burst: anchor the first-update delay and clear the digest
@@ -536,11 +872,41 @@ export class VoiceSessionService {
     }
   }
 
+  /** Finds the registered client-tool handler whose prefix matches `toolName`, or `null`. */
+  private findClientToolHandler(toolName: string): VoiceClientToolHandler | null {
+    for (const [prefix, handler] of this.clientToolHandlers) {
+      if (toolName.startsWith(prefix)) {
+        return handler;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Executes one client-tool call through its handler, wrapping any thrown error into a
+   * `{ success: false, error }` JSON payload so the model can narrate the failure instead of
+   * the call going silent.
+   */
+  private async executeClientTool(handler: VoiceClientToolHandler, call: RealtimeClientToolCall): Promise<string> {
+    try {
+      return await handler(call.ToolName, call.ArgumentsJson);
+    } catch (error) {
+      console.error('[VoiceSession] Client tool execution failed:', error);
+      return JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
   /**
    * Emits a delegation result so the overlay's "working" card flips to a result card with real
-   * content. Parses the broker's `{success, output}` | `{success:false, error}` shape; if it isn't
-   * JSON, surfaces the raw string. Only delegation cards (created from progress events) react —
-   * non-delegation tool results have no card and are harmlessly ignored downstream.
+   * content. Parses the broker's `{success, output, runId}` | `{success:false, error}` shape via
+   * {@link ParseDelegationResultJson}; if it isn't JSON, surfaces the raw string. Only delegation
+   * cards (created from progress events) react — non-delegation tool results have no card and are
+   * harmlessly ignored downstream. The `runId` (the delegated `MJ: AI Agent Runs` record) rides
+   * along as {@link VoiceDelegationResult.RunID} for the overlay's dev links, and any `artifacts`
+   * ride along as {@link VoiceDelegationResult.Artifacts} for the surface panel's artifact tabs.
    */
   private emitDelegationResult(callId: string, resultJson: string): void {
     // The result will be spoken next — a deferred interim update is now pointless
@@ -548,16 +914,14 @@ export class VoiceSessionService {
     // and any progress still in the PubSub pipe for this call is stale.
     this.inFlightCallIds.delete(callId);
     this.cancelPendingNarration();
-    let success = true;
-    let output = '';
-    try {
-      const parsed = JSON.parse(resultJson) as { success?: boolean; output?: string; error?: string };
-      success = parsed.success !== false;
-      output = parsed.output ?? parsed.error ?? '';
-    } catch {
-      output = resultJson;
-    }
-    this._delegationResult$.next({ CallID: callId, Success: success, Output: output });
+    const parsed = ParseDelegationResultJson(resultJson);
+    this._delegationResult$.next({
+      CallID: callId,
+      Success: parsed.Success,
+      Output: parsed.Output,
+      RunID: parsed.RunID,
+      Artifacts: parsed.Artifacts
+    });
   }
 
   // ── Session minting (GraphQL) ──────────────────────────────────────────────
@@ -567,11 +931,12 @@ export class VoiceSessionService {
     targetAgentId: string,
     conversationId?: string | null,
     lastSessionId?: string | null,
-    preferredModelId?: string | null
+    preferredModelId?: string | null,
+    clientTools?: RealtimeToolDefinition[] | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson) {
           AgentSessionId
           ConversationId
           Provider
@@ -588,7 +953,8 @@ export class VoiceSessionService {
       targetAgentId,
       conversationId: conversationId ?? null,
       lastSessionId: lastSessionId ?? null,
-      preferredModelId: preferredModelId ?? null
+      preferredModelId: preferredModelId ?? null,
+      clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -615,6 +981,38 @@ export class VoiceSessionService {
       argsJson
     });
     return (result?.ExecuteRealtimeSessionTool as string) ?? '{}';
+  }
+
+  /**
+   * Persists an interactive channel's state of record (e.g. the whiteboard's serialized scene)
+   * onto the session's `MJ: AI Agent Session Channels` row via `SaveSessionChannelState`.
+   *
+   * @param channelName The channel definition name (e.g. `'Whiteboard'`).
+   * @param stateJson The serialized channel state.
+   * @param agentSessionId Optional EXPLICIT session id. The debounced channel-save pipeline
+   *   captures the id while the session is live and passes it here, so the final teardown
+   *   flush still lands on the just-closed session. Falls back to the active session's id;
+   *   returns `false` when neither is available.
+   * @returns Whether the server persisted the state. Failures are logged, never thrown — channel
+   *   persistence is best-effort and must not disturb the live call.
+   */
+  public async SaveChannelState(channelName: string, stateJson: string, agentSessionId?: string | null): Promise<boolean> {
+    const sessionId = agentSessionId ?? this.agentSessionId;
+    if (!sessionId) {
+      return false;
+    }
+    try {
+      const mutation = `
+        mutation SaveSessionChannelState($agentSessionId: String!, $channelName: String!, $stateJson: String!) {
+          SaveSessionChannelState(agentSessionId: $agentSessionId, channelName: $channelName, stateJson: $stateJson)
+        }
+      `;
+      const result = await this.gql().ExecuteGQL(mutation, { agentSessionId: sessionId, channelName, stateJson });
+      return (result?.SaveSessionChannelState as boolean) ?? false;
+    } catch (error) {
+      console.error('[VoiceSession] Failed to save channel state:', error);
+      return false;
+    }
   }
 
   // ── Transcript relay (GraphQL) ─────────────────────────────────────────────
@@ -827,6 +1225,11 @@ export class VoiceSessionService {
   private async teardown(closeServerSession: boolean): Promise<void> {
     this.teardownDelegationProgress();
 
+    // Channels first: flush any unsaved channel state WHILE the live session id is still
+    // set (the captured per-save id covers the race anyway), then dispose the plugins.
+    this.flushAllChannelSaves();
+    this.disposeChannels();
+
     // Defensive: stop the mic even when Connect never ran (the client also stops the
     // tracks it was handed — track.stop() is idempotent).
     this.localStream?.getTracks().forEach(t => t.stop());
@@ -843,7 +1246,9 @@ export class VoiceSessionService {
 
     this.agentSessionId = null;
     this.narrationTemplate = null;
+    this.clientToolHandlers.clear();
     this._modelName$.next(null);
+    this.SetMinimized(false);
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
       this._connectionState$.next('closed');
@@ -874,6 +1279,7 @@ export class VoiceSessionService {
   /** Resets reactive + internal state at the start of a session. */
   private resetState(): void {
     this._captions$.next([]);
+    this.SetMinimized(false);
   }
 
   /** The GraphQL provider used for relay mutations. */

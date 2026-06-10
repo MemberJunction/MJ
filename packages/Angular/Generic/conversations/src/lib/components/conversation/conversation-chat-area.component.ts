@@ -30,6 +30,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
+import { RealtimeNavigateRequest } from '../realtime/realtime-session-overlay.component';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** Default width (percentage) for the artifact viewer pane */
@@ -2323,6 +2324,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: testRunId });
     this.openEntityRecord.emit({
       entityName: 'MJ: Test Runs',
+      compositeKey
+    });
+  }
+
+  /**
+   * A gear-gated developer link in the live call overlay asked to open a record
+   * (delegated agent run / agent session). The overlay has already minimized itself
+   * (the call stays live behind the floating "on call" pill); re-emit on the SAME
+   * `openEntityRecord` chain every other chat record-open uses, so the Explorer
+   * wrapper routes it through `NavigationService.OpenEntityRecord`.
+   */
+  onVoiceNavigateRequest(event: RealtimeNavigateRequest): void {
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: event.RecordID });
+    this.openEntityRecord.emit({
+      entityName: event.EntityName,
       compositeKey
     });
   }

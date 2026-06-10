@@ -19,6 +19,13 @@
   width: 40px;
 }
 
+/* EMBEDDED in the surface panel's Activity tab: the panel owns chrome + collapse,
+   so the rail stretches to the pane and drops its own border. */
+.rail--embedded {
+  width: 100%;
+  border-left: 0;
+}
+
 .rail__head {
   display: flex;
   align-items: center;
@@ -188,13 +195,67 @@
   overflow: hidden;
 }
 
+/* "View →" chip for an artifact a delegated run produced (focuses its surface tab) */
+.act-card__artifact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  margin-right: 6px;
+  padding: 2px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--sage-border);
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.act-card__artifact-link:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+}
+.act-card__artifact-link i {
+  font-size: 9px;
+}
+
+/* Gear-gated developer link to the delegated run record */
+.act-card__dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.act-card__dev-link:hover {
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.act-card__dev-link i {
+  font-size: 8px;
+}
+
 @keyframes rail-spin {
   to { transform: rotate(360deg); }
 }
 
-/* On narrow widths the rail stacks out of the way (overlay falls back to single column) */
+/* On narrow widths the STANDALONE rail stacks out of the way (overlay falls back to a
+   single column). The embedded rail is governed by the surface panel's own breakpoint. */
 @media (max-width: 860px) {
-  .rail {
+  .rail:not(.rail--embedded) {
     display: none;
   }
 }

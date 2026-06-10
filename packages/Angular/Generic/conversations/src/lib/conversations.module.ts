@@ -73,9 +73,18 @@ import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.co
 import { VoiceOverlayComponent } from './components/voice/voice-overlay.component';
 import { VoiceAgentPickerComponent } from './components/voice/voice-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
+import { RealtimeWhiteboardHostComponent } from './components/realtime/whiteboard/whiteboard-host.component';
+import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/whiteboard-channel';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
+
+// Tree-shaking prevention for interactive-channel CLIENT PLUGINS: they are resolved
+// dynamically through the MJ ClassFactory (keyed by the `MJ: AI Agent Channels` registry's
+// ClientPluginClass), so these static calls are what keep their @RegisterClass side effects
+// from being eliminated by the bundler. They live here (not in VoiceSessionService) because
+// channel plugins carry Angular surface components — the service stays component-free.
+LoadRealtimeWhiteboardChannel();
 
 // Export all components (excluding standalone components)
 const COMPONENTS = [
@@ -156,7 +165,8 @@ const COMPONENTS = [
     ArtifactShareModalComponent,
     VoiceOverlayComponent,
     VoiceAgentPickerComponent,
-    RealtimeSessionOverlayComponent
+    RealtimeSessionOverlayComponent,
+    RealtimeWhiteboardHostComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -165,7 +175,8 @@ const COMPONENTS = [
     TasksFullViewComponent,
     VoiceOverlayComponent,
     VoiceAgentPickerComponent,
-    RealtimeSessionOverlayComponent
+    RealtimeSessionOverlayComponent,
+    RealtimeWhiteboardHostComponent
   ]
 })
 export class ConversationsModule { }

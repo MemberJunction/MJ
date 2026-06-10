@@ -1,6 +1,7 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RealtimeDelegationCardVM, FriendlyStepLabel } from './realtime-session-state';
+import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
 /**
  * Renders a single delegation in the live session thread:
@@ -14,6 +15,10 @@ import { RealtimeDelegationCardVM, FriendlyStepLabel } from './realtime-session-
  *
  * Provenance is a small `via <agent>` badge + a shield icon whose `title` tooltip
  * carries the full provenance sentence (no repeated sentence under every card).
+ *
+ * DEVELOPER MODE (gear-gated by the overlay shell): when {@link DevMode} is on and the
+ * card knows its delegated run id, an "Open run" link is revealed that emits
+ * {@link OpenRunRequested} so the shell can navigate to the `MJ: AI Agent Runs` record.
  */
 @Component({
   standalone: true,
@@ -29,8 +34,41 @@ export class RealtimeDelegationCardComponent {
   /** The delegation card view-model to render (immutable — replaced on every update). */
   @Input({ required: true }) Card!: RealtimeDelegationCardVM;
 
+  /** Whether developer affordances (the "Open run" link) are revealed. */
+  @Input() DevMode = false;
+
+  /** Emitted with the delegated run's ID when the dev "Open run" link is clicked. */
+  @Output() OpenRunRequested = new EventEmitter<string>();
+
+  /** Emitted when a "View" artifact chip is clicked (the overlay focuses the artifact's tab). */
+  @Output() OpenArtifactRequested = new EventEmitter<ParsedDelegationArtifact>();
+
   /** Whether the done chip is expanded inline to show the full result text. */
   public Expanded = false;
+
+  /** The artifacts this (done) delegation produced (empty array while running / when none). */
+  public get Artifacts(): ParsedDelegationArtifact[] {
+    return this.Card.Done && this.Card.Artifacts ? this.Card.Artifacts : [];
+  }
+
+  /** Emits the open-artifact request for one of this card's produced artifacts. */
+  public OpenArtifact(event: MouseEvent, artifact: ParsedDelegationArtifact): void {
+    event.stopPropagation();
+    this.OpenArtifactRequested.emit(artifact);
+  }
+
+  /** True when the dev "Open run" link should render (gear on + run id known). */
+  public get ShowOpenRun(): boolean {
+    return this.DevMode && !!this.Card.RunID;
+  }
+
+  /** Emits the open-run request for this card's delegated run. */
+  public OpenRun(event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.Card.RunID) {
+      this.OpenRunRequested.emit(this.Card.RunID);
+    }
+  }
 
   /** Friendly label for the current delegation step (raw message as fallback). */
   public get StepLabel(): string {
