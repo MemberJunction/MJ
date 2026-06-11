@@ -1,77 +1,131 @@
 /**
- * @fileoverview Stub observability surface for AI Agent Sessions & Channels.
+ * @fileoverview Observability surface for AI Agent Sessions & Channels lifecycle.
  *
- * This is a **no-op placeholder** until PR #2787 (`plans/ai-agent-sessions.md`) lands.
- * That PR introduces:
- * - `BaseRealtimeModel` — modality-agnostic, streaming, full-duplex, tool-calling model
- *   primitive (Gemini Live, GPT Realtime, etc.).
- * - A new `Realtime` agent type + generic Voice Co-Agent that acts as the live voice for
- *   any existing agent, delegating real work back to it.
- * - Sessions & Channels infrastructure — long-lived Sessions wrap multiple `AIAgentRun`s
- *   of a real-time interaction; pluggable, *interactive* Channels (voice, whiteboard,
- *   text, …) are bidirectional surfaces the agent perceives and acts on.
+ * `SessionsObserver` is the runtime's framework-agnostic re-broadcaster of
+ * session lifecycle events that originate from PR #2787's Sessions/Channels
+ * infrastructure. It does NOT subscribe directly to any Angular service or
+ * realtime client — those concerns live behind an {@link ISessionsAdapter} the
+ * host registers at bootstrap (typically `VoiceSessionsAdapter` in
+ * `@memberjunction/ng-conversations`, but anything implementing the contract
+ * works — a React host, a Node test harness, a server-side runner, etc.).
  *
- * **What this stub does today:** nothing. It exists so the runtime API is stable and
- * widget consumers can already subscribe to session-related observables without code
- * changes once PR #2787 lands.
+ * **What you get on `SessionLifecycle$`:**
+ * - `session-started` — a new realtime session has fully started (sessionId is
+ *   non-null, the realtime client is connected). Adapter implementations are
+ *   responsible for emitting only AFTER all the prerequisites are satisfied
+ *   (e.g., the Angular `VoiceSessionsAdapter` waits for both `Active$` AND a
+ *   non-null `agentSessionId`).
+ * - `session-channel` — a channel (voice/whiteboard/whatever) opened or closed
+ *   inside the session. The `state` union is intentionally narrow
+ *   (`'open' | 'closed'`) because no per-channel transition observable exists
+ *   today; see `ISessionsAdapter` JSDoc for the rationale.
+ * - `session-ended` — the session ended client-side. `reason` is a narrowed
+ *   union (`'explicit' | 'error' | 'unknown'`) — see `ISessionsAdapter`.
  *
- * **What gets wired in once PR #2787 merges:** the observer subscribes to the Sessions
- * infrastructure's public API, surfaces lifecycle (`session-started`, `session-channel`,
- * `session-ended`) through `SessionLifecycle$`, and the widget's existing `SessionStarted`
- * / `SessionChannelStateChanged` / `SessionEnded` `@Output()`s start firing automatically.
+ * **What you DON'T get:** server-side close events that fire while the user's
+ * tab is gone (janitor sweep, host shutdown). Those flow into the `MJ: AI Agent
+ * Sessions` row's `CloseReason` column but are not pushed to the client today.
+ * Admin/observability tooling polls the entity for those — out of scope for
+ * the orchestration runtime.
  *
  * @module @memberjunction/conversations-runtime
  */
 
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, Subscription } from 'rxjs';
+import {
+    ISessionsAdapter,
+    NoOpSessionsAdapter,
+    SessionLifecycleEvent,
+} from '../adapters/ISessionsAdapter';
 
-/** A single Session lifecycle event surfaced by the observer. */
-export type SessionLifecycleEvent =
-    | { kind: 'session-started'; sessionId: string; channelKinds: string[] }
-    | { kind: 'session-channel'; sessionId: string; channelKind: string; state: SessionChannelState }
-    | { kind: 'session-ended'; sessionId: string; reason: string };
-
-/** Channel state transitions surfaced for `session-channel` events. */
-export type SessionChannelState = 'opening' | 'open' | 'closing' | 'closed';
+// Re-export the event types for backwards compatibility with consumers that
+// imported them from this module before the adapter pattern was introduced.
+export type {
+    SessionLifecycleEvent,
+    SessionChannelState,
+    SessionEndReason,
+} from '../adapters/ISessionsAdapter';
 
 /**
- * Observes Sessions/Channels lifecycle from PR #2787 and surfaces it as RxJS events.
+ * Observes Sessions/Channels lifecycle from the registered adapter and
+ * re-broadcasts via `SessionLifecycle$`.
  *
- * **Stub today.** The observable exists and is wired into the runtime, but never emits
- * until PR #2787 lands and the wiring is completed.
+ * **Lifecycle:** constructed once by `ConversationsRuntime` (singleton). Stays
+ * subscribed to the adapter's stream until `Dispose()` is called. Adapter swaps
+ * via `UseSessionsAdapter` unsubscribe the prior adapter cleanly.
  *
  * Usually accessed via `ConversationsRuntime.Instance.Sessions`.
  */
 export class SessionsObserver {
     /**
-     * Stream of Session lifecycle events. Consumers (e.g., the widget's `SessionStarted` /
-     * `SessionChannelStateChanged` / `SessionEnded` `@Output()` plumbing) subscribe here.
-     *
-     * **Stub:** never emits until PR #2787's wiring is completed in a follow-up.
+     * Stream of session lifecycle events from whatever adapter is currently
+     * registered. Subscribers see only events that occur AFTER they subscribe —
+     * `SessionsObserver` does not replay history (use `RealtimeSessionReviewService`
+     * for past-session loading, separate concern).
      */
     public readonly SessionLifecycle$: Observable<SessionLifecycleEvent>;
 
     private readonly _lifecycle$ = new Subject<SessionLifecycleEvent>();
+    private _adapter: ISessionsAdapter;
+    private _adapterSub: Subscription | null = null;
 
     constructor() {
         this.SessionLifecycle$ = this._lifecycle$.asObservable();
+        // Default to no-op so consumers can subscribe immediately without an adapter.
+        this._adapter = new NoOpSessionsAdapter();
+        this.subscribeToAdapter();
     }
 
     /**
-     * Whether this observer is wired against PR #2787's Sessions infrastructure.
-     *
-     * **Today: always `false`** (stub). Once the follow-up PR wires the observer in,
-     * this returns `true` after `Config()` (or equivalent) completes.
+     * Register the adapter that produces session events. Replaces any prior
+     * adapter and cleanly tears down the previous subscription. Typically called
+     * once at host bootstrap (e.g., Angular's `ConversationsRuntimeBootstrap`),
+     * but multiple swaps are supported (e.g., test harnesses that switch
+     * adapters between cases).
+     */
+    public UseSessionsAdapter(adapter: ISessionsAdapter): void {
+        this._adapterSub?.unsubscribe();
+        this._adapter = adapter;
+        this.subscribeToAdapter();
+    }
+
+    /**
+     * Whether a non-default adapter is currently registered. Useful for
+     * diagnostics ("are sessions actually wired up on this host?") and for
+     * features that should gate themselves on real wiring.
      */
     public get IsWired(): boolean {
-        return false;
+        return !(this._adapter instanceof NoOpSessionsAdapter);
     }
 
     /**
-     * Tear down any subscriptions to the Sessions infrastructure. No-op today; the wiring
-     * PR will add the real cleanup. Safe to call regardless of wiring state.
+     * The currently registered adapter. Provided for diagnostics; consumers
+     * should subscribe to `SessionLifecycle$` instead of reaching into the
+     * adapter directly.
+     */
+    public get Adapter(): ISessionsAdapter {
+        return this._adapter;
+    }
+
+    /**
+     * Tear down the adapter subscription and complete the lifecycle stream.
+     * Safe to call multiple times. After Dispose, subscribers will receive a
+     * `complete` notification on `SessionLifecycle$`.
      */
     public Dispose(): void {
+        this._adapterSub?.unsubscribe();
+        this._adapterSub = null;
         this._lifecycle$.complete();
+    }
+
+    /** Forwards adapter events into our internal Subject. */
+    private subscribeToAdapter(): void {
+        this._adapterSub = this._adapter.SessionLifecycle$.subscribe({
+            next: (event) => this._lifecycle$.next(event),
+            // Don't surface adapter errors to consumers — they're host-specific.
+            // The adapter is responsible for its own resilience; we just keep
+            // our broadcast stream alive for the next adapter swap.
+            error: () => undefined,
+        });
     }
 }

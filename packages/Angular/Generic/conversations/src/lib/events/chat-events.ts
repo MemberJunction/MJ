@@ -140,11 +140,19 @@ export class AfterResponseFormSubmittedEventArgs {
 // ────────────────────────────────────────────────────────────────────
 // Session lifecycle (informational — no Before-pair)
 // ────────────────────────────────────────────────────────────────────
+//
+// These re-broadcast the `SessionLifecycleEvent` variants from
+// `@memberjunction/conversations-runtime`'s `SessionsObserver`. State/Reason
+// union types are intentionally narrowed to what's distinguishable client-side
+// today — see the `ISessionsAdapter` JSDoc in the runtime package for the full
+// rationale (no per-channel `opening`/`closing` observable, server-only
+// `Janitor`/`Shutdown` reasons that never reach the browser).
 
 /**
- * Informational event — fired when a Session/Channel lifecycle event arrives
- * from the conversations runtime. Cancellation of voice/realtime activity
- * lives at the Sessions layer (PR #2787), not here.
+ * Informational event — fired when a realtime session has fully started
+ * (server-issued `sessionId` is set AND the realtime client is connected).
+ * Cancellation of voice/realtime activity lives at the Sessions layer
+ * (PR #2787), not here.
  */
 export class SessionStartedEventArgs {
     constructor(
@@ -153,19 +161,25 @@ export class SessionStartedEventArgs {
     ) {}
 }
 
-/** Informational. See {@link SessionStartedEventArgs}. */
+/**
+ * Informational. A channel inside a session opened or closed. Narrowed to
+ * `open | closed` — see {@link SessionStartedEventArgs} module comment.
+ */
 export class SessionChannelStateChangedEventArgs {
     constructor(
         public readonly SessionId: string,
         public readonly ChannelKind: string,
-        public readonly State: 'opening' | 'open' | 'closing' | 'closed'
+        public readonly State: 'open' | 'closed'
     ) {}
 }
 
-/** Informational. See {@link SessionStartedEventArgs}. */
+/**
+ * Informational. A session ended client-side. Narrowed to
+ * `explicit | error | unknown` — see {@link SessionStartedEventArgs} module comment.
+ */
 export class SessionEndedEventArgs {
     constructor(
         public readonly SessionId: string,
-        public readonly Reason: string
+        public readonly Reason: 'explicit' | 'error' | 'unknown'
     ) {}
 }

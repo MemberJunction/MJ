@@ -116,9 +116,19 @@ describe('Session* informational events', () => {
         expect(e.State).toBe('open');
     });
 
-    it('SessionEndedEventArgs carries session id + reason', () => {
-        const e = new SessionEndedEventArgs('sess-1', 'completed');
+    it('SessionEndedEventArgs carries session id + narrowed reason', () => {
+        const e = new SessionEndedEventArgs('sess-1', 'explicit');
         expect(e.SessionId).toBe('sess-1');
-        expect(e.Reason).toBe('completed');
+        expect(e.Reason).toBe('explicit');
+    });
+
+    it('SessionEndedEventArgs accepts all narrowed reason values', () => {
+        // Compile-time check: the narrowed union should permit exactly these three.
+        const explicit = new SessionEndedEventArgs('sess-1', 'explicit');
+        const error = new SessionEndedEventArgs('sess-1', 'error');
+        const unknown = new SessionEndedEventArgs('sess-1', 'unknown');
+        expect(explicit.Reason).toBe('explicit');
+        expect(error.Reason).toBe('error');
+        expect(unknown.Reason).toBe('unknown');
     });
 });

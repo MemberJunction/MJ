@@ -256,43 +256,62 @@ On every install that runs `mj sync push`, the setting exists and the resolver n
 
 **Caching.** `ApplicationSettingEngine` already caches and exposes a reactive observable. `AIEngineBase.Instance.Agents` already caches all agents. The resolver caches its result per `(applicationId, explicitAgentId)` for the lifetime of a turn and invalidates when either source emits a change.
 
-### 4d. AI Agent Sessions & Channels integration (stub task)
+### 4d. AI Agent Sessions & Channels integration
 
-PR #2787 introduces Sessions (long-lived wrappers over multiple `AIAgentRun`s of a real-time interaction) and Channels (interactive, bidirectional surfaces the agent perceives and acts on — voice, whiteboard, text, etc.). The conversations runtime does **not** invent a parallel abstraction; it observes and surfaces what PR #2787 owns.
+> **Status revision (post-#2787 merge):** PR #2787 (sessions/channels infrastructure) has now landed in `next`. The original framing of this section as a "stub task" is replaced by the real wiring described below. Stub language preserved in the rejected-alternatives section for history.
 
-**What the runtime gains:**
+PR #2787 introduced Sessions (long-lived wrappers over multiple `AIAgentRun`s of a real-time interaction) and Channels (interactive, bidirectional surfaces the agent perceives and acts on — voice, whiteboard, text, etc.). The conversations runtime does **not** invent a parallel abstraction; it observes and surfaces what PR #2787 owns.
 
-- A `SessionsObserver` sub-component that subscribes to the lifecycle of Sessions linked to active conversations. When a Voice Co-Agent starts a Session, the observer emits Session/Channel events into the existing `ConversationTurnEvent` stream so widget consumers see them through the same channel they already watch.
-- New `ConversationTurnEvent` variants — additive only:
+**Architecture — adapter pattern, identical shape to `INotificationAdapter` / `IActiveTaskTracker`:**
 
-  ```typescript
-  type ConversationTurnEvent =
-    | { kind: 'started';           agentRunId: string; }
-    | { kind: 'progress';          step: string; percent?: number; message?: string; }
-    | { kind: 'tool-invoked';      toolName: string; args: unknown; }
-    | { kind: 'response-form';     form: AgentResponseForm; }
-    | { kind: 'artifact';          artifactId: string; }
-    | { kind: 'session-started';   sessionId: string; channelKinds: string[]; }     // ★ new
-    | { kind: 'session-channel';   sessionId: string; channelKind: string;
-                                    state: 'opening' | 'open' | 'closing' | 'closed'; } // ★ new
-    | { kind: 'session-ended';     sessionId: string; reason: string; }              // ★ new
-    | { kind: 'complete';          result: ExecuteAgentResult; }
-    | { kind: 'error';             error: Error; };
-  ```
+```
+ConversationsRuntime (pure TS, framework-agnostic)
+  └── Sessions: SessionsObserver
+        └── subscribes to ← ISessionsAdapter (interface in conversations-runtime)
+              ├── Default: NoOpSessionsAdapter (EMPTY observable, headless-friendly)
+              └── Angular impl: VoiceSessionsAdapter (in ng-conversations)
+                    └── bridges → VoiceSessionService (PR #2787)
+                          ├── SessionStarted$  → 'session-started' event
+                          ├── ActiveChannels$  → diff into 'session-channel' open/close
+                          └── SessionEnded$    → 'session-ended' event
+```
 
-- The widget's existing `BeforeAgentTurn` / `AfterAgentTurn` events (Section 4e) handle these new event variants identically to the existing ones — no extra widget surface required for the Session story to flow through.
+**Why an adapter, not direct subscription?** The runtime must remain Angular-free so non-Angular consumers (React, Vue, Node workers) can use it. The adapter contract is the explicit boundary; the host implements it for whatever session source it has.
 
-**What this plan does NOT do:**
+**Narrowed event payloads** — honest about what's distinguishable client-side today:
 
-- Define `BaseRealtimeModel`, `Realtime` agent type, Voice Co-Agent, or any Channel implementation — those belong to PR #2787.
-- Ship code now. The integration is a **stub task** in the sequencing (Section 8, Step 6): once PR #2787 lands, wire the `SessionsObserver` against its public API. Until then, the stub is a no-op observer.
+```typescript
+type SessionLifecycleEvent =
+  | { kind: 'session-started';   sessionId: string; channelKinds: string[]; }
+  | { kind: 'session-channel';   sessionId: string; channelKind: string;
+                                  state: 'open' | 'closed'; }          // narrowed from 4 states
+  | { kind: 'session-ended';     sessionId: string;
+                                  reason: 'explicit' | 'error' | 'unknown'; }  // narrowed from server's 4
+```
 
-**Why this is the right shape:**
+- `'opening'`/`'closing'` channel states were dropped because `VoiceSessionService`'s only channel observable (`ActiveChannels$`) only carries the full plugin array — no per-channel transition observable exists today. Future widening (adding `Status$` to `BaseRealtimeChannelClient`) is non-breaking.
+- `'janitor'`/`'shutdown'` reasons happen out-of-process on the server (janitor sweep while the tab is gone, host shutdown) and have no client push channel today. They're observability concerns, not orchestration.
 
-- The runtime is conversation-shaped; Sessions are agent-shaped. Keeping them in separate layers preserves the "Sessions/Channels are an agent capability" framing from PR #2787 and avoids leaking real-time concerns into every chat surface.
-- The widget already speaks `ConversationTurnEvent`. Adding three event variants is cheaper than adding a parallel event stream.
+**Cross-package change — minimal addition to `VoiceSessionService` (`@memberjunction/ng-conversations`):**
 
-**Net cost of this section now:** ~40 lines of stub code (`SessionsObserver` as a no-op + three event-variant additions), plus a follow-up tightly scoped to PR #2787's public API once it merges.
+Two new `Observable<...>` exports emitted at deterministic points:
+
+- `SessionStarted$: Observable<{ sessionId: string; channelNames: string[] }>` — fires after `mintSession` resolves AND `Connect()` returns, so subscribers see a guaranteed non-null `sessionId`. Avoids the `Active$ → true` / `agentSessionId === null` race window.
+- `SessionEnded$: Observable<{ sessionId: string; reason: 'explicit' | 'error' }>` — fires in `teardown()` with the prior `agentSessionId` captured before nulling. Reason is `'explicit'` when triggered by `EndVoiceSession`, `'error'` when triggered by the start-path catch block.
+
+This is analogous to the `beforeToolInvoked` cancel-enforcement addition to `AgentClientSession` — small, surgical, additive contract additions to PR-#2787-owned code so the runtime layer can bridge without race conditions.
+
+**Scope cut — server-only events.** The `MJ: AI Agent Sessions` row is the durable truth (`Status`, `CloseReason`, `ClosedAt` columns), but server-side close events that fire while the user's tab is gone do NOT propagate to the runtime today (no GraphQL subscription on `AIAgentSession` rows). Admin/observability tooling polls the entity for those. Adding a subscription is out of scope; if a future PR adds one, the runtime can layer a second adapter that merges with `VoiceSessionsAdapter`.
+
+**`RealtimeSessionReviewService` is unrelated.** It loads past sessions for replay; it doesn't observe live lifecycle. Not bridged.
+
+**Wired surfaces:**
+
+- `ConversationsRuntime.Instance.Sessions.SessionLifecycle$` — pure-TS consumers subscribe here.
+- `ConversationsRuntime.Instance.UseSessionsAdapter(adapter)` — hosts register at bootstrap.
+- `<mj-conversation-chat-area>`'s `(sessionStarted)`, `(sessionChannelStateChanged)`, `(sessionEnded)` outputs — Angular consumers subscribe through the widget's existing event surface.
+
+**Net cost of the real wiring:** ~250 lines across `ISessionsAdapter` (new file in `ConversationsRuntime`), the enhanced `SessionsObserver`, `VoiceSessionsAdapter` (new file in `ng-conversations`), 2 new observables on `VoiceSessionService`, chat-area's subscription, plus 18 unit tests covering the round-trip.
 
 ### 4e. Widget extension surface
 

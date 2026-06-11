@@ -43,6 +43,9 @@ import {
     IActiveTaskTracker,
     NoOpActiveTaskTracker,
 } from './adapters/IActiveTaskTracker';
+import {
+    ISessionsAdapter,
+} from './adapters/ISessionsAdapter';
 import { IConversationsRuntimeContext } from './context/IConversationsRuntimeContext';
 
 /**
@@ -146,6 +149,21 @@ export class ConversationsRuntime
         this._tasks = tracker;
     }
 
+    /**
+     * Register a sessions adapter — bridges the host's realtime session source
+     * (e.g., Angular's `VoiceSessionService`) to the framework-agnostic runtime
+     * `Sessions` observer. Typically called once at host bootstrap; multiple
+     * swaps are supported (test harnesses, modality additions).
+     *
+     * Delegates to {@link SessionsObserver.UseSessionsAdapter}, which cleanly
+     * tears down any prior adapter subscription before subscribing to the new
+     * one. The new adapter takes effect immediately for all subscribers of
+     * `Sessions.SessionLifecycle$`.
+     */
+    public UseSessionsAdapter(adapter: ISessionsAdapter): void {
+        this._sessions.UseSessionsAdapter(adapter);
+    }
+
     // ────────────────────────────────────────────────────────────────────
     // Sub-components — eagerly constructed (cheap) so the Instance accessor
     // always returns a ready runtime.
@@ -188,8 +206,14 @@ export class ConversationsRuntime
     }
 
     /**
-     * Sessions/Channels lifecycle observer — stub today, wired in once PR #2787 lands.
-     * See {@link SessionsObserver}.
+     * Sessions/Channels lifecycle observer — surfaces realtime session lifecycle
+     * events from the registered {@link ISessionsAdapter}. Defaults to a no-op
+     * adapter so headless consumers still construct cleanly; the Angular host's
+     * `ConversationsRuntimeBootstrap` swaps in a `VoiceSessionsAdapter` that
+     * bridges `VoiceSessionService` from PR #2787.
+     *
+     * Subscribe to `Sessions.SessionLifecycle$` for `session-started` /
+     * `session-channel` / `session-ended` events. See {@link SessionsObserver}.
      */
     public get Sessions(): SessionsObserver {
         return this._sessions;

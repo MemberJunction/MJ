@@ -26,6 +26,7 @@ export {
     SessionsObserver,
     type SessionLifecycleEvent,
     type SessionChannelState,
+    type SessionEndReason,
 } from './sessions/SessionsObserver';
 export {
     ConversationStreaming,
@@ -50,6 +51,10 @@ export {
     type IActiveTaskTracker,
     NoOpActiveTaskTracker,
 } from './adapters/IActiveTaskTracker';
+export {
+    type ISessionsAdapter,
+    NoOpSessionsAdapter,
+} from './adapters/ISessionsAdapter';
 
 // Context interface — exported so hosts implementing custom runtime
 // composition can use it. The runtime itself implements it.

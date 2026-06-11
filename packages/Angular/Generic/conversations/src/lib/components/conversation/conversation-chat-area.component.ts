@@ -30,6 +30,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { VoiceSessionService } from '../../services/voice-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
@@ -406,8 +407,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //     AgentClientSession.handleToolRequest short-circuits dispatch (tool
   //     handler NOT called, ToolExecuted$ NOT emitted, server receives a
   //     failure response carrying any CancelReason).
-  //   ✗ session* — DECLARED but the SessionsObserver is a no-op stub until
-  //     PR #2787 (ai-agent-sessions) lands.
+  //   ✓ sessionStarted / sessionChannelStateChanged / sessionEnded — subscribed
+  //     to ConversationsRuntime.Sessions.SessionLifecycle$ in ngOnInit. The
+  //     runtime's SessionsObserver consumes whichever ISessionsAdapter the host
+  //     registered at bootstrap; the Angular default is VoiceSessionsAdapter,
+  //     which bridges VoiceSessionService's SessionStarted$ / ActiveChannels$
+  //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
+  //     Vue, Node) register their own adapter — the chat-area code is unchanged.
 
   /** Cancelable — fired BEFORE a user message is sent to the agent. */
   @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
@@ -746,6 +752,38 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             toolEvent.Result
           )
         );
+      });
+
+    // Bridge ConversationsRuntime.Sessions.SessionLifecycle$ → chat-area's
+    // informational session* outputs. The runtime's SessionsObserver subscribes
+    // to whichever ISessionsAdapter the host registered at bootstrap (today:
+    // VoiceSessionsAdapter from ConversationsRuntimeBootstrap, bridging
+    // VoiceSessionService from PR #2787). Each event variant maps 1:1 to one
+    // of the three @Output() emitters declared above.
+    ConversationsRuntime.Instance.Sessions.SessionLifecycle$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event) => {
+        switch (event.kind) {
+          case 'session-started':
+            this.sessionStarted.emit(
+              new SessionStartedEventArgs(event.sessionId, event.channelKinds)
+            );
+            return;
+          case 'session-channel':
+            this.sessionChannelStateChanged.emit(
+              new SessionChannelStateChangedEventArgs(
+                event.sessionId,
+                event.channelKind,
+                event.state
+              )
+            );
+            return;
+          case 'session-ended':
+            this.sessionEnded.emit(
+              new SessionEndedEventArgs(event.sessionId, event.reason)
+            );
+            return;
+        }
       });
 
     // The workspace component initializes AI Engine and mention service before

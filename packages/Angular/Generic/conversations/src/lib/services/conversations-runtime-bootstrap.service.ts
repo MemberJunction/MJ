@@ -20,6 +20,8 @@ import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { ActiveTasksService } from './active-tasks.service';
+import { VoiceSessionService } from './voice-session.service';
+import { VoiceSessionsAdapter } from './voice-sessions-adapter';
 
 /**
  * Document-level `--mj-chat-*` design tokens. Each token defaults to a
@@ -52,7 +54,7 @@ const CHAT_TOKENS_CSS = `
     --mj-chat-character-accent: var(--mj-brand-primary);
     --mj-chat-presence-pulse-color: var(--mj-brand-primary);
 
-    /* ===== Voice state (PR #2787 wires these once it lands) ===== */
+    /* ===== Voice state (PR #2787 — bridged to VoiceSessionService) ===== */
     --mj-chat-voice-listening: var(--mj-status-info);
     --mj-chat-voice-thinking: var(--mj-status-warning);
     --mj-chat-voice-speaking: var(--mj-brand-primary);
@@ -64,7 +66,7 @@ const CHAT_TOKENS_STYLE_ID = 'mj-chat-tokens';
 
 @Injectable({ providedIn: 'root' })
 export class ConversationsRuntimeBootstrap {
-    constructor(activeTasks: ActiveTasksService) {
+    constructor(activeTasks: ActiveTasksService, voice: VoiceSessionService) {
         const runtime = ConversationsRuntime.Instance;
 
         // INotificationAdapter — bridge to MJNotificationService.CreateSimpleNotification.
@@ -84,6 +86,12 @@ export class ConversationsRuntimeBootstrap {
         runtime.UseActiveTaskTracker({
             RemoveByAgentRunId: (agentRunId) => activeTasks.removeByAgentRunId(agentRunId),
         });
+
+        // ISessionsAdapter — bridge VoiceSessionService's lifecycle observables
+        // (SessionStarted$ / ActiveChannels$ / SessionEnded$) into the runtime's
+        // framework-agnostic SessionsObserver. See VoiceSessionsAdapter docs for
+        // the why-an-adapter design rationale.
+        runtime.UseSessionsAdapter(new VoiceSessionsAdapter(voice));
 
         // Inject the chat-token CSS into the document <head> exactly once.
         // Guarded against SSR (no `document` global) and double-injection.
