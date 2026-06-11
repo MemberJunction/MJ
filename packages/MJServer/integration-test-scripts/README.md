@@ -401,6 +401,53 @@ Templates engine rendering, RLS/multi-user isolation (the one security-shaped ga
 the current suites), dataset caching, and CodeGen determinism. The agent framework and
 CodeGen are the big prizes — both have huge surface and zero headless coverage today.
 
+### What to build FIRST when picking this up (@jordanfanapour, cc @rkihm-bc)
+
+Prioritized backlog for the caching/RunView/RunQuery layer itself — these close the
+remaining coverage gaps and are ordered by bug-finding value:
+
+1. **RLS / multi-user isolation** *(do this first — it's security-shaped)*. Every test
+   in all three suites runs as a single context user. The cache fingerprint embeds the
+   RLS where-clause, which *should* segregate users — but nothing proves user A's
+   row-level-filtered cache entry can never serve user B, on either tier (server
+   superset slots AND client smart-cache `current` validation). A bug here is a data
+   leak, not a wrong column count. Fixture: two users with different RLS policies,
+   then the standard harness pattern.
+2. **Dataset caching.** The third cache family (`DatasetCache` category,
+   `GetAndCacheDatasetByName`) has zero coverage — and app startup rides on it. The
+   instrumented-storage technique applies directly.
+3. **Aggregates through the cache.** `AggregateResults` are stored and re-served and
+   `aggHash` is part of the fingerprint — never asserted. A stale or
+   cross-contaminated aggregate silently shows wrong KPI numbers; nobody files a bug
+   for that, it just looks like data.
+4. **Quick wins (same pattern as S16):** `StartRow` pagination and `UserSearchString`
+   fingerprint separation; saved views (`ViewID`/`ViewName`) through the cache —
+   including asserting the *documented* behavior that two views resolving to the same
+   entity+filter intentionally share one cache entry.
+5. **Cross-server invalidation over Redis.** The production multi-server topology
+   (Redis storage provider, remote-invalidate pub/sub, `HandleRemoteInvalidateEvent`)
+   is untested live. Docker-workbench-shaped: two MJAPI processes, save in one,
+   assert invalidation in the other — wants the Testing Framework's infrastructure
+   rather than ad-hoc scripts.
+6. **PostgreSQL parity.** These suites are SQL Server-only, but
+   GenericDatabaseProvider is dual-platform and PG-parity regressions have happened
+   before (see the `TotalRowCount` alias-folding note in `BuildTotalRowCountSQL`).
+   Running these exact suites against a PG backend is the cheapest coverage lever
+   available — zero new test code.
+7. **Stress / eviction.** Cache behavior under `maxSizeBytes` pressure and eviction
+   sweeps; true racing save+read invalidation (current tests use settle windows — a
+   hammer test could expose timing windows). Higher flake risk; best built in the
+   framework with proper retry semantics.
+8. **RunQuery follow-ups:** client e2e against a `CacheValidationSQL` fixture visible
+   to MJAPI's QueryEngine (needs fixture-then-restart orchestration or engine refresh
+   over the API), and Query category TTL inheritance
+   (`DefaultCacheEnabled`/`CacheInheritanceEnabled` → `MJQueryEntityExtended.CacheConfig`),
+   whose consumers deserve an audit of their own.
+
+Beyond this layer, the next *subsystems* to onboard are in the candidates table above —
+Scheduled Jobs, API Keys, MetadataSync, Agent framework (stubbed LLM), query parameter
+pipeline, CodeGen determinism.
+
 ## Extending the suite
 
 - Add tests with `suite.Test('name', async () => { ... })` — they run sequentially in
