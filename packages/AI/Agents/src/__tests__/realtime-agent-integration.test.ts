@@ -87,7 +87,7 @@ class TestableRealtimeAgent extends BaseAgent {
 }
 
 function makeAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
-    return { ID: 'agent-1', Name: 'Voice Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
+    return { ID: 'agent-1', Name: 'Realtime Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
 }
 
 function makeParams(overrides: Partial<ExecuteAgentParams> = {}): ExecuteAgentParams {
@@ -142,7 +142,7 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(deps.Model).toBe(agent.ResolvedModel);
             expect(deps.SessionParams.Model).toBe('mock-realtime');
             // Companion / "voice for the target" framing is in the system prompt.
-            expect(deps.SessionParams.SystemPrompt).toContain('Voice Co-Agent');
+            expect(deps.SessionParams.SystemPrompt).toContain('Realtime Co-Agent');
             expect(deps.SessionParams.SystemPrompt).toContain(INVOKE_TARGET_AGENT_TOOL_NAME);
             // All collaborators are wired as callable closures.
             expect(typeof deps.DelegateToTarget).toBe('function');

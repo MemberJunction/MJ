@@ -28,7 +28,7 @@ function sessionRow(overrides: Record<string, string | null> = {}): object {
   return {
     ID: 'SESSION-1',
     AgentID: 'AGENT-CO',
-    Agent: 'Voice Co-Agent',
+    Agent: 'Realtime Co-Agent',
     Status: 'Closed',
     ConversationID: 'CONV-1',
     Config: JSON.stringify({ targetAgentID: 'AGENT-TARGET', coAgentRunID: 'RUN-CO' }),
@@ -166,7 +166,7 @@ describe('RealtimeSessionReviewService', () => {
       expect(review).not.toBeNull();
       expect(review?.SessionID).toBe('SESSION-1');
       expect(review?.AgentID).toBe('AGENT-CO');
-      expect(review?.AgentName).toBe('Voice Co-Agent');
+      expect(review?.AgentName).toBe('Realtime Co-Agent');
       expect(review?.TargetAgentID).toBe('AGENT-TARGET');
       expect(review?.ConversationID).toBe('CONV-1');
       expect(review?.Status).toBe('Closed');

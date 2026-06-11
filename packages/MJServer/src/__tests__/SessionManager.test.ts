@@ -206,7 +206,28 @@ describe('SessionManager.CloseSession', () => {
 
         expect(ok).toBe(true);
         expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
-        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-5', 'prompt-run-5', user, provider, true);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-5', 'prompt-run-5', user, provider, true, null);
+    });
+
+    it('threads the co-agent run-step id into finalize when the session config carries it', async () => {
+        const session = makeSessionEntity({
+            ID: 'session-voice-step',
+            Status: 'Active',
+            Config_: JSON.stringify({
+                targetAgentID: 't1',
+                coAgentRunID: 'co-run-6',
+                promptRunID: 'prompt-run-6',
+                coAgentRunStepID: 'run-step-6',
+            }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+        const user = makeUser();
+
+        const ok = await mgr.CloseSession('session-voice-step', user, provider);
+
+        expect(ok).toBe(true);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-6', 'prompt-run-6', user, provider, true, 'run-step-6');
     });
 
     it('does not finalize when the session config has no run ids (target only)', async () => {

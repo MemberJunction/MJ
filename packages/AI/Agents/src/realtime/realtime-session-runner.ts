@@ -1,6 +1,6 @@
 /**
  * @fileoverview Dependency-injected orchestrator that drives a `BaseRealtimeModel` session for
- * the {@link RealtimeAgentType} (Voice Co-Agent).
+ * the {@link RealtimeAgentType} (Realtime Co-Agent).
  *
  * The {@link RealtimeSessionRunner} owns the lifecycle of a single full-duplex
  * {@link IRealtimeSession}: it opens the session, registers a **stable, target-independent** tool

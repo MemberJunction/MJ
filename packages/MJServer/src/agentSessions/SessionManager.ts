@@ -21,6 +21,8 @@ const CONVERSATION_ENTITY = 'MJ: Conversations';
 interface SessionRunConfig {
     coAgentRunID?: string;
     promptRunID?: string;
+    /** The co-agent run's single system-prompt `MJ: AI Agent Run Steps` row id (its Timeline entry). */
+    coAgentRunStepID?: string;
 }
 
 /**
@@ -164,7 +166,7 @@ export class SessionManager {
         provider: IMetadataProvider,
     ): Promise<void> {
         const config = this.parseSessionRunConfig(session.Config_);
-        if (!config.coAgentRunID && !config.promptRunID) {
+        if (!config.coAgentRunID && !config.promptRunID && !config.coAgentRunStepID) {
             return;
         }
         try {
@@ -174,6 +176,7 @@ export class SessionManager {
                 contextUser,
                 provider,
                 true,
+                config.coAgentRunStepID ?? null,
             );
         } catch (e) {
             LogError(`SessionManager.finalizeObservabilityRuns failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -190,6 +193,7 @@ export class SessionManager {
             return {
                 coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
                 promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+                coAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
             };
         } catch {
             return {};

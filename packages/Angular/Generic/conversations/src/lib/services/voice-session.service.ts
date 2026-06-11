@@ -195,7 +195,7 @@ interface StartRealtimeClientSessionResult {
  * `OpenAIRealtimeClient`). Future providers (Gemini Live, …) snap in by registering a
  * new driver — this service does not change.
  *
- * The Voice Co-Agent (server-side) fronts the conversation's current agent — the server
+ * The Realtime Co-Agent (server-side) fronts the conversation's current agent — the server
  * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
  * driver applies verbatim.
  *
@@ -396,7 +396,7 @@ export class VoiceSessionService {
   /**
    * Start a client-direct voice session fronting `targetAgentId`.
    *
-   * @param targetAgentId The agent the Voice Co-Agent voices on behalf of.
+   * @param targetAgentId The agent the Realtime Co-Agent voices on behalf of.
    * @param conversationId Optional existing conversation to bind + seed context from.
    * @param lastSessionId Optional prior session to chain to (resume / continuation).
    * @param agentName Optional display name of the target agent — resolved by the caller
@@ -415,7 +415,7 @@ export class VoiceSessionService {
    *   Realtime-type agent) — the highest-precedence step of the server's co-agent resolution
    *   chain. When set, the server uses exactly that co-agent and FAILS with a clear reason if
    *   it can't (no silent fallback). Omit to let server metadata drive the choice: the target
-   *   agent's `DefaultCoAgentID`, then its agent type's, then the global Voice Co-Agent.
+   *   agent's `DefaultCoAgentID`, then its agent type's, then the global Realtime Co-Agent.
    */
   public async StartVoiceSession(
     targetAgentId: string,
@@ -1304,7 +1304,7 @@ export class VoiceSessionService {
   /**
    * Builds the one-off instructions for a short spoken update that conveys THIS specific
    * progress message naturally — strictly first person, since the co-agent owns the work.
-   * The wording is DB-driven: the server-resolved `Voice Co-Agent - Progress Narration`
+   * The wording is DB-driven: the server-resolved `Realtime Co-Agent - Progress Narration`
    * template (substituting `{{ progressMessage }}`) when present, otherwise the built-in
    * fallback so deployments that haven't synced the prompt behave exactly as before.
    * The client tags the resulting turn as narration, keeping it EPHEMERAL — surfaced on

@@ -9,7 +9,7 @@ MemberJunction agents today are **asynchronous** by design — a request comes i
 This proposal adds **real-time agents** to MemberJunction. The headline capability is a new kind of agent you can speak with live (and, later, share video and visual surfaces with). Real-time is delivered through three pillars:
 
 1. **A new model primitive — `BaseRealtimeModel`.** A modality-agnostic, streaming, full-duplex, tool-calling model class (Gemini Live and GPT Realtime to start, with the Eleven Labs stack as a fast-follow) sitting at MJ's lowest level alongside `BaseLLM`, `BaseAudioGenerator`, etc.
-2. **A new agent type — `Realtime` — and the Voice Co-Agent.** A first-class agent type (peer of Loop and Flow) that runs a real-time model inside a session. The first agent we ship of this type, the **Voice Co-Agent**, is generic: it acts as the live voice for *any* existing MJ agent, delegating real work back to that agent. Agents gain voice by configuration, not by being rewritten.
+2. **A new agent type — `Realtime` — and the Realtime Co-Agent.** A first-class agent type (peer of Loop and Flow) that runs a real-time model inside a session. The first agent we ship of this type, the **Realtime Co-Agent**, is generic: it acts as the live voice for *any* existing MJ agent, delegating real work back to that agent. Agents gain voice by configuration, not by being rewritten.
 3. **Session & Channel infrastructure.** Long-lived **Sessions** wrap the multiple `AIAgentRun`s of a real-time interaction; pluggable **Channels** (voice, whiteboard, text, …) are the bidirectional surfaces the agent perceives and acts on. This is the substrate that makes pillars 1–2 work.
 
 > [!NOTE]
@@ -81,7 +81,7 @@ graph TD
 
 Real-time interaction (voice today, video later) does **not** run through the standard loop agent. The loop agent is intentionally **asynchronous and long-running** — forcing it to drive a live, low-latency conversation produces a poor experience, and modern real-time models (Gemini Live and GPT Realtime now; the Eleven Labs stack as a fast-follow) own the listen-reason-speak loop themselves. So we keep the loop agent exactly as it is and introduce a **new agent type** that wraps a real-time model and runs inside a session.
 
-Critically, this still gives us broad coverage. Rather than rebuilding every agent for voice, we ship a single generic **Voice Co-Agent** that can supplement **any** existing agent (see below) — so adding real-time to a new agent is configuration, not code.
+Critically, this still gives us broad coverage. Rather than rebuilding every agent for voice, we ship a single generic **Realtime Co-Agent** that can supplement **any** existing agent (see below) — so adding real-time to a new agent is configuration, not code.
 
 ### The model primitive: `BaseRealtimeModel`
 
@@ -112,23 +112,23 @@ export interface IRealtimeSession {
 
 The driver translates MJ tool definitions into the provider's native function schema and provider `tool_call` frames back into MJ tool execution — this is the **upstream-provider plane** from [Parallel Channel Orchestration & Tool Routing](#parallel-channel-orchestration--tool-routing). New `AIModelType`: **`Realtime`**.
 
-### The `Realtime` agent type & the Voice Co-Agent
+### The `Realtime` agent type & the Realtime Co-Agent
 
 We add a new **agent type** named **`Realtime`** — a first-class peer of Loop and Flow, with its own class, that drives a `BaseRealtimeModel` session instead of an iterative reasoning loop. Because it is a *real MJ agent type*, it inherits the entire framework for free: server tools (actions), client tools, artifacts, prompts, memory, permissions, observability. We are not building a parallel runtime — just a new agent type.
 
-The first agent we ship of this type is the **Voice Co-Agent** (working name — chosen to avoid "impersonation", which can read badly and can make models refuse). It is framed as a **companion / co-agent** that voices *on behalf of* a target agent:
+The first agent we ship of this type is the **Realtime Co-Agent** (working name — chosen to avoid "impersonation", which can read badly and can make models refuse). It is framed as a **companion / co-agent** that voices *on behalf of* a target agent:
 
-- **Generic by design — the target is a runtime parameter.** One Voice Co-Agent definition can front **any** MJ agent. You point it at Sage, at Query Builder, at anything, and it "just works" — that is how we recover the universal-voice goal without forking every agent.
+- **Generic by design — the target is a runtime parameter.** One Realtime Co-Agent definition can front **any** MJ agent. You point it at Sage, at Query Builder, at anything, and it "just works" — that is how we recover the universal-voice goal without forking every agent.
 - **The co-agent's job:** hold a natural, low-latency conversation as the target agent's voice. It is told who it is acting for, what that agent can do, the conversation so far, and the user's memory. It is explicitly told it cannot do everything synchronously, but it can **invoke the real agent** to do actual work (seconds → minutes) and narrate while that runs.
 - **Prompt-safety:** the system prompt must use *companion / "voice for"* framing, never "pretend to be / impersonate" — otherwise the model may refuse ("I'm not allowed to do that").
 - **Future:** a co-agent could blend **two or more** agents' capabilities into one voice persona. Out of scope for the first build — start with a single target.
 
 ### Why "just another MJ agent" is the whole point
 
-Because the Voice Co-Agent is a normal agent, tool wiring is already solved:
+Because the Realtime Co-Agent is a normal agent, tool wiring is already solved:
 
 - **Primary tool — invoke the target agent.** The co-agent's headline capability is a tool that runs the full async (loop/flow) agent and feeds results back to the model. Sub-agents are **not** exposed — the co-agent only talks to the top-level agent (the target's own loop handles its sub-agents).
-- **Plus normal server & client tools and artifacts.** Just like any agent, a Voice Co-Agent can be given fast server tools (actions), client tools, and artifact capabilities directly — no special plumbing.
+- **Plus normal server & client tools and artifacts.** Just like any agent, a Realtime Co-Agent can be given fast server tools (actions), client tools, and artifact capabilities directly — no special plumbing.
 - **The realtime-registered tool set stays stable and target-independent.** The tools the co-agent registers *with the realtime provider* are fixed regardless of which agent is fronted: the **invoke-target-agent** tool (the target is a runtime parameter *inside* that one tool, not a different tool set) plus any fixed UI/control tools. Everything target-specific executes inside the delegated agent's own run — it is **never** registered on the realtime socket. This keeps the provider contract identical across targets, and is precisely what lets a pre-provisioned, fixed-tool provider like Eleven Labs fit the same model later (see [Eleven Labs](#eleven-labs--a-config-bound-agent-mapped-but-a-fast-follow)) — so it is a design rule for *all* drivers, not an EL workaround.
 
 ### Execution model & run topology
@@ -211,7 +211,7 @@ The driver classes (`GeminiRealtime`, `OpenAIRealtime`, implementing `BaseRealti
 Eleven Labs is genuinely different and worth calling out. Its real-time unit is **not a raw model** but an **Agent** — a server-side configuration bundle (ASR + LLM + TTS/voice + turn-taking + system prompt + tools) created in their dashboard/API and referenced by an **`agent_id`**. A client opens a WebSocket/WebRTC conversation against that `agent_id`. At conversation start you may pass **`conversation_config_override`** (system prompt, first message, LLM, voice, language — *each field must be pre-enabled for override on the agent*), **`dynamic_variables`**, and `custom_llm_extra_body`. **Tools** are declared on the agent config; the client registers *handlers* whose names must match those declarations — it does **not** accept arbitrary tool schemas at session start the way GPT Realtime / Gemini Live do.
 
 How it maps to our model:
-- The EL **Agent sits *below* our model** — it is purely the voice transport + reasoning bundle. Our MJ Voice Co-Agent (companion framing, target description, conversation history, memory) lives in the **overridden system prompt + dynamic variables**; the target agent is a runtime value, not a different EL agent.
+- The EL **Agent sits *below* our model** — it is purely the voice transport + reasoning bundle. Our MJ Realtime Co-Agent (companion framing, target description, conversation history, memory) lives in the **overridden system prompt + dynamic variables**; the target agent is a runtime value, not a different EL agent.
 - **One pre-provisioned EL agent serves all targets:** create it once with override enabled for system prompt / first message / variables and with the co-agent's stable tool set declared (primary: *invoke target agent*). The `ElevenLabsRealtime` driver opens the socket against its `agent_id`, sends the per-session overrides + dynamic variables, and registers client-tool handlers matching the declared names.
 - The **`agent_id` (and which override fields are enabled) is driver configuration** — stored via the model/vendor config (e.g. `MJ: AI Configuration Params`) and read by the driver, not hardcoded.
 
@@ -271,7 +271,7 @@ So a channel definition contributes, on top of transport: **(a)** a *state→con
 
 ## Detailed Execution & Streaming Flow
 
-Here is how a real-time voice + UI interaction flows through the layered session architecture, using the `Realtime` agent type (Voice Co-Agent) fronting a target agent (e.g. Sage):
+Here is how a real-time voice + UI interaction flows through the layered session architecture, using the `Realtime` agent type (Realtime Co-Agent) fronting a target agent (e.g. Sage):
 
 1. **Session setup**:
    * The client requests a session for a target agent. The server checks `CanRun` on that agent (see [Authorization & Socket Security](#authorization--socket-security)), creates an `AIAgentSession`, and opens the channels — e.g. `VoiceAudio` and `ClientControl` (and `Whiteboard` if requested).
@@ -326,7 +326,7 @@ While a session is active, present a focused **overlay / mode** over the convers
 - Live updates ride the existing push/subscription transport (see [Unified Session Transport](#unified-session-transport)); the conversations service already consumes agent progress, so the real-time stream extends a path that exists rather than inventing a new one.
 
 ### Suggested build phasing
-1. **MVP** — mic button → minimal overlay (turn state + captions) → voice round-trip with the Voice Co-Agent; collapsed session block in the timeline; **minimal failure UX** (provider drop → "reconnecting / call ended", a narrated tool/delegation failure rather than dead air — see [Failure, interruption & error handling](#failure-interruption--error-handling)).
+1. **MVP** — mic button → minimal overlay (turn state + captions) → voice round-trip with the Realtime Co-Agent; collapsed session block in the timeline; **minimal failure UX** (provider drop → "reconnecting / call ended", a narrated tool/delegation failure rather than dead air — see [Failure, interruption & error handling](#failure-interruption--error-handling)).
 2. **Delegation legibility** — "working on it" indicators + delegated-run links in the expanded block.
 3. **Interactive channels** — Whiteboard surface with perception + agent-driven mutations.
 4. **Polish** — Matt/LXT visual design pass, resume UX, multi-channel layout.
@@ -833,7 +833,7 @@ When a realtime provider drives the loop and emits a native `tool_call`, MJ must
 
 ## Benefits of This Approach
 
-1. **Zero Forking**: Loop and Flow agents are untouched and stay asynchronous. Real-time is a *new* `Realtime` agent type that wraps a `BaseRealtimeModel`; the generic **Voice Co-Agent** fronts any existing agent by configuration, so we get broad voice coverage without rewriting a single agent.
+1. **Zero Forking**: Loop and Flow agents are untouched and stay asynchronous. Real-time is a *new* `Realtime` agent type that wraps a `BaseRealtimeModel`; the generic **Realtime Co-Agent** fronts any existing agent by configuration, so we get broad voice coverage without rewriting a single agent.
 2. **True Multi-Channel Coordination**: Users can speak to the agent while simultaneously typing text or interacting with a whiteboard, and the agent can update the client UI mid-conversation.
 3. **Decoupled Sockets**: The heavy lifting of socket connection maintenance, WebRTC negotiation, and Twilio/telephony integration is isolated in the Session Host layer, keeping the core AI Agent package (`@memberjunction/ai-agents`) lightweight and focused on reasoning/actions.
 4. **Natural Continuation of Client Tools**: Client tools already have an asynchronous, event-driven request/response lifecycle. In standard HTTP runs, they rely on database polling/PubSub. In Session mode, they flow instantly over the established WebSocket, dropping round-trip latency to milliseconds.

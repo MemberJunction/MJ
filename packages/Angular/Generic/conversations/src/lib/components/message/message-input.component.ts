@@ -209,7 +209,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ) {
   super();}
 
-  // ── Voice session (real-time Voice Co-Agent) ───────────────────────────────
+  // ── Voice session (Realtime Co-Agent) ───────────────────────────────
   /** True while a live voice session is active — drives the overlay + mic state. */
   public voiceActive: boolean = false;
   private voiceActiveSub?: Subscription;

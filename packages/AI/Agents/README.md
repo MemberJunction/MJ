@@ -177,7 +177,7 @@ graph LR
 
 Real-time is the **live, low-latency complement** to the async Loop/Flow paradigm — not a replacement for it. Loop and Flow agents stay asynchronous and untouched; what they cannot deliver is a natural spoken conversation, because the loop is intentionally long-running while realtime models own sub-second turn taking, VAD, and barge-in natively. The `Realtime` agent type bridges the two worlds: a realtime model holds the conversation, and **real work is delegated back to the async agents you already have** as ordinary `AIAgentRun`s.
 
-The first shipped agent of this type is the **Voice Co-Agent** (seeded in `metadata/agents/`): a generic companion that acts as the live voice *for any* target MJ agent. The target is a runtime parameter — agents gain voice by configuration, never by being rewritten. Which co-agent voices a given target resolves through a metadata chain at session start: runtime `coAgentId` parameter → `AIAgent.DefaultCoAgentID` → `AIAgentType.DefaultCoAgentID` → the seeded global `Voice Co-Agent`.
+The first shipped agent of this type is the **Realtime Co-Agent** (seeded in `metadata/agents/`): a generic companion that acts as the live voice *for any* target MJ agent. The target is a runtime parameter — agents gain voice by configuration, never by being rewritten. Which co-agent voices a given target resolves through a metadata chain at session start: runtime `coAgentId` parameter → `AIAgent.DefaultCoAgentID` → `AIAgentType.DefaultCoAgentID` → the seeded global `Realtime Co-Agent`.
 
 Key pieces in this package:
 
@@ -411,7 +411,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
 | [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
 | [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |
-| [Real-Time Co-Agents Guide](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) | Repo-level flagship guide: Realtime agent type, Voice Co-Agent, dual topologies, sessions, channels, whiteboard, narration, security |
+| [Real-Time Co-Agents Guide](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) | Repo-level flagship guide: Realtime agent type, Realtime Co-Agent, dual topologies, sessions, channels, whiteboard, narration, security |
 
 ## Re-exports
 

@@ -1,23 +1,23 @@
 [
   {
     "fields": {
-      "Name": "Voice Co-Agent",
+      "Name": "Realtime Co-Agent",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "Description": "Generic real-time voice companion. Acts as the live, low-latency voice for any target MJ agent (the target is a runtime parameter), holding a natural spoken conversation while delegating real work back to that agent. Of the Realtime agent type; driven by a BaseRealtimeModel session rather than an iterative loop.",
+      "Description": "Generic realtime companion. Acts as the live, low-latency front for any target MJ agent (the target is a runtime parameter) across realtime channels \u2014 voice today, plus interactive channels like the live whiteboard \u2014 holding a natural conversation while delegating real work back to that agent. Of the Realtime agent type; driven by a BaseRealtimeModel session rather than an iterative loop.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Realtime",
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExecutionMode": "Sequential",
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": false,
-      "IconClass": "fa-solid fa-microphone-lines"
+      "IconClass": "fa-solid fa-tower-broadcast"
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:MJ: AI Prompts.Name=Voice Co-Agent - System Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Realtime Co-Agent - System Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },

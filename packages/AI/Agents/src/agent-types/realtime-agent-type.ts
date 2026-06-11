@@ -37,7 +37,7 @@ import { BaseAgentType } from './base-agent-type';
  * than an iterative reasoning loop. Because it is a real MJ agent type, an agent of this type
  * inherits the entire framework for free: server tools (actions), client tools, artifacts,
  * prompts, memory, permissions, and observability. The first agent shipped of this type is the
- * Voice Co-Agent, which voices on behalf of a target agent.
+ * Realtime Co-Agent, which voices on behalf of a target agent.
  *
  * **Execution branch.** The realtime path is session-driven: `BaseAgent` (in a later task) will
  * detect {@link IsSessionDriven} (or `instanceof RealtimeAgentType`) and hand control to a

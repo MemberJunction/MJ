@@ -62,7 +62,7 @@ export interface RealtimeSessionReviewChannelState {
 export interface RealtimeSessionReview {
   /** `MJ: AI Agent Sessions.ID` of the reviewed session. */
   SessionID: string;
-  /** The session's fronting agent id (`AIAgentSession.AgentID` — usually the Voice Co-Agent). */
+  /** The session's fronting agent id (`AIAgentSession.AgentID` — usually the Realtime Co-Agent). */
   AgentID: string;
   /** Display name shown in the review banner (target agent when resolvable, else the session agent). */
   AgentName: string;

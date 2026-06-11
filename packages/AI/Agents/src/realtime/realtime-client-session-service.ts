@@ -1,6 +1,6 @@
 /**
  * @fileoverview Server-agnostic preparer + tool relay for a CLIENT-DIRECT realtime session
- * (the Voice Co-Agent dual-topology design).
+ * (the Realtime Co-Agent dual-topology design).
  *
  * In the client-direct topology the browser opens its OWN provider socket (e.g. WebRTC) using a
  * server-minted ephemeral token, but the **server** still owns the system prompt and tool set and
@@ -30,8 +30,8 @@
  * @author MemberJunction.com
  */
 
-import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { MJAIPromptRunEntity, MJArtifactEntity } from '@memberjunction/core-entities';
+import { UserInfo, IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
+import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
@@ -66,9 +66,9 @@ import {
  * id — it is a runtime choice made when the voice session starts.
  */
 export interface PrepareClientSessionInput {
-    /** The Voice Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
+    /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
-    /** The Voice Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
+    /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
     CoAgentID?: string;
     /** The top-level target agent the co-agent voices on behalf of (a runtime parameter). */
     TargetAgentID: string;
@@ -124,6 +124,15 @@ export interface RealtimeClientSessionPrepResult {
      * Present only when the co-agent's system prompt resolved (so a prompt run could be created).
      */
     PromptRunID?: string;
+    /**
+     * ID of the single `MJ: AI Agent Run Steps` row created under {@link RealtimeClientSessionPrepResult.CoAgentRunID}
+     * for the realtime session's system prompt (StepType `Prompt`, TargetID = the system prompt,
+     * TargetLogID = {@link RealtimeClientSessionPrepResult.PromptRunID}). It makes the co-agent run's
+     * Timeline non-empty. Present only when the co-agent's system prompt resolved AND the step saved
+     * (step creation is best-effort, like the runs themselves). Finalized alongside the runs by
+     * {@link RealtimeClientSessionService.FinalizeCoAgentRun}.
+     */
+    CoAgentRunStepID?: string;
     /** A human-readable failure reason. Present on failure. */
     ErrorMessage?: string;
     /** The `MJ: AI Models` row id of the realtime model the session was minted with. Present on success. */
@@ -131,7 +140,7 @@ export interface RealtimeClientSessionPrepResult {
     /** The display name of the realtime model the session was minted with. Present on success. */
     ModelName?: string;
     /**
-     * The DB-driven progress-narration instruction template (the `Voice Co-Agent - Progress
+     * The DB-driven progress-narration instruction template (the `Realtime Co-Agent - Progress
      * Narration` prompt's `TemplateText`, containing a `{{ progressMessage }}` placeholder).
      * `undefined` when that prompt is not present in metadata — clients fall back to their
      * built-in narration instruction text.
@@ -228,7 +237,15 @@ export class RealtimeClientSessionService {
      * progress-narration instructions (with a `{{ progressMessage }}` placeholder). Resolved at
      * session prepare time so the browser narrates with DB-driven, product-tunable wording.
      */
-    public static readonly NarrationPromptName = 'Voice Co-Agent - Progress Narration';
+    public static readonly NarrationPromptName = 'Realtime Co-Agent - Progress Narration';
+
+    /**
+     * DEPRECATED legacy name of the narration prompt, from before the co-agent's rename from
+     * "Voice Co-Agent" to "Realtime Co-Agent". Deployments that have not re-synced the prompt seed
+     * still carry this name, so {@link resolveNarrationInstructionsTemplate} falls back to it
+     * (with a deprecation log) when {@link RealtimeClientSessionService.NarrationPromptName} is absent.
+     */
+    public static readonly LegacyNarrationPromptName = 'Voice Co-Agent - Progress Narration';
 
     /**
      * Prepares a client-direct realtime session: resolves the model, assembles the companion
@@ -251,7 +268,7 @@ export class RealtimeClientSessionService {
 
         const coAgent = this.resolveCoAgent(input);
         if (!coAgent) {
-            return { Success: false, ErrorMessage: 'The Voice Co-Agent could not be resolved from the supplied id or entity.' };
+            return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
         }
 
         const outcome = await this.resolveModelForSession(input, coAgent);
@@ -293,6 +310,7 @@ export class RealtimeClientSessionService {
             SessionParams: sessionParams,
             CoAgentRunID: obs?.CoAgentRunID,
             PromptRunID: obs?.PromptRunID,
+            CoAgentRunStepID: obs?.CoAgentRunStepID,
             ModelID: resolution.ModelID,
             ModelName: resolution.ModelName,
             NarrationInstructionsTemplate: this.resolveNarrationInstructionsTemplate() ?? undefined,
@@ -301,21 +319,23 @@ export class RealtimeClientSessionService {
 
     /**
      * Creates the server-side co-agent observability runs for a voice session: an `AIAgentRun`
-     * (Status `Running`) and — when a co-agent system prompt resolved — a linked `AIPromptRun`
-     * (Status `Running`, `AgentRunID` = the co-agent run). Delegated target-agent runs nest under
-     * the returned `CoAgentRunID` via `ParentRunID`.
+     * (Status `Running`), and — when a co-agent system prompt resolved — a linked `AIPromptRun`
+     * (Status `Running`, `AgentRunID` = the co-agent run, `AgentID` = the co-agent) plus a single
+     * `MJ: AI Agent Run Steps` row (StepType `Prompt`) so the co-agent run's Timeline is non-empty.
+     * Delegated target-agent runs nest under the returned `CoAgentRunID` via `ParentRunID`.
      *
      * Best-effort: returns `null` (and logs) when the co-agent run cannot be saved, so callers can
-     * continue without observability rather than failing the whole prepare.
+     * continue without observability rather than failing the whole prepare. A failed prompt-run or
+     * run-step save just omits that id.
      *
-     * @param coAgent The resolved co-agent (its id stamps `AgentID`).
-     * @param promptID The co-agent system prompt id, or `null` to skip the prompt run.
+     * @param coAgent The resolved co-agent (its id stamps `AgentID` on both runs).
+     * @param promptID The co-agent system prompt id, or `null` to skip the prompt run + run step.
      * @param modelID The resolved realtime model id (stamps the prompt run's `ModelID`).
      * @param userID Optional owning user id for the agent run.
      * @param agentSessionID The session id grouping this voice session's runs.
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
-     * @returns The `{ CoAgentRunID, PromptRunID }` pair, or `null` when the agent run failed.
+     * @returns The `{ CoAgentRunID, PromptRunID, CoAgentRunStepID }` ids, or `null` when the agent run failed.
      */
     protected async createCoAgentObservabilityRun(
         coAgent: MJAIAgentEntityExtended,
@@ -326,15 +346,16 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         conversationID?: string,
-    ): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
+    ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
         const coAgentRunID = await this.createCoAgentRun(
             coAgent, userID, agentSessionID, conversationID, contextUser, provider,
         );
         if (!coAgentRunID) {
             return null;
         }
-        const promptRunID = await this.createCoAgentPromptRun(promptID, modelID, coAgentRunID, contextUser, provider);
-        return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined };
+        const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, coAgentRunID, contextUser, provider);
+        const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider);
+        return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined, CoAgentRunStepID: runStepID ?? undefined };
     }
 
     /**
@@ -369,10 +390,13 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Creates the co-agent `AIPromptRun` row (Status `Running`) linked to the co-agent run. Returns
-     * its id, or `null` when `promptID` is absent (skipped) or the save fails (logged).
+     * Creates the co-agent `AIPromptRun` row (Status `Running`) linked to the co-agent run via
+     * `AgentRunID` AND to the co-agent itself via `AgentID` — so the run shows up both on the
+     * prompt's run history (`PromptID`) and in agent-scoped prompt-run views. Returns its id, or
+     * `null` when `promptID` is absent (skipped) or the save fails (logged).
      */
     private async createCoAgentPromptRun(
+        coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
         coAgentRunID: string,
@@ -386,6 +410,7 @@ export class RealtimeClientSessionService {
         promptRun.NewRecord();
         promptRun.PromptID = promptID;
         promptRun.ModelID = modelID;
+        promptRun.AgentID = coAgent.ID;
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';
@@ -398,16 +423,58 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Finalizes the server-side co-agent observability runs when a voice session ends. Loads each
-     * (when its id is supplied) and, **only if it is still `Running`**, sets it to `Completed`
-     * (or `Failed` when `success` is false) with a `CompletedAt` stamp. Idempotent and tolerant:
-     * a missing/already-finalized run is a no-op; a load/save failure is logged, never thrown.
+     * Creates the single `MJ: AI Agent Run Steps` row for the co-agent observability run — the
+     * realtime session has no iterative loop, so its Timeline carries exactly one step
+     * representing the session's system prompt (StepNumber 1, StepType `Prompt`, Status `Running`,
+     * `TargetID` = the system `AIPrompt`, `TargetLogID` = the linked `AIPromptRun` when one was
+     * created). Skipped (returns `null`) when no system prompt resolved. Best-effort: a save
+     * failure is logged and returns `null` — it never breaks the session.
+     */
+    private async createCoAgentRunStep(
+        coAgentRunID: string,
+        promptID: string | null,
+        promptRunID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        if (!promptID) {
+            return null;
+        }
+        try {
+            const step = await provider.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
+            step.NewRecord();
+            step.AgentRunID = coAgentRunID;
+            step.StepNumber = 1;
+            step.StepType = 'Prompt';
+            step.StepName = 'Realtime session system prompt';
+            step.TargetID = promptID;
+            step.TargetLogID = promptRunID;
+            step.Status = 'Running';
+            step.StartedAt = new Date();
+            if (await step.Save()) {
+                return step.ID;
+            }
+            LogError(`RealtimeClientSessionService.createCoAgentRunStep save failed: ${step.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return null;
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.createCoAgentRunStep failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Finalizes the server-side co-agent observability records when a voice session ends. Loads
+     * each (when its id is supplied) and, **only if it is still `Running`**, sets it to `Completed`
+     * (or `Failed` when `success` is false) with a `CompletedAt` + `Success` stamp. Idempotent and
+     * tolerant: a missing/already-finalized record is a no-op; a load/save failure is logged,
+     * never thrown.
      *
      * @param coAgentRunID The co-agent run id, or `null` to skip.
      * @param promptRunID The co-agent prompt run id, or `null` to skip.
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
      * @param success Whether the session ended successfully (controls Completed vs Failed).
+     * @param coAgentRunStepID The co-agent run's single `MJ: AI Agent Run Steps` row id, or `null` to skip.
      */
     public async FinalizeCoAgentRun(
         coAgentRunID: string | null,
@@ -415,9 +482,11 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         success: boolean = true,
+        coAgentRunStepID: string | null = null,
     ): Promise<void> {
         await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
         await this.finalizePromptRun(promptRunID, contextUser, provider, success);
+        await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
     }
 
     /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */
@@ -436,8 +505,42 @@ export class RealtimeClientSessionService {
         }
         run.Status = success ? 'Completed' : 'Failed';
         run.CompletedAt = new Date();
+        run.Success = success;
         if (!(await run.Save())) {
             LogError(`RealtimeClientSessionService.finalizeAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Loads + finalizes the co-agent run's single system-prompt `MJ: AI Agent Run Steps` row if
+     * still `Running` (Status `Completed`/`Failed`, `CompletedAt`, `Success`). Tolerant: a
+     * missing/already-finalized step is a no-op; a load/save failure is logged, never thrown.
+     */
+    private async finalizeRunStep(
+        coAgentRunStepID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        success: boolean,
+    ): Promise<void> {
+        if (!coAgentRunStepID) {
+            return;
+        }
+        try {
+            const step = await provider.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
+            if (!(await step.Load(coAgentRunStepID)) || step.Status !== 'Running') {
+                return;
+            }
+            step.Status = success ? 'Completed' : 'Failed';
+            step.CompletedAt = new Date();
+            step.Success = success;
+            if (!success) {
+                step.ErrorMessage = 'The realtime session ended in an error state.';
+            }
+            if (!(await step.Save())) {
+                LogError(`RealtimeClientSessionService.finalizeRunStep save failed: ${step.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.finalizeRunStep failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -457,6 +560,7 @@ export class RealtimeClientSessionService {
         }
         run.Status = success ? 'Completed' : 'Failed';
         run.CompletedAt = new Date();
+        run.Success = success;
         if (!(await run.Save())) {
             LogError(`RealtimeClientSessionService.finalizePromptRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
@@ -698,23 +802,46 @@ export class RealtimeClientSessionService {
     /**
      * Resolves the DB-driven progress-narration instruction template: the Active `MJ: AI Prompts`
      * row named {@link RealtimeClientSessionService.NarrationPromptName}, read from
-     * {@link AIEngine}'s cached prompts. **Tolerant**: returns `null` (never throws) when the
-     * prompt is missing, empty, or the engine cache is unavailable — clients fall back to their
+     * {@link AIEngine}'s cached prompts. When the current name is absent, falls back to the
+     * DEPRECATED {@link RealtimeClientSessionService.LegacyNarrationPromptName} (pre-rename seed)
+     * with a deprecation log. **Tolerant**: returns `null` (never throws) when neither prompt is
+     * present, the text is empty, or the engine cache is unavailable — clients fall back to their
      * built-in narration instruction text.
      *
      * @returns The template text (containing a `{{ progressMessage }}` placeholder), or `null`.
      */
     protected resolveNarrationInstructionsTemplate(): string | null {
         try {
-            const wanted = RealtimeClientSessionService.NarrationPromptName.toLowerCase();
-            const prompt = (AIEngine.Instance.Prompts ?? []).find(
-                p => p.Name?.trim().toLowerCase() === wanted && p.Status === 'Active'
-            );
-            const text = prompt?.TemplateText;
-            return text && text.trim().length > 0 ? text : null;
+            const current = this.findActiveNarrationPromptText(RealtimeClientSessionService.NarrationPromptName);
+            if (current) {
+                return current;
+            }
+            const legacy = this.findActiveNarrationPromptText(RealtimeClientSessionService.LegacyNarrationPromptName);
+            if (legacy) {
+                LogStatus(
+                    `RealtimeClientSessionService: resolved the narration prompt via its DEPRECATED legacy name ` +
+                        `'${RealtimeClientSessionService.LegacyNarrationPromptName}'. Re-sync the prompt seed metadata to ` +
+                        `rename it to '${RealtimeClientSessionService.NarrationPromptName}'.`
+                );
+                return legacy;
+            }
+            return null;
         } catch {
             return null; // engine cache unavailable — tolerated, client falls back
         }
+    }
+
+    /**
+     * Finds the Active `MJ: AI Prompts` row with the given name (case/whitespace-insensitive) in
+     * {@link AIEngine}'s cached prompts and returns its non-empty `TemplateText`, or `null`.
+     */
+    private findActiveNarrationPromptText(promptName: string): string | null {
+        const wanted = promptName.toLowerCase();
+        const prompt = (AIEngine.Instance.Prompts ?? []).find(
+            p => p.Name?.trim().toLowerCase() === wanted && p.Status === 'Active'
+        );
+        const text = prompt?.TemplateText;
+        return text && text.trim().length > 0 ? text : null;
     }
 
     /**
@@ -1229,7 +1356,7 @@ export class RealtimeClientSessionService {
      */
     private noModelMessage(): string {
         return (
-            'No usable Realtime model could be resolved for the Voice Co-Agent. Configure a model of ' +
+            'No usable Realtime model could be resolved for the Realtime Co-Agent. Configure a model of ' +
             "AIModelType 'Realtime' with an active vendor DriverClass and a valid API key " +
             '(e.g. AI_VENDOR_API_KEY__<driver>).'
         );

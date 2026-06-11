@@ -1433,7 +1433,7 @@ export class BaseAgent {
             // =====================================================================================
             // SESSION-DRIVEN BRANCH (Realtime agent type)
             //
-            // For session-driven agent types (the Realtime / Voice Co-Agent type, marked by
+            // For session-driven agent types (the Realtime / Realtime Co-Agent type, marked by
             // `IsSessionDriven === true`), we do NOT enter the iterative reasoning loop. Instead we
             // hand control to a RealtimeSessionRunner that drives a long-lived duplex model session.
             //
@@ -1837,7 +1837,7 @@ export class BaseAgent {
      * under the same session.
      *
      * **Target source.** The target agent id comes from `params.data.targetAgentID` when present
-     * (the Voice Co-Agent receives its target as a runtime parameter), falling back to the agent's
+     * (the Realtime Co-Agent receives its target as a runtime parameter), falling back to the agent's
      * own `DefaultModelID`-style config is NOT applicable here; absent a target the delegation
      * returns a failed {@link DelegatedResult} the model can narrate.
      *

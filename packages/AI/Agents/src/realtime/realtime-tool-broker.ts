@@ -25,7 +25,7 @@
 import { RealtimeToolCall } from '@memberjunction/ai';
 
 /**
- * The stable name of the primary tool every Voice Co-Agent registers with the realtime provider.
+ * The stable name of the primary tool every Realtime Co-Agent registers with the realtime provider.
  *
  * Per the plan's design rule, the realtime-registered tool set is **target-independent**: the
  * co-agent always exposes this single `invoke-target-agent` tool, and the specific target is a

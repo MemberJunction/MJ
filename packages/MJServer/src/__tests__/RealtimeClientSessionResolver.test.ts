@@ -13,7 +13,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     },
 }));
 
-// --- Mock AIEngine so the Voice Co-Agent resolves without DB-backed config ---
+// --- Mock AIEngine so the Realtime Co-Agent resolves without DB-backed config ---
 /** Minimal cached-agent shape the resolver's co-agent chain reads. */
 interface FakeAgent {
     ID: string;
@@ -27,7 +27,7 @@ interface FakeAgentType {
     Name: string;
     DefaultCoAgentID?: string | null;
 }
-const agentsMock = vi.fn((): FakeAgent[] => [{ ID: 'co-agent-1', Name: 'Voice Co-Agent' }]);
+const agentsMock = vi.fn((): FakeAgent[] => [{ ID: 'co-agent-1', Name: 'Realtime Co-Agent' }]);
 const agentTypesMock = vi.fn((): FakeAgentType[] => []);
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
@@ -129,7 +129,7 @@ beforeEach(() => {
     createSessionMock.mockReset();
     closeSessionMock.mockClear();
     heartbeatMock.mockClear();
-    agentsMock.mockReturnValue([{ ID: 'co-agent-1', Name: 'Voice Co-Agent' }]);
+    agentsMock.mockReturnValue([{ ID: 'co-agent-1', Name: 'Realtime Co-Agent' }]);
     agentTypesMock.mockReturnValue([]);
 });
 
@@ -156,6 +156,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
             Success: true,
             CoAgentRunID: 'co-run-9',
             PromptRunID: 'prompt-run-9',
+            CoAgentRunStepID: 'run-step-9',
             ClientConfig: {
                 Provider: 'openai',
                 Model: 'gpt-realtime',
@@ -174,9 +175,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         const createArg = createSessionMock.mock.calls[0][0] as { agentID: string; config: string };
         expect(createArg.agentID).toBe('co-agent-1');
         expect(JSON.parse(createArg.config)).toEqual({ targetAgentID: 'target-1' });
-        // After prepare, the observability run ids are written back into the session config + saved.
+        // After prepare, the observability run + run-step ids are written back into the session config + saved.
         expect(JSON.parse(createdSession.Config_ as string)).toEqual({
-            targetAgentID: 'target-1', coAgentRunID: 'co-run-9', promptRunID: 'prompt-run-9',
+            targetAgentID: 'target-1', coAgentRunID: 'co-run-9', promptRunID: 'prompt-run-9', coAgentRunStepID: 'run-step-9',
         });
         expect(createdSession.Save).toHaveBeenCalled();
         // Ephemeral config surfaced to the browser.
@@ -311,7 +312,9 @@ describe('RealtimeClientSessionResolver — authentication gate', () => {
 describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent resolution chain', () => {
     const REALTIME_TYPE: FakeAgentType = { ID: 'type-realtime', Name: 'Realtime' };
     const LOOP_TYPE: FakeAgentType = { ID: 'type-loop', Name: 'Loop' };
-    const GLOBAL_CO: FakeAgent = { ID: 'co-global', Name: 'Voice Co-Agent', Status: 'Active', TypeID: 'type-realtime' };
+    const GLOBAL_CO: FakeAgent = { ID: 'co-global', Name: 'Realtime Co-Agent', Status: 'Active', TypeID: 'type-realtime' };
+    /** The pre-rename legacy seed name — still resolvable as a deprecated fallback. */
+    const LEGACY_GLOBAL_CO: FakeAgent = { ID: 'co-global-legacy', Name: 'Voice Co-Agent', Status: 'Active', TypeID: 'type-realtime' };
     /** A valid alternative co-agent (Active + Realtime-type) usable at any chain step. */
     const PERSONA_CO: FakeAgent = { ID: 'co-persona', Name: 'Sales Persona Voice', Status: 'Active', TypeID: 'type-realtime' };
     const TYPE_CO: FakeAgent = { ID: 'co-type-default', Name: 'Loop Default Voice', Status: 'Active', TypeID: 'type-realtime' };
@@ -433,7 +436,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
         expect(coAgentID).toBe('co-type-default');
     });
 
-    it('falls through past an INVALID type-level default (dangling reference) to the global Voice Co-Agent', async () => {
+    it('falls through past an INVALID type-level default (dangling reference) to the global Realtime Co-Agent', async () => {
         setupHappyStart();
         agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-deleted' }]);
         agentsMock.mockReturnValue([
@@ -458,7 +461,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
         expect(coAgentID).toBe('co-global');
     });
 
-    it('resolves the global Voice Co-Agent by name when no defaults are configured anywhere (step 4)', async () => {
+    it('resolves the global Realtime Co-Agent by name when no defaults are configured anywhere (step 4)', async () => {
         setupHappyStart();
         agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
         agentsMock.mockReturnValue([
@@ -470,7 +473,32 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
         expect(coAgentID).toBe('co-global');
     });
 
-    it('throws when the chain exhausts and the global Voice Co-Agent is missing entirely', async () => {
+    it('falls back to the DEPRECATED legacy seed name when no Realtime Co-Agent exists (un-resynced deployment)', async () => {
+        setupHappyStart();
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        agentsMock.mockReturnValue([
+            { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: null },
+            LEGACY_GLOBAL_CO,
+        ]);
+
+        const coAgentID = await startAndGetCoAgentID('target-1');
+        expect(coAgentID).toBe('co-global-legacy');
+    });
+
+    it('prefers the current Realtime Co-Agent name over the legacy name when BOTH exist', async () => {
+        setupHappyStart();
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        agentsMock.mockReturnValue([
+            { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: null },
+            LEGACY_GLOBAL_CO,
+            GLOBAL_CO,
+        ]);
+
+        const coAgentID = await startAndGetCoAgentID('target-1');
+        expect(coAgentID).toBe('co-global');
+    });
+
+    it('throws (naming the CURRENT seed name) when the chain exhausts and neither global co-agent name exists', async () => {
         setupHappyStart();
         agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
         agentsMock.mockReturnValue([
@@ -480,7 +508,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
         await expect(
             resolver.StartRealtimeClientSession('target-1', makeCtx()),
-        ).rejects.toThrow(/'Voice Co-Agent' agent is not configured/);
+        ).rejects.toThrow(/'Realtime Co-Agent' agent is not configured/);
         expect(createSessionMock).not.toHaveBeenCalled();
     });
 });
@@ -567,8 +595,10 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         });
     });
 
-    it('persists pendingFeedbackRunID when a relayed call leaves a run paused', async () => {
-        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1' }) });
+    it('persists pendingFeedbackRunID when a relayed call leaves a run paused (preserving the run/step ids)', async () => {
+        const session = makeSessionEntity({
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: 'co-run-1', coAgentRunStepID: 'run-step-1' }),
+        });
         currentProvider = makeProvider(() => session);
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"q":1}', Success: true, PausedRunID: 'paused-1' });
         const resolver = makeResolver();
@@ -577,6 +607,8 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
 
         expect(JSON.parse(session.Config_ as string)).toMatchObject({
             targetAgentID: 'target-1',
+            coAgentRunID: 'co-run-1',
+            coAgentRunStepID: 'run-step-1',
             pendingFeedbackRunID: 'paused-1',
         });
         expect(session.Save).toHaveBeenCalled();

@@ -2,7 +2,7 @@
 
 How MemberJunction delivers **live, low-latency, full-duplex agents** — agents you talk to the way you talk to a person, that can draw on a shared whiteboard while they speak, and that delegate real work back to the async agents you already have.
 
-This is the developer guide for the whole stack: the model primitive, the `Realtime` agent type, the Voice Co-Agent, the dual-topology session architecture, the session/channel persistence layer, the interactive-channel plugin system (with the live Whiteboard as the canonical implementation), narration, observability, and security.
+This is the developer guide for the whole stack: the model primitive, the `Realtime` agent type, the Realtime Co-Agent, the dual-topology session architecture, the session/channel persistence layer, the interactive-channel plugin system (with the live Whiteboard as the canonical implementation), narration, observability, and security.
 
 **Companion documents:**
 
@@ -38,7 +38,7 @@ So instead of forcing the loop agent to drive a live call, MJ adds a **third age
 
 ### One co-agent voices ANY agent
 
-The first (and seeded) agent of this type is the **Voice Co-Agent** (`metadata/agents/.voice-co-agent.json`). It is deliberately generic: it is the live voice **for** a *target* agent, and the target is a **runtime parameter**, not configuration baked into the co-agent. One Voice Co-Agent definition fronts Sage, Query Builder, or anything else — agents gain voice by configuration, never by being rewritten.
+The first (and seeded) agent of this type is the **Realtime Co-Agent** (`metadata/agents/.voice-co-agent.json`). It is deliberately generic: it is the live voice **for** a *target* agent, and the target is a **runtime parameter**, not configuration baked into the co-agent. One Realtime Co-Agent definition fronts Sage, Query Builder, or anything else — agents gain voice by configuration, never by being rewritten.
 
 Three design rules make this work:
 
@@ -55,7 +55,7 @@ Which Realtime-type agent voices a given target is resolved at session start by 
 | 1 | Runtime `coAgentId` argument on `StartRealtimeClientSession` | **Throws** (fail loud — the caller asked for something specific) |
 | 2 | Target agent's `AIAgent.DefaultCoAgentID` (per-agent persona) | Logs a warning, **falls through** (metadata drift must degrade, not break calls) |
 | 3 | Target agent's type's `AIAgentType.DefaultCoAgentID` (per-type default) | Logs a warning, **falls through** |
-| 4 | The seeded **`Voice Co-Agent`**, looked up by name | Throws when absent (the voice feature is unconfigured in this deployment) |
+| 4 | The seeded **`Realtime Co-Agent`**, looked up by name (falls back to the deprecated legacy name `Voice Co-Agent` with a deprecation log, for deployments that haven't re-synced the renamed seed) | Throws when both names are absent (the realtime feature is unconfigured in this deployment) |
 
 Every candidate from steps 1–3 is validated by `findValidCoAgent()`: it must exist in `AIEngine`'s cached agents, have `Status = 'Active'`, and be of the `Realtime` agent type. The two `DefaultCoAgentID` columns were added by migration `migrations/v5/V202606090930__v5.41.x__AI_Agent_Sessions_Channels.sql`.
 
@@ -335,7 +335,7 @@ Delegated work takes seconds to minutes; dead air kills a voice call. The narrat
 2. The browser correlates events to the active session, **drops stale progress** (events for calls no longer in `inFlightCallIds` — PubSub can lag the fast mutation result, and narrating "starting up" after the answer was spoken is exactly the bug this prevents).
 3. Every live progress message is injected as a context note (`[delegated-agent progress] …`) so the model *knows* what's happening even when it doesn't speak.
 4. **Throttled spoken updates**: the first no earlier than ~5 s into a delegation burst (`FirstNarrationDelayMs`), subsequent ones at ≥8 s spacing (`NarrationIntervalMs`) — and the spacing floor is **session-global**, so back-to-back tool calls can't re-arm the faster first-update path. Floods of small updates **aggregate** into one digest (up to 4 distinct messages, deduped, oldest-first). If the model is busy or audio is still audibly playing, the update retries in 1.5 s — hosts must gate on **both** `IsBusy` and `IsAudioPlaying`, or queued utterances come out late and stale. When the result lands first, the pending narration is cancelled (it's moot — the result is about to be spoken).
-5. The spoken update itself is `BaseRealtimeClient.RequestSpokenUpdate(instructions)`. The instruction wording is **DB-driven**: the `Voice Co-Agent - Progress Narration` prompt (`metadata/prompts/`) carries the template with `{{ progressMessage }}`, `{{ updateNumber }}`, and `{{ priorNarrations }}` placeholders — resolved server-side at session prepare (`RealtimeClientSessionService.NarrationPromptName`) and threaded to the browser, with a built-in fallback when the deployment hasn't synced the prompt. The template enforces strictly **first-person** narration (the co-agent owns the work — "I'm digging into that now", never "Sage is analyzing"), bans repetition (prior spoken narrations are chained into the instructions), and bans generic filler.
+5. The spoken update itself is `BaseRealtimeClient.RequestSpokenUpdate(instructions)`. The instruction wording is **DB-driven**: the `Realtime Co-Agent - Progress Narration` prompt (`metadata/prompts/`) carries the template with `{{ progressMessage }}`, `{{ updateNumber }}`, and `{{ priorNarrations }}` placeholders — resolved server-side at session prepare (`RealtimeClientSessionService.NarrationPromptName`, with a deprecated-name fallback to `Voice Co-Agent - Progress Narration` for un-resynced deployments) and threaded to the browser, with a built-in fallback when the deployment hasn't synced the prompt. The template enforces strictly **first-person** narration (the co-agent owns the work — "I'm digging into that now", never "Sage is analyzing"), bans repetition (prior spoken narrations are chained into the instructions), and bans generic filler.
 6. Narration transcripts are tagged `Kind: 'narration'` by the client driver and are **ephemeral by product decision**: surfaced as a transient "live note" in the overlay (`DelegationNarration$`), never captions, never persisted as `Conversation Detail`s.
 
 > Server-bridged narration consumption (the runner feeding delegation progress into `IRealtimeSession.SendContextNote` / `RequestSpokenUpdate`) is **pending** — the driver capabilities exist; the runner doesn't call them yet.

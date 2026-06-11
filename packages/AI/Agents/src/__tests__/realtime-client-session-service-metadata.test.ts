@@ -122,12 +122,12 @@ describe('resolveCoAgent / resolveTargetAgent (real metadata lookup)', () => {
     it('returns the supplied CoAgent entity directly without consulting the cache', () => {
         engineState.throwOnAccess = true; // would explode if the cache were touched
         const svc = new MetadataExposedService();
-        const co = agent('co-1', 'Voice Co-Agent');
+        const co = agent('co-1', 'Realtime Co-Agent');
         expect(svc.CallResolveCoAgent({ CoAgent: co, TargetAgentID: 't', AgentSessionID: 's' })).toBe(co);
     });
 
     it('resolves CoAgentID from the cached agents, case-insensitively (UUID casing)', () => {
-        const co = agent('ABCDEF00-0000-0000-0000-000000000001', 'Voice Co-Agent');
+        const co = agent('ABCDEF00-0000-0000-0000-000000000001', 'Realtime Co-Agent');
         engineState.Agents = [agent('other-1', 'Other'), co];
         const svc = new MetadataExposedService();
 
@@ -140,7 +140,7 @@ describe('resolveCoAgent / resolveTargetAgent (real metadata lookup)', () => {
     });
 
     it('returns null when the CoAgentID is not in the cache', () => {
-        engineState.Agents = [agent('co-1', 'Voice Co-Agent')];
+        engineState.Agents = [agent('co-1', 'Realtime Co-Agent')];
         const svc = new MetadataExposedService();
         expect(svc.CallResolveCoAgent({ CoAgentID: 'missing', TargetAgentID: 't', AgentSessionID: 's' })).toBeNull();
     });
@@ -165,7 +165,7 @@ describe('resolveNarrationInstructionsTemplate (real metadata lookup)', () => {
 
     it('returns the Active narration prompt template text', () => {
         engineState.Prompts = [
-            { ID: 'p1', Name: 'Voice Co-Agent - Progress Narration', Status: 'Active', TemplateText: TEMPLATE },
+            { ID: 'p1', Name: 'Realtime Co-Agent - Progress Narration', Status: 'Active', TemplateText: TEMPLATE },
         ];
         const svc = new MetadataExposedService();
         expect(svc.CallNarration()).toBe(TEMPLATE);
@@ -173,7 +173,7 @@ describe('resolveNarrationInstructionsTemplate (real metadata lookup)', () => {
 
     it('matches the prompt name case/whitespace-insensitively', () => {
         engineState.Prompts = [
-            { ID: 'p1', Name: '  VOICE co-agent - progress NARRATION  ', Status: 'Active', TemplateText: TEMPLATE },
+            { ID: 'p1', Name: '  REALTIME co-agent - progress NARRATION  ', Status: 'Active', TemplateText: TEMPLATE },
         ];
         const svc = new MetadataExposedService();
         expect(svc.CallNarration()).toBe(TEMPLATE);
@@ -181,7 +181,7 @@ describe('resolveNarrationInstructionsTemplate (real metadata lookup)', () => {
 
     it('ignores an inactive narration prompt', () => {
         engineState.Prompts = [
-            { ID: 'p1', Name: 'Voice Co-Agent - Progress Narration', Status: 'Disabled', TemplateText: TEMPLATE },
+            { ID: 'p1', Name: 'Realtime Co-Agent - Progress Narration', Status: 'Disabled', TemplateText: TEMPLATE },
         ];
         const svc = new MetadataExposedService();
         expect(svc.CallNarration()).toBeNull();
@@ -189,7 +189,7 @@ describe('resolveNarrationInstructionsTemplate (real metadata lookup)', () => {
 
     it('returns null when the prompt exists but its template text is empty/whitespace', () => {
         engineState.Prompts = [
-            { ID: 'p1', Name: 'Voice Co-Agent - Progress Narration', Status: 'Active', TemplateText: '   ' },
+            { ID: 'p1', Name: 'Realtime Co-Agent - Progress Narration', Status: 'Active', TemplateText: '   ' },
         ];
         const svc = new MetadataExposedService();
         expect(svc.CallNarration()).toBeNull();
@@ -197,6 +197,31 @@ describe('resolveNarrationInstructionsTemplate (real metadata lookup)', () => {
 
     it('returns null when the prompt is absent', () => {
         engineState.Prompts = [{ ID: 'p2', Name: 'Some Other Prompt', Status: 'Active', TemplateText: 'x' }];
+        const svc = new MetadataExposedService();
+        expect(svc.CallNarration()).toBeNull();
+    });
+
+    it('falls back to the DEPRECATED legacy prompt name when the current name is absent (un-resynced deployment)', () => {
+        engineState.Prompts = [
+            { ID: 'p-legacy', Name: 'Voice Co-Agent - Progress Narration', Status: 'Active', TemplateText: TEMPLATE },
+        ];
+        const svc = new MetadataExposedService();
+        expect(svc.CallNarration()).toBe(TEMPLATE);
+    });
+
+    it('prefers the CURRENT prompt name over the legacy one when BOTH exist', () => {
+        engineState.Prompts = [
+            { ID: 'p-legacy', Name: 'Voice Co-Agent - Progress Narration', Status: 'Active', TemplateText: 'LEGACY TEXT' },
+            { ID: 'p-current', Name: 'Realtime Co-Agent - Progress Narration', Status: 'Active', TemplateText: TEMPLATE },
+        ];
+        const svc = new MetadataExposedService();
+        expect(svc.CallNarration()).toBe(TEMPLATE);
+    });
+
+    it('ignores an INACTIVE legacy prompt during the fallback', () => {
+        engineState.Prompts = [
+            { ID: 'p-legacy', Name: 'Voice Co-Agent - Progress Narration', Status: 'Disabled', TemplateText: TEMPLATE },
+        ];
         const svc = new MetadataExposedService();
         expect(svc.CallNarration()).toBeNull();
     });
@@ -213,7 +238,7 @@ describe('resolveNarrationInstructionsTemplate (real metadata lookup)', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('resolveCoAgentSystemPrompt (real metadata lookup)', () => {
-    const coAgent = agent('co-1', 'Voice Co-Agent');
+    const coAgent = agent('co-1', 'Realtime Co-Agent');
 
     it('picks the lowest-ExecutionOrder ACTIVE agent prompt and returns its template + id', () => {
         engineState.AgentPrompts = [
@@ -307,7 +332,7 @@ describe('selectRealtimeVendor (real metadata lookup)', () => {
 });
 
 describe('resolveRealtimeModel — default (highest-PowerRank) selection', () => {
-    const coAgent = agent('co-1', 'Voice Co-Agent');
+    const coAgent = agent('co-1', 'Realtime Co-Agent');
 
     it('selects the highest-PowerRank ACTIVE Realtime model and resolves its vendor', async () => {
         engineState.Models = [

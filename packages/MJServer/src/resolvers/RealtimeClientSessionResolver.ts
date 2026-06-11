@@ -18,7 +18,7 @@
  *    `Conversation Detail`.
  *
  * Authorization model:
- * - **Start**: the caller must have `CanRun` on the *target* agent (the Voice Co-Agent is an internal
+ * - **Start**: the caller must have `CanRun` on the *target* agent (the Realtime Co-Agent is an internal
  *   orchestration agent, so the meaningful gate is the agent doing the real work).
  * - **Execute / Relay**: inbound ownership — the session's `UserID` must equal `contextUser.ID`.
  *
@@ -26,7 +26,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { UserInfo, IMetadataProvider, LogError, RunView } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
@@ -54,13 +54,22 @@ import { SessionManager } from '../agentSessions/index.js';
 const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
 /**
- * The seeded name of the internal orchestration agent that voices on behalf of a target agent.
- * This is the GLOBAL DEFAULT co-agent — the final step of the co-agent resolution chain (see
- * {@link RealtimeClientSessionResolver.resolveCoAgentID}). Deployments can override it per agent
- * (`AIAgent.DefaultCoAgentID`), per agent type (`AIAgentType.DefaultCoAgentID`), or per call
- * (the `coAgentId` mutation argument) without touching this seed.
+ * The seeded name of the internal orchestration agent that fronts a target agent in realtime
+ * sessions (voice + interactive channels). This is the GLOBAL DEFAULT co-agent — the final step of
+ * the co-agent resolution chain (see {@link RealtimeClientSessionResolver.resolveCoAgentID}).
+ * Deployments can override it per agent (`AIAgent.DefaultCoAgentID`), per agent type
+ * (`AIAgentType.DefaultCoAgentID`), or per call (the `coAgentId` mutation argument) without
+ * touching this seed.
  */
-const VOICE_CO_AGENT_NAME = 'Voice Co-Agent';
+const REALTIME_CO_AGENT_NAME = 'Realtime Co-Agent';
+
+/**
+ * DEPRECATED legacy seed name of {@link REALTIME_CO_AGENT_NAME}, from before the agent's rename
+ * from "Voice Co-Agent" to "Realtime Co-Agent". Deployments that have not re-synced the agent seed
+ * still carry this name, so {@link RealtimeClientSessionResolver.resolveGlobalCoAgentID} falls
+ * back to it (with a deprecation log) when no agent named {@link REALTIME_CO_AGENT_NAME} exists.
+ */
+const LEGACY_REALTIME_CO_AGENT_NAME = 'Voice Co-Agent';
 
 /**
  * The seeded name of the Realtime agent TYPE. Every co-agent candidate (explicit or metadata
@@ -109,6 +118,11 @@ interface RealtimeSessionConfig {
     coAgentRunID?: string;
     /** ID of the co-agent `AIPromptRun` linked to {@link RealtimeSessionConfig.coAgentRunID}. Optional. */
     promptRunID?: string;
+    /**
+     * ID of the co-agent run's single system-prompt `MJ: AI Agent Run Steps` row (the one Timeline
+     * entry of {@link RealtimeSessionConfig.coAgentRunID}); finalized on session close. Optional.
+     */
+    coAgentRunStepID?: string;
     /**
      * ID of a delegated target-agent run that paused awaiting user feedback (Status `AwaitingFeedback`,
      * e.g. an interactive agent like Query Builder). Set when a relayed tool call left a run paused;
@@ -224,7 +238,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * 1. Authorize — the caller must have `CanRun` on the **target** agent; denial throws and no
      *    session is created.
      * 2. Resolve the co-agent id via the metadata-driven resolution chain (runtime `coAgentId` →
-     *    agent's `DefaultCoAgentID` → agent type's `DefaultCoAgentID` → global Voice Co-Agent) —
+     *    agent's `DefaultCoAgentID` → agent type's `DefaultCoAgentID` → global Realtime Co-Agent) —
      *    see {@link RealtimeClientSessionResolver.resolveCoAgentID} for the full contract.
      * 3. Create the durable `AIAgentSession` (run by the co-agent), storing `targetAgentID` in its
      *    config server-side — this is the authoritative target for all later relays.
@@ -243,7 +257,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *   Realtime-type agent). When set, the server uses exactly that co-agent and FAILS with a
      *   clear reason if it can't (no silent fallback — mirroring `preferredModelId`'s contract).
      *   Omit to let metadata drive the choice: the target agent's `DefaultCoAgentID`, then its
-     *   agent type's `DefaultCoAgentID`, then the global Voice Co-Agent.
+     *   agent type's `DefaultCoAgentID`, then the global Realtime Co-Agent.
      *
      * @returns The ephemeral config + session linkage the browser needs to open its socket.
      */
@@ -379,6 +393,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             targetAgentID: config.targetAgentID,
             coAgentRunID: config.coAgentRunID,
             promptRunID: config.promptRunID,
+            coAgentRunStepID: config.coAgentRunStepID,
             pendingFeedbackRunID: pausedRunID,
         };
         session.Config_ = JSON.stringify(next);
@@ -565,8 +580,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *    degrade gracefully, never break calls).
      * 3. **Per-type default** — the target agent's TYPE's `AIAgentType.DefaultCoAgentID`. Same
      *    tolerant warn-and-fall-through semantics as step 2.
-     * 4. **Global default** — the seeded {@link VOICE_CO_AGENT_NAME} agent, looked up by name.
-     *    Throws when absent entirely (the voice feature is unconfigured in this deployment).
+     * 4. **Global default** — the seeded {@link REALTIME_CO_AGENT_NAME} agent, looked up by name
+     *    (with a deprecated fallback to {@link LEGACY_REALTIME_CO_AGENT_NAME}). Throws when absent
+     *    entirely (the realtime feature is unconfigured in this deployment).
      *
      * Every candidate from steps 1–3 is validated by {@link findValidCoAgent}: it must exist in
      * {@link AIEngine}'s cached agents, have Status `Active`, and be of the
@@ -616,8 +632,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return fromType;
         }
 
-        // Step 4 — global default: the seeded Voice Co-Agent, by name (original behavior).
-        return this.resolveVoiceCoAgentID();
+        // Step 4 — global default: the seeded Realtime Co-Agent, by name (original behavior).
+        return this.resolveGlobalCoAgentID();
     }
 
     /**
@@ -668,20 +684,36 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Resolves the seeded Voice Co-Agent's id from {@link AIEngine}'s cached agents — the GLOBAL
+     * Resolves the seeded Realtime Co-Agent's id from {@link AIEngine}'s cached agents — the GLOBAL
      * DEFAULT (step 4) of the co-agent resolution chain. The engine is already configured by
-     * {@link resolveCoAgentID}. Throws a clear error when the co-agent is not present in metadata.
+     * {@link resolveCoAgentID}. Looks up the current {@link REALTIME_CO_AGENT_NAME} first, then
+     * falls back to the DEPRECATED {@link LEGACY_REALTIME_CO_AGENT_NAME} (pre-rename seed) with a
+     * deprecation log so un-resynced deployments keep working. Throws a clear error when neither
+     * name is present in metadata.
      */
-    private resolveVoiceCoAgentID(): string {
-        const coAgent = (AIEngine.Instance.Agents ?? []).find(
-            a => a.Name?.trim().toLowerCase() === VOICE_CO_AGENT_NAME.toLowerCase(),
-        );
-        if (!coAgent) {
-            throw new Error(
-                `The '${VOICE_CO_AGENT_NAME}' agent is not configured; cannot start a realtime voice session.`,
-            );
+    private resolveGlobalCoAgentID(): string {
+        const coAgent = this.findAgentByName(REALTIME_CO_AGENT_NAME);
+        if (coAgent) {
+            return coAgent.ID;
         }
-        return coAgent.ID;
+        const legacy = this.findAgentByName(LEGACY_REALTIME_CO_AGENT_NAME);
+        if (legacy) {
+            LogStatus(
+                `StartRealtimeClientSession: resolved the global co-agent via its DEPRECATED legacy name ` +
+                    `'${LEGACY_REALTIME_CO_AGENT_NAME}'. Re-sync the agent seed metadata to rename it to ` +
+                    `'${REALTIME_CO_AGENT_NAME}'.`,
+            );
+            return legacy.ID;
+        }
+        throw new Error(
+            `The '${REALTIME_CO_AGENT_NAME}' agent is not configured; cannot start a realtime voice session.`,
+        );
+    }
+
+    /** Case/whitespace-insensitive agent lookup by Name in {@link AIEngine}'s cached agents. */
+    private findAgentByName(name: string): MJAIAgentEntityExtended | undefined {
+        const wanted = name.toLowerCase();
+        return (AIEngine.Instance.Agents ?? []).find(a => a.Name?.trim().toLowerCase() === wanted);
     }
 
     /**
@@ -726,7 +758,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             throw new Error(prep.ErrorMessage ?? 'Failed to prepare the client realtime session.');
         }
 
-        await this.persistObservabilityRunIDs(session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID);
+        await this.persistObservabilityRunIDs(session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID);
 
         const cfg = prep.ClientConfig;
         return {
@@ -753,8 +785,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         targetAgentID: string,
         coAgentRunID?: string,
         promptRunID?: string,
+        coAgentRunStepID?: string,
     ): Promise<void> {
-        const config: RealtimeSessionConfig = { targetAgentID, coAgentRunID, promptRunID };
+        const config: RealtimeSessionConfig = { targetAgentID, coAgentRunID, promptRunID, coAgentRunStepID };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
         if (!saved) {
@@ -1215,6 +1248,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         targetAgentID: parsed.targetAgentID,
                         coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
                         promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+                        coAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
                         pendingFeedbackRunID:
                             typeof parsed.pendingFeedbackRunID === 'string' ? parsed.pendingFeedbackRunID : undefined,
                     };

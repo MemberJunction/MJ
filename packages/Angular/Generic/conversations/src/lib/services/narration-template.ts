@@ -2,7 +2,7 @@
  * @fileoverview Pure helpers for building the one-off spoken progress-narration instructions a
  * realtime voice session sends to the model while delegated work runs.
  *
- * The instruction text is DB-driven: the server resolves the `Voice Co-Agent - Progress Narration`
+ * The instruction text is DB-driven: the server resolves the `Realtime Co-Agent - Progress Narration`
  * prompt's `TemplateText` at session start and threads it to the browser. The template may use:
  *   - `{{ progressMessage }}`  — the aggregated progress digest (one or more updates, oldest first)
  *   - `{{ priorNarrations }}`  — what the model has ALREADY said aloud for this task (so it can

@@ -2,7 +2,7 @@
  * Unit tests for the pure narration-template helpers used by VoiceSessionService — the DB-driven
  * `{{ progressMessage }}` / `{{ priorNarrations }}` / `{{ updateNumber }}` substitution plus the
  * built-in fallback for deployments that haven't synced the
- * `Voice Co-Agent - Progress Narration` prompt.
+ * `Realtime Co-Agent - Progress Narration` prompt.
  */
 import { describe, it, expect } from 'vitest';
 import {

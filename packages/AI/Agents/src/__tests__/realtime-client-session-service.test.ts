@@ -1,6 +1,6 @@
 /**
  * Unit tests for {@link RealtimeClientSessionService} — the server-agnostic preparer + tool relay
- * for the CLIENT-DIRECT realtime topology (Voice Co-Agent).
+ * for the CLIENT-DIRECT realtime topology (Realtime Co-Agent).
  *
  * All collaborators are injected via overridable seams on a test subclass: model resolution returns
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
@@ -89,8 +89,8 @@ class TestableService extends RealtimeClientSessionService {
     }));
 
     /** Observability-run creation result this stub returns (override per-test). null = creation failed. */
-    public ObservabilityResult: { CoAgentRunID: string; PromptRunID?: string } | null = {
-        CoAgentRunID: 'co-run-1', PromptRunID: 'prompt-run-1'
+    public ObservabilityResult: { CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null = {
+        CoAgentRunID: 'co-run-1', PromptRunID: 'prompt-run-1', CoAgentRunStepID: 'run-step-1'
     };
     public ObservabilitySpy = vi.fn();
 
@@ -108,7 +108,7 @@ class TestableService extends RealtimeClientSessionService {
         modelID: string,
         userID: string | undefined,
         agentSessionID: string
-    ): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
+    ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
         this.ObservabilitySpy({ coAgentID: coAgent.ID, promptID, modelID, userID, agentSessionID });
         return this.ObservabilityResult;
     }
@@ -128,7 +128,7 @@ const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserI
 const provider = {} as unknown as IMetadataProvider;
 
 function makeCoAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
-    return { ID: 'co-1', Name: 'Voice Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
+    return { ID: 'co-1', Name: 'Realtime Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
 }
 
 function makePrepInput(overrides: Partial<PrepareClientSessionInput> = {}): PrepareClientSessionInput {
@@ -171,13 +171,14 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         expect(svc.Model.LastParams!.Model).toBe('mock-realtime');
     });
 
-    it('surfaces CoAgentRunID + PromptRunID when observability run creation succeeds', async () => {
+    it('surfaces CoAgentRunID + PromptRunID + CoAgentRunStepID when observability run creation succeeds', async () => {
         const svc = new TestableService();
         const result = await svc.PrepareClientSession(makePrepInput({ UserID: 'voice-user' }), contextUser, provider);
 
         expect(result.Success).toBe(true);
         expect(result.CoAgentRunID).toBe('co-run-1');
         expect(result.PromptRunID).toBe('prompt-run-1');
+        expect(result.CoAgentRunStepID).toBe('run-step-1');
 
         // Run creation was invoked with the resolved model + prompt + session linkage.
         expect(svc.ObservabilitySpy).toHaveBeenCalledTimes(1);
@@ -195,6 +196,7 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         expect(result.ClientConfig).toBeDefined();
         expect(result.CoAgentRunID).toBeUndefined();
         expect(result.PromptRunID).toBeUndefined();
+        expect(result.CoAgentRunStepID).toBeUndefined();
     });
 
     it('includes caller-supplied extra tools alongside invoke-target', async () => {
@@ -250,7 +252,7 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
             provider
         );
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toContain('Voice Co-Agent could not be resolved');
+        expect(result.ErrorMessage).toContain('Realtime Co-Agent could not be resolved');
     });
 
     it('returns a failure result (no throw) when the model rejects minting', async () => {
@@ -476,7 +478,7 @@ function makeRunProvider(byName: (entityName: string) => FakeRun): IMetadataProv
 }
 
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
-    it('completes both runs when they are still Running', async () => {
+    it('completes both runs (Status, CompletedAt, Success) when they are still Running', async () => {
         const agentRun = makeRun({ ID: 'co-run-1' });
         const promptRun = makeRun({ ID: 'prompt-run-1' });
         const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
@@ -486,9 +488,11 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
 
         expect(agentRun.Status).toBe('Completed');
         expect(agentRun.CompletedAt).toBeInstanceOf(Date);
+        expect(agentRun.Success).toBe(true);
         expect(agentRun.Save).toHaveBeenCalledTimes(1);
         expect(promptRun.Status).toBe('Completed');
         expect(promptRun.CompletedAt).toBeInstanceOf(Date);
+        expect(promptRun.Success).toBe(true);
         expect(promptRun.Save).toHaveBeenCalledTimes(1);
     });
 
@@ -500,7 +504,62 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
         await svc.FinalizeCoAgentRun('co-run-1', null, contextUser, prov, false);
 
         expect(agentRun.Status).toBe('Failed');
+        expect(agentRun.Success).toBe(false);
         expect(agentRun.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('completes the co-agent run step (Status, CompletedAt, Success) when its id is supplied', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1' });
+        const promptRun = makeRun({ ID: 'prompt-run-1' });
+        const runStep = makeRun({ ID: 'run-step-1' });
+        const prov = makeRunProvider(name => {
+            if (name === 'MJ: AI Agent Runs') return agentRun;
+            if (name === 'MJ: AI Agent Run Steps') return runStep;
+            return promptRun;
+        });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true, 'run-step-1');
+
+        expect(runStep.Load).toHaveBeenCalledWith('run-step-1');
+        expect(runStep.Status).toBe('Completed');
+        expect(runStep.CompletedAt).toBeInstanceOf(Date);
+        expect(runStep.Success).toBe(true);
+        expect(runStep.ErrorMessage).toBeUndefined();
+        expect(runStep.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks the run step Failed (Success false, ErrorMessage stamped) on an error close', async () => {
+        const runStep = makeRun({ ID: 'run-step-1' });
+        const prov = makeRunProvider(() => runStep);
+        const svc = new RealtimeClientSessionService();
+
+        await svc.FinalizeCoAgentRun(null, null, contextUser, prov, false, 'run-step-1');
+
+        expect(runStep.Status).toBe('Failed');
+        expect(runStep.Success).toBe(false);
+        expect(runStep.ErrorMessage).toContain('error state');
+        expect(runStep.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('is a no-op for an already-finalized (non-Running) run step', async () => {
+        const runStep = makeRun({ ID: 'run-step-1', Status: 'Completed' });
+        const prov = makeRunProvider(() => runStep);
+        const svc = new RealtimeClientSessionService();
+
+        await svc.FinalizeCoAgentRun(null, null, contextUser, prov, true, 'run-step-1');
+
+        expect(runStep.Save).not.toHaveBeenCalled();
+    });
+
+    it('tolerates a run-step finalize save failure (logged, never thrown)', async () => {
+        const runStep = makeRun({ ID: 'run-step-1', Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'db down' } });
+        const prov = makeRunProvider(() => runStep);
+        const svc = new RealtimeClientSessionService();
+
+        await expect(
+            svc.FinalizeCoAgentRun(null, null, contextUser, prov, true, 'run-step-1')
+        ).resolves.toBeUndefined();
     });
 
     it('is a no-op for an already-finalized (non-Running) run', async () => {
@@ -524,12 +583,12 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
         expect(agentRun.Save).not.toHaveBeenCalled();
     });
 
-    it('skips both when ids are null', async () => {
+    it('skips all three when ids are null', async () => {
         const getEntity = vi.fn();
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new RealtimeClientSessionService();
 
-        await svc.FinalizeCoAgentRun(null, null, contextUser, prov, true);
+        await svc.FinalizeCoAgentRun(null, null, contextUser, prov, true, null);
 
         expect(getEntity).not.toHaveBeenCalled();
     });
@@ -565,7 +624,7 @@ class ObservabilityTestService extends RealtimeClientSessionService {
         agentSessionID: string,
         prov: IMetadataProvider,
         conversationID?: string,
-    ): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
+    ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
         return this.createCoAgentObservabilityRun(
             coAgent, promptID, modelID, userID, agentSessionID, contextUser, prov, conversationID
         );
@@ -584,18 +643,28 @@ function makeObsRun(id: string, overrides: Partial<FakeObsRun> = {}): FakeObsRun
     } as FakeObsRun;
 }
 
+/** Three-way provider routing for the agent run / prompt run / run step entities. */
+function makeObsProvider(agentRun: FakeObsRun, promptRun: FakeObsRun, runStep: FakeObsRun): IMetadataProvider {
+    return makeRunProvider(name => {
+        if (name === 'MJ: AI Agent Runs') return agentRun;
+        if (name === 'MJ: AI Agent Run Steps') return runStep;
+        return promptRun;
+    });
+}
+
 describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)', () => {
-    it('creates the co-agent AIAgentRun + linked AIPromptRun with full linkage stamping', async () => {
+    it('creates the co-agent AIAgentRun + linked AIPromptRun + single run step with full linkage stamping', async () => {
         const agentRun = makeObsRun('co-run-real');
         const promptRun = makeObsRun('prompt-run-real');
-        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+        const runStep = makeObsRun('run-step-real');
+        const prov = makeObsProvider(agentRun, promptRun, runStep);
         const svc = new ObservabilityTestService();
 
         const result = await svc.CallCreateObservabilityRun(
             makeCoAgent(), 'prompt-77', 'model-77', 'voice-user', 'session-77', prov, 'conv-77'
         );
 
-        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real' });
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: 'run-step-real' });
 
         // Agent run stamping.
         expect(agentRun.NewRecord).toHaveBeenCalled();
@@ -606,14 +675,28 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         expect(agentRun.ConversationID).toBe('conv-77');
         expect(agentRun.UserID).toBe('voice-user');
 
-        // Prompt run stamping + linkage back to the co-agent run.
+        // Prompt run stamping + linkage back to the co-agent run AND the co-agent itself —
+        // PromptID puts the run on the prompt's run history, AgentID on agent-scoped views.
         expect(promptRun.NewRecord).toHaveBeenCalled();
         expect(promptRun.PromptID).toBe('prompt-77');
         expect(promptRun.ModelID).toBe('model-77');
+        expect(promptRun.AgentID).toBe('co-1');
         expect(promptRun.Status).toBe('Running');
         expect(promptRun.RunType).toBe('Single');
         expect(promptRun.RunAt).toBeInstanceOf(Date);
         expect(promptRun.AgentRunID).toBe('co-run-real');
+
+        // The single Timeline step: StepType Prompt targeting the system prompt + its prompt run.
+        expect(runStep.NewRecord).toHaveBeenCalled();
+        expect(runStep.AgentRunID).toBe('co-run-real');
+        expect(runStep.StepNumber).toBe(1);
+        expect(runStep.StepType).toBe('Prompt');
+        expect(runStep.StepName).toBe('Realtime session system prompt');
+        expect(runStep.TargetID).toBe('prompt-77');
+        expect(runStep.TargetLogID).toBe('prompt-run-real');
+        expect(runStep.Status).toBe('Running');
+        expect(runStep.StartedAt).toBeInstanceOf(Date);
+        expect(runStep.Save).toHaveBeenCalledTimes(1);
     });
 
     it('leaves ConversationID/UserID unset when not supplied', async () => {
@@ -639,7 +722,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         expect(getEntity).toHaveBeenCalledTimes(1); // only the agent run was ever requested
     });
 
-    it('skips the prompt run (PromptRunID undefined) when no co-agent prompt resolved', async () => {
+    it('skips the prompt run AND run step (ids undefined) when no co-agent prompt resolved', async () => {
         const agentRun = makeObsRun('co-run-real');
         const getEntity = vi.fn(async () => agentRun);
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
@@ -647,19 +730,51 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
 
         const result = await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'u1', 's1', prov);
 
-        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined });
-        expect(getEntity).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined, CoAgentRunStepID: undefined });
+        expect(getEntity).toHaveBeenCalledTimes(1); // neither the prompt run nor the step was requested
     });
 
-    it('still returns the CoAgentRunID when only the prompt-run save fails', async () => {
+    it('still returns the CoAgentRunID — and creates the step WITHOUT a TargetLogID — when only the prompt-run save fails', async () => {
         const agentRun = makeObsRun('co-run-real');
         const promptRun = makeObsRun('prompt-run-fail', { Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'boom' } });
-        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+        const runStep = makeObsRun('run-step-real');
+        const prov = makeObsProvider(agentRun, promptRun, runStep);
         const svc = new ObservabilityTestService();
 
         const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
 
-        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined });
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined, CoAgentRunStepID: 'run-step-real' });
+        expect(runStep.TargetID).toBe('prompt-1');
+        expect(runStep.TargetLogID).toBeNull();
+    });
+
+    it('omits only the CoAgentRunStepID (runs still returned) when the run-step save fails — best-effort', async () => {
+        const agentRun = makeObsRun('co-run-real');
+        const promptRun = makeObsRun('prompt-run-real');
+        const runStep = makeObsRun('run-step-fail', { Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'step boom' } });
+        const prov = makeObsProvider(agentRun, promptRun, runStep);
+        const svc = new ObservabilityTestService();
+
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: undefined });
+    });
+
+    it('contains a THROWN run-step failure (runs still returned) — step creation never breaks the session', async () => {
+        const agentRun = makeObsRun('co-run-real');
+        const promptRun = makeObsRun('prompt-run-real');
+        const getEntity = vi.fn(async (name: string) => {
+            if (name === 'MJ: AI Agent Run Steps') {
+                throw new Error('run step entity unavailable');
+            }
+            return name === 'MJ: AI Agent Runs' ? agentRun : promptRun;
+        });
+        const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
+        const svc = new ObservabilityTestService();
+
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: undefined });
     });
 });
 

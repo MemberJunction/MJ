@@ -1,6 +1,6 @@
 {
   "fields": {
-    "Name": "Voice Co-Agent - System Prompt",
+    "Name": "Realtime Co-Agent - System Prompt",
     "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
     "TemplateText": "@file:templates/Voice Co-Agent - System Prompt.template.md",
     "ResponseFormat": "Text",

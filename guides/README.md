@@ -24,7 +24,7 @@ If you're about to start work in one of the areas below, **read the guide first*
 
 ## AI and agents
 
-- **[Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md)** — Live, low-latency voice agents: the `Realtime` agent type and Voice Co-Agent (one co-agent voices any target agent), the triple-registry plugin architecture (server/client model drivers + channel plugins), client-direct vs server-bridged topologies, session lifecycle/janitor, interactive channels (the live Whiteboard), narration, observability, and security. Companion to [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md).
+- **[Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md)** — Live, low-latency voice agents: the `Realtime` agent type and Realtime Co-Agent (one co-agent voices any target agent), the triple-registry plugin architecture (server/client model drivers + channel plugins), client-direct vs server-bridged topologies, session lifecycle/janitor, interactive channels (the live Whiteboard), narration, observability, and security. Companion to [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md).
 
 ## Angular / MJExplorer
 
