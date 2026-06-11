@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Realtime Co-Agent",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "Description": "Generic realtime companion. Acts as the live, low-latency front for any target MJ agent (the target is a runtime parameter) across realtime channels \u2014 voice today, plus interactive channels like the live whiteboard \u2014 holding a natural conversation while delegating real work back to that agent. Of the Realtime agent type; driven by a BaseRealtimeModel session rather than an iterative loop.",
+      "Description": "Generic realtime companion. Acts as the live, low-latency front for any target MJ agent (the target is a runtime parameter) across realtime channels — voice today, plus interactive channels like the live whiteboard — holding a natural conversation while delegating real work back to that agent. Of the Realtime agent type; driven by a BaseRealtimeModel session rather than an iterative loop.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Realtime",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -25,8 +25,8 @@
             "ID": "F9F5549A-0E54-46FF-98CE-DB4AB9E74992"
           },
           "sync": {
-            "lastModified": "2026-06-10T22:36:28.921Z",
-            "checksum": "5c4b5e68d7a915675b3f28cdf423be20fa4a2f34f88b791a855e866b89ac717d"
+            "lastModified": "2026-06-11T13:54:52.355Z",
+            "checksum": "0757be74544df5e00c2a14eb199fb487aeee9c969d2ac9ba865f1b2b70038828"
           }
         }
       ]
@@ -35,8 +35,8 @@
       "ID": "C277FEE8-D450-4B50-9167-2F3396072123"
     },
     "sync": {
-      "lastModified": "2026-06-10T22:36:28.889Z",
-      "checksum": "e330424218767968cd057463a9d6eabfc18c0feede671842e3f0800f2e752af2"
+      "lastModified": "2026-06-11T13:54:52.347Z",
+      "checksum": "07440200f00fdd4b2d61e60234e8cf3856603081e37ea42604af0b813ccf0af8"
     }
   }
 ]

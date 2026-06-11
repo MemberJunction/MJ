@@ -12,6 +12,9 @@ import {
     type Transcription,
 } from '@google/genai';
 import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
+import { base64ToArrayBuffer } from '../audio/pcmUtils';
+import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
+import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
 
@@ -21,28 +24,6 @@ const GEMINI_INPUT_SAMPLE_RATE = 16000;
 const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 /** Gemini Live emits model audio as 16-bit signed PCM, 24 kHz, mono. */
 const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
-
-/** Registration name for the inline mic-capture worklet processor. */
-const CAPTURE_WORKLET_NAME = 'mj-gemini-pcm16-capture';
-
-/**
- * Inline AudioWorklet processor source (loaded via a Blob URL so the package ships no asset
- * files). Runs inside the audio rendering thread: forwards each 128-frame mono input block to
- * the main thread as a copied `Float32Array`. PCM16 conversion + base64 encoding happen on the
- * main thread to keep the render-thread callback minimal.
- */
-const CAPTURE_WORKLET_SOURCE = `
-class MJGeminiPcm16Capture extends AudioWorkletProcessor {
-    process(inputs) {
-        const channel = inputs[0] && inputs[0][0];
-        if (channel && channel.length > 0) {
-            this.port.postMessage(channel.slice(0));
-        }
-        return true;
-    }
-}
-registerProcessor('${CAPTURE_WORKLET_NAME}', MJGeminiPcm16Capture);
-`;
 
 // ── Structural transport seams (typed subsets — fakes in tests, SDK in prod) ──
 
@@ -88,134 +69,34 @@ export interface GeminiClientConnectArgs {
 /**
  * Handle returned by the mic-capture seam: the only operation the driver needs is teardown.
  * Production wraps an `AudioContext` + `AudioWorkletNode` pipeline; tests return a no-op fake.
+ *
+ * Back-compat alias for the shared {@link IPcmMicCapture} (the capture pipeline now lives in
+ * `src/audio/micCapture.ts`, shared with the ElevenLabs driver).
  */
-export interface IGeminiMicCapture {
-    /** Stops capture and releases the audio context / worklet resources. */
-    Stop(): void;
-}
+export type IGeminiMicCapture = IPcmMicCapture;
 
 /**
  * The playback seam: schedules raw PCM16 chunks for gapless playout and reports whether audio
  * is AUDIBLY playing. Production is {@link GeminiPcmPlayback} (Web Audio, playhead-clock
  * scheduling); tests inject a fake with a controllable `IsPlaying`.
+ *
+ * Back-compat alias for the shared {@link IRealtimePcmPlayback} (the playout engine now lives
+ * in `src/audio/pcmPlayback.ts`, shared with the ElevenLabs driver).
  */
-export interface IGeminiAudioPlayback {
-    /** Schedules a raw PCM16 (24 kHz mono) chunk back-to-back after any already-queued audio. */
-    Enqueue(pcm16: ArrayBuffer): void;
-    /** Stops + clears every scheduled source (barge-in / interruption). */
-    Flush(): void;
-    /** `true` while scheduled audio is audibly playing (playhead ahead of the context clock). */
-    readonly IsPlaying: boolean;
-    /** Flushes and releases the underlying audio context. */
-    Close(): void;
-}
-
-// ── Base64 / PCM helpers (atob/btoa are global in both browsers and Node 18+) ─
-
-/** Decodes a base64 string into a freshly-allocated `ArrayBuffer`. */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = atob(base64);
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        out[i] = binary.charCodeAt(i);
-    }
-    return out.buffer;
-}
-
-/** Encodes raw bytes to base64 in chunks (avoids call-stack limits on large frames). */
-function bytesToBase64(bytes: Uint8Array): string {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
-}
-
-/** Converts a Float32 [-1, 1] sample block to PCM16 little-endian bytes, base64-encoded. */
-function encodeFloat32ToPcm16Base64(samples: Float32Array): string {
-    const pcm = new Int16Array(samples.length);
-    for (let i = 0; i < samples.length; i++) {
-        const s = Math.max(-1, Math.min(1, samples[i]));
-        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    }
-    return bytesToBase64(new Uint8Array(pcm.buffer));
-}
-
-/** Converts raw PCM16 little-endian bytes to Float32 samples (truncates a trailing odd byte). */
-function pcm16ToFloat32(pcm: ArrayBuffer): Float32Array<ArrayBuffer> {
-    const even = pcm.byteLength - (pcm.byteLength % 2);
-    const ints = new Int16Array(pcm.slice(0, even));
-    const out = new Float32Array(ints.length);
-    for (let i = 0; i < ints.length; i++) {
-        out[i] = ints[i] / 0x8000;
-    }
-    return out;
-}
+export type IGeminiAudioPlayback = IRealtimePcmPlayback;
 
 // ── Production playback engine ─────────────────────────────────────────────────
 
 /**
  * Web Audio playout scheduler for Gemini's 24 kHz PCM16 model audio.
  *
- * Chunks are wrapped in `AudioBuffer`s and scheduled back-to-back against a **playhead clock**:
- * each chunk starts at `max(playheadTime, currentTime)` and advances the playhead by its
- * duration, producing gapless playout regardless of network jitter. {@link IsPlaying} is
- * computed directly from that clock — the playhead being ahead of `currentTime` (with live
- * sources) means audio is audibly coming out of the speaker. On interruption, {@link Flush}
- * stops every scheduled source and rewinds the playhead.
+ * A thin specialization of the shared {@link RealtimePcmPlayback} (playhead-clock scheduling,
+ * gapless playout, honest `IsPlaying`) fixed at Gemini Live's 24 kHz output rate. Kept as a
+ * named export for back-compat with existing consumers.
  */
-export class GeminiPcmPlayback implements IGeminiAudioPlayback {
-    private context: AudioContext;
-    /** The absolute context time up to which audio has been scheduled. */
-    private playheadTime = 0;
-    /** Sources scheduled and not yet ended (so Flush can stop them). */
-    private activeSources = new Set<AudioBufferSourceNode>();
-
+export class GeminiPcmPlayback extends RealtimePcmPlayback {
     constructor() {
-        this.context = new AudioContext({ sampleRate: GEMINI_OUTPUT_SAMPLE_RATE });
-    }
-
-    /** @inheritdoc */
-    public Enqueue(pcm16: ArrayBuffer): void {
-        const samples = pcm16ToFloat32(pcm16);
-        if (samples.length === 0) {
-            return;
-        }
-        const buffer = this.context.createBuffer(1, samples.length, GEMINI_OUTPUT_SAMPLE_RATE);
-        buffer.copyToChannel(samples, 0);
-        const source = this.context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(this.context.destination);
-        source.onended = () => this.activeSources.delete(source);
-        this.activeSources.add(source);
-        const startAt = Math.max(this.playheadTime, this.context.currentTime);
-        source.start(startAt);
-        this.playheadTime = startAt + buffer.duration;
-    }
-
-    /** @inheritdoc */
-    public Flush(): void {
-        for (const source of this.activeSources) {
-            try {
-                source.stop();
-            } catch {
-                /* source never started or already stopped — fine */
-            }
-        }
-        this.activeSources.clear();
-        this.playheadTime = 0;
-    }
-
-    /** @inheritdoc */
-    public get IsPlaying(): boolean {
-        return this.activeSources.size > 0 && this.playheadTime > this.context.currentTime;
-    }
-
-    /** @inheritdoc */
-    public Close(): void {
-        this.Flush();
-        void this.context.close();
+        super(GEMINI_OUTPUT_SAMPLE_RATE);
     }
 }
 
@@ -512,9 +393,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Creation seam for the mic-capture pipeline: a 16 kHz `AudioContext`, the inline-Blob
-     * capture worklet, and a zero-gain tail that keeps the graph pulled without audible
-     * monitoring. Each worklet block is PCM16-encoded and handed to `onPcmChunk` as base64.
+     * Creation seam for the mic-capture pipeline. Production delegates to the shared
+     * {@link createPcmMicCapture} (a 16 kHz `AudioContext`, inline-Blob capture worklet, and a
+     * zero-gain tail; each worklet block is PCM16-encoded and handed to `onPcmChunk` as base64).
      * Unit tests override this with a no-op fake (and may capture `onPcmChunk` to simulate mic
      * frames).
      */
@@ -522,26 +403,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         micStream: MediaStream,
         onPcmChunk: (base64Pcm16: string) => void
     ): Promise<IGeminiMicCapture> {
-        const context = new AudioContext({ sampleRate: GEMINI_INPUT_SAMPLE_RATE });
-        await this.loadCaptureWorklet(context);
-        const source = context.createMediaStreamSource(micStream);
-        const worklet = new AudioWorkletNode(context, CAPTURE_WORKLET_NAME);
-        worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-            onPcmChunk(encodeFloat32ToPcm16Base64(event.data));
-        };
-        source.connect(worklet);
-        const muteTail = context.createGain();
-        muteTail.gain.value = 0;
-        worklet.connect(muteTail).connect(context.destination);
-        return {
-            Stop: () => {
-                worklet.port.onmessage = null;
-                source.disconnect();
-                worklet.disconnect();
-                muteTail.disconnect();
-                void context.close();
-            },
-        };
+        return createPcmMicCapture(micStream, GEMINI_INPUT_SAMPLE_RATE, onPcmChunk);
     }
 
     /** Creation seam for the playout engine. Production returns {@link GeminiPcmPlayback}. */
@@ -550,16 +412,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     // ── Connection internals ───────────────────────────────────────────────────
-
-    /** Loads the inline capture worklet module from a Blob URL (no asset files shipped). */
-    private async loadCaptureWorklet(context: AudioContext): Promise<void> {
-        const blobUrl = URL.createObjectURL(new Blob([CAPTURE_WORKLET_SOURCE], { type: 'application/javascript' }));
-        try {
-            await context.audioWorklet.addModule(blobUrl);
-        } finally {
-            URL.revokeObjectURL(blobUrl);
-        }
-    }
 
     /**
      * Extracts the model + Live connect config from the server-minted `SessionConfig`
