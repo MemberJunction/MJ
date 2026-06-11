@@ -4873,27 +4873,27 @@ export class AIPromptRunner {
         jsonToParse = CleanJSON(rawOutput);
       }
       catch (cleanError) {
-        if (params.verbose) {
-          this.logError(cleanError, {
-            category: 'JSONCleaningFailed',
-            metadata: {
-              originalError: originalError.message,
-              rawOutput: rawOutput.substring(0, 500)
-            },
-            maxErrorLength: params.maxErrorLength
-          });
-        }
+        this.logError(cleanError, {
+          category: 'JSONCleaningFailed',
+          metadata: {
+            originalError: originalError.message,
+            rawOutput: rawOutput.substring(0, 500)
+          },
+          maxErrorLength: params.maxErrorLength
+        });
       }
       const json5Result = JSON5.parse(jsonToParse);
-      if (params.verbose) {
-        this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
-      }
+      this.logStatus('   ✅ JSON5 successfully parsed the malformed JSON', true, params);
+      currentPromptRun._jsonRepairInfo = {
+        repaired: true,
+        method: 'JSON5',
+        originalError: originalError.message,
+        rawOutputPrefix: rawOutput.substring(0, 200)
+      };
       return json5Result;
     } catch (json5Error) {
       // Step 2: Use AI to repair the JSON
-      if (params.verbose) {
-        this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
-      }
+      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
       
       try {
         // Find the "Repair JSON" prompt in the "MJ: System" category
@@ -4927,21 +4927,26 @@ export class AIPromptRunner {
 
         // if we get here, we successfully repaired the JSON!!!
         this.logStatus('   ✅ AI successfully repaired the JSON', true, params);
+        currentPromptRun._jsonRepairInfo = {
+          repaired: true,
+          method: 'AIRepair',
+          originalError: originalError.message,
+          rawOutputPrefix: rawOutput.substring(0, 200),
+          repairPromptRunId: repairResult.promptRun?.ID
+        };
         return repairedJSON;
       } catch (aiRepairError) {
-        // Both repair attempts failed
-        if (params.verbose) {
-          this.logError(aiRepairError, {
-            category: 'JSONRepairFailed',
-            metadata: {
-              originalError: originalError.message,
-              json5Error: json5Error.message,
-              aiError: aiRepairError.message,
-              rawOutput: rawOutput.substring(0, 500)
-            },
-            maxErrorLength: params.maxErrorLength
-          });
-        }        
+        // Both repair attempts failed — always log, this is unexpected LLM behavior
+        this.logError(aiRepairError, {
+          category: 'JSONRepairFailed',
+          metadata: {
+            originalError: originalError.message,
+            json5Error: json5Error.message,
+            aiError: aiRepairError.message,
+            rawOutput: rawOutput.substring(0, 500)
+          },
+          maxErrorLength: params.maxErrorLength
+        });
         
         throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
       }
@@ -5229,7 +5234,8 @@ export class AIPromptRunner {
             parsedResult.validationResult?.Success || false,
             validationAttempts.length,
             promptRun.ValidationBehavior || 'Warn'
-          )
+          ),
+          jsonRepairInfo: promptRun._jsonRepairInfo || null
         });
       } else {
         // No validation attempts (possibly skipped validation)
@@ -5238,6 +5244,13 @@ export class AIPromptRunner {
         promptRun.FinalValidationPassed = parsedResult.validationResult?.Success !== false;
         promptRun.LastAttemptAt = endTime;
         promptRun.TotalRetryDurationMS = 0;
+
+        // Even without validation, persist JSON repair info if a repair occurred
+        if (promptRun._jsonRepairInfo) {
+          promptRun.ValidationSummary = JSON.stringify({
+            jsonRepairInfo: promptRun._jsonRepairInfo
+          });
+        }
       }
 
       // Set Success flag based on validation result
