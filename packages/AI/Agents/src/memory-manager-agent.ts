@@ -3060,6 +3060,143 @@ export class MemoryManagerAgent extends BaseAgent {
      * `triggerType` flows through to the parent consolidation run step so observability
      * records *why* the maintenance cycle fired this run.
      */
+    /**
+     * Counters returned by the hardening pass over agent-authored provisional notes.
+     */
+    private static readonly HARDENING_CONFIG = {
+        /** Max provisional notes processed per MM run — batch cap, remainder picked up next cycle */
+        maxNotesPerRun: 200,
+        /** Similarity threshold for the dedupe check against hardened notes */
+        dedupeSimilarity: 0.85,
+    };
+
+    /**
+     * Hardening pass over in-flight agent-written notes (Status='Provisional',
+     * AuthoredBy='Agent'). Runs UNCONDITIONALLY at the start of every MM cycle —
+     * before the consolidation-gated maintenance phases — so that:
+     *   1. provisional notes never languish waiting for a consolidation trigger, and
+     *   2. notes hardened here participate in importance scoring, consolidation,
+     *      contradiction detection, and decay in the SAME cycle via the existing
+     *      machinery (no duplicated reconciliation logic in this pass).
+     *
+     * Per note: dedupe against hardened (Active) notes using the same LLM dedupe
+     * prompt as extraction — duplicates are Archived with ConsolidatedIntoNoteID
+     * lineage; survivors are hardened (Status='Active', ExpiresAt=NULL so the
+     * standard decay machinery owns their lifetime).
+     */
+    protected async runHardeningPhase(
+        contextUser: UserInfo
+    ): Promise<{ hardened: number; deduped: number; failed: number }> {
+        const counters = { hardened: 0, deduped: 0, failed: 0 };
+        const step = await this.CreateRunStep('Decision', 'Harden Provisional Notes', {
+            maxNotesPerRun: MemoryManagerAgent.HARDENING_CONFIG.maxNotesPerRun
+        });
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJAIAgentNoteEntity>({
+                EntityName: 'MJ: AI Agent Notes',
+                ExtraFilter: `Status = 'Provisional' AND AuthoredBy = 'Agent'`,
+                OrderBy: '__mj_CreatedAt ASC',
+                MaxRows: MemoryManagerAgent.HARDENING_CONFIG.maxNotesPerRun,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!result.Success) {
+                await this.FinalizeRunStep(step, false, counters, undefined, `Failed to load provisional notes: ${result.ErrorMessage}`);
+                return counters;
+            }
+
+            const provisionalNotes = result.Results || [];
+            if (provisionalNotes.length === 0) {
+                await this.FinalizeRunStep(step, true, { ...counters, provisionalCount: 0 });
+                return counters;
+            }
+
+            const runner = new AIPromptRunner();
+            const dedupePrompt = AIEngine.Instance.Prompts.find(p =>
+                p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
+            );
+
+            for (const note of provisionalNotes) {
+                const outcome = await this.hardenSingleNote(note, dedupePrompt, runner, contextUser);
+                counters[outcome]++;
+            }
+
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Hardening pass — ${counters.hardened} hardened, ${counters.deduped} deduped, ${counters.failed} failed of ${provisionalNotes.length} provisional notes`);
+            }
+            await this.FinalizeRunStep(step, counters.failed === 0, { ...counters, provisionalCount: provisionalNotes.length });
+        } catch (error) {
+            LogError('Memory Manager: Hardening pass failed, continuing with run:', error);
+            await this.FinalizeRunStep(step, false, counters, undefined, error instanceof Error ? error.message : String(error));
+        }
+        return counters;
+    }
+
+    /**
+     * Harden one provisional note: archive it as a duplicate when the LLM dedupe
+     * decision says an equivalent hardened note exists, otherwise promote it to
+     * Active with decay-managed lifetime.
+     */
+    protected async hardenSingleNote(
+        note: MJAIAgentNoteEntity,
+        dedupePrompt: MJAIPromptEntityExtended | undefined,
+        runner: AIPromptRunner,
+        contextUser: UserInfo
+    ): Promise<'hardened' | 'deduped' | 'failed'> {
+        try {
+            // Compare against HARDENED notes only — other provisional notes are themselves
+            // unvetted, and same-run duplicates were already handled at write time.
+            const similar = (await AIEngine.Instance.FindSimilarAgentNotes(
+                note.Note || '',
+                note.AgentID || undefined,
+                note.UserID || undefined,
+                note.CompanyID || undefined,
+                10,
+                MemoryManagerAgent.HARDENING_CONFIG.dedupeSimilarity
+            )).filter(m => m.note.ID !== note.ID && m.note.Status === 'Active');
+
+            if (similar.length > 0 && dedupePrompt) {
+                const candidate: ExtractedNote = {
+                    type: note.Type,
+                    content: note.Note || '',
+                    confidence: 100,
+                    agentId: note.AgentID || undefined,
+                    userId: note.UserID || undefined,
+                    companyId: note.CompanyID || undefined,
+                };
+                const decision = await this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similar, contextUser);
+                if (!decision.shouldAdd) {
+                    const target = similar[0].note;
+                    note.Status = 'Archived';
+                    note.ConsolidatedIntoNoteID = target.ID;
+                    note.Comments = `${note.Comments || ''} [Hardening: duplicate of ${target.ID} — ${decision.reason}]`.trim();
+                    if (!await note.Save()) {
+                        LogError(`Memory Manager: Failed to archive duplicate provisional note ${note.ID}: ${note.LatestResult?.CompleteMessage || 'unknown error'}`);
+                        return 'failed';
+                    }
+                    target.AccessCount = (target.AccessCount || 0) + 1;
+                    target.LastAccessedAt = new Date();
+                    if (!await target.Save()) {
+                        LogError(`Memory Manager: Failed to bump dedupe target ${target.ID}: ${target.LatestResult?.CompleteMessage || 'unknown error'}`);
+                    }
+                    return 'deduped';
+                }
+            }
+
+            note.Status = 'Active';
+            note.ExpiresAt = null;
+            if (!await note.Save()) {
+                LogError(`Memory Manager: Failed to harden provisional note ${note.ID}: ${note.LatestResult?.CompleteMessage || 'unknown error'}`);
+                return 'failed';
+            }
+            return 'hardened';
+        } catch (error) {
+            LogError(`Memory Manager: Exception hardening note ${note.ID}:`, error);
+            return 'failed';
+        }
+    }
+
     private async runMaintenancePhases(
         contextUser: UserInfo,
         forceMaintenance: boolean,
@@ -3500,6 +3637,14 @@ export class MemoryManagerAgent extends BaseAgent {
                 if (this._verbose) LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
             }
 
+            // Harden agent-written provisional notes FIRST and unconditionally — survivors
+            // become Active and participate in this same cycle's maintenance phases
+            // (importance, consolidation, contradiction, decay) when those fire.
+            const hardening = await this.runHardeningPhase(params.contextUser!);
+            const hardeningSummary = hardening.hardened + hardening.deduped + hardening.failed > 0
+                ? ` Hardened ${hardening.hardened} provisional notes (${hardening.deduped} deduped, ${hardening.failed} failed).`
+                : '';
+
             const forceMaintenance = params.data?.forceMaintenance === true;
             const triggerDecision = await this.shouldRunConsolidation(params.agent.ID, params.contextUser!, forceMaintenance);
             const maintenance = triggerDecision.shouldRun
@@ -3511,7 +3656,7 @@ export class MemoryManagerAgent extends BaseAgent {
             const finalStep: BaseAgentNextStep<P> = {
                 terminate: true,
                 step: 'Success',
-                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.${maintenanceSummary}`,
+                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.${hardeningSummary}${maintenanceSummary}`,
                 newPayload: {
                     notesCreated,
                     examplesCreated,

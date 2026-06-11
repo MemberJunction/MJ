@@ -19,6 +19,7 @@ export * from './AgentRunner';
 export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './ArtifactToolManager';
+export * from './MemoryWriteManager';
 export * from './pipeline';
 export * from './file-input-resolver';
 export * from './artifact-tools/DataSnapshotToolLibrary';
