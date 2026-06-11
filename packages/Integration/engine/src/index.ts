@@ -90,6 +90,7 @@ export { ConnectorFactory } from './ConnectorFactory.js';
 // Engines
 export { FieldMappingEngine } from './FieldMappingEngine.js';
 export { MatchEngine } from './MatchEngine.js';
+export { serializeKeyValue } from './KeySerialization.js';
 
 // Services
 export { WatermarkService } from './WatermarkService.js';

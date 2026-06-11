@@ -361,6 +361,12 @@ export class IntegrationSchemaSync {
             obj.NewRecord();
             obj.IntegrationID = integrationID;
             obj.Name = srcObj.ExternalName;
+            // APIPath is NOT NULL with no DB default. Declared objects get it from the metadata file;
+            // a runtime-DISCOVERED object has no source APIPath (ExternalObjectSchema carries none),
+            // so default it to the object name. Path-driven connectors read APIPath; runtime-discovery
+            // connectors (e.g. a file feed) key off the object name and ignore it. Without this,
+            // Save() fails the NOT-NULL check and the discovered object is silently lost.
+            obj.APIPath = srcObj.ExternalName;
             obj.DisplayName = srcObj.ExternalLabel || srcObj.ExternalName;
             if (srcObj.Description) obj.Description = srcObj.Description;
             if (srcObj.IncrementalWatermarkField) obj.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
@@ -380,6 +386,9 @@ export class IntegrationSchemaSync {
                 }));
                 return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered' };
             }
+            // Save() returned false (validation/constraint failure) WITHOUT throwing — SURFACE it.
+            // A silent false here is exactly how discovered objects vanished with zero signal.
+            console.warn(`[IntegrationSchemaSync] Save() returned false creating IntegrationObject '${srcObj.ExternalName}': ${obj.LatestResult?.CompleteMessage ?? 'unknown validation failure'}`);
         } catch (err) {
             console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObject '${srcObj.ExternalName}': ${err instanceof Error ? err.message : err}`);
         }
@@ -424,6 +433,12 @@ export class IntegrationSchemaSync {
                 winners.Type = 'Discovered';
             } else {
                 winners.Type = 'Declared';
+            }
+            // Length is DDL-affecting (describe wins): seed it so the column is sized
+            // nvarchar(N) instead of defaulting to NVARCHAR(MAX) downstream.
+            if (srcField.MaxLength != null && existing.Length !== srcField.MaxLength) {
+                existing.Length = srcField.MaxLength;
+                dirty = true;
             }
             if (existing.AllowsNull !== describedAllowsNull) {
                 existing.AllowsNull = describedAllowsNull;
@@ -511,6 +526,9 @@ export class IntegrationSchemaSync {
             field.DisplayName = srcField.Label || srcField.Name;
             if (srcField.Description) field.Description = srcField.Description;
             field.Type = MapSourceType(srcField.SourceType);
+            // Persist the discovered length onto IOF.Length so the schema builder sizes the
+            // column (nvarchar(N)) instead of defaulting to NVARCHAR(MAX).
+            if (srcField.MaxLength != null) field.Length = srcField.MaxLength;
             field.AllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
             field.IsPrimaryKey = srcField.IsPrimaryKey;
             field.IsRequired = srcField.IsRequired;

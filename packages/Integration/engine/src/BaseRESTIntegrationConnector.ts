@@ -3,6 +3,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { computeContentHash } from './ContentHash.js';
+import { serializeKeyValue } from './KeySerialization.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -1024,9 +1025,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // (a composite key with a missing part — e.g. "abc|" — is not a stable identity). When any
         // part is missing, fall back to a deterministic content-derived identity (identity hash) so
         // PK-less / partial-key tables are still syncable + dedupable. Stable while content is unchanged.
+        // serializeKeyValue mirrors the write-side coercion (objects → JSON, not "[object Object]"),
+        // so an object-valued PK (a connector that surfaces a nested {id,...} blob as its key) yields
+        // a stable, distinct ExternalID instead of every record collapsing to "[object Object]".
         const allPkPresent = pkFieldNames.length > 0
-            && pkFieldNames.every(name => raw[name] != null && String(raw[name]).length > 0);
-        const externalID = pkFieldNames.map(name => String(raw[name] ?? '')).join('|');
+            && pkFieldNames.every(name => raw[name] != null && serializeKeyValue(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => serializeKeyValue(raw[name])).join('|');
         const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
         return {
             ExternalID: resolvedID,

@@ -190,9 +190,11 @@ describe('MatchEngine', () => {
             expect(results[0].MatchedMJRecordID).toBe('mj-multi-key');
 
             const callArgs = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
-            // Plain (unbracketed) identifiers — dialect-agnostic; SQL-Server brackets break Postgres.
-            expect(callArgs.ExtraFilter).toContain('Email =');
-            expect(callArgs.ExtraFilter).toContain('CompanyName =');
+            // ANSI double-quoted identifiers — portable across dialects (QUOTED_IDENTIFIER ON on
+            // SQL Server, standard on Postgres) and safe for reserved-word columns (e.g. `open`).
+            // SQL-Server square brackets are NOT used — they break Postgres.
+            expect(callArgs.ExtraFilter).toContain('"Email" =');
+            expect(callArgs.ExtraFilter).toContain('"CompanyName" =');
             expect(callArgs.ExtraFilter).not.toContain('[Email]');
             expect(callArgs.ExtraFilter).toContain('AND');
         });

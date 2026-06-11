@@ -22,11 +22,13 @@ import type {
 } from './types.js';
 import {
     discoverFromStream,
+    pickKeyFromStats,
     pickPrimaryKeyFromStats,
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
 import { AdaptiveConcurrencyController, RunAdaptive, type AdaptiveItemOutcome } from './AdaptiveConcurrency.js';
+import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -414,6 +416,21 @@ export abstract class BaseIntegrationConnector {
     public get RateLimitPolicy(): RateLimitPolicy | null { return null; }
 
     /**
+     * Whether the watermark this connector returns (`FetchBatchResult.NewWatermarkValue`) is a
+     * RELIABLE, monotonically-increasing global maximum — i.e. the connector fetches in watermark
+     * order so the last batch's value IS the true high-water mark, and an updated record always
+     * re-surfaces at a NEW (higher) watermark. When `true`, the engine uses that watermark to NARROW
+     * the next incremental (instead of advancing a full sync to wall-clock "now", and instead of the
+     * keyset clear-and-re-scan), so incrementals fetch only what's new.
+     *
+     * Default `false` — the safe, backwards-compatible choice: a connector whose source returns
+     * records out of watermark order (e.g. HubSpot's creation-ordered list API, where the last batch
+     * can carry old modstamps) MUST stay false so the engine keeps advancing to "now" and never saves
+     * a stale watermark. Override to `true` ONLY when the source guarantees monotonic ordering.
+     */
+    public get MonotonicWatermark(): boolean { return false; }
+
+    /**
      * Parse a Retry-After / rate-limit signal out of a failed response or thrown error into
      * milliseconds so the engine can back off precisely. Return `undefined` when the error is not a
      * throttle (or carries no hint).
@@ -469,11 +486,12 @@ export abstract class BaseIntegrationConnector {
      * gathered statistics. The connector supplies whatever read-only fetch yields the records; this
      * helper turns that stream into `ExternalFieldSchema[]`.
      *
-     * Why data-informed instead of nominal: streaming the real values lets us prove which column is
-     * unique + non-null over a statistically significant N (`pickPrimaryKeyFromStats`, p<0.05) and
-     * pick the PK from evidence rather than a name guess. The scan is time-bounded — it stops on
-     * exhaustion OR `opts.Discovery.TimeBudgetMs`, whichever comes first, and uses what it gathered;
-     * more rows simply mean stronger claims.
+     * Why data-informed: streaming the real values lets `pickPrimaryKeyFromStats` pick the PK from
+     * evidence (uniqueness/non-null statistics) COMBINED with the naming convention, rather than a
+     * name guess alone. The PK is a SOFT key, so the pick is best-available, not strict-significance:
+     * a confident unique+non-null column wins outright; otherwise a near-unique / convention-named
+     * column is taken as a soft key (a PK-less object would stall CodeGen). The scan is time-bounded —
+     * it stops on exhaustion OR `opts.Discovery.TimeBudgetMs`; more rows simply mean stronger claims.
      *
      * Provable-only encoding into the standard flags:
      *  - `IsPrimaryKey` — set ONLY on the single statistics-first pick. Multiple equally-ranked unique
@@ -499,8 +517,36 @@ export abstract class BaseIntegrationConnector {
         records: AsyncIterable<Record<string, unknown>> | Iterable<Record<string, unknown>>,
         opts: { Discovery?: StreamDiscoveryOptions; Pk?: PkPickOptions; ReadOnly?: boolean } = {}
     ): Promise<ExternalFieldSchema[]> {
-        const scan = await discoverFromStream(records, opts.Discovery);
-        const pk = pickPrimaryKeyFromStats(scan.Columns, opts.Pk);
+        // Flatten nested objects so the column corpus + PK pick see SCALAR fields (e.g.
+        // checkin_question.id → checkin_question_id) instead of an object-valued blob being chosen
+        // as the key. Mirrors the sync-intake flatten (FieldMappingEngine) EXACTLY, so the field
+        // names discovered here match what sync produces. A flat record passes through unchanged.
+        async function* flattenRecords(): AsyncIterable<Record<string, unknown>> {
+            for await (const r of records) yield hasNestedObject(r) ? flattenRecord(r) : r;
+        }
+        const scan = await discoverFromStream(flattenRecords(), opts.Discovery);
+        // Provable-only identity in ONE pass: best contender per subset size (1,2,3…) → the SMALLEST
+        // size whose best contender is a provable key (single OR composite), decided by the Chao1
+        // domain-saturation test on the streamed sample. No fabricated keys; a genuinely-keyless object
+        // simply gets no PK and is honestly not added downstream.
+        const key = pickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
+        let pkFieldNames: string[] = key.Fields ?? [];
+        let pkReason = key.Reason;
+        if (pkFieldNames.length === 0) {
+            // No PROVABLE key (Chao1 saturated, or sub-significance sample). Fall back to a SOFT
+            // best-available SINGLE-column pick: a convention-named column ('id'-like) carrying an
+            // identity signal (non-null on every row + near-unique/distinct-capped). Rationale: a
+            // PK-less entity STALLS CodeGen — it skips spCreate/Update/Delete + views for that table,
+            // exits non-zero, and aborts ApplyAll. A soft key is dedup-only (can NEVER reject a row),
+            // so "all keys are soft, best-available" keeps the table syncable. Genuinely-signal-less
+            // objects still get no PK (content-hash identity handles dedup).
+            const soft = pickPrimaryKeyFromStats(scan.Columns, opts.Pk);
+            if (soft.Field) { pkFieldNames = [soft.Field]; pkReason = `[soft-fallback] ${soft.Reason}`; }
+        }
+        const pkFields = new Set<string>(pkFieldNames);
+        // Diagnostic: the verdict + per-column stats, so a keyless object is an explained decision.
+        const stats = scan.Columns.map(c => `${c.Key}(occ=${c.Occurrences}/${c.TotalRows},distinct=${c.DistinctNonNull}${c.DistinctCapped ? ',capped' : ''})`).join(', ');
+        console.log(`[DiscoverFieldsViaStream] key pick — rows=${scan.RowSamples.length} | ${pkReason} | cols: [${stats}]`);
         const readOnly = opts.ReadOnly ?? true;
 
         return scan.Columns.map(c => {
@@ -516,11 +562,85 @@ export abstract class BaseIntegrationConnector {
             };
             // Provable-only: only assert nullability we actually observed; never fabricate NOT NULL.
             if (sawNull) field.AllowsNull = true;
-            // Statistics-first PK: set only on the unambiguous pick; defer ties to the LLM tiebreaker.
-            if (pk.Field === c.Key) field.IsPrimaryKey = true;
-            if (c.Inferred.MaxLength != null) field.MaxLength = c.Inferred.MaxLength;
+            // Statistics-first PK: mark each component of the chosen identity (single column or the
+            // greedy composite set). Empty set = genuinely keyless → content-hash identity handles dedup.
+            if (pkFields.has(c.Key)) field.IsPrimaryKey = true;
+            // Provable-only length: a streamed-sample max isn't a proof. When unproven, seed a
+            // safe bounded default (450 — the largest a key column can be, so any field stays
+            // PK-eligible) so the column is nvarchar(450) downstream — never NVARCHAR(MAX),
+            // which can't be a key and breaks idempotent re-apply.
+            field.MaxLength = c.Inferred.MaxLength ?? 450;
             return field;
         });
+    }
+
+    /**
+     * Discovery via the connector's READ PATH ({@link FetchChanges}), TIME-BOUNDED — the way to gather
+     * a statistically-significant sample when a single {@link DiscoverFields} sample is too small to
+     * PROVE a key. "Discovery is the sync read path with the save removed."
+     *
+     * Loops FetchChanges as a read-only FULL fetch (WatermarkValue=null, nothing persisted), threading
+     * pagination/keyset cursors across batches, and streams every record through the data-informed
+     * field + provable-PK inference. It stops at the discovery TIME BUDGET (default 5 min), or a record
+     * cap, or source exhaustion — whichever comes first — so the provable-PK decision is made on as much
+     * real data as the budget allows. It NEVER fabricates a key: if even this larger sample yields no
+     * provable single/composite PK, the field set comes back PK-less and the object is honestly not added.
+     *
+     * Falls back to the single-sample {@link DiscoverFields} if the read path can't run for this object
+     * (e.g. a connector whose FetchChanges needs an already-persisted IO row that doesn't exist yet).
+     */
+    public async DiscoverFieldsViaFetch(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo,
+        opts: { TimeBudgetMs?: number; BatchSize?: number; MaxRecords?: number } = {}
+    ): Promise<ExternalFieldSchema[]> {
+        // Discovery budgets are operator-tunable via env (time- or record-count-based — either bounds it);
+        // explicit opts win, then env, then the sensible defaults. The record cap usually hits before time.
+        const envInt = (name: string, fb: number): number => {
+            const v = parseInt(process.env[name] ?? '', 10);
+            return Number.isFinite(v) && v > 0 ? v : fb;
+        };
+        const timeBudgetMs = opts.TimeBudgetMs ?? envInt('MJ_INTEGRATION_DISCOVERY_TIME_BUDGET_MS', 5 * 60 * 1000);
+        const batchSize = opts.BatchSize ?? envInt('MJ_INTEGRATION_DISCOVERY_BATCH_SIZE', 500);
+        const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 5000);
+        const self = this;
+        async function* readPathStream(): AsyncGenerator<Record<string, unknown>> {
+            let ctx: FetchContext = {
+                CompanyIntegration: companyIntegration,
+                ObjectName: objectName,
+                WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
+                BatchSize: batchSize,
+                ContextUser: contextUser,
+            };
+            let yielded = 0;
+            for (;;) {
+                const batch = await self.FetchChanges(ctx);
+                for (const rec of batch.Records) {
+                    yield rec.Fields;
+                    if (++yielded >= maxRecords) return;
+                }
+                if (!batch.HasMore) break;
+                ctx = {
+                    ...ctx,
+                    WatermarkValue: null,
+                    CurrentPage: batch.NextPage,
+                    CurrentOffset: batch.NextOffset,
+                    CurrentCursor: batch.NextCursor,
+                    AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
+                };
+            }
+        }
+        try {
+            return await this.DiscoverFieldsViaStream(readPathStream(), {
+                Discovery: { TimeBudgetMs: timeBudgetMs },
+                ReadOnly: true,
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[DiscoverFieldsViaFetch] read-path discovery failed for "${objectName}" (${msg}); falling back to single-sample DiscoverFields.`);
+            return this.DiscoverFields(companyIntegration, objectName, contextUser);
+        }
     }
 
     // ─── Core Abstract Methods ───────────────────────────────────────
