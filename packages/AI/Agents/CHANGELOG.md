@@ -1,5 +1,27 @@
 # @memberjunction/ai-agents
 
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/ai-vector-dupe@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-reranker@5.40.2
+  - @memberjunction/ai-vector-sync@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/storage@5.40.2
+  - @memberjunction/search-engine@5.40.2
+  - @memberjunction/templates@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

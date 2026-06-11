@@ -1,0 +1,218 @@
+:host {
+  display: contents;
+}
+
+/* Fills the conversation panel IN PLACE: the chat area host provides the positioned
+   context (position:relative on .chat-area) and this covers it edge to edge — header,
+   thread and composer included. Opaque-ish page surface with a slight blur so the
+   conversation underneath reads as "paused", not as an app-wide modal. */
+.call-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  background: color-mix(in srgb, var(--mj-bg-page) 94%, transparent);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+/* Minimized: hidden (NOT destroyed) so the shell's session/view state survives while
+   the host shows its floating "on call" pill. The audio session is untouched. */
+.call-overlay--hidden {
+  display: none;
+}
+
+/* MAIN column: banner (top) → scrolling thread → channel strip → composer → controls */
+.call-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.call-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 22px;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mj-border-strong) transparent;
+}
+.call-body::-webkit-scrollbar {
+  width: 6px;
+}
+.call-body::-webkit-scrollbar-thumb {
+  background: var(--mj-border-strong);
+  border-radius: 3px;
+}
+
+.call-connecting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 160px;
+}
+
+/* Ephemeral narration shown under the banner when no working card anchors it */
+.banner-live-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 22px 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--mj-text-muted);
+  animation: overlay-note-in 220ms ease;
+}
+.banner-live-note i {
+  font-size: 10px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+@keyframes overlay-note-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- FOCUS-BOARD mode (whiteboard "Focus board" toggle) ----------
+   The main call column collapses away entirely and the surface panel (whiteboard tab)
+   fills the overlay; a compact floating call pill keeps the live call reachable. */
+.call-overlay.board-focus .call-main {
+  display: none;
+}
+.call-overlay.board-focus mj-realtime-surface-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Floating call pill: orb + state + mute / show-thread / end (per the whiteboard mockup). */
+.board-focus-pill {
+  position: absolute;
+  left: 64px;
+  top: 12px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px 7px 12px;
+  border-radius: var(--mj-radius-full, 999px);
+  background: color-mix(in srgb, var(--mj-bg-surface-card) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--mj-border-strong);
+  box-shadow: var(--mj-shadow-xl, 0 12px 32px rgba(0, 0, 0, 0.18));
+  animation: overlay-note-in 220ms ease;
+}
+.board-focus-pill__orb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+}
+.board-focus-pill__orb[data-state='speaking'],
+.board-focus-pill__orb[data-state='listening'] {
+  animation: board-pill-pulse 1.6s ease-in-out infinite;
+}
+.board-focus-pill__orb[data-state='error'] {
+  background: var(--mj-status-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-error) 18%, transparent);
+}
+@keyframes board-pill-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); }
+}
+.board-focus-pill__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.board-focus-pill__name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--mj-text-primary);
+}
+.board-focus-pill__state {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--mj-brand-primary);
+}
+.board-focus-pill__btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.board-focus-pill__btn:hover {
+  color: var(--mj-text-primary);
+}
+.board-focus-pill__btn--active {
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-primary);
+}
+.board-focus-pill__btn--end {
+  background: var(--mj-status-error);
+  border-color: var(--mj-status-error);
+  color: var(--mj-text-inverse, #fff);
+}
+
+/* ---------- Session review mode ---------- */
+/* Subtle archival tint so a glance says "this is history, not a live call". */
+.call-overlay--review {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--mj-text-muted) 4%, transparent), transparent 120px),
+    var(--mj-bg-surface);
+}
+
+/* The review whiteboard pane body: the board component positions itself absolutely
+   (inset: 0), so its template-based pane needs a filling, positioned frame. */
+.review-board-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---------- angular-split layout (main column | surface panel) ---------- */
+.call-split {
+  flex: 1;
+  min-height: 0;
+}
+/* Token-styled gutter: invisible until hover, brand-tinted while interacting.
+   (angular-split's default gutter is a gray bar with a dotted icon — restyle.) */
+:host ::ng-deep .call-split > .as-split-gutter {
+  background: transparent !important;
+  transition: background 140ms ease;
+}
+:host ::ng-deep .call-split > .as-split-gutter:hover,
+:host ::ng-deep .call-split > .as-split-gutter.as-dragged {
+  background: color-mix(in srgb, var(--mj-brand-primary) 26%, transparent) !important;
+}
+:host ::ng-deep .call-split > .as-split-gutter .as-split-gutter-icon {
+  display: none;
+}
+/* Areas CONTAIN their children (overflow hidden keeps the flex height chain intact
+   so the thread scrolls internally under a fixed banner — overflow:visible here let
+   the whole column overflow the area and broke scrolling). Children own their own
+   scrollbars via flex + min-height:0. */
+:host ::ng-deep .call-split > .as-split-area {
+  overflow: hidden;
+  display: flex;
+}
+:host ::ng-deep .call-split > .as-split-area > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

@@ -1,5 +1,14 @@
 # @memberjunction/schema-engine
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/queue@5.40.2
+- @memberjunction/sql-dialect@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

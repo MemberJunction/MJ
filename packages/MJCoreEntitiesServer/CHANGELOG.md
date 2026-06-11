@@ -1,5 +1,35 @@
 # @memberjunction/core-entities-server
 
+## 5.40.2
+
+### Patch Changes
+
+- da2ee38: Fix duplicate detection defects: drop stale "ghost" vector matches to deleted/re-seeded records (the apparent record-matching-itself), guard against recursive re-triggering that exploded detail rows, skip auto-merge for merge-disallowed entities instead of failing the run, and sort the Record Duplicates UI groups and per-card matches by match probability descending.
+- Updated dependencies [da2ee38]
+  - @memberjunction/ai-vector-dupe@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/tag-engine@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/ai-vectordb@5.40.2
+  - @memberjunction/ai-vectors-memory@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/doc-utils@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/integration-engine@5.40.2
+  - @memberjunction/integration-pk-classifier@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/sql-converter@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+  - @memberjunction/sql-parser@5.40.2
+  - @memberjunction/skip-types@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

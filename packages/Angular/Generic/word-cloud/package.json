@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-word-cloud",
-  "version": "5.40.1",
+  "version": "5.40.2",
   "description": "MemberJunction: Reusable SVG-based word cloud component for Angular.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

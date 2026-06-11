@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-entity-form-dialog@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-container-directives@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
 ## 5.40.1
 
 ### Patch Changes

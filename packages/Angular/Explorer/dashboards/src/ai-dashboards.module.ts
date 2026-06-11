@@ -59,6 +59,8 @@ import { AnalyticsModelPerformanceComponent, LoadAnalyticsModelPerformance } fro
 import { AnalyticsCostBudgetComponent, LoadAnalyticsCostBudget } from './AI/components/analytics/cost-budget/cost-budget.component';
 import { AnalyticsErrorAnalysisComponent, LoadAnalyticsErrorAnalysis } from './AI/components/analytics/error-analysis/error-analysis.component';
 import { AnalyticsUsagePatternsComponent, LoadAnalyticsUsagePatterns } from './AI/components/analytics/usage-patterns/usage-patterns.component';
+import { AnalyticsRealtimeOverviewComponent, LoadAnalyticsRealtimeOverview } from './AI/components/analytics/realtime/realtime-overview.component';
+import { AnalyticsRealtimeSessionsComponent, LoadAnalyticsRealtimeSessions } from './AI/components/analytics/realtime/realtime-sessions.component';
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
@@ -147,6 +149,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    AnalyticsRealtimeOverviewComponent,
+    AnalyticsRealtimeSessionsComponent,
     AIOverviewHubComponent
   ],
   imports: [
@@ -221,6 +225,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    AnalyticsRealtimeOverviewComponent,
+    AnalyticsRealtimeSessionsComponent,
     AIOverviewHubComponent,
     SharedDashboardWidgetsModule
   ]
@@ -241,6 +247,8 @@ export class AIDashboardsModule {
         LoadAnalyticsCostBudget();
         LoadAnalyticsErrorAnalysis();
         LoadAnalyticsUsagePatterns();
+        LoadAnalyticsRealtimeOverview();
+        LoadAnalyticsRealtimeSessions();
         LoadAIOverviewHub();
     }
 }

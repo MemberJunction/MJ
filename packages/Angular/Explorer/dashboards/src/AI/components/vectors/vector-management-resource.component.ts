@@ -394,7 +394,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async findVectorizeActionID(): Promise<string | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Actions',
+            EntityName: 'MJ: Actions',
             ExtraFilter: `Name = '__VectorizeEntity'`,
             Fields: ['ID'],
             ResultType: 'simple',
@@ -410,7 +410,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'Action Params',
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
             Fields: ['ID', 'Name'],
             ResultType: 'simple',

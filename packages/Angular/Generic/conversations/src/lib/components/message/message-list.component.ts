@@ -19,14 +19,22 @@ import {
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
 } from '../../events/chat-events';
+import { RealtimeSessionTimelineCardComponent } from '../realtime/realtime-session-timeline-card.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { selectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
+import {
+  BuildConversationTimeline,
+  ConversationTimelineItem,
+  RealtimeSessionTimelineGroup,
+  RealtimeSessionTimelineMeta
+} from '../../utils/realtime-session-timeline';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /** Context handed to the `messageRenderer` slot template per message. */
@@ -36,13 +44,24 @@ interface MessageRendererContext {
 }
 
 /**
- * One per rendered message in the list. The default path holds a
- * `MessageItemComponent` ref; the custom-renderer path holds an `EmbeddedViewRef`
- * created from the consumer's slot template. Discriminated by `kind`.
+ * One per rendered message in the list. Three paths can produce an entry:
+ *   - `component`        — the default `MessageItemComponent` (single message).
+ *   - `embedded`         — an `EmbeddedViewRef` from the consumer's
+ *                          `messageRenderer` slot template (full per-message
+ *                          replacement, PR 2c slot system).
+ *   - `realtime-session` — a `RealtimeSessionTimelineCardComponent` collapsing
+ *                          an entire past realtime session into one timeline
+ *                          card (PR #2787 co-agent timeline). The grouping pass
+ *                          (`BuildConversationTimeline`) emits these alongside
+ *                          normal messages — see the timeline utility for the
+ *                          rules.
+ *
+ * Discriminated by the `kind` tag for ergonomic narrowing.
  */
 type RenderedMessageEntry =
   | { kind: 'component'; ref: ComponentRef<MessageItemComponent> }
-  | { kind: 'embedded'; ref: EmbeddedViewRef<MessageRendererContext> };
+  | { kind: 'embedded'; ref: EmbeddedViewRef<MessageRendererContext> }
+  | { kind: 'realtime-session'; ref: ComponentRef<RealtimeSessionTimelineCardComponent> };
 
 /**
  * Container component for displaying a list of messages
@@ -65,6 +84,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
+  /**
+   * Optional session-row enrichment for realtime SESSION BLOCKS, keyed by
+   * `NormalizeUUID(sessionId)` (agent name / status / close reason). Details stamped
+   * with an `AgentSessionID` collapse into one timeline card per session — see
+   * `BuildConversationTimeline` — and this map dresses those cards up when present.
+   */
+  @Input() public sessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
 
   /**
    * Optional per-iteration custom message renderer. When set, the list renders each
@@ -101,6 +127,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+  /** Emitted with the `MJ: AI Agent Sessions.ID` when a realtime session block's Open affordance is clicked. */
+  @Output() public realtimeSessionOpenRequested = new EventEmitter<string>();
 
   /** Forwarded from MessageItemComponent — see its docs. */
   @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
@@ -111,9 +139,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
 
   /**
-   * Per-message rendered entries. Either a full `MessageItemComponent` (default
-   * path) or an `EmbeddedViewRef` from the consumer's `messageRenderer` slot
-   * template. Discriminated by the `kind` tag.
+   * Per-message rendered entries — see `RenderedMessageEntry` for the 3-way
+   * union (default MessageItemComponent / consumer messageRenderer slot
+   * embedded view / collapsed realtime session timeline card).
    */
   private _renderedMessages = new Map<string, RenderedMessageEntry>();
   private _shouldScrollToBottom = false;
@@ -193,6 +221,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (changes['attachmentsMap'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
     }
+
+    // Watch for session-meta changes so realtime session blocks pick up their
+    // agent name / status chip once the (async, batched) session lookup lands
+    if (changes['sessionMetaMap'] && this.messages && this.messageContainerRef) {
+      this.updateMessages(this.messages);
+    }
   }
 
   ngAfterViewChecked() {
@@ -230,46 +264,44 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   /**
    * Updates the message list using dynamic component creation
    * Only adds/removes changed messages for optimal performance
+   *
+   * REALTIME SESSIONS: details stamped with an `AgentSessionID` (turns persisted during
+   * a live realtime session) do NOT render as normal chat bubbles. The timeline pass
+   * (`BuildConversationTimeline`) collapses each session's stamped rows into ONE session
+   * block, rendered as a `RealtimeSessionTimelineCardComponent` at the session's
+   * chronological position. Everything else renders exactly as before.
    */
   private updateMessages(messages: MJConversationDetailEntity[]): void {
     // Temporarily detach change detection for performance
     this.cdRef.detach();
 
     try {
-      // Remove messages that no longer exist
-      const currentIds = new Set(messages.map(m => this.getMessageKey(m)));
+      // Build the timeline first — collapses contiguous realtime-session rows
+      // into ONE session block per session, leaving normal messages in place.
+      // See `BuildConversationTimeline` in `utils/realtime-session-timeline`.
+      const timeline = BuildConversationTimeline(messages);
+
+      // Remove rendered items (messages AND session blocks) that no longer exist
+      const currentKeys = new Set(timeline.map(item => this.getTimelineKey(item)));
       this._renderedMessages.forEach((entry, key) => {
-        if (!currentIds.has(key)) {
+        if (!currentKeys.has(key)) {
           entry.ref.destroy();
           this._renderedMessages.delete(key);
         }
       });
 
-      // Add or update messages
-      const useCustomRenderer = this.messageRendererTemplate !== null;
-      messages.forEach((message, index) => {
-        const key = this.getMessageKey(message);
-        const existing = this._renderedMessages.get(key);
-
-        if (existing && existing.kind === 'embedded' && useCustomRenderer) {
-          // Update existing embedded view from messageRenderer slot
-          existing.ref.context.$implicit = message;
-          existing.ref.context.message = message;
-          existing.ref.markForCheck();
-        } else if (existing && existing.kind === 'component' && !useCustomRenderer) {
-          // Update existing MessageItemComponent in place
-          this.updateMessageItemInstance(existing.ref, message, messages, index);
-        } else if (existing) {
-          // Rendering mode changed (component ↔ embedded) — destroy and recreate.
-          // Should be rare since messageRendererTemplate is set once at content-projection time.
-          existing.ref.destroy();
-          this._renderedMessages.delete(key);
-          this.createRenderedEntry(message, messages, index, key, useCustomRenderer);
+      // Add or update timeline items in chronological order. `renderMessageItem`
+      // internally branches on the slot template (messageRenderer) vs the
+      // default MessageItemComponent; `renderSessionBlock` always creates a
+      // RealtimeSessionTimelineCardComponent.
+      const lastMessageKey = this.findLastMessageKey(timeline);
+      for (const item of timeline) {
+        if (item.Kind === 'session') {
+          this.renderSessionBlock(item.Group);
         } else {
-          // New message — create with whichever path is active
-          this.createRenderedEntry(message, messages, index, key, useCustomRenderer);
+          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey);
         }
-      });
+      }
 
       // Only scroll to bottom if new messages were added (not just updates)
       // This prevents scrolling when the message list is merely refreshed (e.g., during agent run timer)
@@ -284,6 +316,98 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.cdRef.reattach();
       this.cdRef.detectChanges();
     }
+  }
+
+  /** Stable render key for a timeline item — message ID, or a prefixed session key for session blocks. */
+  private getTimelineKey(item: ConversationTimelineItem<MJConversationDetailEntity>): string {
+    return item.Kind === 'session' ? this.getSessionKey(item.Group.SessionID) : this.getMessageKey(item.Detail);
+  }
+
+  /** Render key for a session block (case-insensitive on the session id; prefixed so it can't collide with message IDs). */
+  private getSessionKey(sessionId: string): string {
+    return `session:${NormalizeUUID(sessionId)}`;
+  }
+
+  /** The render key of the LAST normal message item in the timeline (drives `isLastMessage`), or null when none. */
+  private findLastMessageKey(timeline: ConversationTimelineItem<MJConversationDetailEntity>[]): string | null {
+    for (let i = timeline.length - 1; i >= 0; i--) {
+      const item = timeline[i];
+      if (item.Kind === 'message') {
+        return this.getMessageKey(item.Detail);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Creates or updates the ONE timeline card a realtime session collapses to.
+   * Click/Open on the card bubbles up via {@link realtimeSessionOpenRequested} so the
+   * chat area can host the SESSION REVIEW overlay for it.
+   */
+  private renderSessionBlock(group: RealtimeSessionTimelineGroup): void {
+    const key = this.getSessionKey(group.SessionID);
+    const meta = this.sessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
+    const existing = this._renderedMessages.get(key);
+
+    if (existing && existing.kind === 'realtime-session') {
+      // Update existing card in place.
+      const instance = existing.ref.instance;
+      instance.Group = group;
+      instance.Meta = meta;
+      existing.ref.changeDetectorRef.markForCheck();
+      return;
+    }
+
+    // Different kind at this key (e.g. mode changed) — drop the old entry, fall through to create.
+    if (existing) {
+      existing.ref.destroy();
+      this._renderedMessages.delete(key);
+    }
+
+    const componentRef = this.messageContainerRef.createComponent(RealtimeSessionTimelineCardComponent);
+    componentRef.instance.Group = group;
+    componentRef.instance.Meta = meta;
+    componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.realtimeSessionOpenRequested.emit(sessionId));
+    this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef });
+  }
+
+  /**
+   * Creates or updates one normal chat message item. Routes to the
+   * consumer-projected `messageRenderer` slot template (EmbeddedViewRef path)
+   * when present, otherwise falls back to the default `MessageItemComponent`
+   * dynamic-component path. Both paths flow through the shared
+   * `createRenderedEntry` / `updateMessageItemInstance` helpers.
+   */
+  private renderMessageItem(message: MJConversationDetailEntity, messages: MJConversationDetailEntity[], isLastMessage: boolean): void {
+    const key = this.getMessageKey(message);
+    // `index` is only used for the `isLastMessage` heuristic inside
+    // updateMessageItemInstance — synthesize a value that produces the right
+    // boolean (last index when `isLastMessage` is true, else 0 — any non-last
+    // index works since it just affects that one comparison).
+    const index = isLastMessage ? messages.length - 1 : 0;
+    const useCustomRenderer = this.messageRendererTemplate !== null;
+    const existing = this._renderedMessages.get(key);
+
+    if (existing && existing.kind === 'embedded' && useCustomRenderer) {
+      // Update existing embedded view from messageRenderer slot
+      existing.ref.context.$implicit = message;
+      existing.ref.context.message = message;
+      existing.ref.markForCheck();
+      return;
+    }
+    if (existing && existing.kind === 'component' && !useCustomRenderer) {
+      // Update existing MessageItemComponent in place
+      this.updateMessageItemInstance(existing.ref, message, messages, index);
+      return;
+    }
+    if (existing) {
+      // Rendering kind changed (e.g. component↔embedded, or a session block was
+      // overwritten with a message). Destroy + recreate.
+      existing.ref.destroy();
+      this._renderedMessages.delete(key);
+    }
+
+    this.createRenderedEntry(message, messages, index, key, useCustomRenderer);
   }
 
   /**

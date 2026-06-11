@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Voice Session · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  /* dimmed conversation behind the overlay */
+  .dim-conversation { position: fixed; inset: 56px 0 0 0; z-index: 1; filter: blur(3px) brightness(0.5); pointer-events: none; padding: 28px; opacity: 0.7; }
+  .ghost-msg { max-width: 520px; margin: 0 auto 14px; }
+  .ghost-line { height: 12px; border-radius: 6px; background: var(--mj-bg-surface-card); margin-bottom: 8px; }
+
+  .call-overlay {
+    position: fixed; inset: 56px 0 0 0; z-index: 40; display: flex; justify-content: center;
+    background: var(--mj-bg-overlay); backdrop-filter: blur(8px); padding: 22px;
+  }
+  .call-panel {
+    width: 100%; max-width: 760px; background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-2xl);
+    box-shadow: var(--mj-shadow-2xl); display: flex; flex-direction: column; overflow: hidden; max-height: calc(100vh - 100px);
+  }
+  /* identity header */
+  .call-header { display: flex; align-items: center; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--mj-border-default); background: linear-gradient(180deg, rgba(38,153,204,0.10), transparent); }
+  .ch-id { flex: 1; }
+  .ch-name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+  .ch-for { font-size: 12.5px; color: var(--mj-text-muted); margin-top: 2px; }
+  .ch-state { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: var(--mj-radius-full); background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); }
+  .ch-state-label { font-size: 13px; font-weight: 600; }
+
+  .call-thread { flex: 1; overflow-y: auto; padding: 22px; }
+  .thread-divider { text-align: center; font-size: 11px; color: var(--mj-text-disabled); margin: 4px 0 16px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+
+  .channel-bar { display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+
+  .call-composer { padding: 14px 22px 18px; border-top: 1px solid var(--mj-border-default); }
+  .composer-note { font-size: 11.5px; color: var(--mj-brand-accent); font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .composer-box {
+    display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px;
+    border: 1px solid var(--mj-brand-primary); border-radius: var(--mj-radius-full);
+    background: var(--mj-bg-surface); box-shadow: 0 0 0 3px rgba(38,153,204,0.12);
+  }
+  .composer-box input { flex: 1; background: transparent; border: 0; outline: none; color: var(--mj-text-primary); font-family: inherit; font-size: 14px; }
+  .composer-box input::placeholder { color: var(--mj-text-muted); }
+  .composer-icon { color: var(--mj-text-muted); cursor: pointer; padding: 6px; font-size: 15px; }
+  .composer-icon:hover { color: var(--mj-text-secondary); }
+  .composer-send { width: 38px; height: 38px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; border: 0; display: grid; place-items: center; cursor: pointer; }
+
+  .call-controls { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 16px 22px 22px; border-top: 1px solid var(--mj-border-subtle); }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Conversations</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><span class="dot dot--live"></span> Voice session live</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <!-- Dimmed conversation behind -->
+  <div class="dim-conversation">
+    <div class="ghost-msg"><div class="ghost-line" style="width:60%"></div><div class="ghost-line" style="width:85%"></div></div>
+    <div class="ghost-msg" style="margin-right:0;margin-left:auto"><div class="ghost-line" style="width:50%;margin-left:auto"></div></div>
+    <div class="ghost-msg"><div class="ghost-line" style="width:70%"></div><div class="ghost-line" style="width:40%"></div></div>
+  </div>
+
+  <!-- CALL OVERLAY -->
+  <div class="call-overlay">
+    <div class="call-panel">
+
+      <!-- Identity header -->
+      <div class="call-header">
+        <div class="agent-orb" data-state="speaking" style="--orb-size:56px"></div>
+        <div class="ch-id">
+          <div class="ch-name">Voice for Sage <span class="pill pill--sage" style="margin-left:2px"><i class="fa-solid fa-feather"></i> Co-Agent</span></div>
+          <div class="ch-for">Speaking as <b style="color:var(--mj-text-secondary)">Sage</b> · the ambient helper in MemberJunction</div>
+        </div>
+        <div class="ch-state">
+          <div class="waveform"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="ch-state-label" style="color:var(--mj-brand-accent)">Sage is speaking…</span>
+        </div>
+      </div>
+
+      <!-- Unified voice + text thread -->
+      <div class="call-thread">
+        <div class="thread-divider">Live session · started 3:40 pm</div>
+        <div class="thread">
+
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div>
+              <div class="turn-meta">Sage <span class="muted">· voice</span></div>
+              <div class="bubble">Yep, I'm here. What's up?</div>
+            </div>
+          </div>
+
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div>
+              <div class="turn-meta">Sage <span class="muted">· voice</span></div>
+              <div class="bubble">I'm the voice for Sage, the ambient helper in MJ. I help you navigate MJ, handle basic stuff, and pull in other agents when something needs real work. I keep things moving and hand off tasks instead of making up results.</div>
+            </div>
+          </div>
+
+          <div class="turn turn--user">
+            <div class="turn-avatar">AM</div>
+            <div>
+              <div class="turn-meta"><span class="typed-tag">typed</span> You</div>
+              <div class="bubble">what's the weather in LA, SF, and NYC?</div>
+            </div>
+          </div>
+
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div>
+              <div class="turn-meta">Sage <span class="muted">· voice</span></div>
+              <div class="bubble">Got it, I'll have Sage check the weather for those three cities and then I'll share what comes back.<span class="caption-cursor"></span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Active channels strip -->
+      <div class="channel-bar">
+        <span class="section-label" style="margin:0 4px 0 0">Channels</span>
+        <span class="chan-chip chan-chip--live"><i class="fa-solid fa-microphone-lines"></i> Voice <span class="live-dot"></span></span>
+        <span class="chan-chip chan-chip--live"><i class="fa-solid fa-comment"></i> Text <span class="live-dot"></span></span>
+        <span class="chan-chip chan-chip--opening"><i class="fa-solid fa-chalkboard"></i> Whiteboard <span class="muted">opening…</span></span>
+        <span class="chan-chip chan-chip--add"><i class="fa-solid fa-plus"></i> Add channel</span>
+      </div>
+
+      <!-- Composer that joins the SAME session -->
+      <div class="call-composer">
+        <div class="composer-note"><i class="fa-solid fa-arrow-turn-down" style="transform:rotate(90deg)"></i> Type here to join the live session — your text goes into this voice call</div>
+        <div class="composer-box">
+          <i class="fa-solid fa-paperclip composer-icon" title="Attach"></i>
+          <i class="fa-solid fa-cube composer-icon" title="Insert artifact"></i>
+          <input type="text" placeholder="Type a message into the live session…">
+          <i class="fa-solid fa-microphone composer-icon" title="Hold to talk" style="color:var(--mj-status-success)"></i>
+          <button class="composer-send"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+
+      <!-- Call controls -->
+      <div class="call-controls">
+        <div class="ctrl-group">
+          <button class="ctrl"><i class="fa-solid fa-microphone"></i></button>
+          <span class="ctrl-label">Mute</span>
+        </div>
+        <div class="ctrl-group">
+          <button class="ctrl ctrl--on"><i class="fa-solid fa-closed-captioning"></i></button>
+          <span class="ctrl-label">Captions</span>
+        </div>
+        <div class="ctrl-group">
+          <button class="ctrl"><i class="fa-solid fa-plus"></i></button>
+          <span class="ctrl-label">Channel</span>
+        </div>
+        <div class="ctrl-group">
+          <button class="ctrl ctrl--end"><i class="fa-solid fa-phone-slash"></i></button>
+          <span class="ctrl-label" style="color:var(--mj-status-error)">End call</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

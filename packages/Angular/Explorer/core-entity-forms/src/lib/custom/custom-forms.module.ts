@@ -73,6 +73,8 @@ import { WebsiteCrawlerSettingsPanel } from "../panels/content-sources/website-c
 import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
 import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
 import { SearchModule } from "@memberjunction/ng-search";
+import { MJAIAgentSessionFormComponentExtended } from "./AIAgentSessions/ai-agent-session-form.component";
+import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agent-channel-form.component";
 
 @NgModule({
     declarations: [
@@ -119,6 +121,8 @@ import { SearchModule } from "@memberjunction/ng-search";
         WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -191,6 +195,8 @@ import { SearchModule } from "@memberjunction/ng-search";
         WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
         ActionsModule
     ],
     providers: [
