@@ -136,6 +136,14 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
     /** Sends deferred while a response is in flight; drained in order at the next boundary. */
     private queuedSends: Array<() => void> = [];
     /**
+     * Nudge guard for tool results delivered AFTER the platform closed the turn (a long
+     * delegation outlasting the agent's last utterance): {@link sendToolResultFrame}
+     * optimistically marks a response active, but if NO model output actually arrives within
+     * this window, the platform has silently absorbed the result — the timer fires a
+     * user_message nudge so the outcome is always voiced (live finding).
+     */
+    private toolResultNudgeTimer: ReturnType<typeof setTimeout> | null = null;
+    /**
      * Tool calls awaiting their result — used to make {@link SendToolResult} EXACTLY-ONCE:
      * the id is consumed when the result is accepted (queued or sent), so a duplicate send
      * for the same call is dropped with a warning instead of confusing the conversation.
@@ -618,6 +626,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * sends flush at the next response boundary.
      */
     private handleInterruption(): void {
+        this.cancelToolResultNudge();
         if (!this.responseActive && !this.IsAudioPlaying) {
             return;
         }
@@ -633,6 +642,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * the client is audibly / imminently `'speaking'`.
      */
     private markGenerationStarted(): void {
+        this.cancelToolResultNudge();
         this.responseActive = true;
         if (this.currentState !== 'speaking') {
             this.setState('speaking');
@@ -701,6 +711,36 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.responseActive = true;
         this.activeResponseKind = 'normal';
         this.setState('speaking');
+        this.armToolResultNudge();
+    }
+
+    /** How long to wait for real model output after a tool result before nudging. */
+    private static readonly ToolResultNudgeMs = 1600;
+
+    /** Arms the absorbed-tool-result nudge (see {@link toolResultNudgeTimer}). */
+    private armToolResultNudge(): void {
+        this.cancelToolResultNudge();
+        this.toolResultNudgeTimer = setTimeout(() => {
+            this.toolResultNudgeTimer = null;
+            // No audio / response text arrived — the platform closed the turn before the
+            // result landed and won't speak it on its own. Clear the optimistic busy mark
+            // and explicitly ask for the outcome.
+            this.responseActive = false;
+            this.sendUserMessage(
+                'The delegated work you were waiting on has just finished and its result has been ' +
+                'delivered to you. Tell the user the outcome now, in your own first-person voice.',
+                'normal',
+                false
+            );
+        }, ElevenLabsRealtimeClient.ToolResultNudgeMs);
+    }
+
+    /** Cancels the nudge — real model output arrived (or the session is resetting). */
+    private cancelToolResultNudge(): void {
+        if (this.toolResultNudgeTimer) {
+            clearTimeout(this.toolResultNudgeTimer);
+            this.toolResultNudgeTimer = null;
+        }
     }
 
     /**
