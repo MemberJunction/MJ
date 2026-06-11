@@ -85,6 +85,9 @@ export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-composer.component';
 export * from './lib/components/realtime/realtime-channel-strip.component';
 export * from './lib/components/realtime/realtime-controls.component';
+// Conversation-timeline collapse of past realtime sessions (one card per session) + its pure grouping pass
+export * from './lib/components/realtime/realtime-session-timeline-card.component';
+export * from './lib/utils/realtime-session-timeline';
 // Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
 export * from './lib/components/realtime/channels/base-realtime-channel-client';
 export * from './lib/components/realtime/channels/realtime-channel-pane.component';

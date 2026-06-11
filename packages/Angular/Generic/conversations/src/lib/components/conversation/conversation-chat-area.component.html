@@ -170,6 +170,8 @@
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               [attachmentsMap]="attachmentsByDetailId"
+              [sessionMetaMap]="realtimeSessionMetaMap"
+              (realtimeSessionOpenRequested)="OpenRealtimeSessionReview($event)"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (deleteMessage)="onDeleteMessage($event)"

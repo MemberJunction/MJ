@@ -566,6 +566,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       queryParams['versionNumber'] = null;
     }
 
+    // realtimeSessionId is a one-shot deep-link trigger (e.g. from the AI Agent Session
+    // form). Always clear it from the tab params here — leaving it lingering re-delivers
+    // it on every tab re-focus / popstate, which reopened the review overlay forever
+    // (the live-tested "stuck overlay" bug).
+    queryParams['realtimeSessionId'] = null;
+
     // Use NavigationService to update query params properly
     this.navigationService.UpdateActiveTabQueryParams(queryParams);
   }
